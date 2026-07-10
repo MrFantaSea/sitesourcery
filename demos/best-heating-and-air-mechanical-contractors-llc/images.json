@@ -1,0 +1,29 @@
+{
+  "business": "Best Heating and Air Mechanical Contractors LLC",
+  "source": "http://www.mcbestheatingandair.com/",
+  "fetchedAt": "2026-07-10T12:46:19.583Z",
+  "logo": null,
+  "hero": "assets/hero.jpg",
+  "gallery": [
+    "assets/gallery-1.jpg",
+    "assets/gallery-2.jpg",
+    "assets/gallery-3.jpg",
+    "assets/gallery-4.jpg",
+    "assets/gallery-5.jpg",
+    "assets/gallery-6.jpg",
+    "assets/gallery-7.jpg",
+    "assets/gallery-8.jpg"
+  ],
+  "pagesFetched": [
+    "http://www.mcbestheatingandair.com/",
+    "http://www.mcbestheatingandair.com/our-services.htm",
+    "http://www.mcbestheatingandair.com/photo-gallery.htm"
+  ],
+  "counts": {
+    "candidates": 25,
+    "downloaded": 25,
+    "kept": 9
+  },
+  "note": "",
+  "tookMs": 5910
+}

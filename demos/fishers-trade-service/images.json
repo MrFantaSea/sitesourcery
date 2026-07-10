@@ -1,0 +1,30 @@
+{
+  "business": "Fishers Trade Service",
+  "source": "https://www.fisherstradeservice.com/",
+  "fetchedAt": "2026-07-10T12:28:48.824Z",
+  "logo": "assets/logo.png",
+  "hero": "assets/hero.jpg",
+  "gallery": [
+    "assets/gallery-1.jpg",
+    "assets/gallery-2.jpg",
+    "assets/gallery-3.jpg",
+    "assets/gallery-4.jpg",
+    "assets/gallery-5.jpg",
+    "assets/gallery-6.jpg",
+    "assets/gallery-7.jpg",
+    "assets/gallery-8.jpg"
+  ],
+  "pagesFetched": [
+    "https://www.fisherstradeservice.com/",
+    "https://www.fisherstradeservice.com/geothermal-service-south-jersey.html",
+    "https://www.fisherstradeservice.com/heating-service-south-jersey.html",
+    "https://www.fisherstradeservice.com/air-conditioning-service-south-jersey.html"
+  ],
+  "counts": {
+    "candidates": 11,
+    "downloaded": 11,
+    "kept": 10
+  },
+  "note": "",
+  "tookMs": 9717
+}

@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trattoria Bella Vita — Italian Restaurant in Collingswood, NJ</title>
+<meta name="description" content="Handmade pasta, wood-fired pizza, and Sunday gravy like Nonna used to make.. Italian in Collingswood, NJ. Reserve a table, order online, see our menu &amp; hours. Call (856) 555-0192.">
+<meta name="theme-color" content="#a23520">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Crect%20width%3D'64'%20height%3D'64'%20rx%3D'14'%20fill%3D'%23a23520'%2F%3E%3Ctext%20x%3D'32'%20y%3D'33'%20font-family%3D'Arial%2CHelvetica%2Csans-serif'%20font-size%3D'30'%20font-weight%3D'700'%20fill%3D'%23ffffff'%20text-anchor%3D'middle'%20dominant-baseline%3D'central'%3ETV%3C%2Ftext%3E%3C%2Fsvg%3E">
+<meta property="og:type" content="restaurant">
+<meta property="og:title" content="Trattoria Bella Vita — Italian in Collingswood, NJ">
+<meta property="og:description" content="Handmade pasta, wood-fired pizza, and Sunday gravy like Nonna used to make.. Italian in Collingswood, NJ. Reserve a table, order online, see our menu &amp; hours. Call (856) 555-0192.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Restaurant","name":"Trattoria Bella Vita","servesCuisine":"Italian","priceRange":"$$","telephone":"(856) 555-0192","description":"Handmade pasta, wood-fired pizza, and Sunday gravy like Nonna used to make.","address":{"@type":"PostalAddress","streetAddress":"712 Haddon Avenue","addressLocality":"Collingswood","addressRegion":"NJ","postalCode":"08108"},"aggregateRating":{"@type":"AggregateRating","ratingValue":4.8,"reviewCount":486},"hasMenu":{"@type":"Menu","hasMenuSection":[{"@type":"MenuSection","name":"Antipasti","hasMenuItem":[{"@type":"MenuItem","name":"Burrata & Prosciutto","description":"Creamy burrata, San Daniele prosciutto, grilled ciabatta, aged balsamic"},{"@type":"MenuItem","name":"Calamari Fritti","description":"Lightly fried, cherry-pepper aioli, lemon"},{"@type":"MenuItem","name":"Meatballs al Forno","description":"Grandma's recipe, San Marzano marinara, whipped ricotta"},{"@type":"MenuItem","name":"Arancini","description":"Crispy saffron risotto, mozzarella, pomodoro"}]},{"@type":"MenuSection","name":"Pasta Fatta a Mano","hasMenuItem":[{"@type":"MenuItem","name":"Rigatoni Bolognese","description":"Slow-simmered beef & pork ragù, pecorino romano"},{"@type":"MenuItem","name":"Cacio e Pepe","description":"Tonnarelli, pecorino, cracked black pepper, the classic"},{"@type":"MenuItem","name":"Lobster Ravioli","description":"Maine lobster, vodka-cream blush, chives"},{"@type":"MenuItem","name":"Sunday Gravy Pappardelle","description":"Braised short rib, sausage, meatball — all day Sunday"}]},{"@type":"MenuSection","name":"Dal Forno · Wood-Fired","hasMenuItem":[{"@type":"MenuItem","name":"Margherita","description":"San Marzano, fresh mozzarella, basil, olive oil"},{"@type":"MenuItem","name":"Diavola","description":"Spicy soppressata, chili honey, mozzarella"},{"@type":"MenuItem","name":"Chicken Parmigiana","description":"Hand-breaded, house marinara, mozzarella, spaghetti"}]},{"@type":"MenuSection","name":"Dolci","hasMenuItem":[{"@type":"MenuItem","name":"Tiramisù","description":"Espresso-soaked ladyfingers, mascarpone, cocoa"},{"@type":"MenuItem","name":"Cannoli","description":"Sicilian shells, sweet ricotta, pistachio, chocolate"}]}]}}</script>
+<style>
+:root{
+  --brand:#a23520;--brand-d:#822a1a;--brand-dd:#591d12;--on-brand:#ffffff;
+  --gold:#c58a3a;--ink:#2a201a;--body:#5b4d43;--muted:#8a7a6d;
+  --paper:#fdf8f1;--paper-2:#f6ecdd;--line:#e8dcc9;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,'Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 2px 8px rgba(58,42,28,.06),0 14px 34px rgba(58,42,28,.09);
+  --radius:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:4.6rem}
+body{background:var(--paper);color:var(--body);font-family:var(--sans);
+  font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+  padding-bottom:env(safe-area-inset-bottom)}
+img{max-width:100%;display:block}
+a{color:var(--brand);text-decoration:none}
+h1,h2,h3{font-family:var(--serif);color:var(--ink);line-height:1.1;font-weight:600;letter-spacing:-.01em}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px;border-radius:6px}
+.skip{position:absolute;left:-999px;top:0;background:var(--brand);color:var(--on-brand);
+  padding:.7rem 1.1rem;border-radius:0 0 8px 0;z-index:100;font-weight:700}
+.skip:focus{left:0}
+.wrap{width:100%;max-width:66rem;margin:0 auto;padding:0 clamp(1.1rem,4vw,2rem)}
+.ic{width:1.15em;height:1.15em;flex:none}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;font-family:var(--sans);
+  font-weight:700;font-size:1rem;letter-spacing:.01em;cursor:pointer;padding:.7rem 1.2rem;
+  border-radius:999px;border:1.5px solid transparent;min-height:46px;
+  transition:transform .12s,box-shadow .18s,background .15s,color .15s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn-lg{font-size:1.05rem;padding:.85rem 1.6rem;min-height:52px}
+.btn-solid{background:var(--brand);color:var(--on-brand);box-shadow:0 6px 18px rgba(162,53,32,0.32)}
+.btn-solid:hover,.btn-solid:focus-visible{background:var(--brand-d);transform:translateY(-1px);
+  box-shadow:0 10px 26px rgba(162,53,32,0.4)}
+.btn-line{background:rgba(255,255,255,0.08);color:#fff;border-color:rgba(255,255,255,0.55)}
+.btn-line:hover,.btn-line:focus-visible{background:rgba(255,255,255,0.16);border-color:#fff}
+.btn-line-d{background:transparent;color:var(--brand);border-color:rgba(162,53,32,0.4)}
+.btn-line-d:hover{background:rgba(162,53,32,0.07);border-color:var(--brand)}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:1rem;
+  padding:.7rem clamp(1.1rem,4vw,2rem);background:rgba(253,248,241,0.86);
+  backdrop-filter:saturate(1.3) blur(10px);border-bottom:1px solid var(--line)}
+.nav .brand{font-family:var(--serif);color:var(--ink);font-weight:700;font-size:1.3rem;
+  letter-spacing:-.01em;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-links{display:none;gap:1.5rem}
+.nav-links a{color:var(--body);font-weight:600;font-size:.96rem;padding:.4rem 0}
+.nav-links a:hover{color:var(--brand)}
+.nav-cta{display:inline-flex;align-items:center;background:var(--brand);color:var(--on-brand);
+  font-weight:700;padding:.55rem 1.1rem;border-radius:999px;min-height:42px;font-size:.95rem;
+  box-shadow:0 4px 14px rgba(162,53,32,0.3);white-space:nowrap}
+.nav-cta:hover{background:var(--brand-d)}
+@media(min-width:48rem){.nav-links{display:flex}}
+
+/* hero */
+.hero{position:relative;color:#fdf6ec;isolation:isolate;overflow:hidden}
+.hero-bg{position:absolute;inset:0;z-index:-1;
+  background:radial-gradient(130% 100% at 20% 0%,var(--brand-d) 0%,var(--brand-dd) 55%,#1c1310 100%)}
+.hero-bg::before{content:"";position:absolute;inset:0;opacity:.5;mix-blend-mode:overlay;
+  background:radial-gradient(60% 50% at 80% 15%,rgba(255,217,160,0.45),transparent 70%)}
+.hero-bg::after{content:"";position:absolute;inset:0;opacity:.14;
+  background-image:radial-gradient(#fff 1px,transparent 1.5px);background-size:26px 26px;
+  -webkit-mask-image:radial-gradient(80% 70% at 50% 30%,#000,transparent);mask-image:radial-gradient(80% 70% at 50% 30%,#000,transparent)}
+.hero-in{max-width:66rem;margin:0 auto;padding:clamp(4rem,12vw,7rem) clamp(1.1rem,4vw,2rem) clamp(4.5rem,12vw,7.5rem);
+  text-align:center;display:flex;flex-direction:column;align-items:center}
+.hero-eyebrow{color:var(--gold);font-family:var(--sans);font-weight:700;letter-spacing:.24em;
+  text-transform:uppercase;font-size:.8rem;margin-bottom:1.1rem}
+.hero-h1{font-family:var(--serif);color:#fff;font-weight:600;font-size:clamp(2.9rem,10vw,6rem);
+  line-height:.98;letter-spacing:-.02em;text-wrap:balance;max-width:14ch}
+.hero-tag{color:rgba(255,255,255,0.9);font-size:clamp(1.12rem,2.8vw,1.5rem);line-height:1.5;
+  margin-top:1.3rem;max-width:38ch;font-style:italic;font-family:var(--serif)}
+.hero-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.7rem;
+  margin-top:1.5rem;color:rgba(255,255,255,0.9);font-size:1rem}
+.hero-meta b{color:#fff}.hm-q{opacity:.75}
+.hm{display:inline-flex;align-items:center;gap:.4em}.hm-sep{opacity:.4}
+.hero-cta{display:flex;flex-wrap:wrap;gap:.8rem;justify-content:center;margin-top:2.2rem}
+.hero-fade{position:absolute;left:0;right:0;bottom:0;height:5rem;z-index:-1;
+  background:linear-gradient(180deg,transparent,var(--paper))}
+.stars{display:inline-flex;gap:.06em}
+.stars .st{width:1.05em;height:1.05em}
+.stars-gold .st-full,.stars-gold .st-half{color:var(--gold);fill:var(--gold)}
+.stars-gold .st-empty{color:rgba(255,255,255,0.35);fill:rgba(255,255,255,0.28)}
+.about .stars-gold .st-empty,.reviews .stars-gold .st-empty{color:#e7d8bf;fill:#efe3cd}
+.st-outline{stroke:currentColor;stroke-width:1.4}
+
+/* sections */
+.sec{padding:clamp(3.2rem,8vw,5.6rem) 0}
+.sec-alt{background:var(--paper-2)}
+.eyebrow{color:var(--brand);font-family:var(--sans);font-weight:800;font-size:.8rem;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:.7rem;display:inline-flex;align-items:center;gap:.4em}
+.eyebrow-c{display:block;text-align:center}
+.eb-ic{width:1.15em;height:1.15em}
+.h2{font-size:clamp(1.9rem,5vw,3rem);color:var(--ink);max-width:20ch;letter-spacing:-.015em}
+.h2-c{text-align:center;margin:0 auto;max-width:22ch}
+.lead{color:var(--body);font-size:clamp(1.06rem,2.2vw,1.22rem);margin-top:1rem;max-width:54ch;line-height:1.6}
+
+/* about */
+.about-in{display:grid;grid-template-columns:1fr;gap:2.4rem;align-items:center}
+@media(min-width:50rem){.about-in{grid-template-columns:1.1fr .9fr;gap:3.4rem}}
+.badges{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.6rem}
+.badge{display:inline-flex;align-items:center;gap:.45em;background:var(--paper-2);
+  border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:.9rem;
+  padding:.45rem .9rem;border-radius:999px}
+.bi{width:1.15em;height:1.15em;color:var(--brand)}
+
+/* photo slots */
+.photo-slot{position:relative;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.photo-art{display:block;aspect-ratio:4/3;position:relative;
+  background:linear-gradient(150deg,rgba(162,53,32,0.16),rgba(197,138,58,0.14) 55%,rgba(138,90,42,0.12));
+  border:1px solid var(--line)}
+.photo-art::before{content:"";position:absolute;inset:0;opacity:.5;
+  background-image:radial-gradient(rgba(162,53,32,0.18) 1px,transparent 1.4px);background-size:18px 18px}
+.photo-ic{position:absolute;inset:0;display:grid;place-items:center;color:rgba(162,53,32,0.5)}
+.pa{width:3.2em;height:3.2em}
+.photo-slot figcaption{position:absolute;left:0;right:0;bottom:0;padding:.7rem .9rem;
+  background:linear-gradient(0deg,rgba(42,32,26,0.72),transparent);color:#fff;
+  font-size:.86rem;font-weight:600;font-family:var(--sans)}
+.about-photo{max-width:100%}
+.photo-slot img{display:block;width:100%;height:auto;object-fit:cover}
+.about-photo img{aspect-ratio:4/3}
+.g-slot img{aspect-ratio:1/1}
+.nav-logo{height:2rem;width:auto;max-width:9rem;vertical-align:middle;margin-right:.5rem;
+  border-radius:5px;object-fit:contain}
+
+/* menu */
+.menu{display:grid;grid-template-columns:1fr;gap:2.6rem 3rem;margin-top:2.6rem}
+@media(min-width:44rem){.menu{grid-template-columns:1fr 1fr}}
+.menu-note{text-align:center;color:var(--muted);margin-top:.8rem;font-style:italic}
+.mcat-h{display:flex;align-items:center;gap:.55rem;font-family:var(--serif);color:var(--ink);
+  font-size:1.5rem;font-weight:600;padding-bottom:.7rem;margin-bottom:1.1rem;
+  border-bottom:2px solid var(--line)}
+.mcat-ic{width:1.1em;height:1.1em;color:var(--brand);flex:none}
+.mcat-note{color:var(--muted);font-size:.9rem;margin:-.6rem 0 1rem;font-style:italic}
+.mitems{display:flex;flex-direction:column;gap:1.1rem}
+.mi-head{display:flex;align-items:baseline;gap:.5rem}
+.mi-nm{color:var(--ink);font-weight:700;font-size:1.08rem;font-family:var(--sans)}
+.mi-dots{flex:1;border-bottom:2px dotted rgba(138,122,109,0.5);transform:translateY(-.28em)}
+.mi-pr{color:var(--brand);font-weight:800;font-size:1.05rem;font-variant-numeric:tabular-nums;
+  font-family:var(--sans)}
+.mi-ds{color:var(--body);font-size:.96rem;line-height:1.5;margin-top:.25rem;max-width:44ch}
+.menu-foot{text-align:center;margin-top:3rem;color:var(--muted);font-size:.98rem}
+.menu-order{display:inline-flex;align-items:center;gap:.4em;color:var(--brand);font-weight:800;
+  margin-left:.3rem;white-space:nowrap}
+.menu-order:hover{text-decoration:underline}
+
+/* gallery */
+.gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:2.4rem}
+@media(min-width:40rem){.gallery{grid-template-columns:repeat(3,1fr)}}
+.g-slot{transition:transform .18s,box-shadow .2s}
+.g-slot:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.g-slot .photo-art{aspect-ratio:1/1}
+
+/* visit */
+.visit{display:grid;grid-template-columns:1fr;gap:2.8rem}
+@media(min-width:48rem){.visit{grid-template-columns:1fr 1fr;gap:3.2rem}}
+.hours{width:100%;margin-top:1.3rem;border-collapse:collapse}
+.hours th,.hours td{text-align:left;padding:.72rem 0;border-bottom:1px solid var(--line);font-size:1.04rem}
+.hours th{color:var(--muted);font-weight:600;font-family:var(--sans)}
+.hours td{color:var(--ink);font-weight:700;text-align:right;font-family:var(--sans)}
+.visit-line{display:flex;align-items:center;gap:.55rem;margin-top:1rem;color:var(--body);font-size:1.02rem}
+.visit-line a{color:var(--brand);font-weight:700}
+.vi{width:1.2em;height:1.2em;color:var(--brand);flex:none}
+.visit-cta{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.6rem}
+.map-slot{position:relative;display:block;margin-top:1.3rem;aspect-ratio:16/11;border-radius:var(--radius);
+  overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
+  background:linear-gradient(160deg,#eef3ea,#e3ecdf)}
+.map-grid{position:absolute;inset:0;opacity:.6;
+  background-image:linear-gradient(rgba(157,176,140,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(157,176,140,0.5) 1px,transparent 1px);
+  background-size:2.4rem 2.4rem}
+.map-grid::after{content:"";position:absolute;left:8%;right:34%;top:44%;height:9px;background:rgba(199,180,138,0.9);transform:rotate(-8deg);border-radius:6px}
+.map-pin{position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);color:var(--brand);
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}
+.map-pin .mp{width:2.6em;height:2.6em;fill:rgba(162,53,32,0.18)}
+.map-card{position:absolute;left:.9rem;right:.9rem;bottom:.9rem;background:#fff;border-radius:12px;
+  padding:.8rem 1rem;box-shadow:0 6px 18px rgba(0,0,0,.16);display:flex;flex-direction:column;gap:.15rem}
+.map-name{color:var(--ink);font-weight:800;font-family:var(--sans)}
+.map-addr{color:var(--muted);font-size:.9rem}
+.map-link{display:inline-flex;align-items:center;gap:.4em;color:var(--brand);font-weight:800;font-size:.92rem;margin-top:.25rem}
+
+/* reviews */
+.reviews{display:grid;grid-template-columns:1fr;gap:1.4rem;margin-top:2.4rem}
+@media(min-width:44rem){.reviews{grid-template-columns:repeat(3,1fr)}}
+.rev{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+  padding:1.7rem 1.6rem;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.9rem}
+.sec-alt .rev{background:#fff}
+.rev-q{font-family:var(--serif);color:var(--ink);font-size:1.1rem;line-height:1.5;font-style:italic}
+.rev-by{color:var(--muted);font-size:.94rem;margin-top:auto}
+.rev-by b{color:var(--ink);font-style:normal}
+
+/* finale */
+.finale{position:relative;color:#fff;isolation:isolate;overflow:hidden;text-align:center}
+.finale-bg{background:radial-gradient(120% 120% at 50% 0%,var(--brand-d),var(--brand-dd) 60%,#1c1310)}
+.finale-in{max-width:50rem;margin:0 auto;padding:clamp(4rem,10vw,6rem) clamp(1.1rem,4vw,2rem)}
+.finale-eyebrow{color:var(--gold);font-weight:700;letter-spacing:.24em;text-transform:uppercase;font-size:.8rem;margin-bottom:1rem}
+.finale-h{font-family:var(--serif);color:#fff;font-size:clamp(2.6rem,8vw,4.5rem);font-weight:600;letter-spacing:-.02em}
+.finale-sub{color:rgba(255,255,255,0.9);font-size:clamp(1.08rem,2.4vw,1.3rem);margin-top:1rem;font-family:var(--serif);font-style:italic}
+.finale-cta{display:flex;flex-wrap:wrap;gap:.8rem;justify-content:center;margin-top:2.2rem}
+
+/* footer */
+.foot{background:#221812;color:#c9b8a6;padding:clamp(2.8rem,6vw,4rem) 0 6.5rem}
+.foot-in{display:grid;gap:2.4rem}
+@media(min-width:46rem){.foot-in{grid-template-columns:1fr 2fr}}
+.foot-name{font-family:var(--serif);color:#fff;font-size:1.5rem;font-weight:600}
+.foot-tag{color:#a5917d;font-size:.92rem;margin-top:.3rem}
+.socials{display:flex;gap:1rem;margin-top:1rem}
+.socials a{color:#c9b8a6;font-weight:600;font-size:.9rem}.socials a:hover{color:#fff}
+.foot-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:1.6rem}
+.foot-col h4{font-family:var(--sans);color:#fff;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.8rem}
+.foot-col a{display:block;color:#c9b8a6;padding:.3rem 0;font-weight:600;min-height:30px}
+.foot-col a:hover{color:#fff}
+.foot-hr{display:flex;justify-content:space-between;gap:1rem;padding:.26rem 0;font-size:.88rem}
+.foot-hr span:first-child{color:#a5917d}.foot-hr span:last-child{color:#e6d8c8;font-weight:600}
+.foot-act .btn{margin-top:.3rem;width:100%}
+.foot-fine{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.6rem;margin-top:2.6rem;
+  padding-top:1.5rem;border-top:1px solid #3a2c22;font-size:.84rem;color:#8f7c6a}
+.credit{color:#a5917d}
+
+/* sticky mobile bar */
+.stickybar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;gap:.6rem;
+  padding:.7rem clamp(.8rem,3vw,1.2rem);background:rgba(253,248,241,0.96);
+  backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  padding-bottom:calc(.7rem + env(safe-area-inset-bottom))}
+.sb-primary,.sb-secondary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.45em;
+  min-height:50px;border-radius:999px;font-weight:800;font-size:1rem}
+.sb-primary{background:var(--brand);color:var(--on-brand);box-shadow:0 4px 14px rgba(162,53,32,0.35)}
+.sb-secondary{background:transparent;color:var(--brand);border:1.5px solid rgba(162,53,32,0.4)}
+@media(max-width:47.99rem){.stickybar{display:flex}.foot{padding-bottom:5.5rem}}
+
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#menu">Skip to menu</a>
+
+<header class="nav" id="top">
+  <a class="brand" href="#top">Trattoria Bella Vita</a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#menu">Menu</a>
+    <a href="#visit">Visit</a>
+    <a href="#visit">Hours</a>
+  </nav>
+  <a class="nav-cta" href="https://example.com/reserve" target="_blank" rel="noopener">Reserve a Table</a>
+</header>
+
+<main>
+
+  <!-- ── HERO ─────────────────────────────────────────────── -->
+  <section class="hero" aria-label="Introduction">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="hero-in">
+      <p class="hero-eyebrow">Italian · Collingswood, NJ</p>
+      <h1 class="hero-h1">Trattoria Bella Vita</h1>
+      <p class="hero-tag">Handmade pasta, wood-fired pizza, and Sunday gravy like Nonna used to make.</p>
+      <div class="hero-meta">
+        <span class="hm"><span class="stars stars-gold" role="img" aria-label="4.8 out of 5 stars"><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-half" aria-hidden="true"><defs><linearGradient id="hg"><stop offset="50%" stop-color="currentColor"/><stop offset="50%" stop-color="transparent"/></linearGradient></defs><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z" fill="url(#hg)"/><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z" fill="none" class="st-outline"/></svg></span> <b>4.8</b> <span class="hm-q">(486)</span></span>
+        <span class="hm-sep">·</span>
+        <span class="hm">$$</span>
+        <span class="hm-sep">·</span>
+        <span class="hm">Italian</span>
+      </div>
+      <div class="hero-cta">
+        <a class="btn btn-solid btn-lg" href="https://example.com/reserve" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6.5h14v13H5z"/><path d="M5 10.5h14"/><path d="M8.5 3.5v4M15.5 3.5v4"/></svg> Reserve a Table</a>
+        <a class="btn btn-line btn-lg" href="https://example.com/order" target="_blank" rel="noopener">Order Online</a>
+      </div>
+    </div>
+    <div class="hero-fade" aria-hidden="true"></div>
+  </section>
+
+  <!-- ── ABOUT ────────────────────────────────────────────── -->
+  <section class="sec about" aria-label="About">
+    <div class="wrap about-in">
+      <div class="about-txt">
+        <p class="eyebrow">Welcome</p>
+        <h2 class="h2">Buon appetito.</h2>
+        <p class="lead">Family-owned since 2009, Trattoria Bella Vita brings a little corner of Italy to the heart of Collingswood. Our pasta is rolled by hand every morning, our mozzarella is pulled fresh, and our wood-fired oven has been going strong since day one. Come hungry — leave like family.</p>
+        <div class="badges">
+          <span class="badge"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 5-12.5 14-12.5C19 15 14 19.3 5 19z"/><path d="M7.5 16.5c2.5-3.5 5.5-5.5 8.5-6.5"/></svg> Made from scratch</span>
+          <span class="badge"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8L6.6 19.8l1-6L3.3 9.6l6-.9z"/></svg> Locally loved</span>
+          <span class="badge"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6.5h14v13H5z"/><path d="M5 10.5h14"/><path d="M8.5 3.5v4M15.5 3.5v4"/></svg> Reservations welcome</span>
+        </div>
+      </div>
+      <figure class="about-photo photo-slot" data-slot="dining-room">
+        <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 14.5v5h11v-5"/><path d="M6.5 14.5a3 3 0 0 1-.6-6 4 4 0 0 1 7.6-1.8 4 4 0 0 1 6 3.2 3 3 0 0 1-1.4 4.6z"/><path d="M9.5 17.5h5"/></svg></span></span>
+        <figcaption>A photo of your dining room or a signature dish drops in here.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ── MENU ─────────────────────────────────────────────── -->
+  <section class="sec sec-alt" id="menu" aria-label="Menu">
+    <div class="wrap">
+      <p class="eyebrow eyebrow-c">Our Menu</p>
+      <h2 class="h2 h2-c">Fresh, made to order</h2>
+      
+      <div class="menu">
+        <section class="mcat">
+          <h3 class="mcat-h"><svg class="mcat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v18M4.5 3v5a2.5 2.5 0 0 0 5 0V3"/><path d="M16.5 3c-1.5 0-2.5 2-2.5 4.5S15 12 16.5 12V3"/><path d="M16.5 12v9"/></svg> Antipasti</h3>
+          
+          <div class="mitems">
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Burrata &amp; Prosciutto</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$15</span>
+            </div>
+            <p class="mi-ds">Creamy burrata, San Daniele prosciutto, grilled ciabatta, aged balsamic</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Calamari Fritti</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$16</span>
+            </div>
+            <p class="mi-ds">Lightly fried, cherry-pepper aioli, lemon</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Meatballs al Forno</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$13</span>
+            </div>
+            <p class="mi-ds">Grandma&#39;s recipe, San Marzano marinara, whipped ricotta</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Arancini</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$12</span>
+            </div>
+            <p class="mi-ds">Crispy saffron risotto, mozzarella, pomodoro</p>
+          </div>
+          </div>
+        </section>
+        <section class="mcat">
+          <h3 class="mcat-h"><svg class="mcat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v6a2.2 2.2 0 0 0 4.4 0V3"/><path d="M9.2 11v10"/><path d="M6.8 3v4.5M11.6 3v4.5"/><path d="M16 3c-1.6 0-2.5 2.2-2.5 5s.9 3.6 2.5 3.6V21"/></svg> Pasta Fatta a Mano</h3>
+          <p class="mcat-note">Made fresh by hand every morning</p>
+          <div class="mitems">
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Rigatoni Bolognese</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$24</span>
+            </div>
+            <p class="mi-ds">Slow-simmered beef &amp; pork ragù, pecorino romano</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Cacio e Pepe</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$21</span>
+            </div>
+            <p class="mi-ds">Tonnarelli, pecorino, cracked black pepper, the classic</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Lobster Ravioli</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$29</span>
+            </div>
+            <p class="mi-ds">Maine lobster, vodka-cream blush, chives</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Sunday Gravy Pappardelle</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$27</span>
+            </div>
+            <p class="mi-ds">Braised short rib, sausage, meatball — all day Sunday</p>
+          </div>
+          </div>
+        </section>
+        <section class="mcat">
+          <h3 class="mcat-h"><svg class="mcat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v6a2.2 2.2 0 0 0 4.4 0V3"/><path d="M9.2 11v10"/><path d="M6.8 3v4.5M11.6 3v4.5"/><path d="M16 3c-1.6 0-2.5 2.2-2.5 5s.9 3.6 2.5 3.6V21"/></svg> Dal Forno · Wood-Fired</h3>
+          
+          <div class="mitems">
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Margherita</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$18</span>
+            </div>
+            <p class="mi-ds">San Marzano, fresh mozzarella, basil, olive oil</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Diavola</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$21</span>
+            </div>
+            <p class="mi-ds">Spicy soppressata, chili honey, mozzarella</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Chicken Parmigiana</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$26</span>
+            </div>
+            <p class="mi-ds">Hand-breaded, house marinara, mozzarella, spaghetti</p>
+          </div>
+          </div>
+        </section>
+        <section class="mcat">
+          <h3 class="mcat-h"><svg class="mcat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v6a2.2 2.2 0 0 0 4.4 0V3"/><path d="M9.2 11v10"/><path d="M6.8 3v4.5M11.6 3v4.5"/><path d="M16 3c-1.6 0-2.5 2.2-2.5 5s.9 3.6 2.5 3.6V21"/></svg> Dolci</h3>
+          
+          <div class="mitems">
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Tiramisù</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$11</span>
+            </div>
+            <p class="mi-ds">Espresso-soaked ladyfingers, mascarpone, cocoa</p>
+          </div>
+          <div class="mi">
+            <div class="mi-head">
+              <span class="mi-nm">Cannoli</span>
+              <span class="mi-dots" aria-hidden="true"></span>
+              <span class="mi-pr">$10</span>
+            </div>
+            <p class="mi-ds">Sicilian shells, sweet ricotta, pistachio, chocolate</p>
+          </div>
+          </div>
+        </section>
+      </div>
+      <p class="menu-foot">Menu subject to change · Ask your server about today's specials.
+         <a class="menu-order" href="https://example.com/order" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg> Order online</a></p>
+    </div>
+  </section>
+
+  <!-- ── GALLERY ──────────────────────────────────────────── -->
+  <section class="sec" aria-label="Photo gallery">
+    <div class="wrap">
+      <p class="eyebrow eyebrow-c">Gallery</p>
+      <h2 class="h2 h2-c">A taste of the experience</h2>
+      <div class="gallery">
+        <figure class="photo-slot g-slot" data-slot="gallery-1">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v6a2.2 2.2 0 0 0 4.4 0V3"/><path d="M9.2 11v10"/><path d="M6.8 3v4.5M11.6 3v4.5"/><path d="M16 3c-1.6 0-2.5 2.2-2.5 5s.9 3.6 2.5 3.6V21"/></svg></span></span>
+          <figcaption>Wood-fired Margherita</figcaption>
+        </figure>
+        <figure class="photo-slot g-slot" data-slot="gallery-2">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 6c-2.5 6-6 9-9 12-3-3-6.5-6-9-12z"/><path d="M9.5 8.5a1 1 0 1 0 0-.01M13.5 11a1 1 0 1 0 0-.01M10 14a1 1 0 1 0 0-.01"/></svg></span></span>
+          <figcaption>Hand-rolled pasta</figcaption>
+        </figure>
+        <figure class="photo-slot g-slot" data-slot="gallery-3">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 14.5v5h11v-5"/><path d="M6.5 14.5a3 3 0 0 1-.6-6 4 4 0 0 1 7.6-1.8 4 4 0 0 1 6 3.2 3 3 0 0 1-1.4 4.6z"/><path d="M9.5 17.5h5"/></svg></span></span>
+          <figcaption>The dining room</figcaption>
+        </figure>
+        <figure class="photo-slot g-slot" data-slot="gallery-4">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 5-12.5 14-12.5C19 15 14 19.3 5 19z"/><path d="M7.5 16.5c2.5-3.5 5.5-5.5 8.5-6.5"/></svg></span></span>
+          <figcaption>Sunday gravy</figcaption>
+        </figure>
+        <figure class="photo-slot g-slot" data-slot="gallery-5">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h9l-.9 5a3.6 3.6 0 0 1-7.2 0z"/><path d="M12 13v6"/><path d="M8.5 21.5h7"/></svg></span></span>
+          <figcaption>Tiramisù</figcaption>
+        </figure>
+        <figure class="photo-slot g-slot" data-slot="gallery-6">
+          <span class="photo-art" aria-hidden="true"><span class="photo-ic"><svg class="pa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8.5h11.5v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16.5 9.5h1.7a2 2 0 0 1 0 4h-1.7"/><path d="M8 3c0 1-.6 1.5-.6 2.6M11 3c0 1-.6 1.5-.6 2.6"/></svg></span></span>
+          <figcaption>The bar</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── VISIT: hours + location + map ────────────────────── -->
+  <section class="sec sec-alt" id="visit" aria-label="Hours and location">
+    <div class="wrap visit">
+      <div class="visit-col">
+        <p class="eyebrow"><svg class="eb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/><path d="M12 7.2V12l3.2 2"/></svg> Hours</p>
+        <h2 class="h2">When we're open</h2>
+        <table class="hours">
+          <tbody>
+          <tr><th scope="row">Tue – Thu</th><td>4:00 PM – 9:00 PM</td></tr>
+          <tr><th scope="row">Fri – Sat</th><td>4:00 PM – 10:00 PM</td></tr>
+          <tr><th scope="row">Sunday</th><td>3:00 PM – 9:00 PM</td></tr>
+          <tr><th scope="row">Monday</th><td>Closed</td></tr>
+          </tbody>
+        </table>
+        <p class="visit-line"><svg class="vi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 3h3l1.4 4-2 1.3a12 12 0 0 0 5.3 5.3l1.3-2 4 1.4v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.2 2 2 0 0 1 6.6 3z"/></svg> <a href="tel:+18565550192">(856) 555-0192</a></p>
+        <p class="visit-line"><svg class="vi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s6.5-5.3 6.5-10.5A6.5 6.5 0 1 0 5.5 10.5C5.5 15.7 12 21 12 21z"/><path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z"/></svg> 712 Haddon Avenue, Collingswood, NJ 08108</p>
+        <div class="visit-cta">
+          <a class="btn btn-solid" href="https://example.com/reserve" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6.5h14v13H5z"/><path d="M5 10.5h14"/><path d="M8.5 3.5v4M15.5 3.5v4"/></svg> Reserve a Table</a>
+          <a class="btn btn-line-d" href="https://example.com/order" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg> Order Online</a>
+        </div>
+      </div>
+      <div class="visit-col">
+        <p class="eyebrow"><svg class="eb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s6.5-5.3 6.5-10.5A6.5 6.5 0 1 0 5.5 10.5C5.5 15.7 12 21 12 21z"/><path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z"/></svg> Find us</p>
+        <h2 class="h2">Come visit</h2>
+        <!-- MAP PLACEHOLDER — swap this block for a Google Maps embed:
+             <iframe src="https://www.google.com/maps?q=YOUR+ADDRESS&output=embed"
+                     width="100%" height="300" style="border:0;border-radius:16px"
+                     loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe> -->
+        <a class="map-slot" href="https://www.google.com/maps/search/?api=1&query=712%20Haddon%20Avenue%2C%20Collingswood%2C%20NJ%2C%2008108" target="_blank" rel="noopener" aria-label="Open Trattoria Bella Vita in Google Maps">
+          <span class="map-grid" aria-hidden="true"></span>
+          <span class="map-pin"><svg class="mp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s6.5-5.3 6.5-10.5A6.5 6.5 0 1 0 5.5 10.5C5.5 15.7 12 21 12 21z"/><path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z"/></svg></span>
+          <span class="map-card">
+            <span class="map-name">Trattoria Bella Vita</span>
+            <span class="map-addr">712 Haddon Avenue, Collingswood, NJ 08108</span>
+            <span class="map-link"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 9-9 9-9-9 9-9z"/><path d="M10 14v-2.2a2 2 0 0 1 2-2h3.5"/><path d="M13.5 7.8l2 1.9-2 1.9"/></svg> Get directions</span>
+          </span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── REVIEWS ──────────────────────────────────────────── -->
+  <section class="sec" aria-label="Reviews">
+    <div class="wrap">
+      <p class="eyebrow eyebrow-c">Reviews</p>
+      <h2 class="h2 h2-c">Guests love it here</h2>
+      <div class="reviews">
+        <figure class="rev">
+          <span class="stars stars-gold" role="img" aria-label="5.0 out of 5 stars"><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg></span>
+          <blockquote class="rev-q">The lobster ravioli is unreal and the Sunday gravy tastes exactly like my grandmother&#39;s. Our new standing reservation.</blockquote>
+          <figcaption class="rev-by">— <b>Jenna P.</b>, Haddonfield</figcaption>
+        </figure>
+        <figure class="rev">
+          <span class="stars stars-gold" role="img" aria-label="5.0 out of 5 stars"><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg></span>
+          <blockquote class="rev-q">Cozy, warm, and everything is clearly made from scratch. The wood-fired pizza has the perfect char. Bring your appetite!</blockquote>
+          <figcaption class="rev-by">— <b>Marcus D.</b>, Cherry Hill</figcaption>
+        </figure>
+        <figure class="rev">
+          <span class="stars stars-gold" role="img" aria-label="5.0 out of 5 stars"><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg><svg viewBox="0 0 24 24" class="st st-full" aria-hidden="true"><path d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z"/></svg></span>
+          <blockquote class="rev-q">Best Italian in South Jersey, full stop. Great for date night and family dinners alike. The staff treats you like family.</blockquote>
+          <figcaption class="rev-by">— <b>Sofia L.</b>, Collingswood</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FINALE ───────────────────────────────────────────── -->
+  <section class="finale" aria-label="Call to action">
+    <div class="hero-bg finale-bg" aria-hidden="true"></div>
+    <div class="finale-in">
+      <p class="finale-eyebrow">Collingswood, NJ</p>
+      <h2 class="finale-h">Come hungry.</h2>
+      <p class="finale-sub">We can't wait to serve you. Reserve your table or order online today.</p>
+      <div class="finale-cta">
+        <a class="btn btn-solid btn-lg" href="https://example.com/reserve" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6.5h14v13H5z"/><path d="M5 10.5h14"/><path d="M8.5 3.5v4M15.5 3.5v4"/></svg> Reserve a Table</a>
+        <a class="btn btn-line btn-lg" href="https://www.google.com/maps/dir/?api=1&amp;destination=712%20Haddon%20Avenue%2C%20Collingswood%2C%20NJ%2C%2008108" target="_blank" rel="noopener">Get Directions</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <div class="foot-name">Trattoria Bella Vita</div>
+      <p class="foot-tag">Italian · Collingswood, NJ</p>
+      <div class="socials"><a href="https://instagram.com/" target="_blank" rel="noopener">Instagram</a><a href="https://facebook.com/" target="_blank" rel="noopener">Facebook</a></div>
+    </div>
+    <div class="foot-cols">
+      <div class="foot-col">
+        <h4>Visit</h4>
+        <a href="https://www.google.com/maps/search/?api=1&query=712%20Haddon%20Avenue%2C%20Collingswood%2C%20NJ%2C%2008108" target="_blank" rel="noopener">712 Haddon Avenue, Collingswood, NJ 08108</a>
+        <a href="tel:+18565550192">(856) 555-0192</a>
+      </div>
+      <div class="foot-col">
+        <h4>Hours</h4>
+        <span class="foot-hr"><span>Tue – Thu</span><span>4:00 PM – 9:00 PM</span></span>
+        <span class="foot-hr"><span>Fri – Sat</span><span>4:00 PM – 10:00 PM</span></span>
+        <span class="foot-hr"><span>Sunday</span><span>3:00 PM – 9:00 PM</span></span>
+        <span class="foot-hr"><span>Monday</span><span>Closed</span></span>
+      </div>
+      <div class="foot-col foot-act">
+        <h4>Order &amp; reserve</h4>
+        <a class="btn btn-solid" href="https://example.com/reserve" target="_blank" rel="noopener">Reserve a Table</a>
+        <a class="btn btn-line-d" href="https://example.com/order" target="_blank" rel="noopener">Order Online</a>
+      </div>
+    </div>
+  </div>
+  <div class="wrap foot-fine">
+    <span>© 2026 Trattoria Bella Vita. All rights reserved.</span>
+    <span class="credit">Website by Desiderata Labs · South Jersey</span>
+  </div>
+</footer>
+
+<div class="stickybar">
+  <a class="sb-primary" href="https://example.com/reserve" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6.5h14v13H5z"/><path d="M5 10.5h14"/><path d="M8.5 3.5v4M15.5 3.5v4"/></svg> Reserve a Table</a>
+  <a class="sb-secondary" href="tel:+18565550192"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 3h3l1.4 4-2 1.3a12 12 0 0 0 5.3 5.3l1.3-2 4 1.4v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.2 2 2 0 0 1 6.6 3z"/></svg> Call</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "business": "Jersey Concrete",
+  "source": "https://jerseyconcrete.com/",
+  "fetchedAt": "2026-07-10T12:12:57.502Z",
+  "logo": "assets/logo.png",
+  "hero": "assets/hero.jpg",
+  "gallery": [
+    "assets/gallery-1.jpg",
+    "assets/gallery-2.jpg",
+    "assets/gallery-3.jpg",
+    "assets/gallery-4.jpg",
+    "assets/gallery-5.jpg",
+    "assets/gallery-6.jpg",
+    "assets/gallery-7.jpg",
+    "assets/gallery-8.jpg"
+  ],
+  "pagesFetched": [
+    "https://jerseyconcrete.com/",
+    "https://jerseyconcrete.com/",
+    "https://jerseyconcrete.com/gallery/"
+  ],
+  "counts": {
+    "candidates": 15,
+    "downloaded": 15,
+    "kept": 10
+  },
+  "note": "",
+  "tookMs": 4554
+}

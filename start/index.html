@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     Site Sourcery — /start  (the self-serve customizer)
+     This is the page the printed flyer + outreach emails point to.
+     A dead-simple form → a live, in-browser PREVIEW of the visitor's
+     site in ~60 seconds. Built to be effortless for a non-technical
+     or older business owner: big taps, plain words, no account.
+
+     ┌─────────────────────────────────────────────────────────┐
+     │ HONEST NOTE — WHAT IS REAL NOW vs. WHAT NEEDS A BACKEND  │
+     ├─────────────────────────────────────────────────────────┤
+     │ REAL NOW (this file, 100% client-side, no server):      │
+     │  • The whole form + validation + UX.                    │
+     │  • A faithful LIVE MOCK preview, rendered in an iframe   │
+     │    from the SAME trade/cuisine defaults the Node         │
+     │    generator uses (see ../../lib/data.mjs) — so what the │
+     │    owner sees closely matches what we'd actually ship.   │
+     │  • The exact lead JSON payload the generator consumes is │
+     │    assembled and saved to localStorage + console.        │
+     │                                                          │
+     │ NEEDS A BACKEND to go fully live (the documented seam):  │
+     │  • A tiny HTTP endpoint  POST {apiBase}/api/generate     │
+     │    that receives the lead JSON below and runs the        │
+     │    existing CLI:  buildOne(lead, outDir, {harvest})      │
+     │    from ../../generate.mjs  (which calls ../../harvest.mjs│
+     │    when `website` is present to pull the owner's real     │
+     │    photos). It returns {id, slug, statusUrl}.            │
+     │  • GET {apiBase}/api/status/{id} → {status, previewUrl}  │
+     │    so we can swap the mock for the REAL generated site    │
+     │    and publish it to <slug>.sitesourcery.com.        │
+     │  • Persisting the lead (DB/queue) + notifying the owner   │
+     │    (SMS/email with their link).                          │
+     │  Set CONFIG.apiBase (in the script below) to that origin  │
+     │  and the front-end starts POSTing real jobs — no other    │
+     │  change needed. Until then it runs the mock and captures  │
+     │  the lead locally. Full contract is in the build report.  │
+     └─────────────────────────────────────────────────────────┘
+
+     Brand name/domain/phone are centralized in ../brand.js.
+     ============================================================ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>See your website — free, in 60 seconds · Site Sourcery</title>
+<meta name="description" content="Tell us about your business and watch your new website come together — free, in about a minute. No account, no payment, no tech skills.">
+<meta name="theme-color" content="#f8f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://sitesourcery.com/start/">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231b60c5'/><path d='M16 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z' fill='%23ffffff'/><path d='M24.6 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z' fill='%23ffd9c2'/></svg>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Site Sourcery">
+<meta property="og:title" content="See your website — free, in 60 seconds">
+<meta property="og:description" content="Tell us about your business and watch your new website come together. No account, no payment, no tech skills.">
+<meta property="og:url" content="https://sitesourcery.com/start/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="See your website — free, in 60 seconds">
+<meta name="twitter:description" content="Tell us about your business and watch your website come together — free, in about a minute.">
+<script>document.documentElement.classList.add('js');addEventListener('load',function(){setTimeout(function(){if(!window.__ssReveal){var n=document.querySelectorAll('[data-reveal]');for(var i=0;i<n.length;i++)n[i].classList.add('in')}},3000)});try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body
+  data-brand-title="See your website — free, in 60 seconds · {name}"
+  data-brand-desc="Tell us about your business and watch your new website come together — free, in about a minute. No account, no payment, no tech skills.">
+
+<a class="skip" href="#form-card">Skip to the form</a>
+
+<!-- ── NAV (slim) ──────────────────────────────────────────── -->
+<nav class="nav" aria-label="Primary">
+  <div class="bar">
+    <a class="brand" href="../">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="ssg-s-nav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b60c5"/><stop offset=".52" stop-color="#6a5cf0"/><stop offset="1" stop-color="#f2743a"/></linearGradient></defs><rect width="32" height="32" rx="7" fill="url(#ssg-s-nav)"/><path d="M15 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z" fill="#fff"/><path d="M24.5 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" fill="#fff" opacity=".95"/></svg>
+      <span class="nm" data-brand>Site Sourcery</span>
+    </a>
+    <div class="links">
+      <a class="hide-sm" href="../#examples">Examples</a>
+      <a class="hide-sm" href="../#pricing">Pricing</a>
+      <button class="theme-btn" type="button" aria-label="Switch color theme">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn ghost navcta" href="tel:+18565550199" data-tel>Call us</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <div class="start-hero">
+    <span class="eyebrow spark"><span class="dot spark"></span> Free preview · no account</span>
+    <h1>See your website — in 60 seconds.</h1>
+    <p>Tell us a little about your business and watch it come together. No payment, no tech skills, nothing to install.</p>
+  </div>
+
+  <div class="start-shell">
+
+    <!-- ── THE FORM ──────────────────────────────────────── -->
+    <form id="form-card" class="card-form" novalidate action="#" method="post" aria-label="Build my website">
+      <noscript>
+        <p style="background:var(--accent-soft);border:1px solid var(--accent-bright);border-radius:12px;padding:1rem 1.1rem;color:var(--body);margin-bottom:1.4rem">
+          The instant preview needs JavaScript. No problem — just call or text us at
+          <a href="tel:+18565550199" data-tel>(856) 555-0199</a> and a real person will build your site for you.
+        </p>
+      </noscript>
+
+      <div class="field">
+        <label for="biz-name">What's your business called?</label>
+        <p class="hint">Exactly how you'd want it on the sign.</p>
+        <input class="in" id="biz-name" name="name" type="text" autocomplete="organization"
+               placeholder="e.g. Bright Spark Electric" required>
+        <p class="msg" id="name-msg">Add your business name so we can put it on your site.</p>
+      </div>
+
+      <fieldset class="field">
+        <span class="flabel">What kind of business is it?</span>
+        <p class="hint">Pick the closest one — we'll tailor the design to match.</p>
+        <div class="chips" role="radiogroup" aria-label="Business type">
+          <label class="chip"><input type="radio" name="btype" value="plumber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 5.7 6 10a6 6 0 0 1-12 0c0-4.3 6-10 6-10Z"/></svg> Plumber</label>
+          <label class="chip"><input type="radio" name="btype" value="electrician"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> Electrician</label>
+          <label class="chip"><input type="radio" name="btype" value="hvac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0Z"/></svg> Heating &amp; Cooling</label>
+          <label class="chip"><input type="radio" name="btype" value="roofer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg> Roofer</label>
+          <label class="chip"><input type="radio" name="btype" value="contractor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m17.6 6.4-3.5 3.5-3-3 3.5-3.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8Z"/></svg> Contractor</label>
+          <label class="chip"><input type="radio" name="btype" value="restaurant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v18M4 3v6a3 3 0 0 0 6 0V3"/><path d="M17 3c-2 2-2 8 0 10v8"/></svg> Restaurant</label>
+          <label class="chip"><input type="radio" name="btype" value="cafe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><path d="M8 3v2M12 3v2"/></svg> Café / Bakery</label>
+          <label class="chip"><input type="radio" name="btype" value="pizza"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 9c2 6 6 10 10 12 4-2 8-6 10-12L12 3Z"/><circle cx="10" cy="11" r="1"/><circle cx="13.5" cy="14" r="1"/></svg> Pizzeria</label>
+          <label class="chip"><input type="radio" name="btype" value="other"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 4.5 4h15L21 9"/><path d="M4 9v11h16V9"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/></svg> Something else</label>
+        </div>
+        <p class="msg" id="type-msg">Tap the closest match so we can pick your design.</p>
+      </fieldset>
+
+      <div class="field">
+        <label for="biz-phone">Your phone number</label>
+        <p class="hint">So we can text you the link when it's ready. We don't share it.</p>
+        <input class="in" id="biz-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel"
+               placeholder="(856) 555-0148" required>
+        <p class="msg" id="phone-msg">Add a phone number so we can send you your site.</p>
+      </div>
+
+      <div class="field">
+        <label for="biz-url">Have a website now? <span class="opt">(optional)</span></label>
+        <p class="hint">Paste it and we'll pull in your real photos and info. No site yet? Skip this.</p>
+        <input class="in" id="biz-url" name="website" type="url" autocomplete="url" inputmode="url"
+               placeholder="yourbusiness.com">
+      </div>
+
+      <div class="submit-row">
+        <button class="btn primary big block" type="submit">
+          Build my website <span class="arw" aria-hidden="true">→</span>
+        </button>
+        <p class="form-fine">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          Free preview · no account · no card · takes about a minute
+        </p>
+      </div>
+    </form>
+
+    <!-- ── BUILDING STATE ────────────────────────────────── -->
+    <div class="building" id="building" aria-live="polite">
+      <div class="spin" aria-hidden="true"></div>
+      <h2>Building your website…</h2>
+      <p class="stat" id="build-stat">Reading your details…</p>
+      <div class="bar" aria-hidden="true"><i id="build-bar"></i></div>
+    </div>
+
+    <!-- ── RESULT / PREVIEW ──────────────────────────────── -->
+    <div class="result" id="result">
+      <h2 tabindex="-1" id="result-head" style="text-align:center;margin-bottom:1rem">Here's your website</h2>
+      <div class="win">
+        <div class="winbar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="addr" id="preview-addr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> <span id="preview-host">yourbusiness.com</span></span>
+          <a href="#" class="open-real" id="open-full" target="_blank" rel="noopener">Full screen ↗</a>
+        </div>
+        <iframe class="preview-frame" id="preview" title="Live preview of your website"
+                sandbox="allow-popups allow-top-navigation-by-user-activation"></iframe>
+      </div>
+
+      <div class="after">
+        <div class="tada" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c94f1e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:2.4rem;height:2.4rem;margin:0 auto"><circle cx="12" cy="12" r="9"/><path d="m8.3 12 2.6 2.6 4.8-5.4"/></svg>
+        </div>
+        <h2>Looking good, <span id="after-name">friend</span>.</h2>
+        <p>This is a quick preview built right in your browser. Love it? A <b>real person</b> will finish it by hand — your photos, your words, your colors — and put it live. <span id="after-photos"></span>We'll text the link to <b id="after-phone">your phone</b>.</p>
+        <div class="cta-row">
+          <a class="btn primary big" href="tel:+18565550199" data-tel>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.15rem;height:1.15rem"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z"/></svg>
+            Call to make it live
+          </a>
+          <a class="btn secondary" href="../#pricing">See what's included</a>
+        </div>
+        <p class="captured" id="captured">Your details are saved — we've got it from here.</p>
+        <button class="restart" type="button" id="restart">Start over with a different business</button>
+      </div>
+    </div>
+
+    <!-- reassurance -->
+    <div class="mini-trust" id="mini-trust">
+      <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Real preview, right now</span>
+      <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg> Finished by a real person</span>
+      <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> South Jersey local</span>
+    </div>
+
+    <!-- honest, friendly disclosure -->
+    <div class="how" id="how">
+      <p><b>How this works.</b> The preview above is a quick, honest mock so you can see the idea in your browser right away — no waiting. Your real site is finished by hand and looks even better.</p>
+      <p>Paste an existing website and we'll bring your own photos across. Otherwise we start with clean stand-in images and swap in yours anytime — always included in <span data-price>$79</span>/mo.</p>
+    </div>
+
+  </div><!-- /start-shell -->
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <a class="brand" href="../">
+          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="ssg-s-foot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b60c5"/><stop offset=".52" stop-color="#6a5cf0"/><stop offset="1" stop-color="#f2743a"/></linearGradient></defs><rect width="32" height="32" rx="7" fill="url(#ssg-s-foot)"/><path d="M15 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z" fill="#fff"/><path d="M24.5 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" fill="#fff" opacity=".95"/></svg>
+          <span class="nm" data-brand>Site Sourcery</span>
+        </a>
+        <p class="about">Beautiful, done-for-you websites for South Jersey small businesses. We build it, host it, and keep it updated.</p>
+      </div>
+      <nav class="fnav" aria-label="Footer">
+        <a href="../">Home</a>
+        <a href="../#how">How it works</a>
+        <a href="../#pricing">Pricing</a>
+        <a href="../#examples">Examples</a>
+        <a href="tel:+18565550199" data-tel>Call us</a>
+      </nav>
+    </div>
+    <p class="fine">
+      © <span data-year>2026</span> <span data-brand>Site Sourcery</span> · <span data-domain>sitesourcery.com</span> — built with care in South Jersey.<br>
+      The 60-second preview is a browser-side mock; your finished site is hand-built. Working name &amp; placeholder contact details.
+    </p>
+  </div>
+</footer>
+
+<script src="../brand.js"></script>
+<script src="../app.js"></script>
+<script>
+/* ============================================================
+   Customizer engine — form → live mock preview → lead capture.
+   100% client-side. The one line to wire up a real backend is
+   CONFIG.apiBase (see the HONEST NOTE at the top of this file).
+   ============================================================ */
+(function () {
+  "use strict";
+
+  /* ── ONE SETTING to go fully live ──────────────────────────
+     Leave "" to run the local mock + capture leads in the browser.
+     Set to your API origin (e.g. "https://api.sitesourcery.com")
+     and the form POSTs the lead JSON to {apiBase}/api/generate,
+     which runs buildOne()/harvest() from ../../generate.mjs.       */
+  var CONFIG = { apiBase: "" };
+
+  /* ── faithful defaults — mirror ../../lib/data.mjs ─────────
+     (trimmed to what the preview shows so the mock closely
+      matches what the Node generator would actually ship)        */
+  var TRADES = {
+    plumber: { word: "Plumbing", brand: "#0e5a8a", noun: "Plumber",
+      tagline: "Fast, honest plumbing you can count on",
+      services: [["Drain Cleaning", "Slow or clogged drains cleared fast — no mess left behind."],
+        ["Water Heaters", "Repairs, replacements, and tankless upgrades, often same day."],
+        ["Leak Detection", "We find the leak, fix it right, and stop the damage."],
+        ["Toilets & Fixtures", "Running toilets, dripping faucets, clean new installs."],
+        ["Sewer & Main Lines", "Camera inspections, rooter service, and replacements."],
+        ["Emergency Plumbing", "Burst pipe or backed-up drain? We answer day and night."]] },
+    electrician: { word: "Electrical", brand: "#1f4e8c", noun: "Electrician",
+      tagline: "Licensed electrical work, done safe and to code",
+      services: [["Panel Upgrades", "Safely bring your electrical panel up to a modern load."],
+        ["Wiring & Rewiring", "New circuits, whole-home rewires, and code corrections."],
+        ["Lighting & Fans", "Recessed lighting, ceiling fans, and fixture installs."],
+        ["Outlets & Switches", "GFCI outlets, dimmers, USB outlets, switch repairs."],
+        ["EV Charger Install", "Level-2 home charging installed clean and to code."],
+        ["Emergency Electrical", "Sparking outlets or lost power — call now."]] },
+    hvac: { word: "Heating & Cooling", brand: "#0b6b6b", noun: "HVAC Pro",
+      tagline: "Comfort you can count on, all year round",
+      services: [["AC Repair & Install", "Cool comfort restored fast, plus efficient new systems."],
+        ["Heating & Furnace", "Furnace repair, heat pumps, and reliable winter heat."],
+        ["Tune-Ups", "Seasonal tune-ups that prevent breakdowns and cut bills."],
+        ["Ducts & Air Quality", "Sealed ducts, cleaner air, and balanced airflow."],
+        ["New System Installs", "Right-sized, energy-efficient systems, fair quotes."],
+        ["Emergency HVAC", "No heat or no cool? We're on the way, day or night."]] },
+    roofer: { word: "Roofing", brand: "#8a3b1e", noun: "Roofer",
+      tagline: "A roof done right protects everything under it",
+      services: [["Roof Repair", "Leaks, missing shingles, and flashing fixed to last."],
+        ["Roof Replacement", "Durable new roofs installed by a licensed local crew."],
+        ["Storm & Hail Damage", "Fast tarping and full insurance-claim support."],
+        ["Gutters", "Cleaned, repaired, or replaced to protect your home."],
+        ["Free Inspections", "Honest inspections — no pressure, no surprises."],
+        ["Emergency Tarping", "Storm damage? We'll secure your roof right away."]] },
+    contractor: { word: "Home Services", brand: "#374a5e", noun: "Contractor",
+      tagline: "Quality workmanship for your home, on time",
+      services: [["Repairs & Maintenance", "The fix-it list, handled by one trusted pro."],
+        ["Remodels & Upgrades", "Kitchens, baths, and the projects on your wishlist."],
+        ["Installations", "Done clean, done right, done to code."],
+        ["Free Estimates", "Honest estimates with no surprises."],
+        ["Emergency Service", "Something urgent? We'll be there quick."],
+        ["Seasonal Service", "Keep your home ready for any season."]] },
+    other: { word: "Local Business", brand: "#2a5f8f", noun: "Local Business",
+      tagline: "Quality local service you can count on",
+      services: [["What We Do", "The services your customers come to you for."],
+        ["Our Work", "A gallery of jobs done right, close to home."],
+        ["Why Us", "Local, reliable, and easy to reach."],
+        ["Serving Your Area", "Proudly serving South Jersey neighbors."],
+        ["Get in Touch", "Call, text, or stop by — we're happy to help."],
+        ["Fair Pricing", "Straightforward quotes, no surprises."]] }
+  };
+  var CUISINES = {
+    restaurant: { word: "American", brand: "#9a3b2e",
+      tagline: "Fresh, local, made-from-scratch comfort food",
+      items: [["The House Burger", "Half-pound blend, aged cheddar, special sauce", "$16"],
+        ["Buttermilk Fried Chicken", "Crispy, honey drizzle, mashed potatoes", "$19"],
+        ["Grilled Salmon", "Lemon-herb butter, seasonal vegetables", "$24"],
+        ["Farmhouse Salad", "Greens, roasted veg, goat cheese, balsamic", "$14"]] },
+    cafe: { word: "Café & Bakery", brand: "#7c4a2d",
+      tagline: "Great coffee, fresh food, your third place",
+      items: [["Latte", "Double shot, silky steamed milk", "$5"],
+        ["Avocado Toast", "Sourdough, smashed avocado, chili, egg", "$12"],
+        ["Butter Croissant", "Baked in-house every morning", "$4"],
+        ["Cold Brew", "Slow-steeped 18 hours, smooth & bold", "$5"]] },
+    pizza: { word: "Pizzeria", brand: "#b23e1e",
+      tagline: "Wood-fired, hand-tossed, worth the wait",
+      items: [["Margherita", "San Marzano, fresh mozzarella, basil", "$17"],
+        ["Pepperoni", "Crispy cup pepperoni, hot honey", "$19"],
+        ["Garlic Knots", "House dough, garlic butter, pecorino", "$8"],
+        ["White Pie", "Ricotta, mozzarella, garlic, olive oil", "$18"]] }
+  };
+  // which chip values are restaurants
+  var RESTAURANT = { restaurant: 1, cafe: 1, pizza: 1 };
+
+  /* ── tiny helpers (mirror ../../lib/helpers.mjs) ──────────── */
+  function esc(v) {
+    return String(v == null ? "" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function digits(p) { return String(p || "").replace(/[^\d+]/g, ""); }
+  function prettyPhone(p) {
+    var d = String(p || "").replace(/\D/g, "");
+    if (d.length === 10) return "(" + d.slice(0, 3) + ") " + d.slice(3, 6) + "-" + d.slice(6);
+    if (d.length === 11 && d[0] === "1") return "(" + d.slice(1, 4) + ") " + d.slice(4, 7) + "-" + d.slice(7);
+    return String(p || "");
+  }
+  function initials(name) {
+    var w = String(name || "").replace(/&/g, " ").split(/\s+/).filter(function (x) { return /[a-z0-9]/i.test(x); });
+    if (!w.length) return "B";
+    if (w.length === 1) return w[0].slice(0, 2).toUpperCase();
+    return (w[0][0] + w[w.length - 1][0]).toUpperCase();
+  }
+  function hexRgb(h) { h = h.replace("#", ""); return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) }; }
+  function readableInk(hex) {
+    var c = hexRgb(hex);
+    function ln(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    var L = 0.2126 * ln(c.r) + 0.7152 * ln(c.g) + 0.0722 * ln(c.b);
+    return L > 0.42 ? "#14202e" : "#ffffff";
+  }
+  function shade(hex, amt) {
+    var c = hexRgb(hex), t = amt < 0 ? 0 : 255, p = Math.abs(amt);
+    function mix(x) { return Math.round((t - x) * p + x); }
+    function h2(n) { n = n.toString(16); return n.length < 2 ? "0" + n : n; }
+    return "#" + h2(mix(c.r)) + h2(mix(c.g)) + h2(mix(c.b));
+  }
+  function normUrl(u) {
+    u = String(u || "").trim();
+    if (!u) return "";
+    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    try { var url = new URL(u); if (!/\./.test(url.hostname)) return ""; return url.href; }
+    catch (e) { return ""; }
+  }
+  function hostOf(u) { try { return new URL(u).host.replace(/^www\./, ""); } catch (e) { return ""; } }
+  function siteHost(name) {
+    var s = String(name || "your business").toLowerCase()
+      .replace(/['’]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "").slice(0, 24);
+    return (s || "yourbusiness") + ".com";
+  }
+
+  /* ── build the lead JSON the Node generator consumes ───────
+     Shape matches generate.mjs → normalize() exactly.            */
+  function buildLead(f) {
+    var isRest = !!RESTAURANT[f.btype];
+    var lead = { name: f.name, phone: f.phone };
+    if (isRest) { lead.type = "restaurant"; lead.cuisine = ({ restaurant: "American", cafe: "Cafe", pizza: "Pizza" })[f.btype]; }
+    else { lead.type = "trades"; lead.trade = f.btype === "other" ? "contractor" : f.btype; }
+    if (f.website) lead.website = f.website;   // → harvest.mjs pulls their real photos
+    lead.source = "customizer";
+    lead.submittedAt = new Date().toISOString();
+    return lead;
+  }
+
+  /* ── render the in-browser preview site (returns full HTML) ─ */
+  function starRow(color) {
+    var s = "";
+    for (var i = 0; i < 5; i++) s += "<svg viewBox='0 0 24 24' fill='" + color + "'><path d='M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.7-4.58 6.5-.94z'/></svg>";
+    return s;
+  }
+  function buildPreviewHTML(f) {
+    var isRest = !!RESTAURANT[f.btype];
+    var meta = isRest ? CUISINES[f.btype] : TRADES[f.btype];
+    var brand = meta.brand;
+    var ink = readableInk(brand);
+    var dark = shade(brand, -0.35);
+    var soft = shade(brand, 0.9);
+    var name = esc(f.name || meta.noun || "Your Business");
+    var tel = digits(f.phone);
+    var phoneP = esc(prettyPhone(f.phone));
+    var mono = esc(initials(f.name));
+    var cta = isRest ? "See the Menu" : "Get a Free Quote";
+    var eyebrow = isRest
+      ? esc(meta.word) + " · South Jersey · Family-owned"
+      : "South Jersey · Licensed &amp; Insured";
+    var trust = isRest
+      ? ["Made from scratch", "Family-owned", "Locally loved", "Warm & welcoming"]
+      : ["Licensed & Insured", "Upfront Pricing", "Locally Owned", "Same-Day Service"];
+
+    var cards = "";
+    if (isRest) {
+      meta.items.forEach(function (it) {
+        cards += "<div class='sv'><div class='svtop'><h3>" + esc(it[0]) + "</h3><span class='pr'>" + esc(it[2]) + "</span></div><p>" + esc(it[1]) + "</p></div>";
+      });
+    } else {
+      meta.services.forEach(function (s) {
+        cards += "<div class='sv'><h3>" + esc(s[0]) + "</h3><p>" + esc(s[1]) + "</p></div>";
+      });
+    }
+    var trustRow = trust.map(function (t) { return "<span class='b'>" + esc(t) + "</span>"; }).join("");
+    var reviewText = isRest
+      ? "Our new favorite spot. Everything was fresh and the staff was warm. We'll be back weekly."
+      : "Came out the same day and fixed it fast. Fair price, no upsell. This is who we call now.";
+
+    return "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
+      + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+      + "<title>" + name + "</title><style>"
+      + "*{margin:0;padding:0;box-sizing:border-box}"
+      + "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#20303f;background:#fff;line-height:1.5;-webkit-font-smoothing:antialiased}"
+      + "a{color:inherit;text-decoration:none}"
+      + ".hd{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid #eee}"
+      + ".lg{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em}"
+      + ".mono{width:34px;height:34px;border-radius:9px;background:" + brand + ";color:" + ink + ";display:grid;place-items:center;font-weight:800;font-size:15px}"
+      + ".call{display:inline-flex;align-items:center;gap:7px;background:" + brand + ";color:" + ink + ";font-weight:700;font-size:14px;padding:9px 14px;border-radius:999px}"
+      + ".call svg{width:15px;height:15px;fill:none;stroke:" + ink + ";stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}"
+      + ".hero{padding:44px 20px 34px;background:radial-gradient(120% 90% at 100% 0," + soft + ",#fff 62%)}"
+      + ".eb{color:" + dark + ";font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}"
+      + ".hero h1{font-size:clamp(28px,7vw,44px);letter-spacing:-.02em;line-height:1.08;margin:10px 0 8px;color:#152230}"
+      + ".hero .tag{font-size:17px;color:#51606f;max-width:30rem}"
+      + ".btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}"
+      + ".btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:13px 20px;border-radius:999px;min-height:48px}"
+      + ".btn.p{background:" + brand + ";color:" + ink + "}.btn.p svg{width:16px;height:16px;fill:none;stroke:" + ink + ";stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}"
+      + ".btn.s{background:#fff;color:" + dark + ";border:2px solid " + shade(brand, 0.55) + "}"
+      + ".trust{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}"
+      + ".trust .b{font-size:12.5px;font-weight:700;color:" + dark + ";background:" + soft + ";border:1px solid " + shade(brand, 0.7) + ";padding:6px 11px;border-radius:999px}"
+      + ".sec{padding:30px 20px}.sec h2{font-size:22px;letter-spacing:-.01em;margin-bottom:4px;color:#152230}"
+      + ".sec .lead{color:#61707f;margin-bottom:18px;font-size:15px}"
+      + ".grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}"
+      + ".sv{border:1px solid #ececec;border-radius:12px;padding:15px 16px;background:#fff}"
+      + ".sv .svtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}"
+      + ".sv h3{font-size:15.5px;color:#1f2c3a;margin-bottom:4px}.sv .pr{font-weight:800;color:" + dark + ";white-space:nowrap}"
+      + ".sv p{font-size:13.5px;color:#68757f}"
+      + ".rev{margin:6px 20px 0;background:" + soft + ";border:1px solid " + shade(brand, 0.72) + ";border-radius:14px;padding:20px 22px}"
+      + ".rev .st{display:flex;gap:2px;margin-bottom:8px}.rev .st svg{width:17px;height:17px}"
+      + ".rev p{font-size:16px;color:#2c3a48;font-style:italic}.rev .who{margin-top:10px;font-weight:700;font-size:13.5px;color:#55636f}"
+      + ".ft{margin-top:26px;background:" + shade(brand, -0.4) + ";color:#eaf0f5;padding:26px 20px 30px}"
+      + ".ft .fn{font-weight:800;font-size:18px;color:#fff}.ft .fc{margin-top:6px;font-size:14px;color:#c9d6e2}"
+      + ".ft .fcall{display:inline-flex;align-items:center;gap:8px;margin-top:14px;background:" + brand + ";color:" + ink + ";font-weight:700;padding:11px 18px;border-radius:999px;font-size:14px}"
+      + ".ft .cred{margin-top:20px;font-size:11.5px;color:#9fb1c2;border-top:1px solid rgba(255,255,255,.14);padding-top:14px}"
+      + "@media(max-width:520px){.grid{grid-template-columns:1fr}}"
+      + "</style></head><body>"
+      + "<header class='hd'><span class='lg'><span class='mono'>" + mono + "</span> " + name + "</span>"
+      + (tel ? "<a class='call' href='tel:" + esc(tel) + "'><svg viewBox='0 0 24 24'><path d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z'/></svg>" + phoneP + "</a>" : "")
+      + "</header>"
+      + "<section class='hero'><div class='eb'>" + eyebrow + "</div>"
+      + "<h1>" + name + "</h1><p class='tag'>" + esc(meta.tagline) + "</p>"
+      + "<div class='btns'>"
+      + (tel ? "<a class='btn p' href='tel:" + esc(tel) + "'><svg viewBox='0 0 24 24'><path d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z'/></svg>Call " + phoneP + "</a>" : "")
+      + "<a class='btn s' href='#'>" + cta + "</a></div>"
+      + "<div class='trust'>" + trustRow + "</div></section>"
+      + "<section class='sec'><h2>" + (isRest ? "On the menu" : "What we do") + "</h2>"
+      + "<p class='lead'>" + (isRest ? "A few favorites — the full menu lives here." : "Straightforward help from a local team you can trust.") + "</p>"
+      + "<div class='grid'>" + cards + "</div></section>"
+      + "<div class='rev'><div class='st'>" + starRow(brand) + "</div><p>“" + reviewText + "”</p><div class='who'>— a happy " + (isRest ? "regular" : "neighbor") + ", South Jersey</div></div>"
+      + "<footer class='ft'><div class='fn'>" + name + "</div>"
+      + "<div class='fc'>" + (isRest ? esc(meta.word) + " · " : "") + "Serving South Jersey" + (phoneP ? " · " + phoneP : "") + "</div>"
+      + (tel ? "<a class='fcall' href='tel:" + esc(tel) + "'>Call " + phoneP + "</a>" : "")
+      + "<div class='cred'>Website by Site Sourcery — built for you, live today.</div></footer>"
+      + "</body></html>";
+  }
+
+  /* ── DOM refs ──────────────────────────────────────────────*/
+  var form = document.getElementById("form-card");
+  var building = document.getElementById("building");
+  var buildStat = document.getElementById("build-stat");
+  var buildBar = document.getElementById("build-bar");
+  var result = document.getElementById("result");
+  var frame = document.getElementById("preview");
+  var miniTrust = document.getElementById("mini-trust");
+  var how = document.getElementById("how");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var lastBlobUrl = null;
+
+  /* ── chip selection: JS twin of :has() for older browsers ──*/
+  form.querySelectorAll(".chip input").forEach(function (inp) {
+    inp.addEventListener("change", function () {
+      form.querySelectorAll(".chip").forEach(function (c) { c.classList.remove("sel"); });
+      if (inp.checked) inp.closest(".chip").classList.add("sel");
+      clearMsg("type-msg", "btype");
+    });
+  });
+  ["biz-name", "biz-phone"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", function () {
+      this.classList.remove("err");
+      var m = document.getElementById(id === "biz-name" ? "name-msg" : "phone-msg");
+      if (m) m.classList.remove("show");
+    });
+  });
+  function clearMsg(msgId) { var m = document.getElementById(msgId); if (m) m.classList.remove("show"); }
+  function showErr(inputId, msgId) {
+    var m = document.getElementById(msgId); if (m) m.classList.add("show");
+    var el = document.getElementById(inputId);
+    if (el) { el.classList.add("err"); el.focus(); }
+  }
+
+  /* ── read + validate the form ──────────────────────────────*/
+  function readForm() {
+    var checked = form.querySelector("input[name=btype]:checked");
+    return {
+      name: form.name.value.trim(),
+      btype: checked ? checked.value : "",
+      phone: form.phone.value.trim(),
+      website: normUrl(form.website.value)
+    };
+  }
+  function validate(f) {
+    if (!f.name) { showErr("biz-name", "name-msg"); return false; }
+    if (!f.btype) {
+      document.getElementById("type-msg").classList.add("show");
+      var first = form.querySelector("input[name=btype]"); if (first) first.focus();
+      document.querySelector(".chips").scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      return false;
+    }
+    if (digits(f.phone).replace(/\D/g, "").length < 7) { showErr("biz-phone", "phone-msg"); return false; }
+    return true;
+  }
+
+  /* ── the progress "build" animation ────────────────────────*/
+  function runBuild(f, lead, done) {
+    form.style.display = "none";
+    miniTrust.style.display = "none";
+    how.style.display = "none";
+    result.classList.remove("show");
+    building.classList.add("show");
+    building.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+
+    var steps = [
+      "Reading your details…",
+      "Choosing a design that fits " + (TRADES[f.btype] ? TRADES[f.btype].word.toLowerCase() : "your business") + "…",
+      "Writing your words…",
+      "Laying out your " + (RESTAURANT[f.btype] ? "menu" : "services") + "…"
+    ];
+    if (f.website) steps.push("Pulling your photos from " + hostOf(f.website) + "…");
+    steps.push("Putting it all together…");
+    steps.push("Almost ready…");
+
+    var i = 0, n = steps.length, per = reduce ? 130 : 620;
+    buildStat.textContent = steps[0];
+    buildBar.style.width = (100 / n).toFixed(0) + "%";
+    var timer = setInterval(function () {
+      i++;
+      if (i >= n) {
+        clearInterval(timer);
+        buildBar.style.width = "100%";
+        setTimeout(done, reduce ? 60 : 340);
+        return;
+      }
+      buildStat.style.opacity = 0;
+      setTimeout(function () { buildStat.textContent = steps[i]; buildStat.style.opacity = 1; }, reduce ? 0 : 140);
+      buildBar.style.width = Math.round((i + 1) / n * 100) + "%";
+    }, per);
+  }
+
+  /* ── reveal the finished preview ───────────────────────────*/
+  function reveal(f, lead) {
+    var html = buildPreviewHTML(f);
+    frame.srcdoc = html;
+
+    // full-screen open via a blob (client-side, no server)
+    try {
+      if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+      lastBlobUrl = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      document.getElementById("open-full").href = lastBlobUrl;
+    } catch (e) { document.getElementById("open-full").style.display = "none"; }
+
+    document.getElementById("preview-host").textContent = f.website ? hostOf(f.website) : siteHost(f.name);
+    document.getElementById("after-name").textContent = f.name;
+    document.getElementById("after-phone").textContent = prettyPhone(f.phone) || "your phone";
+    document.getElementById("after-photos").textContent = f.website
+      ? "We'll pull your photos from " + hostOf(f.website) + " and drop them in. "
+      : "";
+
+    building.classList.remove("show");
+    result.classList.add("show");
+    var head = document.getElementById("result-head");
+    head.focus();
+    result.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }
+
+  /* ── capture the lead (local now; the seam sends it live) ──*/
+  function capture(lead) {
+    try {
+      var key = "sourcery-leads";
+      var all = JSON.parse(localStorage.getItem(key) || "[]");
+      all.push(lead);
+      localStorage.setItem(key, JSON.stringify(all));
+    } catch (e) {}
+    // The exact payload a backend receives — visible for the operator.
+    try { console.info("[Site Sourcery] captured lead →", lead); } catch (e) {}
+  }
+
+  /* ── optional real backend call (no-op until apiBase set) ──
+     When CONFIG.apiBase is configured this fires the real job;
+     any failure silently falls back to the local mock preview.  */
+  function sendToBackend(lead) {
+    if (!CONFIG.apiBase) return;            // not wired yet → mock only
+    try {
+      fetch(CONFIG.apiBase.replace(/\/$/, "") + "/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lead)
+      }).catch(function () { /* fall back to mock silently */ });
+    } catch (e) {}
+  }
+
+  /* ── submit ────────────────────────────────────────────────*/
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var f = readForm();
+    if (!validate(f)) return;
+    var lead = buildLead(f);
+    capture(lead);
+    sendToBackend(lead);
+    runBuild(f, lead, function () { reveal(f, lead); });
+  });
+
+  /* ── start over ────────────────────────────────────────────*/
+  document.getElementById("restart").addEventListener("click", function () {
+    result.classList.remove("show");
+    form.reset();
+    form.querySelectorAll(".chip").forEach(function (c) { c.classList.remove("sel"); });
+    form.style.display = "";
+    miniTrust.style.display = "";
+    how.style.display = "";
+    if (lastBlobUrl) { URL.revokeObjectURL(lastBlobUrl); lastBlobUrl = null; }
+    form.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    document.getElementById("biz-name").focus();
+  });
+})();
+</script>
+</body>
+</html>
