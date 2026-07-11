@@ -1,280 +1,256 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — work.html · PLATE V: THE WORK
-     INK (plain): real sites we built, shown honestly. INSTRUMENT: the before /
-     after slider + a Two Readings card on a featured build. HARD HONESTY, baked
-     into the labels: every build here is an EXAMPLE — "what's possible, not a
-     client." Only sitesourcery.com + daarx.money are called ours. No fabricated
-     clients, names, ratings, or reviews. Zero images (view-source it) — same
-     self-contained rule as the rest of the site. Look = style.css; behavior =
-     sourcery.js. No CDN/fonts/remote.
+     SITE SOURCERY — work.html · WORK ("SPELLCAST")
+     The proof page. Exactly two pieces, honestly labeled: daarx.money (a live
+     product site we built) and Tidewater Plumbing & Heating (a showpiece we
+     built to show what's possible — our demo, not a client). No borrowed
+     logos, no made-up clients, no ratings, no ranking promises.
+     Self-contained: loads only style.css + sourcery.js, all graphics inline SVG.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The work — real sites we built · Site Sourcery</title>
-<meta name="description" content="Custom sites for local trades — real towns, real trades, built so Google and AI can read them and hand you the customer. Two of these are ours; the rest are examples we built to show what's possible, never paying clients. Open any one; they're live. See a free preview of yours.">
-<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<title>Work — Site Sourcery</title>
+<meta name="description" content="Two pieces, honestly labeled: daarx.money, a live product site we built, and Tidewater Plumbing &amp; Heating, a showpiece we built to show what's possible. Both open. No borrowed logos, no made-up clients.">
+<meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/work.html">
 <link rel="stylesheet" href="style.css">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="The work — real sites we built">
-<meta property="og:description" content="Custom sites built so Google and AI can read them. Two are ours; the rest are examples we built to show what's possible, never clients. Open any one; they're live.">
+<meta property="og:title" content="Work — Site Sourcery">
+<meta property="og:description" content="Two pieces, honestly labeled: a live product site we built and a showpiece demo. Both open. No borrowed logos, no made-up clients.">
 <meta property="og:url" content="https://sitesourcery.com/work.html">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="The work — real sites we built">
-<meta name="twitter:description" content="Real sites, built to get found. Two are ours; the rest are examples we built, never clients.">
-<!-- Honest structured data: examples we built, not a list of clients. No aggregateRating, no fabricated reviews. -->
+<meta name="twitter:title" content="Work — Site Sourcery">
+<meta name="twitter:description" content="Two pieces, honestly labeled. Both open. No borrowed logos, no made-up clients.">
+<!-- Honest structured data: what the page actually shows, nothing invented.
+     No aggregateRating, no reviews, no client list. -->
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"CollectionPage","name":"The work — Site Sourcery","url":"https://sitesourcery.com/work.html","isPartOf":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/"},"about":"Example custom websites for local businesses, built so Google and AI can read them","description":"Real sites we built, shown honestly: custom, easy-to-read builds for local trades, shown as examples of what's possible, not clients. Only sitesourcery.com and daarx.money are presented as our own live sites."}
+{"@context":"https://schema.org","@type":"CollectionPage","name":"Work — Site Sourcery","url":"https://sitesourcery.com/work.html","description":"Two pieces, honestly labeled: daarx.money, a live product site built by Site Sourcery, and Tidewater Plumbing & Heating, a showpiece demo build (not a client).","hasPart":[{"@type":"WebSite","name":"daarx.money","url":"https://daarx.money/","description":"A live product site designed and built by Site Sourcery."},{"@type":"WebPage","name":"Tidewater Plumbing & Heating — showpiece demo","url":"https://sitesourcery.com/work/tidewater/","description":"A demonstration build by Site Sourcery showing what a local trade's site can be. Not a client."}]}
 </script>
-<script>
-/* pre-paint: mark JS on, apply saved theme (no flash), reveal safety net */
-document.documentElement.classList.add('js');
-try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
-addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
-</script>
-<!-- ── page-scoped composition for THE WORK — DESIGN TOKENS ONLY. Net-new layout
-     (the example plates, the two before/after panels, the salon hang) that the
-     shared sheet doesn't pre-build. Inline = self-contained; it never touches
-     style.css and reads only from its tokens, so it stays of the same book.
-     Zero external loads. ── -->
-<style>
-  /* the salon hang — asymmetric, never a 3-up SaaS grid.
-     Plain BLOCK flow (not a flex column): a flex-column parent makes the engine
-     mis-measure the grid-item pieces when JS/compositing is off, collapsing them.
-     Block + margins is the robust equivalent and keeps the no-JS reading intact. */
-  .wk-hang{margin-top:1.8rem}
-  .wk-piece{display:grid;grid-template-columns:1fr;gap:1.3rem 2.2rem;align-items:center}
-  .wk-piece + .wk-piece{margin-top:3.6rem}
-  @media (min-width:52rem){
-    .wk-piece{grid-template-columns:21rem 1fr}
-    .wk-piece.flip{grid-template-columns:1fr 21rem}
-    .wk-piece.flip .wk-specimen{order:2}
-    .wk-piece:nth-child(even){margin-left:2.4rem}
-    .wk-piece:nth-child(3n+1){margin-left:1rem}
-  }
-
-  /* THE EXAMPLE PLATE — a clean catalog rendering of a build (type & air, no
-     screenshot, clearly an example). Links out to the real, openable site. */
-  /* height is content-driven with a floor — NOT aspect-ratio: an aspect-ratio'd
-     flex box as a grid item collapses to 0 height when JS is off (no will-change
-     context), which would break the no-JS reading. min-height keeps it a plate. */
-  .wk-specimen{position:relative;display:flex;flex-direction:column;text-decoration:none;color:inherit;
-    border:1px solid var(--line-lit);border-radius:var(--r);background:var(--leaf);
-    box-shadow:var(--edge),var(--e1);overflow:hidden;min-height:15rem;
-    transition:transform .16s var(--ease-settle),box-shadow .2s,border-color .16s}
-  .wk-specimen:hover,.wk-specimen:focus-visible{transform:translateY(-3px);
-    border-color:var(--rubric);box-shadow:var(--edge),var(--e2)}
-  .wk-specimen .top{display:flex;align-items:center;gap:.4rem;padding:.55rem .8rem;
-    border-bottom:1px solid var(--line);background:var(--paper-2)}
-  .wk-specimen .top i{width:.48rem;height:.48rem;border-radius:50%;background:var(--line-lit)}
-  .wk-specimen .top .u{margin-left:auto;font-family:var(--index);font-size:.58rem;
-    letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
-  .wk-specimen .body{flex:1;padding:1rem 1.05rem 1.1rem;display:flex;flex-direction:column;gap:.55rem}
-  .wk-specimen .glyph{width:26px;height:26px;color:var(--rubric)}
-  .wk-specimen .glyph svg{width:100%;height:100%;stroke:currentColor;fill:none;
-    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-  .wk-specimen .nm{font-family:var(--display);font-weight:700;font-size:1.34rem;
-    line-height:1.02;color:var(--ink)}
-  .wk-specimen:hover .nm,.wk-specimen:focus-visible .nm{color:var(--rubric)}
-  .wk-specimen .said{display:flex;gap:.6rem;align-items:flex-start;
-    padding-left:.7rem;border-left:2px solid var(--rubric)}
-  .wk-specimen .said span{font-family:var(--index);font-size:.74rem;line-height:1.45;
-    color:var(--dim)}
-  .wk-specimen .cited{margin-top:auto;display:inline-flex;align-items:center;gap:.4em;
-    font-family:var(--index);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;
-    color:var(--faint)}
-  .wk-specimen .cited b{color:var(--rubric);font-size:1.1em;line-height:0}
-
-  /* THE BEFORE / AFTER panels — "before" (a typical tired site, abstract, no fake
-     brand) → "after" (the clean, easy-to-find build). Pure type; theme-aware. */
-  .wk-pan{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
-    gap:.55rem;padding:clamp(1rem,4vw,2rem);text-align:center}
-  .wk-found{background:var(--paper-2);padding-right:50%}   /* content sits in its own (left) half so the split doesn't cut it */
-  .wk-found .broke{width:34px;height:26px;margin:0 auto;border:2px dashed var(--faint);
-    border-radius:4px;opacity:.6}
-  .wk-found .wnav{font-family:var(--index);font-size:.62rem;letter-spacing:.06em;color:var(--faint);opacity:.7}
-  .wk-found .wh{font-family:Georgia,'Times New Roman',serif;font-weight:700;color:var(--faint);
-    font-size:clamp(1rem,3.2vw,1.5rem);letter-spacing:.02em;line-height:1.1}
-  .wk-found .uc{font-family:var(--index);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--faint);border:1px solid var(--line);border-radius:2px;padding:.18em .6em;align-self:center}
-  .wk-found .cr{font-family:var(--index);font-size:.56rem;letter-spacing:.05em;color:var(--faint);opacity:.65}
-  .wk-kept{background:var(--leaf);align-items:center;padding-left:50%}   /* content sits in its own (right) half */
-  .wk-kept .spine{display:flex;gap:.8rem;align-items:center;text-align:left;max-width:20rem}
-  .wk-kept .spine .bar{width:3px;align-self:stretch;background:var(--rubric);border-radius:2px;flex:0 0 auto}
-  .wk-kept .biz{font-family:var(--display);font-weight:800;color:var(--ink);
-    font-size:clamp(1.2rem,3.6vw,1.9rem);line-height:1.02}
-  .wk-kept .biz .mark{color:var(--rubric)}
-  .wk-kept .said2{font-family:var(--index);font-size:.72rem;color:var(--dim);margin-top:.3rem;line-height:1.4}
-  .wk-kept .chips{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:.3rem}
-  .wk-kept .chip{font-family:var(--index);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--faint);border:1px solid var(--line-lit);border-radius:2px;padding:.2em .55em}
-  .wk-kept .chip.on{color:var(--paper);background:var(--rubric);border-color:var(--rubric)}
-
-  /* the "open the site" affordance, matching .entry .go */
-  .wk-go{display:inline-flex;align-items:center;gap:.4em;margin-top:.7rem;
-    font-family:var(--index);font-size:var(--fs-fine);letter-spacing:.02em;color:var(--rubric);
-    text-decoration:none}
-  .wk-go .arw{transition:transform .16s}
-  .wk-go:hover .arw,.wk-go:focus-visible .arw{transform:translateX(3px)}
-</style>
+<script src="sourcery.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="paper" aria-hidden="true"></div>
 
-<!-- ── NAV (shared chrome; work marked current) ── -->
-<nav class="nav" aria-label="Primary">
-  <div class="bar">
-    <a class="brand" href="./" aria-label="Site Sourcery — home">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
-      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
+      <span class="brand-name">Site&nbsp;Sourcery</span>
     </a>
-    <div class="links">
-      <a class="txt" href="how-it-works.html">how it works</a>
-      <a class="txt" href="the-moat.html">the difference</a>
-      <a class="txt" href="pricing.html">pricing</a>
-      <button class="theme-btn" type="button" aria-label="Switch color theme">
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-      </button>
-      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <a class="nav-link" href="/work/" aria-current="page">Work</a>
+      <a class="nav-link" href="/pricing/">Pricing</a>
+      <a class="nav-link" href="/faq/">FAQ</a>
+      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
 </nav>
 
-<!-- ── RUNNING HEAD ── -->
-<header class="runhead">
-  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate V</span>
-  <span class="sec">§05 · The Work</span>
-</header>
+<main id="main">
 
-<main id="main" class="wrap wide">
+  <!-- ══ HERO — the honest thesis in five seconds ══════════════════════════ -->
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow reveal">The work</p>
+      <h1 class="hero-title reveal">Small portfolio. All <em class="accent">true</em>.</h1>
+      <p class="lede reveal">Two pieces: a live product site we built and run, and a showpiece we made to show what&rsquo;s possible. Both open right here. <strong>No borrowed logos, no made-up clients.</strong></p>
+    </div>
+  </header>
 
-  <!-- ══ THE THESIS + THE BEFORE/AFTER (INK + INSTRUMENT) ══════════════════════ -->
-  <section class="plate">
-    <p class="folio">§05</p>
-    <p class="label mark reveal">The work</p>
-    <h1 class="cover hero-in">Real sites, built to get <span class="inscribe">found<svg class="stroke" viewBox="0 0 180 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 45 6, 110 6, 150 11 S 172 17, 176 8" stroke-width="5"/></svg></span>.</h1>
-    <p class="colo hero-in">Two of these are ours — and a fresh set of example builds is on the way.</p>
-    <p class="lede hero-in">Every one is a <b>custom site a computer can read</b> — so Google and AI can find it and hand you the customer. Drag the slider to see the before and after.</p>
-
-    <!-- ── the before/after slider (abstract, no fake brand) ── -->
-    <figure class="compare reveal" data-compare style="margin-top:2.4rem" aria-label="Drag to compare: a typical tired local site versus a clean, easy-to-find build">
-      <div class="side before">
-        <div class="wk-pan wk-found" aria-hidden="true">
-          <div class="broke"></div>
-          <div class="wnav">Home&nbsp;·&nbsp;About&nbsp;·&nbsp;Services&nbsp;·&nbsp;Contact</div>
-          <div class="wh">Welcome to<br>Our Website</div>
-          <div class="uc">Under construction</div>
-          <div class="cr">© 2009 · best viewed in your browser</div>
-        </div>
-      </div>
-      <div class="side after">
-        <div class="wk-pan wk-kept" aria-hidden="true">
-          <div class="spine">
-            <span class="bar"></span>
-            <span>
-              <span class="biz">The name they<br><span class="mark">find</span>.</span>
-              <span class="said2">One clear answer. Tap to call, book online. Built so Google and AI can read it.</span>
-              <span class="chips"><span class="chip on">found by AI</span><span class="chip">reads clean</span><span class="chip">loads fast</span></span>
-            </span>
+  <!-- ══ PIECE 1 — daarx.money · live site we built ════════════════════════ -->
+  <section class="section" aria-labelledby="piece-daarx">
+    <div class="wrap">
+      <div class="grid cols-2">
+        <div class="shop-window reveal">
+          <div class="shop-bar">
+            <span class="num">daarx.money</span>
+            <span class="badge"><span class="live-dot" aria-hidden="true"></span>Live site &mdash; ours</span>
           </div>
+          <a href="https://daarx.money/" aria-label="Open daarx.money — a live product site we built">
+            <svg viewBox="0 0 640 400" role="img" aria-label="Stylized preview of daarx.money: a dark product site with a bold headline and one clear call to action" focusable="false">
+              <defs>
+                <linearGradient id="dxG" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/>
+                </linearGradient>
+              </defs>
+              <rect width="640" height="400" fill="#0B0912"/>
+              <rect width="640" height="46" fill="#151221"/>
+              <line x1="0" y1="46" x2="640" y2="46" stroke="#2A2444"/>
+              <circle cx="34" cy="23" r="7" fill="url(#dxG)"/>
+              <rect x="52" y="18" width="66" height="10" rx="5" fill="#B8B2D4" opacity=".55"/>
+              <rect x="470" y="18" width="40" height="10" rx="5" fill="#B8B2D4" opacity=".4"/>
+              <rect x="522" y="18" width="40" height="10" rx="5" fill="#B8B2D4" opacity=".4"/>
+              <rect x="574" y="12" width="44" height="22" rx="11" fill="url(#dxG)" opacity=".9"/>
+              <rect x="48" y="104" width="330" height="28" rx="7" fill="#F6F4FF"/>
+              <rect x="48" y="144" width="252" height="28" rx="7" fill="#F6F4FF" opacity=".92"/>
+              <rect x="48" y="196" width="298" height="11" rx="5.5" fill="#B8B2D4" opacity=".7"/>
+              <rect x="48" y="216" width="236" height="11" rx="5.5" fill="#B8B2D4" opacity=".7"/>
+              <rect x="48" y="256" width="142" height="40" rx="20" fill="url(#dxG)"/>
+              <rect x="204" y="256" width="118" height="40" rx="20" fill="none" stroke="#2A2444" stroke-width="2"/>
+              <rect x="420" y="100" width="172" height="196" rx="14" fill="#151221" stroke="#2A2444"/>
+              <rect x="442" y="126" width="80" height="12" rx="6" fill="#B8B2D4" opacity=".5"/>
+              <rect x="442" y="150" width="128" height="18" rx="6" fill="#F6F4FF" opacity=".9"/>
+              <rect x="442" y="186" width="80" height="12" rx="6" fill="#B8B2D4" opacity=".5"/>
+              <rect x="442" y="210" width="104" height="18" rx="6" fill="#F6F4FF" opacity=".9"/>
+              <rect x="442" y="248" width="128" height="8" rx="4" fill="url(#dxG)" opacity=".8"/>
+              <rect x="48" y="344" width="90" height="9" rx="4.5" fill="#B8B2D4" opacity=".35"/>
+              <rect x="150" y="344" width="60" height="9" rx="4.5" fill="#B8B2D4" opacity=".35"/>
+            </svg>
+          </a>
+        </div>
+        <div class="card reveal">
+          <span class="badge"><span class="live-dot" aria-hidden="true"></span>Live on the open web</span>
+          <h3 id="piece-daarx">daarx.money</h3>
+          <p>A product site we designed, built, and run &mdash; <strong>real and live right now</strong>. Dark, quick, and carrying zero weight it doesn&rsquo;t need.</p>
+          <p>Open it on your phone. It loads fast, reads clean, and every page answers the one question a visitor came with &mdash; the same way yours would.</p>
+          <p><a class="btn ghost" href="https://daarx.money/">Open daarx.money
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          </a></p>
         </div>
       </div>
-      <span class="cap b" aria-hidden="true">before</span>
-      <span class="cap a" aria-hidden="true">after</span>
-      <input class="range" type="range" min="0" max="100" value="50" aria-label="Drag to compare the before and after">
-      <span class="handle" aria-hidden="true"></span>
-    </figure>
-    <p class="colo">A before-and-after — the &ldquo;before&rdquo; side is a <b>typical tired local site</b>, not any real business. On a keyboard: focus the handle and use the arrow keys.</p>
-  </section>
-
-  <hr class="rule">
-
-  <!-- ══ THE TWO THAT ARE ACTUALLY OURS — the only real, indisputable proof ════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">Actually ours</p>
-    <h2 class="head reveal">Two sites we&#39;ll really call ours.</h2>
-    <p class="lede reveal">No borrowed logos. No made-up clients. The only sites we call <b>ours</b> are the two we made and stand behind — this very page, and a live product site. Both built exactly the way yours would be. <b>View-source either one.</b></p>
-
-    <div class="stagger" style="display:grid;gap:1.3rem;margin-top:1.4rem">
-      <dl class="walllabel reveal" aria-label="This site — Site Sourcery">
-        <dt>Site</dt><dd>sitesourcery.com — <span class="mark">this site</span></dd>
-        <dt>Kind</dt><dd>a custom site, built by hand</dd>
-        <dt>Loads</dt><dd><span class="mark">zero images, zero trackers</span> — the whole site</dd>
-        <dt>Status</dt><dd>built this way &mdash; really ours</dd>
-      </dl>
-      <dl class="walllabel reveal" aria-label="daarx.money — a live product site">
-        <dt>Site</dt><dd><a href="https://daarx.money/">daarx.money</a> — a live product site</dd>
-        <dt>Kind</dt><dd>a custom site, same hands, same care</dd>
-        <dt>Subject</dt><dd>a real, live product — dark to this page&#39;s light</dd>
-        <dt>Status</dt><dd>built this way &mdash; really ours</dd>
-      </dl>
-    </div>
-    <p class="stamp" style="margin-top:1.1rem"><span class="dot" aria-hidden="true"></span>&nbsp;Real sites. Everything below is an example we built to show what&rsquo;s possible.</p>
-  </section>
-
-  <hr class="rule">
-
-  <!-- ══ EXAMPLES — real-business demos pulled 2026-07-11; fresh showcase coming ══ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">Examples we built</p>
-    <h2 class="head reveal">A fresh showcase is on the way.</h2>
-    <p class="lede reveal">We&#39;re building a set of brand-new example sites — invented businesses, built from scratch — so we can show the real work without ever putting someone else&#39;s name on our page. Until they&#39;re up, the two sites above are the honest proof: open either one and read it the way an assistant would.</p>
-    <div class="actions reveal">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="https://daarx.money/">Open a live one <span class="arw" aria-hidden="true">&#8594;</span></a>
     </div>
   </section>
 
-  <hr class="rule">
+  <!-- ══ PIECE 2 — Tidewater · showpiece demo build (not a client) ═════════ -->
+  <section class="section" aria-labelledby="piece-tidewater">
+    <div class="wrap">
+      <div class="grid cols-2">
+        <div class="shop-window reveal">
+          <div class="shop-bar">
+            <span class="num">work/tidewater</span>
+            <span class="badge">Showpiece &mdash; our demo build</span>
+          </div>
+          <a href="/work/tidewater/" aria-label="Tour the Tidewater Plumbing and Heating showpiece — a demo we built to show what's possible">
+            <svg viewBox="0 0 640 400" role="img" aria-label="Stylized preview of the Tidewater Plumbing and Heating showpiece: a bright local-trade site with a clear call button and three service cards" focusable="false">
+              <defs>
+                <linearGradient id="twG" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/>
+                </linearGradient>
+              </defs>
+              <rect width="640" height="400" fill="#FBFAFF"/>
+              <rect width="640" height="46" fill="#FFFFFF"/>
+              <line x1="0" y1="46" x2="640" y2="46" stroke="#E8E4F4"/>
+              <path d="M26 16l6 6m0 0a4.5 4.5 0 1 0 6 6l-6-6z" stroke="#1A1530" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+              <rect x="52" y="18" width="96" height="10" rx="5" fill="#1A1530" opacity=".8"/>
+              <rect x="440" y="18" width="42" height="10" rx="5" fill="#55507A" opacity=".6"/>
+              <rect x="494" y="18" width="42" height="10" rx="5" fill="#55507A" opacity=".6"/>
+              <rect x="548" y="12" width="70" height="22" rx="11" fill="url(#twG)"/>
+              <rect x="48" y="96" width="312" height="26" rx="7" fill="#1A1530"/>
+              <rect x="48" y="134" width="228" height="26" rx="7" fill="#1A1530" opacity=".92"/>
+              <rect x="48" y="182" width="300" height="11" rx="5.5" fill="#55507A" opacity=".75"/>
+              <rect x="48" y="202" width="232" height="11" rx="5.5" fill="#55507A" opacity=".75"/>
+              <rect x="48" y="238" width="158" height="40" rx="20" fill="url(#twG)"/>
+              <path d="M74 252c1.8 4.2 5.6 8 9.8 9.8l3.4-3.4 5.4 2v5.4c-9.6 1-21-10.4-20-20h5.4l2 5.4z" fill="#FFFFFF" opacity=".95"/>
+              <rect x="102" y="252" width="88" height="11" rx="5.5" fill="#FFFFFF" opacity=".9"/>
+              <rect x="222" y="238" width="118" height="40" rx="20" fill="none" stroke="#E8E4F4" stroke-width="2"/>
+              <rect x="48" y="308" width="170" height="72" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="74" cy="334" r="10" fill="#7C5CFF" opacity=".18"/>
+              <rect x="94" y="328" width="88" height="10" rx="5" fill="#1A1530" opacity=".8"/>
+              <rect x="66" y="354" width="122" height="8" rx="4" fill="#55507A" opacity=".5"/>
+              <rect x="234" y="308" width="170" height="72" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="260" cy="334" r="10" fill="#7C5CFF" opacity=".18"/>
+              <rect x="280" y="328" width="88" height="10" rx="5" fill="#1A1530" opacity=".8"/>
+              <rect x="252" y="354" width="122" height="8" rx="4" fill="#55507A" opacity=".5"/>
+              <rect x="420" y="308" width="170" height="72" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="446" cy="334" r="10" fill="#7C5CFF" opacity=".18"/>
+              <rect x="466" y="328" width="88" height="10" rx="5" fill="#1A1530" opacity=".8"/>
+              <rect x="438" y="354" width="122" height="8" rx="4" fill="#55507A" opacity=".5"/>
+              <rect x="420" y="100" width="172" height="178" rx="14" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <rect x="442" y="124" width="96" height="12" rx="6" fill="#1A1530" opacity=".8"/>
+              <rect x="442" y="150" width="128" height="9" rx="4.5" fill="#55507A" opacity=".55"/>
+              <rect x="442" y="168" width="128" height="9" rx="4.5" fill="#55507A" opacity=".55"/>
+              <rect x="442" y="186" width="104" height="9" rx="4.5" fill="#55507A" opacity=".55"/>
+              <rect x="442" y="222" width="128" height="34" rx="17" fill="url(#twG)" opacity=".9"/>
+            </svg>
+          </a>
+        </div>
+        <div class="card reveal">
+          <span class="badge">Demo build &mdash; not a client</span>
+          <h3 id="piece-tidewater">Tidewater Plumbing &amp; Heating</h3>
+          <p>A full site we built to show <strong>what a local trade gets</strong>: a call button that&rsquo;s always in reach, services in plain words, hours, service area, and the answers a customer is actually looking for.</p>
+          <p>Tidewater isn&rsquo;t a paying client &mdash; it&rsquo;s our own showpiece, and we label it that way. What it shows is exactly how we&rsquo;d build yours.</p>
+          <p><a class="btn ghost" href="/work/tidewater/">Tour the showpiece
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14m-6-6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          </a></p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-  <!-- ══ THE CLOSE ═════════════════════════════════════════════════════════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <div class="payoff reveal">
-      <p class="q">The best site here is the one that isn&#39;t built yet — <span class="mark">yours.</span></p>
+  <!-- ══ HOW WE SHOW WORK — the honesty rules, stated plainly ══════════════ -->
+  <section class="section" aria-labelledby="honesty">
+    <div class="wrap">
+      <p class="eyebrow reveal">How we show work</p>
+      <h2 id="honesty" class="reveal">Two pieces, because two is the truth.</h2>
+      <div class="grid cols-3" style="margin-top:2rem">
+        <div class="card reveal">
+          <h3>Nothing borrowed</h3>
+          <p>No stock logo walls, no star ratings, no testimonials we didn&rsquo;t earn. If it&rsquo;s on this page, we built it.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Labels you can trust</h3>
+          <p>The live site says live. The demo says demo. When real client work joins this page, it&rsquo;ll be labeled just as plainly.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Open, not screenshots</h3>
+          <p>Both pieces are real pages you can tap through, on any phone, right now. Judge the work by using it.</p>
+        </div>
+      </div>
     </div>
-    <p class="reveal">See a free preview of your own in about a minute — a real sketch, not your finished site. Your real one is built from scratch, with your words and your photos, and it looks better than any example on this page.</p>
-    <div class="actions reveal">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="how-it-works.html">How it&#39;s built <span class="arw" aria-hidden="true">&#8594;</span></a>
+  </section>
+
+  <!-- ══ THE CLOSE — step into the bright shop ═════════════════════════════ -->
+  <section class="section daylight" aria-labelledby="close">
+    <div class="wrap">
+      <p class="eyebrow reveal">Your turn</p>
+      <h2 id="close" class="reveal">The best site here isn&rsquo;t built yet &mdash; it&rsquo;s <em class="accent">yours</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Tell us about your business and we&rsquo;ll get to work. You own everything, cancel anytime &mdash; and you change your site by sending a text.</p>
+      <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="/pricing/">See pricing</a>
+      </div>
     </div>
-    <p class="colo reveal">Rather talk to a person first? That door is on every page.</p>
   </section>
 
 </main>
 
-<!-- ── COLOPHON ── -->
-<footer class="colophon">
-  <div class="in">
-    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
-    <nav class="fnav" aria-label="Site">
-      <a href="./">site sourcery</a>
-      <a href="how-it-works.html">how it works</a>
-      <a href="the-moat.html">the difference</a>
-      <a href="the-meter.html">the meter</a>
-      <a href="work.html" aria-current="page">work</a>
-      <a href="pricing.html">pricing</a>
-      <a href="about.html">about</a>
-      <a href="faq.html">faq</a>
-      <a href="contact.html">contact</a>
-      <a href="start/">see your site</a>
-      <a href="https://daarx.money/">daarx.money</a>
-    </nav>
-    <p class="fine">Get found on Google · named by AI · wired for calls · yours to keep · cancel anytime<br>
-    This page loads <span class="figure">0</span> images and names no client it doesn&#39;t have. Every site shown is an example we built to show what&#39;s possible, except the two marked ours. No fake reviews, ratings, or clients.</p>
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/">
+          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
+          <span class="brand-name">Site&nbsp;Sourcery</span>
+        </a>
+        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
+        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+      </div>
+      <nav class="footer-links" aria-label="Pages">
+        <a href="/">Home</a>
+        <a href="/work/">Work</a>
+        <a href="/pricing/">Pricing</a>
+        <a href="/how-it-works/">How it works</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/contact/">Contact</a>
+        <a href="/start/">Start your site</a>
+      </nav>
+      <div class="footer-contact">
+        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
+        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+      </div>
+    </div>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
   </div>
 </footer>
 
-<script src="sourcery.js" defer></script>
 </body>
 </html>

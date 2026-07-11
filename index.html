@@ -1,297 +1,426 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — index.html · HOME
-     Plain words, real substance, one obvious next step — wrapped in the same
-     high-craft "paper & rubric ink" design (style.css). Self-contained static:
-     zero external asset loads, zero raster images on this page (view-source it).
-     Look = style.css; behavior = sourcery.js (both same-origin, no CDN/fonts).
+     SITE SOURCERY — index.html · HOME · "SPELLCAST"
+     Main Street after dark, one window still glowing.
+     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
+     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
+     The only http(s) URLs below are hyperlinks/metadata, never loads.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Site Sourcery — get found online, get more calls</title>
-<meta name="description" content="We build you a website that gets you found and gets your phone ringing — including when people ask AI for the best business near them. We build it, we run it, you own it. Plans from $9/mo. See a free preview of yours in about a minute.">
-<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Site Sourcery — custom websites for local businesses, built and run for you</title>
+<meta name="description" content="A custom website, built and run for you — hosting, updates, and changes handled. Change anything by sending a text. You own everything; cancel anytime. Free preview, plans from $9/mo.">
+<meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/">
-<link rel="stylesheet" href="style.css">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='38' fill='%23f4efe3'/><rect x='52' y='52' width='84' height='11' rx='5' fill='%23c6b795'/><rect x='24' y='83' width='118' height='15' rx='7' fill='%23c5361c'/><circle cx='152' cy='90' r='10' fill='%23c5361c'/><rect x='52' y='118' width='84' height='11' rx='5' fill='%23c6b795'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Site Sourcery — get found online, get more calls">
-<meta property="og:description" content="We build you a website that gets you found and gets the phone ringing. We build it, we run it, you own it. Plans from $9/mo. See a free preview of yours.">
+<meta property="og:title" content="Site Sourcery — custom websites for local businesses, built and run for you">
+<meta property="og:description" content="We build it, host it, and run it. Change anything by sending a text. You own everything; cancel anytime.">
 <meta property="og:url" content="https://sitesourcery.com/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Site Sourcery — get found online, get more calls">
-<meta name="twitter:description" content="A website that gets you found and gets the phone ringing. We build it, we run it, you own it. See a free preview of yours.">
-<!-- This page is its own proof: a clean, static, schema-rich document a machine reads perfectly. -->
+<meta name="twitter:title" content="Site Sourcery — custom websites, built and run for you">
+<meta name="twitter:description" content="Change your site by sending a text. You own everything; cancel anytime. Free preview.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","areaServed":"South Jersey, NJ","slogan":"Get found online, get more calls.","description":"We build custom websites for local businesses and run them for you, so you get found — including when someone asks AI for the best business near them — and get more calls. Done for you; you own your site; cancel anytime. Plans from $9/month.","makesOffer":{"@type":"Offer","category":"Custom website design, hosting, and care for local businesses"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","slogan":"Custom websites for local businesses — built, hosted, and run for you.","description":"Custom websites for local businesses. We design, host, and run your site; you change anything by sending a plain-English text. You own everything and can cancel anytime. Free preview; plans from $9/month.","makesOffer":{"@type":"Offer","category":"Custom website design, hosting, and ongoing care for local businesses"}}
 </script>
-<script>
-/* pre-paint: mark JS on, apply saved theme (no flash), and a reveal safety net */
-document.documentElement.classList.add('js');
-try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
-addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
-</script>
+<link rel="stylesheet" href="style.css">
+<style>
+/* page-scoped: Living Storefront step states only (system CSS untouched).
+   The typewriter in sourcery.js sets data-demo-step after each cast. */
+#demo-site .step{display:none}
+#demo-site[data-demo-step="start"] .step-start{display:block}
+#demo-site[data-demo-step="0"] .step-0{display:block}
+#demo-site[data-demo-step="1"] .step-1{display:block}
+#demo-site[data-demo-step="2"] .step-2{display:block}
+/* no JS or reduced motion: resolved before→after pair — sent text stays
+   visible in the bubble, the site shows the change already made */
+html:not(.js) #demo-site .step{display:none}
+html:not(.js) #demo-site .step-0{display:block}
+@media (prefers-reduced-motion:reduce){
+  #demo-site .step{display:none!important}
+  #demo-site .step-0{display:block!important}
+}
+</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="paper" aria-hidden="true"></div>
 
-<!-- ── NAV (shared chrome — keep identical on every page) ── -->
-<nav class="nav" aria-label="Primary">
-  <div class="bar">
-    <a class="brand" href="./" aria-label="Site Sourcery — home">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
-      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
+      <span class="brand-name">Site&nbsp;Sourcery</span>
     </a>
-    <div class="links">
-      <a class="txt" href="how-it-works.html">how it works</a>
-      <a class="txt" href="the-moat.html">the difference</a>
-      <a class="txt" href="pricing.html">pricing</a>
-      <button class="theme-btn" type="button" aria-label="Switch color theme">
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-      </button>
-      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <a class="nav-link" href="/work/">Work</a>
+      <a class="nav-link" href="/pricing/">Pricing</a>
+      <a class="nav-link" href="/faq/">FAQ</a>
+      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
 </nav>
 
-<!-- ── RUNNING HEAD (decorative book chrome; plain section title) ── -->
-<header class="runhead">
-  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate I</span>
-  <span class="sec">§01 · What we do</span>
-</header>
+<main id="main">
 
-<main id="main" class="wrap wide">
-
-  <!-- ══ HERO — the 5-second answer: what we do · what you get · what it costs · how to start ══ -->
-  <section class="plate" id="answer">
-    <p class="folio">§01</p>
-    <p class="label mark reveal">Custom websites for local business</p>
-
-    <figure class="winnow hero-in" aria-hidden="true">
-      <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="ssfade" cx="40%" cy="48%" r="66%">
-            <stop offset="0" stop-color="#fff"/><stop offset="55%" stop-color="#fff" stop-opacity=".5"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-          </radialGradient>
-          <pattern id="ssdots" width="22" height="22" patternUnits="userSpaceOnUse">
-            <circle class="dot" cx="5" cy="6" r="1.15"/><circle class="dot" cx="16" cy="15" r="1"/>
-          </pattern>
-          <mask id="sscrowd"><rect width="640" height="300" fill="url(#ssfade)"/></mask>
-        </defs>
-
-        <!-- the many listings nobody clicks -->
-        <rect class="crowd" width="640" height="300" fill="url(#ssdots)" mask="url(#sscrowd)"/>
-
-        <!-- a faint stack of listings, dimming -->
-        <g class="row">
-          <g transform="translate(48,44)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="150" height="8" rx="4"/></g>
-          <g transform="translate(48,70)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="120" height="8" rx="4"/></g>
-          <g transform="translate(48,96)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="168" height="8" rx="4"/></g>
-          <g transform="translate(48,122)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="134" height="8" rx="4"/></g>
-          <g transform="translate(48,148)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="158" height="8" rx="4"/></g>
-          <g transform="translate(48,174)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="112" height="8" rx="4"/></g>
-          <g transform="translate(48,200)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="176" height="8" rx="4"/></g>
-          <g transform="translate(48,226)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="128" height="8" rx="4"/></g>
-        </g>
-
-        <!-- faint converging guides -->
-        <g class="row" opacity=".5">
-          <path class="linestroke" d="M240 50 C 320 90, 320 120, 372 140" stroke-width="1"/>
-          <path class="linestroke" d="M226 228 C 320 200, 320 168, 372 152" stroke-width="1"/>
-        </g>
-
-        <!-- THE ONE — the name that gets the call -->
-        <g class="one" transform="translate(374,104)">
-          <rect class="paperfill" x="0" y="0" width="252" height="94" rx="12"/>
-          <rect class="linestroke" x=".75" y=".75" width="250.5" height="92.5" rx="11.25" stroke-width="1.5"/>
-          <rect class="rubfill" x="14" y="18" width="4" height="58" rx="2"/>
-          <rect class="inkfill" x="30" y="22" width="150" height="11" rx="5.5"/>
-          <rect class="faintfill" x="30" y="44" width="196" height="7" rx="3.5"/>
-          <rect class="faintfill" x="30" y="60" width="120" height="7" rx="3.5"/>
-          <g class="onemark" transform="translate(228,26)">
-            <circle class="rubfill" cx="0" cy="0" r="11"/>
-            <path d="M-4.6 0 L-1.4 3.4 L5 -3.6" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--paper)"/>
-          </g>
-        </g>
-      </svg>
-    </figure>
-    <p class="colo hero-in" style="margin-top:.4rem">Ten listings nobody clicks — and the one name that gets the call.</p>
-
-    <h1 class="cover hero-in">Get found.<br>Get <span class="inscribe">more&nbsp;calls<svg class="stroke" viewBox="0 0 320 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 70 5, 165 6, 232 11 S 300 17, 315 8" stroke-width="5"/></svg></span>.</h1>
-
-    <p class="lede hero-in">Someone asks their phone for the best plumber in town — and one shop comes up first. We build the website that makes it <b>you</b>: found on Google, named when people ask AI, and good enough to look at that they call. <b>We build it, we run it, you own it.</b></p>
-
-    <div class="actions hero-in">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="how-it-works.html">How it works <span class="arw" aria-hidden="true">&#8594;</span></a>
-    </div>
-    <p class="colo hero-in">A real preview of your own in about a minute — free, no card. Or just <a href="mailto:hello@sitesourcery.com?subject=A%20question%20for%20a%20real%20person">talk to a real person</a>.</p>
-
-    <!-- ── WHAT IT COSTS — the full range, at a glance (5-second test) ── -->
-    <dl class="walllabel reveal" style="margin-top:1.9rem" aria-label="What it costs">
-      <dt>Do it yourself</dt><dd>from <b>$9/mo</b> — a site builds itself from your words; you make the edits</dd>
-      <dt>Done for you</dt><dd>from <b>$79/mo</b>, nothing up front — we build it and run it</dd>
-      <dt>Own it outright</dt><dd>from <b>$500</b> to build <span aria-hidden="true">·</span> <b>$39/mo</b> to keep it running</dd>
-      <dt>White glove</dt><dd>work one-on-one with a real person — by application</dd>
-    </dl>
-    <p class="colo reveal"><a href="pricing.html">See full pricing <span class="arw" aria-hidden="true">&#8594;</span></a> <span aria-hidden="true">·</span> Every plan: 30 days risk-free, cancel anytime.</p>
-
-    <!-- ── A LITTLE PROOF — what a site like this does for you (labeled a sample) ── -->
-    <div class="answer reveal" data-answer style="margin-top:2.6rem" aria-label="An example of what AI tells a ready customer">
-      <span class="cite" aria-hidden="true">cite this</span>
-      <div class="answer-body">
-
-        <div class="reading reading-human">
-          <p class="label" style="margin-bottom:.7rem">What AI tells someone looking for a plumber</p>
-          <div class="who">Tidewater Plumbing &amp; Heating</div>
-          <p class="said">Need a plumber in Woodbury today? The one locals call is <span class="mark">Tidewater Plumbing&nbsp;&amp; Heating</span> — licensed, same-day service, and you can call or book right on their site.</p>
-          <div class="meta"><b>same-day</b> <span aria-hidden="true">·</span> <b>licensed &amp; insured</b> <span aria-hidden="true">·</span> Woodbury, NJ <span aria-hidden="true">·</span> <b>call or book online</b></div>
-        </div>
-
-        <div class="reading reading-machine">
-          <span class="cap">The same site — the way a computer reads it, so AI can hand you over</span>
-          <div class="figure" role="img" aria-label="The clean data on the site that lets AI recommend the business, with the quotable line highlighted">
-            {<br>
-            &nbsp;&nbsp;<span class="k">"@type"</span>: <span class="s">"Plumber"</span>,<br>
-            &nbsp;&nbsp;<span class="k">"name"</span>: <span class="s">"Tidewater Plumbing &amp; Heating"</span>,<br>
-            &nbsp;&nbsp;<span class="k">"areaServed"</span>: <span class="s">"Woodbury, NJ"</span>,<br>
-            &nbsp;&nbsp;<span class="k">"hasCredential"</span>: <span class="s">"licensed &amp; insured"</span>,<br>
-            &nbsp;&nbsp;<span class="k">"potentialAction"</span>: <span class="s">"BookAction"</span>,<br>
-            &nbsp;&nbsp;<span class="k">"description"</span>: <span class="lift">"The Woodbury plumber locals call — licensed, same-day, book online."</span><br>
-            }
-          </div>
-        </div>
-
+  <!-- ══ HERO — the 5-second answer ══════════════════════════════════════ -->
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow reveal">Custom websites for local businesses</p>
+      <h1 class="hero-title reveal">A custom website, built and run <em class="accent">for you</em>.</h1>
+      <p class="lede reveal">Get found. Get more calls. We design it, host it, and make every change you ask for — you never touch code. <strong>You own everything. Cancel anytime.</strong></p>
+      <div class="actions reveal">
+        <a class="btn primary" href="/start/">See your site — free</a>
+        <a class="btn ghost" href="/contact/">Talk to a person</a>
       </div>
-      <button class="twobtn" type="button" aria-pressed="false">
-        <span class="label-txt">Read it the way a machine reads it</span>
-        <span style="display:inline-flex;gap:.6em;align-items:center"><span class="state">human</span><span class="glyph" aria-hidden="true">&#8645;</span></span>
-      </button>
-    </div>
-    <p class="stamp" style="margin-top:1rem"><span class="dot" aria-hidden="true"></span>&nbsp;An example, not a real customer.</p>
-
-    <!-- ── a sample of the monthly note we send (stays in ink — a sample, not real) ── -->
-    <div class="meterstrip reveal" style="margin-top:1.4rem" role="group" aria-label="A sample of the monthly note we send">
-      <span><span class="figure" data-tick>14</span> <span class="u">calls</span></span>
-      <span><span class="figure" data-tick>6</span> <span class="u">booked</span></span>
-      <span><span class="figure">9</span> <span class="u">new reviews</span></span>
-      <span>Google map <span class="figure">#7</span> <span class="arw" aria-hidden="true">&#8594;</span> <span class="figure">#3</span></span>
-      <span class="tag">sample</span>
-    </div>
-    <p class="colo">Every month we send you one plain note: how many calls, how many booked, where you rank. This one is just a sample.</p>
-  </section>
-
-  <hr class="rule">
-
-  <!-- ══ REAL SITES WE BUILT — honest interim 2026-07-11 (demos pulled) ═══ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">Real sites we built</p>
-    <h2 class="head reveal" style="margin-bottom:.4rem">See the kind of work we do.</h2>
-    <p class="lede reveal">A fresh set of example sites is on the way. Until they&rsquo;re up, here&rsquo;s the honest proof: the two sites we truly call ours are <b>this one</b> and <a href="https://daarx.money/">daarx.money</a> — a live product site, built exactly the way yours would be. Open it and read it the way an assistant would.</p>
-    <div class="actions reveal">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="https://daarx.money/">Open a live one <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <p class="terms reveal" style="max-width:34em;margin-top:1.6rem">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised — just your best shot at being found and recommended.</p>
     </div>
   </section>
 
-  <hr class="rule">
+  <!-- ══ THE LIVING STOREFRONT — the signature moment ════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">The whole point</p>
+      <h2 class="reveal">You text us. It&rsquo;s <em class="accent">done</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">No dashboard. No app to learn. Send a plain text — new hours, new price, new photo — and it&rsquo;s live on your site.</p>
 
-  <!-- ══ WHAT YOU GET — plain benefits, no abstractions ═══════════════════════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">What you get</p>
-    <h2 class="head reveal" style="margin-bottom:.4rem">Four plain things, all done for you.</h2>
-    <p class="lede reveal">Most people sell you the web page and leave you the rest. We do the whole job and keep it running, so you can get back to work.</p>
+      <div class="demo reveal" style="margin-top:2.5rem">
+        <div class="demo-phone" role="group" aria-label="A text-message conversation: the owner texts a change, and it is made on the site">
+          <p class="bubble sent" data-type='["Add Saturday hours — and make the lemon tarts the big photo","Bump birthday cakes to $32","Add a banner: closed July 4th"]' data-type-target="#demo-site">Add Saturday hours — and make the lemon tarts the big photo</p>
+          <p class="bubble">Done — it&rsquo;s live.</p>
+        </div>
 
-    <dl class="walllabel reveal" style="margin:1.6rem 0" aria-label="What you get">
-      <dt>Get found</dt><dd>When someone asks Google or AI for the best <span class="mark">plumber near me</span>, you&#39;ve got a real shot at being the name that comes up.</dd>
-      <dt>Get calls</dt><dd>Tap-to-call and online booking built in, so a visitor turns into a job.</dd>
-      <dt>We handle it</dt><dd>We build it, host it, and keep it updated. Need a change? <span class="mark">Just text us.</span> You never touch code.</dd>
-      <dt>You own it</dt><dd>The site and your web address are <span class="mark">yours to keep</span>. Cancel anytime; nothing held hostage.</dd>
-    </dl>
+        <div class="demo-site cast" id="demo-site" data-demo-step="start" role="img" aria-label="A small bakery website updating itself as each text arrives: Saturday hours appear, the lemon tart photo goes big, the cake price changes, a holiday banner goes up">
 
-    <div class="contents stagger">
-      <a class="entry" href="the-moat.html">
-        <span class="ord">&rarr;</span>
-        <span class="body">
-          <h3>Why you'd get found</h3>
-          <p class="sub">How a clean, custom site puts your name in front of people the moment they go looking — on Google and in AI answers.</p>
-          <span class="go">See the difference <span class="arw" aria-hidden="true">&#8594;</span></span>
-        </span>
-      </a>
-      <a class="entry" href="the-meter.html">
-        <span class="ord">&rarr;</span>
-        <span class="body">
-          <h3>How you'd see it working</h3>
-          <p class="sub">Once a month, one plain note: calls, bookings, new reviews, where you rank. No dashboard to babysit — we send it to you.</p>
-          <span class="go">See a sample month <span class="arw" aria-hidden="true">&#8594;</span></span>
-        </span>
-      </a>
-      <a class="entry" href="how-it-works.html#the-operator">
-        <span class="ord">&rarr;</span>
-        <span class="body">
-          <h3>How it's run for you</h3>
-          <p class="sub">We do the building, the hosting, the getting-found, and the changes. You own everything and can walk anytime.</p>
-          <span class="go">See how it works <span class="arw" aria-hidden="true">&#8594;</span></span>
-        </span>
-      </a>
+          <!-- BEFORE -->
+          <svg class="step step-start" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
+            <rect width="640" height="430" fill="#FBFAFF"/>
+            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
+            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
+            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
+            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF6E3"/>
+            <ellipse cx="178" cy="176" rx="76" ry="45" fill="#E0A84F"/>
+            <path d="M128 160 q14 -16 28 0 M164 152 q14 -16 28 0 M200 160 q14 -16 28 0" stroke="#B9832F" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
+            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
+            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Open Mon–Fri · 7am–3pm</text>
+            <g font-family="Arial,sans-serif">
+              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
+              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
+              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
+              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
+              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
+              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
+              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
+              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
+              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$28</text>
+            </g>
+          </svg>
+
+          <!-- AFTER TEXT 1 — Saturday hours + lemon tarts big -->
+          <svg class="step step-0" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
+            <rect width="640" height="430" fill="#FBFAFF"/>
+            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
+            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
+            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
+            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF9E8"/>
+            <circle cx="178" cy="174" r="64" fill="#E8C079"/>
+            <circle cx="178" cy="174" r="50" fill="#FFD166"/>
+            <circle cx="160" cy="158" r="9" fill="#FFE39B"/>
+            <ellipse cx="214" cy="140" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 214 140)"/>
+            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
+            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
+            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#7C5CFF">Now open Saturdays · Mon–Sat 7–3</text>
+            <g font-family="Arial,sans-serif">
+              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
+              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
+              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
+              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
+              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
+              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
+              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
+              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
+              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$28</text>
+            </g>
+          </svg>
+
+          <!-- AFTER TEXT 2 — cake price $32 -->
+          <svg class="step step-1" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
+            <rect width="640" height="430" fill="#FBFAFF"/>
+            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
+            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
+            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
+            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF9E8"/>
+            <circle cx="178" cy="174" r="64" fill="#E8C079"/>
+            <circle cx="178" cy="174" r="50" fill="#FFD166"/>
+            <circle cx="160" cy="158" r="9" fill="#FFE39B"/>
+            <ellipse cx="214" cy="140" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 214 140)"/>
+            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
+            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
+            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Now open Saturdays · Mon–Sat 7–3</text>
+            <g font-family="Arial,sans-serif">
+              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
+              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
+              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
+              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
+              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
+              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
+              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
+              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
+              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" font-weight="700" fill="#7C5CFF">$32</text>
+            </g>
+          </svg>
+
+          <!-- AFTER TEXT 3 — holiday banner -->
+          <svg class="step step-2" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
+            <rect width="640" height="430" fill="#FBFAFF"/>
+            <rect width="640" height="30" fill="#7C5CFF"/>
+            <text x="320" y="20" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Closed July 4th — see you Monday!</text>
+            <text x="28" y="64" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
+            <rect x="418" y="52" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="470" y="52" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
+            <rect x="528" y="43" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
+            <text x="570" y="61" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
+            <rect x="28" y="90" width="300" height="176" rx="14" fill="#FFF9E8"/>
+            <circle cx="178" cy="178" r="62" fill="#E8C079"/>
+            <circle cx="178" cy="178" r="48" fill="#FFD166"/>
+            <circle cx="161" cy="163" r="9" fill="#FFE39B"/>
+            <ellipse cx="212" cy="145" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 212 145)"/>
+            <text x="352" y="142" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
+            <text x="352" y="174" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
+            <text x="352" y="208" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Now open Saturdays · Mon–Sat 7–3</text>
+            <g font-family="Arial,sans-serif">
+              <rect x="28" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="62" cy="328" r="18" fill="#E0A84F"/>
+              <text x="90" y="334" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
+              <text x="48" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
+              <rect x="232" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="266" cy="328" r="18" fill="#FFD166"/>
+              <text x="294" y="334" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
+              <text x="252" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
+              <rect x="436" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
+              <circle cx="470" cy="328" r="18" fill="#F49AC1"/>
+              <text x="498" y="334" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
+              <text x="456" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$32</text>
+            </g>
+          </svg>
+
+        </div>
+      </div>
+      <p class="reveal" style="margin-top:1.25rem"><span class="badge">A demonstration</span></p>
+      <p class="terms reveal" style="max-width:34em">This is how the service works, not a client&rsquo;s site. Your changes are made by a person and are usually live the same day.</p>
     </div>
   </section>
 
-  <hr class="rule">
-
-  <!-- ══ THE CLOSE — own it, risk-free, one obvious step ══════════════════════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <div class="payoff reveal">
-      <p class="q">A website that gets you found and gets the phone ringing — <span class="mark">built for you, run for you, and yours to keep.</span> Try it 30 days; if it's not right, you're not out a cent.</p>
+  <!-- ══ WHAT YOU GET ════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">What you get</p>
+      <h2 class="reveal">The whole job, <em class="accent">handled</em>.</h2>
+      <div class="grid cols-3" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <h3>Found and recommended</h3>
+          <p>Built to be findable and citable — your best shot at coming up when someone asks their phone for the best plumber, bakery, or barber in town. We never promise rankings; we build so the answer can be you.</p>
+        </div>
+        <div class="card reveal">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18v3h3l5.7-5.7a4.5 4.5 0 0 0 6-6l-2.6 2.6-2.4-2.4 2.6-2.6z"/></svg>
+          <h3>We&rsquo;re the labor</h3>
+          <p>Design, hosting, updates, changes — the lot. One accountable person runs your whole web presence while you run the business. Need something changed? Text it.</p>
+        </div>
+        <div class="card reveal">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/></svg>
+          <h3>You own it</h3>
+          <p>Your site, your domain, your content — yours to keep. Leave whenever you like and take all of it with you. No lock-in, ever.</p>
+        </div>
+      </div>
     </div>
+  </section>
 
-    <dl class="walllabel reveal" style="margin:1.6rem 0" aria-label="The honest details">
-      <dt>Risk-free</dt><dd>30 days to try it &mdash; <span class="mark">cancel inside 30 days and pay nothing</span></dd>
-      <dt>Loads</dt><dd><span class="mark">zero images, zero trackers</span> — fast, clean, and easy for AI to read (view-source this page)</dd>
-      <dt>Real proof</dt><dd>this site and <a href="https://daarx.money/">daarx.money</a> were both built exactly this way</dd>
-      <dt>Honest</dt><dd>no fake reviews, no invented clients — we sell what we deliver</dd>
-    </dl>
-
-    <p class="reveal">No borrowed logos, no made-up ratings. Every business site you see in our examples was built to show what's possible, and is labeled as an example. The only sites we call our own are this one and <a href="https://daarx.money/">daarx.money</a>.</p>
-
-    <div class="actions reveal">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="pricing.html">See pricing <span class="arw" aria-hidden="true">&#8594;</span></a>
+  <!-- ══ THE METER ═══════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">Proof, monthly</p>
+      <h2 class="reveal">One plain note a month: is it <em class="accent">working</em>?</h2>
+      <p class="lede reveal" style="margin-top:1rem">No charts to decode, no login to check. We send the numbers that matter in a note you can read at a red light.</p>
+      <div class="meter reveal" style="margin-top:2.5rem">
+        <header><span>Your month, in one note</span> <span class="badge">Sample</span></header>
+        <div class="cells">
+          <div class="stat"><span class="num" data-count-to="14">14</span><span class="stat-label">calls from the site</span></div>
+          <div class="stat"><span class="num" data-count-to="6">6</span><span class="stat-label">jobs booked</span></div>
+          <div class="stat"><span class="num">3rd</span><span class="stat-label">on the local map — up from 7th</span></div>
+        </div>
+        <p class="terms">A sample of the note, not a promise. Your note shows your numbers — results vary and are never guaranteed.</p>
+      </div>
     </div>
-    <p class="colo reveal">The free preview is a real sketch of your own site in about a minute — not the finished thing. Your real one is built from scratch, with your photos, and looks better. Rather talk to a person first? That door's on every page.</p>
+  </section>
+
+  <!-- ══ THE WORK — two pieces, both honest ══════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">The work</p>
+      <h2 class="reveal">Two pieces. Both <em class="accent">real</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients. Here&rsquo;s what we&rsquo;ve built — open them and judge for yourself.</p>
+
+      <div class="grid cols-2" style="margin-top:2.5rem">
+        <div class="reveal">
+          <div class="shop-window">
+            <div class="shop-bar"><span class="num" style="font-size:.85rem;color:var(--muted)">daarx.money</span><span class="badge">Live site we built</span></div>
+            <svg viewBox="0 0 640 360" width="640" height="360" aria-hidden="true" focusable="false">
+              <rect width="640" height="360" fill="#08070E"/>
+              <text x="36" y="52" font-family="Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="3" fill="#F6F4FF">DAARX</text>
+              <rect x="500" y="34" width="104" height="28" rx="14" fill="#FFD166"/>
+              <text x="552" y="53" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#08070E">Reserve</text>
+              <rect x="36" y="112" width="300" height="20" rx="10" fill="#F6F4FF"/>
+              <rect x="36" y="146" width="236" height="20" rx="10" fill="#F6F4FF"/>
+              <rect x="36" y="192" width="264" height="10" rx="5" fill="#5E5878"/>
+              <rect x="36" y="212" width="212" height="10" rx="5" fill="#5E5878"/>
+              <rect x="36" y="252" width="130" height="34" rx="17" fill="#FFD166"/>
+              <rect x="380" y="96" width="224" height="210" rx="16" fill="#12101C" stroke="#2A2444"/>
+              <g fill="#FFD166">
+                <circle cx="424" cy="140" r="14" opacity=".9"/><circle cx="492" cy="140" r="14" opacity=".55"/><circle cx="560" cy="140" r="14" opacity=".9"/>
+                <circle cx="424" cy="200" r="14" opacity=".55"/><circle cx="492" cy="200" r="14" opacity=".9"/><circle cx="560" cy="200" r="14" opacity=".55"/>
+              </g>
+              <rect x="404" y="252" width="176" height="9" rx="4.5" fill="#5E5878"/>
+              <rect x="404" y="272" width="132" height="9" rx="4.5" fill="#5E5878"/>
+            </svg>
+          </div>
+          <p style="margin-top:.9rem;color:var(--muted)">A live product site we built and run — proof of the craft, out in the world. <a href="https://daarx.money/">Visit daarx.money</a></p>
+        </div>
+
+        <div class="reveal">
+          <div class="shop-window">
+            <div class="shop-bar"><span class="num" style="font-size:.85rem;color:var(--muted)">tidewater</span><span class="badge">Showpiece demo build</span></div>
+            <svg viewBox="0 0 640 360" width="640" height="360" aria-hidden="true" focusable="false">
+              <rect width="640" height="360" fill="#F4F8FB"/>
+              <text x="36" y="50" font-family="Georgia,serif" font-size="19" font-weight="700" fill="#123A5C">Tidewater Plumbing &amp; Heating</text>
+              <rect x="500" y="30" width="104" height="28" rx="14" fill="#1B7FA8"/>
+              <text x="552" y="49" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Call now</text>
+              <rect x="36" y="104" width="320" height="20" rx="10" fill="#123A5C"/>
+              <rect x="36" y="138" width="252" height="20" rx="10" fill="#123A5C"/>
+              <rect x="36" y="182" width="272" height="10" rx="5" fill="#7C93A8"/>
+              <rect x="36" y="202" width="204" height="10" rx="5" fill="#7C93A8"/>
+              <g font-family="Arial,sans-serif">
+                <rect x="36" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
+                <text x="52" y="276" font-size="13" font-weight="700" fill="#123A5C">Repairs</text>
+                <rect x="52" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
+                <rect x="228" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
+                <text x="244" y="276" font-size="13" font-weight="700" fill="#123A5C">Water heaters</text>
+                <rect x="244" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
+                <rect x="420" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
+                <text x="436" y="276" font-size="13" font-weight="700" fill="#123A5C">Same-day</text>
+                <rect x="436" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
+              </g>
+              <path d="M420 96 q28 -20 56 0 t56 0 t56 0 t56 0 V180 H420 Z" fill="#1B7FA8" opacity=".16"/>
+              <path d="M420 116 q28 -20 56 0 t56 0 t56 0 t56 0" fill="none" stroke="#1B7FA8" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p style="margin-top:.9rem;color:var(--muted)">A demo we built to show what&rsquo;s possible — not a client, and labeled that way. <a href="/work/tidewater/">Explore the build</a></p>
+        </div>
+      </div>
+
+      <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn ghost" href="/work/">See the work</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ PRICING TEASER — the bright shop ════════════════════════════════ -->
+  <section class="section daylight">
+    <div class="wrap">
+      <p class="eyebrow reveal">Pricing</p>
+      <h2 class="reveal">One clear path. Start <em class="accent">small</em>.</h2>
+      <div class="grid cols-2" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <h3>Do it yourself</h3>
+          <p class="price" style="margin:.4rem 0">from&nbsp;<span class="num">$9</span><span class="per">/mo</span></p>
+          <p>You drive. Built-in tools and hosting — the cheapest way in.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Done for you</h3>
+          <p class="price" style="margin:.4rem 0"><span class="num">$89</span><span class="per">/mo · $0 down</span></p>
+          <p>We build it, host it, and run it. Everything included. Cancel anytime.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Build + Care</h3>
+          <p class="price" style="margin:.4rem 0">from&nbsp;<span class="num">$500</span><span class="per">+ $39/mo care</span></p>
+          <p>Pay once for the build and own it outright — we keep it fast, safe, and current.</p>
+        </div>
+        <div class="card reveal">
+          <h3>White Glove Wizardry</h3>
+          <p class="price" style="margin:.4rem 0"><span class="per" style="font-size:1.1rem">by application</span></p>
+          <p>One-on-one with the founder, start to finish. A few businesses a month.</p>
+        </div>
+      </div>
+      <p class="terms reveal" style="margin-top:1.75rem;max-width:44em">Every done-for-you plan: 30-day risk-free trial · card upfront · one build · auto-converts after the trial · one-tap cancel.</p>
+      <div class="actions reveal" style="margin-top:1.5rem">
+        <a class="btn primary" href="/pricing/">See full pricing</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ THE CLOSE ═══════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <h2 class="reveal">See your site before you spend a <em class="accent">cent</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Start with a free preview — no card, no commitment. Rather ask a question first? A real person answers.</p>
+      <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn primary" href="/start/">See your site — free</a>
+        <a class="btn ghost" href="/contact/">Talk to a person</a>
+      </div>
+    </div>
   </section>
 
 </main>
 
-<!-- ── COLOPHON (shared footer; keep links, plain fine print) ── -->
-<footer class="colophon">
-  <div class="in">
-    <p class="say">Built by one person in South Jersey — a real name, a real look at every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
-    <nav class="fnav" aria-label="Site">
-      <a href="./" aria-current="page">site sourcery</a>
-      <a href="how-it-works.html">how it works</a>
-      <a href="the-moat.html">the difference</a>
-      <a href="the-meter.html">the meter</a>
-      <a href="work.html">work</a>
-      <a href="pricing.html">pricing</a>
-      <a href="about.html">about</a>
-      <a href="faq.html">faq</a>
-      <a href="contact.html">contact</a>
-      <a href="start/">see your site</a>
-      <a href="https://daarx.money/">daarx.money</a>
-    </nav>
-    <p class="fine">Get found &middot; get more calls &middot; done for you &middot; yours to keep &middot; cancel anytime<br>
-    This page loads <span class="figure">0</span> images and names no client it doesn't have. Sample numbers are labeled as samples; real results only ever wear the proof color.</p>
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/">
+          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
+          <span class="brand-name">Site&nbsp;Sourcery</span>
+        </a>
+        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
+        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+      </div>
+      <nav class="footer-links" aria-label="Pages">
+        <a href="/">Home</a>
+        <a href="/work/">Work</a>
+        <a href="/pricing/">Pricing</a>
+        <a href="/how-it-works/">How it works</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/contact/">Contact</a>
+        <a href="/start/">Start your site</a>
+      </nav>
+      <div class="footer-contact">
+        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
+        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+      </div>
+    </div>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
   </div>
 </footer>
 

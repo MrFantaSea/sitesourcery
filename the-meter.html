@@ -1,282 +1,178 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — the-meter.html · PLATE IV: THE METER
-     INK (plain): every month, we show you what your site did — calls, new
-     customers, reviews, where you show up. INSTRUMENT: the sample scoreboard +
-     the actual plain-English note we send. The verified-green is load-bearing:
-     this sample is labeled illustrative, so EVERY figure renders in ink, never
-     the proof color. A note we send, not a dashboard you babysit. Self-contained,
-     zero external asset loads, zero images. Look = style.css; behavior =
-     sourcery.js; one page-scoped <style> for the monthly note.
+     SITE SOURCERY — the-meter.html · "SPELLCAST"
+     The plain-English monthly note that proves the care plan is working.
+     One honest, MODEST sample for a clearly-fictional shop; sample figures
+     deliberately do NOT wear Mint (green = true only), via a token override.
+     Loads exactly /style.css + /sourcery.js. Zero remote loads.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Meter — every month, we show you what your site did · Site Sourcery</title>
-<meta name="description" content="Once a month we send you one plain note: how many people called from your site, how many became customers, your new reviews, and where you show up on Google and in AI answers. A note we send — not a dashboard you have to log into. See exactly what one looks like.">
-<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Meter — one plain note a month · Site Sourcery</title>
+<meta name="description" content="Once a month, one short note in plain English: how many people called from your site, how many booked, your new reviews, where you show up. No dashboard, no login. Results vary — we show you the real month either way.">
+<meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/the-meter.html">
-<link rel="stylesheet" href="style.css">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
-<meta property="og:type" content="article">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="The Meter — every month, we show you what your site did">
-<meta property="og:description" content="One plain note a month: the calls your site brought in, the ones that became customers, your new reviews, and where you show up. A note we send, not a dashboard you babysit.">
+<meta property="og:title" content="The Meter — one plain note a month">
+<meta property="og:description" content="Calls, booked jobs, new reviews, where you show up — one short note in plain English, every month. No dashboard to learn. Results vary; you see the real month either way.">
 <meta property="og:url" content="https://sitesourcery.com/the-meter.html">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="The Meter — proof, every month">
-<meta name="twitter:description" content="We don't ask you to trust us. We show you — the calls, the customers, the reviews, where you show up. A note, not a dashboard.">
-<!-- A page about proof, built to be proof: clean, static, schema-rich, zero images. -->
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Article","headline":"The Meter — every month, we show you what your site did","description":"A single plain-English note each month: the calls a business's site brought in, the ones that became customers, new reviews, where it shows up on Google, and whether AI answers name it. A note we send, not a dashboard to babysit. Sample figures are shown in ink; the proof color is saved for real, counted results.","about":"A plain monthly report of what a local business's website did","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"publisher":{"@type":"ProfessionalService","name":"Site Sourcery","areaServed":"South Jersey, NJ"}}
-</script>
-<!-- pre-paint: mark JS on, apply saved theme (no flash), reveal safety net -->
-<script>
-document.documentElement.classList.add('js');
-try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
-addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
-</script>
-<!-- ── page-scoped: the monthly note + the rank-climb sparkline. All token-based,
-     theme-aware, mobile-first. The scoreboard reuses the shared .meter component
-     verbatim; nothing here spends the sacred green. ── -->
-<style>
-/* THE NOTE — the actual monthly note, framed like a short letter */
-.dispatch{background:var(--leaf);border:1px solid var(--line-lit);border-radius:var(--r);
-  box-shadow:var(--edge),var(--e2);overflow:hidden;margin-top:1.4rem}
-.dispatch .mast{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
-  gap:.4rem 1rem;padding:1.05rem 1.35rem;border-top:3px solid var(--rubric);
-  border-bottom:1px solid var(--line)}
-.dispatch .mast .who{font-family:var(--display);font-weight:700;font-size:1.18rem;
-  line-height:1.1;color:var(--ink)}
-.dispatch .mast .when{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
-  letter-spacing:.13em;color:var(--faint)}
-.dispatch .body{padding:1.35rem 1.4rem 1.45rem}
-.dispatch .greet{font-family:var(--display);font-weight:700;font-size:clamp(1.25rem,3vw,1.6rem);
-  line-height:1.15;color:var(--ink);margin:0 0 .9rem}
-.dispatch .body p{max-width:40em}
-.dispatch .body p .mark{color:var(--rubric);font-weight:600}
-.dispatch .sign{margin-top:1.3rem;padding-top:1.05rem;border-top:1px dashed var(--line-lit);
-  font-family:var(--index);font-size:var(--fs-fine);color:var(--faint);line-height:1.6}
-.dispatch .sign b{color:var(--ink);font-weight:600}
-
-/* what we did on the site this month — a quiet checklist (rubric stays rare) */
-.tended{list-style:none;margin:1.1rem 0 0;padding:0}
-.tended li{position:relative;padding-left:1.6rem;margin-bottom:.5rem;color:var(--dim);
-  font-family:var(--index);font-size:var(--fs-note);max-width:40em}
-.tended li::before{content:"";position:absolute;left:0;top:.62em;width:.8rem;height:2px;
-  background:var(--line-lit)}
-.tended .lab{display:block;font-family:var(--index);font-size:var(--fs-micro);
-  text-transform:uppercase;letter-spacing:.13em;color:var(--faint);margin-bottom:.5rem}
-
-/* THE RANK-CLIMB — a small sparkline; ink line, one rubric "now" mark */
-.rankclimb{margin:1.25rem 0 .4rem;padding:1rem 1.15rem;background:var(--paper-2);
-  border:1px solid var(--line);border-radius:var(--r-sm)}
-.rankclimb .top{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;
-  font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
-  letter-spacing:.13em;color:var(--faint);margin-bottom:.7rem}
-.rankclimb svg{width:100%;height:auto;overflow:visible;display:block}
-.rankclimb .axis{stroke:var(--line);fill:none}
-.rankclimb .path{stroke:var(--ink);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-.rankclimb .dot{fill:var(--faint)}
-.rankclimb .now{fill:var(--rubric)}
-.rankclimb .rlab{font-family:var(--ledger);font-size:13px;fill:var(--faint);font-weight:600}
-.rankclimb .rlab.hi{fill:var(--ink)}
-/* draw the climb on reveal; reduced-motion → already drawn (handled below) */
-.js .rankclimb .path{stroke-dasharray:420;stroke-dashoffset:420}
-.js .reveal.in .rankclimb .path{transition:stroke-dashoffset 1.1s var(--ease-settle) .2s;stroke-dashoffset:0}
-@media (prefers-reduced-motion:reduce){
-  .js .rankclimb .path{stroke-dashoffset:0 !important;transition:none !important}
-}
-</style>
+<link rel="stylesheet" href="style.css">
+<script src="sourcery.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="paper" aria-hidden="true"></div>
 
-<!-- ── NAV (constant chrome; keep identical on every page) ── -->
-<nav class="nav" aria-label="Primary">
-  <div class="bar">
-    <a class="brand" href="./" aria-label="Site Sourcery — home">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
-      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
+      <span class="brand-name">Site&nbsp;Sourcery</span>
     </a>
-    <div class="links">
-      <a class="txt" href="how-it-works.html">how it works</a>
-      <a class="txt" href="the-moat.html">the difference</a>
-      <a class="txt" href="pricing.html">pricing</a>
-      <button class="theme-btn" type="button" aria-label="Switch color theme">
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-      </button>
-      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <a class="nav-link" href="/work/">Work</a>
+      <a class="nav-link" href="/pricing/">Pricing</a>
+      <a class="nav-link" href="/faq/">FAQ</a>
+      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
 </nav>
 
-<header class="runhead">
-  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate IV</span>
-  <span class="sec">§04 · The Meter</span>
-</header>
+<main id="main">
 
-<main id="main" class="wrap wide">
-
-  <!-- ══ THE THESIS — the trust-close, made plain (INK + the inscribing hand) ══ -->
-  <section class="plate">
-    <p class="folio">§04</p>
-    <p class="label mark reveal">Proof, every month</p>
-    <h1 class="cover hero-in">We don&rsquo;t ask you to trust us. We <span class="inscribe">show&nbsp;you<svg class="stroke" viewBox="0 0 210 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 50 6, 120 6, 160 11 S 200 17, 205 8" stroke-width="5"/></svg></span>.</h1>
-    <p class="colo hero-in">Once a month. In plain English. Signed by a real person.</p>
-
-    <p class="lede hero-in">Most web people promise the world, then go quiet the week after your site is live. We do the opposite. Once a month, one short note lands in your inbox: <b>what your site actually did</b>. How many people called. How many became customers. Your new reviews. Where you show up when someone searches. You read it in a minute — no dashboard to log into, nothing to learn. This page shows you exactly what one looks like.</p>
-
-    <dl class="walllabel reveal" style="margin:1.9rem 0 0" aria-label="What the Meter is, and isn't">
-      <dt>It is</dt><dd>one plain note, sent to you <span class="mark">every month</span></dd>
-      <dt>It isn&rsquo;t</dt><dd>a dashboard you log into, learn, and babysit</dd>
-      <dt>It shows</dt><dd>calls, new customers, reviews, and where you show up</dd>
-      <dt>Good news or bad</dt><dd>you get it either way — that&rsquo;s the whole point</dd>
-    </dl>
+  <!-- ══ HERO — what the Meter is, in five seconds ══ -->
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow reveal">The Meter</p>
+      <h1 class="hero-title reveal">One short note a month: what your site actually <em class="accent">did</em>.</h1>
+      <p class="lede reveal">Calls, booked jobs, new reviews, where you show up — in plain English, the first week of every month. Read it in a minute. Reply and a person answers. <strong>No dashboard, no login, ever.</strong></p>
+      <div class="actions reveal">
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="/pricing/">See pricing</a>
+      </div>
+    </div>
   </section>
 
-  <hr class="rule">
+  <!-- ══ THE SAMPLE — step into the bright shop and read one ══ -->
+  <section class="section daylight">
+    <div class="wrap">
+      <p class="eyebrow reveal">One sample month</p>
+      <h2 class="reveal">Here&rsquo;s what one <em class="accent">looks</em> like.</h2>
+      <p class="lede reveal">A sample for a fictional shop, kept modest on purpose. Your months are your own — <strong>results vary and are never guaranteed.</strong></p>
 
-  <!-- ══ THE INSTRUMENT — THE SAMPLE MONTH (the heart) ════════════════════════
-       An honest, made-up month. NO .is-verified anywhere → every figure renders
-       in INK, never the sacred green. The palette enforces the rule. -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">One sample month</p>
-    <h2 class="head reveal">Here&rsquo;s a whole month&rsquo;s note, start to finish.</h2>
-    <p class="lede reveal">This is a <b>made-up</b> month for one of our example shops — not a real customer&rsquo;s results. Because these numbers aren&rsquo;t real yet, they stay in plain <b>ink</b>. When it&rsquo;s your real month, they get a color we save only for the truth. First, the scoreboard.</p>
-
-    <p class="stamp reveal" style="margin-bottom:1rem"><span class="dot" aria-hidden="true"></span>&nbsp;A sample of the monthly note — not a real customer&rsquo;s month</p>
-
-    <!-- THE SCOREBOARD — the shared .meter component, in ink (sample) -->
-    <div class="meter reveal" role="group" aria-label="The Meter scoreboard — a sample month, figures in ink">
-      <div class="mhd"><span>The Meter · Tidewater Plumbing &amp; Heating · a sample June</span><span class="stamp">sample</span></div>
-      <div class="cells">
-        <div class="cell"><span class="val"><span data-tick>14</span></span><span class="k">calls from the site</span></div>
-        <div class="cell"><span class="val"><span data-tick>6</span></span><span class="k">new jobs booked</span></div>
-        <div class="cell"><span class="val"><span data-tick>9</span></span><span class="k">new Google reviews</span></div>
-        <div class="cell"><span class="val">#7&nbsp;<span class="arw" aria-hidden="true">&#8594;</span>&nbsp;#3</span><span class="k">Google map spot</span></div>
-        <div class="cell"><span class="val"><span data-tick>2</span></span><span class="k">AI assistants name you</span></div>
+      <!-- Sample figures must NOT wear the proof green: --mint is re-pointed at
+           plain text color for this one panel. Green only ever marks numbers
+           we actually counted on a real customer's Meter. -->
+      <div class="meter reveal" style="--mint:var(--text)" role="group" aria-label="Sample Meter scoreboard for a fictional shop">
+        <header>
+          <span>The Meter &middot; Cedar Lane Bakery &middot; June</span>
+          <span class="badge">Sample &mdash; fictional shop</span>
+        </header>
+        <div class="cells">
+          <div class="stat"><span class="num" data-count-to="11">11</span><span class="stat-label">calls from the site</span></div>
+          <div class="stat"><span class="num" data-count-to="5">5</span><span class="stat-label">became orders &mdash; you told us which</span></div>
+          <div class="stat"><span class="num" data-count-to="3">3</span><span class="stat-label">new reviews</span></div>
+          <div class="stat"><span class="num">#8 &rarr; #6</span><span class="stat-label">map spot, &ldquo;custom cakes near me&rdquo;</span></div>
+        </div>
       </div>
-      <div class="foot">Every figure here is a sample, so it stays in ink. When it&rsquo;s <b>your</b> real month — counted from your real calls and real reviews — the numbers earn the proof color, a green we keep only for the truth.</div>
+
+      <div class="grid cols-2" style="margin-top:1.25rem">
+        <article class="card reveal">
+          <h3>The note that comes with it</h3>
+          <p><strong>Hi Maya — here&rsquo;s your June.</strong></p>
+          <p>Eleven people called from the site; you told us five became orders. Three new reviews came in — real ones from your customers, we never write them. For &ldquo;custom cakes near me,&rdquo; you&rsquo;re on the first map screen, up two spots since May.</p>
+          <p>Things went quiet around the 14th — the rainy week, we think, not the site. We&rsquo;re watching it.</p>
+          <p>&mdash; [Your name]</p>
+        </article>
+        <article class="card reveal">
+          <h3>What we changed, by text</h3>
+          <ul style="list-style:none;display:grid;gap:.55rem">
+            <li>&ldquo;Open Saturdays through summer&rdquo; &mdash; hours updated everywhere</li>
+            <li>&ldquo;Make the strawberry cake the big photo&rdquo; &mdash; swapped same day</li>
+            <li>&ldquo;Add a line about pie pre-orders&rdquo; &mdash; on the home page by dinner</li>
+          </ul>
+          <p style="margin-top:.9rem">You texted, it got done. That part of the note is the receipt.</p>
+        </article>
+      </div>
+
+      <p class="reveal" style="margin-top:1.25rem"><strong>Why the sample numbers aren&rsquo;t green:</strong> on a real Meter, green marks figures we actually counted. A sample hasn&rsquo;t earned it — so the page won&rsquo;t let us fake it.</p>
     </div>
-
-    <!-- THE NOTE — the plain-English letter that comes with the scoreboard -->
-    <p class="colo reveal" style="margin:1.6rem 0 .2rem">And the note that comes with it &mdash; the part no dashboard sends:</p>
-
-    <article class="dispatch reveal" aria-label="The monthly note, a sample">
-      <div class="mast">
-        <span class="who">The Meter — Tidewater Plumbing &amp; Heating</span>
-        <span class="when">June · sample note</span>
-      </div>
-      <div class="body">
-        <p class="greet">Here&rsquo;s what your site did in June.</p>
-        <p>Fourteen people called you straight from the site — most tapped the call button right on their phone. <b>Six turned into booked jobs</b>, and three of those came in after hours, when your old site would&rsquo;ve sent them to voicemail. The burst-pipe / no-heat section you asked for is already catching people who used to scroll right past.</p>
-        <p>You picked up <b>nine new Google reviews</b> from the follow-up we send after each job, and you climbed the map: for <i>&ldquo;emergency plumber Woodbury&rdquo;</i> you moved from the 7th spot to the 3rd over four weeks.</p>
-
-        <figure class="rankclimb" role="img" aria-label="Google map spot climbed from 7th to 3rd over four weeks: week 1 at 7, week 2 at 6, week 3 at 4, week 4 at 3.">
-          <div class="top"><span>Map spot · &ldquo;emergency plumber Woodbury&rdquo;</span><span>week by week</span></div>
-          <svg viewBox="0 0 300 96" preserveAspectRatio="none" aria-hidden="true">
-            <line class="axis" x1="8" y1="90" x2="292" y2="90" stroke-width="1"/>
-            <path class="path" d="M28 78 L118 66 L208 40 L280 24"/>
-            <circle class="dot" cx="28" cy="78" r="4"/>
-            <circle class="dot" cx="118" cy="66" r="4"/>
-            <circle class="dot" cx="208" cy="40" r="4"/>
-            <circle class="now" cx="280" cy="24" r="5.5"/>
-            <text class="rlab" x="28" y="94" text-anchor="middle" dy="6">#7</text>
-            <text class="rlab hi" x="280" y="18" text-anchor="middle">#3</text>
-          </svg>
-        </figure>
-
-        <p>The one we like best: when we asked a few AI assistants this week for the best emergency plumber in Woodbury, <span class="mark">two of the three named Tidewater</span>.</p>
-
-        <ul class="tended">
-          <li><span class="lab">What we did on your site this month</span>Added the burst-pipe / no-heat section, right up top where it&rsquo;s seen first</li>
-          <li>Made the 24/7 call button one tap, so an emergency never hunts for your number</li>
-          <li>Posted two job photos from the Mullica Hill repair</li>
-          <li>Updated your hours for the holiday weekend</li>
-        </ul>
-
-        <p class="sign">Sent by <b>a real person</b> in South Jersey. Reply to this note and you reach them — not a bot, not a ticket. If a number ever dips, you&rsquo;ll hear why, and what we&rsquo;re already doing about it.</p>
-      </div>
-    </article>
-
-    <p class="stamp reveal" style="margin-top:1rem"><span class="dot" aria-hidden="true"></span>&nbsp;Sample figures for an example shop — not a real customer&rsquo;s month</p>
   </section>
 
-  <hr class="rule">
-
-  <!-- ══ HOW WE COUNT IT + THE SACRED GREEN (the truth gate, explained) ════════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">How we count it</p>
-    <h2 class="head reveal">Every number is a real thing that happened — or it doesn&rsquo;t go in.</h2>
-    <p class="lede reveal">No meaningless clicks, no puffed-up &ldquo;views.&rdquo; The Meter counts the things a business owner actually cares about, each the plain way.</p>
-
-    <dl class="walllabel reveal" style="margin:1.4rem 0" aria-label="How each number is counted">
-      <dt>Calls</dt><dd>taps on your call button — <b>counted, not guessed</b></dd>
-      <dt>New jobs</dt><dd>the calls that became work — <span class="mark">you tell us which ones</span>, we don&rsquo;t assume</dd>
-      <dt>Reviews</dt><dd>new reviews, counted on Google where they land</dd>
-      <dt>Where you show up</dt><dd>your spot on the Google map for the searches that matter to your trade</dd>
-      <dt>AI answers</dt><dd>whether the assistants name you when someone asks for your trade in your town — we check</dd>
-    </dl>
-
-    <div class="payoff reveal">
-      <p class="q">There&rsquo;s a color on the Meter you&rsquo;ll never see on this page: <span class="mark">a green we save for the truth.</span> A sample can&rsquo;t wear it. Only your real, counted month can.</p>
+  <!-- ══ HOW WE COUNT — plain rules, no inflation ══ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">How we count</p>
+      <h2 class="reveal">Every number is a real thing that <em class="accent">happened</em>.</h2>
+      <p class="lede reveal">No puffed-up &ldquo;views,&rdquo; no mystery scores. Three plain rules.</p>
+      <div class="grid cols-3" style="margin-top:2rem">
+        <article class="card reveal">
+          <h3>Calls</h3>
+          <p>Taps on your call button. <strong>Counted, not guessed.</strong></p>
+        </article>
+        <article class="card reveal">
+          <h3>Booked</h3>
+          <p>You tell us which calls became work. <strong>We never assume</strong> — or round up.</p>
+        </article>
+        <article class="card reveal">
+          <h3>Found</h3>
+          <p>Where you show up when someone searches your trade and town. Built to be <strong>findable and citable</strong> — never a promised ranking.</p>
+        </article>
+      </div>
     </div>
-
-    <p class="reveal">That&rsquo;s not a design touch — it&rsquo;s a promise built into the page. Sample numbers, like the ones above, show in plain ink. The proof color only ever touches a number we&rsquo;ve counted from your real calls and your real reviews. If it&rsquo;s green, it&rsquo;s true. The page itself won&rsquo;t let us fake it.</p>
   </section>
 
-  <hr class="rule">
-
-  <!-- ══ A NOTE, NOT A DASHBOARD + THE CLOSE ══════════════════════════════════ -->
-  <section class="plate">
-    <p class="folio">§—</p>
-    <p class="label mark reveal">No dashboards</p>
-    <h2 class="head reveal">You never log into anything.</h2>
-    <p class="lede reveal">The whole idea is that you keep running your business, not a marketing app. The Meter comes to you — first week of the month, in your inbox, in plain words. Read it in a minute. Reply to a real person. That&rsquo;s it.</p>
-
-    <div class="payoff reveal">
-      <p class="q">Proof you can read in a minute, every month — <span class="mark">whether the news is good or bad.</span> That&rsquo;s the difference between someone who sells you a website and someone who stays on the hook for it.</p>
+  <!-- ══ WHY WE SEND IT — the anti-churn heart ══ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">Why we send it</p>
+      <h2 class="reveal">So you never wonder what you&rsquo;re <em class="accent">paying</em> for.</h2>
+      <p class="lede reveal">A slow month shows up on the Meter too — with why, and what we&rsquo;re doing about it. You see the real month; we stay on the hook for it.</p>
+      <p class="reveal" style="margin-top:1rem;color:var(--muted);max-width:34em">And since <strong>you own everything and can cancel anytime</strong>, the Meter is the only thing keeping you. That&rsquo;s how it should be.</p>
+      <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="/how-it-works/">How it works</a>
+      </div>
     </div>
-
-    <p class="drop reveal">Anyone can show you a chart that only goes up. We show you the real month — and when something slips, we tell you why before you have to ask. The Meter is how we stay honest out loud, every thirty days, for as long as you&rsquo;re with us. It&rsquo;s also why leaving is easy: there&rsquo;s never a mystery about what you&rsquo;re paying for.</p>
-
-    <div class="actions reveal">
-      <a class="btn primary big" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
-      <a class="btn big" href="the-moat.html">Why it works <span class="arw" aria-hidden="true">&#8594;</span></a>
-    </div>
-    <p class="colo reveal">The free preview is a real sketch of your own site in about a minute — not the finished thing. Your real one is built from scratch, with your photos, and looks better. Rather talk to a person first? That door&rsquo;s on every page.</p>
   </section>
 
 </main>
 
-<footer class="colophon">
-  <div class="in">
-    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
-    <nav class="fnav" aria-label="Site">
-      <a href="./">site sourcery</a>
-      <a href="how-it-works.html">how it works</a>
-      <a href="the-moat.html">the difference</a>
-      <a href="the-meter.html" aria-current="page">the meter</a>
-      <a href="work.html">work</a>
-      <a href="pricing.html">pricing</a>
-      <a href="about.html">about</a>
-      <a href="faq.html">faq</a>
-      <a href="contact.html">contact</a>
-      <a href="start/">see your site</a>
-      <a href="https://daarx.money/">daarx.money</a>
-    </nav>
-    <p class="fine">Get found on Google · named by AI · wired for calls · yours to keep · cancel anytime<br>
-    The Meter is a note we send, not a dashboard you babysit. Sample numbers are shown in ink; the proof color is saved for real, counted results.</p>
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/">
+          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
+          <span class="brand-name">Site&nbsp;Sourcery</span>
+        </a>
+        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
+        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+      </div>
+      <nav class="footer-links" aria-label="Pages">
+        <a href="/">Home</a>
+        <a href="/work/">Work</a>
+        <a href="/pricing/">Pricing</a>
+        <a href="/how-it-works/">How it works</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/contact/">Contact</a>
+        <a href="/start/">Start your site</a>
+      </nav>
+      <div class="footer-contact">
+        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
+        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+      </div>
+    </div>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
   </div>
 </footer>
-
-<script src="sourcery.js" defer></script>
 </body>
 </html>
