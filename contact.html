@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — contact.html · THE CORRESPONDENCE / REACH A PERSON
+     The dedicated contact path. INK: "Reach a real person." INSTRUMENT: one
+     honest contact mark — a real inbox a real human reads — stamped, not a form
+     wall. Sets honest expectations (who you reach, how fast) and stays strictly
+     phone-honest: there is no public line yet, so it never pretends there is.
+     Complements faq.html (the full marginalia Q&A) — it does NOT duplicate it;
+     the short reassurances here deep-link into the FAQ for the full answers.
+     The model is NEVER named; no fabricated stats. Self-contained static, zero
+     external asset loads. Look = style.css; behavior = sourcery.js.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact — reach a real person · Site Sourcery</title>
+<meta name="description" content="One honest inbox, and a real person on the other end of it — no bot, no queue, no ticket number. Ask anything, get a free specimen, or just say hello. Usually answered the same day.">
+<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://sitesourcery.com/contact.html">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='38' fill='%23f4efe3'/><rect x='52' y='52' width='84' height='11' rx='5' fill='%23c6b795'/><rect x='24' y='83' width='118' height='15' rx='7' fill='%23c5361c'/><circle cx='152' cy='90' r='10' fill='%23c5361c'/><rect x='52' y='118' width='84' height='11' rx='5' fill='%23c6b795'/></svg>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Site Sourcery">
+<meta property="og:title" content="Contact — reach a real person · Site Sourcery">
+<meta property="og:description" content="One honest inbox, a real person on the other end — no bot, no queue. Ask anything, get a free specimen, or just say hello.">
+<meta property="og:url" content="https://sitesourcery.com/contact.html">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Contact — reach a real person · Site Sourcery">
+<meta name="twitter:description" content="One honest inbox, a real human on the other end. No bot, no queue, no ticket number.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ContactPage","name":"Contact — Site Sourcery","url":"https://sitesourcery.com/contact.html","description":"Reach a real person at Site Sourcery. One honest inbox, answered by a human — usually the same day.","mainEntity":{"@type":"Organization","name":"Site Sourcery","email":"hello@sitesourcery.com","areaServed":"South Jersey, NJ","contactPoint":{"@type":"ContactPoint","contactType":"customer support","email":"hello@sitesourcery.com","availableLanguage":"English"}}}
+</script>
+<script>
+/* pre-paint: mark JS on, apply saved theme (no flash), reveal safety net */
+document.documentElement.classList.add('js');
+try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
+</script>
+<style>
+/* ══ THE CORRESPONDENCE · page-scoped styles — built only on shared tokens ══ */
+
+/* the postmark — one honest contact mark, stamped (NOT a form wall) */
+.postmark{display:flex;flex-direction:column;gap:1.05rem;padding:1.8rem 1.7rem;
+  background:var(--leaf);border:1px solid var(--line-lit);border-left:2px solid var(--rubric);
+  border-radius:var(--r);box-shadow:var(--edge),var(--e1)}
+.postmark .to{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
+  letter-spacing:.15em;color:var(--faint);display:inline-flex;align-items:center;gap:.55rem}
+.postmark .to svg{width:1.05em;height:1.05em;stroke:var(--rubric);fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.postmark .addr{font-family:var(--display);font-weight:700;letter-spacing:-.01em;line-height:1.05;
+  font-size:clamp(1.5rem,4.4vw,2.4rem);color:var(--ink);word-break:break-word}
+.postmark .addr a{text-decoration-color:var(--line-lit)}
+.postmark .addr a:hover,.postmark .addr a:focus-visible{text-decoration-color:var(--rubric)}
+.postmark .promise{color:var(--dim);font-size:var(--fs-note);max-width:40em;margin:0}
+.postmark .promise .mark{color:var(--rubric);font-weight:600}
+.postmark .doors{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:.25rem}
+
+/* the expectations rail — what actually happens when you write */
+.expect{display:grid;gap:0;margin-top:1.5rem;border-top:1px solid var(--line)}
+.expect .row{display:grid;grid-template-columns:1fr;gap:.2rem .9rem;padding:1rem 0;
+  border-bottom:1px solid var(--line)}
+@media(min-width:40rem){.expect .row{grid-template-columns:9rem 1fr;gap:1.2rem;align-items:baseline}}
+.expect .k{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
+  letter-spacing:.14em;color:var(--faint)}
+.expect .v{color:var(--dim)}
+.expect .v b{color:var(--ink);font-weight:600}
+.expect .v .mark{color:var(--rubric);font-weight:600}
+
+/* "the short of it" — one-line reassurances that link to the FULL FAQ answers */
+.shorts{display:flex;flex-direction:column;gap:0;margin-top:1.2rem;border-top:1px solid var(--line-lit)}
+.short{display:grid;grid-template-columns:1fr;gap:.15rem;padding:1.15rem 0;border-bottom:1px solid var(--line)}
+@media(min-width:46rem){.short{grid-template-columns:13rem 1fr;gap:1.6rem;align-items:baseline}}
+.short .sq{font-family:var(--index);font-weight:600;color:var(--ink);font-size:.98rem}
+.short .sa{color:var(--dim);font-size:var(--fs-note)}
+.short .sa .more{font-family:var(--index);font-size:var(--fs-fine);color:var(--rubric);
+  white-space:nowrap;margin-left:.15em}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="paper" aria-hidden="true"></div>
+
+<!-- ── NAV — matches the flagship (how it works + one rubric CTA) ── -->
+<nav class="nav" aria-label="Primary">
+  <div class="bar">
+    <a class="brand" href="./" aria-label="Site Sourcery — home">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
+      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+    </a>
+    <div class="links">
+      <a class="txt" href="how-it-works.html">how it works</a>
+      <a class="txt" href="the-moat.html">the difference</a>
+      <a class="txt" href="pricing.html">pricing</a>
+      <button class="theme-btn" type="button" aria-label="Switch color theme">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── RUNNING HEAD ── -->
+<header class="runhead">
+  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Correspondence</span>
+  <span class="sec">Reach a Person</span>
+</header>
+
+<main id="main" class="wrap">
+
+  <!-- ══ THE INK + THE ONE INSTRUMENT — the honest contact mark ════════════ -->
+  <section class="plate" id="contact">
+    <p class="folio">&sect;</p>
+    <p class="label mark reveal">The Correspondence</p>
+    <h1 class="cover hero-in">Reach a real <span class="inscribe">person<svg class="stroke" viewBox="0 0 200 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 46 6, 118 6, 162 11 S 195 17, 196 9" stroke-width="5"/></svg></span>.</h1>
+    <p class="lede hero-in">No phone tree, no ticket queue, no bot wearing a person's name. One inbox, and a human on the other end of it — the same person who builds the sites. Write, and you'll hear back.</p>
+
+    <div class="postmark reveal" style="margin-top:1.4rem">
+      <span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg> Write to</span>
+      <div class="addr"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a></div>
+      <p class="promise"><span class="mark">A real person reads every one</span> — usually the same day. A question, a second opinion on the site you already have, or just "can we talk first?" — the answer is always yes.</p>
+      <div class="doors">
+        <a class="btn primary" href="mailto:hello@sitesourcery.com?subject=A%20question%20for%20a%20real%20person">Write a note <span class="arw" aria-hidden="true">&#8594;</span></a>
+        <a class="btn" href="start/">Send a brief instead <span class="arw" aria-hidden="true">&#8594;</span></a>
+      </div>
+    </div>
+    <p class="colo reveal">Built by one person in South Jersey. There's no call-center line to share yet — so we don't pretend there is. When a real number is live, it'll be right here, and a person will pick up.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ WHAT HAPPENS WHEN YOU WRITE — honest expectations ═════════════════ -->
+  <section class="plate">
+    <p class="folio">&sect;&mdash;</p>
+    <p class="label mark reveal">Before you write</p>
+    <h2 class="head reveal">Who you're reaching, plainly.</h2>
+    <p class="lede reveal">So you know exactly what's on the other side of that email — no mystery, no script waiting to pounce.</p>
+
+    <div class="expect reveal">
+      <div class="row"><span class="k">Who</span><span class="v"><b>One person in South Jersey</b> — the same one who directs the build and does the final once-over. Not a call center.</span></div>
+      <div class="row"><span class="k">When</span><span class="v"><b>Usually the same day.</b> If it's after hours, first thing next.</span></div>
+      <div class="row"><span class="k">Cost</span><span class="v">Nothing to ask. No obligation, <span class="mark">no card</span>, no sales script — ask a question and get a plain answer.</span></div>
+      <div class="row"><span class="k">Good to send</span><span class="v">Your business name and town, a link to your current site if you have one, and what you're hoping for. Even just "is my trade a fit?" is welcome.</span></div>
+    </div>
+
+    <p class="reveal" style="margin-top:1.4rem">Rather not type it all out? <a href="start/">Send a specimen brief</a> — a few taps assembles the details for you — or just <a href="mailto:hello@sitesourcery.com?subject=Can%20we%20talk%3F">say hello</a> and we'll take it from there. There's no wrong door.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ THE SHORT OF IT — one-liners that deep-link into the full FAQ ══════ -->
+  <section class="plate">
+    <p class="folio">&sect;&mdash;</p>
+    <p class="label mark reveal">The short of it</p>
+    <h2 class="head reveal">The three worries, in one line each.</h2>
+    <p class="lede reveal">The very short version of what most people ask before they write. The full answers — and more — live in the <a href="faq.html">FAQ</a>.</p>
+
+    <div class="shorts reveal">
+      <div class="short">
+        <span class="sq">Do I own it?</span>
+        <span class="sa">Yes — the site file and your domain are yours to keep. <a class="more" href="faq.html#q-own">full answer &#8599;</a></span>
+      </div>
+      <div class="short">
+        <span class="sq">What if I cancel?</span>
+        <span class="sa">Cancel anytime, no lock-in; you keep the file and domain. <a class="more" href="faq.html#q-cancel">full answer &#8599;</a></span>
+      </div>
+      <div class="short">
+        <span class="sq">A robot builds it?</span>
+        <span class="sa">AI does the heavy lifting; a real person signs off before it's live. <a class="more" href="faq.html#q-who">full answer &#8599;</a></span>
+      </div>
+    </div>
+
+    <div class="actions reveal">
+      <a class="btn primary big" href="faq.html">Every question, answered <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn big" href="start/">See your specimen — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+    <p class="colo reveal">The free specimen is a genuine sketch built from your own words — not your finished site. Your real one is built from scratch, by hand, and looks better.</p>
+  </section>
+
+</main>
+
+<!-- ── COLOPHON ── -->
+<footer class="colophon">
+  <div class="in">
+    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
+    <nav class="fnav" aria-label="Site">
+      <a href="./">site sourcery</a>
+      <a href="how-it-works.html">how it works</a>
+      <a href="the-moat.html">the difference</a>
+      <a href="the-meter.html">the meter</a>
+      <a href="work.html">work</a>
+      <a href="pricing.html">pricing</a>
+      <a href="about.html">about</a>
+      <a href="faq.html">faq</a>
+      <a href="contact.html" aria-current="page">contact</a>
+      <a href="start/">see your site</a>
+      <a href="https://daarx.money/">daarx.money</a>
+    </nav>
+    <p class="fine">The one name AI recommends · run for you · proven by the calls · yours to keep · cancel anytime<br>
+    Real answers from a real person; the model is never named, and no figure here is invented. This page loads <span class="figure">0</span> images.</p>
+  </div>
+</footer>
+
+<script src="sourcery.js" defer></script>
+</body>
+</html>

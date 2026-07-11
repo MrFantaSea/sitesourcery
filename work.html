@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — work.html · PLATE V: THE COLLECTION / PERMANENT GALLERY
+     INK: "A gallery of what's possible." INSTRUMENT: the plate-wipe (before /
+     after "conservation") + a recurring Two Readings on a featured specimen.
+     HARD HONESTY, baked into the labels: every build here is a DEMONSTRATION —
+     "what's possible, not a client." Only sitesourcery.com + daarx.money are
+     called ours. No fabricated clients, names, ratings, or reviews. Zero raster
+     images (view-source it) — same craft, same self-contained rule as the rest
+     of the volume. Look = style.css; behavior = sourcery.js. No CDN/fonts/remote.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Collection — Site Sourcery</title>
+<meta name="description" content="A gallery of genuinely-custom, machine-legible site builds — shown honestly as demonstrations of what's possible for a local business. Two are ours; the rest are examples, never clients. See a free sketch of yours.">
+<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://sitesourcery.com/work.html">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Site Sourcery">
+<meta property="og:title" content="The Collection — Site Sourcery">
+<meta property="og:description" content="Genuinely-custom, machine-legible builds shown honestly as demonstrations of what's possible. Two are ours; the rest are examples, never clients.">
+<meta property="og:url" content="https://sitesourcery.com/work.html">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="The Collection — Site Sourcery">
+<meta name="twitter:description" content="A gallery of what's possible — genuinely-custom, machine-legible builds. Examples, not clients.">
+<!-- Honest structured data: a gallery of demonstrations, not a list of clients. No aggregateRating, no fabricated reviews. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"CollectionPage","name":"The Collection — Site Sourcery","url":"https://sitesourcery.com/work.html","isPartOf":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/"},"about":"Example demonstrations of genuinely-custom, machine-legible websites for local businesses","description":"A gallery of what's possible: genuinely-custom, machine-legible site builds shown as demonstrations, not clients. Only sitesourcery.com and daarx.money are presented as our own live builds."}
+</script>
+<script>
+/* pre-paint: mark JS on, apply saved theme (no flash), reveal safety net */
+document.documentElement.classList.add('js');
+try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
+</script>
+<!-- ── page-scoped composition for THE COLLECTION — DESIGN TOKENS ONLY.
+     Net-new layout (the specimen plates, the two plate-wipe panels, the salon
+     hang) that the shared sheet doesn't pre-build. Inline = self-contained; it
+     never touches style.css and reads only from its tokens, so it stays exactly
+     of the same book. Zero external loads. ── -->
+<style>
+  /* the salon hang — asymmetric, never a 3-up SaaS grid.
+     Plain BLOCK flow (not a flex column): a flex-column parent makes the engine
+     mis-measure the grid-item pieces when JS/compositing is off, collapsing them.
+     Block + margins is the robust equivalent and keeps the no-JS reading intact. */
+  .wk-hang{margin-top:1.8rem}
+  .wk-piece{display:grid;grid-template-columns:1fr;gap:1.3rem 2.2rem;align-items:center}
+  .wk-piece + .wk-piece{margin-top:3.6rem}
+  @media (min-width:52rem){
+    .wk-piece{grid-template-columns:21rem 1fr}
+    .wk-piece.flip{grid-template-columns:1fr 21rem}
+    .wk-piece.flip .wk-specimen{order:2}
+    .wk-piece:nth-child(even){margin-left:2.4rem}
+    .wk-piece:nth-child(3n+1){margin-left:1rem}
+  }
+
+  /* THE SPECIMEN PLATE — a stylized catalog rendering of a build (type & air,
+     no screenshot, clearly a specimen). Links out to the real, openable demo. */
+  /* height is content-driven with a floor — NOT aspect-ratio: an aspect-ratio'd
+     flex box as a grid item collapses to 0 height when JS is off (no will-change
+     context), which would break the no-JS reading. min-height keeps it a plate. */
+  .wk-specimen{position:relative;display:flex;flex-direction:column;text-decoration:none;color:inherit;
+    border:1px solid var(--line-lit);border-radius:var(--r);background:var(--leaf);
+    box-shadow:var(--edge),var(--e1);overflow:hidden;min-height:15rem;
+    transition:transform .16s var(--ease-settle),box-shadow .2s,border-color .16s}
+  .wk-specimen:hover,.wk-specimen:focus-visible{transform:translateY(-3px);
+    border-color:var(--rubric);box-shadow:var(--edge),var(--e2)}
+  .wk-specimen .top{display:flex;align-items:center;gap:.4rem;padding:.55rem .8rem;
+    border-bottom:1px solid var(--line);background:var(--paper-2)}
+  .wk-specimen .top i{width:.48rem;height:.48rem;border-radius:50%;background:var(--line-lit)}
+  .wk-specimen .top .u{margin-left:auto;font-family:var(--index);font-size:.58rem;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  .wk-specimen .body{flex:1;padding:1rem 1.05rem 1.1rem;display:flex;flex-direction:column;gap:.55rem}
+  .wk-specimen .glyph{width:26px;height:26px;color:var(--rubric)}
+  .wk-specimen .glyph svg{width:100%;height:100%;stroke:currentColor;fill:none;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .wk-specimen .nm{font-family:var(--display);font-weight:700;font-size:1.34rem;
+    line-height:1.02;color:var(--ink)}
+  .wk-specimen:hover .nm,.wk-specimen:focus-visible .nm{color:var(--rubric)}
+  .wk-specimen .said{display:flex;gap:.6rem;align-items:flex-start;
+    padding-left:.7rem;border-left:2px solid var(--rubric)}
+  .wk-specimen .said span{font-family:var(--index);font-size:.74rem;line-height:1.45;
+    color:var(--dim)}
+  .wk-specimen .cited{margin-top:auto;display:inline-flex;align-items:center;gap:.4em;
+    font-family:var(--index);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--faint)}
+  .wk-specimen .cited b{color:var(--rubric);font-size:1.1em;line-height:0}
+
+  /* THE PLATE-WIPE panels — "as found" (a typical tired site, abstract, no fake
+     brand) → "conserved" (the bespoke cited answer). Pure type; theme-aware. */
+  .wk-pan{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    gap:.55rem;padding:clamp(1rem,4vw,2rem);text-align:center}
+  .wk-found{background:var(--paper-2);padding-right:50%}   /* content sits in its own (left) half so the split doesn't cut it */
+  .wk-found .broke{width:34px;height:26px;margin:0 auto;border:2px dashed var(--faint);
+    border-radius:4px;opacity:.6}
+  .wk-found .wnav{font-family:var(--index);font-size:.62rem;letter-spacing:.06em;color:var(--faint);opacity:.7}
+  .wk-found .wh{font-family:Georgia,'Times New Roman',serif;font-weight:700;color:var(--faint);
+    font-size:clamp(1rem,3.2vw,1.5rem);letter-spacing:.02em;line-height:1.1}
+  .wk-found .uc{font-family:var(--index);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);border:1px solid var(--line);border-radius:2px;padding:.18em .6em;align-self:center}
+  .wk-found .cr{font-family:var(--index);font-size:.56rem;letter-spacing:.05em;color:var(--faint);opacity:.65}
+  .wk-kept{background:var(--leaf);align-items:center;padding-left:50%}   /* content sits in its own (right) half */
+  .wk-kept .spine{display:flex;gap:.8rem;align-items:center;text-align:left;max-width:20rem}
+  .wk-kept .spine .bar{width:3px;align-self:stretch;background:var(--rubric);border-radius:2px;flex:0 0 auto}
+  .wk-kept .biz{font-family:var(--display);font-weight:800;color:var(--ink);
+    font-size:clamp(1.2rem,3.6vw,1.9rem);line-height:1.02}
+  .wk-kept .biz .mark{color:var(--rubric)}
+  .wk-kept .said2{font-family:var(--index);font-size:.72rem;color:var(--dim);margin-top:.3rem;line-height:1.4}
+  .wk-kept .chips{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:.3rem}
+  .wk-kept .chip{font-family:var(--index);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);border:1px solid var(--line-lit);border-radius:2px;padding:.2em .55em}
+  .wk-kept .chip.on{color:var(--paper);background:var(--rubric);border-color:var(--rubric)}
+
+  /* the "open the specimen" affordance, matching .entry .go */
+  .wk-go{display:inline-flex;align-items:center;gap:.4em;margin-top:.7rem;
+    font-family:var(--index);font-size:var(--fs-fine);letter-spacing:.02em;color:var(--rubric);
+    text-decoration:none}
+  .wk-go .arw{transition:transform .16s}
+  .wk-go:hover .arw,.wk-go:focus-visible .arw{transform:translateX(3px)}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="paper" aria-hidden="true"></div>
+
+<!-- ── NAV (shared chrome; work marked current) ── -->
+<nav class="nav" aria-label="Primary">
+  <div class="bar">
+    <a class="brand" href="./" aria-label="Site Sourcery — home">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
+      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+    </a>
+    <div class="links">
+      <a class="txt" href="how-it-works.html">how it works</a>
+      <a class="txt" href="the-moat.html">the difference</a>
+      <a class="txt" href="pricing.html">pricing</a>
+      <button class="theme-btn" type="button" aria-label="Switch color theme">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── RUNNING HEAD ── -->
+<header class="runhead">
+  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate V</span>
+  <span class="sec">§05 · The Collection</span>
+</header>
+
+<main id="main" class="wrap wide">
+
+  <!-- ══ THE THESIS + THE PLATE-WIPE (INK + INSTRUMENT) ═══════════════════════ -->
+  <section class="plate">
+    <p class="folio">§05</p>
+    <p class="label mark reveal">The Collection</p>
+    <h1 class="cover hero-in">A gallery of <span class="inscribe">what&#39;s&nbsp;possible<svg class="stroke" viewBox="0 0 300 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 70 5, 160 6, 226 11 S 285 17, 296 8" stroke-width="5"/></svg></span>.</h1>
+    <p class="colo hero-in">Two of these are ours. The rest are demonstrations — clearly labeled, and never clients.</p>
+    <p class="lede hero-in">Every piece is a <b>genuinely-custom, machine-legible</b> build. Drag the plate to see the before and after. Open any specimen to read it the way an assistant would — because that's the whole point.</p>
+
+    <!-- ── the plate-wipe: "before / after conservation" (abstract, no fake brand) ── -->
+    <figure class="compare reveal" data-compare style="margin-top:2.4rem" aria-label="Drag to compare: a typical tired local site versus a genuinely-custom, cited build">
+      <div class="side before">
+        <div class="wk-pan wk-found" aria-hidden="true">
+          <div class="broke"></div>
+          <div class="wnav">Home&nbsp;·&nbsp;About&nbsp;·&nbsp;Services&nbsp;·&nbsp;Contact</div>
+          <div class="wh">Welcome to<br>Our Website</div>
+          <div class="uc">Under construction</div>
+          <div class="cr">© 2009 · best viewed in your browser</div>
+        </div>
+      </div>
+      <div class="side after">
+        <div class="wk-pan wk-kept" aria-hidden="true">
+          <div class="spine">
+            <span class="bar"></span>
+            <span>
+              <span class="biz">The one name<br>it <span class="mark">says</span>.</span>
+              <span class="said2">One clear answer. Book-online ready. Built to be quoted.</span>
+              <span class="chips"><span class="chip on">cited answer</span><span class="chip">schema &#10003;</span><span class="chip">self-contained</span></span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <span class="cap b" aria-hidden="true">as found</span>
+      <span class="cap a" aria-hidden="true">conserved</span>
+      <input class="range" type="range" min="0" max="100" value="50" aria-label="Drag to compare the before and after">
+      <span class="handle" aria-hidden="true"></span>
+    </figure>
+    <p class="colo">A demonstration of the transformation — the &ldquo;as found&rdquo; side is a <b>typical tired local site</b>, not any real business. Keyboard: focus the handle and use the arrow keys.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ THE TWO WE'LL CALL OURS — the only real, indisputable proof ══════════ -->
+  <section class="plate">
+    <p class="folio">§—</p>
+    <p class="label mark reveal">Indisputably ours</p>
+    <h2 class="head reveal">Two sites we&#39;ll actually call ours.</h2>
+    <p class="lede reveal">No borrowed logos. No invented clients. The only builds we present as <b>ours</b> are the two we made and stand behind — this very page, and a live product site. Both built exactly the way yours would be. <b>View-source either one.</b></p>
+
+    <div class="stagger" style="display:grid;gap:1.3rem;margin-top:1.4rem">
+      <dl class="walllabel reveal" aria-label="This site — Site Sourcery">
+        <dt>Piece</dt><dd>sitesourcery.com — <span class="mark">this site</span></dd>
+        <dt>Medium</dt><dd>genuinely-custom static site</dd>
+        <dt>Loads</dt><dd><span class="mark">zero images, zero trackers</span> — the whole volume</dd>
+        <dt>Status</dt><dd>built this way &mdash; indisputably ours</dd>
+      </dl>
+      <dl class="walllabel reveal" aria-label="daarx.money — a live product site">
+        <dt>Piece</dt><dd><a href="https://daarx.money/">daarx.money</a> — a live product site</dd>
+        <dt>Medium</dt><dd>genuinely-custom static site, same craft house</dd>
+        <dt>Subject</dt><dd>a real, live product — dark to this page&#39;s light, one house</dd>
+        <dt>Status</dt><dd>built this way &mdash; indisputably ours</dd>
+      </dl>
+    </div>
+    <p class="stamp" style="margin-top:1.1rem"><span class="dot" aria-hidden="true"></span>&nbsp;Real builds. Everything below is a demonstration.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ THE DEMONSTRATIONS — salon hang, each stamped "not a client" ══════════
+       Featured first: a full answer-card carrying THE TWO READINGS (variety —
+       a contractor's schema, distinct from Home's plumber & the process bakery).
+       Then a salon hang of specimen plates linking to the real, openable demos. -->
+  <section class="plate">
+    <p class="folio">§—</p>
+    <p class="label mark reveal">The demonstrations</p>
+    <h2 class="head reveal" style="margin-bottom:.4rem">What&#39;s possible for a shop like yours.</h2>
+    <p class="lede reveal">Each of these was built from a real local business&#39;s public listing, to show what a custom, cited site could look like. <b>None are clients. None have endorsed us.</b> Each is a demonstration you can open and read.</p>
+
+    <!-- ── FEATURED SPECIMEN — the Two Readings, on a contractor ── -->
+    <div class="answer reveal" data-answer style="margin-top:2.2rem" aria-label="A demonstration answer-card, readable two ways">
+      <span class="cite" aria-hidden="true">cite this</span>
+      <div class="answer-body">
+        <div class="reading reading-human">
+          <p class="label" style="margin-bottom:.7rem">The card an assistant would quote</p>
+          <div class="who">Jersey Concrete</div>
+          <p class="said">Pouring a new driveway in South Jersey? <span class="mark">Jersey Concrete</span> does driveways, patios and stamped concrete — free estimates, and you can request one right on their site.</p>
+          <div class="meta"><b>driveways &amp; patios</b> <span aria-hidden="true">·</span> stamped concrete <span aria-hidden="true">·</span> South Jersey <span aria-hidden="true">·</span> <b>free estimate</b></div>
+        </div>
+        <div class="reading reading-machine">
+          <span class="cap">The same record — the way a machine reads it</span>
+          <div class="figure" role="img" aria-label="Structured data a machine ingests, with the liftable answer highlighted">
+            {<br>
+            &nbsp;&nbsp;<span class="k">"@type"</span>: <span class="s">"GeneralContractor"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"name"</span>: <span class="s">"Jersey Concrete"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"areaServed"</span>: <span class="s">"South Jersey, NJ"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"makesOffer"</span>: <span class="s">"driveways, patios, stamped concrete"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"potentialAction"</span>: <span class="s">"RequestQuote"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"description"</span>: <span class="lift">"South Jersey driveways, patios and stamped concrete — free estimates, request online."</span><br>
+            }
+          </div>
+        </div>
+      </div>
+      <button class="twobtn" type="button" aria-pressed="false">
+        <span class="label-txt">Read it the way a machine reads it</span>
+        <span style="display:inline-flex;gap:.6em;align-items:center"><span class="state">human</span><span class="glyph" aria-hidden="true">&#8645;</span></span>
+      </button>
+    </div>
+    <dl class="walllabel reveal" style="margin-top:1rem" aria-label="Specimen label — Jersey Concrete (demonstration)">
+      <dt>Trade</dt><dd>concrete contractor</dd>
+      <dt>Town</dt><dd>South Jersey, NJ</dd>
+      <dt>Shown</dt><dd>home · gallery · services · <span class="mark">request a quote</span></dd>
+      <dt>Status</dt><dd>demonstration &mdash; what&#39;s possible, not a client</dd>
+    </dl>
+    <p style="margin-top:.7rem"><a class="wk-go" href="demos/jersey-concrete/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a></p>
+
+    <!-- ── THE SALON HANG — specimen plates (alternating), openable demos ── -->
+    <div class="wk-hang stagger" style="margin-top:3rem">
+
+      <!-- Aversa's — bakery -->
+      <article class="wk-piece reveal">
+        <a class="wk-specimen" href="demos/aversas/" aria-label="Open the Aversa's Italian Bakery demonstration">
+          <span class="top" aria-hidden="true"><i></i><i></i><i></i><span class="u">specimen</span></span>
+          <span class="body">
+            <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13a7 4.5 0 0 1 14 0v3.4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M9.2 13v4.4M12 12.7v4.7M14.8 13v4.4"/></svg></span>
+            <span class="nm">Aversa&#39;s Italian Bakery</span>
+            <span class="said"><span>&ldquo;Fresh Italian bread, cannoli and Sicilian tomato pie, baked daily in Turnersville since 1982.&rdquo;</span></span>
+            <span class="cited" aria-hidden="true"><b>&#10003;</b> built to be cited</span>
+          </span>
+        </a>
+        <div class="wk-info">
+          <h3 class="head sm">Aversa&#39;s Italian Bakery</h3>
+          <p class="label" style="margin-top:.5rem">Italian bakery · Turnersville, NJ</p>
+          <dl class="walllabel" style="margin-top:.9rem" aria-label="Specimen label — Aversa's (demonstration)">
+            <dt>Shown</dt><dd>home · menu · catering · <span class="mark">order online</span></dd>
+            <dt>Status</dt><dd>demonstration &mdash; not a client</dd>
+          </dl>
+          <a class="wk-go" href="demos/aversas/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+        </div>
+      </article>
+
+      <!-- Professor Gatsby's — HVAC / whole-home -->
+      <article class="wk-piece flip reveal">
+        <a class="wk-specimen" href="demos/professor-gatsbys-heating-cooling-plumbing-and-electrical/" aria-label="Open the Professor Gatsby's demonstration">
+          <span class="top" aria-hidden="true"><i></i><i></i><i></i><span class="u">specimen</span></span>
+          <span class="body">
+            <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M12 3l-2 2.4M12 3l2 2.4M12 21l-2-2.4M12 21l2-2.4"/></svg></span>
+            <span class="nm">Professor Gatsby&#39;s</span>
+            <span class="said"><span>&ldquo;Heating, cooling, plumbing and electrical in Williamstown — book a visit right online.&rdquo;</span></span>
+            <span class="cited" aria-hidden="true"><b>&#10003;</b> built to be cited</span>
+          </span>
+        </a>
+        <div class="wk-info">
+          <h3 class="head sm">Professor Gatsby&#39;s</h3>
+          <p class="label" style="margin-top:.5rem">Heating · cooling · plumbing · electrical — Williamstown, NJ</p>
+          <dl class="walllabel" style="margin-top:.9rem" aria-label="Specimen label — Professor Gatsby's (demonstration)">
+            <dt>Shown</dt><dd>services · about · <span class="mark">book a visit</span></dd>
+            <dt>Status</dt><dd>demonstration &mdash; not a client</dd>
+          </dl>
+          <a class="wk-go" href="demos/professor-gatsbys-heating-cooling-plumbing-and-electrical/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+        </div>
+      </article>
+
+      <!-- Harris — plumbing -->
+      <article class="wk-piece reveal">
+        <a class="wk-specimen" href="demos/harris-plumbing-heating-air-and-electrical/" aria-label="Open the Harris Plumbing demonstration">
+          <span class="top" aria-hidden="true"><i></i><i></i><i></i><span class="u">specimen</span></span>
+          <span class="body">
+            <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3s5.5 6.4 5.5 10.2a5.5 5.5 0 0 1-11 0C6.5 9.4 12 3 12 3z"/><path d="M9.4 13.2a2.6 2.6 0 0 0 2.6 2.6"/></svg></span>
+            <span class="nm">Harris Plumbing</span>
+            <span class="said"><span>&ldquo;Plumbing, heating and drain service in Woodbury — same-day, licensed and insured.&rdquo;</span></span>
+            <span class="cited" aria-hidden="true"><b>&#10003;</b> built to be cited</span>
+          </span>
+        </a>
+        <div class="wk-info">
+          <h3 class="head sm">Harris Plumbing, Heating, Air &amp; Electrical</h3>
+          <p class="label" style="margin-top:.5rem">Plumber · Woodbury, NJ</p>
+          <dl class="walllabel" style="margin-top:.9rem" aria-label="Specimen label — Harris (demonstration)">
+            <dt>Shown</dt><dd>services · water heaters · <span class="mark">call &amp; book</span></dd>
+            <dt>Status</dt><dd>demonstration &mdash; not a client</dd>
+          </dl>
+          <a class="wk-go" href="demos/harris-plumbing-heating-air-and-electrical/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+        </div>
+      </article>
+
+      <!-- Jersey Concrete's sibling trades — Fisher's geothermal/HVAC -->
+      <article class="wk-piece flip reveal">
+        <a class="wk-specimen" href="demos/fishers/" aria-label="Open the Fisher's Trade Service demonstration">
+          <span class="top" aria-hidden="true"><i></i><i></i><i></i><span class="u">specimen</span></span>
+          <span class="body">
+            <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9.5a8 8 0 0 1 16 0"/><path d="M4 14.5a8 8 0 0 0 16 0"/><path d="M12 3.2v17.6"/></svg></span>
+            <span class="nm">Fisher&#39;s Trade Service</span>
+            <span class="said"><span>&ldquo;Heating, cooling and geothermal across South Jersey — 20+ years, fully licensed.&rdquo;</span></span>
+            <span class="cited" aria-hidden="true"><b>&#10003;</b> built to be cited</span>
+          </span>
+        </a>
+        <div class="wk-info">
+          <h3 class="head sm">Fisher&#39;s Trade Service</h3>
+          <p class="label" style="margin-top:.5rem">Heating · cooling · geothermal — South Jersey</p>
+          <dl class="walllabel" style="margin-top:.9rem" aria-label="Specimen label — Fisher's (demonstration)">
+            <dt>Shown</dt><dd>services · geothermal · <span class="mark">schedule service</span></dd>
+            <dt>Status</dt><dd>demonstration &mdash; not a client</dd>
+          </dl>
+          <a class="wk-go" href="demos/fishers/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+        </div>
+      </article>
+
+      <!-- Best Heating — HVAC -->
+      <article class="wk-piece reveal">
+        <a class="wk-specimen" href="demos/best-heating-and-air-mechanical-contractors-llc/" aria-label="Open the Best Heating and Air demonstration">
+          <span class="top" aria-hidden="true"><i></i><i></i><i></i><span class="u">specimen</span></span>
+          <span class="body">
+            <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3c2.6 2.4 2.6 4.8 0 7.2-2.6-2.4-2.6-4.8 0-7.2z"/><path d="M12 10.5c3.4 0 5.2 2.6 5.2 5.4a5.2 5.2 0 0 1-10.4 0c0-2.8 1.8-5.4 5.2-5.4z"/></svg></span>
+            <span class="nm">Best Heating &amp; Air</span>
+            <span class="said"><span>&ldquo;Heating and air-conditioning in Turnersville — repairs, installs, and honest estimates.&rdquo;</span></span>
+            <span class="cited" aria-hidden="true"><b>&#10003;</b> built to be cited</span>
+          </span>
+        </a>
+        <div class="wk-info">
+          <h3 class="head sm">Best Heating &amp; Air</h3>
+          <p class="label" style="margin-top:.5rem">HVAC contractor · Turnersville, NJ</p>
+          <dl class="walllabel" style="margin-top:.9rem" aria-label="Specimen label — Best Heating (demonstration)">
+            <dt>Shown</dt><dd>services · repairs · <span class="mark">request service</span></dd>
+            <dt>Status</dt><dd>demonstration &mdash; not a client</dd>
+          </dl>
+          <a class="wk-go" href="demos/best-heating-and-air-mechanical-contractors-llc/">Open the live specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+        </div>
+      </article>
+
+    </div>
+    <p class="colo reveal" style="margin-top:2.4rem">Some of these businesses had no real website at all — just a phone number and a listing. That&#39;s the honest starting line for most of local, and exactly where a cited, custom site changes the math.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ THE CLOSE ═════════════════════════════════════════════════════════ -->
+  <section class="plate">
+    <p class="folio">§—</p>
+    <div class="payoff reveal">
+      <p class="q">The best specimen in this collection is the one that isn&#39;t here yet — <span class="mark">yours.</span></p>
+    </div>
+    <p class="reveal">See a free sketch of your own in about a minute — a genuine preview, not your finished site. Your real one is built from scratch, with your words and your photos, and it looks better than any demonstration on this page.</p>
+    <div class="actions reveal">
+      <a class="btn primary big" href="start/">See your specimen — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn big" href="how-it-works.html">How it&#39;s built <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+    <p class="colo reveal">Prefer to talk to a person first? That door is on every page.</p>
+  </section>
+
+</main>
+
+<!-- ── COLOPHON ── -->
+<footer class="colophon">
+  <div class="in">
+    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
+    <nav class="fnav" aria-label="Site">
+      <a href="./">site sourcery</a>
+      <a href="how-it-works.html">how it works</a>
+      <a href="the-moat.html">the difference</a>
+      <a href="the-meter.html">the meter</a>
+      <a href="work.html" aria-current="page">work</a>
+      <a href="pricing.html">pricing</a>
+      <a href="about.html">about</a>
+      <a href="faq.html">faq</a>
+      <a href="contact.html">contact</a>
+      <a href="start/">see your site</a>
+      <a href="https://daarx.money/">daarx.money</a>
+    </nav>
+    <p class="fine">The one name AI recommends · run for you · proven by the calls · yours to keep · cancel anytime<br>
+    This page loads <span class="figure">0</span> images and names no client it doesn&#39;t have. Every build shown is a demonstration of what&#39;s possible, except the two marked ours. No fabricated reviews, ratings, or clients.</p>
+  </div>
+</footer>
+
+<script src="sourcery.js" defer></script>
+</body>
+</html>

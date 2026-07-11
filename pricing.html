@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — pricing.html · PLATE IV: THE RATE CARD / COMMISSION SHEET
+     INK: pricing as an art-commission acquisition sheet — ledger numerals,
+     ruled, honest, acres of paper, ZERO fake urgency. INSTRUMENT: the ~$5,000
+     agency invoice struck in vermilion, corrected to the real commission (a
+     ledger split-flap tick). Editions are HUNG, not a SaaS card-grid. Ownership
+     & the 30-day trial stated PRECISELY (spec §2.10). No proven Meter number
+     appears, so verified-green is structurally absent — rubric is the one accent.
+     "Fable" is a tier name ONLY; copy never links it to any engine or model.
+     Self-contained static — zero external asset loads. Look = style.css; behavior
+     = sourcery.js. Page-specific components live in the scoped <style> below,
+     built purely on the shared tokens (never touches style.css).
+     ══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing — Site Sourcery</title>
+<meta name="description" content="Plain prices, the ~$5,000 agency invoice struck through. A genuinely-custom site built for you from $500, run for you from $39/mo — yours to keep, cancel anytime, risk-free for 30 days. Spark, Signature, Showpiece, and the Fable commission.">
+<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://sitesourcery.com/pricing.html">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Site Sourcery">
+<meta property="og:title" content="Pricing — Site Sourcery">
+<meta property="og:description" content="The agency invoice struck through. A custom site built for you from $500, run for you from $39/mo — yours to keep, cancel anytime, risk-free for 30 days.">
+<meta property="og:url" content="https://sitesourcery.com/pricing.html">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Pricing — Site Sourcery">
+<meta name="twitter:description" content="Plain prices, the agency anchor struck. Built for you, run for you, yours to keep. Cancel anytime.">
+<!-- This page is its own strongest case study: the rate card as clean, structured data a machine reads perfectly. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Service","name":"Site Sourcery — done-for-you custom websites","serviceType":"Custom website design, hosting, and care for local businesses","provider":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/"},"areaServed":"South Jersey, NJ","offers":{"@type":"OfferCatalog","name":"Editions","itemListElement":[{"@type":"Offer","name":"Spark","description":"A genuinely-custom site for a trade that needs one clean, findable home.","priceSpecification":[{"@type":"PriceSpecification","price":"500","priceCurrency":"USD","description":"one-time build"},{"@type":"UnitPriceSpecification","price":"39","priceCurrency":"USD","unitText":"MONTH","description":"care"}]},{"@type":"Offer","name":"Signature","description":"The edition most owners choose — more room, more polish, booking or a live menu wired in.","priceSpecification":[{"@type":"PriceSpecification","price":"900","priceCurrency":"USD","description":"one-time build"},{"@type":"UnitPriceSpecification","price":"59","priceCurrency":"USD","unitText":"MONTH","description":"care"}]},{"@type":"Offer","name":"Showpiece","description":"The full works — every integration, every page.","priceSpecification":[{"@type":"PriceSpecification","price":"1500","priceCurrency":"USD","description":"one-time build"},{"@type":"UnitPriceSpecification","price":"99","priceCurrency":"USD","unitText":"MONTH","description":"care"}]},{"@type":"Offer","name":"Open studio","description":"Self-serve: drive the changes yourself, metered. A real new version each time — not the bespoke commission a person art-directs.","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"9","maxPrice":"19","priceCurrency":"USD","unitText":"MONTH"}}]}}
+</script>
+<script>
+/* pre-paint: mark JS on, apply saved theme (no flash), and a reveal safety net */
+document.documentElement.classList.add('js');
+try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
+</script>
+
+<!-- ══ PAGE-SCOPED COMPONENTS — the commission sheet. Built ONLY on shared
+     tokens (--ink/--rubric/--leaf/--ledger…), so it is theme-aware and AAA for
+     free and stays perfectly of-the-same-book. Nothing here touches style.css. ══ -->
+<style>
+  /* ── THE CORRECTION — the one instrument: the struck agency invoice, an
+        editor's proofmark, and the real commission written in below. ── */
+  .correction{background:var(--leaf);border:1px solid var(--line-lit);border-radius:var(--r);
+    box-shadow:var(--edge),var(--e1);overflow:hidden;margin-top:2.4rem}
+  .correction .band{padding:1.5rem 1.35rem}
+  .correction .band + .band{border-top:1px solid var(--line)}
+  .correction .rowlabel{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
+    letter-spacing:.15em;color:var(--faint);display:block;margin-bottom:.55rem}
+  /* the wrong number — struck, faint, huge ledger */
+  .correction .old{font-family:var(--ledger);font-variant-numeric:tabular-nums lining-nums;
+    font-size:clamp(2.4rem,8vw,4.4rem);line-height:1;color:var(--faint);letter-spacing:-.01em;
+    text-decoration:line-through;text-decoration-color:var(--rubric);text-decoration-thickness:3px;
+    text-underline-offset:0;display:inline-block}
+  .correction .band.wrong{position:relative}
+  .correction .band.wrong .aside{font-family:var(--index);font-size:var(--fs-fine);color:var(--faint);
+    margin-top:.5rem;max-width:30em}
+  /* the proofmark seam — a rubric caret marking the correction */
+  .correction .band.right{background:var(--paper-2)}
+  .correction .caret{display:inline-flex;align-items:center;gap:.55rem;font-family:var(--index);
+    font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.15em;color:var(--rubric-deep);
+    margin-bottom:.7rem}
+  .correction .caret::before{content:"";width:.9rem;height:.9rem;flex:0 0 auto;
+    background:var(--rubric);clip-path:polygon(50% 0,100% 100%,0 100%);transform:rotate(180deg)}
+  .correction .real{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .9rem}
+  .correction .real .fig{font-family:var(--ledger);font-variant-numeric:tabular-nums lining-nums;
+    font-weight:600;font-size:clamp(2.4rem,8vw,4.4rem);line-height:1;color:var(--ink);letter-spacing:-.01em}
+  .correction .real .u{font-family:var(--index);font-size:var(--fs-note);color:var(--dim)}
+  .correction .real .plus{font-family:var(--ledger);color:var(--faint);font-size:1.4rem;align-self:center}
+  .correction .real .keep{font-family:var(--index);font-size:var(--fs-fine);letter-spacing:.02em;
+    color:var(--rubric-deep);margin-left:.2rem}
+  .correction .foot{padding:.85rem 1.35rem;border-top:1px solid var(--line);background:var(--paper-2);
+    font-family:var(--index);font-size:var(--fs-fine);color:var(--faint)}
+
+  /* ── THE GUARANTEE STAMPS — a stamped promise, not fine print ── */
+  .guar{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.3rem}
+  .guar .stamp{font-size:var(--fs-fine);padding:.4em .75em}
+
+  /* ── THE EDITIONS — a salon hang, stacked. Each earns its wall. NOT a grid. ── */
+  .editions{display:flex;flex-direction:column;gap:1.5rem;margin-top:1.8rem}
+  .edition{position:relative;background:var(--leaf);border:1px solid var(--line-lit);
+    border-radius:var(--r);box-shadow:var(--edge),var(--e1);overflow:hidden}
+  .edition .edin{display:grid;gap:1.5rem 2.4rem;padding:1.7rem 1.5rem}
+  @media (min-width:46rem){ .edition .edin{grid-template-columns:1fr 1.05fr;padding:2.1rem 2rem;align-items:start} }
+  /* the chosen edition wears the rubric — the one marked answer */
+  .edition.pick{border-color:var(--rubric);box-shadow:var(--edge),var(--e2)}
+  .edition.pick .edin{border-left:3px solid var(--rubric)}
+  .edmark{position:absolute;top:0;right:0;font-family:var(--index);font-size:var(--fs-micro);
+    text-transform:uppercase;letter-spacing:.15em;color:var(--paper);background:var(--rubric);
+    padding:.4em .8em;border-bottom-left-radius:var(--r-sm)}
+  .edhd .ednm{font-family:var(--display);font-weight:700;font-size:clamp(1.7rem,4vw,2.4rem);
+    line-height:1;color:var(--ink);margin:0}
+  .edhd .edrole{color:var(--dim);font-size:var(--fs-note);margin-top:.55rem;max-width:26em}
+  .edprice{margin-top:1.15rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .7rem}
+  .edprice .b{font-family:var(--ledger);font-variant-numeric:tabular-nums lining-nums;font-weight:600;
+    font-size:clamp(1.9rem,5vw,2.5rem);line-height:1;color:var(--ink)}
+  .edprice .care{font-family:var(--ledger);font-variant-numeric:tabular-nums;color:var(--ink);
+    font-size:1.05rem}
+  .edprice .u{font-family:var(--index);font-size:var(--fs-fine);color:var(--faint);letter-spacing:.02em}
+  .edprice .sep{color:var(--line-lit)}
+  .eddoor{font-family:var(--index);font-size:var(--fs-fine);color:var(--faint);margin-top:.6rem}
+  .eddoor b{color:var(--dim);font-weight:600}
+  .edition .actions{margin-top:1.4rem}
+  /* the ruled inclusion register */
+  .incl{list-style:none;margin:0}
+  .incl li{position:relative;padding:.62rem 0 .62rem 1.5rem;border-top:1px solid var(--line);
+    font-family:var(--index);font-size:var(--fs-note);color:var(--dim);line-height:1.5}
+  .incl li:first-child{border-top:none;padding-top:.1rem}
+  .incl li::before{content:"";position:absolute;left:0;top:1.02rem;width:.5rem;height:.5rem;
+    background:var(--rubric);border-radius:1px;transform:rotate(45deg)}
+  .incl li:first-child::before{top:.5rem}
+  .incl li b{color:var(--ink);font-weight:600}
+  .incl li.carry{font-style:italic;color:var(--faint);border-top:none;padding-left:0}
+  .incl li.carry::before{display:none}
+  .incl li.carry b{color:var(--ink);font-style:normal}
+
+  /* ── THE OPEN STUDIO — the modest DIY lane, set quietly to the side ── */
+  .studio{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r);
+    padding:1.5rem 1.5rem;margin-top:1.6rem;display:grid;gap:.5rem 2rem}
+  @media (min-width:46rem){ .studio{grid-template-columns:auto 1fr;align-items:baseline;padding:1.6rem 1.8rem} }
+  .studio .snm{font-family:var(--display);font-weight:700;font-size:1.3rem;color:var(--ink);white-space:nowrap}
+  .studio .sbody p{margin:0;font-size:var(--fs-note)}
+  .studio .sprice{font-family:var(--ledger);font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+  .studio .go{display:inline-flex;align-items:center;gap:.4em;margin-top:.7rem;font-family:var(--index);
+    font-size:var(--fs-fine);letter-spacing:.02em;color:var(--rubric);text-decoration:none}
+  .studio .go:hover .arw,.studio .go:focus-visible .arw{transform:translateX(3px)}
+  .studio .go .arw{transition:transform .16s}
+
+  /* ── FABLE — the limited-edition plate. Distinct frame + a wax-seal edition
+        mark. A tier NAME only; copy stays about craft, never an engine. ── */
+  .fable{position:relative;background:var(--leaf);border:1px solid var(--line-lit);border-radius:var(--r);
+    box-shadow:var(--edge),var(--e2),inset 0 0 0 4px var(--paper),inset 0 0 0 5px var(--line);
+    padding:2.2rem 1.8rem;margin-top:1.6rem;overflow:hidden}
+  @media (min-width:46rem){ .fable{padding:2.6rem 2.4rem;display:grid;grid-template-columns:1fr auto;gap:1.6rem 2rem;align-items:center} }
+  .fable .seal{width:64px;height:64px;flex:0 0 auto}
+  .fable .fnm{font-family:var(--display);font-weight:800;font-size:clamp(2rem,6vw,3rem);line-height:.98;
+    color:var(--ink);margin:0}
+  .fable .fnm .mark{color:var(--rubric)}
+  .fable .frole{color:var(--dim);margin-top:.7rem;max-width:34em}
+  .fable .fprice{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;
+    letter-spacing:.16em;color:var(--rubric-deep);margin-top:1rem;display:inline-flex;align-items:center;gap:.6rem}
+  .fable .fright{display:flex;flex-direction:column;align-items:flex-start;gap:1rem}
+  @media (min-width:46rem){ .fable .fright{align-items:flex-end;text-align:right} }
+  .fable .ed{font-family:var(--index);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.15em;
+    color:var(--faint)}
+
+  /* ── THE OWNERSHIP LEDGER — precise portability, stated plainly ── */
+  .own{display:grid;gap:1rem;margin-top:1.6rem}
+  @media (min-width:44rem){ .own{grid-template-columns:1fr 1fr} }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="paper" aria-hidden="true"></div>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────────────── -->
+<nav class="nav" aria-label="Primary">
+  <div class="bar">
+    <a class="brand" href="./" aria-label="Site Sourcery — home">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
+      <span class="nm">Site Sourcery<span class="of">of record</span></span>
+    </a>
+    <div class="links">
+      <a class="txt" href="how-it-works.html">how it works</a>
+      <a class="txt" href="the-moat.html">the difference</a>
+      <a class="txt" href="pricing.html" aria-current="page">pricing</a>
+      <button class="theme-btn" type="button" aria-label="Switch color theme">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── RUNNING HEAD ── -->
+<header class="runhead">
+  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate VI</span>
+  <span class="sec">§06 · The Rate Card</span>
+</header>
+
+<main id="main" class="wrap wide">
+
+  <!-- ══ THE COMMISSION SHEET — INK claim + the struck-invoice INSTRUMENT ═══ -->
+  <section class="plate">
+    <p class="folio">§06</p>
+    <p class="label mark reveal">The Rate Card</p>
+    <h1 class="cover hero-in">What it costs to be <span class="inscribe">the&nbsp;answer<svg class="stroke" viewBox="0 0 240 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 60 6, 140 6, 188 11 S 225 17, 235 9" stroke-width="5"/></svg></span>.</h1>
+    <p class="colo hero-in">Plain numbers. The agency anchor struck. No countdown clocks, no "limited spots."</p>
+    <p class="lede hero-in">A genuinely-custom site a local agency invoices <b>~$5,000</b> for — built for you, run for you, proven every month by the calls, and yours to keep. Here's the whole commission sheet, nothing buried.</p>
+
+    <!-- THE INSTRUMENT — the one lit thing: the invoice corrected in rubric -->
+    <figure class="correction reveal" aria-label="The going agency rate, struck through, corrected to the real commission">
+      <div class="band wrong">
+        <span class="rowlabel">What an agency invoices for a custom site</span>
+        <span class="old" aria-label="about five thousand dollars, struck through">$5,000</span>
+        <p class="aside">Plus weeks of back-and-forth — and when they're done, they hand you a bill and walk.</p>
+      </div>
+      <div class="band right">
+        <span class="caret">The real commission</span>
+        <div class="real">
+          <span class="fig"><span data-tick>$500</span></span>
+          <span class="u">to build</span>
+          <span class="plus" aria-hidden="true">+</span>
+          <span class="fig" style="font-size:clamp(1.5rem,4vw,2rem)">$39</span>
+          <span class="u">a month to run</span>
+          <span class="keep">— and it's yours.</span>
+        </div>
+      </div>
+      <figcaption class="foot">That's where <b>Spark</b> starts. Signature and Showpiece build on it below. Every edition: built for you, run for you, cancel anytime.</figcaption>
+    </figure>
+
+    <div class="guar reveal" role="list" aria-label="The guarantee">
+      <span class="stamp" role="listitem"><span class="dot" aria-hidden="true"></span>&nbsp;Yours to keep</span>
+      <span class="stamp" role="listitem"><span class="dot" aria-hidden="true"></span>&nbsp;Cancel anytime</span>
+      <span class="stamp" role="listitem"><span class="dot" aria-hidden="true"></span>&nbsp;30 days risk-free</span>
+      <span class="stamp" role="listitem"><span class="dot" aria-hidden="true"></span>&nbsp;No contracts, no lock-in</span>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ THE EDITIONS — salon-hung, stacked. The chosen one wears the rubric. ═ -->
+  <section class="plate" id="editions">
+    <p class="folio">§—</p>
+    <p class="label mark reveal">The Commissions</p>
+    <h2 class="head reveal">Three editions. A real person builds each.</h2>
+    <p class="lede reveal">Same craft as <a href="https://daarx.money/">daarx.money</a> every time — the difference is how much site, and how many moving parts. The <b>build fee</b> is the commission; the <b>monthly care</b> keeps it hosted, found, and tended. Both shown plainly, neither buried.</p>
+
+    <div class="editions stagger">
+
+      <!-- SPARK -->
+      <article class="edition" aria-labelledby="ed-spark">
+        <div class="edin">
+          <div class="edhd">
+            <h3 class="ednm" id="ed-spark">Spark</h3>
+            <p class="edrole">A genuinely-custom site for the trade that needs one clean, findable home — done right, done for you.</p>
+            <div class="edprice">
+              <span class="b">$500</span><span class="u">to build</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span class="care">$39</span><span class="u">/mo care</span>
+            </div>
+            <p class="eddoor">Or <b>$89/mo, nothing down</b> — the build folded into the monthly.</p>
+            <div class="actions"><a class="btn" href="start/">Start with Spark <span class="arw" aria-hidden="true">&#8594;</span></a></div>
+          </div>
+          <ul class="incl" aria-label="Spark includes">
+            <li>A <b>custom site built from scratch</b> for your trade and town — not a template with your logo dropped on</li>
+            <li><b>Click-to-call</b>, your hours, your service area, wired in</li>
+            <li>The machine-legible floor: <b>schema, accessibility, self-contained, fast</b> — built to be cited</li>
+            <li>Hosting and your <b>yourname.sitesourcery.com</b> address; your own domain whenever you're ready</li>
+            <li><b>Text us to change anything</b> — small edits free, forever</li>
+            <li>The <b>Meter</b>: one plain monthly note on what it did</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- SIGNATURE — the marked answer -->
+      <article class="edition pick" aria-labelledby="ed-sig">
+        <span class="edmark">Most chosen</span>
+        <div class="edin">
+          <div class="edhd">
+            <h3 class="ednm" id="ed-sig">Signature</h3>
+            <p class="edrole">The one most owners pick — more room, more polish, and the booking or menu your trade actually lives on.</p>
+            <div class="edprice">
+              <span class="b">$900</span><span class="u">to build</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span class="care">$59</span><span class="u">/mo care</span>
+            </div>
+            <p class="eddoor">Or <b>$149/mo, nothing down</b> — the build folded into the monthly.</p>
+            <div class="actions"><a class="btn primary" href="start/">Choose Signature <span class="arw" aria-hidden="true">&#8594;</span></a></div>
+          </div>
+          <ul class="incl" aria-label="Signature includes">
+            <li class="carry"><b>Everything in Spark, plus —</b></li>
+            <li>A <b>multi-section site</b> with the pages your trade needs, art-directed around your real photos</li>
+            <li><b>Online booking or a live menu</b> built in</li>
+            <li>Deeper get-found work so assistants and Maps hand back <b>your</b> name</li>
+            <li><b>Near-unlimited small changes</b> — same free text-to-change, just more of it</li>
+            <li>Priority on the once-over and the monthly care</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- SHOWPIECE -->
+      <article class="edition" aria-labelledby="ed-show">
+        <div class="edin">
+          <div class="edhd">
+            <h3 class="ednm" id="ed-show">Showpiece</h3>
+            <p class="edrole">The full works — every integration, every page — for the shop that means to own its market.</p>
+            <div class="edprice">
+              <span class="b">$1,500</span><span class="u">to build</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span class="care">$99</span><span class="u">/mo care</span>
+            </div>
+            <p class="eddoor">Or <b>$229/mo, nothing down</b> — the build folded into the monthly.</p>
+            <div class="actions"><a class="btn" href="start/">Commission Showpiece <span class="arw" aria-hidden="true">&#8594;</span></a></div>
+          </div>
+          <ul class="incl" aria-label="Showpiece includes">
+            <li class="carry"><b>Everything in Signature, plus —</b></li>
+            <li>The integrations: <b>booking, menu-to-cart, live review pulls, call-tracking</b></li>
+            <li>A bigger build — <b>more pages, bespoke sections</b>, a calculator or quote tool where it earns its keep</li>
+            <li>The deepest get-found work we do</li>
+            <li>First in line for care, changes, and the once-over</li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- THE OPEN STUDIO — the modest self-serve lane, honestly labeled -->
+    <div class="studio reveal" aria-labelledby="studio-nm">
+      <div class="snm" id="studio-nm">The open studio</div>
+      <div class="sbody">
+        <p>Rather keep the keys? Drive the changes yourself, metered, on a preview address — it builds you <b>a real new version</b> each time. Good, honest, self-serve. It isn't the bespoke commission a person art-directs, and we won't pretend it is. <span class="sprice">$9/mo</span> for 8 changes, <span class="sprice">$19/mo</span> for 16, or $5 for five more.</p>
+        <a class="go" href="start/">Try the open studio <span class="arw" aria-hidden="true">&#8594;</span></a>
+      </div>
+    </div>
+
+    <!-- FABLE — the limited-edition commission (a tier NAME only) -->
+    <div class="fable reveal" aria-labelledby="fable-nm">
+      <div class="fmain">
+        <h3 class="fnm" id="fable-nm">Fable<span class="mark">.</span></h3>
+        <p class="frole">When the site itself has to <b>be the story</b> — fully art-directed, unmistakable, the daarx.money tier of craft turned all the way up. A commissioned masterwork, built to be talked about.</p>
+        <p class="fprice">By commission &middot; priced per project</p>
+      </div>
+      <div class="fright">
+        <svg class="seal" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="30" fill="none" style="stroke:var(--rubric)" stroke-width="1.5" opacity=".45"/>
+          <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--rubric)" stroke-width="1"/>
+          <text x="32" y="30" text-anchor="middle" style="fill:var(--rubric)" font-family="Georgia,'Times New Roman',serif" font-size="17" font-weight="800">Ex.</text>
+          <text x="32" y="44.5" text-anchor="middle" style="fill:var(--rubric)" font-family="ui-sans-serif,system-ui,Arial,sans-serif" font-size="7" letter-spacing="1.5">A FEW</text>
+        </svg>
+        <span class="ed">We take only a handful</span>
+        <a class="btn" href="mailto:hello@sitesourcery.com?subject=A%20Fable%20commission">Enquire about Fable <span class="arw" aria-hidden="true">&#8594;</span></a>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ YOURS TO KEEP — the guarantee, ownership, and the 30-day trial, plain ═ -->
+  <section class="plate" id="guarantee">
+    <p class="folio">§—</p>
+    <p class="label mark reveal">The Fine Print, Un-Fined</p>
+    <h2 class="head reveal">Every commission, risk-free for 30&nbsp;days.</h2>
+    <p class="lede reveal">We take a card to begin — then you've got a month. If the site isn't right, <b>cancel inside 30 days and you're not out a cent.</b> Risk-free means risk-free: no contract, no lock-in, no hostage files.</p>
+
+    <div class="own">
+      <div class="reveal">
+        <dl class="walllabel" aria-label="What is always yours">
+          <dt>Always yours</dt><dd>the <span class="mark">self-contained site file</span> + your domain — genuinely portable; we help you take them once the build's paid off</dd>
+          <dt>Cancel in 30d</dt><dd>you owe nothing and we part as friends</dd>
+        </dl>
+      </div>
+      <div class="reveal">
+        <dl class="walllabel" aria-label="What stops on cancel">
+          <dt>Stops on cancel</dt><dd>hosting, care, text-to-change, and anything that runs on <span class="mark">our</span> accounts — booking, call-tracking, live review pulls</dd>
+          <dt>Lock-in</dt><dd>none — <span class="mark">cancel anytime</span></dd>
+        </dl>
+      </div>
+    </div>
+
+    <p class="reveal" style="margin-top:1.4rem">We say it precisely because the whole point is to be the shop that doesn't trap you. The static site and the domain are yours to keep. The services that run on our side stop when you leave — no surprises, and never a file held for ransom. Questions about any of it? <a href="faq.html">The margins answer them</a>, or just ask a person.</p>
+
+    <div class="payoff reveal">
+      <p class="q">Built for you, run for you, proven by real calls, <span class="mark">owned by you, cancel anytime.</span> The price is the whole thing — not a deposit on a fight.</p>
+    </div>
+
+    <div class="actions reveal">
+      <a class="btn primary big" href="start/">See your site — free first <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn big" href="faq.html">Read the fine print <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+    <p class="colo reveal">Start with a free 60-second sketch — a genuine preview, not your custom site. Your real one is built from scratch, with your photos, and looks better. Prefer to talk to a person before a card comes out? That door's on every page.</p>
+  </section>
+
+</main>
+
+<!-- ── COLOPHON ── -->
+<footer class="colophon">
+  <div class="in">
+    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
+    <nav class="fnav" aria-label="Site">
+      <a href="./">site sourcery</a>
+      <a href="how-it-works.html">how it works</a>
+      <a href="the-moat.html">the difference</a>
+      <a href="the-meter.html">the meter</a>
+      <a href="work.html">work</a>
+      <a href="pricing.html" aria-current="page">pricing</a>
+      <a href="about.html">about</a>
+      <a href="faq.html">faq</a>
+      <a href="contact.html">contact</a>
+      <a href="start/">see your site</a>
+      <a href="https://daarx.money/">daarx.money</a>
+    </nav>
+    <p class="fine">The one name AI recommends · run for you · proven by the calls · yours to keep · cancel anytime<br>
+    Prices are the real thing — build fee + monthly care, anchored honestly against the ~$5,000 agency invoice. No fake urgency, no reselling your data, no lock-in. "Fable" is a tier name only.</p>
+  </div>
+</footer>
+
+<script src="sourcery.js" defer></script>
+</body>
+</html>

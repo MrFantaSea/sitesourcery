@@ -1,379 +1,279 @@
 <!DOCTYPE html>
-<!-- ============================================================
-     Site Sourcery — landing page
-     BRAND NAME / domain / tagline / offer are centralized in
-     brand.js (the single edit to rename). The literal values in
-     this <head> + the hero are no-JS / social-scraper fallbacks,
-     kept in sync by brand.js at load. Look lives in style.css.
-     ============================================================ -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — index.html · FRONTISPIECE / PLATE I: THE ONE ANSWER
+     The flagship. Built to be the most quotable, machine-liftable object in
+     local: FORM IS THE PROOF. Self-contained static — zero external asset
+     loads, zero raster images on this page (view-source it). Look = style.css;
+     behavior = sourcery.js (both same-origin, no CDN/fonts/remote).
+     PAGE-BUILDERS: this file + how-it-works.html are your two exemplars.
+     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Site Sourcery — a beautiful website for your business, built for you</title>
-<meta name="description" content="Done-for-you websites for South Jersey small businesses. $79/mo all-in — we design it, host it, and keep it updated. You just send photos. See your site in 60 seconds.">
-<meta name="theme-color" content="#f8f6f2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)">
+<title>Site Sourcery — the one name AI recommends, built for you</title>
+<meta name="description" content="A genuinely-custom website engineered to be the one local business AI recommends — run for you, proven every month by the calls, and yours to keep. Cancel anytime. See a free sketch of yours in 60 seconds.">
+<meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
 <link rel="canonical" href="https://sitesourcery.com/">
 <link rel="stylesheet" href="style.css">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231b60c5'/><path d='M16 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z' fill='%23ffffff'/><path d='M24.6 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z' fill='%23ffd9c2'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f4efe3'/><rect x='9' y='9' width='15' height='2' rx='1' fill='%23c6b795'/><rect x='4' y='14.8' width='21' height='2.6' rx='1.3' fill='%23c5361c'/><circle cx='27' cy='16' r='1.7' fill='%23c5361c'/><rect x='9' y='21' width='15' height='2' rx='1' fill='%23c6b795'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='38' fill='%23f4efe3'/><rect x='52' y='52' width='84' height='11' rx='5' fill='%23c6b795'/><rect x='24' y='83' width='118' height='15' rx='7' fill='%23c5361c'/><circle cx='152' cy='90' r='10' fill='%23c5361c'/><rect x='52' y='118' width='84' height='11' rx='5' fill='%23c6b795'/></svg>">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Site Sourcery — a beautiful website for your business, built for you">
-<meta property="og:description" content="Done-for-you websites for South Jersey small businesses. $79/mo all-in — we build it, host it, keep it updated. You just send photos.">
+<meta property="og:title" content="Site Sourcery — the one name AI recommends, built for you">
+<meta property="og:description" content="A genuinely-custom site engineered to be the one local business AI recommends — run for you, proven by the calls, yours to keep.">
 <meta property="og:url" content="https://sitesourcery.com/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Site Sourcery — a beautiful website for your business, built for you">
-<meta name="twitter:description" content="Done-for-you websites for South Jersey small businesses. $79/mo all-in — we build it, host it, keep it updated.">
-<script>document.documentElement.classList.add('js');addEventListener('load',function(){setTimeout(function(){if(!window.__ssReveal){var n=document.querySelectorAll('[data-reveal]');for(var i=0;i<n.length;i++)n[i].classList.add('in')}},3000)});try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<meta name="twitter:title" content="Site Sourcery — the one name AI recommends, built for you">
+<meta name="twitter:description" content="Genuinely-custom, run for you, proven by the calls, yours to keep. See a free sketch of yours.">
+<!-- This page is its own strongest case study: a clean, static, schema-rich document a machine reads perfectly. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","areaServed":"South Jersey, NJ","slogan":"The one name AI recommends — built for you, proven by the calls, and yours to keep.","description":"Genuinely-custom websites for local businesses, done for you, engineered to be the answer AI engines cite, proven monthly by a plain outcome report. You own everything; cancel anytime.","makesOffer":{"@type":"Offer","category":"Custom website design, hosting, and care for local businesses"}}
+</script>
+<script>
+/* pre-paint: mark JS on, apply saved theme (no flash), and a reveal safety net */
+document.documentElement.classList.add('js');
+try{var t=localStorage.getItem('sourcery-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}
+addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryReady){document.querySelectorAll('.reveal,.stagger,.chassis').forEach(function(n){n.classList.add('in');});}},2600);});
+</script>
 </head>
-<body
-  data-brand-title="{name} — a beautiful website for your business, built for you"
-  data-brand-desc="Done-for-you websites for {region} small businesses. {offer} See your site in 60 seconds.">
-
+<body>
 <a class="skip" href="#main">Skip to content</a>
+<div class="paper" aria-hidden="true"></div>
 
-<!-- ── NAV ─────────────────────────────────────────────────── -->
+<!-- ── NAV ─────────────────────────────────────────────────────────────────
+     PAGE-BUILDERS: keep this identical on every page. Add deep links as pages
+     land (the moat · work · pricing · about · faq). One rubric CTA only. ── -->
 <nav class="nav" aria-label="Primary">
   <div class="bar">
-    <a class="brand" href="./">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="ssg-nav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b60c5"/><stop offset=".52" stop-color="#6a5cf0"/><stop offset="1" stop-color="#f2743a"/></linearGradient></defs><rect width="32" height="32" rx="7" fill="url(#ssg-nav)"/><path d="M15 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z" fill="#fff"/><path d="M24.5 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" fill="#fff" opacity=".95"/></svg>
-      <span class="nm" data-brand>Site Sourcery</span>
+    <a class="brand" href="./" aria-label="Site Sourcery — home">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ece4d3"/><rect x="9" y="9" width="15" height="2" rx="1" fill="#c6b795"/><rect x="4" y="14.8" width="21" height="2.6" rx="1.3" fill="#c5361c"/><circle cx="27" cy="16" r="1.7" fill="#c5361c"/><rect x="9" y="21" width="15" height="2" rx="1" fill="#c6b795"/></svg>
+      <span class="nm">Site Sourcery<span class="of">of record</span></span>
     </a>
     <div class="links">
-      <a class="hide-sm" href="#how">How it works</a>
-      <a class="hide-sm" href="#pricing">Pricing</a>
-      <a class="hide-sm" href="#examples">Examples</a>
+      <a class="txt" href="how-it-works.html">how it works</a>
+      <a class="txt" href="the-moat.html">the difference</a>
+      <a class="txt" href="pricing.html">pricing</a>
       <button class="theme-btn" type="button" aria-label="Switch color theme">
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
       </button>
-      <a class="btn primary navcta" href="start/">See your site <span class="arw" aria-hidden="true">→</span></a>
+      <a class="btn primary" href="start/">See your site — free <span class="arw" aria-hidden="true">&#8594;</span></a>
     </div>
   </div>
 </nav>
 
-<main id="main">
+<!-- ── RUNNING HEAD ── -->
+<header class="runhead">
+  <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate I</span>
+  <span class="sec">§01 · The One Answer</span>
+</header>
 
-  <!-- ── HERO ──────────────────────────────────────────────── -->
-  <header class="hero wrap">
-    <div class="aura" aria-hidden="true"></div>
-    <div class="spark-field" aria-hidden="true">
-      <span class="s s1"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg></span>
-      <span class="s s2"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg></span>
-      <span class="s s3"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg></span>
-      <span class="s s4"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg></span>
-      <span class="s s5"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg></span>
+<main id="main" class="wrap wide">
+
+  <!-- ══ THE FRONTISPIECE ═══════════════════════════════════════════════════
+       INK: the positioning line at cover-scale, inscribed by the rubricating
+       hand. INSTRUMENT: the Winnowing (many→one) + the self-demonstrating
+       answer-card carrying The Two Readings. ── -->
+  <section class="plate" id="answer">
+    <p class="folio">§01</p>
+    <p class="label mark reveal">The Frontispiece</p>
+
+    <figure class="winnow hero-in" aria-hidden="true">
+      <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="ssfade" cx="40%" cy="48%" r="66%">
+            <stop offset="0" stop-color="#fff"/><stop offset="55%" stop-color="#fff" stop-opacity=".5"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </radialGradient>
+          <pattern id="ssdots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle class="dot" cx="5" cy="6" r="1.15"/><circle class="dot" cx="16" cy="15" r="1"/>
+          </pattern>
+          <mask id="sscrowd"><rect width="640" height="300" fill="url(#ssfade)"/></mask>
+        </defs>
+
+        <!-- the ten-thousand implied listings -->
+        <rect class="crowd" width="640" height="300" fill="url(#ssdots)" mask="url(#sscrowd)"/>
+
+        <!-- a faint stack of listings, dimming -->
+        <g class="row">
+          <g transform="translate(48,44)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="150" height="8" rx="4"/></g>
+          <g transform="translate(48,70)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="120" height="8" rx="4"/></g>
+          <g transform="translate(48,96)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="168" height="8" rx="4"/></g>
+          <g transform="translate(48,122)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="134" height="8" rx="4"/></g>
+          <g transform="translate(48,148)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="158" height="8" rx="4"/></g>
+          <g transform="translate(48,174)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="112" height="8" rx="4"/></g>
+          <g transform="translate(48,200)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="176" height="8" rx="4"/></g>
+          <g transform="translate(48,226)"><circle class="barline" cx="6" cy="6" r="5"/><rect class="barline" x="22" y="2" width="128" height="8" rx="4"/></g>
+        </g>
+
+        <!-- faint converging guides (the winnowing) -->
+        <g class="row" opacity=".5">
+          <path class="linestroke" d="M240 50 C 320 90, 320 120, 372 140" stroke-width="1"/>
+          <path class="linestroke" d="M226 228 C 320 200, 320 168, 372 152" stroke-width="1"/>
+        </g>
+
+        <!-- THE ONE — the lit answer it hands over -->
+        <g class="one" transform="translate(374,104)">
+          <rect class="paperfill" x="0" y="0" width="252" height="94" rx="12"/>
+          <rect class="linestroke" x=".75" y=".75" width="250.5" height="92.5" rx="11.25" stroke-width="1.5"/>
+          <rect class="rubfill" x="14" y="18" width="4" height="58" rx="2"/>
+          <rect class="inkfill" x="30" y="22" width="150" height="11" rx="5.5"/>
+          <rect class="faintfill" x="30" y="44" width="196" height="7" rx="3.5"/>
+          <rect class="faintfill" x="30" y="60" width="120" height="7" rx="3.5"/>
+          <g class="onemark" transform="translate(228,26)">
+            <circle class="rubfill" cx="0" cy="0" r="11"/>
+            <path d="M-4.6 0 L-1.4 3.4 L5 -3.6" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--paper)"/>
+          </g>
+        </g>
+      </svg>
+    </figure>
+
+    <h1 class="cover hero-in">We make you the <span class="inscribe">one name it&nbsp;says<svg class="stroke" viewBox="0 0 320 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 70 5, 165 6, 232 11 S 300 17, 315 8" stroke-width="5"/></svg></span>.</h1>
+    <p class="colo hero-in">This page was built this way. Yours will be too.</p>
+
+    <p class="lede hero-in">Ask an assistant for a plumber in your town and it hands back <b>one shop</b>. We build the site engineered to be that shop — <b>genuinely custom</b>, run for you, and proven every month by the calls. You own it; cancel anytime.</p>
+
+    <div class="actions hero-in">
+      <a class="btn primary big" href="start/">See your specimen — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn big" href="how-it-works.html">How it's built <span class="arw" aria-hidden="true">&#8594;</span></a>
     </div>
-    <div class="grid">
-      <div class="copy">
-        <span class="eyebrow spark"><span class="dot spark"></span> A little site sorcery</span>
-        <h1>A beautiful website for your business — <span class="accent-word">built for you, live today.</span></h1>
-        <p class="lede">No tech skills, no templates to wrestle with, no big-agency invoice. Tell us about your business and a real person builds your site — designed, hosted, and kept up to date.</p>
-        <p class="offer-line">
-          <span class="price"><span data-price>$79</span><span data-per>/mo</span></span>
-          <span class="rest">all-in — we build it, host it, keep it updated. You just send photos.</span>
-        </p>
-        <div class="cta-row">
-          <a class="btn primary big" href="start/">See your site in 60 seconds <span class="arw" aria-hidden="true">→</span></a>
-          <a class="btn secondary" href="#examples">See examples <span aria-hidden="true">↓</span></a>
-        </div>
-        <div class="trust-strip">
-          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Right here in South Jersey</span>
-          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg> One real person</span>
-          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> No contracts</span>
-          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Live in a day</span>
-        </div>
-      </div>
+    <p class="colo hero-in">A demonstration of what's possible — your real site is built from scratch, and looks better.</p>
 
-      <!-- before/after slider — an EXAMPLE of what's possible: a dated
-           bakery site vs. the kind of modern site we build — the centerpiece.
-           Illustrative example, not a current client's site. -->
-      <div class="art">
-        <div class="ba" id="ba">
-          <div class="ba-chrome">
-            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="addr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> yourbakery.com</span>
-            <span class="live" aria-hidden="true"><span class="pulse"></span> Demo</span>
+    <!-- ── THE SELF-DEMONSTRATING ANSWER-CARD (THE TWO READINGS debut) ────── -->
+    <div class="answer reveal" data-answer style="margin-top:3rem" aria-label="The answer an assistant hands a ready customer">
+      <span class="cite" aria-hidden="true">cite this</span>
+      <div class="answer-body">
+
+        <div class="reading reading-human">
+          <p class="label" style="margin-bottom:.7rem">The answer an assistant hands a ready customer</p>
+          <div class="who">Harris Plumbing &amp; Heating</div>
+          <p class="said">Burst pipe in Sewell tonight? The shop locals call is <span class="mark">Harris Plumbing&nbsp;&amp; Heating</span> — licensed, open 24/7, same-day, and you can book right on their site.</p>
+          <div class="meta"><b>24/7</b> emergency <span aria-hidden="true">·</span> <b>licensed &amp; insured</b> <span aria-hidden="true">·</span> Sewell, NJ <span aria-hidden="true">·</span> <b>book online</b></div>
+        </div>
+
+        <div class="reading reading-machine">
+          <span class="cap">The same record — the way a machine reads it</span>
+          <div class="figure" role="img" aria-label="Structured data a machine ingests, with the liftable answer highlighted">
+            {<br>
+            &nbsp;&nbsp;<span class="k">"@type"</span>: <span class="s">"Plumber"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"name"</span>: <span class="s">"Harris Plumbing &amp; Heating"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"areaServed"</span>: <span class="s">"Sewell, NJ"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"openingHours"</span>: <span class="s">"Mo-Su 00:00-24:00"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"hasCredential"</span>: <span class="s">"licensed &amp; insured"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"potentialAction"</span>: <span class="s">"BookAction"</span>,<br>
+            &nbsp;&nbsp;<span class="k">"description"</span>: <span class="lift">"The Sewell shop locals call for a burst pipe — licensed, 24/7, same-day."</span><br>
+            }
           </div>
-          <div class="ba-stage" id="ba-stage">
-            <!-- AFTER: the kind of modern site we build (bottom layer) -->
-            <div class="ba-layer ba-after" aria-hidden="true">
-              <img class="ba-img" src="assets/aversa-after.jpg" width="1160" height="974" decoding="async" draggable="false" alt="Example of a clean, modern bakery website — the kind of site we build">
-            </div>
-            <!-- BEFORE: a dated, generic bakery site (clipped top layer) -->
-            <div class="ba-layer ba-before" aria-hidden="true">
-              <img class="ba-img" src="assets/aversa-before.jpg" width="1160" height="974" decoding="async" draggable="false" alt="A dated, hard-to-read bakery website — the 'before'">
-            </div>
-            <input class="ba-range" type="range" min="0" max="100" value="52" step="0.5" id="ba-range" aria-label="Drag to compare the old website with the new one">
-            <div class="ba-divider" aria-hidden="true"><span class="grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 7-5 5 5 5M15 7l5 5-5 5"/></svg></span></div>
-            <span class="ba-tag ba-tag-before" aria-hidden="true">Before</span>
-            <span class="ba-tag ba-tag-after" aria-hidden="true">After</span>
-          </div>
         </div>
-        <p class="ba-cap"><span class="ba-real">See the transformation</span> a bakery site, before → after</p>
-        <p class="ba-hint"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 13.6 9.4 21 12 13.6 14.6 12 22 10.4 14.6 3 12 10.4 9.4Z"/></svg> Drag the handle to compare a dated site with the kind we build</p>
-      </div>
-    </div>
-  </header>
 
-  <!-- ── HOW IT WORKS ──────────────────────────────────────── -->
-  <section id="how" class="wrap">
-    <div class="sec-head center" data-reveal>
-      <span class="eyebrow blue"><span class="dot"></span> How it works</span>
-      <h2>Three steps. You do the first one.</h2>
-      <p>The rest is on us. This is the whole process — no meetings, no logins, no homework.</p>
+      </div>
+      <button class="twobtn" type="button" aria-pressed="false">
+        <span class="label-txt">Read it the way a machine reads it</span>
+        <span style="display:inline-flex;gap:.6em;align-items:center"><span class="state">human</span><span class="glyph" aria-hidden="true">&#8645;</span></span>
+      </button>
     </div>
-    <div class="steps">
-      <div class="step" data-reveal>
-        <div class="n"></div>
-        <h3>Tell us about your business</h3>
-        <p>Your name, what you do, and your phone number. Right from your phone — no account to make.</p>
-        <span class="time">About 60 seconds</span>
-      </div>
-      <div class="step" data-reveal style="--rd:.09s">
-        <div class="n"></div>
-        <h3>We build it — by hand</h3>
-        <p>A real person designs your site around your services, your town, and your photos. Not a template you fill in.</p>
-        <span class="time">Ready in a day</span>
-      </div>
-      <div class="step" data-reveal style="--rd:.18s">
-        <div class="n"></div>
-        <h3>It goes live — and stays fresh</h3>
-        <p>We host it, get it ready for Google, and keep it updated. New photo or price? Text it over — we handle it.</p>
-        <span class="time">Handled for you</span>
-      </div>
+
+    <p class="stamp" style="margin-top:1rem"><span class="dot" aria-hidden="true"></span>&nbsp;Demonstration — what's possible, not a client</p>
+
+    <!-- ── THE METER STRIP — one honest line, stamped ILLUSTRATIVE (ink, not green) ── -->
+    <div class="meterstrip reveal" style="margin-top:1.4rem" role="group" aria-label="Illustrative monthly outcome">
+      <span><span class="figure" data-tick>14</span> <span class="u">calls</span></span>
+      <span><span class="figure" data-tick>6</span> <span class="u">booked</span></span>
+      <span><span class="figure">9</span> <span class="u">new reviews</span></span>
+      <span>map <span class="figure">#7</span> <span class="arw" aria-hidden="true">&#8594;</span> <span class="figure">#3</span></span>
+      <span class="tag">illustrative</span>
     </div>
+    <p class="colo">A sample of the monthly note we'd send. Real customers' figures earn the proof color; this one is illustrative, so it stays in ink.</p>
   </section>
 
-  <!-- ── OFFER / PRICING ───────────────────────────────────── -->
-  <section id="pricing" class="wrap">
-    <div class="offer" data-reveal>
-      <div class="left">
-        <span class="allin">All-in</span>
-        <p class="eyebrow blue" style="margin-bottom:.4rem"><span class="dot"></span> Simple pricing</p>
-        <h2 class="headline">One price. Everything included.</h2>
-        <div class="big-price"><span class="amt" data-price>$79</span><span class="per" data-per>/mo</span></div>
-        <p class="sub">No setup fee. No contract. Cancel anytime — it's your site and your call. Stay because it's working, not because you're stuck.</p>
-        <div class="cta-row">
-          <a class="btn primary big" href="start/">Start free — see it first <span class="arw" aria-hidden="true">→</span></a>
-        </div>
-      </div>
-      <ul class="incl">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> A custom site, designed and built <b>for you</b></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> Fast, secure hosting included</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> Your own domain — new or bring yours</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> <b>Unlimited updates</b> — just send photos or text</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> Looks great on phones, ready for Google</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5.5"/></svg> A real person you can call — no ticket queue</li>
-        <li><svg class="no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg> <b class="accent-word">No</b> setup fee, contract, or lock-in</li>
-      </ul>
-    </div>
-  </section>
+  <hr class="rule">
 
-  <!-- ── WHY US ────────────────────────────────────────────── -->
-  <section id="why" class="wrap">
-    <div class="sec-head center" data-reveal>
-      <span class="eyebrow"><span class="dot"></span> Why us</span>
-      <h2>Why local businesses pick us</h2>
-      <p>Big enough to do it right, small enough to pick up the phone.</p>
-    </div>
-    <div class="why">
-      <div class="card blue" data-reveal>
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
-        <h3>Actually local</h3>
-        <p>We're in South Jersey. We build for the neighbors who'll actually call you — and we know Sewell from Swedesboro.</p>
-      </div>
-      <div class="card" data-reveal style="--rd:.08s">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg></span>
-        <h3>A real person</h3>
-        <p>One person builds your site and answers when you call. No call center, no template farm, no bots reading a script.</p>
-      </div>
-      <div class="card blue" data-reveal style="--rd:.16s">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m17.6 6.4-3.5 3.5-3-3 3.5-3.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8Z"/><path d="m14 8 2 2"/></svg></span>
-        <h3>We do everything</h3>
-        <p>Design, words, photos, hosting, updates, Google. You send the photos; we do the rest. That's the whole job.</p>
-      </div>
-      <div class="card" data-reveal style="--rd:.24s">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
-        <h3>Cheaper than DIY</h3>
-        <p>Wix and Squarespace run $16–$49 a month <em>before</em> your time — and you still build it yourself. We build it, host it, and maintain it for $79. Done.</p>
-      </div>
-    </div>
-  </section>
+  <!-- ══ THE CONTENTS SPREAD — salon hang, not a card grid ═════════════════ -->
+  <section class="plate">
+    <p class="folio">§—</p>
+    <p class="label mark reveal">In this volume</p>
+    <h2 class="head reveal" style="margin-bottom:.4rem">Four promises no one else makes at once.</h2>
+    <p class="lede reveal">Everyone in local sells the page and leaves you the rest. We sell the whole outcome — the one line an assistant repeats, the proof it worked, and the person who runs it — with the site as the hub.</p>
 
-  <!-- ── EXAMPLES / DEMOS ──────────────────────────────────── -->
-  <section id="examples" class="wrap">
-    <div class="sec-head center" data-reveal>
-      <span class="eyebrow blue"><span class="dot"></span> Examples</span>
-      <h2>The kind of sites we build for South Jersey</h2>
-      <p>Each one shows what we can build from a single phone call's worth of info. Tap any card to open a live demo in a new tab.</p>
-    </div>
-    <div class="demos">
-      <a class="demo" href="demos/aversas-italian-bakery/" target="_blank" rel="noopener" style="--dc:#a8341f" data-reveal>
-        <div class="top"><span class="miniwin"></span><span class="kind">Bakery</span><span class="photos">Real photos</span><span class="nm">Aversa's Italian Bakery</span></div>
-        <div class="body">
-          <div class="meta">Bakery &amp; café · Turnersville, NJ</div>
-          <span class="go">Open live demo <span class="arw" aria-hidden="true">→</span></span>
-        </div>
+    <div class="contents stagger">
+      <a class="entry" href="the-moat.html">
+        <span class="ord">01</span>
+        <span class="body">
+          <h3>The Answer</h3>
+          <p class="sub">A genuinely-custom site built, from the first line, to be the local name ChatGPT, Gemini and Maps recommend — and an agent can act on. Not a template. Not $5,000.</p>
+          <span class="go">Why you become the answer <span class="arw" aria-hidden="true">&#8594;</span></span>
+        </span>
       </a>
-      <a class="demo" href="demos/jersey-concrete/" target="_blank" rel="noopener" style="--dc:#374a5e;--rd:.08s" data-reveal>
-        <div class="top"><span class="miniwin"></span><span class="kind">Concrete</span><span class="photos">Real photos</span><span class="nm">Jersey Concrete</span></div>
-        <div class="body">
-          <div class="meta">Concrete contractor · South Jersey</div>
-          <span class="go">Open live demo <span class="arw" aria-hidden="true">→</span></span>
-        </div>
+      <a class="entry" href="the-meter.html">
+        <span class="ord">02</span>
+        <span class="body">
+          <h3>The Meter</h3>
+          <p class="sub">Proof, in plain English, every month: calls, bookings, reviews, where you rank, who's citing you. A report we send — not a dashboard you babysit.</p>
+          <span class="go">See a whole month's proof <span class="arw" aria-hidden="true">&#8594;</span></span>
+        </span>
       </a>
-      <a class="demo" href="demos/professor-gatsbys-heating-cooling-plumbing-and-electrical/" target="_blank" rel="noopener" style="--dc:#0b6b6b;--rd:.16s" data-reveal>
-        <div class="top"><span class="miniwin"></span><span class="kind">Heating &amp; Cooling</span><span class="photos">Real photos</span><span class="nm">Professor Gatsby's</span></div>
-        <div class="body">
-          <div class="meta">HVAC · plumbing · electrical · Williamstown, NJ</div>
-          <span class="go">Open live demo <span class="arw" aria-hidden="true">→</span></span>
-        </div>
-      </a>
-      <a class="demo" href="demos/harris-plumbing-heating-air-and-electrical/" target="_blank" rel="noopener" style="--dc:#0e5a8a;--rd:.24s" data-reveal>
-        <div class="top"><span class="miniwin"></span><span class="kind">Plumbing</span><span class="photos">Real photos</span><span class="nm">Harris Plumbing &amp; Heating</span></div>
-        <div class="body">
-          <div class="meta">Plumbing, heating &amp; air · Sewell, NJ</div>
-          <span class="go">Open live demo <span class="arw" aria-hidden="true">→</span></span>
-        </div>
+      <a class="entry" href="how-it-works.html#the-operator">
+        <span class="ord">03</span>
+        <span class="body">
+          <h3>The Operator</h3>
+          <p class="sub">We're the labor across the whole loop — build, host, get-found, tended by text. You own every asset. Cancel anytime, and the file is yours.</p>
+          <span class="go">How it's run for you <span class="arw" aria-hidden="true">&#8594;</span></span>
+        </span>
       </a>
     </div>
-    <div class="center" style="margin-top:2rem">
-      <a class="btn secondary" href="start/">Make one for my business <span class="arw" aria-hidden="true">→</span></a>
-    </div>
   </section>
 
-  <!-- ── FAQ ───────────────────────────────────────────────── -->
-  <section id="faq" class="wrap">
-    <div class="sec-head center" data-reveal>
-      <span class="eyebrow"><span class="dot"></span> Questions</span>
-      <h2>The stuff people ask first</h2>
-    </div>
-    <div class="faq" data-reveal>
-      <details>
-        <summary>Do I need to be good with computers? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>Not at all. If you can send a text, you can do this. You tell us about your business; we build and run the website. There's nothing to install and nothing to log into.</p></div>
-      </details>
-      <details>
-        <summary>What if I don't have photos? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>We start with clean, professional stand-in images so your site looks great from day one. Send your real photos whenever you're ready and we drop them in — no charge, no hassle.</p></div>
-      </details>
-      <details>
-        <summary>Do I have to sign a contract? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>No. It's month-to-month at <span data-price>$79</span>. Stay because it's working, not because you're locked in. Cancel anytime and we'll hand over your content.</p></div>
-      </details>
-      <details>
-        <summary>Can I use my own domain name? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>Yes. We can register a fresh domain for you or point the one you already own — either way it's included in the <span data-price>$79</span>.</p></div>
-      </details>
-      <details>
-        <summary>How fast is it live? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>Most sites are up within a day of getting your details. You'll see a preview first, and we won't publish until you're happy with it.</p></div>
-      </details>
-      <details>
-        <summary>I already have a website — can you just make it better? <span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>Absolutely. Paste your current site when you start and we'll pull in your real photos and info, then rebuild it faster, cleaner, and mobile-friendly.</p></div>
-      </details>
-    </div>
-  </section>
+  <hr class="rule">
 
-  <!-- ── FINAL CTA ─────────────────────────────────────────── -->
-  <section class="wrap">
-    <div class="band" data-reveal>
-      <h2>Ready to see your website?</h2>
-      <p>A free preview in about a minute. No account, no card, no pressure — just tell us about your business and watch it come together.</p>
-      <a class="btn primary big" href="start/">See your site in 60 seconds <span class="arw" aria-hidden="true">→</span></a>
-      <p class="sub">Built and supported right here in South Jersey.</p>
+  <!-- ══ THE PAYOFF + THE CLOSE ════════════════════════════════════════════ -->
+  <section class="plate">
+    <p class="folio">§—</p>
+    <div class="payoff reveal">
+      <p class="q">A site engineered to be the one name AI recommends — <span class="mark">run for you, proven by real calls, owned by you, cancel anytime.</span> Nobody else offers all four.</p>
     </div>
+
+    <dl class="walllabel reveal" style="margin:1.6rem 0" aria-label="What this specimen is">
+      <dt>Medium</dt><dd>genuinely-custom static site</dd>
+      <dt>Loads</dt><dd><span class="mark">zero images, zero trackers</span> — view-source it</dd>
+      <dt>Proof</dt><dd>this page, and daarx.money — built this way, indisputably ours</dd>
+      <dt>Status</dt><dd>built to be cited</dd>
+    </dl>
+
+    <p class="reveal">No borrowed logos. No invented reviews. The only sites we'll call ours are this one and <a href="https://daarx.money/">daarx.money</a> — both built exactly this way. Everything else you see is a <b>demonstration of what's possible</b>, labeled as one.</p>
+
+    <div class="actions reveal">
+      <a class="btn primary big" href="start/">See your specimen — free <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn big" href="how-it-works.html">Read how it's made <span class="arw" aria-hidden="true">&#8594;</span></a>
+    </div>
+    <p class="colo reveal">A free 60-second sketch — a genuine preview, not your custom site. Your real one is built from scratch, with your photos, and looks better. Prefer to talk to a person? That door's on every page.</p>
   </section>
 
 </main>
 
-<!-- ── FOOTER ──────────────────────────────────────────────── -->
-<footer>
-  <div class="wrap">
-    <div class="cols">
-      <div>
-        <a class="brand" href="./">
-          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="ssg-foot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b60c5"/><stop offset=".52" stop-color="#6a5cf0"/><stop offset="1" stop-color="#f2743a"/></linearGradient></defs><rect width="32" height="32" rx="7" fill="url(#ssg-foot)"/><path d="M15 6c.75 5.8 4.2 9.25 10 10-5.8.75-9.25 4.2-10 10-.75-5.8-4.2-9.25-10-10 5.8-.75 9.25-4.2 10-10z" fill="#fff"/><path d="M24.5 4.4c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" fill="#fff" opacity=".95"/></svg>
-          <span class="nm" data-brand>Site Sourcery</span>
-        </a>
-        <p class="about">Beautiful, done-for-you websites for South Jersey small businesses. We build it, host it, and keep it updated — so you can get back to work.</p>
-      </div>
-      <nav class="fnav" aria-label="Footer">
-        <a href="./">Home</a>
-        <a href="#how">How it works</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#examples">Examples</a>
-        <a href="#faq">Questions</a>
-        <a href="start/">See your site</a>
-      </nav>
-    </div>
-    <p class="fine">
-      © <span data-year>2026</span> <span data-brand>Site Sourcery</span> · <span data-domain>sitesourcery.com</span> — built with care in South Jersey.<br>
-      <span data-offer>$79/mo all-in: we build it, host it, keep it updated. You just send photos.</span><br>
-      Working name &amp; placeholder contact details. Demo businesses shown are real South Jersey shops, used as examples of what we can build — not current clients.
-    </p>
+<!-- ── COLOPHON ────────────────────────────────────────────────────────────
+     PAGE-BUILDERS: reuse this footer verbatim; add page links as they land. ── -->
+<footer class="colophon">
+  <div class="in">
+    <p class="say">Built by one person in South Jersey — a real name, a real once-over on every site before it goes live, and questions answered by a human, not a bot: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>.</p>
+    <nav class="fnav" aria-label="Site">
+      <a href="./" aria-current="page">site sourcery</a>
+      <a href="how-it-works.html">how it works</a>
+      <a href="the-moat.html">the difference</a>
+      <a href="the-meter.html">the meter</a>
+      <a href="work.html">work</a>
+      <a href="pricing.html">pricing</a>
+      <a href="about.html">about</a>
+      <a href="faq.html">faq</a>
+      <a href="contact.html">contact</a>
+      <a href="start/">see your site</a>
+      <a href="https://daarx.money/">daarx.money</a>
+    </nav>
+    <p class="fine">The one name AI recommends · run for you · proven by the calls · yours to keep · cancel anytime<br>
+    This page loads <span class="figure">0</span> images and names no client it doesn't have. Sample figures are illustrative; the proof color is reserved for real, verified results.</p>
   </div>
 </footer>
 
-<!-- sticky mobile action bar -->
-<div class="sticky-cta">
-  <a class="btn primary" href="start/">See your site <span class="arw" aria-hidden="true">→</span></a>
-  <a class="btn ghost" href="#examples">See examples</a>
-</div>
-
-<script src="brand.js"></script>
-<script src="app.js"></script>
-<script>
-/* Before/After slider — pointer-drag for mouse/touch/pen, the range
-   input carries keyboard a11y. Both drive one --pos on #ba. Vertical
-   touch scrolling is preserved (we only engage once a horizontal drag
-   is clear). Self-contained; degrades to a static 52/48 split w/o JS. */
-(function () {
-  "use strict";
-  var ba = document.getElementById("ba");
-  var stage = document.getElementById("ba-stage");
-  var range = document.getElementById("ba-range");
-  if (!ba || !stage || !range) return;
-
-  function setPos(p) {
-    p = Math.max(0, Math.min(100, p));
-    ba.style.setProperty("--pos", p + "%");
-    if (+range.value !== p) range.value = p;
-  }
-  function posFromX(clientX) {
-    var r = stage.getBoundingClientRect();
-    if (!r.width) return;
-    setPos((clientX - r.left) / r.width * 100);
-  }
-
-  var dragging = false, engaged = false, sx = 0, sy = 0;
-  stage.addEventListener("pointerdown", function (e) {
-    dragging = true;
-    engaged = (e.pointerType === "mouse" || e.pointerType === "pen");
-    sx = e.clientX; sy = e.clientY;
-    // Claim the gesture: stop the browser starting a native image
-    // drag / text selection — that was hijacking a real mouse drag
-    // on the live site (synthetic test input never hit this path).
-    if (engaged) { e.preventDefault(); posFromX(e.clientX); }
-  });
-  window.addEventListener("pointermove", function (e) {
-    if (!dragging) return;
-    if (!engaged) {
-      var dx = Math.abs(e.clientX - sx), dy = Math.abs(e.clientY - sy);
-      if (dx > dy && dx > 6) engaged = true; else return;   // let vertical scroll win
-    }
-    posFromX(e.clientX);
-  }, { passive: true });
-  function end() { dragging = false; engaged = false; }
-  window.addEventListener("pointerup", end);
-  window.addEventListener("pointercancel", end);
-
-  range.addEventListener("input", function () { setPos(+range.value); });
-  setPos(+range.value || 52);
-})();
-</script>
+<script src="sourcery.js" defer></script>
 </body>
 </html>
