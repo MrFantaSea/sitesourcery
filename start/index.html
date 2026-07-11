@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — start/index.html · PLATE IX: THE COMMISSION
-     INK: "Open your file." — an HONEST intake, the opening page of a bespoke
-     commission ledger. NOT a live instant-engine claim; NO magic button.
-     INSTRUMENT: "turn the machine on you" — your own SPECIMEN (a masthead
-     sketch + the Two Readings answer-card + the wall-label) assembles LIVE from
-     your own words, client-side. A sketch, not your finished site. A real
-     person builds the real one. The model is NEVER named. Escape hatch to a
-     human is persistent. Self-contained, zero external asset loads.
+     SITE SOURCERY — start/index.html · START YOUR SITE
+     Plain, honest start: "Tell us about your business." NOT a live instant-engine
+     claim; NO magic button. A live PREVIEW (a masthead sketch + the two readings
+     answer-card + the wall-label) builds itself from the owner's own words, client-
+     side — a sketch, not your finished site. A real person builds the real one.
+     The AI model is NEVER named. The escape hatch to a human is persistent.
+     Self-contained, zero external asset loads. (CSS class/id names like .commission
+     and #specimen are internal design hooks, referenced by the script — leave them.)
      Look = ../style.css; shared behavior = ../sourcery.js; the commission
      engine is the inline script at the foot (same-origin, no CDN/fonts/remote).
      ══════════════════════════════════════════════════════════════════════════ -->
@@ -15,8 +15,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Start your site — an honest intake · Site Sourcery</title>
-<meta name="description" content="Tell us your business in a few taps and watch a specimen of the answer assemble — the way a person reads it and the way a machine reads it. An honest intake, not a magic button. A real person builds the real thing. Prefer to talk? That door is always here.">
+<title>Start your site — tell us about your business · Site Sourcery</title>
+<meta name="description" content="Tell us about your business in a few taps and watch a preview of your site build itself — the way a person reads it and the way a computer reads it. Honest and simple, not a magic button. A real person builds the real thing. Prefer to talk? That door is always here.">
 <meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
 <link rel="canonical" href="https://sitesourcery.com/start/">
@@ -25,14 +25,14 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='38' fill='%23f4efe3'/><rect x='52' y='52' width='84' height='11' rx='5' fill='%23c6b795'/><rect x='24' y='83' width='118' height='15' rx='7' fill='%23c5361c'/><circle cx='152' cy='90' r='10' fill='%23c5361c'/><rect x='52' y='118' width='84' height='11' rx='5' fill='%23c6b795'/></svg>">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Start your site — an honest intake · Site Sourcery">
-<meta property="og:description" content="Tell us your business and watch a specimen of the answer assemble — human-read and machine-read. An honest intake, not a magic button. A real person builds the real thing.">
+<meta property="og:title" content="Start your site — tell us about your business · Site Sourcery">
+<meta property="og:description" content="Tell us about your business and watch a preview of your site build itself — the way a person reads it and the way a computer reads it. A real person builds the real thing.">
 <meta property="og:url" content="https://sitesourcery.com/start/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Start your site — an honest intake · Site Sourcery">
-<meta name="twitter:description" content="Describe your business; watch a specimen of the answer assemble. An honest intake — a real person builds the real thing.">
+<meta name="twitter:title" content="Start your site — tell us about your business · Site Sourcery">
+<meta name="twitter:description" content="Describe your business; watch a preview of your site build itself. A real person builds the real thing.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"Start your site — Site Sourcery","description":"An honest intake for a genuinely-custom local website: describe your business and watch a specimen of the answer assemble, human-read and machine-read. A real person builds the real thing; you own it and can cancel anytime.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":"mailto:hello@sitesourcery.com"}
+{"@context":"https://schema.org","@type":"WebPage","name":"Start your site — Site Sourcery","description":"A simple, honest start for a custom local website: describe your business and watch a preview of your site build itself, the way a person reads it and the way a computer reads it. A real person builds the real thing; you own it and can cancel anytime.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":"mailto:hello@sitesourcery.com"}
 </script>
 <script>
 /* pre-paint: mark JS on, apply saved theme (no flash), reveal safety net */
@@ -172,7 +172,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
 </style>
 </head>
 <body>
-<a class="skip" href="#commission">Skip to the intake</a>
+<a class="skip" href="#commission">Skip to the form</a>
 <div class="paper" aria-hidden="true"></div>
 
 <!-- ── NAV — identical chrome; the CTA here IS the persistent escape hatch ── -->
@@ -198,7 +198,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
 <!-- ── RUNNING HEAD ── -->
 <header class="runhead">
   <span class="vol">Site Sourcery <span class="sep">·</span> <span class="mid">Of Record <span class="sep">·</span> </span> Plate IX</span>
-  <span class="sec">§09 · The Commission</span>
+  <span class="sec">§09 · Start your site</span>
 </header>
 
 <main id="main" class="wrap wide">
@@ -206,11 +206,11 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
   <!-- ══ THE COMMISSION — INK (the honest frame) + INSTRUMENT (the live specimen) ══ -->
   <section class="plate" id="commission">
     <p class="folio">§09</p>
-    <p class="label mark reveal">The Commission</p>
-    <h1 class="cover hero-in">Open your <span class="inscribe">file<svg class="stroke" viewBox="0 0 120 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 30 6, 70 6, 95 11 S 112 17, 116 9" stroke-width="5"/></svg></span>.</h1>
-    <p class="colo hero-in">Not a checkout. Not a magic button. The first page of a commission.</p>
+    <p class="label mark reveal">Get started</p>
+    <h1 class="cover hero-in">Start your <span class="inscribe">site<svg class="stroke" viewBox="0 0 120 22" preserveAspectRatio="none" aria-hidden="true"><path class="rubstroke" d="M5 15 C 30 6, 70 6, 95 11 S 112 17, 116 9" stroke-width="5"/></svg></span>.</h1>
+    <p class="colo hero-in">Not a checkout. Not a magic button. Just tell us about your business.</p>
 
-    <p class="lede hero-in">Tell us the business in a few taps and watch a <b>specimen of the answer</b> assemble on the right — the way a person reads it, and the way a machine reads it. It's a <b>sketch built from your own words</b>. Your real site is built from scratch, by hand, and looks better. Then <b>a real person</b> — not a robot — takes it from there.</p>
+    <p class="lede hero-in">Tell us about your business in a few taps and watch a <b>preview build itself</b> on the right — the way a person reads it, and the way a computer reads it. It's a <b>sketch made from your own words</b>. Your real site is built from scratch, by hand, and looks better. Then <b>a real person</b> — not a robot — takes it from there.</p>
 
     <div class="commission">
 
@@ -227,7 +227,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
           <input class="in" id="f-name" name="Business name" type="text" autocomplete="organization"
                  placeholder="e.g. Harris Plumbing &amp; Heating" required
                  aria-describedby="name-msg">
-          <p class="msg" id="name-msg">Add the name so we can set it on your specimen.</p>
+          <p class="msg" id="name-msg">Add the name so we can set it on your preview.</p>
         </div>
 
         <fieldset class="field">
@@ -312,15 +312,15 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
       </form>
 
       <!-- ── THE SPECIMEN (live proof) — assembles from the words on the left ── -->
-      <aside class="specimen spec-empty reveal" id="specimen" aria-label="Your specimen — a live sketch of the answer">
+      <aside class="specimen spec-empty reveal" id="specimen" aria-label="Your preview — a live sketch of your site">
         <div class="spec-hd">
-          <span class="l">Your specimen</span>
+          <span class="l">Your preview</span>
           <span class="stamp"><span class="dot" aria-hidden="true"></span>&nbsp;sketch</span>
         </div>
 
         <p class="spec-nudge">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          Start on the left — your specimen fills in as you type.
+          Start on the left — your preview fills in as you type.
         </p>
 
         <!-- the masthead sketch: a small, honest taste of the frontispiece -->
@@ -344,13 +344,13 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
           <span class="cite" aria-hidden="true">cite this</span>
           <div class="answer-body">
             <div class="reading reading-human">
-              <p class="label" style="margin-bottom:.7rem">The answer an assistant would hand a ready customer</p>
+              <p class="label" style="margin-bottom:.7rem">What AI would tell a customer looking for you</p>
               <div class="who" data-sp="who">Your Business</div>
-              <p class="said" data-sp="said">Fill in the business on the left and the answer an assistant would give assembles right here — quotable, and built to be lifted.</p>
-              <div class="meta" data-sp="meta"><b>your specimen</b> <span aria-hidden="true">·</span> updates as you type</div>
+              <p class="said" data-sp="said">Fill in your business on the left, and the answer AI would give a ready customer builds right here — the line it can quote.</p>
+              <div class="meta" data-sp="meta"><b>your preview</b> <span aria-hidden="true">·</span> updates as you type</div>
             </div>
             <div class="reading reading-machine">
-              <span class="cap">The same record — the way a machine reads it</span>
+              <span class="cap">The same site — the way a computer reads it, so AI can recommend you</span>
               <div class="figure" data-sp="machine" role="img" aria-label="Structured data assembled from your answers, with the liftable line marked">
                 {<br>
                 &nbsp;&nbsp;<span class="k">"@type"</span>: <span class="s">"LocalBusiness"</span>,<br>
@@ -368,16 +368,16 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
         </div>
 
         <!-- the wall-label — the museum unit, keyed to their business -->
-        <dl class="walllabel" aria-label="Specimen label">
-          <dt>Medium</dt><dd>genuinely-custom static site</dd>
+        <dl class="walllabel" aria-label="Preview label">
+          <dt>What it is</dt><dd>a custom site, built for you</dd>
           <dt>Trade</dt><dd><span data-sp="wl-trade">local business</span></dd>
           <dt>Town</dt><dd><span data-sp="wl-town">your town</span></dd>
           <dt>Do next</dt><dd><span class="mark" data-sp="wl-action">choose one action</span></dd>
-          <dt>Status</dt><dd>a sketch — built to be cited</dd>
+          <dt>Status</dt><dd>a preview — built to get you found</dd>
         </dl>
 
         <p class="sketch-note">
-          <b>What this is.</b> A live sketch, assembled from your own words to show what's possible — not your finished site, and nothing on it is invented. Your real one is built from scratch, by hand, with your photos, and looks better.
+          <b>What this is.</b> A live sketch, put together from your own words to show what's possible — not your finished site, and nothing on it is invented. Your real one is built from scratch, by hand, with your photos, and looks better.
         </p>
       </aside>
 
@@ -395,19 +395,19 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
 
     <dl class="walllabel plainly reveal" style="margin:1.4rem 0" aria-label="What happens after you send your brief">
       <dt>You send</dt><dd>your brief lands with <span class="mark">a real person</span> — usually read the same day</dd>
-      <dt>We build</dt><dd>a genuinely-custom draft, from scratch — frontier AI does the heavy lifting, a person directs it</dd>
+      <dt>We build</dt><dd>a custom draft, from scratch — AI does the heavy lifting, a real person directs it</dd>
       <dt>The once-over</dt><dd>a real person checks <span class="mark">taste and truth</span> before anything is live under your name</dd>
       <dt>The trial</dt><dd>30 days risk-free, card upfront, <span class="mark">cancel anytime</span> — no lock-in</dd>
-      <dt>You own it</dt><dd>the self-contained site file + your domain are <span class="mark">yours to keep</span></dd>
+      <dt>You own it</dt><dd>your finished site file + your web address are <span class="mark">yours to keep</span></dd>
     </dl>
 
     <p class="reveal">Not sure yet, or would rather explain it out loud? That's completely fine — <a href="mailto:hello@sitesourcery.com?subject=A%20question%20before%20I%20start">write to a real person</a> and start with a conversation instead. There's no wrong door here.</p>
 
     <div class="actions reveal">
-      <a class="btn primary big" href="#commission">Fill in my specimen <span class="arw" aria-hidden="true">&#8594;</span></a>
+      <a class="btn primary big" href="#commission">Fill in my details <span class="arw" aria-hidden="true">&#8594;</span></a>
       <a class="btn big" href="../how-it-works.html">See how it's built <span class="arw" aria-hidden="true">&#8594;</span></a>
     </div>
-    <p class="colo reveal">The specimen above is a demonstration of what's possible. The only sites we call ours are <a href="../">this one</a> and <a href="https://daarx.money/">daarx.money</a> — both built exactly this way.</p>
+    <p class="colo reveal">The preview above is a demo of what's possible. The only sites we call ours are <a href="../">this one</a> and <a href="https://daarx.money/">daarx.money</a> — both built exactly this way.</p>
   </section>
 
 </main>
@@ -430,7 +430,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
       <a href="https://daarx.money/">daarx.money</a>
     </nav>
     <p class="fine">The one name AI recommends · run for you · proven by the calls · yours to keep · cancel anytime<br>
-    An honest intake — no instant-engine claim, and the person, not the machine, is the promise. Your specimen is a live sketch built from your own words; nothing on it is invented.</p>
+    Honest and simple — no instant-robot claim, and a real person, not the machine, is the promise. Your preview is a live sketch built from your own words; nothing on it is invented.</p>
   </div>
 </footer>
 
@@ -555,7 +555,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
     if(els.who) els.who.textContent=displayName;
     if(els.said){
       if(!hasCore){
-        els.said.textContent="Fill in the business on the left and the answer an assistant would give assembles right here — quotable, and built to be lifted.";
+        els.said.textContent="Fill in your business on the left, and the answer AI would give a ready customer builds right here — the line it can quote.";
       }else{
         var s=humanAnswer(f,T,A,tradeWord,townLabel,credsHuman);
         // mark the business name in rubric within the sentence
@@ -568,7 +568,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
     }
     if(els.meta){
       if(!hasCore){
-        els.meta.innerHTML='<b>your specimen</b> <span aria-hidden="true">·</span> updates as you type';
+        els.meta.innerHTML='<b>your preview</b> <span aria-hidden="true">·</span> updates as you type';
       }else{
         var bits=[];
         credsHuman.forEach(function(c){bits.push("<b>"+esc(c)+"</b>");});
@@ -632,7 +632,7 @@ addEventListener('load',function(){setTimeout(function(){if(!window.__sourceryRe
       "Existing website: "+(f.url||"none yet"),
       "Reach me at: "+(f.contact||"(add a phone or email)"),
       "",
-      "— Sent from the Site Sourcery commission page."
+      "— Sent from the Site Sourcery start page."
     ].join("\n");
     var href="mailto:hello@sitesourcery.com?subject="+encodeURIComponent(subj)+"&body="+encodeURIComponent(body);
     form.setAttribute("data-mailto",href);
