@@ -25,8 +25,10 @@
     price: "$79",
     per: "/mo",
     region: "South Jersey",
-    // Contact — placeholders until the real line/inbox is live.
-    phone: "(856) 555-0199",
+    // Contact — no public phone line yet. The /start form is the live
+    // contact funnel; leave phone empty until a real number is live so the
+    // site never advertises a number that doesn't actually reach us.
+    phone: "",
     email: "hello@sitesourcery.com",
   };
 
@@ -57,9 +59,12 @@
       for (var i = 0; i < nodes.length; i++) nodes[i].textContent = map[key];
     });
 
-    // Fill href slots for phone / email / domain links.
+    // Fill href slots for phone / email / domain links. With no live phone
+    // line, hide any call links rather than dial a number that isn't ours.
     document.querySelectorAll("[data-tel]").forEach(function (a) {
-      a.setAttribute("href", "tel:" + BRAND.phone.replace(/[^\d+]/g, ""));
+      var d = BRAND.phone.replace(/[^\d+]/g, "");
+      if (d) { a.setAttribute("href", "tel:" + d); a.removeAttribute("hidden"); }
+      else { a.setAttribute("hidden", ""); }
     });
     document.querySelectorAll("[data-mailto]").forEach(function (a) {
       a.setAttribute("href", "mailto:" + BRAND.email);
