@@ -58,10 +58,10 @@ html:not(.js) #demo-site .step-0{display:block}
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work/">Work</a>
-      <a class="nav-link" href="/pricing/">Pricing</a>
-      <a class="nav-link" href="/faq/">FAQ</a>
-      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
@@ -69,17 +69,192 @@ html:not(.js) #demo-site .step-0{display:block}
 
 <main id="main">
 
-  <!-- ══ HERO — the 5-second answer ══════════════════════════════════════ -->
+  <!-- ══ HERO — the 5-second answer + the signature "one window glowing" ══ -->
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">Custom websites for local businesses</p>
-      <h1 class="hero-title reveal">A custom website, built and run <em class="accent">for you</em>.</h1>
+      <h1 class="hero-mega reveal">A custom website, built and run <em class="accent">for you</em>.</h1>
       <p class="lede reveal">Get found. Get more calls. We design it, host it, and make every change you ask for — you never touch code. <strong>You own everything. Cancel anytime.</strong></p>
       <div class="actions reveal">
         <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact/">Talk to a person</a>
+        <a class="btn ghost" href="/contact.html">Talk to a person</a>
       </div>
       <p class="terms reveal" style="max-width:34em;margin-top:1.6rem">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised — just your best shot at being found and recommended.</p>
+
+      <!-- ── THE STOREFRONT · signature interactive nocturne ──────────────────
+           A hand-authored Main Street after dark. Every shop is dark but one:
+           move the spark (it follows your cursor; drifts on its own when idle)
+           and the warmth of the window rises with it. No pointer / reduced
+           motion → the window simply stays lit. Pure inline SVG, no loads. -->
+      <div class="hero-stage reveal">
+        <figure class="spellstage" data-win-x="600" data-win-y="404" data-range="440"
+                role="img" aria-label="A dark Main Street at night with a single storefront — yours — glowing warm from within, its lamp lit and its sign softly aglow while the neighbouring shops stay dark.">
+          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
+               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="st-sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0B0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
+              </linearGradient>
+              <radialGradient id="st-moon" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="st-lamp" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#B4A0FF" stop-opacity=".55"/><stop offset="100%" stop-color="#B4A0FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="st-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFB460" stop-opacity=".6"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="st-pane" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFDDA2"/><stop offset=".45" stop-color="#F6AE5C"/><stop offset="1" stop-color="#DE7A32"/>
+              </linearGradient>
+              <linearGradient id="st-refl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFAF5C" stop-opacity=".5"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
+              </linearGradient>
+              <radialGradient id="st-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="st-core" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
+              </radialGradient>
+            </defs>
+
+            <!-- sky + moon -->
+            <rect width="1200" height="640" fill="url(#st-sky)"/>
+            <circle cx="980" cy="120" r="270" fill="url(#st-moon)"/>
+            <circle cx="980" cy="120" r="44" fill="#E9E3FF" opacity=".92"/>
+            <circle cx="964" cy="108" r="7" fill="#CFC6F0" opacity=".5"/><circle cx="998" cy="132" r="5" fill="#CFC6F0" opacity=".45"/><circle cx="986" cy="104" r="4" fill="#CFC6F0" opacity=".4"/>
+
+            <!-- stars -->
+            <g fill="#D6CDF7">
+              <circle class="st-twinkle" cx="120" cy="70" r="1.6"/><circle class="st-twinkle" cx="240" cy="120" r="1.2"/>
+              <circle class="st-twinkle" cx="360" cy="60" r="1.7"/><circle class="st-twinkle" cx="470" cy="110" r="1.1"/>
+              <circle class="st-twinkle" cx="600" cy="66" r="1.5"/><circle class="st-twinkle" cx="700" cy="130" r="1.2"/>
+              <circle class="st-twinkle" cx="150" cy="180" r="1.2"/><circle class="st-twinkle" cx="330" cy="200" r="1.3"/>
+              <circle class="st-twinkle" cx="1130" cy="80" r="1.5"/><circle class="st-twinkle" cx="1080" cy="200" r="1.1"/>
+              <circle class="st-twinkle" cx="820" cy="70" r="1.3"/><circle class="st-twinkle" cx="540" cy="150" r="1.1"/>
+            </g>
+
+            <!-- far skyline -->
+            <path d="M0 330 V250 H80 V300 H150 V220 H240 V290 H330 V255 H430 V300 H520 V240 H610 V295 H720 V235 H830 V300 H940 V260 H1040 V300 H1120 V245 H1200 V330 Z" fill="#0C0819"/>
+            <g fill="#211C3A">
+              <rect x="60" y="270" width="8" height="12"/><rect x="200" y="240" width="8" height="12"/><rect x="880" y="272" width="8" height="12"/><rect x="1080" y="266" width="8" height="12"/>
+            </g>
+
+            <!-- ═ NIGHT STREET · the block ══════════════════════════════════ -->
+            <!-- ground -->
+            <rect x="0" y="486" width="1200" height="154" fill="#08060F"/>
+            <rect x="0" y="486" width="1200" height="2" fill="#241C3C"/>
+            <path d="M0 560 H1200" stroke="#140F26" stroke-width="2"/>
+
+            <!-- LEFT neighbours (dark shops) -->
+            <g>
+              <rect x="20" y="248" width="210" height="238" fill="#0A0714"/>
+              <rect x="230" y="206" width="196" height="280" fill="#0C0A1C"/>
+              <g fill="#1D1A34"><!-- cold, dark windows -->
+                <rect x="52" y="300" width="46" height="60" rx="4"/><rect x="120" y="300" width="46" height="60" rx="4"/>
+                <rect x="52" y="384" width="146" height="90" rx="6"/>
+                <rect x="262" y="252" width="40" height="52" rx="4"/><rect x="330" y="252" width="40" height="52" rx="4"/>
+                <rect x="262" y="330" width="132" height="146" rx="6"/>
+              </g>
+              <rect x="330" y="360" width="14" height="60" fill="#2A2748" opacity=".7"/><!-- one faint far light -->
+            </g>
+
+            <!-- RIGHT neighbours (dark shops) -->
+            <g>
+              <rect x="742" y="226" width="220" height="260" fill="#0C0A1C"/>
+              <rect x="962" y="272" width="218" height="214" fill="#0A0714"/>
+              <g fill="#1D1A34">
+                <rect x="770" y="272" width="42" height="54" rx="4"/><rect x="840" y="272" width="42" height="54" rx="4"/><rect x="910" y="272" width="42" height="54" rx="4"/>
+                <rect x="770" y="352" width="182" height="124" rx="6"/>
+                <rect x="992" y="316" width="44" height="56" rx="4"/><rect x="1064" y="316" width="44" height="56" rx="4"/>
+                <rect x="992" y="392" width="160" height="84" rx="6"/>
+              </g>
+              <rect x="840" y="286" width="42" height="40" fill="#2A2748" opacity=".55"/>
+            </g>
+
+            <!-- ═ THE ONE STILL-GLOWING SHOP · centre ═══════════════════════ -->
+            <!-- facade -->
+            <rect x="450" y="176" width="300" height="310" fill="#160F26"/>
+            <path d="M446 176 H754 L742 150 H458 Z" fill="#1C1330"/><!-- cornice/parapet -->
+            <rect x="446" y="146" width="308" height="8" rx="3" fill="#241838"/>
+
+            <!-- warm light pooling on the wet pavement (under everything shopfront) -->
+            <ellipse class="st-pool" cx="600" cy="524" rx="250" ry="60" fill="url(#st-pool)"/>
+            <path class="st-pool" d="M500 470 L700 470 L788 604 L412 604 Z" fill="url(#st-pool)" opacity=".5"/>
+            <rect class="st-pool" x="516" y="486" width="168" height="120" fill="url(#st-refl)"/><!-- reflection streak -->
+
+            <!-- awning -->
+            <rect x="470" y="308" width="260" height="22" rx="4" fill="#1B1228"/>
+            <rect class="st-lit-soft" x="470" y="308" width="260" height="9" rx="4" fill="#B7702E"/>
+            <path class="st-lit-soft" d="M474 330 h252 v4 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 z" fill="#C6772F"/>
+            <path d="M474 330 h252 v4 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 q-15.75 15 -31.5 0 z" fill="none" stroke="#0D0818" stroke-width="1" opacity=".5"/>
+
+            <!-- DISPLAY WINDOW -->
+            <rect x="494" y="344" width="212" height="130" rx="4" fill="#0B1320"/><!-- dark base glass -->
+            <rect class="st-lit" x="494" y="344" width="212" height="130" rx="4" fill="url(#st-pane)"/><!-- lit glass -->
+            <!-- interior silhouettes (dark against the warm light) -->
+            <g class="st-lit-soft" fill="#2A1A0C">
+              <rect x="504" y="438" width="192" height="36"/><!-- counter -->
+              <rect x="520" y="360" width="120" height="7" rx="2"/><rect x="520" y="384" width="96" height="7" rx="2"/><!-- shelves -->
+              <circle cx="556" cy="428" r="12"/><rect x="548" y="428" width="16" height="12"/><!-- cake dome on counter -->
+              <rect x="648" y="418" width="30" height="22" rx="2"/><!-- register -->
+            </g>
+            <!-- potted plant on the sill -->
+            <g class="st-lit-soft">
+              <path d="M516 438 q-14 -30 -2 -52 M516 438 q4 -34 18 -50 M516 438 q16 -22 30 -30" stroke="#22160A" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path d="M506 438 h20 l-3 20 h-14 z" fill="#22160A"/>
+            </g>
+            <!-- hanging pendant lamp -->
+            <line x1="600" y1="344" x2="600" y2="372" stroke="#22160A" stroke-width="2"/>
+            <path d="M590 384 q10 -16 20 0 z" fill="#3A2410"/>
+            <circle class="st-lit" cx="600" cy="388" r="24" fill="url(#st-pool)"/>
+            <circle class="st-lit" cx="600" cy="386" r="6" fill="#FFE6BE"/>
+            <!-- muntins (window grid) -->
+            <g class="st-lit-soft" stroke="#B87636" stroke-width="2.5" opacity=".7">
+              <line x1="565" y1="344" x2="565" y2="474"/><line x1="635" y1="344" x2="635" y2="474"/>
+              <line x1="494" y1="392" x2="706" y2="392"/><line x1="494" y1="434" x2="706" y2="434"/>
+            </g>
+            <!-- window frame + warm inner rim -->
+            <rect x="494" y="344" width="212" height="130" rx="4" fill="none" stroke="#150D06" stroke-width="6"/>
+            <rect class="st-lit" x="497" y="347" width="206" height="124" rx="3" fill="none" stroke="#FFD79A" stroke-width="1.4" opacity=".7"/>
+
+            <!-- door (right of window) -->
+            <rect x="712" y="360" width="34" height="114" rx="3" fill="#0E0906"/>
+            <rect class="st-lit" x="717" y="366" width="24" height="42" rx="2" fill="url(#st-pane)"/><!-- door glass -->
+            <rect x="712" y="360" width="34" height="114" rx="3" fill="none" stroke="#150D06" stroke-width="4"/>
+            <circle class="st-lit" cx="720" cy="440" r="2.4" fill="#FFE6BE"/><!-- knob glint -->
+
+            <!-- knee-wall under the window -->
+            <rect x="486" y="474" width="228" height="12" fill="#0F0A1A"/>
+
+            <!-- hanging shop sign with the lit sigil -->
+            <line x1="450" y1="270" x2="500" y2="270" stroke="#2A2038" stroke-width="4" stroke-linecap="round"/>
+            <line x1="486" y1="270" x2="486" y2="286" stroke="#2A2038" stroke-width="3"/>
+            <rect x="456" y="286" width="60" height="42" rx="7" fill="#140E22" stroke="#2E2440" stroke-width="1.5"/>
+            <path class="st-lit" d="M486 296 l3.4 9.6 9.6 3.4 -9.6 3.4 -3.4 9.6 -3.4 -9.6 -9.6 -3.4 9.6 -3.4 z" fill="url(#st-core)"/>
+
+            <!-- ═ FOREGROUND · a cool violet street-lamp (the brand's other hue) ═ -->
+            <ellipse cx="196" cy="540" rx="150" ry="34" fill="url(#st-lamp)" opacity=".6"/>
+            <rect x="190" y="214" width="12" height="300" rx="4" fill="#1A1530"/>
+            <rect x="150" y="508" width="92" height="12" rx="4" fill="#1A1530"/>
+            <path d="M196 214 q0 -34 40 -34" fill="none" stroke="#1A1530" stroke-width="10" stroke-linecap="round"/>
+            <circle cx="240" cy="176" r="30" fill="url(#st-lamp)"/>
+            <path d="M228 168 h24 l-6 22 h-12 z" fill="#241C40"/>
+            <circle cx="240" cy="176" r="6.5" fill="#CBBBFF"/>
+
+            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
+            <g class="spell-spark" transform="translate(360,250)">
+              <circle class="spark-glow" r="34" fill="url(#st-glow)"/>
+              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#st-core)"/>
+              <circle r="2.6" fill="#FFFFFF"/>
+            </g>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
+          <span>Main&nbsp;Street after dark — <em>one window still glowing.</em> Move the spark; that&rsquo;s your shop, lit. <span class="badge">Interactive</span></span>
+        </figcaption>
+      </div>
     </div>
   </section>
 
@@ -341,7 +516,7 @@ html:not(.js) #demo-site .step-0{display:block}
       </div>
 
       <div class="actions reveal" style="margin-top:2rem">
-        <a class="btn ghost" href="/work/">See the work</a>
+        <a class="btn ghost" href="/work.html">See the work</a>
       </div>
     </div>
   </section>
@@ -375,7 +550,7 @@ html:not(.js) #demo-site .step-0{display:block}
       </div>
       <p class="terms reveal" style="margin-top:1.75rem;max-width:44em">Every done-for-you plan: 30-day risk-free trial · card upfront · one build · auto-converts after the trial · one-tap cancel.</p>
       <div class="actions reveal" style="margin-top:1.5rem">
-        <a class="btn primary" href="/pricing/">See full pricing</a>
+        <a class="btn primary" href="/pricing.html">See full pricing</a>
       </div>
     </div>
   </section>
@@ -387,7 +562,7 @@ html:not(.js) #demo-site .step-0{display:block}
       <p class="lede reveal" style="margin-top:1rem">Start with a free preview — no card, no commitment. Rather ask a question first? A real person answers.</p>
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact/">Talk to a person</a>
+        <a class="btn ghost" href="/contact.html">Talk to a person</a>
       </div>
     </div>
   </section>
@@ -407,15 +582,15 @@ html:not(.js) #demo-site .step-0{display:block}
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work/">Work</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/how-it-works/">How it works</a>
-        <a href="/faq/">FAQ</a>
-        <a href="/contact/">Contact</a>
+        <a href="/work.html">Work</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
         <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
       </div>

@@ -226,6 +226,75 @@
     });
   }
 
+  /* ── 8b · THE STOREFRONT — the signature "one window still glowing" ──────
+     A four-point sigil-spark eases toward the pointer inside .spellstage and
+     the window's warmth (--lit, 0→1) tracks how near the spark is. Untouched,
+     the spark drifts a slow orbit and the window breathes warmly lit. No
+     pointer / reduced-motion: the window simply stays lit, spark parked.       */
+  function wireStorefront() {
+    var stage = d.querySelector('.spellstage');
+    if (!stage) return;
+    var svg = stage.querySelector('svg');
+    var spark = stage.querySelector('.spell-spark');
+    if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
+    var vb = svg.viewBox.baseVal;
+    var wx = parseFloat(stage.dataset.winX) || vb.width * 0.5;
+    var wy = parseFloat(stage.dataset.winY) || vb.height * 0.52;
+    var range = parseFloat(stage.dataset.range) || 380;
+
+    if (reduce) { stage.style.setProperty('--lit', '1'); return; }
+
+    var coarse = window.matchMedia &&
+      matchMedia('(hover: none), (pointer: coarse)').matches;
+
+    var px = wx - range * 0.7, py = wy - range * 0.5;   // spark position
+    var tx = px, ty = py;                                // target
+    var idle = true, running = false, visible = true;
+
+    function toVB(e) {
+      var r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      return {
+        x: (e.clientX - r.left) / r.width * vb.width,
+        y: (e.clientY - r.top) / r.height * vb.height
+      };
+    }
+    if (!coarse) {
+      stage.addEventListener('pointermove', function (e) {
+        var p = toVB(e); if (!p) return;
+        tx = p.x; ty = p.y; idle = false; start();
+      });
+      stage.addEventListener('pointerleave', function () { idle = true; });
+    }
+
+    function frame(now) {
+      if (!visible) { running = false; return; }     // pause off-screen
+      if (idle) {
+        var t = now / 1000;
+        tx = wx + Math.cos(t * 0.62) * range * 0.92;
+        ty = wy + Math.sin(t * 0.94) * range * 0.42 - 30;
+      }
+      px += (tx - px) * 0.12;
+      py += (ty - py) * 0.12;
+      if (spark) spark.setAttribute('transform', 'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')');
+      var dx = px - wx, dy = py - wy;
+      var lit = 1 - Math.sqrt(dx * dx + dy * dy) / range;
+      lit = lit < 0 ? 0 : lit > 1 ? 1 : lit;
+      if (idle) lit = Math.max(lit, 0.58 + 0.14 * Math.sin(now / 1500)); // breathing floor
+      stage.style.setProperty('--lit', lit.toFixed(3));
+      requestAnimationFrame(frame);
+    }
+    function start() { if (!running) { running = true; requestAnimationFrame(frame); } }
+
+    // only spend frames while the stage is on screen
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (en) {
+        visible = en[0].isIntersecting;
+        if (visible) start();
+      }, { threshold: 0.05 }).observe(stage);
+    } else { start(); }
+  }
+
   /* ── 8 · manual cast triggers — [data-cast="#target"] on any button/link ── */
   function wireCastTriggers() {
     d.querySelectorAll('[data-cast]').forEach(function (el) {
@@ -244,6 +313,7 @@
     wireToggles();
     wireTypewriters();
     wireCastTriggers();
+    wireStorefront();
   }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', boot);
   else boot();

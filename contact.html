@@ -1,4 +1,11 @@
 <!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — contact.html · CONTACT · "SPELLCAST"
+     The light's still on — someone's still here.
+     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
+     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
+     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -13,8 +20,10 @@
 <meta property="og:title" content="Contact — talk to a real person · Site Sourcery">
 <meta property="og:description" content="Call, text, or email — a real person answers, usually the same day. No phone tree, no ticket queue.">
 <meta property="og:url" content="https://sitesourcery.com/contact/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Contact — talk to a real person · Site Sourcery">
+<meta name="twitter:description" content="Call, text, or email — a real person answers, usually the same day. No phone tree, no ticket queue.">
 <link rel="stylesheet" href="style.css">
-<script src="sourcery.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -29,10 +38,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work/">Work</a>
-      <a class="nav-link" href="/pricing/">Pricing</a>
-      <a class="nav-link" href="/faq/">FAQ</a>
-      <a class="nav-link" href="/contact/" aria-current="page">Contact</a>
+      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/contact.html" aria-current="page">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
@@ -40,35 +49,216 @@
 
 <main id="main">
 
-  <!-- ═══ HERO ═══ -->
+  <!-- ══ HERO — the 5-second answer + the signature "the light's still on" ══ -->
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">Contact</p>
-      <h1 class="hero-title reveal">Talk to a real <em class="accent">person</em>.</h1>
-      <p class="lede reveal">No phone tree, no ticket queue, no chatbot wearing a name tag. <strong>[Your name]</strong> answers — the same person who builds and runs your site. Usually the same day.</p>
+      <h1 class="hero-mega reveal">Talk to a real <em class="accent">person</em>.</h1>
+      <p class="lede reveal">No phone tree, no ticket queue, no chatbot wearing a name tag. <strong>The same person</strong> answers — the one who builds and runs your site. Usually the same day.</p>
       <div class="actions reveal">
         <a class="btn primary" href="mailto:hello@sitesourcery.com">Email us
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </a>
         <a class="btn ghost" href="/start/">Get a free preview instead</a>
       </div>
+
+      <!-- ── THE NIGHT DESK · signature interactive nocturne ───────────────────
+           A close look through the one lit window: the maker is still at the
+           desk, building a site under a warm lamp — one violet phone glowing
+           on the bench (the brand's other hue). Move the spark (it follows your
+           cursor; drifts on its own when idle) and the room warms with it, the
+           OPEN sign kindling. No pointer / reduced motion → the room stays lit.
+           Pure inline SVG, no loads. -->
+      <div class="hero-stage reveal">
+        <figure class="spellstage" data-win-x="600" data-win-y="330" data-range="460"
+                role="img" aria-label="A shopfront window at night, seen close. Inside, one person is still at the desk under a warm hanging lamp, building a website on a glowing monitor, a phone lit on the bench and an OPEN sign in the corner — the one light still on the dark street.">
+          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
+               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="ct-night" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0A0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#190F2C"/>
+              </linearGradient>
+              <radialGradient id="ct-room" cx="47%" cy="34%" r="74%">
+                <stop offset="0" stop-color="#FFE4B8"/><stop offset="44%" stop-color="#E89A4E"/><stop offset="100%" stop-color="#7C3E1B"/>
+              </radialGradient>
+              <radialGradient id="ct-lamp" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFE6BE" stop-opacity=".95"/><stop offset="45%" stop-color="#FFB460" stop-opacity=".5"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="ct-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFB460" stop-opacity=".6"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="ct-refl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFAF5C" stop-opacity=".5"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="ct-screen" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFF6E8"/><stop offset="100%" stop-color="#F4DBAC"/>
+              </linearGradient>
+              <linearGradient id="ct-neon" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#FF5C8A"/><stop offset="1" stop-color="#7C5CFF"/>
+              </linearGradient>
+              <radialGradient id="ct-phone" cx="50%" cy="40%" r="65%">
+                <stop offset="0" stop-color="#CDB8FF"/><stop offset="60%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#5B3FD6"/>
+              </radialGradient>
+              <radialGradient id="ct-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="ct-core" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
+              </radialGradient>
+            </defs>
+
+            <!-- night backdrop + faint stars over the rooftops -->
+            <rect width="1200" height="640" fill="url(#ct-night)"/>
+            <g fill="#D6CDF7">
+              <circle class="st-twinkle" cx="120" cy="60" r="1.5"/><circle class="st-twinkle" cx="250" cy="44" r="1.1"/>
+              <circle class="st-twinkle" cx="1080" cy="56" r="1.5"/><circle class="st-twinkle" cx="980" cy="40" r="1.1"/>
+              <circle class="st-twinkle" cx="1140" cy="88" r="1.2"/><circle class="st-twinkle" cx="70" cy="96" r="1.2"/>
+            </g>
+
+            <!-- the shop facade (dark brick front) -->
+            <rect x="150" y="70" width="900" height="470" fill="#150F26"/>
+            <rect x="140" y="58" width="920" height="16" rx="5" fill="#1D1432"/><!-- cornice -->
+            <g stroke="#0E091C" stroke-width="2" opacity=".55"><!-- faint brick courses -->
+              <path d="M150 132 H1050"/><path d="M150 196 H250"/><path d="M950 196 H1050"/>
+              <path d="M150 470 H1050"/><path d="M150 250 H250"/><path d="M950 250 H1050"/>
+            </g>
+
+            <!-- warm light pooling out onto the wet sidewalk (under the sill) -->
+            <ellipse class="st-pool" cx="600" cy="586" rx="308" ry="52" fill="url(#ct-pool)"/>
+            <path class="st-pool" d="M300 500 H900 L992 616 H208 Z" fill="url(#ct-pool)" opacity=".5"/>
+
+            <!-- ═ THE WINDOW · the room behind the glass ════════════════════ -->
+            <!-- frame + sill -->
+            <rect x="250" y="150" width="700" height="360" rx="8" fill="#0E0A1A"/>
+            <rect x="238" y="504" width="724" height="16" rx="4" fill="#1B1330"/><!-- sill -->
+
+            <!-- room: dark base, then the warm glow the spark kindles -->
+            <rect x="264" y="164" width="672" height="336" rx="4" fill="#0C0A18"/>
+            <rect class="st-lit" x="264" y="164" width="672" height="336" rx="4" fill="url(#ct-room)"/>
+
+            <!-- back-wall shelves (faint unlit, warm when lit) -->
+            <g class="st-lit-soft">
+              <rect x="300" y="220" width="220" height="6" rx="2" fill="#3A2410"/>
+              <rect x="300" y="266" width="180" height="6" rx="2" fill="#3A2410"/>
+              <g fill="#2A1A0C">
+                <rect x="308" y="196" width="14" height="24" rx="2"/><rect x="326" y="200" width="14" height="20" rx="2"/><rect x="344" y="194" width="14" height="26" rx="2"/>
+                <rect x="470" y="198" width="20" height="22" rx="2"/><rect x="494" y="202" width="14" height="18" rx="2"/>
+                <rect x="312" y="244" width="16" height="22" rx="2"/><rect x="332" y="248" width="14" height="18" rx="2"/>
+              </g>
+            </g>
+
+            <!-- hanging pendant lamp over the desk -->
+            <line x1="612" y1="164" x2="612" y2="208" stroke="#22160A" stroke-width="2"/>
+            <path d="M596 224 q16 -30 32 0 z" fill="#3A2410"/>
+            <circle class="st-lit" cx="612" cy="240" r="150" fill="url(#ct-lamp)"/>
+            <circle class="st-lit" cx="612" cy="222" r="7" fill="#FFE6BE"/>
+
+            <!-- the maker, still at the bench -->
+            <g class="st-lit-soft">
+              <!-- reaching arm to the keyboard -->
+              <path d="M520 372 C 556 384, 586 410, 612 442" fill="none" stroke="#24160A" stroke-width="20" stroke-linecap="round"/>
+              <circle cx="616" cy="444" r="10" fill="#24160A"/><!-- hand -->
+              <!-- torso -->
+              <path d="M436 474 C 432 396, 450 356, 486 350 C 522 356, 540 396, 536 474 Z" fill="#24160A"/>
+              <!-- head -->
+              <circle cx="486" cy="302" r="33" fill="#24160A"/>
+            </g>
+            <!-- warm rim-light catching the head + shoulder (turns on with the room) -->
+            <path class="st-lit" d="M486 269 A33 33 0 0 1 519 302" fill="none" stroke="#FFE0AE" stroke-width="2.6" stroke-linecap="round" opacity=".85"/>
+            <path class="st-lit" d="M528 360 C 538 372, 540 392, 539 410" fill="none" stroke="#FFCE92" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>
+
+            <!-- the monitor: a site being built on it -->
+            <rect x="612" y="330" width="188" height="118" rx="7" fill="#0B0F1A"/>
+            <rect class="st-lit" x="618" y="336" width="176" height="106" rx="4" fill="url(#ct-screen)"/>
+            <!-- the little site on the screen (the brand's violet, being built) -->
+            <g class="st-lit">
+              <rect x="628" y="346" width="52" height="8" rx="4" fill="#7C5CFF"/>
+              <rect x="760" y="345" width="24" height="10" rx="5" fill="#FF5C8A"/>
+              <rect x="628" y="366" width="88" height="9" rx="4" fill="#3A2C6B"/>
+              <rect x="628" y="382" width="66" height="7" rx="3.5" fill="#B9A6EE" opacity=".8"/>
+              <rect x="628" y="402" width="46" height="30" rx="4" fill="#EAE2FF" stroke="#7C5CFF" stroke-width="1.2"/>
+              <rect x="682" y="402" width="46" height="30" rx="4" fill="#EAE2FF" stroke="#7C5CFF" stroke-width="1.2"/>
+              <rect x="736" y="402" width="46" height="30" rx="4" fill="#EAE2FF" stroke="#7C5CFF" stroke-width="1.2"/>
+            </g>
+            <path d="M700 448 h12 l6 20 h-24 z" fill="#160D06"/><!-- monitor stand -->
+
+            <!-- the desk -->
+            <rect x="304" y="452" width="604" height="10" rx="3" fill="#3A2712"/>
+            <rect class="st-lit-soft" x="304" y="450" width="604" height="4" rx="2" fill="#8A5A2A"/>
+            <rect x="360" y="462" width="12" height="46" fill="#241706"/><rect x="836" y="462" width="12" height="46" fill="#241706"/>
+
+            <!-- keyboard under the reaching hand -->
+            <rect class="st-lit-soft" x="586" y="452" width="118" height="9" rx="3" fill="#4A3418"/>
+
+            <!-- one cool-violet phone glowing on the bench (the brand's other hue) -->
+            <g>
+              <rect x="392" y="430" width="40" height="72" rx="8" fill="#0C0A18"/>
+              <rect x="397" y="436" width="30" height="60" rx="4" fill="url(#ct-phone)"/>
+              <rect x="403" y="446" width="18" height="7" rx="3.5" fill="#FFFFFF" opacity=".92"/>
+              <rect x="403" y="459" width="13" height="6" rx="3" fill="#EAE2FF" opacity=".7"/>
+              <ellipse cx="412" cy="418" rx="30" ry="14" fill="url(#ct-glow)" opacity=".7"/>
+            </g>
+
+            <!-- coffee mug + steam -->
+            <g class="st-lit-soft">
+              <path d="M320 468 h30 v22 a6 6 0 0 1 -6 6 h-18 a6 6 0 0 1 -6 -6 z" fill="#3A2712"/>
+              <path d="M350 472 q14 0 14 10 t-14 10" fill="none" stroke="#3A2712" stroke-width="4"/>
+              <path d="M330 456 q6 -8 0 -16 M340 456 q6 -8 0 -16" fill="none" stroke="#C7A06A" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
+            </g>
+
+            <!-- a small potted plant on the sill -->
+            <g class="st-lit-soft">
+              <path d="M878 470 q-12 -26 -2 -46 M878 470 q4 -30 16 -44 M878 470 q14 -20 26 -26" fill="none" stroke="#22160A" stroke-width="4.5" stroke-linecap="round"/>
+              <path d="M868 470 h20 l-3 20 h-14 z" fill="#22160A"/>
+            </g>
+
+            <!-- OPEN sign, hanging in the upper corner (neon-lit, brand charm) -->
+            <line x1="330" y1="176" x2="330" y2="196" stroke="#2A2038" stroke-width="2.5"/>
+            <line x1="404" y1="176" x2="404" y2="196" stroke="#2A2038" stroke-width="2.5"/>
+            <rect x="300" y="196" width="134" height="52" rx="10" fill="#120C1F" stroke="#2E2440" stroke-width="1.5"/>
+            <rect class="st-lit" x="300" y="196" width="134" height="52" rx="10" fill="none" stroke="url(#ct-neon)" stroke-width="2.4"/>
+            <text class="st-lit" x="367" y="230" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-size="26" font-weight="800" letter-spacing="3" fill="url(#ct-neon)">OPEN</text>
+
+            <!-- window muntins (the cross of the glass) + inner warm rim -->
+            <g stroke="#0E0A1A" stroke-width="7">
+              <line x1="600" y1="150" x2="600" y2="510"/><line x1="250" y1="332" x2="950" y2="332"/>
+            </g>
+            <rect x="250" y="150" width="700" height="360" rx="8" fill="none" stroke="#080510" stroke-width="8"/>
+            <rect class="st-lit" x="256" y="156" width="688" height="348" rx="6" fill="none" stroke="#FFD79A" stroke-width="1.6" opacity=".55"/>
+
+            <!-- warm reflection streak down the wet pavement -->
+            <rect class="st-pool" x="520" y="520" width="160" height="104" fill="url(#ct-refl)"/>
+
+            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
+            <g class="spell-spark" transform="translate(300,250)">
+              <circle class="spark-glow" r="34" fill="url(#ct-glow)"/>
+              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#ct-core)"/>
+              <circle r="2.6" fill="#FFFFFF"/>
+            </g>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
+          <span>The light&rsquo;s still on — <em>someone&rsquo;s still here.</em> Move the spark; that&rsquo;s a real person, answering. <span class="badge">Interactive</span></span>
+        </figcaption>
+      </div>
     </div>
   </section>
 
-  <!-- ═══ THE THREE DOORS ═══ -->
+  <!-- ══ THE THREE DOORS ═════════════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
       <div class="grid cols-3">
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><path d="M6 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="M9 18h2" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round"/></svg>
           <h3>Call or text</h3>
-          <p>Texting is how you'll change your site anyway — try it now. If a call goes to voicemail, leave your name; you'll hear back.</p>
+          <p>Texting is how you&rsquo;ll change your site anyway — try it now. If a call goes to voicemail, leave your name; you&rsquo;ll hear back.</p>
           <p style="margin-top:.75rem"><a class="num" href="tel:+10000000000">(000) 000-0000</a></p>
         </div>
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="m4 7.5 8 5.5 8-5.5" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           <h3>Email</h3>
-          <p>Best for links, longer questions, or "here's my current site — what would you do with it?"</p>
+          <p>Best for links, longer questions, or &ldquo;here&rsquo;s my current site — what would you do with it?&rdquo;</p>
           <p style="margin-top:.75rem"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a></p>
         </div>
         <div class="card reveal">
@@ -81,12 +271,12 @@
     </div>
   </section>
 
-  <!-- ═══ THE FORM — bright room ═══ -->
+  <!-- ══ THE FORM — the bright shop ══════════════════════════════════════ -->
   <section class="section daylight">
     <div class="wrap">
       <p class="eyebrow reveal">Write a note</p>
       <h2 class="reveal">Ask <em class="accent">anything</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Your business name, your town, and what you're hoping for is plenty. Even "is my kind of business a fit?" is a fine first note.</p>
+      <p class="lede reveal" style="margin-top:1rem">Your business name, your town, and what you&rsquo;re hoping for is plenty. Even &ldquo;is my kind of business a fit?&rdquo; is a fine first note.</p>
 
       <div class="grid cols-2" style="margin-top:2.5rem;align-items:start">
         <form class="card reveal" action="mailto:hello@sitesourcery.com" method="post" enctype="text/plain">
@@ -103,13 +293,13 @@
             <input class="input" id="f-reach" name="Reach me at" type="text" placeholder="Phone or email" autocomplete="email">
           </div>
           <div class="field">
-            <label for="f-msg">What's on your mind?</label>
+            <label for="f-msg">What&rsquo;s on your mind?</label>
             <textarea class="input" id="f-msg" name="Message" required></textarea>
           </div>
           <button class="btn primary" type="submit">Send your note
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           </button>
-          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">Honest note: this button opens <strong>your own email app</strong> with your note filled in — nothing is collected or sent behind the scenes. If it doesn't open, just email <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> directly.</p>
+          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">Honest note: this button opens <strong>your own email app</strong> with your note filled in — nothing is collected or sent behind the scenes. If it doesn&rsquo;t open, just email <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> directly.</p>
         </form>
 
         <div class="reveal">
@@ -121,20 +311,20 @@
             </li>
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>A plain answer</strong> — no sales script. If we're not the right fit, we'll say so and point you somewhere better.</span>
+              <span><strong>A plain answer</strong> — no sales script. If we&rsquo;re not the right fit, we&rsquo;ll say so and point you somewhere better.</span>
             </li>
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>Nothing to lose</strong> — asking costs nothing, and there's no obligation. Your details never go anywhere else.</span>
+              <span><strong>Nothing to lose</strong> — asking costs nothing, and there&rsquo;s no obligation. Your details never go anywhere else.</span>
             </li>
           </ul>
-          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq/">FAQ</a> answers the big three — you own it, you can cancel anytime, and changes happen by text.</p>
+          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> answers the big three — you own it, you can cancel anytime, and changes happen by text.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══ CLOSER ═══ -->
+  <!-- ══ CLOSER ══════════════════════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
       <h2 class="reveal">Rather just see <em class="accent">your</em> site?</h2>
@@ -143,7 +333,7 @@
         <a class="btn primary" href="/start/">Start your site
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </a>
-        <a class="btn ghost" href="/work/">See the work first</a>
+        <a class="btn ghost" href="/work.html">See the work first</a>
       </div>
     </div>
   </section>
@@ -163,15 +353,15 @@
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work/">Work</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/how-it-works/">How it works</a>
-        <a href="/faq/">FAQ</a>
-        <a href="/contact/">Contact</a>
+        <a href="/work.html">Work</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
         <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
       </div>
@@ -180,5 +370,6 @@
   </div>
 </footer>
 
+<script src="sourcery.js" defer></script>
 </body>
 </html>

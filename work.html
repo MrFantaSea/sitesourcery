@@ -45,10 +45,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work/" aria-current="page">Work</a>
-      <a class="nav-link" href="/pricing/">Pricing</a>
-      <a class="nav-link" href="/faq/">FAQ</a>
-      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="nav-link" href="/work.html" aria-current="page">Work</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
@@ -56,12 +56,185 @@
 
 <main id="main">
 
-  <!-- ══ HERO — the honest thesis in five seconds ══════════════════════════ -->
+  <!-- ══ HERO — the honest thesis + the signature "inside the lit window" ═══
+       Same nocturne language as home, one page further in: home shows Main
+       Street with one window glowing; Work steps THROUGH that window to the
+       studio bench where the site is actually built by hand. One warm source
+       (the desk lamp), the cool violet night through the window + the roaming
+       spark. Move the spark and --lit rises: lamp, screen, sketches, bench all
+       warm to life. No pointer / reduced-motion → the bench simply stays lit.
+       Pure inline SVG, wb-* ids, driven by the shared wireStorefront(). -->
   <header class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">The work</p>
-      <h1 class="hero-title reveal">Small portfolio. All <em class="accent">true</em>.</h1>
+      <h1 class="hero-mega reveal">Small portfolio. All <em class="accent">true</em>.</h1>
       <p class="lede reveal">Two pieces: a live product site we built and run, and a showpiece we made to show what&rsquo;s possible. Both open right here. <strong>No borrowed logos, no made-up clients.</strong></p>
+
+      <div class="hero-stage reveal">
+        <figure class="spellstage" data-win-x="560" data-win-y="350" data-range="460"
+                role="img" aria-label="A studio workbench at night: a desk lamp glows warm over a monitor where a website is taking shape, pinned wireframe sketches on the wall beside it, and the dark Main Street visible through the window behind — the one lit room where the work gets made by hand.">
+          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
+               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="wb-wall" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0E0A1C"/><stop offset="1" stop-color="#160F28"/>
+              </linearGradient>
+              <linearGradient id="wb-sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0B0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
+              </linearGradient>
+              <radialGradient id="wb-moon" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="wb-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFB460" stop-opacity=".62"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="wb-pane" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFF0CE"/><stop offset=".5" stop-color="#F8C97E"/><stop offset="1" stop-color="#E89B4A"/>
+              </linearGradient>
+              <linearGradient id="wb-desk" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#241634"/><stop offset="1" stop-color="#150D22"/>
+              </linearGradient>
+              <radialGradient id="wb-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="wb-core" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
+              </radialGradient>
+            </defs>
+
+            <!-- room + back wall -->
+            <rect width="1200" height="640" fill="#08060F"/>
+            <rect width="1200" height="486" fill="url(#wb-wall)"/>
+
+            <!-- ═ THE WINDOW · Main Street, seen from inside the lit room ═════ -->
+            <g>
+              <rect x="812" y="58" width="280" height="252" rx="4" fill="#0C0818"/>
+              <rect x="824" y="70" width="256" height="228" fill="url(#wb-sky)"/>
+              <circle cx="1004" cy="132" r="120" fill="url(#wb-moon)"/>
+              <circle cx="1004" cy="132" r="26" fill="#E9E3FF" opacity=".9"/>
+              <circle cx="992" cy="122" r="4.5" fill="#CFC6F0" opacity=".5"/><circle cx="1016" cy="142" r="3.5" fill="#CFC6F0" opacity=".45"/>
+              <g fill="#D6CDF7">
+                <circle class="st-twinkle" cx="852" cy="100" r="1.5"/><circle class="st-twinkle" cx="900" cy="140" r="1.1"/>
+                <circle class="st-twinkle" cx="936" cy="96" r="1.4"/><circle class="st-twinkle" cx="880" cy="204" r="1.2"/>
+                <circle class="st-twinkle" cx="1052" cy="206" r="1.3"/><circle class="st-twinkle" cx="1040" cy="104" r="1.1"/>
+              </g>
+              <!-- dark rooftops across the way, one far window faintly lit -->
+              <path d="M824 298 V266 H860 V248 H900 V272 H944 V252 H986 V274 H1030 V258 H1080 V298 Z" fill="#0A0716"/>
+              <rect x="908" y="258" width="12" height="16" fill="#2A2748" opacity=".7"/>
+              <!-- muntins + frame -->
+              <g stroke="#241838" stroke-width="6"><line x1="952" y1="70" x2="952" y2="298"/><line x1="824" y1="184" x2="1080" y2="184"/></g>
+              <rect x="812" y="58" width="280" height="252" rx="4" fill="none" stroke="#2A1F3E" stroke-width="8"/>
+            </g>
+
+            <!-- ═ THE WALL · pinned working drawings + a framed house-mark ════ -->
+            <g transform="rotate(-4 205 175)">
+              <rect x="130" y="80" width="150" height="190" rx="3" fill="#0E0B1A"/>
+              <rect class="st-lit-soft" x="130" y="80" width="150" height="190" rx="3" fill="#EAD9B0"/>
+              <g class="st-lit-soft" fill="#3A2A14">
+                <rect x="144" y="96" width="122" height="14" rx="2"/>
+                <rect x="144" y="120" width="70" height="30" rx="2"/><rect x="222" y="120" width="44" height="30" rx="2"/>
+                <rect x="144" y="162" width="122" height="8" rx="2"/><rect x="144" y="176" width="96" height="8" rx="2"/>
+                <rect x="144" y="200" width="36" height="24" rx="2"/><rect x="188" y="200" width="36" height="24" rx="2"/><rect x="232" y="200" width="34" height="24" rx="2"/>
+              </g>
+              <circle cx="205" cy="86" r="4" fill="#7C5CFF"/>
+            </g>
+            <g transform="rotate(3 372 182)">
+              <rect x="300" y="92" width="144" height="180" rx="3" fill="#0E0B1A"/>
+              <rect class="st-lit-soft" x="300" y="92" width="144" height="180" rx="3" fill="#E7D3A6"/>
+              <g class="st-lit-soft" fill="#3A2A14">
+                <circle cx="372" cy="140" r="26"/>
+                <rect x="322" y="180" width="100" height="10" rx="2"/><rect x="322" y="198" width="76" height="10" rx="2"/>
+                <rect x="322" y="226" width="100" height="26" rx="3"/>
+              </g>
+              <circle cx="372" cy="98" r="4" fill="#7C5CFF"/>
+            </g>
+            <!-- framed house-mark, lit -->
+            <rect x="560" y="120" width="80" height="80" rx="8" fill="#120C22" stroke="#2A2040" stroke-width="2"/>
+            <path class="st-lit" d="M600 138 l5 16 16 6 -16 6 -5 16 -5 -16 -16 -6 16 -6 z" fill="url(#wb-core)"/>
+
+            <!-- ═ THE BENCH ══════════════════════════════════════════════════ -->
+            <path d="M120 452 H1080 L1168 560 H32 Z" fill="url(#wb-desk)"/>
+            <path class="st-lit-soft" d="M120 452 H1080 L1168 560 H32 Z" fill="#4A2E14"/>
+            <rect x="32" y="558" width="1136" height="82" fill="#0C0818"/>
+            <path d="M120 452 H1080" stroke="#2E1F14" stroke-width="2" opacity=".55"/>
+
+            <!-- warm light pooling on the bench + the lamp's cone -->
+            <ellipse class="st-pool" cx="540" cy="470" rx="440" ry="96" fill="url(#wb-pool)"/>
+            <path class="st-pool" d="M700 330 L726 330 L900 470 L470 470 Z" fill="url(#wb-pool)" fill-opacity=".55"/>
+
+            <!-- ═ THE MONITOR · a site taking shape ══════════════════════════ -->
+            <rect x="452" y="428" width="16" height="26" fill="#0E0A18"/>
+            <path d="M430 454 h60 l14 12 h-88 z" fill="#100B1C"/>
+            <rect x="300" y="248" width="272" height="190" rx="10" fill="#0E0A18"/>
+            <rect x="316" y="262" width="240" height="162" rx="4" fill="#0B1320"/>
+            <rect class="st-lit" x="316" y="262" width="240" height="162" rx="4" fill="url(#wb-pane)"/>
+            <!-- the wireframe on the glowing screen -->
+            <g class="st-lit-soft" fill="#3A2410">
+              <rect x="332" y="278" width="208" height="18" rx="3"/>
+              <rect x="332" y="308" width="120" height="14" rx="3"/><rect x="332" y="330" width="92" height="14" rx="3"/>
+              <rect x="332" y="354" width="150" height="8" rx="3"/><rect x="332" y="370" width="120" height="8" rx="3"/>
+              <rect x="332" y="390" width="72" height="22" rx="11"/>
+              <rect x="470" y="308" width="70" height="70" rx="6"/>
+            </g>
+            <rect class="st-lit-soft" x="510" y="281" width="26" height="12" rx="6" fill="#7C5CFF"/><!-- one violet CTA glint -->
+            <rect x="316" y="262" width="240" height="162" rx="4" fill="none" stroke="#08060F" stroke-width="4"/>
+            <rect class="st-lit" x="319" y="265" width="234" height="156" rx="3" fill="none" stroke="#FFE6BE" stroke-width="1.2" opacity=".6"/>
+
+            <!-- ═ DESK ITEMS ═════════════════════════════════════════════════ -->
+            <!-- loose paper wireframe under the lamp -->
+            <g transform="rotate(-6 700 500)">
+              <rect x="620" y="470" width="160" height="86" rx="3" fill="#0E0B1A"/>
+              <rect class="st-lit-soft" x="620" y="470" width="160" height="86" rx="3" fill="#E7D3A6"/>
+              <g class="st-lit-soft" stroke="#3A2A14" stroke-width="3" fill="none">
+                <rect x="634" y="484" width="132" height="20" rx="2"/>
+                <line x1="634" y1="518" x2="720" y2="518"/><line x1="634" y1="530" x2="700" y2="530"/>
+                <rect x="700" y="512" width="66" height="30" rx="2"/>
+              </g>
+            </g>
+            <!-- potted plant -->
+            <g class="st-lit-soft">
+              <path d="M628 452 q-14 -34 -2 -58 M628 452 q4 -38 20 -56 M628 452 q18 -24 34 -34" stroke="#24341C" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path d="M616 452 h26 l-4 24 h-18 z" fill="#3A2416"/>
+            </g>
+            <!-- pencil cup -->
+            <path class="st-lit-soft" d="M262 452 l-8 -44 M270 452 l0 -50 M278 452 l8 -46" stroke="#6A4A2A" stroke-width="4" stroke-linecap="round"/>
+            <rect x="250" y="430" width="40" height="30" rx="4" fill="#160F26"/>
+            <rect class="st-lit-soft" x="250" y="430" width="40" height="8" rx="3" fill="#4A3A2A"/>
+            <!-- coffee mug + faint steam -->
+            <path class="st-lit-soft" d="M190 410 q-6 -12 4 -22 M206 410 q-6 -12 4 -22" fill="none" stroke="#6A5540" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+            <rect x="176" y="418" width="52" height="40" rx="6" fill="#160F26"/>
+            <path d="M228 426 q18 4 0 22" fill="none" stroke="#160F26" stroke-width="6"/>
+            <rect class="st-lit-soft" x="176" y="418" width="52" height="9" rx="4" fill="#5A3A1E"/>
+            <!-- keyboard -->
+            <path d="M338 452 h196 l24 20 h-244 z" fill="#140E22"/>
+            <path class="st-lit-soft" d="M344 456 h184 l14 12 h-212 z" fill="#3A2E1E"/>
+            <g class="st-lit-soft" stroke="#1A1226" stroke-width="2" opacity=".7">
+              <line x1="352" y1="461" x2="520" y2="461"/><line x1="348" y1="468" x2="524" y2="468"/>
+            </g>
+
+            <!-- ═ THE DESK LAMP · the one warm source ════════════════════════ -->
+            <ellipse cx="928" cy="452" rx="52" ry="12" fill="#0C0818"/>
+            <line x1="928" y1="450" x2="892" y2="330" stroke="#241C3C" stroke-width="9" stroke-linecap="round"/>
+            <line x1="892" y1="330" x2="748" y2="300" stroke="#241C3C" stroke-width="9" stroke-linecap="round"/>
+            <circle cx="928" cy="450" r="8" fill="#2E2450"/><circle cx="892" cy="330" r="8" fill="#2E2450"/>
+            <path d="M748 300 l-34 -14 -20 46 40 16 z" fill="#1C1533"/>
+            <circle class="st-lit" cx="712" cy="340" r="30" fill="url(#wb-pool)"/>
+            <path class="st-lit-soft" d="M726 336 l-32 -12 22 26 z" fill="#B7702E"/>
+            <circle class="st-lit" cx="712" cy="338" r="7" fill="#FFE6BE"/>
+
+            <!-- the roaming sigil-spark (JS moves it; charming + static without JS) -->
+            <g class="spell-spark" transform="translate(238,120)">
+              <circle class="spark-glow" r="34" fill="url(#wb-glow)"/>
+              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#wb-core)"/>
+              <circle r="2.6" fill="#FFFFFF"/>
+            </g>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="wbCapG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#wbCapG)"/></svg>
+          <span>Behind the one lit window &mdash; <em>the bench where your site gets built by hand.</em> Move the spark; the work comes alight. <span class="badge">Interactive</span></span>
+        </figcaption>
+      </div>
     </div>
   </header>
 
@@ -215,7 +388,7 @@
       <p class="lede reveal" style="margin-top:1rem">Tell us about your business and we&rsquo;ll get to work. You own everything, cancel anytime &mdash; and you change your site by sending a text.</p>
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="/pricing/">See pricing</a>
+        <a class="btn ghost" href="/pricing.html">See pricing</a>
       </div>
     </div>
   </section>
@@ -235,15 +408,15 @@
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work/">Work</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/how-it-works/">How it works</a>
-        <a href="/faq/">FAQ</a>
-        <a href="/contact/">Contact</a>
+        <a href="/work.html">Work</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
         <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
       </div>

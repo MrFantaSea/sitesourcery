@@ -1,8 +1,15 @@
 <!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — about.html · THE ACCOUNTABLE HUMAN · "SPELLCAST"
+     Step through the glowing window: the desk where your site gets built.
+     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
+     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
+     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>About — Site Sourcery</title>
 <meta name="description" content="Site Sourcery is one person in South Jersey who builds custom websites for local businesses — and runs them. You text changes in plain English. You own everything. Cancel anytime.">
 <meta name="theme-color" content="#0B0912">
@@ -20,7 +27,6 @@
 {"@context":"https://schema.org","@type":"AboutPage","name":"About — Site Sourcery","url":"https://sitesourcery.com/about.html","mainEntity":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","areaServed":"South Jersey, NJ","description":"A one-person studio building custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text. You own everything; cancel anytime."}}
 </script>
 <link rel="stylesheet" href="style.css">
-<script src="sourcery.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -35,10 +41,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work/">Work</a>
-      <a class="nav-link" href="/pricing/">Pricing</a>
-      <a class="nav-link" href="/faq/">FAQ</a>
-      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
@@ -46,15 +52,213 @@
 
 <main id="main">
 
-  <!-- ═ HERO ═ -->
+  <!-- ══ HERO — the human, and the signature "behind the glowing window" ══ -->
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">About</p>
-      <h1 class="hero-title reveal">The whole studio is one person. That&#8217;s the <em class="accent">point</em>.</h1>
-      <p class="lede reveal">Site Sourcery is [Your name], in South Jersey. I build every site, run every site, and answer every text. There&#8217;s no queue and no handoff — because there&#8217;s no one to hand you to.</p>
+      <h1 class="hero-mega reveal">The whole studio is one person. That&rsquo;s the <em class="accent">point</em>.</h1>
+      <p class="lede reveal">Site Sourcery is a one-person studio in South Jersey. I build every site, run every site, and answer every text. There&rsquo;s no queue and no handoff — because there&rsquo;s no one to hand you to.</p>
       <div class="actions reveal">
         <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="/work/">See the work</a>
+        <a class="btn ghost" href="/work.html">See the work</a>
+      </div>
+
+      <!-- ── THE DESK · signature interactive nocturne ────────────────────────
+           On the homepage you saw the one lit window from the street. Here we
+           step through it. The maker's desk after dark: a cool monitor (the
+           digital half) and a warm desk lamp (the human half). Move the spark
+           (it follows your cursor; drifts on its own when idle) and the lamp
+           warms the room and lights the portrait on the wall. No pointer /
+           reduced motion → the lamp simply stays lit. Pure inline SVG, no loads. -->
+      <div class="hero-stage reveal">
+        <figure class="spellstage" data-win-x="700" data-win-y="330" data-range="460"
+                role="img" aria-label="Behind the glowing shop window: a maker&rsquo;s desk at night. A cool monitor shows a small website being built; a warm desk lamp pools light across the desk and lifts the quiet tools of a one-person studio.">
+          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
+               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="wk-wall" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0A0714"/><stop offset=".6" stop-color="#130B21"/><stop offset="1" stop-color="#170F29"/>
+              </linearGradient>
+              <linearGradient id="wk-night" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0B0716"/><stop offset=".6" stop-color="#160C26"/><stop offset="1" stop-color="#1E1236"/>
+              </linearGradient>
+              <radialGradient id="wk-moon" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CFC6FF" stop-opacity=".85"/><stop offset="60%" stop-color="#8C78FF" stop-opacity=".14"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="wk-desk" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#2A1B0E"/><stop offset="1" stop-color="#170D05"/>
+              </linearGradient>
+              <radialGradient id="wk-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFB65F" stop-opacity=".62"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".22"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="wk-cone" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFCE86" stop-opacity=".55"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="wk-shade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFE0AC"/><stop offset="1" stop-color="#E08A3A"/>
+              </linearGradient>
+              <linearGradient id="wk-frame" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#3A2A16"/><stop offset=".5" stop-color="#241631"/><stop offset="1" stop-color="#1B1226"/>
+              </linearGradient>
+              <linearGradient id="wk-refl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFAF5C" stop-opacity=".45"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
+              </linearGradient>
+              <radialGradient id="wk-scr" cx="50%" cy="30%" r="80%">
+                <stop offset="0" stop-color="#171331"/><stop offset="100%" stop-color="#0A0818"/>
+              </radialGradient>
+              <radialGradient id="wk-scrglow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#8C78FF" stop-opacity=".42"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="wk-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="wk-core" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
+              </radialGradient>
+            </defs>
+
+            <!-- room: back wall + floor -->
+            <rect width="1200" height="640" fill="url(#wk-wall)"/>
+            <rect x="0" y="470" width="1200" height="170" fill="#0A0716"/>
+            <rect x="0" y="470" width="1200" height="2" fill="#241C3C" opacity=".8"/>
+            <path d="M0 556 H1200" stroke="#140F26" stroke-width="2"/>
+
+            <!-- BACK WINDOW · the night street we came from (cool, always there) -->
+            <g>
+              <rect x="92" y="92" width="252" height="212" rx="4" fill="#150E28"/>
+              <rect x="104" y="104" width="228" height="188" rx="2" fill="url(#wk-night)"/>
+              <circle cx="150" cy="150" r="120" fill="url(#wk-moon)"/>
+              <circle cx="150" cy="150" r="22" fill="#E9E3FF" opacity=".9"/>
+              <circle cx="141" cy="143" r="4" fill="#CFC6F0" opacity=".5"/><circle cx="159" cy="156" r="3" fill="#CFC6F0" opacity=".45"/>
+              <g fill="#D6CDF7">
+                <circle class="st-twinkle" cx="232" cy="132" r="1.5"/><circle class="st-twinkle" cx="286" cy="160" r="1.2"/>
+                <circle class="st-twinkle" cx="256" cy="200" r="1.3"/><circle class="st-twinkle" cx="304" cy="126" r="1.1"/>
+                <circle class="st-twinkle" cx="200" cy="122" r="1.2"/><circle class="st-twinkle" cx="300" cy="212" r="1.4"/>
+              </g>
+              <!-- far storefronts across the street: one warm dot still glowing -->
+              <rect x="120" y="238" width="196" height="54" fill="#0C0A1C"/>
+              <rect x="146" y="252" width="18" height="22" fill="#221D3A"/><rect x="180" y="252" width="18" height="22" fill="#221D3A"/>
+              <rect x="236" y="252" width="18" height="22" fill="#221D3A"/><rect x="272" y="252" width="18" height="22" fill="#221D3A"/>
+              <rect x="210" y="250" width="18" height="24" fill="#F6AE5C" opacity=".85"/><!-- a neighbour, lit -->
+              <!-- muntins + frame -->
+              <g stroke="#2A2038" stroke-width="4"><line x1="218" y1="104" x2="218" y2="292"/><line x1="104" y1="198" x2="332" y2="198"/></g>
+              <rect x="92" y="92" width="252" height="212" rx="4" fill="none" stroke="#221831" stroke-width="6"/>
+              <rect x="86" y="300" width="264" height="8" rx="3" fill="#1C142C"/><!-- sill -->
+            </g>
+
+            <!-- ═ FRAMED PORTRAIT on the wall · warm-lit placeholder ═══════════ -->
+            <!-- hook -->
+            <path d="M934 78 l-9 26 h18 z" fill="#221831"/>
+            <line x1="934" y1="80" x2="934" y2="104" stroke="#2A2038" stroke-width="2"/>
+            <!-- warm wash the lamp throws across the portrait -->
+            <ellipse class="st-pool" cx="934" cy="228" rx="150" ry="170" fill="url(#wk-pool)" opacity="0"/>
+            <!-- frame -->
+            <rect x="828" y="104" width="214" height="252" rx="8" fill="url(#wk-frame)"/>
+            <rect class="st-lit-soft" x="828" y="104" width="214" height="252" rx="8" fill="none" stroke="#C6862F" stroke-width="3"/>
+            <!-- mat + portrait field -->
+            <rect x="848" y="124" width="174" height="212" rx="3" fill="#0E0B18"/>
+            <rect class="st-lit-soft" x="848" y="124" width="174" height="212" rx="3" fill="#3B2A16" opacity=".9"/>
+            <!-- the placeholder figure (a clear silhouette, not a stock face) -->
+            <g class="st-lit-soft">
+              <circle cx="935" cy="206" r="38" fill="none" stroke="#6A5433" stroke-width="6"/>
+              <path d="M876 312 c0-34 27-56 59-56 s59 22 59 56" fill="none" stroke="#6A5433" stroke-width="6" stroke-linecap="round"/>
+            </g>
+            <!-- maker's mark: the brand sigil, lit -->
+            <path class="st-lit" d="M866 148 l2.6 7.6 7.6 2.6 -7.6 2.6 -2.6 7.6 -2.6 -7.6 -7.6 -2.6 7.6 -2.6 z" fill="url(#wk-core)"/>
+            <!-- warm inner rim of the frame -->
+            <rect class="st-lit" x="831" y="107" width="208" height="246" rx="7" fill="none" stroke="#FFD79A" stroke-width="1.4" opacity=".65"/>
+
+            <!-- ═ THE DESK ═════════════════════════════════════════════════════ -->
+            <!-- warm light pooling on the desk + reflection (under the props) -->
+            <ellipse class="st-pool" cx="720" cy="452" rx="240" ry="46" fill="url(#wk-pool)"/>
+            <!-- desk top -->
+            <rect x="70" y="432" width="1060" height="30" rx="6" fill="url(#wk-desk)"/>
+            <rect x="70" y="460" width="1060" height="12" fill="#120B06"/>
+            <rect class="st-lit-soft" x="70" y="432" width="1060" height="4" rx="2" fill="#7A4E22"/><!-- lit desk edge -->
+            <rect class="st-pool" x="600" y="436" width="240" height="24" fill="url(#wk-refl)"/><!-- warm reflection -->
+            <!-- legs -->
+            <rect x="150" y="472" width="14" height="84" fill="#0E0906"/><rect x="1036" y="472" width="14" height="84" fill="#0E0906"/>
+
+            <!-- ═ MONITOR · the digital half (cool, always on) ═════════════════ -->
+            <ellipse cx="300" cy="436" rx="70" ry="9" fill="#0C0A16"/>
+            <rect x="294" y="392" width="12" height="42" fill="#1C1730"/>
+            <rect x="262" y="426" width="76" height="10" rx="4" fill="#1C1730"/>
+            <ellipse cx="300" cy="320" rx="210" ry="150" fill="url(#wk-scrglow)"/><!-- cool screen glow -->
+            <rect x="150" y="230" width="300" height="172" rx="12" fill="#0B0916" stroke="#2A2444" stroke-width="3"/>
+            <rect x="162" y="242" width="276" height="148" rx="4" fill="url(#wk-scr)"/>
+            <!-- a small site being built on the screen -->
+            <g>
+              <path d="M182 266 l2.4 7 7 2.4 -7 2.4 -2.4 7 -2.4 -7 -7 -2.4 7 -2.4 z" fill="#A78BFA"/>
+              <rect x="200" y="266" width="34" height="6" rx="3" fill="#4A4370"/>
+              <circle cx="404" cy="270" r="3" fill="#4A4370"/><circle cx="416" cy="270" r="3" fill="#4A4370"/>
+              <rect x="182" y="292" width="150" height="9" rx="4" fill="#E9E4FF"/>
+              <rect x="182" y="308" width="112" height="9" rx="4" fill="#E9E4FF"/>
+              <rect x="300" y="308" width="4" height="11" fill="#A78BFA"/><!-- the build caret -->
+              <rect x="182" y="332" width="120" height="44" rx="6" fill="#171331" stroke="#332B57"/>
+              <rect x="196" y="346" width="52" height="6" rx="3" fill="#6D5AB0"/>
+              <rect x="196" y="360" width="80" height="5" rx="2.5" fill="#3E366A"/>
+              <rect x="316" y="332" width="106" height="44" rx="6" fill="#171331" stroke="#332B57"/>
+              <rect x="330" y="346" width="52" height="6" rx="3" fill="#6D5AB0"/>
+              <rect x="330" y="360" width="72" height="5" rx="2.5" fill="#3E366A"/>
+            </g>
+
+            <!-- keyboard in front of the monitor -->
+            <rect x="196" y="446" width="216" height="10" rx="4" fill="#171223"/>
+            <g fill="#241C38"><rect x="204" y="448" width="12" height="4" rx="1"/><rect x="222" y="448" width="12" height="4" rx="1"/><rect x="240" y="448" width="12" height="4" rx="1"/><rect x="258" y="448" width="12" height="4" rx="1"/><rect x="276" y="448" width="12" height="4" rx="1"/><rect x="294" y="448" width="60" height="4" rx="1"/><rect x="360" y="448" width="12" height="4" rx="1"/><rect x="378" y="448" width="12" height="4" rx="1"/></g>
+
+            <!-- ═ THE DESK LAMP · the human half (warm source) ═════════════════ -->
+            <!-- warm cone of light from the shade down to the desk -->
+            <path class="st-pool" d="M742 214 L806 214 L858 452 L636 452 Z" fill="url(#wk-cone)"/>
+            <!-- base + articulated arm -->
+            <ellipse cx="930" cy="440" rx="46" ry="9" fill="#15101E"/>
+            <rect x="912" y="420" width="36" height="20" rx="4" fill="#1B1530"/>
+            <line x1="930" y1="424" x2="884" y2="304" stroke="#241C3C" stroke-width="8" stroke-linecap="round"/>
+            <line x1="884" y1="304" x2="782" y2="204" stroke="#241C3C" stroke-width="8" stroke-linecap="round"/>
+            <circle cx="930" cy="424" r="8" fill="#2E2648"/><circle cx="884" cy="304" r="8" fill="#2E2648"/>
+            <!-- shade + bulb -->
+            <path d="M736 208 q38 -34 76 -4 l-38 42 z" fill="#1E1730"/>
+            <path class="st-lit-soft" d="M742 210 q34 -28 66 -2 l-30 34 z" fill="url(#wk-shade)"/>
+            <circle class="st-lit" cx="774" cy="242" r="9" fill="#FFE6BE"/>
+            <circle class="st-lit" cx="774" cy="242" r="20" fill="url(#wk-pool)"/>
+
+            <!-- ═ DESK PROPS · warm-lit human details ══════════════════════════ -->
+            <!-- coffee mug + steam -->
+            <g class="st-lit-soft">
+              <path d="M642 402 h44 v22 a22 22 0 0 1 -44 0 z" fill="#3A2412"/>
+              <path d="M686 406 q16 2 16 12 t-16 12" fill="none" stroke="#3A2412" stroke-width="5"/>
+              <ellipse cx="664" cy="402" rx="22" ry="6" fill="#5A3C1E"/>
+              <path d="M656 392 q-6 -12 4 -22 M672 392 q6 -12 -4 -22" stroke="#7A5A34" stroke-width="3" fill="none" stroke-linecap="round" opacity=".7"/>
+            </g>
+            <!-- small plant on the desk -->
+            <g class="st-lit-soft">
+              <path d="M556 404 q-14 -30 -3 -52 M556 404 q3 -34 16 -50 M556 404 q15 -22 30 -30" stroke="#2E5A32" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path d="M544 404 h26 l-4 22 h-18 z" fill="#3A2414"/>
+            </g>
+            <!-- pen cup + a couple of papers -->
+            <g class="st-lit-soft">
+              <rect x="838" y="404" width="26" height="30" rx="4" fill="#2A1E12"/>
+              <line x1="846" y1="404" x2="842" y2="380" stroke="#8A6A3E" stroke-width="3" stroke-linecap="round"/>
+              <line x1="854" y1="404" x2="856" y2="376" stroke="#A78BFA" stroke-width="3" stroke-linecap="round"/>
+              <line x1="860" y1="404" x2="866" y2="382" stroke="#8A6A3E" stroke-width="3" stroke-linecap="round"/>
+              <rect x="470" y="420" width="70" height="14" rx="2" fill="#2A2016" transform="rotate(-6 505 427)"/>
+            </g>
+
+            <!-- the empty chair pulled up to the desk (foreground silhouette) -->
+            <path d="M470 560 v-150 a16 16 0 0 1 16 -16 h150 a16 16 0 0 1 16 16 v150" fill="none" stroke="#0C0A16" stroke-width="26" stroke-linecap="round"/>
+            <rect x="486" y="404" width="150" height="150" rx="14" fill="#0C0A16"/>
+
+            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
+            <g class="spell-spark" transform="translate(420,250)">
+              <circle class="spark-glow" r="34" fill="url(#wk-glow)"/>
+              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#wk-core)"/>
+              <circle r="2.6" fill="#FFFFFF"/>
+            </g>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
+          <span>Behind the glowing window — <em>the desk where your site gets built.</em> Move the spark; the lamp warms, the photo lights. <span class="badge">Interactive</span></span>
+        </figcaption>
       </div>
     </div>
   </section>
@@ -63,26 +267,31 @@
   <section class="section">
     <div class="wrap">
       <p class="eyebrow reveal">The accountable human</p>
-      <h2 class="reveal">Who you&#8217;re <em class="accent">actually</em> hiring.</h2>
-      <div class="grid cols-2" style="margin-top:2rem;align-items:start">
-        <!-- Photo placeholder — owner drops in a real same-origin photo here. Never a stock face. -->
-        <figure class="card reveal" style="text-align:center">
-          <svg viewBox="0 0 200 240" width="100%" role="img" aria-label="Photo placeholder — the founder&#8217;s real photo goes here" style="max-width:16rem;margin:0 auto;border-radius:12px;background:var(--surface-2)">
-            <circle cx="100" cy="92" r="38" fill="none" stroke="#2A2444" stroke-width="6"/>
-            <path d="M38 208c0-36 28-58 62-58s62 22 62 58" fill="none" stroke="#2A2444" stroke-width="6" stroke-linecap="round"/>
-          </svg>
-          <figcaption style="margin-top:1rem">
-            <span class="badge">Your photo here</span>
-            <p style="margin:.8rem auto 0;font-weight:650;color:var(--text)">[Your name]</p>
+      <h2 class="reveal">Who you&rsquo;re <em class="accent">actually</em> hiring.</h2>
+      <div class="grid cols-2" style="margin-top:2.5rem;align-items:start">
+        <!-- Photo slot — the owner drops a real same-origin photo in here. Never a stock face. -->
+        <figure class="card reveal" style="text-align:center;padding-top:1.75rem">
+          <div class="shop-window" style="max-width:18rem;margin:0 auto;box-shadow:none">
+            <div class="shop-bar"><span class="num" style="font-size:.8rem;color:var(--muted)">Site Sourcery</span><span class="badge">South Jersey</span></div>
+            <svg viewBox="0 0 320 300" width="100%" role="img" aria-label="Site Sourcery, South Jersey" style="background:var(--surface-2);display:block">
+              <defs><radialGradient id="ph-warm" cx="50%" cy="34%" r="70%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".16"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient></defs>
+              <rect width="320" height="300" fill="url(#ph-warm)"/>
+              <circle cx="160" cy="120" r="52" fill="none" stroke="#2A2444" stroke-width="7"/>
+              <path d="M74 268c0-48 38-78 86-78s86 30 86 78" fill="none" stroke="#2A2444" stroke-width="7" stroke-linecap="round"/>
+              <path d="M255 60 l3.6 10.6 10.6 3.6 -10.6 3.6 -3.6 10.6 -3.6 -10.6 -10.6 -3.6 10.6 -3.6 z" fill="#A78BFA" opacity=".8"/>
+            </svg>
+          </div>
+          <figcaption style="margin-top:1.1rem">
+            <p style="margin:0 auto;font-weight:650;color:var(--text)">Site Sourcery</p>
             <p style="margin:.2rem auto 0;color:var(--muted);font-size:.95rem">Founder &middot; South Jersey, NJ</p>
-            <p style="margin:.6rem auto 0;font-size:.95rem"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><br><a href="tel:+10000000000" class="num">(000) 000-0000</a></p>
+            <p style="margin:.7rem auto 0;font-size:.95rem"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><br><a href="tel:+10000000000" class="num">(000) 000-0000</a></p>
           </figcaption>
         </figure>
         <div>
           <p class="reveal">I build custom websites for local businesses — bakeries, plumbers, barbers, the shops that hold a town together. Not templates. Your hours, your prices, your photos, your voice.</p>
-          <p class="reveal" style="margin-top:1rem">Then I keep running it: hosting, updates, changes. When you want something different, you <strong>text me in plain English</strong> and it gets done. No dashboard, no app, nothing to learn. That&#8217;s the whole idea.</p>
-          <p class="reveal" style="margin-top:1rem">And <strong>you own everything</strong> the whole time — the site, the domain, the words. If you ever leave, it all goes with you. I&#8217;d rather earn your business every month than lock you in.</p>
-          <p class="reveal" style="margin-top:1rem">My name goes on every build. When something needs fixing at 7am, I&#8217;m the one who fixes it.</p>
+          <p class="reveal" style="margin-top:1rem">Then I keep running it: hosting, updates, changes. When you want something different, you <strong>text me in plain English</strong> and it gets done. No dashboard, no app, nothing to learn. That&rsquo;s the whole idea.</p>
+          <p class="reveal" style="margin-top:1rem">And <strong>you own everything</strong> the whole time — the site, the domain, the words. If you ever leave, it all goes with you. I&rsquo;d rather earn your business every month than lock you in.</p>
+          <p class="reveal" style="margin-top:1rem">The same hands on every build. When something needs fixing at 7am, I&rsquo;m the one who fixes it.</p>
         </div>
       </div>
     </div>
@@ -93,10 +302,10 @@
     <div class="wrap">
       <p class="eyebrow reveal">Why it works</p>
       <h2 class="reveal">Why a person beats a <em class="accent">platform</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2rem">
+      <div class="grid cols-3" style="margin-top:2.5rem">
         <div class="card reveal">
-          <h3>You text. It&#8217;s done.</h3>
-          <p>Website builders hand you homework. Here, you say what you want changed — &#8220;add Saturday hours&#8221; — and it&#8217;s live before you think about it again.</p>
+          <h3>You text. It&rsquo;s done.</h3>
+          <p>Website builders hand you homework. Here, you say what you want changed — &ldquo;add Saturday hours&rdquo; — and it&rsquo;s live before you think about it again.</p>
         </div>
         <div class="card reveal">
           <h3>You own it all.</h3>
@@ -115,10 +324,10 @@
     <div class="wrap">
       <p class="eyebrow reveal">House rules</p>
       <h2 class="reveal">The honest <em class="accent">fine print</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2rem">
+      <div class="grid cols-3" style="margin-top:2.5rem">
         <div class="card reveal">
           <h3>Only real work</h3>
-          <p>The <a href="/work/">work page</a> shows two pieces, because two is what&#8217;s real: a live product site we built, and a showpiece demo built to show what&#8217;s possible. Each labeled as exactly what it is.</p>
+          <p>The <a href="/work.html">work page</a> shows two pieces, because two is what&rsquo;s real: a live product site we built, and a showpiece demo built to show what&rsquo;s possible. Each labeled as exactly what it is.</p>
         </div>
         <div class="card reveal">
           <h3>No promised rankings</h3>
@@ -126,7 +335,7 @@
         </div>
         <div class="card reveal">
           <h3>No invented praise</h3>
-          <p>You won&#8217;t find a star rating or testimonial here that didn&#8217;t happen. When real clients say real things, they&#8217;ll be here — with their names on them.</p>
+          <p>You won&rsquo;t find a star rating or testimonial here that didn&rsquo;t happen. When real clients say real things, they&rsquo;ll be here — with their names on them.</p>
         </div>
       </div>
     </div>
@@ -136,13 +345,13 @@
   <section class="section">
     <div class="wrap">
       <p class="eyebrow reveal">Say hello</p>
-      <h2 class="reveal">Talk to the person who&#8217;d <em class="accent">build it</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Tell me about your business. You&#8217;ll get a straight answer from the same person who&#8217;d do the work.</p>
+      <h2 class="reveal">Talk to the person who&rsquo;d <em class="accent">build it</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Tell me about your business. You&rsquo;ll get a straight answer from the same person who&rsquo;d do the work.</p>
       <div class="actions reveal" style="margin-top:1.8rem">
         <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="mailto:hello@sitesourcery.com">Email [Your name]</a>
+        <a class="btn ghost" href="mailto:hello@sitesourcery.com">Email Site Sourcery</a>
       </div>
-      <p class="reveal" style="margin-top:1.2rem;color:var(--muted)">Or call <a href="tel:+10000000000" class="num">(000) 000-0000</a> — [Your name] answers.</p>
+      <p class="reveal" style="margin-top:1.2rem;color:var(--muted)">Or call <a href="tel:+10000000000" class="num">(000) 000-0000</a> — the same person answers.</p>
     </div>
   </section>
 
@@ -161,15 +370,15 @@
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work/">Work</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/how-it-works/">How it works</a>
-        <a href="/faq/">FAQ</a>
-        <a href="/contact/">Contact</a>
+        <a href="/work.html">Work</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
         <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
       </div>
@@ -178,5 +387,6 @@
   </div>
 </footer>
 
+<script src="sourcery.js" defer></script>
 </body>
 </html>

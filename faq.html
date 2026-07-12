@@ -1,11 +1,23 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — faq.html · FAQ ("Spellcast")
+     Main Street after dark — and, on this page, the crossroads just off it.
      Plain answers in tasteful accordions. The honest ranking answer lives here:
      nobody can guarantee "first on Google," and we say so out loud. Ownership,
      cancel, trial, and text-to-change stated precisely. FAQPage JSON-LD mirrors
      the visible Q&A exactly — no fabricated ratings, no invented stats.
-     Self-contained: loads only style.css + sourcery.js. ═══════════════════ -->
+
+     SIGNATURE MOMENT: a hand-authored inline-SVG nocturne — a signpost at a
+     dark crossroads. One arm is warm-lit and honest, pointing down a lit road
+     toward a single glowing shop window on the horizon; the other arm points
+     into an unlit maze of promises. Move the spark (it follows the cursor,
+     drifts on its own when idle) and the lantern — and the honest way — light
+     up. No pointer / reduced motion → it simply stays lit. Same brand hues:
+     warm lantern vs. cool violet lamp. Reuses wireStorefront()'s --lit engine.
+
+     Self-contained: loads only style.css + sourcery.js. All graphics inline
+     SVG. No CDNs, no remote fonts, no trackers, no fetch. The only http(s)
+     URLs are hyperlinks/metadata, never loads. ═══════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -25,6 +37,17 @@
 <meta name="twitter:description" content="The real questions, answered plainly. No fine print doing the dodging.">
 <link rel="stylesheet" href="style.css">
 <script src="sourcery.js" defer></script>
+<style>
+/* ── faq page-scoped: a warm spine lights the open answer — the "one window
+   still glowing," at accordion scale. System CSS untouched. ─────────────── */
+.faq-item{position:relative;padding-left:1.15rem}
+.faq-item::before{content:"";position:absolute;left:0;top:.95rem;bottom:.95rem;
+  width:2px;border-radius:1px;background:var(--hairline);
+  transition:background .3s var(--ease),box-shadow .3s var(--ease)}
+.faq-item[open]::before{background:var(--charm);
+  box-shadow:0 0 12px rgba(124,92,255,.5)}
+@media (prefers-reduced-motion:reduce){ .faq-item::before{transition:none} }
+</style>
 <!-- Honest structured data: mirrors the visible Q&A exactly. No fabricated ratings. -->
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
@@ -35,7 +58,7 @@
 {"@type":"Question","name":"Can you guarantee I show up first on Google?","acceptedAnswer":{"@type":"Answer","text":"No — and anyone who promises that is lying to you. Nobody controls Google, and no honest shop pretends to. What we actually do: build your site with the setup that makes it findable and citable — fast pages, clean structure, the details search and answer tools look for — so you have your best shot at being found and recommended when someone asks for the best plumber or bakery near them. Then the monthly note shows how it's actually moving: calls, bookings, where you rank. Results vary; honesty doesn't."}},
 {"@type":"Question","name":"How do I know it's working?","acceptedAnswer":{"@type":"Answer","text":"Once a month you get a plain-English note — \"14 calls, 6 booked, here's where you rank\" — no charts to decode, no login to check. If a number dips, the note says so, and what we're doing about it. Real numbers only; results vary and we never guarantee them."}},
 {"@type":"Question","name":"What does it cost?","acceptedAnswer":{"@type":"Answer","text":"There's a rung for every budget: drive it yourself from $9 a month, done-for-you at $89 a month with $0 down, own-it builds from $500 plus a low monthly, up to White Glove Wizardry by application. Every done-for-you plan includes the 30-day risk-free trial. The pricing page lays out the whole ladder."}},
-{"@type":"Question","name":"Who am I actually working with?","acceptedAnswer":{"@type":"Answer","text":"One accountable person — [Your name] — not a queue or a ticket number. You get a real name and a real number, and the same person answers every time. Everything shown on this site is work we actually built."}},
+{"@type":"Question","name":"Who am I actually working with?","acceptedAnswer":{"@type":"Answer","text":"One accountable person — the same one every time — not a queue or a ticket number. You get a real person and a real number, and the same person answers every time. Everything shown on this site is work we actually built."}},
 {"@type":"Question","name":"I already have a website or domain. Can you use it?","acceptedAnswer":{"@type":"Answer","text":"Yes. We rebuild it properly and bring your domain across — we handle the move end to end. You keep your address; it just finally points at a site that earns it."}}
 ]}
 </script>
@@ -53,10 +76,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work/">Work</a>
-      <a class="nav-link" href="/pricing/">Pricing</a>
-      <a class="nav-link" href="/faq/" aria-current="page">FAQ</a>
-      <a class="nav-link" href="/contact/">Contact</a>
+      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/faq.html" aria-current="page">FAQ</a>
+      <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
   </div>
@@ -64,31 +87,175 @@
 
 <main id="main">
 
-  <!-- ══ HERO ═══════════════════════════════════════════════════════════════ -->
+  <!-- ══ HERO — straight answers + the signature "crossroads" nocturne ════════ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow">FAQ</p>
-      <h1 class="hero-title">Straight answers.<br>No <em class="accent">fine print</em>.</h1>
-      <p class="lede">The questions people actually ask before trusting someone with their business's name online — answered plainly. Don't see yours? <a href="#ask">Ask a person</a>.</p>
+      <p class="eyebrow reveal">FAQ</p>
+      <h1 class="hero-mega reveal">Straight answers.<br>No <em class="accent">fine print</em>.</h1>
+      <p class="lede reveal">The questions people actually ask before trusting someone with their business&rsquo;s name online — answered plainly. Don&rsquo;t see yours? <a href="#ask">Ask a person</a>.</p>
+
+      <!-- ── THE CROSSROADS · signature interactive nocturne ──────────────────
+           A hand-authored signpost at a dark crossroads. One arm is warm-lit
+           and honest — it points down a lit road toward a single glowing shop
+           window on the horizon. The other arm points into an unlit maze of
+           promises. Move the spark (it follows your cursor; drifts on its own
+           when idle) and the lantern rises with it, lighting the honest way.
+           No pointer / reduced motion → it simply stays lit. Inline SVG, no loads. -->
+      <div class="hero-stage reveal">
+        <figure class="spellstage" data-win-x="345" data-win-y="230" data-range="470"
+                role="img" aria-label="A dark crossroads at night. A signpost holds a warm-glowing lantern; its honest arm points down a lit road toward a single glowing shop window on the horizon — yours — while its other arm points into an unlit maze of promises. A cool violet street-lamp stands in the distance.">
+          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
+               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="fq-sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0B0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
+              </linearGradient>
+              <radialGradient id="fq-moon" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="fq-lamp" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#B4A0FF" stop-opacity=".55"/><stop offset="100%" stop-color="#B4A0FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="fq-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFB460" stop-opacity=".6"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="fq-pane" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFDDA2"/><stop offset=".45" stop-color="#F6AE5C"/><stop offset="1" stop-color="#DE7A32"/>
+              </linearGradient>
+              <linearGradient id="fq-refl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FFAF5C" stop-opacity=".5"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
+              </linearGradient>
+              <radialGradient id="fq-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="fq-core" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
+              </radialGradient>
+            </defs>
+
+            <!-- sky + moon -->
+            <rect width="1200" height="640" fill="url(#fq-sky)"/>
+            <circle cx="980" cy="118" r="270" fill="url(#fq-moon)"/>
+            <circle cx="980" cy="118" r="42" fill="#E9E3FF" opacity=".92"/>
+            <circle cx="965" cy="106" r="7" fill="#CFC6F0" opacity=".5"/><circle cx="997" cy="130" r="5" fill="#CFC6F0" opacity=".45"/><circle cx="986" cy="102" r="4" fill="#CFC6F0" opacity=".4"/>
+
+            <!-- stars -->
+            <g fill="#D6CDF7">
+              <circle class="st-twinkle" cx="120" cy="70" r="1.6"/><circle class="st-twinkle" cx="250" cy="120" r="1.2"/>
+              <circle class="st-twinkle" cx="360" cy="58" r="1.7"/><circle class="st-twinkle" cx="470" cy="112" r="1.1"/>
+              <circle class="st-twinkle" cx="600" cy="66" r="1.5"/><circle class="st-twinkle" cx="710" cy="128" r="1.2"/>
+              <circle class="st-twinkle" cx="150" cy="182" r="1.2"/><circle class="st-twinkle" cx="330" cy="200" r="1.3"/>
+              <circle class="st-twinkle" cx="1130" cy="80" r="1.5"/><circle class="st-twinkle" cx="1080" cy="196" r="1.1"/>
+              <circle class="st-twinkle" cx="822" cy="70" r="1.3"/><circle class="st-twinkle" cx="548" cy="150" r="1.1"/>
+            </g>
+
+            <!-- far skyline -->
+            <path d="M0 342 V262 H80 V312 H150 V232 H240 V300 H330 V266 H430 V310 H520 V252 H610 V306 H720 V246 H830 V310 H940 V270 H1040 V308 H1120 V256 H1200 V342 Z" fill="#0C0819"/>
+            <g fill="#211C3A">
+              <rect x="60" y="282" width="8" height="12"/><rect x="200" y="252" width="8" height="12"/><rect x="882" y="282" width="8" height="12"/><rect x="1080" y="278" width="8" height="12"/>
+            </g>
+
+            <!-- ═ NIGHT GROUND ═════════════════════════════════════════════ -->
+            <rect x="0" y="470" width="1200" height="170" fill="#08060F"/>
+            <rect x="0" y="470" width="1200" height="2" fill="#241C3C"/>
+
+            <!-- the honest road, receding to the far shop -->
+            <path d="M452 640 L604 472 H700 L852 640 Z" fill="#0D0A1A"/>
+            <path d="M470 640 L610 472 H616 L510 640 Z" fill="#100C20" opacity=".7"/>
+            <line x1="652" y1="478" x2="652" y2="632" stroke="#1A1430" stroke-width="3" stroke-dasharray="9 15"/>
+
+            <!-- ═ the far HONEST shop — a single lit window on the horizon ══ -->
+            <g>
+              <rect x="612" y="398" width="82" height="74" fill="#0C0A1C"/>
+              <path d="M610 398 H696 L688 384 H618 Z" fill="#120C22"/>
+              <rect x="624" y="414" width="46" height="42" rx="3" fill="#0B1320"/>
+              <rect class="st-lit" x="624" y="414" width="46" height="42" rx="3" fill="url(#fq-pane)"/>
+              <line class="st-lit-soft" x1="647" y1="414" x2="647" y2="456" stroke="#150D06" stroke-width="2" opacity=".55"/>
+              <line class="st-lit-soft" x1="624" y1="435" x2="670" y2="435" stroke="#150D06" stroke-width="2" opacity=".55"/>
+              <ellipse class="st-pool" cx="647" cy="476" rx="66" ry="15" fill="url(#fq-pool)"/>
+            </g>
+
+            <!-- ═ far COOL violet street-lamp (the brand's other hue) ══════ -->
+            <ellipse cx="150" cy="512" rx="96" ry="24" fill="url(#fq-lamp)" opacity=".5"/>
+            <rect x="145" y="300" width="9" height="214" rx="3" fill="#161127"/>
+            <rect x="120" y="508" width="58" height="9" rx="3" fill="#161127"/>
+            <path d="M149.5 300 q0 -26 30 -26" fill="none" stroke="#161127" stroke-width="8" stroke-linecap="round"/>
+            <circle cx="182" cy="274" r="22" fill="url(#fq-lamp)"/>
+            <path d="M173 268 h18 l-4 16 h-10 z" fill="#221A3C"/>
+            <circle cx="182" cy="274" r="5" fill="#CBBBFF"/>
+
+            <!-- warm light the lantern spills — pool + downward cone -->
+            <path class="st-pool" d="M322 250 L368 250 L458 608 L232 608 Z" fill="url(#fq-pool)" opacity=".5"/>
+            <ellipse class="st-pool" cx="345" cy="560" rx="212" ry="50" fill="url(#fq-pool)"/>
+            <rect class="st-pool" x="288" y="486" width="116" height="122" fill="url(#fq-refl)"/><!-- wet-street reflection -->
+
+            <!-- ═ THE SIGNPOST · the crossroads ════════════════════════════ -->
+            <ellipse cx="301" cy="608" rx="48" ry="10" fill="#0A0714"/>
+            <rect x="294" y="170" width="14" height="438" rx="4" fill="#1A1530"/>
+            <rect x="294" y="170" width="5" height="438" rx="2" fill="#241C40" opacity=".8"/>
+            <circle cx="301" cy="166" r="7" fill="#241C40"/>
+
+            <!-- the DARK arm — a cold maze of promises, never lit -->
+            <g>
+              <path d="M296 234 H196 L172 249 L196 264 H296 Z" fill="#14101F" stroke="#241C38" stroke-width="1.5"/>
+              <path d="M210 249 h13 v-6 h9 v12 h9 v-6 h11 v6 h9" fill="none" stroke="#2E2648" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+
+            <!-- the HONEST arm — warm-lit, points toward the far shop -->
+            <g class="st-lit">
+              <path d="M308 276 H436 L462 292 L436 308 H308 Z" fill="url(#fq-pane)"/>
+              <path d="M308 276 H436 L462 292 L436 308 H308 Z" fill="none" stroke="#150D06" stroke-width="2" opacity=".55"/>
+              <path d="M356 284 l13 8 -13 8" fill="none" stroke="#3A2410" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="330" cy="292" r="3" fill="#3A2410"/>
+            </g>
+
+            <!-- the LANTERN — the warm light source (win point) -->
+            <path d="M308 190 q30 0 37 9" fill="none" stroke="#1A1530" stroke-width="6" stroke-linecap="round"/>
+            <line x1="345" y1="195" x2="345" y2="202" stroke="#241C40" stroke-width="3"/>
+            <path d="M328 202 h34 l-5 -8 h-24 z" fill="#241C40"/>
+            <rect x="326" y="202" width="38" height="60" rx="6" fill="#0B1320"/><!-- dark glass base -->
+            <rect class="st-lit" x="330" y="206" width="30" height="52" rx="4" fill="url(#fq-pane)"/><!-- lit glass -->
+            <circle class="st-lit" cx="345" cy="236" r="10" fill="url(#fq-pool)"/><!-- inner glow -->
+            <path class="st-lit" d="M345 242 q-7 -11 0 -23 q7 12 0 23 z" fill="#FFE6BE"/><!-- flame -->
+            <g class="st-lit-soft" stroke="#B87636" stroke-width="1.6" opacity=".6">
+              <line x1="345" y1="206" x2="345" y2="258"/><line x1="330" y1="232" x2="360" y2="232"/>
+            </g>
+            <rect x="326" y="202" width="38" height="60" rx="6" fill="none" stroke="#150D06" stroke-width="4"/>
+            <rect class="st-lit" x="329" y="205" width="32" height="54" rx="4" fill="none" stroke="#FFD79A" stroke-width="1.2" opacity=".7"/>
+            <path d="M340 262 h10 l-3 8 h-4 z" fill="#241C40"/>
+
+            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
+            <g class="spell-spark" transform="translate(560,250)">
+              <circle class="spark-glow" r="34" fill="url(#fq-glow)"/>
+              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#fq-core)"/>
+              <circle r="2.6" fill="#FFFFFF"/>
+            </g>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
+          <span>A crossroads after dark — <em>one way honest, one a maze of promises.</em> Move the spark; we only light the real one. <span class="badge">Interactive</span></span>
+        </figcaption>
+      </div>
     </div>
   </section>
 
   <!-- ══ DAY TO DAY ══════════════════════════════════════════════════════════ -->
   <section class="section" aria-labelledby="h-daytoday">
     <div class="wrap">
-      <p class="eyebrow">Day to day</p>
+      <p class="eyebrow reveal">Day to day</p>
       <h2 id="h-daytoday" class="reveal">How it <em class="accent">works</em></h2>
       <div style="max-width:46rem;margin-top:1.5rem">
 
         <details class="faq-item reveal" id="q-changes">
           <summary>How do I change my site?</summary>
-          <p><strong>Text us in plain English</strong> — “Add Saturday hours,” “Make the lemon tarts the big photo,” “Raise the haircut price to $30.” We make the change and reply when it&rsquo;s live, usually the same day.</p>
+          <p><strong>Text us in plain English</strong> — &ldquo;Add Saturday hours,&rdquo; &ldquo;Make the lemon tarts the big photo,&rdquo; &ldquo;Raise the haircut price to $30.&rdquo; We make the change and reply when it&rsquo;s live, usually the same day.</p>
           <p>There&rsquo;s no dashboard, no app, and nothing to learn. That&rsquo;s the whole point.</p>
         </details>
 
         <details class="faq-item reveal" id="q-who">
           <summary>Who am I actually working with?</summary>
-          <p><strong>One accountable person — [Your name]</strong> — not a queue or a ticket number. You get a real name and a real number, and the same person answers every time.</p>
+          <p><strong>One accountable person — the same one every time</strong> — not a queue or a ticket number. You get a real person and a real number, and the same person answers every time.</p>
           <p>Everything shown on this site is work we actually built.</p>
         </details>
 
@@ -104,7 +271,7 @@
   <!-- ══ MONEY & OWNERSHIP — the bright room ═════════════════════════════════ -->
   <section class="section daylight" aria-labelledby="h-money">
     <div class="wrap">
-      <p class="eyebrow">Money &amp; ownership</p>
+      <p class="eyebrow reveal">Money &amp; ownership</p>
       <h2 id="h-money" class="reveal">What&rsquo;s <em class="accent">yours</em>, in writing</h2>
       <div style="max-width:46rem;margin-top:1.5rem">
 
@@ -128,7 +295,7 @@
         <details class="faq-item reveal" id="q-cost">
           <summary>What does it cost?</summary>
           <p>There&rsquo;s a rung for every budget: drive it yourself from <strong class="num">$9</strong>/mo, done-for-you at <strong class="num">$89</strong>/mo with <strong class="num">$0</strong> down, own-it builds from <strong class="num">$500</strong> plus a low monthly, up to White Glove Wizardry by application.</p>
-          <p>Every done-for-you plan includes the 30-day risk-free trial. The <a href="/pricing/">pricing page</a> lays out the whole ladder.</p>
+          <p>Every done-for-you plan includes the 30-day risk-free trial. The <a href="/pricing.html">pricing page</a> lays out the whole ladder.</p>
         </details>
 
       </div>
@@ -138,7 +305,7 @@
   <!-- ══ BEING FOUND — the honest ranking answer ═════════════════════════════ -->
   <section class="section" aria-labelledby="h-found">
     <div class="wrap">
-      <p class="eyebrow">Being found</p>
+      <p class="eyebrow reveal">Being found</p>
       <h2 id="h-found" class="reveal">The <em class="accent">honest</em> part</h2>
       <div style="max-width:46rem;margin-top:1.5rem">
 
@@ -168,7 +335,7 @@
         <p>Anything at all — whether your trade&rsquo;s a fit, what a move would take, what a fair price looks like. A plain answer, no sales script: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a></p>
         <div class="actions" style="margin-top:1.25rem">
           <a class="btn primary" href="/start/">Start your site</a>
-          <a class="btn ghost" href="/pricing/">See pricing</a>
+          <a class="btn ghost" href="/pricing.html">See pricing</a>
         </div>
       </div>
     </div>
@@ -189,15 +356,15 @@
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work/">Work</a>
-        <a href="/pricing/">Pricing</a>
-        <a href="/how-it-works/">How it works</a>
-        <a href="/faq/">FAQ</a>
-        <a href="/contact/">Contact</a>
+        <a href="/work.html">Work</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">[Your name] answers — one accountable person, not a queue.</p>
+        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
         <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
       </div>

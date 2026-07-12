@@ -560,4 +560,94 @@ select.input{appearance:none;
   body::before,.nav-toggle,.theme-btn,.skip{display:none}
   body{background:#fff;color:#1A1530}
   .js .reveal{opacity:1;transform:none}
+  .spell-spark,.st-twinkle{display:none}
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   19 · SPELLCAST — the signature visual language
+   "Main Street after dark, one window still glowing."
+
+   A hand-authored nocturne. Everything below is scene-only and INTENTIONALLY
+   nocturnal in BOTH themes — the night street is the brand, it never flips to
+   day. The page chrome around it still themes normally.
+
+   WARM LIGHT is a scene-only pigment (the glow from the window), NOT a UI
+   accent — it never appears on buttons/badges, so the mint/gold discipline
+   upstream is untouched.
+
+   REUSABLE MOTIFS (drop these on any page):
+     .spellstage      cinematic night-street panel; owns --lit (0→1 glow)
+     .spellstreet     the <svg> inside a stage (keeps aspect, fills width)
+     .spell-spark     the roaming four-point sigil that casts the window alight
+     .st-lit / .st-lit-soft / .st-pool   opacity layers driven by --lit
+     .st-twinkle      faint star flicker
+     .stage-caption   the one-line identity caption under a stage
+     .sigil           standalone brand sparkle (glows on hover)
+     .hero-mega       colossal hero headline scale
+   Driven by sourcery.js → wireStorefront(): a spark eases toward the pointer
+   (idle-drifts + breathes when untouched) and --lit tracks its nearness to
+   the window. No pointer / reduced-motion → the window simply stays lit.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* warm window pigments — scene-only, shared by both themes */
+:root{
+  --warm:#FFC27A;      /* lamp-warm amber — the glow that spills from the window */
+  --warm-hi:#FFE6BE;   /* the bulb / hottest highlight */
+  --pane:#F4A657;      /* the lit glass itself */
+}
+
+/* colossal, confident hero headline */
+.hero-mega{font-size:clamp(2.9rem,9vw,6.5rem);line-height:1.02;font-weight:800;
+  letter-spacing:-.03em;max-width:14ch}
+.hero-mega .accent{letter-spacing:-.01em}
+
+/* the stage — a lifted, rounded cinema of the night street */
+.spellstage{--lit:1;position:relative;isolation:isolate;
+  border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--hairline);box-shadow:var(--lift);
+  background:#07050F;   /* stays night in both themes */
+  cursor:crosshair}
+.spellstage::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;
+  border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(124,92,255,.14),
+    inset 0 -60px 90px -40px rgba(0,0,0,.7)}
+.spellstreet{display:block;width:100%;height:auto}
+
+/* opacity layers the spark controls — default fully lit (no-JS friendly) */
+.st-lit{opacity:var(--lit)}
+.st-lit-soft{opacity:calc(.16 + .84*var(--lit))}
+.st-pool{opacity:calc(.05 + .82*var(--lit))}
+
+/* the roaming sigil-spark that casts the window alight */
+.spell-spark{pointer-events:none}
+.spell-spark .spark-glow{transform-box:fill-box;transform-origin:center;
+  animation:spark-breathe 3.2s var(--ease) infinite}
+@keyframes spark-breathe{0%,100%{opacity:.9;transform:scale(1)}50%{opacity:.55;transform:scale(.86)}}
+
+/* faint stars */
+.st-twinkle{animation:twinkle 4s steps(1,end) infinite}
+.st-twinkle:nth-of-type(2n){animation-duration:5.5s;animation-delay:-1.2s}
+.st-twinkle:nth-of-type(3n){animation-duration:6.8s;animation-delay:-2.6s}
+@keyframes twinkle{0%,72%,100%{opacity:.85}80%{opacity:.18}88%{opacity:.9}}
+
+/* the identity caption that sits beneath a stage */
+.stage-caption{margin-top:1rem;display:flex;align-items:center;gap:.7rem;
+  color:var(--muted);font-size:.9rem;line-height:1.4}
+.stage-caption .sigil{flex:0 0 auto}
+.stage-caption em{font-family:var(--font-accent);font-style:italic;
+  color:var(--text);font-size:1.05em;letter-spacing:0}
+
+/* standalone brand sparkle — a reusable mark, gently alive on hover */
+.sigil{display:inline-block;width:1.1em;height:1.1em;vertical-align:-.15em;
+  filter:drop-shadow(0 0 6px rgba(124,92,255,.55));
+  transition:transform .3s var(--ease),filter .3s var(--ease)}
+a:hover .sigil,.sigil:hover{transform:rotate(90deg) scale(1.08);
+  filter:drop-shadow(0 0 10px rgba(255,92,138,.6))}
+
+/* the stage sits in a colossal hero band */
+.hero-stage{margin-top:clamp(2.2rem,5vw,3.4rem)}
+@media (min-width:60rem){ .hero-stage{margin-top:clamp(2.6rem,4vw,3.6rem)} }
+
+@media (prefers-reduced-motion:reduce){
+  .spell-spark .spark-glow,.st-twinkle{animation:none!important}
+  .spellstage{--lit:1!important;cursor:default}
 }
