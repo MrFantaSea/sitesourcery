@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — how-it-works.html · "THE LANTERN WALK"
-     Main Street after dark — four lanterns, four steps, one shop that glows.
+     Two offerings, two flows. The website: you talk, I build, you text a
+     change, I run it — a lit shop at the end of the walk. The Responder: you
+     miss a call, your phone texts the customer back, the job waits for you.
      Self-contained: loads ONLY same-origin style.css + sourcery.js. Every
      graphic is inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
      The only http(s) URLs below are hyperlinks/metadata, never loads.
@@ -13,18 +15,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>How it works — Site Sourcery</title>
-<meta name="description" content="How Site Sourcery works: tell us about your business, we build your custom site, you change it by texting in plain English, and we run it — with a plain monthly note on how it's doing. You own everything. Cancel anytime.">
+<meta name="description" content="How it works, both ways: I hand-build your custom site and run it — you change anything by texting me — and The Responder texts a customer back the second you miss their call, so the job waits for you. You own your site. Cancel the monthly parts anytime.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/how-it-works.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Site Sourcery">
 <meta property="og:title" content="How it works — Site Sourcery">
-<meta property="og:description" content="Tell us about your business, we build your site, you change it by texting, and we run it for you. You own everything. Cancel anytime.">
+<meta property="og:description" content="We hand-build your site and run it — you change it by texting us. And The Responder texts a customer back the moment you miss their call. Local, responsive, and accountable.">
 <meta property="og:url" content="https://sitesourcery.com/how-it-works.html">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://sitesourcery.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How it works — Site Sourcery">
+<meta name="twitter:description" content="We build your site and run it (text any change). The Responder catches the calls you miss. Local and accountable.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"HowTo","name":"How Site Sourcery works","description":"Four steps: tell us about your business, we build your custom site, you change it by texting in plain English, and we run it — with a plain monthly note on how it's doing.","step":[{"@type":"HowToStep","name":"Tell us about your business","text":"A conversation, not a form. What you do, who calls you, what you want more of."},{"@type":"HowToStep","name":"We build your custom site","text":"Designed for your trade, written in plain words, built to be findable and citable. You look it over, we polish, it goes live."},{"@type":"HowToStep","name":"Change it by texting","text":"Send a plain-English text and it's done, usually same day. No dashboard, no logins, nothing to learn."},{"@type":"HowToStep","name":"We run it","text":"Hosting, updates, and changes handled — plus a plain monthly note on calls, bookings, and where you stand."}]}
+{"@context":"https://schema.org","@type":"WebPage","name":"How it works — Site Sourcery","url":"https://sitesourcery.com/how-it-works.html","description":"How a Site Sourcery build runs: you tell us about the business, we build a custom draft by hand, you shape it, and you own it on the final payment. Plus how The Responder texts missed callers back.","publisher":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","telephone":"+1-321-788-2555","email":"hello@sitesourcery.com"}}
 </script>
 <script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
@@ -50,11 +58,19 @@
   .walkstage{--n1:1!important;--n2:1!important;--n3:1!important;
              --n4:1!important;--n5:1!important;cursor:default}
 }
+/* the two-flow route header — a numbered lane label */
+.flow-tag{display:inline-flex;align-items:center;gap:.6rem;
+  font-family:var(--font-display);font-weight:700;font-size:.9rem;letter-spacing:.02em;
+  color:var(--text)}
+.flow-tag .n{display:inline-grid;place-items:center;width:1.9rem;height:1.9rem;
+  border-radius:999px;background:var(--charm);color:var(--on-charm);
+  font-family:var(--font-num);font-weight:650;font-size:.95rem}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+<!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
 <nav class="nav" aria-label="Main">
   <div class="wrap nav-inner">
     <a class="brand" href="/">
@@ -65,9 +81,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/">Home</a>
       <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/automation.html">The Hive</a>
+      <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
@@ -79,12 +96,12 @@
   <!-- ══ HERO — the 5-second answer + the signature "Lantern Walk" ═════════ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow reveal">How it works</p>
-      <h1 class="hero-mega reveal">You talk. We do <em class="accent">the rest</em>.</h1>
-      <p class="lede reveal">Tell us about your business. We build your site, put it online, and run it — and when you want something changed, you text us. No dashboard, no logins, nothing to learn. <strong>You own all of it, and you can cancel anytime.</strong></p>
+      <p class="eyebrow reveal">How it works · both ways</p>
+      <h1 class="hero-mega reveal">You talk. I do <em class="accent">the rest</em>.</h1>
+      <p class="lede reveal">Two offerings, one studio behind both. We hand-build your website and run it — when you want a change, you just text us. And if you want it, I set up <strong>The Responder</strong>, so the second you miss a call your phone texts the customer back and the job waits for you. <strong>You own your site, and the monthly parts cancel anytime.</strong></p>
       <div class="actions reveal">
         <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="/pricing.html">See pricing</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
 
       <!-- ── THE LANTERN WALK · signature interactive nocturne ────────────────
@@ -95,7 +112,7 @@
            motion / no JS → the whole street is simply lit. Pure inline SVG. -->
       <div class="hero-stage reveal">
         <figure class="walkstage"
-                role="img" aria-label="A dark Main Street path lined with four lanterns leading to a single warm-lit shop. Step one: tell us about your business. Step two: we build your custom site. Step three: you text a change. Step four: we run it — and the shop at the end of the path glows.">
+                role="img" aria-label="A dark Main Street path lined with four lanterns leading to a single warm-lit shop. Step one: tell me about your business. Step two: I build your custom site. Step three: you text a change. Step four: I run it — and the shop at the end of the path glows.">
           <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
                preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
             <defs>
@@ -195,18 +212,18 @@
             <path d="M880 288 l2.8 8 8 2.8 -8 2.8 -2.8 8 -2.8 -8 -8 -2.8 8 -2.8 z" fill="url(#lw-core)" style="opacity:var(--n5)"/>
 
             <!-- ═ THE PATH · a dark bed with a lit trail that follows the walk ═
-                 #lw-road is the static bed; #lw-walk is the geometry the script
-                 samples AND the glowing trail (its dash reveals up to the spark).
-                 Without JS the trail is drawn whole — the finished, lit street. -->
-            <path id="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
+                 .lw-road are the two static bed layers; #lw-walk is the geometry
+                 the script samples AND the glowing trail (its dash reveals up to
+                 the spark). Without JS the trail is drawn whole — a lit street. -->
+            <path class="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
                   fill="none" stroke="#0F0A1C" stroke-width="30" stroke-linecap="round"/>
-            <path id="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
+            <path class="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
                   fill="none" stroke="#181233" stroke-width="16" stroke-linecap="round" opacity=".8"/>
             <path id="lw-walk" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
                   fill="none" stroke="url(#lw-trail)" stroke-width="5" stroke-linecap="round"/>
 
             <!-- ═ THE FOUR LANTERNS · one per step, near→far ═══════════════════ -->
-            <!-- Lantern 1 — Tell us -->
+            <!-- Lantern 1 — Tell me -->
             <g>
               <ellipse cx="300" cy="560" rx="72" ry="17" fill="url(#lw-lamp)" style="opacity:var(--n1)"/>
               <rect x="296" y="490" width="8" height="72" rx="3" fill="#17122A"/>
@@ -220,7 +237,7 @@
               <text x="300" y="416" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" fill="#3C3660">1</text>
               <text x="300" y="416" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" fill="#CDB8FF" style="opacity:var(--n1)">1</text>
             </g>
-            <!-- Lantern 2 — We build -->
+            <!-- Lantern 2 — I build -->
             <g>
               <ellipse cx="500" cy="494" rx="60" ry="14" fill="url(#lw-lamp)" style="opacity:var(--n2)"/>
               <rect x="497" y="431" width="7" height="64" rx="3" fill="#17122A"/>
@@ -248,7 +265,7 @@
               <text x="690" y="332" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="800" fill="#3C3660">3</text>
               <text x="690" y="332" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="800" fill="#CDB8FF" style="opacity:var(--n3)">3</text>
             </g>
-            <!-- Lantern 4 — We run it -->
+            <!-- Lantern 4 — I run it -->
             <g>
               <ellipse cx="858" cy="402" rx="46" ry="10" fill="url(#lw-lamp)" style="opacity:var(--n4)"/>
               <rect x="855" y="353" width="6" height="50" rx="3" fill="#17122A"/>
@@ -274,72 +291,224 @@
         </figure>
         <figcaption class="stage-caption">
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>From your first hello to a shop that glows — <em>four lanterns, four steps.</em> Drag across to walk the path. <span class="badge">Interactive</span></span>
+          <span>The website walk — <em>four lanterns, four steps,</em> to a shop that glows.<span class="stage-hint"> Drag across to walk the path. <span class="badge">Interactive</span></span></span>
         </figcaption>
       </div>
     </div>
   </section>
 
-  <!-- ═══ THE FOUR STEPS ═════════════════════════════════════════════════ -->
+  <!-- ═══ FLOW ONE · THE WEBSITE ═════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
-      <p class="eyebrow reveal">The whole process</p>
+      <p class="flow-tag reveal" style="margin-bottom:.9rem"><span class="n">1</span> Getting found · your website</p>
       <h2 class="reveal">Four steps. Yours is the <em class="accent">easy</em> one.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Buy the build once and it&rsquo;s yours. From your first hello to a site that&rsquo;s live, the work is mine.</p>
       <div class="grid cols-2" style="margin-top:2rem">
         <div class="card reveal">
           <p class="eyebrow">Step 1 · You</p>
-          <h3>Tell us about your business</h3>
-          <p>A conversation, not a form. What you do, who calls you, what you want more of. Bring photos if you have them — <strong>we handle everything else.</strong></p>
+          <h3>Tell me about your business</h3>
+          <p>A conversation, not a form. What you do, who calls you, what you want more of. Bring photos if you have them — <strong>I handle everything else.</strong></p>
         </div>
         <div class="card reveal">
-          <p class="eyebrow">Step 2 · Us</p>
-          <h3>We build your custom site</h3>
-          <p>Designed for your trade, written in plain words, and <strong>built to be findable and citable</strong> — your best shot at being found and recommended. You look it over, we polish, it goes live.</p>
+          <p class="eyebrow">Step 2 · Me</p>
+          <h3>I build your custom site</h3>
+          <p>Designed by hand for your trade — never a template — and written so <strong>you come up when someone nearby asks their phone for your trade</strong>: your town, hours and services spelled out where search can read them. You look it over, I polish, it goes live.</p>
         </div>
         <div class="card reveal">
           <p class="eyebrow">Step 3 · A text</p>
-          <h3>Change anything by texting us</h3>
-          <p>New hours, new price, new photo — send it like you'd text a friend and <strong>it's done, usually the same day.</strong> There is no app to learn. That's the point.</p>
+          <h3>Change anything by texting me</h3>
+          <p>New hours, new price, new photo — send it like you&rsquo;d text a friend and <strong>it&rsquo;s done, usually the same day.</strong> There&rsquo;s no app to learn. <em>(Text-to-change comes with a care plan, from $29/mo.)</em></p>
         </div>
         <div class="card reveal">
           <p class="eyebrow">Step 4 · Every month</p>
-          <h3>We run it — and prove it</h3>
-          <p>Hosting, updates, security, changes: handled. Once a month you get <strong>a plain note on what your site actually did.</strong> No charts to decode.</p>
+          <h3>I run it — and prove it</h3>
+          <p>Hosting, updates, security, changes: handled. On a care plan you also get <strong>a plain note each month on what your site actually did.</strong> No charts to decode.</p>
         </div>
       </div>
 
       <!-- the texting demo — honestly labeled -->
       <div class="demo reveal" style="margin-top:3rem">
-        <div class="demo-phone" aria-label="A text conversation: you send a plain-English request, we reply when it's done">
+        <div class="demo-phone" aria-label="A text conversation: you send a plain-English request, I reply when it's done">
           <p class="bubble sent" data-type='["Add Saturday hours — 9 to 1.","Swap the big photo for the new van.","Put the fall special on the front page."]'>Add Saturday hours — 9 to 1.</p>
           <p class="bubble">Done — it&rsquo;s live. Anything else?</p>
         </div>
         <div>
-          <span class="badge">Demonstration</span>
+          <span class="badge">A demonstration</span>
           <h3 style="margin-top:.9rem">This is the whole interface.</h3>
-          <p style="color:var(--muted);margin-top:.5rem">No login. No control panel. No &ldquo;how do I&hellip;&rdquo; Your website changes because you said so, in your own words — and a real person confirms when it&rsquo;s done.</p>
+          <p style="color:var(--muted);margin-top:.5rem">No login. No control panel. No &ldquo;how do I&hellip;&rdquo; Your website changes because you said so, in your own words — and I confirm when it&rsquo;s done. That&rsquo;s the point.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ═══ FLOW TWO · THE RESPONDER ════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="flow-tag reveal" style="margin-bottom:.9rem"><span class="n">2</span> Never missing a call · The Responder</p>
+      <h2 class="reveal">You miss the call. It <em class="accent">catches</em> it.</h2>
+      <p class="lede reveal" style="margin-top:1rem">The Responder is the first app of the Hive, our AI integration &amp; automation menu. The moment a call goes unanswered, your phone texts the customer back — so they wait for you instead of dialing the next name in their search.</p>
+
+      <!-- the missed-call scene — a sleeping shop, a phone awake, a text sent -->
+      <div class="hero-stage reveal" style="margin-top:2.25rem">
+        <figure class="spellstage" style="--lit:1"
+                role="img" aria-label="Night. A dark, sleeping shop. Beside it a phone glows awake: a missed call arrives and a warm text-back bubble is sent — a little spark hovering by the phone.">
+          <svg class="spellstreet" viewBox="0 0 1200 460" width="1200" height="460" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="fm-sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0B0716"/><stop offset=".6" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
+              </linearGradient>
+              <radialGradient id="fm-moon" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="fm-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".42"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="fm-phone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#211A3C"/><stop offset="1" stop-color="#160F28"/></linearGradient>
+              <linearGradient id="fm-bub" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient>
+              <radialGradient id="fm-core" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/></radialGradient>
+            </defs>
+
+            <!-- sky + moon -->
+            <rect width="1200" height="460" fill="url(#fm-sky)"/>
+            <circle cx="240" cy="96" r="200" fill="url(#fm-moon)"/>
+            <circle cx="240" cy="96" r="36" fill="#E9E3FF" opacity=".9"/>
+            <circle cx="227" cy="86" r="5" fill="#CFC6F0" opacity=".5"/><circle cx="256" cy="108" r="4" fill="#CFC6F0" opacity=".45"/>
+            <g fill="#D6CDF7">
+              <circle class="st-twinkle" cx="120" cy="60" r="1.4"/><circle class="st-twinkle" cx="430" cy="70" r="1.2"/>
+              <circle class="st-twinkle" cx="560" cy="52" r="1.5"/><circle class="st-twinkle" cx="150" cy="150" r="1.1"/>
+              <circle class="st-twinkle" cx="700" cy="70" r="1.2"/><circle class="st-twinkle" cx="1090" cy="70" r="1.3"/>
+            </g>
+
+            <!-- ground -->
+            <rect x="0" y="330" width="1200" height="130" fill="#08060F"/>
+            <rect x="0" y="330" width="1200" height="1.5" fill="#171130" opacity=".7"/>
+
+            <!-- ═ the sleeping shop (dark, "zzz") ═ -->
+            <g>
+              <rect x="120" y="150" width="300" height="180" fill="#100B20"/>
+              <path d="M112 150 H428 L414 122 H126 Z" fill="#160F26"/>
+              <rect x="150" y="196" width="96" height="110" rx="5" fill="#1A142E"/>
+              <rect x="264" y="196" width="120" height="80" rx="5" fill="#1A142E"/>
+              <rect x="300" y="284" width="48" height="46" fill="#150F28"/>
+              <!-- faint cold window mullions -->
+              <g stroke="#241C3C" stroke-width="2"><line x1="198" y1="196" x2="198" y2="306"/><line x1="150" y1="248" x2="246" y2="248"/></g>
+              <!-- the shop sleeps -->
+              <g fill="#3A3160" font-family="Georgia,serif" font-style="italic">
+                <text x="300" y="150" font-size="30">z</text><text x="330" y="126" font-size="22">z</text><text x="354" y="108" font-size="16">z</text>
+              </g>
+            </g>
+
+            <!-- ═ the phone, awake ═ -->
+            <circle cx="820" cy="212" r="180" fill="url(#fm-glow)"/>
+            <rect x="726" y="70" width="188" height="272" rx="30" fill="url(#fm-phone)" stroke="#3A3160" stroke-width="2"/>
+            <rect x="746" y="104" width="148" height="204" rx="12" fill="#0C0A1C"/>
+            <rect x="788" y="84" width="64" height="8" rx="4" fill="#3A3160"/>
+
+            <!-- missed call row -->
+            <g font-family="Arial,sans-serif">
+              <circle cx="778" cy="140" r="15" fill="#2A2350"/>
+              <path d="M771 135 a6 6 0 0 1 6 -1 l4 5 -4 4 a12 12 0 0 0 6 6 l4 -4 5 4 a6 6 0 0 1 -1 6 c-10 4 -22 -7 -19 -18 z" fill="#B8B2D4"/>
+              <rect x="804" y="132" width="80" height="7" rx="3.5" fill="#4A4270"/>
+              <rect x="804" y="146" width="52" height="6" rx="3" fill="#39335A"/>
+            </g>
+
+            <!-- the text-back bubble the Responder sent -->
+            <g>
+              <rect x="770" y="188" width="118" height="70" rx="16" fill="url(#fm-bub)"/>
+              <path d="M796 258 l-12 20 l28 -14 z" fill="url(#fm-bub)"/>
+              <rect x="784" y="208" width="90" height="7" rx="3.5" fill="#FFFFFF" opacity=".92"/>
+              <rect x="784" y="224" width="68" height="7" rx="3.5" fill="#FFFFFF" opacity=".7"/>
+              <rect x="784" y="240" width="44" height="7" rx="3.5" fill="#FFFFFF" opacity=".5"/>
+            </g>
+
+            <!-- the little spark hovering by the phone -->
+            <g class="spell-spark" transform="translate(690,150)">
+              <circle class="spark-glow" r="26" fill="url(#fm-glow)"/>
+              <path d="M0 -13 L3.4 -3.4 L13 0 L3.4 3.4 L0 13 L-3.4 3.4 L-13 0 L-3.4 -3.4 Z" fill="url(#fm-core)"/>
+              <circle r="2.3" fill="#FFFFFF"/>
+            </g>
+
+            <!-- caption sigil at the shop sign -->
+            <line x1="120" y1="176" x2="156" y2="176" stroke="#2A2038" stroke-width="3" stroke-linecap="round"/>
+            <rect x="126" y="176" width="44" height="30" rx="6" fill="#140E22" stroke="#2E2440" stroke-width="1.3"/>
+            <path d="M148 183 l2.4 6.8 6.8 2.4 -6.8 2.4 -2.4 6.8 -2.4 -6.8 -6.8 -2.4 6.8 -2.4 z" fill="#2E2650"/>
+          </svg>
+        </figure>
+        <figcaption class="stage-caption">
+          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG2)"/></svg>
+          <span>The shop sleeps — <em>the phone answers anyway.</em> A missed call goes out as a warm text-back in seconds.</span>
+        </figcaption>
+      </div>
+
+      <!-- the three beats of the Responder flow -->
+      <div class="grid cols-3" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <p class="eyebrow">Beat 1 · The call</p>
+          <h3>You can&rsquo;t pick up</h3>
+          <p>You&rsquo;re on a ladder, under a sink, mid-cut. The call rings out and goes to voicemail — the moment most jobs quietly slip to the next name in the search.</p>
+        </div>
+        <div class="card reveal">
+          <p class="eyebrow">Beat 2 · The text-back</p>
+          <h3>Your phone texts them back</h3>
+          <p>Within seconds, the caller gets a warm message in your voice — &ldquo;Sorry I missed you, I&rsquo;ll call you right back.&rdquo; They know a real person saw them, so they hang on.</p>
+        </div>
+        <div class="card reveal">
+          <p class="eyebrow">Beat 3 · The job</p>
+          <h3>The job waits for you</h3>
+          <p>You finish what you&rsquo;re doing and call back on your own time. The customer&rsquo;s still there — and the work is yours, not the competitor&rsquo;s.</p>
+        </div>
+      </div>
+
+      <!-- the other Hive apps add -->
+      <div class="does reveal" style="margin-top:1.75rem">
+        <div class="do">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h5l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v5a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg>
+          <h4>Miss a call, they get a text</h4>
+          <p>The core of The Responder — $99/mo, $0 down, works with the number you already have. Stack it with the rest of the Hive and it gets cheaper.</p>
+        </div>
+        <div class="do">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.5-.8z"/></svg>
+          <h4>Reviews, replied</h4>
+          <p>I draft a reply to every review — warm for the good, calm for the rough — ready for you to send. <em>(The Review engine &mdash; another Hive app.)</em></p>
+        </div>
+        <div class="do">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.5 21a2 2 0 0 1-3 0"/></svg>
+          <h4>Reminders that stick</h4>
+          <p>Appointment reminders go out so fewer people forget you&rsquo;re coming. <em>(Comes with Online booking &mdash; another Hive app.)</em></p>
+        </div>
+      </div>
+
+      <!-- the REAL-number demo — never a fake animation -->
+      <div class="callout reveal" style="margin-top:2.5rem">
+        <p class="eyebrow" style="margin:0">Try it right now — a real number</p>
+        <a class="big-tel" href="tel:+13217882555"><span class="live-dot" aria-hidden="true"></span>(321)&nbsp;788-2555</a>
+        <p style="margin:0">Call <strong>(321) 788-2555</strong> right now — don&rsquo;t hang around. Ring it, let it go like you&rsquo;re busy, and the text-back lands on your phone a few seconds later. That&rsquo;s the actual system, not a slick fake — exactly what your customer would get.</p>
+        <div class="actions">
+          <a class="btn primary" href="/automation.html">See The Responder</a>
+          <a class="btn ghost" href="/pricing.html">See pricing</a>
+        </div>
+      </div>
+      <p class="terms reveal" style="max-width:44em">Month-to-month, cancel anytime. We run this system ourselves — so if it ever misbehaves, you have a direct line, not a call center.</p>
     </div>
   </section>
 
   <!-- ═══ THE DEAL — daylight ════════════════════════════════════════════ -->
   <section class="section daylight" id="the-operator">
     <div class="wrap">
-      <p class="eyebrow reveal">The deal</p>
+      <p class="eyebrow reveal">The deal, either way</p>
       <h2 class="reveal">Done for you. Owned <em class="accent">by you</em>.</h2>
       <div class="grid cols-3" style="margin-top:2rem">
         <div class="card reveal">
-          <h3>We&rsquo;re the labor</h3>
-          <p>Building, hosting, updates, changes — the whole job, done for you by <strong>one accountable person</strong>, not a ticket queue.</p>
+          <h3>We do the work</h3>
+          <p>Building, hosting, updates, changes, the missed-call text-back — the whole job, handled <strong>end to end by the studio</strong>, never handed off to a ticket queue.</p>
         </div>
         <div class="card reveal">
-          <h3>You own everything</h3>
-          <p>Your domain, your design, your words and photos. <strong>Leave anytime and take it all with you</strong> — we&rsquo;ll even help you move it.</p>
+          <h3>You own your site</h3>
+          <p>Your domain, your design, your words and photos. <strong>Leave anytime and take it all with you</strong> — I&rsquo;ll even help you move it.</p>
         </div>
         <div class="card reveal">
           <h3>Cancel anytime</h3>
-          <p>No contracts, no exit fees, one tap. <strong>We keep your business by being worth keeping</strong> — never by locking the door.</p>
+          <p>The build is yours once you buy it. Care and the Hive apps are month-to-month — <strong>no contracts, no exit fees. One text and it&rsquo;s done.</strong></p>
         </div>
       </div>
     </div>
@@ -348,31 +517,61 @@
   <!-- ═══ THE MONTHLY NOTE ═══════════════════════════════════════════════ -->
   <section class="section" id="the-meter">
     <div class="wrap">
-      <p class="eyebrow reveal">The monthly note</p>
+      <p class="eyebrow reveal">The Meter · the monthly note</p>
       <h2 class="reveal">Proof, once a <em class="accent">month</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">One plain-English note: how many people called, how many booked, where you stand when neighbors go looking. Nothing to log into — it comes to you.</p>
-      <div class="card reveal" style="margin-top:2rem;max-width:38rem">
-        <span class="badge">Sample note</span>
-        <p style="margin-top:.9rem">&ldquo;Your June: <span class="num">14</span> calls from the site, <span class="num">6</span> booked. The water-heater page was your most-visited. You&rsquo;re showing up when people nearby search for emergency plumbers. Slow week around the 4th — that&rsquo;s normal.&rdquo;</p>
+      <p class="lede reveal" style="margin-top:1rem">On the Care plan ($59/mo) and up, I send one short note a month with your real numbers — so you never wonder what you&rsquo;re paying for. Nothing to log into; it comes to you.</p>
+      <div class="meter reveal" style="margin-top:2rem;max-width:40rem;--mint:var(--text)">
+        <header><span>A sample month, in one note</span> <span class="badge">Sample — not real numbers</span></header>
+        <div class="cells">
+          <div class="stat"><span class="num">11</span><span class="stat-label">calls from the site</span></div>
+          <div class="stat"><span class="num">5</span><span class="stat-label">jobs booked</span></div>
+          <div class="stat"><span class="num">3</span><span class="stat-label">new reviews</span></div>
+        </div>
+        <p class="terms">And beside the numbers, a few honest lines: what I changed for you that month, what went quiet and why, what I&rsquo;m watching. A slow month shows up too — with what I&rsquo;m doing about it.</p>
       </div>
-      <p class="reveal" style="color:var(--muted);font-size:.875rem;margin-top:1rem">Sample shown. Your note reports your real numbers. Results vary by trade and town — we show you yours instead of promising anyone&rsquo;s.</p>
+      <div class="grid cols-3" style="margin-top:1.5rem">
+        <div class="card reveal"><h3>Calls</h3><p>Taps on your call button. <strong>Counted, not guessed.</strong></p></div>
+        <div class="card reveal"><h3>Booked</h3><p>You tell me which calls became work. <strong>I never assume</strong> — or round up.</p></div>
+        <div class="card reveal"><h3>Reviews</h3><p>Real ones from real customers. <strong>I never write them.</strong></p></div>
+      </div>
+      <p class="terms reveal" style="margin-top:1.25rem;max-width:42em">A sample, not a promise — results vary by trade and town, and I never guarantee anyone&rsquo;s numbers. No puffed-up &ldquo;views,&rdquo; no mystery scores: every figure is a real thing that happened.</p>
     </div>
   </section>
 
-  <!-- ═══ CLOSING CTA ════════════════════════════════════════════════════ -->
+  <!-- ═══ CROSS-SELL + CLOSING CTA ═══════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
+      <p class="eyebrow reveal">Both doors, one studio</p>
       <h2 class="reveal">Ready when <em class="accent">you</em> are.</h2>
-      <p class="lede reveal" style="margin-top:1rem">It starts with a conversation about your business. Every done-for-you plan comes with a 30-day risk-free trial and one-tap cancel.</p>
+      <p class="lede reveal" style="margin-top:1rem">Most owners take both: a site that brings the calls in, and The Responder so none of them slip away. Start with either — I&rsquo;ll help you fit the other in when you&rsquo;re ready.</p>
+
+      <div class="grid cols-2 reveal" style="margin-top:2.5rem">
+        <div class="card">
+          <h3>Getting a site?</h3>
+          <p>Want the calls it brings in answered too? Add The Responder so a missed call still becomes a booked job.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/automation.html">Add The Responder</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Here for The Responder?</h3>
+          <p>Want a site to match — one that makes the phone ring in the first place? I&rsquo;ll build you one.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/pricing.html">See website pricing</a>
+          </div>
+        </div>
+      </div>
+
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="/contact.html">Talk to a person</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
     </div>
   </section>
 
 </main>
 
+<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
 <footer class="footer">
   <div class="wrap">
     <div class="footer-grid">
@@ -381,22 +580,25 @@
           <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
           <span class="brand-name">Site&nbsp;Sourcery</span>
         </a>
-        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
-        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
+        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work.html">Work</a>
         <a href="/pricing.html">Pricing</a>
+        <a href="/automation.html">The Hive</a>
         <a href="/how-it-works.html" aria-current="page">How it works</a>
+        <a href="/about.html">About</a>
         <a href="/faq.html">FAQ</a>
+        <a href="/terms.html">Terms</a>
         <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
+        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
     <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>

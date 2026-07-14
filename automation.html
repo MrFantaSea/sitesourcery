@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SITE SOURCERY — automation.html · "SPELLCAST"
+     THE HIVE — AI integration & automation. The Responder is the flagship
+     app; this page is the hive around it: booking, reviews, after-hours
+     answering, follow-ups, getting paid — stack more, pay less, with the
+     interactive Build-your-hive comb. Ladder: 2=20% · 3=25%+half setups ·
+     4=20% · all five = flat $219/mo. (2=10% · 3=15%+half app setups)
+     Outcomes only — the machinery underneath is never named (white-label).
+     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
+     graphics inline SVG. No CDNs, no fonts, no trackers, no fetch.
+     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Hive — six apps, exactly what each does · Site Sourcery</title>
+<meta name="description" content="The Hive: pick the apps your shop needs — missed-call text-back, booking, reviews, after-hours answers, follow-ups, getting paid. Stack more, pay less: two apps 10% off, the whole hive a flat $219/mo. Set up in your name and run by a real local person.">
+<meta name="theme-color" content="#0B0912">
+<link rel="canonical" href="https://sitesourcery.com/automation.html">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Site Sourcery">
+<meta property="og:title" content="The Hive — automation, stacked your way">
+<meta property="og:description" content="Pick your apps: missed calls answered, booking filled, reviews asked, follow-ups sent, invoices chased. Stack more, pay less — the whole hive is a flat $219/mo. Month-to-month, cancel anytime.">
+<meta property="og:url" content="https://sitesourcery.com/automation.html">
+<meta property="og:image" content="https://sitesourcery.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Hive — Site Sourcery">
+<meta name="twitter:description" content="Stack the apps your shop needs — the whole hive runs for a flat $219/mo. Month-to-month.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Service","name":"The Hive — AI integration & automation, Site Sourcery","serviceType":"Missed-call text-back, online booking, review engine, after-hours website answering, customer follow-ups, invoicing setup, custom automation","provider":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","telephone":"+1-321-788-2555"},"areaServed":"Local & Main-Street businesses","url":"https://sitesourcery.com/automation.html","description":"Working automations for small businesses — set up in your name, tested with you, and run month-to-month by a real, local, accountable person. Never a bot pretending to be human.","offers":[
+{"@type":"Offer","name":"The Responder","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"99","description":"$99/month, $0 down"}},
+{"@type":"Offer","name":"Online booking","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"29","description":"$200 setup, then $29/month"}},
+{"@type":"Offer","name":"Review engine","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"69","description":"$150 setup, then $69/month"}},
+{"@type":"Offer","name":"After-hours site answering","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"69","description":"$250 setup, then $69/month"}},
+{"@type":"Offer","name":"Customer follow-ups","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"49","description":"$150 setup, then $49/month"}},
+{"@type":"Offer","name":"Getting paid","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"200","description":"$200 one-time setup"}},
+{"@type":"Offer","name":"The whole Hive","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"199","description":"All five apps, flat $219/month"}}]}
+</script>
+<link rel="stylesheet" href="style.css">
+<script src="sourcery.js" defer></script>
+<style>
+/* page-scoped: menu sigils + truenames (mirrors pricing.html). System CSS untouched. */
+.tier-sigil{width:30px;height:30px;flex:0 0 auto;opacity:.85;
+  transition:opacity .3s var(--ease),filter .3s var(--ease),transform .3s var(--ease)}
+.tier-sigil .disc{fill:var(--surface-2);stroke:var(--hairline);stroke-width:1}
+.price-card:hover .tier-sigil,.price-card:focus-within .tier-sigil{
+  opacity:1;filter:drop-shadow(0 0 8px rgba(124,92,255,.5));transform:scale(1.06)}
+.truename{font-family:var(--font-accent);font-style:italic;font-weight:400;
+  letter-spacing:0;color:var(--muted);font-size:1.08rem;
+  -webkit-text-fill-color:currentColor}
+.step-glyph{width:30px;height:30px;margin-bottom:.9rem;flex:0 0 auto}
+
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- one shared charm gradient for every sigil (as pricing declares charmG once) -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;pointer-events:none"><defs><linearGradient id="charmG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs></svg>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
+      <span class="brand-name">Site&nbsp;Sourcery</span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <a class="nav-link" href="/">Home</a>
+      <a class="nav-link" href="/pricing.html">Pricing</a>
+      <a class="nav-link" href="/automation.html" aria-current="page">The Hive</a>
+      <a class="nav-link" href="/terms.html">Terms</a>
+      <a class="nav-link" href="/contact.html">Contact</a>
+      <a class="btn primary nav-cta" href="/start/">Start your site</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+
+  <!-- ══ HERO — the workshop ══════════════════════════════════════════════ -->
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow reveal">AI integration &amp; automation</p>
+      <h1 class="hero-mega reveal">Meet <em class="accent">the Hive</em>.</h1>
+      <p class="lede reveal">Six apps that handle the chores of running a shop — missed calls, booking, reviews, after-hours questions, follow-ups, invoices. Pick what you need: I set each one up in your name, test it with you, and run it. Stack more and each costs less.</p>
+      <div class="actions reveal">
+        <a class="btn primary" href="/start/">Name the chore</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+      </div>
+      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">No contracts — start or stop any app whenever you like; setups are paid once. Your number, your accounts, your data stay yours. Nothing here pretends to be a person — the software answers instantly, and I follow up for real.</p>
+
+      <!-- ── THE WORKSHOP · the shop's star and its orbiting familiars (inline SVG, gentle SMIL pulse only) ── -->
+      <figure class="reveal" style="max-width:640px;margin:2.6rem auto 0;display:block" role="img" aria-label="A glowing four-pointed star — the shop — with six small orbs orbiting it on luminous threads: a phone, a calendar, a review star, a crescent moon, a letter, and a coin. The six Hive apps at work.">
+        <svg viewBox="0 0 1000 520" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+          <defs>
+            <radialGradient id="au-halo" cx="50%" cy="50%" r="55%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".3"/><stop offset="50%" stop-color="#7C5CFF" stop-opacity=".08"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
+            <linearGradient id="au-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5C8A"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
+            <filter id="au-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <rect width="1000" height="520" fill="url(#au-halo)"/>
+          <g fill="#C8BEFF"><circle cx="140" cy="80" r="2" opacity=".7"/><circle cx="250" cy="420" r="1.4" opacity=".5"/><circle cx="850" cy="90" r="2" opacity=".7"/><circle cx="890" cy="380" r="1.5" opacity=".5"/><circle cx="500" cy="34" r="1.5" opacity=".55"/><circle cx="120" cy="300" r="1.3" opacity=".45"/><circle cx="640" cy="60" r="1.2" opacity=".4"/></g>
+          <g transform="translate(500 260)">
+            <circle r="176" fill="none" stroke="url(#au-arc)" stroke-width="1.2" stroke-dasharray="3 9" opacity=".5">
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="120s" repeatCount="indefinite"/>
+            </circle>
+            <!-- threads: shop → familiars -->
+            <g stroke="url(#au-arc)" stroke-width="1.4" opacity=".45" filter="url(#au-glow)">
+              <line x1="0" y1="0" x2="0" y2="-176"/><line x1="0" y1="0" x2="152" y2="-88"/><line x1="0" y1="0" x2="152" y2="88"/><line x1="0" y1="0" x2="0" y2="176"/><line x1="0" y1="0" x2="-152" y2="88"/><line x1="0" y1="0" x2="-152" y2="-88"/>
+              <animate attributeName="opacity" values=".3;.6;.3" dur="7s" repeatCount="indefinite"/>
+            </g>
+            <!-- the shop: the brand star, haloed -->
+            <g filter="url(#au-glow)">
+              <circle r="52" fill="#141026" stroke="url(#au-arc)" stroke-width="2"/>
+              <path d="M0,-30 L6.7,-6.7 L30,0 L6.7,6.7 L0,30 L-6.7,6.7 L-30,0 L-6.7,-6.7 Z" fill="url(#au-arc)"/>
+            </g>
+            <!-- the familiars: six orbs, each with its glyph -->
+            <g filter="url(#au-glow)">
+              <g transform="translate(0 -176)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><rect x="-8" y="-13" width="16" height="26" rx="4"/><line x1="-3" y1="9" x2="3" y2="9"/></g></g>
+              <g transform="translate(152 -88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><rect x="-12" y="-10" width="24" height="22" rx="3"/><line x1="-12" y1="-3" x2="12" y2="-3"/><line x1="-6" y1="-14" x2="-6" y2="-8"/><line x1="6" y1="-14" x2="6" y2="-8"/></g></g>
+              <g transform="translate(152 88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><path d="M0,-12 L3.7,-3.7 L13,-2.5 L6,4 L8,13 L0,8.5 L-8,13 L-6,4 L-13,-2.5 L-3.7,-3.7 Z" fill="none" stroke="#C8BEFF" stroke-width="2" stroke-linejoin="round"/></g>
+              <g transform="translate(0 176)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><path d="M4,-13 A13,13 0 1 0 13,4 A10,10 0 0 1 4,-13 Z" fill="none" stroke="#C8BEFF" stroke-width="2.2" stroke-linejoin="round"/></g>
+              <g transform="translate(-152 88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linejoin="round"><rect x="-13" y="-9" width="26" height="18" rx="3"/><path d="M-13,-9 L0,2 L13,-9"/></g></g>
+              <g transform="translate(-152 -88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><circle r="12"/><line x1="0" y1="-6" x2="0" y2="6"/><line x1="-4" y1="-6" x2="4" y2="-6"/><line x1="-4" y1="6" x2="4" y2="6"/></g></g>
+            </g>
+          </g>
+        </svg>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ══ HOW IT RUNS — three steps ════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">How it runs</p>
+      <h2 class="reveal">You name it. I wire it. I <em class="accent">run</em> it.</h2>
+      <div class="grid cols-3" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <h3>Name the chore</h3>
+          <p>Anything you do by hand twice a week, or lose sleep over missing. If a machine should be doing it, say so — the answer is almost always &ldquo;yes, I can set that up.&rdquo;</p>
+        </div>
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <h3>I wire it up</h3>
+          <p>Proven machinery, set up wearing your name, on your accounts. We test it together before it goes live — you see it work with your own eyes first.</p>
+        </div>
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+          <h3>I keep it running</h3>
+          <p>Month-to-month, with a plain-English monthly note on what it did for you. If anything ever misbehaves, you call me — not a help desk.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ THE HIVE, CELL BY CELL — exactly what each app does ══════════════ -->
+  <section class="section" id="the-apps">
+    <div class="wrap">
+      <p class="eyebrow reveal">The hive, cell by cell</p>
+      <h2 class="reveal">Six apps. Exactly what each one <em class="accent">does</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">No fog — here&rsquo;s precisely what&rsquo;s included in every cell. All prices live on <a href="/pricing.html#the-hive">the pricing page</a>, where you can stack your own hive and watch it reprice.</p>
+
+      <div class="grid cols-2" style="margin-top:2.5rem">
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M12 11 C15 14.4 15.4 16.4 15.4 18.2 A3.4 3.4 0 0 1 8.6 18.2 C8.6 16.4 9 14.4 12 11 Z" fill="url(#charmG)"/><path d="M21 13 C23.2 15.6 23.5 17.1 23.5 18.5 A2.5 2.5 0 0 1 18.5 18.5 C18.5 17.1 18.8 15.6 21 13 Z" fill="url(#charmG)" opacity=".7"/></svg>
+          <h3>The Responder <span class="per" style="font-weight:400">· missed-call text-back</span></h3>
+          <p style="color:var(--muted)">You miss a call; the customer gets a text in seconds; the job waits for you instead of going to the next name in their search.</p>
+          <ul>
+            <li>Runs on the number you already have — nothing changes for callers</li>
+            <li>You approve the exact message; it&rsquo;s written in your voice, and it never pretends you typed it</li>
+            <li>A shared text inbox on your phone to carry the conversation from there</li>
+            <li>A separate after-hours message for nights and weekends</li>
+            <li>The carrier registration business texting legally requires — filed and handled for you</li>
+            <li>Live in about two weeks (carrier approval sets the pace), usually faster</li>
+          </ul>
+          <p class="terms">For anyone whose hands are full when the phone rings — trades, kitchens, chairs. $99/mo, $0 down.</p>
+        </article>
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linejoin="round"><rect x="8" y="9" width="16" height="15" rx="2"/><line x1="8" y1="14" x2="24" y2="14"/><line x1="12" y1="6.5" x2="12" y2="11"/><line x1="20" y1="6.5" x2="20" y2="11"/></g><path d="M16 15.5 l1.2 3.3 3.3 1.2 -3.3 1.2 -1.2 3.3 -1.2 -3.3 -3.3 -1.2 3.3 -1.2 z" fill="url(#charmG)"/></svg>
+          <h3>Online booking</h3>
+          <p style="color:var(--muted)">A booking page that fills your calendar while you work — no phone-tag, no double-booking.</p>
+          <ul>
+            <li>A booking link under your business name — share it anywhere: your site, Google, Instagram</li>
+            <li>Your services, durations, and prices — customers only pick from what you allow</li>
+            <li>Syncs both ways with the calendar on your phone; booked is booked, no doubles</li>
+            <li>Confirmation and reminder texts go out automatically — fewer no-shows</li>
+            <li>Reschedule and cancel links that update everything on their own</li>
+          </ul>
+          <p class="terms">For anyone booked by the hour — salons, barbers, groomers, tutors, cleaners. $200 setup, $29/mo.</p>
+        </article>
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M16 7 l2.2 5.4 5.8 .5 -4.4 3.8 1.3 5.7 -4.9 -3 -4.9 3 1.3 -5.7 -4.4 -3.8 5.8 -.5 z" fill="none" stroke="url(#charmG)" stroke-width="1.6" stroke-linejoin="round"/><path d="M16 12 l1 2.4 2.6 .2 -2 1.7 .6 2.6 -2.2 -1.4 -2.2 1.4 .6 -2.6 -2 -1.7 2.6 -.2 z" fill="url(#charmG)"/></svg>
+          <h3>Review engine</h3>
+          <p style="color:var(--muted)">Reviews are how a town decides who to call. Most owners never ask — this asks, every time.</p>
+          <ul>
+            <li>After each job, the customer gets one friendly text with your direct Google review link</li>
+            <li>One polite follow-up if they don&rsquo;t get to it — never pestering</li>
+            <li>Every new review lands as a drafted reply in your inbox — approve it, send it</li>
+            <li>Rough reviews get a calm, professional draft so you stay gracious in public</li>
+            <li>A monthly tally: new reviews, your rating, how you stand</li>
+          </ul>
+          <p class="terms">For trades and restaurants that live on the map results. $150 setup, $69/mo.</p>
+        </article>
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M19 8 A9.5 9.5 0 1 0 24.5 20 A7.5 7.5 0 0 1 19 8 Z" fill="none" stroke="url(#charmG)" stroke-width="1.6" stroke-linejoin="round"/><path d="M22 9.5 l.8 2.2 2.2 .8 -2.2 .8 -.8 2.2 -.8 -2.2 -2.2 -.8 2.2 -.8 z" fill="url(#charmG)"/></svg>
+          <h3>After-hours answering</h3>
+          <p style="color:var(--muted)">A small chat window on your website that answers the questions people ask at 9pm.</p>
+          <ul>
+            <li>Answers only from a fact sheet you approve — hours, prices, service area, parking, policies</li>
+            <li>Points people to booking or takes a message; it says plainly that it&rsquo;s automated</li>
+            <li>Anything it can&rsquo;t answer becomes a name and number texted straight to you</li>
+            <li>A transcript each morning, so you see every question your customers actually ask</li>
+            <li>Updated whenever your facts change — new prices, new hours, same day</li>
+          </ul>
+          <p class="terms">For restaurants, gyms, contractors — anyone fielding the same ten questions. $250 setup, $69/mo.</p>
+        </article>
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linejoin="round"><rect x="7" y="10" width="18" height="13" rx="2"/><path d="M7 10 L16 18 L25 10"/></g><path d="M24 6 l.9 2.4 2.4 .9 -2.4 .9 -.9 2.4 -.9 -2.4 -2.4 -.9 2.4 -.9 z" fill="url(#charmG)"/></svg>
+          <h3>Customer follow-ups</h3>
+          <p style="color:var(--muted)">The cheapest customer is the one you already won. This keeps you in their pocket, gently.</p>
+          <ul>
+            <li>Your customer list — names, numbers, emails you&rsquo;ve collected — kept clean, and kept yours</li>
+            <li>A short note in your voice: what&rsquo;s new, what&rsquo;s seasonal, when to come by</li>
+            <li>You approve every send — nothing goes out without your nod</li>
+            <li>Sent by text or email, whichever your customers actually read</li>
+            <li>Proper unsubscribe handling, always — friendly, never spammy</li>
+          </ul>
+          <p class="terms">For bakeries, caf&eacute;s, salons, shops — anywhere people should come back. $150 setup, $49/mo.</p>
+        </article>
+
+        <article class="price-card reveal">
+          <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="16" cy="16" r="8.5"/><path d="M19 12.5 h-4.5 a2 2 0 0 0 0 4 h3 a2 2 0 0 1 0 4 H13"/><line x1="16" y1="10.5" x2="16" y2="12.5"/><line x1="16" y1="20.5" x2="16" y2="22.5"/></g></svg>
+          <h3>Getting paid</h3>
+          <p style="color:var(--muted)">Deposits up front, invoices that chase themselves, cards taken on site. Set up once, yours forever.</p>
+          <ul>
+            <li>Set up on your own accounts — the money never touches mine</li>
+            <li>Clean, professional invoices with a pay-now button (card or bank)</li>
+            <li>Automatic polite nudges on unpaid invoices, so you never have to be the nag</li>
+            <li>Deposit collection for bigger jobs, and tap-to-pay on your phone if you want it</li>
+            <li>A walkthrough so you can run all of it without me</li>
+          </ul>
+          <p class="terms">For trades tired of chasing checks. $200 one-time — no monthly fee to me.</p>
+        </article>
+
+      </div>
+
+      <!-- the live proof — the demo is a REAL number, never an animation -->
+      <div class="callout reveal" style="margin-top:2.5rem">
+        <p class="eyebrow" style="margin:0">Prove it to yourself right now — it&rsquo;s a real number</p>
+        <a class="big-tel" href="tel:+13217882555"><span class="live-dot" aria-hidden="true"></span>(321)&nbsp;788-2555</a>
+        <p style="margin:0">That&rsquo;s my business line, running The Responder. Call it, let it ring out like I&rsquo;m busy, and the text-back lands on your phone a few seconds later — the exact thing your customers would get.</p>
+        <div class="actions">
+          <a class="btn primary" href="/pricing.html#build-your-hive">Build your hive &amp; see the price</a>
+          <a class="btn ghost" href="/contact.html">Ask me anything</a>
+        </div>
+      </div>
+
+      <!-- the growth room -->
+      <div class="callout reveal" style="margin-top:1.5rem">
+        <p class="eyebrow" style="margin:0">Something else eating your evenings?</p>
+        <p style="margin:0">Quoting, scheduling crews, intake forms, waivers, gift cards, waitlists — if a chore has a shape, there&rsquo;s software for it. Tell me what it is and I&rsquo;ll quote it honestly.</p>
+        <div class="actions">
+          <a class="btn primary" href="/start/">Name the chore</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ THE FENCES — honest by design ════════════════════════════════════ -->
+  <section class="section daylight">
+    <div class="wrap">
+      <p class="eyebrow reveal">Honest by design</p>
+      <h2 class="reveal">Plain magic, plain <em class="accent">terms</em>.</h2>
+      <div class="grid cols-3" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <h3>Never a fake human</h3>
+          <p>Nothing I set up pretends to be a person. A helper answers instantly and says what it is — then a real person, you or me, follows through. That&rsquo;s the whole trick, and it&rsquo;s stronger than pretending.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Yours, not mine</h3>
+          <p>Your number, your accounts, your customer data — all stay yours. I configure and run; I never own, move, or sell what&rsquo;s yours. Cancel any month and everything stays with you.</p>
+        </div>
+        <div class="card reveal">
+          <h3>One neck to grab</h3>
+          <p>I run these systems myself, I&rsquo;m local, and if anything breaks you have my number. No ticket queue, no &ldquo;have you tried turning it off and on.&rdquo;</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CROSS-SELL + CLOSE ═══════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <h2 class="reveal">Start with one app — or take the <em class="accent">whole hive</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Most people start with The Responder and add apps as they feel the hours come back — the price drops with every one. And if you don&rsquo;t have a website worth sending people to yet, that&rsquo;s the other half of what I do.</p>
+      <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn primary" href="/start/">Name the chore</a>
+        <a class="btn ghost" href="/pricing.html">See website pricing</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/">
+          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
+          <span class="brand-name">Site&nbsp;Sourcery</span>
+        </a>
+        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
+        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+      </div>
+      <nav class="footer-links" aria-label="Pages">
+        <a href="/">Home</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/automation.html">The Hive</a>
+        <a href="/how-it-works.html">How it works</a>
+        <a href="/about.html">About</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/contact.html">Contact</a>
+        <a href="/start/">Start your site</a>
+      </nav>
+      <div class="footer-contact">
+        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
+        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
+        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
+      </div>
+    </div>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+  </div>
+</footer>
+
+<script>
+/* stillness: SMIL orbits pause under prefers-reduced-motion (CSS can't reach SMIL) */
+(function(){
+  var rm=window.matchMedia('(prefers-reduced-motion: reduce)');
+  function setMotion(){
+    document.querySelectorAll('svg').forEach(function(s){
+      if(!s.pauseAnimations)return;
+      if(rm.matches){s.pauseAnimations();}else{s.unpauseAnimations();}
+    });
+  }
+  setMotion();
+  if(rm.addEventListener)rm.addEventListener('change',setMotion);
+})();
+</script>
+</body>
+</html>

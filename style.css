@@ -204,6 +204,13 @@ strong,b{color:var(--text);font-weight:650}
 }
 :root[data-theme="light"] .section.daylight{background:#F3F1FB}/* still reads as a room */
 
+/* bright rooms: the primary gradient deepens so white text passes AA */
+.section.daylight .btn.primary,:root[data-theme="light"] .btn.primary{
+  background:linear-gradient(135deg,#5B3FD4,#C22E60)}
+.section.daylight .btn.primary:hover,:root[data-theme="light"] .btn.primary:hover{
+  background:linear-gradient(135deg,#4F35BE,#AD2955)}
+
+
 .grid{display:grid;gap:clamp(1rem,2.5vw,1.5rem)}
 .grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -211,6 +218,9 @@ strong,b{color:var(--text);font-weight:650}
 @media (max-width:40rem){ .grid.cols-2,.grid.cols-3{grid-template-columns:minmax(0,1fr)} }
 
 .actions{display:flex;flex-wrap:wrap;gap:.85rem;align-items:center}
+
+/* pointer-only stage instructions vanish on touch — the scene still stands alone */
+@media (hover:none),(pointer:coarse){.stage-hint{display:none}}
 
 /* wide content scrolls inside itself, never the page */
 .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;
@@ -327,7 +337,8 @@ strong,b{color:var(--text);font-weight:650}
   .nav-toggle{display:inline-flex}
   .nav-menu{position:absolute;top:100%;left:0;right:0;
     display:grid;gap:.25rem;align-items:stretch;
-    padding:.75rem max(1.25rem,env(safe-area-inset-left)) 1.25rem;
+    max-height:calc(100dvh - 64px);overflow-y:auto;
+    padding:.75rem max(1.25rem,env(safe-area-inset-right)) 1.25rem max(1.25rem,env(safe-area-inset-left));
     background:var(--surface);border-bottom:1px solid var(--hairline);
     box-shadow:var(--lift);
     visibility:hidden;opacity:0;transform:translateY(-6px);
@@ -499,6 +510,7 @@ strong,b{color:var(--text);font-weight:650}
   color:var(--text);font-family:var(--font-body);font-size:1rem;line-height:1.4;
   transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
 .input::placeholder{color:color-mix(in oklab,var(--muted) 75%,transparent)}
+.section.daylight .input::placeholder,:root[data-theme="light"] .input::placeholder{color:#55507A}
 .input:focus-visible{outline:none;border-color:var(--violet);
   box-shadow:0 0 0 3px rgba(124,92,255,.25)}
 textarea.input{min-height:8rem;resize:vertical}
@@ -520,15 +532,19 @@ select.input{appearance:none;
 .footer{border-top:1px solid var(--hairline);background:var(--surface);
   padding:clamp(2.5rem,6vw,4rem) 0 calc(1.5rem + env(safe-area-inset-bottom));
   margin-top:clamp(3rem,8vw,5rem)}
-.footer-grid{display:grid;gap:2.5rem;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr)}
+.footer-grid{display:grid;gap:2.5rem;grid-template-columns:minmax(0,1.7fr) minmax(0,1.5fr) minmax(0,1.2fr)}
 @media (max-width:52rem){ .footer-grid{grid-template-columns:minmax(0,1fr)} }
 
 .footer-brand{display:grid;gap:.9rem;justify-items:start}
 .footer-tag{color:var(--muted);font-size:.95rem;max-width:30em}
-.footer-honest{color:var(--muted);font-size:.875rem;max-width:30em;
+/* the load-bearing trust line — one real, local, accountable person */
+.footer-trust{color:var(--text);font-size:.95rem;font-weight:500;max-width:32em;
   padding-left:.9rem;border-left:2px solid var(--violet)}
+.footer-honest{color:var(--muted);font-size:.875rem;max-width:30em}
 
-.footer-links{display:grid;gap:.15rem;align-content:start}
+.footer-links{display:grid;gap:.05rem .5rem;align-content:start;
+  grid-template-columns:1fr 1fr}
+@media (max-width:22rem){ .footer-links{grid-template-columns:1fr} }
 .footer-links a{display:inline-flex;align-items:center;min-height:44px;
   color:var(--muted);font-size:.95rem;text-decoration:none;
   transition:color .2s var(--ease)}
@@ -651,3 +667,96 @@ a:hover .sigil,.sigil:hover{transform:rotate(90deg) scale(1.08);
   .spell-spark .spark-glow,.st-twinkle{animation:none!important}
   .spellstage{--lit:1!important;cursor:default}
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   20 · TWO DOORS — the home's spine (get found · never miss a call)
+   Two first-class offerings, side by side, a price on each. Stacks on phones.
+   ════════════════════════════════════════════════════════════════════════ */
+.doors{display:grid;gap:clamp(1rem,3vw,1.75rem);
+  grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:52rem){ .doors{grid-template-columns:minmax(0,1fr)} }
+
+.door{position:relative;display:flex;flex-direction:column;gap:1.05rem;
+  background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);
+  padding:clamp(1.4rem,3.5vw,2.3rem);overflow:hidden;isolation:isolate;
+  transition:transform .22s var(--ease),border-color .22s var(--ease),box-shadow .24s var(--ease)}
+.door:hover{transform:translateY(-3px);
+  border-color:color-mix(in oklab,var(--violet) 55%,var(--hairline));box-shadow:var(--lift)}
+.door::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+  background:var(--charm)}
+.door-art{border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--hairline);
+  background:#07050F}   /* the door's bespoke scene stays night in both themes */
+.door-art svg{display:block;width:100%;height:auto}
+.door .eyebrow{margin:.2rem 0 -.2rem}
+.door h3{font-size:clamp(1.35rem,2.8vw,1.75rem)}
+.door > p{color:var(--muted)}
+.door .price{font-size:clamp(1.5rem,3.4vw,2.1rem)}
+.door .price .per{font-size:.5em}
+.door-list{list-style:none;display:grid;gap:.5rem;margin:0;
+  color:var(--muted);font-size:.95rem}
+.door-list li{display:flex;gap:.6em;align-items:baseline}
+.door-list li::before{content:"";flex:0 0 auto;width:.45em;height:.45em;border-radius:50%;
+  background:var(--charm);transform:translateY(-.08em)}
+.door .actions{margin-top:auto;padding-top:.3rem}
+
+/* ── the real-number callout: the Responder demo is a LIVE line, never faked ──
+   A genuinely-live phone earns the mint truth dot (see the discipline note). */
+.callout{position:relative;display:grid;gap:1.1rem;justify-items:start;
+  background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);
+  padding:clamp(1.5rem,4vw,2.6rem);overflow:hidden;box-shadow:var(--lift);isolation:isolate}
+.callout::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(42rem 22rem at 88% -25%,rgba(124,92,255,.16),transparent 60%)}
+.callout .big-tel{display:inline-flex;align-items:center;gap:.65rem;
+  font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:650;
+  font-size:clamp(1.7rem,6vw,3rem);letter-spacing:-.02em;line-height:1;
+  color:var(--text);text-decoration:none;flex-wrap:wrap}
+.callout .big-tel:hover,.callout .big-tel:focus-visible{color:var(--link)}
+.callout .big-tel .live-dot{width:.5em;height:.5em}
+.callout p{color:var(--muted)}
+
+/* ── The Responder's two tiers reuse .price-card; a compact two-up on home ── */
+.responder-tiers{display:grid;gap:clamp(1rem,2.5vw,1.5rem);
+  grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:44rem){ .responder-tiers{grid-template-columns:minmax(0,1fr)} }
+
+/* the three things the Responder does — small labelled rows */
+.does{display:grid;gap:1rem;margin-top:1.5rem}
+@media (min-width:44rem){ .does{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.does .do{display:grid;gap:.4rem;padding:1.1rem 1.2rem;
+  background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r-sm)}
+.does .do svg{width:26px;height:26px;color:var(--link)}
+.does .do h4{font-family:var(--font-display);font-weight:650;font-size:1.02rem;color:var(--text)}
+.does .do p{color:var(--muted);font-size:.92rem;margin:0}
+
+/* the Responder's load-bearing honesty line — bright, quietly framed by the charm */
+.responder-honest{font-family:var(--font-display);font-size:clamp(1.05rem,2vw,1.3rem);
+  line-height:1.45;color:var(--text);padding-left:1.1rem;
+  border-left:3px solid transparent;
+  border-image:var(--charm) 1}
+.responder-honest strong{color:var(--text);font-weight:650}
+
+/* ════════════════════════════════════════════════════════════════════════
+   21 · PROSE — terms, policies, any long-form page
+   ════════════════════════════════════════════════════════════════════════ */
+.prose{max-width:44rem}
+.prose > * + *{margin-top:1.1rem}
+.prose h2{font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;
+  font-size:clamp(1.4rem,3vw,1.9rem);line-height:1.15;color:var(--text);margin-top:2.6rem}
+.prose h3{font-family:var(--font-display);font-weight:650;font-size:1.15rem;
+  color:var(--text);margin-top:1.7rem}
+.prose p,.prose li{color:var(--muted);max-width:44em}
+.prose ul,.prose ol{padding-left:1.3rem;display:grid;gap:.5rem}
+.prose strong{color:var(--text)}
+.legal-meta{color:var(--muted);font-size:.9rem;font-family:var(--font-num)}
+
+/* ════════════════════════════════════════════════════════════════════════
+   22 · 404 — a lost traveller, gently sent home
+   ════════════════════════════════════════════════════════════════════════ */
+.error{min-height:58svh;display:grid;align-content:center;justify-items:center;
+  gap:1.3rem;text-align:center;padding-block:clamp(3rem,10vw,6rem)}
+.error .code{font-family:var(--font-num);font-variant-numeric:tabular-nums;
+  font-size:clamp(4rem,18vw,9rem);line-height:.9;font-weight:650;letter-spacing:-.03em;
+  background:var(--charm);-webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent}
+.error p{color:var(--muted);max-width:34em}
+.error .actions{justify-content:center}

@@ -1,33 +1,40 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — contact.html · CONTACT · "SPELLCAST"
-     The light's still on — someone's still here.
+     The light's still on — a real person (me) is still here.
      Self-contained: loads ONLY same-origin style.css + sourcery.js. All
-     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
-     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     graphics inline SVG. No CDNs, no remote fonts, no trackers.
+     The ONE allowed remote request is the contact form's POST to the
+     form service (Web3Forms) — a submit action, never a page load.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Contact — talk to a real person · Site Sourcery</title>
-<meta name="description" content="Call, text, or email — a real person answers, usually the same day. No phone tree, no ticket queue. Or skip straight to a free preview of your site.">
+<title>Contact — a real person answers · Site Sourcery</title>
+<meta name="description" content="Call, text, or send a note — a real person answers, usually the same day. No phone tree, no chatbot. Want a custom site or The Responder to answer your calls? Ask us anything.">
 <meta name="theme-color" content="#0B0912">
-<link rel="canonical" href="https://sitesourcery.com/contact/">
+<link rel="canonical" href="https://sitesourcery.com/contact.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Contact — talk to a real person · Site Sourcery">
-<meta property="og:description" content="Call, text, or email — a real person answers, usually the same day. No phone tree, no ticket queue.">
-<meta property="og:url" content="https://sitesourcery.com/contact/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Contact — talk to a real person · Site Sourcery">
-<meta name="twitter:description" content="Call, text, or email — a real person answers, usually the same day. No phone tree, no ticket queue.">
+<meta property="og:title" content="Contact — a real person answers · Site Sourcery">
+<meta property="og:description" content="Call, text, or send a note — a real person answers, usually the same day. No phone tree, no chatbot.">
+<meta property="og:url" content="https://sitesourcery.com/contact.html">
+<meta property="og:image" content="https://sitesourcery.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Contact — a real person answers · Site Sourcery">
+<meta name="twitter:description" content="Call, text, or send a note — a real person answers, usually the same day. No phone tree, no chatbot.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+<!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
 <nav class="nav" aria-label="Main">
   <div class="wrap nav-inner">
     <a class="brand" href="/">
@@ -38,9 +45,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/">Home</a>
       <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/automation.html">The Hive</a>
+      <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html" aria-current="page">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
@@ -53,14 +61,13 @@
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">Contact</p>
-      <h1 class="hero-mega reveal">Talk to a real <em class="accent">person</em>.</h1>
-      <p class="lede reveal">No phone tree, no ticket queue, no chatbot wearing a name tag. <strong>The same person</strong> answers — the one who builds and runs your site. Usually the same day.</p>
+      <h1 class="hero-mega reveal">A real person <em class="accent">answers</em>.</h1>
+      <p class="lede reveal">No phone tree, no chatbot wearing a name tag. The studio that builds and runs your site &mdash; and sets up The Responder &mdash; is the one that picks up. Usually the same day.</p>
       <div class="actions reveal">
-        <a class="btn primary" href="mailto:hello@sitesourcery.com">Email us
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-        </a>
-        <a class="btn ghost" href="/start/">Get a free preview instead</a>
+        <a class="btn primary" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+        <a class="btn ghost" href="#note">Write me a note</a>
       </div>
+      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
 
       <!-- ── THE NIGHT DESK · signature interactive nocturne ───────────────────
            A close look through the one lit window: the maker is still at the
@@ -71,7 +78,7 @@
            Pure inline SVG, no loads. -->
       <div class="hero-stage reveal">
         <figure class="spellstage" data-win-x="600" data-win-y="330" data-range="460"
-                role="img" aria-label="A shopfront window at night, seen close. Inside, one person is still at the desk under a warm hanging lamp, building a website on a glowing monitor, a phone lit on the bench and an OPEN sign in the corner — the one light still on the dark street.">
+                role="img" aria-label="A shopfront window at night, seen close. Inside, someone is still at the desk under a warm hanging lamp, building a website on a glowing monitor, a phone lit on the bench and an OPEN sign in the corner — the one light still on the dark street.">
           <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
                preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
             <defs>
@@ -239,67 +246,79 @@
         </figure>
         <figcaption class="stage-caption">
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>The light&rsquo;s still on — <em>someone&rsquo;s still here.</em> Move the spark; that&rsquo;s a real person, answering. <span class="badge">Interactive</span></span>
+          <span>The light&rsquo;s still on &mdash; <em>someone&rsquo;s still here.</em> A real person is answering.<span class="stage-hint"> Move the spark with your cursor. <span class="badge">Interactive</span></span></span>
         </figcaption>
       </div>
     </div>
   </section>
 
-  <!-- ══ THE THREE DOORS ═════════════════════════════════════════════════ -->
+  <!-- ══ THE THREE WAYS IN ═══════════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
-      <div class="grid cols-3">
+      <p class="eyebrow reveal">Three ways to reach us</p>
+      <h2 class="reveal">Whatever&rsquo;s <em class="accent">easiest</em> for you.</h2>
+      <div class="grid cols-3" style="margin-top:2.5rem">
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><path d="M6 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="M9 18h2" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round"/></svg>
           <h3>Call or text</h3>
-          <p>Texting is how you&rsquo;ll change your site anyway — try it now. If a call goes to voicemail, leave your name; you&rsquo;ll hear back.</p>
-          <p style="margin-top:.75rem"><a class="num" href="tel:+10000000000">(000) 000-0000</a></p>
+          <p>Fastest way to reach us. Texting is also how you&rsquo;ll change your site later, so try it now. If a call goes to voicemail, leave your name &mdash; you&rsquo;ll hear back.</p>
+          <p style="margin-top:.75rem"><a class="num" href="tel:+13217882555">(321)&nbsp;788-2555</a></p>
         </div>
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="m4 7.5 8 5.5 8-5.5" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           <h3>Email</h3>
-          <p>Best for links, longer questions, or &ldquo;here&rsquo;s my current site — what would you do with it?&rdquo;</p>
+          <p>Best for links, longer questions, or &ldquo;here&rsquo;s my current site &mdash; what would you do with it?&rdquo;</p>
           <p style="margin-top:.75rem"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a></p>
         </div>
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><path d="M12 3l2.2 6.3L20.5 12l-6.3 2.2L12 20.5l-2.2-6.3L3.5 12l6.3-2.2z" stroke="#7C5CFF" stroke-width="1.8" stroke-linejoin="round" fill="none"/></svg>
-          <h3>Skip the small talk</h3>
-          <p>Want to see something instead of read something? Send your details and get a free preview of your site — no card, no obligation.</p>
-          <p style="margin-top:.75rem"><a href="/start/">Start your site</a></p>
+          <h3>Write a note</h3>
+          <p>Rather type it out below? The form goes straight to us &mdash; the studio that would build your site or wire up The Responder.</p>
+          <p style="margin-top:.75rem"><a href="#note">Jump to the note form</a></p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ══ THE FORM — the bright shop ══════════════════════════════════════ -->
-  <section class="section daylight">
+  <!-- ══ THE FORM — the bright shop · a real, working POST ═══════════════ -->
+  <section class="section daylight" id="note">
     <div class="wrap">
       <p class="eyebrow reveal">Write a note</p>
-      <h2 class="reveal">Ask <em class="accent">anything</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Your business name, your town, and what you&rsquo;re hoping for is plenty. Even &ldquo;is my kind of business a fit?&rdquo; is a fine first note.</p>
+      <h2 class="reveal">Ask me <em class="accent">anything</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Your business name, your town, and what you&rsquo;re hoping for is plenty. Even &ldquo;is my kind of business a fit?&rdquo; or &ldquo;can The Responder work with my phone?&rdquo; is a fine first note.</p>
 
       <div class="grid cols-2" style="margin-top:2.5rem;align-items:start">
-        <form class="card reveal" action="mailto:hello@sitesourcery.com" method="post" enctype="text/plain">
+        <!-- Real working form: POSTs to the Web3Forms service, which emails me
+             the note. No page-load, no tracker —
+             just a form submit, the one remote request this site allows. -->
+        <form class="card reveal" action="https://api.web3forms.com/submit" method="POST">
+          <!-- Web3Forms access key — wired (public by design) -->
+          <input type="hidden" name="access_key" value="39f30a9b-381d-49e2-8f1a-6be6f4970d4e">
+          <input type="hidden" name="subject" value="New note from sitesourcery.com">
+          <input type="hidden" name="from_name" value="Site Sourcery contact form">
+          <!-- honeypot: real people leave this empty; bots fill it and get dropped -->
+          <input type="hidden" name="redirect" value="https://sitesourcery.com/thanks.html">
+          <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" style="display:none" aria-hidden="true">
           <div class="field">
             <label for="f-name">Your name</label>
-            <input class="input" id="f-name" name="Name" type="text" autocomplete="name" required>
+            <input class="input" id="f-name" name="name" type="text" autocomplete="name" required>
           </div>
           <div class="field">
             <label for="f-biz">Business &amp; town</label>
-            <input class="input" id="f-biz" name="Business" type="text" placeholder="Tidewater Plumbing, Somers Point" autocomplete="organization">
+            <input class="input" id="f-biz" name="business" type="text" placeholder="e.g. Elm Street Barbers, your town" autocomplete="organization">
           </div>
           <div class="field">
             <label for="f-reach">Best way to reach you</label>
-            <input class="input" id="f-reach" name="Reach me at" type="text" placeholder="Phone or email" autocomplete="email">
+            <input class="input" id="f-reach" name="reach_me_at" type="text" placeholder="Phone or email">
           </div>
           <div class="field">
             <label for="f-msg">What&rsquo;s on your mind?</label>
-            <textarea class="input" id="f-msg" name="Message" required></textarea>
+            <textarea class="input" id="f-msg" name="message" required></textarea>
           </div>
           <button class="btn primary" type="submit">Send your note
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           </button>
-          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">Honest note: this button opens <strong>your own email app</strong> with your note filled in — nothing is collected or sent behind the scenes. If it doesn&rsquo;t open, just email <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> directly.</p>
+          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">This note goes straight to us and a real person replies &mdash; usually the same day. Prefer not to fill in a form? Just <a href="tel:+13217882555">call or text (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com">email us directly</a>.</p>
         </form>
 
         <div class="reveal">
@@ -307,18 +326,43 @@
           <ul style="list-style:none;display:grid;gap:1rem;margin-top:1rem">
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>A person replies</strong> — usually the same day, worst case the next morning. No autoresponder pretending to care.</span>
+              <span><strong>A real person replies</strong> &mdash; usually the same day, worst case the next morning. No autoresponder pretending to care.</span>
             </li>
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>A plain answer</strong> — no sales script. If we&rsquo;re not the right fit, we&rsquo;ll say so and point you somewhere better.</span>
+              <span><strong>A plain answer</strong> &mdash; no sales script. If we&rsquo;re not the right fit, we&rsquo;ll say so and point you somewhere better.</span>
             </li>
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>Nothing to lose</strong> — asking costs nothing, and there&rsquo;s no obligation. Your details never go anywhere else.</span>
+              <span><strong>Nothing to lose</strong> &mdash; asking costs nothing, and there&rsquo;s no obligation. Your details never go anywhere else.</span>
             </li>
           </ul>
-          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> answers the big three — you own it, you can cancel anytime, and changes happen by text.</p>
+          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> answers the big three &mdash; you own your site, you can cancel anytime, and changes happen by text.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CROSS-SELL BOTH DOORS ═══════════════════════════════════════════ -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow reveal">Not sure which you need?</p>
+      <h2 class="reveal">Tell us the problem &mdash; we&rsquo;ll point you at the <em class="accent">door</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Two things we do, and they work best together. Most owners end up taking both &mdash; a site that brings the calls in, and The Responder so none of them slip away.</p>
+      <div class="grid cols-2 reveal" style="margin-top:2.5rem">
+        <div class="card">
+          <h3>&ldquo;People can&rsquo;t find me.&rdquo;</h3>
+          <p>That&rsquo;s the website door: a hand-built custom site so you turn up when someone nearby asks their phone for your trade. Buy once, from $200 &mdash; you own it.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/pricing.html">See website pricing</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>&ldquo;I keep missing calls.&rdquo;</h3>
+          <p>That&rsquo;s The Responder: miss a call and your phone texts the customer back in seconds, so the job waits for you. From $99/mo, $0 down.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/automation.html">See The Responder</a>
+          </div>
         </div>
       </div>
     </div>
@@ -327,19 +371,20 @@
   <!-- ══ CLOSER ══════════════════════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
-      <h2 class="reveal">Rather just see <em class="accent">your</em> site?</h2>
-      <p class="lede reveal" style="margin-top:1rem">Skip the note. Send a few details and get a free preview — then decide with the real thing in front of you.</p>
+      <h2 class="reveal">Rather just <em class="accent">see</em> it first?</h2>
+      <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients &mdash; take a look at a live production site we built and run, open right now. Then decide.</p>
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn primary" href="/start/">Start your site
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </a>
-        <a class="btn ghost" href="/work.html">See the work first</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
     </div>
   </section>
 
 </main>
 
+<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
 <footer class="footer">
   <div class="wrap">
     <div class="footer-grid">
@@ -348,22 +393,25 @@
           <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
           <span class="brand-name">Site&nbsp;Sourcery</span>
         </a>
-        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
-        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
+        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work.html">Work</a>
         <a href="/pricing.html">Pricing</a>
+        <a href="/automation.html">The Hive</a>
         <a href="/how-it-works.html">How it works</a>
+        <a href="/about.html">About</a>
         <a href="/faq.html">FAQ</a>
+        <a href="/terms.html">Terms</a>
         <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
+        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
     <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>

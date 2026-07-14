@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — index.html · HOME · "SPELLCAST"
-     Main Street after dark, one window still glowing.
+     Two doors: custom websites + The Responder. Get found · never miss the call.
      Self-contained: loads ONLY same-origin style.css + sourcery.js. All
      graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
      The only http(s) URLs below are hyperlinks/metadata, never loads.
@@ -9,45 +9,34 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Site Sourcery — custom websites for local businesses, built and run for you</title>
-<meta name="description" content="A custom website, built and run for you — hosting, updates, and changes handled. Change anything by sending a text. You own everything; cancel anytime. Free preview, plans from $9/mo.">
+<title>Site Sourcery — custom websites for local businesses, built &amp; run for you</title>
+<meta name="description" content="Site Sourcery builds and runs custom websites for local businesses so the right customers find you — plus The Responder, which texts a customer back the second you miss their call. Websites from $200. The Responder from $99/mo. You own everything.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Site Sourcery — custom websites for local businesses, built and run for you">
-<meta property="og:description" content="We build it, host it, and run it. Change anything by sending a text. You own everything; cancel anytime.">
+<meta property="og:title" content="Site Sourcery — custom websites + The Responder">
+<meta property="og:description" content="Hand-built custom websites so you get found — plus The Responder, the assistant that texts a customer back the second you miss a call. Local, accountable, and you own everything.">
 <meta property="og:url" content="https://sitesourcery.com/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Site Sourcery — custom websites, built and run for you">
-<meta name="twitter:description" content="Change your site by sending a text. You own everything; cancel anytime. Free preview.">
+<meta property="og:image" content="https://sitesourcery.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Site Sourcery — get found, never miss the call">
+<meta name="twitter:description" content="Custom websites from $200. The Responder (missed-call text-back) from $99/mo. Built and run for you.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","slogan":"Custom websites for local businesses — built, hosted, and run for you.","description":"Custom websites for local businesses. We design, host, and run your site; you change anything by sending a plain-English text. You own everything and can cancel anytime. Free preview; plans from $9/month.","makesOffer":{"@type":"Offer","category":"Custom website design, hosting, and ongoing care for local businesses"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","telephone":"+1-321-788-2555","slogan":"Get found. Never miss the call.","description":"Site Sourcery builds and runs custom websites for local businesses so you get found, plus the Hive — AI integration & automation apps, led by The Responder, which texts a customer back when you miss their call. You own everything.","makesOffer":[{"@type":"Offer","name":"Custom website builds","category":"Hand-built custom websites for local businesses","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"200","description":"buy once, from $200"}},{"@type":"Offer","name":"The Responder — missed-call text-back","category":"The Hive: AI integration & automation apps","priceSpecification":{"@type":"PriceSpecification","priceCurrency":"USD","price":"99","description":"$99/month, $0 down"}}]}
 </script>
 <link rel="stylesheet" href="style.css">
-<style>
-/* page-scoped: Living Storefront step states only (system CSS untouched).
-   The typewriter in sourcery.js sets data-demo-step after each cast. */
-#demo-site .step{display:none}
-#demo-site[data-demo-step="start"] .step-start{display:block}
-#demo-site[data-demo-step="0"] .step-0{display:block}
-#demo-site[data-demo-step="1"] .step-1{display:block}
-#demo-site[data-demo-step="2"] .step-2{display:block}
-/* no JS or reduced motion: resolved before→after pair — sent text stays
-   visible in the bubble, the site shows the change already made */
-html:not(.js) #demo-site .step{display:none}
-html:not(.js) #demo-site .step-0{display:block}
-@media (prefers-reduced-motion:reduce){
-  #demo-site .step{display:none!important}
-  #demo-site .step-0{display:block!important}
-}
-</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+<!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
 <nav class="nav" aria-label="Main">
   <div class="wrap nav-inner">
     <a class="brand" href="/">
@@ -58,9 +47,10 @@ html:not(.js) #demo-site .step-0{display:block}
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/" aria-current="page">Home</a>
       <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/automation.html">The Hive</a>
+      <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
@@ -72,14 +62,15 @@ html:not(.js) #demo-site .step-0{display:block}
   <!-- ══ HERO — the 5-second answer + the signature "one window glowing" ══ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow reveal">Custom websites for local businesses</p>
+      <p class="eyebrow reveal">Custom websites · plus the Hive</p>
       <h1 class="hero-mega reveal">A custom website, built and run <em class="accent">for you</em>.</h1>
-      <p class="lede reveal">Get found. Get more calls. We design it, host it, and make every change you ask for — you never touch code. <strong>You own everything. Cancel anytime.</strong></p>
+      <p class="reveal" style="font-size:clamp(1.1rem,2.4vw,1.55rem);font-weight:600;line-height:1.3;margin:.6rem 0 0;max-width:24em">&hellip;and <em class="accent">The Responder</em> texts every missed call back in seconds &mdash; so a missed call never becomes a missed job.</p>
+      <p class="lede reveal">Genuinely custom websites &mdash; designed around your trade, never a template &mdash; so the right customers find you and call. Built, hosted, and kept running for you, start to finish.</p>
       <div class="actions reveal">
-        <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact.html">Talk to a person</a>
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
-      <p class="terms reveal" style="max-width:34em;margin-top:1.6rem">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised — just your best shot at being found and recommended.</p>
+      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number. Everything you see is work I actually built: no stock testimonials, no borrowed logos, no rankings promised.</p>
 
       <!-- ── THE STOREFRONT · signature interactive nocturne ──────────────────
            A hand-authored Main Street after dark. Every shop is dark but one:
@@ -249,216 +240,154 @@ html:not(.js) #demo-site .step-0{display:block}
               <circle r="2.6" fill="#FFFFFF"/>
             </g>
           </svg>
-        </figure>
+        
         <figcaption class="stage-caption">
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>Main&nbsp;Street after dark — <em>one window still glowing.</em> Move the spark; that&rsquo;s your shop, lit. <span class="badge">Interactive</span></span>
+          <span>Main&nbsp;Street after dark — <em>one window still glowing.</em> That&rsquo;s your shop, lit.<span class="stage-hint"> Move the spark with your cursor. <span class="badge">Interactive</span></span></span>
         </figcaption>
+        </figure>
       </div>
     </div>
   </section>
 
-  <!-- ══ THE LIVING STOREFRONT — the signature moment ════════════════════ -->
+  <!-- ══ THE TWO DOORS — the spine of the whole business ═════════════════ -->
   <section class="section">
     <div class="wrap">
-      <p class="eyebrow reveal">The whole point</p>
-      <h2 class="reveal">You text us. It&rsquo;s <em class="accent">done</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">No dashboard. No app to learn. Send a plain text — new hours, new price, new photo — and it&rsquo;s live on your site.</p>
+      <p class="eyebrow reveal">Two ways to work with us</p>
+      <h2 class="reveal">Pick a door. Or take <em class="accent">both</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">One gets people to your door. The other makes sure that when they call, the job is yours — even if your hands are full.</p>
 
-      <div class="demo reveal" style="margin-top:2.5rem">
-        <div class="demo-phone" role="group" aria-label="A text-message conversation: the owner texts a change, and it is made on the site">
-          <p class="bubble sent" data-type='["Add Saturday hours — and make the lemon tarts the big photo","Bump birthday cakes to $32","Add a banner: closed July 4th"]' data-type-target="#demo-site">Add Saturday hours — and make the lemon tarts the big photo</p>
-          <p class="bubble">Done — it&rsquo;s live.</p>
+      <div class="doors" style="margin-top:2.5rem">
+
+        <!-- DOOR A — GET FOUND · custom websites -->
+        <div class="door reveal">
+          <div class="door-art">
+            <svg viewBox="0 0 640 300" width="640" height="300" role="img" aria-label="A dark night map with one glowing pin marking a lit little shop — found among the dark ones.">
+              <defs>
+                <linearGradient id="dA-pin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient>
+                <radialGradient id="dA-glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#B7A0FF" stop-opacity=".7"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
+                <radialGradient id="dA-warm" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFC27A" stop-opacity=".8"/><stop offset="100%" stop-color="#FFC27A" stop-opacity="0"/></radialGradient>
+              </defs>
+              <rect width="640" height="300" fill="#0A0716"/>
+              <!-- map roads -->
+              <g stroke="#1E1838" stroke-width="10" fill="none" stroke-linecap="round">
+                <path d="M-10 90 H650"/><path d="M-10 210 H650"/><path d="M120 -10 V310"/><path d="M470 -10 V310"/>
+                <path d="M0 150 L640 150" stroke-width="6" opacity=".6"/>
+              </g>
+              <g stroke="#2A2350" stroke-width="2" fill="none" opacity=".7"><path d="M280 -10 V310"/><path d="M-10 150 H650"/></g>
+              <!-- dark little shops -->
+              <g fill="#141026">
+                <rect x="60" y="40" width="34" height="26" rx="4"/><rect x="200" y="52" width="30" height="24" rx="4"/>
+                <rect x="520" y="44" width="32" height="26" rx="4"/><rect x="70" y="240" width="34" height="24" rx="4"/>
+                <rect x="300" y="240" width="30" height="24" rx="4"/><rect x="540" y="236" width="34" height="26" rx="4"/>
+                <rect x="380" y="110" width="30" height="24" rx="4"/>
+              </g>
+              <!-- the found one: glow + lit shop + pin -->
+              <circle cx="300" cy="150" r="96" fill="url(#dA-glow)"/>
+              <rect x="278" y="150" width="44" height="30" rx="4" fill="#160F26"/>
+              <rect x="284" y="158" width="32" height="16" rx="2" fill="url(#dA-warm)"/>
+              <circle cx="300" cy="164" r="9" fill="url(#dA-warm)"/>
+              <g transform="translate(300,96)">
+                <path d="M0 60 C-22 34 -26 20 -26 6 A26 26 0 1 1 26 6 C26 20 22 34 0 60 Z" fill="url(#dA-pin)"/>
+                <circle cx="0" cy="4" r="9" fill="#0A0716"/>
+              </g>
+              <!-- a search magnifier ring, faint -->
+              <g stroke="#6D5CC8" stroke-width="4" fill="none" opacity=".55"><circle cx="300" cy="150" r="72"/><path d="M351 201 L392 242" stroke-linecap="round"/></g>
+            </svg>
+          </div>
+          <p class="eyebrow">Get found · custom websites</p>
+          <h3>A website built by hand for your trade</h3>
+          <p>A real, custom site — not a template with your name dropped in. Designed so you turn up when someone nearby asks their phone for your trade, and so calling you is one tap.</p>
+          <p class="price"><span class="per">from&nbsp;</span><span class="num">$200</span><span class="per">, buy once</span></p>
+          <ul class="door-list">
+            <li>Eight build tiers, $200 to $3,000 — pay once, you own it outright</li>
+            <li>Optional monthly Care from $15/mo (updates + text-to-change)</li>
+            <li>Your site, your domain, your content — no lock-in, ever</li>
+          </ul>
+          <div class="actions">
+            <a class="btn primary" href="/start/">Start your site</a>
+            <a class="btn ghost" href="/pricing.html">See pricing</a>
+          </div>
         </div>
 
-        <div class="demo-site cast" id="demo-site" data-demo-step="start" role="img" aria-label="A small bakery website updating itself as each text arrives: Saturday hours appear, the lemon tart photo goes big, the cake price changes, a holiday banner goes up">
-
-          <!-- BEFORE -->
-          <svg class="step step-start" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
-            <rect width="640" height="430" fill="#FBFAFF"/>
-            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
-            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
-            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
-            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF6E3"/>
-            <ellipse cx="178" cy="176" rx="76" ry="45" fill="#E0A84F"/>
-            <path d="M128 160 q14 -16 28 0 M164 152 q14 -16 28 0 M200 160 q14 -16 28 0" stroke="#B9832F" stroke-width="4" fill="none" stroke-linecap="round"/>
-            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
-            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
-            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Open Mon–Fri · 7am–3pm</text>
-            <g font-family="Arial,sans-serif">
-              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
-              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
-              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
-              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
-              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
-              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
-              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
-              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
-              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$28</text>
-            </g>
-          </svg>
-
-          <!-- AFTER TEXT 1 — Saturday hours + lemon tarts big -->
-          <svg class="step step-0" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
-            <rect width="640" height="430" fill="#FBFAFF"/>
-            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
-            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
-            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
-            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF9E8"/>
-            <circle cx="178" cy="174" r="64" fill="#E8C079"/>
-            <circle cx="178" cy="174" r="50" fill="#FFD166"/>
-            <circle cx="160" cy="158" r="9" fill="#FFE39B"/>
-            <ellipse cx="214" cy="140" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 214 140)"/>
-            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
-            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
-            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#7C5CFF">Now open Saturdays · Mon–Sat 7–3</text>
-            <g font-family="Arial,sans-serif">
-              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
-              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
-              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
-              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
-              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
-              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
-              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
-              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
-              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$28</text>
-            </g>
-          </svg>
-
-          <!-- AFTER TEXT 2 — cake price $32 -->
-          <svg class="step step-1" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
-            <rect width="640" height="430" fill="#FBFAFF"/>
-            <text x="28" y="58" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
-            <rect x="418" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="470" y="46" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="528" y="37" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
-            <text x="570" y="55" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
-            <rect x="28" y="84" width="300" height="180" rx="14" fill="#FFF9E8"/>
-            <circle cx="178" cy="174" r="64" fill="#E8C079"/>
-            <circle cx="178" cy="174" r="50" fill="#FFD166"/>
-            <circle cx="160" cy="158" r="9" fill="#FFE39B"/>
-            <ellipse cx="214" cy="140" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 214 140)"/>
-            <text x="352" y="138" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
-            <text x="352" y="170" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
-            <text x="352" y="206" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Now open Saturdays · Mon–Sat 7–3</text>
-            <g font-family="Arial,sans-serif">
-              <rect x="28" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="62" cy="326" r="18" fill="#E0A84F"/>
-              <text x="90" y="332" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
-              <text x="48" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
-              <rect x="232" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="266" cy="326" r="18" fill="#FFD166"/>
-              <text x="294" y="332" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
-              <text x="252" y="380" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
-              <rect x="436" y="292" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="470" cy="326" r="18" fill="#F49AC1"/>
-              <text x="498" y="332" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
-              <text x="456" y="380" font-family="Menlo,Consolas,monospace" font-size="15" font-weight="700" fill="#7C5CFF">$32</text>
-            </g>
-          </svg>
-
-          <!-- AFTER TEXT 3 — holiday banner -->
-          <svg class="step step-2" viewBox="0 0 640 430" width="640" height="430" aria-hidden="true" focusable="false">
-            <rect width="640" height="430" fill="#FBFAFF"/>
-            <rect width="640" height="30" fill="#7C5CFF"/>
-            <text x="320" y="20" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Closed July 4th — see you Monday!</text>
-            <text x="28" y="64" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="700" fill="#1A1530">Butter &amp; Crumb</text>
-            <rect x="418" y="52" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="470" y="52" width="42" height="9" rx="4.5" fill="#D8D3EA"/>
-            <rect x="528" y="43" width="84" height="27" rx="13.5" fill="#7C5CFF"/>
-            <text x="570" y="61" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Order</text>
-            <rect x="28" y="90" width="300" height="176" rx="14" fill="#FFF9E8"/>
-            <circle cx="178" cy="178" r="62" fill="#E8C079"/>
-            <circle cx="178" cy="178" r="48" fill="#FFD166"/>
-            <circle cx="161" cy="163" r="9" fill="#FFE39B"/>
-            <ellipse cx="212" cy="145" rx="12" ry="5" fill="#5FA860" transform="rotate(-32 212 145)"/>
-            <text x="352" y="142" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">Baked fresh,</text>
-            <text x="352" y="174" font-family="Arial,sans-serif" font-size="27" font-weight="800" fill="#1A1530">every morning.</text>
-            <text x="352" y="208" font-family="Arial,sans-serif" font-size="14" fill="#55507A">Now open Saturdays · Mon–Sat 7–3</text>
-            <g font-family="Arial,sans-serif">
-              <rect x="28" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="62" cy="328" r="18" fill="#E0A84F"/>
-              <text x="90" y="334" font-size="14" font-weight="700" fill="#1A1530">Sourdough</text>
-              <text x="48" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$8</text>
-              <rect x="232" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="266" cy="328" r="18" fill="#FFD166"/>
-              <text x="294" y="334" font-size="14" font-weight="700" fill="#1A1530">Lemon tarts</text>
-              <text x="252" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$4.50</text>
-              <rect x="436" y="294" width="176" height="110" rx="12" fill="#FFFFFF" stroke="#E8E4F4"/>
-              <circle cx="470" cy="328" r="18" fill="#F49AC1"/>
-              <text x="498" y="334" font-size="14" font-weight="700" fill="#1A1530">Birthday cakes</text>
-              <text x="456" y="382" font-family="Menlo,Consolas,monospace" font-size="15" fill="#55507A">$32</text>
-            </g>
-          </svg>
-
+        <!-- DOOR B — NEVER MISS A CALL · The Responder -->
+        <div class="door reveal">
+          <div class="door-art">
+            <svg viewBox="0 0 640 300" width="640" height="300" role="img" aria-label="A phone glowing awake at night beside a sleeping dark shop, a little spark sending a text-back bubble that reads: got your call, on it.">
+              <defs>
+                <linearGradient id="dB-phone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#211A3C"/><stop offset="1" stop-color="#160F28"/></linearGradient>
+                <linearGradient id="dB-bub" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient>
+                <radialGradient id="dB-glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#B7A0FF" stop-opacity=".8"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
+              </defs>
+              <rect width="640" height="300" fill="#0A0716"/>
+              <!-- sleeping dark shop behind -->
+              <rect x="40" y="150" width="150" height="120" fill="#100B20"/>
+              <path d="M34 150 H196 L184 128 H46 Z" fill="#160F26"/>
+              <rect x="60" y="182" width="48" height="60" rx="4" fill="#1A142E"/><rect x="120" y="182" width="48" height="60" rx="4" fill="#1A142E"/>
+              <!-- "zzz" the shop sleeps -->
+              <g fill="#3A3160" font-family="Georgia,serif" font-style="italic"><text x="150" y="150" font-size="22">z</text><text x="168" y="134" font-size="16">z</text></g>
+              <!-- the phone, awake -->
+              <circle cx="430" cy="150" r="120" fill="url(#dB-glow)"/>
+              <rect x="372" y="54" width="150" height="210" rx="24" fill="url(#dB-phone)" stroke="#3A3160" stroke-width="2"/>
+              <rect x="388" y="82" width="118" height="154" rx="10" fill="#0C0A1C"/>
+              <rect x="422" y="66" width="50" height="7" rx="3.5" fill="#3A3160"/>
+              <!-- missed call line -->
+              <g font-family="Arial,sans-serif">
+                <circle cx="410" cy="112" r="12" fill="#2A2350"/>
+                <path d="M405 108 a5 5 0 0 1 5 -1 l3 4 -3 3 a10 10 0 0 0 5 5 l3 -3 4 3 a5 5 0 0 1 -1 5 c-8 3 -18 -6 -16 -15 z" fill="#B8B2D4"/>
+                <rect x="430" y="106" width="66" height="6" rx="3" fill="#4A4270"/>
+                <rect x="430" y="118" width="42" height="5" rx="2.5" fill="#39335A"/>
+              </g>
+              <!-- the text-back bubble, sent by the spark -->
+              <g>
+                <rect x="398" y="150" width="100" height="58" rx="14" fill="url(#dB-bub)"/>
+                <path d="M420 208 l-10 16 l24 -12 z" fill="url(#dB-bub)"/>
+                <rect x="410" y="166" width="76" height="6" rx="3" fill="#FFFFFF" opacity=".92"/>
+                <rect x="410" y="180" width="58" height="6" rx="3" fill="#FFFFFF" opacity=".7"/>
+              </g>
+              <!-- the little spark hovering by the phone -->
+              <g transform="translate(360,120)">
+                <circle r="20" fill="url(#dB-glow)"/>
+                <path d="M0 -12 L3 -3 L12 0 L3 3 L0 12 L-3 3 L-12 0 L-3 -3 Z" fill="#FFFFFF"/>
+              </g>
+            </svg>
+          </div>
+          <p class="eyebrow">Never miss a call · the Hive</p>
+          <h3>Your phone texts them back when you can&rsquo;t</h3>
+          <p>You&rsquo;re on a ladder, under a sink, mid-cut. The call goes to voicemail — but your phone has already texted the customer back, so the job waits for you instead of going to the next name in their search.</p>
+          <p class="price"><span class="per">from&nbsp;</span><span class="num">$99</span><span class="per">/mo</span></p>
+          <ul class="door-list">
+            <li>Miss a call → the customer gets a friendly text back in seconds</li>
+            <li>Works with the number you already have</li>
+            <li>First app of the Hive — stack more, pay less each month</li>
+          </ul>
+          <div class="actions">
+            <a class="btn primary" href="/automation.html">See the Hive</a>
+            <a class="btn ghost" href="tel:+13217882555">Call to try it</a>
+          </div>
         </div>
+
       </div>
-      <p class="reveal" style="margin-top:1.25rem"><span class="badge">A demonstration</span></p>
-      <p class="terms reveal" style="max-width:34em">This is how the service works, not a client&rsquo;s site. Your changes are made by a person and are usually live the same day.</p>
-    </div>
-  </section>
 
-  <!-- ══ WHAT YOU GET ════════════════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">What you get</p>
-      <h2 class="reveal">The whole job, <em class="accent">handled</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <h3>Found and recommended</h3>
-          <p>Built to be findable and citable — your best shot at coming up when someone asks their phone for the best plumber, bakery, or barber in town. We never promise rankings; we build so the answer can be you.</p>
-        </div>
-        <div class="card reveal">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18v3h3l5.7-5.7a4.5 4.5 0 0 0 6-6l-2.6 2.6-2.4-2.4 2.6-2.6z"/></svg>
-          <h3>We&rsquo;re the labor</h3>
-          <p>Design, hosting, updates, changes — the lot. One accountable person runs your whole web presence while you run the business. Need something changed? Text it.</p>
-        </div>
-        <div class="card reveal">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="margin-bottom:.9rem"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/></svg>
-          <h3>You own it</h3>
-          <p>Your site, your domain, your content — yours to keep. Leave whenever you like and take all of it with you. No lock-in, ever.</p>
+      <!-- the Hive strip — door B opens into the whole comb -->
+      <div class="callout reveal" style="margin-top:2rem">
+        <p class="eyebrow" style="margin:0">Behind the second door · the Hive</p>
+        <p style="margin:0">The Responder is the first app of <strong>the Hive</strong>: booking that fills your calendar, review asks after every job, after-hours answers on your site, follow-ups that bring regulars back, invoices that chase themselves. Stack apps and the price drops — the whole hive runs for a flat $219/mo. And the text-back is live on my own line right now: call <a href="tel:+13217882555"><strong>(321)&nbsp;788-2555</strong></a>, let it ring out, and watch it land on your phone.</p>
+        <div class="actions">
+          <a class="btn primary" href="/pricing.html#build-your-hive">Build your hive</a>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ══ THE METER ═══════════════════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">Proof, monthly</p>
-      <h2 class="reveal">One plain note a month: is it <em class="accent">working</em>?</h2>
-      <p class="lede reveal" style="margin-top:1rem">No charts to decode, no login to check. We send the numbers that matter in a note you can read at a red light.</p>
-      <div class="meter reveal" style="margin-top:2.5rem">
-        <header><span>Your month, in one note</span> <span class="badge">Sample</span></header>
-        <div class="cells">
-          <div class="stat"><span class="num" data-count-to="14">14</span><span class="stat-label">calls from the site</span></div>
-          <div class="stat"><span class="num" data-count-to="6">6</span><span class="stat-label">jobs booked</span></div>
-          <div class="stat"><span class="num">3rd</span><span class="stat-label">on the local map — up from 7th</span></div>
-        </div>
-        <p class="terms">A sample of the note, not a promise. Your note shows your numbers — results vary and are never guaranteed.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ THE WORK — two pieces, both honest ══════════════════════════════ -->
+  <!-- ══ THE WORK — one real, live site (daarx.money) ════════════════════ -->
   <section class="section">
     <div class="wrap">
       <p class="eyebrow reveal">The work</p>
-      <h2 class="reveal">Two pieces. Both <em class="accent">real</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients. Here&rsquo;s what we&rsquo;ve built — open them and judge for yourself.</p>
+      <h2 class="reveal">Real work you can <em class="accent">open</em> right now.</h2>
+      <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients. Here&rsquo;s a live production site we built and run — open it and judge the craft for yourself.</p>
 
-      <div class="grid cols-2" style="margin-top:2.5rem">
+      <div class="grid cols-2" style="margin-top:2.5rem;align-items:center">
         <div class="reveal">
           <div class="shop-window">
             <div class="shop-bar"><span class="num" style="font-size:.85rem;color:var(--muted)">daarx.money</span><span class="badge">Live site we built</span></div>
@@ -481,94 +410,54 @@ html:not(.js) #demo-site .step-0{display:block}
               <rect x="404" y="272" width="132" height="9" rx="4.5" fill="#5E5878"/>
             </svg>
           </div>
-          <p style="margin-top:.9rem;color:var(--muted)">A live product site we built and run — proof of the craft, out in the world. <a href="https://daarx.money/">Visit daarx.money</a></p>
+          <p style="margin-top:.9rem;color:var(--muted)">Proof the craft ships — open it on your phone right now. <a href="https://daarx.money/">Visit daarx.money</a></p>
         </div>
 
         <div class="reveal">
-          <div class="shop-window">
-            <div class="shop-bar"><span class="num" style="font-size:.85rem;color:var(--muted)">tidewater</span><span class="badge">Showpiece demo build</span></div>
-            <svg viewBox="0 0 640 360" width="640" height="360" aria-hidden="true" focusable="false">
-              <rect width="640" height="360" fill="#F4F8FB"/>
-              <text x="36" y="50" font-family="Georgia,serif" font-size="19" font-weight="700" fill="#123A5C">Tidewater Plumbing &amp; Heating</text>
-              <rect x="500" y="30" width="104" height="28" rx="14" fill="#1B7FA8"/>
-              <text x="552" y="49" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">Call now</text>
-              <rect x="36" y="104" width="320" height="20" rx="10" fill="#123A5C"/>
-              <rect x="36" y="138" width="252" height="20" rx="10" fill="#123A5C"/>
-              <rect x="36" y="182" width="272" height="10" rx="5" fill="#7C93A8"/>
-              <rect x="36" y="202" width="204" height="10" rx="5" fill="#7C93A8"/>
-              <g font-family="Arial,sans-serif">
-                <rect x="36" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
-                <text x="52" y="276" font-size="13" font-weight="700" fill="#123A5C">Repairs</text>
-                <rect x="52" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
-                <rect x="228" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
-                <text x="244" y="276" font-size="13" font-weight="700" fill="#123A5C">Water heaters</text>
-                <rect x="244" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
-                <rect x="420" y="244" width="176" height="76" rx="12" fill="#FFFFFF" stroke="#DCE7F0"/>
-                <text x="436" y="276" font-size="13" font-weight="700" fill="#123A5C">Same-day</text>
-                <rect x="436" y="292" width="120" height="8" rx="4" fill="#C3D3E0"/>
-              </g>
-              <path d="M420 96 q28 -20 56 0 t56 0 t56 0 t56 0 V180 H420 Z" fill="#1B7FA8" opacity=".16"/>
-              <path d="M420 116 q28 -20 56 0 t56 0 t56 0 t56 0" fill="none" stroke="#1B7FA8" stroke-width="4" stroke-linecap="round"/>
-            </svg>
+          <h3>Judge us on what&rsquo;s real.</h3>
+          <p style="margin-top:.9rem;color:var(--muted)">We&rsquo;d rather show you one genuinely live site than a wall of stock mockups. daarx.money is a real product site — dark, fast, and built by hand. What we&rsquo;ll never do is borrow someone else&rsquo;s logo and call it ours.</p>
+          <div class="actions" style="margin-top:1.5rem">
+            <a class="btn ghost" href="https://daarx.money/">Open daarx.money</a>
           </div>
-          <p style="margin-top:.9rem;color:var(--muted)">A demo we built to show what&rsquo;s possible — not a client, and labeled that way. <a href="/work/tidewater/">Explore the build</a></p>
         </div>
-      </div>
-
-      <div class="actions reveal" style="margin-top:2rem">
-        <a class="btn ghost" href="/work.html">See the work</a>
       </div>
     </div>
   </section>
 
-  <!-- ══ PRICING TEASER — the bright shop ════════════════════════════════ -->
+  <!-- ══ CLOSE — one clear path to /start/ ═══════════════════════════════ -->
   <section class="section daylight">
     <div class="wrap">
-      <p class="eyebrow reveal">Pricing</p>
-      <h2 class="reveal">One clear path. Start <em class="accent">small</em>.</h2>
-      <div class="grid cols-2" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <h3>Do it yourself</h3>
-          <p class="price" style="margin:.4rem 0">from&nbsp;<span class="num">$9</span><span class="per">/mo</span></p>
-          <p>You drive. Built-in tools and hosting — the cheapest way in.</p>
-        </div>
-        <div class="card reveal">
-          <h3>Done for you</h3>
-          <p class="price" style="margin:.4rem 0"><span class="num">$89</span><span class="per">/mo · $0 down</span></p>
-          <p>We build it, host it, and run it. Everything included. Cancel anytime.</p>
-        </div>
-        <div class="card reveal">
-          <h3>Build + Care</h3>
-          <p class="price" style="margin:.4rem 0">from&nbsp;<span class="num">$500</span><span class="per">+ $39/mo care</span></p>
-          <p>Pay once for the build and own it outright — we keep it fast, safe, and current.</p>
-        </div>
-        <div class="card reveal">
-          <h3>White Glove Wizardry</h3>
-          <p class="price" style="margin:.4rem 0"><span class="per" style="font-size:1.1rem">by application</span></p>
-          <p>One-on-one with the founder, start to finish. A few businesses a month.</p>
-        </div>
-      </div>
-      <p class="terms reveal" style="margin-top:1.75rem;max-width:44em">Every done-for-you plan: 30-day risk-free trial · card upfront · one build · auto-converts after the trial · one-tap cancel.</p>
-      <div class="actions reveal" style="margin-top:1.5rem">
-        <a class="btn primary" href="/pricing.html">See full pricing</a>
-      </div>
-    </div>
-  </section>
+      <p class="eyebrow reveal">Websites + The Responder</p>
+      <h2 class="reveal">Want the whole thing <em class="accent">handled</em>?</h2>
+      <p class="lede reveal" style="margin-top:1rem">Most owners take both: a site that brings the calls in, and The Responder so none of them slip away. Start with either — we&rsquo;ll help you fit the other in when you&rsquo;re ready.</p>
 
-  <!-- ══ THE CLOSE ═══════════════════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <h2 class="reveal">See your site before you spend a <em class="accent">cent</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Start with a free preview — no card, no commitment. Rather ask a question first? A real person answers.</p>
+      <div class="grid cols-2 reveal" style="margin-top:2.5rem">
+        <div class="card">
+          <h3>Getting a site?</h3>
+          <p>Want the calls it brings in answered too? Add The Responder so a missed call still becomes a booked job.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/automation.html">Add The Responder</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Here for The Responder?</h3>
+          <p>Want a site to match — one that actually makes the phone ring in the first place? We&rsquo;ll build you one.</p>
+          <div class="actions" style="margin-top:1.1rem">
+            <a class="btn ghost" href="/pricing.html">See website pricing</a>
+          </div>
+        </div>
+      </div>
+
       <div class="actions reveal" style="margin-top:2rem">
-        <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact.html">Talk to a person</a>
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
     </div>
   </section>
 
 </main>
 
+<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
 <footer class="footer">
   <div class="wrap">
     <div class="footer-grid">
@@ -577,22 +466,25 @@ html:not(.js) #demo-site .step-0{display:block}
           <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
           <span class="brand-name">Site&nbsp;Sourcery</span>
         </a>
-        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
-        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
+        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-honest">Everything here is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work.html">Work</a>
         <a href="/pricing.html">Pricing</a>
+        <a href="/automation.html">The Hive</a>
         <a href="/how-it-works.html">How it works</a>
+        <a href="/about.html">About</a>
         <a href="/faq.html">FAQ</a>
+        <a href="/terms.html">Terms</a>
         <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
+        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
     <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>

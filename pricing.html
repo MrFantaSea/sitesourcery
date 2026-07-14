@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — pricing.html · PRICING ("Spellcast")
-     Two honest groups: OWN IT ONCE (8 one-time build tiers, Site recommended)
-     and MONTHLY CARE (5 optional care plans). A bespoke inline-SVG moment —
-     "the skyline of tiers": eight night buildings rising like a price ladder,
-     each with warm lit windows that multiply as you climb; the recommended
-     rung haloed gold. Reuses the shared .spellstage / spark / --lit language,
-     so sourcery.js drives the interaction with no new code.
+     SITE SOURCERY — pricing.html · "THE WORKSHOP"
+     The spellbook of workings & wards: two chapters — builds you own and care
+     that keeps them running — plus The Responder. A clean, static hero; no
+     interactive contraptions on this page.
      Self-contained: loads ONLY same-origin style.css + sourcery.js. All
      graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
      The only http(s) URLs below are hyperlinks/metadata, never loads.
@@ -14,29 +11,119 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pricing — Site Sourcery</title>
-<meta name="description" content="Plain prices, two clear groups. Own your site outright with a one-time build — from a $200 one-page Card to a $3,000 Flagship. Optional monthly care from $15. You own everything on final payment; one-page contract, no lock-in.">
+<title>Pricing — Site Sourcery · every spell, itemized</title>
+<meta name="description" content="Exactly what you get, tier by tier. Eight one-time website builds from $200 to $3,000, month-to-month care from $15, and The Responder — missed-call text-back that answers a customer when you can't, from $99/mo. 50% to begin a build, the balance on delivery, and you own everything on the final payment.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/pricing.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Pricing — Site Sourcery">
-<meta property="og:description" content="Own your site outright, one time — from a $200 Card to a $3,000 Flagship. Optional monthly care from $15. You own everything; one-page contract, no lock-in.">
+<meta property="og:title" content="Pricing — Site Sourcery · every spell, itemized">
+<meta property="og:description" content="Exactly what you get, tier by tier. One-time builds from $200, month-to-month care from $15. 50% to begin; you own everything on the final payment.">
 <meta property="og:url" content="https://sitesourcery.com/pricing.html">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://sitesourcery.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Pricing — Site Sourcery">
-<meta name="twitter:description" content="Two clear groups: own the build once, add monthly care only if you want it. You own everything on final payment.">
-<link rel="stylesheet" href="style.css">
-<script src="sourcery.js" defer></script>
-<!-- Honest structured data: real prices, no fabricated ratings or reviews. -->
+<meta name="twitter:description" content="Every spell, itemized. Builds from $200, care from $15. You own everything.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Service","name":"Site Sourcery — custom websites for local businesses","serviceType":"Custom website design, hosting, and care","provider":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/"},"offers":{"@type":"OfferCatalog","name":"Plans","itemListElement":[{"@type":"Offer","name":"Card","description":"One page — who you are, what you do, how to reach you.","priceSpecification":{"@type":"PriceSpecification","price":"200","priceCurrency":"USD","description":"one-time build, 1 page"}},{"@type":"Offer","name":"Card Plus","description":"A rich single page with a gallery.","priceSpecification":{"@type":"PriceSpecification","price":"350","priceCurrency":"USD","description":"one-time build, 1 page + gallery"}},{"@type":"Offer","name":"Site","description":"A proper little site, built to be found. Up to 4 pages plus basic SEO.","priceSpecification":{"@type":"PriceSpecification","price":"600","priceCurrency":"USD","description":"one-time build, up to 4 pages + basic SEO"}},{"@type":"Offer","name":"Site Plus","description":"Up to 6 pages with a portfolio or blog.","priceSpecification":{"@type":"PriceSpecification","price":"900","priceCurrency":"USD","description":"one-time build, up to 6 pages"}},{"@type":"Offer","name":"Pro","description":"Up to 9 pages plus one system: booking requests, quotes, or a live menu. No payments.","priceSpecification":{"@type":"PriceSpecification","price":"1300","priceCurrency":"USD","description":"one-time build, up to 9 pages + one system"}},{"@type":"Offer","name":"Pro Plus","description":"Up to 12 pages, bespoke graphics, and one system.","priceSpecification":{"@type":"PriceSpecification","price":"1800","priceCurrency":"USD","description":"one-time build, up to 12 pages"}},{"@type":"Offer","name":"Signature","description":"Up to 15 pages, bespoke illustration and animation, plus one advanced system.","priceSpecification":{"@type":"PriceSpecification","price":"2400","priceCurrency":"USD","description":"one-time build, up to 15 pages"}},{"@type":"Offer","name":"Flagship","description":"A daarx-level build: fully bespoke, about 20 pages, any one complex system.","priceSpecification":{"@type":"PriceSpecification","price":"3000","priceCurrency":"USD","description":"one-time build, ~20 pages"}},{"@type":"Offer","name":"Host","description":"Your site online, fast and safe. No changes.","priceSpecification":{"@type":"UnitPriceSpecification","price":"15","priceCurrency":"USD","unitText":"MONTH"}},{"@type":"Offer","name":"Care Lite","description":"Two small changes a month.","priceSpecification":{"@type":"UnitPriceSpecification","price":"29","priceCurrency":"USD","unitText":"MONTH"}},{"@type":"Offer","name":"Care","description":"Unlimited small changes plus a plain monthly note.","priceSpecification":{"@type":"UnitPriceSpecification","price":"59","priceCurrency":"USD","unitText":"MONTH"}},{"@type":"Offer","name":"Care Plus","description":"Care plus get-found work, reviews, and priority.","priceSpecification":{"@type":"UnitPriceSpecification","price":"99","priceCurrency":"USD","unitText":"MONTH"}},{"@type":"Offer","name":"Partner","description":"A proactive web-person minding your corner of the web.","priceSpecification":{"@type":"UnitPriceSpecification","price":"159","priceCurrency":"USD","unitText":"MONTH"}}]}}
+{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","slogan":"Custom websites for local businesses — built, hosted, and run for you.","description":"Custom websites for local businesses, priced plainly. One-time builds you own outright, and month-to-month care that keeps them running. 50% to begin, the balance on delivery, and everything is yours on the final payment.","makesOffer":{"@type":"OfferCatalog","name":"Workings & Wards","itemListElement":[
+{"@type":"OfferCatalog","name":"Conjure once — the Workings (one-time builds you own)","itemListElement":[
+{"@type":"Offer","name":"Card","price":"200","priceCurrency":"USD","description":"One striking page that makes you real online — who you are and what you do at a glance, tap-to-call and tap-for-directions, your hours and a map kept current."},
+{"@type":"Offer","name":"Card Plus","price":"350","priceCurrency":"USD","description":"Your whole story on one flowing scroll — everything on Card told fuller, a photo gallery that shows the work at its best, and real words from real customers."},
+{"@type":"Offer","name":"Site","price":"600","priceCurrency":"USD","description":"A proper multi-page site — home, services, about and contact each its own page, custom-drawn around your trade and written to be found for what you do."},
+{"@type":"Offer","name":"Site Plus","price":"900","priceCurrency":"USD","description":"A fuller site with room to show your work over time — a portfolio that lets the work speak, or a living blog, with space that keeps growing as you do."},
+{"@type":"Offer","name":"Pro","price":"1300","priceCurrency":"USD","description":"A full custom site with one working tool built in — take booking requests, send quotes, or run a live menu, with every enquiry reaching you ready to answer."},
+{"@type":"Offer","name":"Pro Plus","price":"1800","priceCurrency":"USD","description":"A larger bespoke site with custom graphics and illustration drawn for you alone, plus a built-in tool doing real work — booking, quotes, or a menu."},
+{"@type":"Offer","name":"Signature","price":"2400","priceCurrency":"USD","description":"A site people remember — hand-drawn illustration and motion that moves as they scroll, and an advanced tool: a small shop, calendar booking, or a members' area."},
+{"@type":"Offer","name":"Flagship","price":"3000","priceCurrency":"USD","description":"The full working of the craft, built from scratch and entirely yours — the showpiece kind of site people screenshot."}
+]},
+{"@type":"OfferCatalog","name":"Ward monthly — the Wards (month-to-month care)","itemListElement":[
+{"@type":"Offer","name":"Host","price":"15","priceCurrency":"USD","description":"Your site kept online, fast and safe — hosting, security, and backups all handled, watched over, quick on every phone."},
+{"@type":"Offer","name":"Care Lite","price":"29","priceCurrency":"USD","description":"Everything in Host, plus a couple of changes a month whenever you need them — new hours, a new price, a fresh photo, done for you."},
+{"@type":"Offer","name":"Care","price":"59","priceCurrency":"USD","description":"Text any change any time and it goes live, usually the same day, plus a plain-English monthly note on how the site is doing — a studio that knows your site."},
+{"@type":"Offer","name":"Care Plus","price":"99","priceCurrency":"USD","description":"Everything in Care, plus ongoing get-found work and help gathering real reviews, with your requests jumping the line."},
+{"@type":"Offer","name":"Partner","price":"159","priceCurrency":"USD","description":"A real web-partner in your corner minding your whole online presence — proactive ideas, seasonal refreshes, and first call when anything's up."}
+]},
+{"@type":"OfferCatalog","name":"The Hive — AI integration & automation (month-to-month)","itemListElement":[
+{"@type":"Offer","name":"The Responder","price":"99","priceCurrency":"USD","description":"Miss a call and your phone texts the customer back in seconds, so the job waits for you instead of going to the next name in their search. Works with the number you already have. Month-to-month, $0 down, cancel anytime."},
+{"@type":"Offer","name":"Online booking","price":"29","priceCurrency":"USD","description":"A booking link that fills your calendar day or night, with automatic reminders so fewer no-shows. $200 setup, then $29/month."},
+{"@type":"Offer","name":"Review engine","price":"69","priceCurrency":"USD","description":"After each job a friendly review ask goes out, and every review gets a drafted reply ready to send. $150 setup, then $69/month."},
+{"@type":"Offer","name":"After-hours site answering","price":"69","priceCurrency":"USD","description":"A helper on your website that answers common questions instantly from facts you approve — and never pretends to be human. $250 setup, then $69/month."},
+{"@type":"Offer","name":"Customer follow-ups","price":"49","priceCurrency":"USD","description":"A short note in your voice that keeps regulars coming back. $150 setup, then $49/month."},
+{"@type":"Offer","name":"Getting paid","price":"200","priceCurrency":"USD","description":"Deposits up front, invoices with a pay-now button, cards on site — set up once on your own accounts. $200 one-time."},
+{"@type":"Offer","name":"The whole Hive","price":"219","priceCurrency":"USD","description":"All five monthly apps together — missed-call text-back, booking, reviews, after-hours answering, follow-ups — for a flat $219/month."}
+]}]}}
 </script>
+<link rel="stylesheet" href="style.css">
+<noscript><style>.when-once,.when-monthly{display:block!important}.toggle{display:none!important}</style></noscript>
+<style>
+/* page-scoped: the tier sigils + the two-chapter book. System CSS untouched. */
+.tier-sigil{width:30px;height:30px;flex:0 0 auto;opacity:.85;
+  transition:opacity .3s var(--ease),filter .3s var(--ease),transform .3s var(--ease)}
+.tier-sigil .disc{fill:var(--surface-2);stroke:var(--hairline);stroke-width:1}
+.price-card:hover .tier-sigil,.price-card:focus-within .tier-sigil{
+  opacity:1;filter:drop-shadow(0 0 8px rgba(124,92,255,.5));transform:scale(1.06)}
+/* the italic "true name" — reuses .accent type but plain --muted, not a 2nd gradient */
+.truename{font-family:var(--font-accent);font-style:italic;font-weight:400;
+  letter-spacing:0;color:var(--muted);font-size:1.08rem;
+  -webkit-text-fill-color:currentColor}
+.chapter-intro{max-width:40em;margin:0 0 2rem}
+.book-head{display:flex;flex-direction:column;align-items:flex-start}
+/* the how-it-works step glyph */
+.step-glyph{width:30px;height:30px;margin-bottom:.9rem;flex:0 0 auto}
+
+/* ── the hive builder: honeycomb cells, pure CSS hexes ── */
+.comb{--hex:clamp(112px,17vw,170px);display:flex;flex-direction:column;align-items:center;margin-top:2.4rem}
+@media (max-width:430px){.comb{--hex:calc((100vw - 3.4rem)/3 - 7px)}.hex-price{display:none}}
+.comb-row{display:flex;gap:10px}
+.comb-row+.comb-row{margin-top:calc(var(--hex)*-0.2)}
+.hex{position:relative;width:var(--hex);height:calc(var(--hex)*1.1547);border:0;padding:0;
+  background:linear-gradient(135deg,#3A3160,#241C44);
+  clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  cursor:pointer;transition:filter .3s var(--ease),transform .3s var(--ease);
+  -webkit-tap-highlight-color:transparent;font:inherit}
+.hex:hover{transform:translateY(-3px)}
+.hex:focus-visible{filter:drop-shadow(0 0 12px rgba(124,92,255,.9))}
+.hex:focus-visible .hex-in{outline:3px solid #FFD9E6;outline-offset:-3px}
+.hex-in{position:absolute;inset:2px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  background:#141026;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:.15rem;padding:16% 12%;text-align:center;transition:background .3s var(--ease)}
+.hex-name{font-weight:700;font-size:clamp(.7rem,1.6vw,.92rem);color:#EDEAF6;line-height:1.15;overflow-wrap:break-word;max-width:100%}
+.hex-price{font-size:clamp(.64rem,1.35vw,.8rem);color:var(--muted)}
+.hex-tick{font-size:.85rem;line-height:1;color:#FFD9E6;opacity:0;transition:opacity .3s}
+.hex[aria-pressed="true"]{background:linear-gradient(135deg,#FF5C8A,#7C5CFF);
+  filter:drop-shadow(0 0 16px rgba(124,92,255,.55))}
+.hex[aria-pressed="true"] .hex-in{background:#1D1339}
+.hex[aria-pressed="true"] .hex-tick{opacity:1}
+.hex-core,.hex-core:hover{cursor:default;transform:none}
+.hex-core .hex-in{background:#0F0B1E}
+.hex-total{font-size:clamp(1.02rem,2.6vw,1.55rem);font-weight:800;color:#fff}
+.hex-total small{display:block;font-size:.6em;font-weight:600;color:var(--muted)}
+.hive-chip{margin-top:.3rem;padding:.14rem .55rem;border-radius:999px;
+  border:1px solid rgba(124,92,255,.5);font-size:.68rem;color:#C8BEFF;opacity:0;transition:opacity .3s}
+.hive-chip.on{opacity:1}
+.hive-bill{max-width:36em;margin:2.2rem auto 0;text-align:center}
+.hive-bill .actions{justify-content:center}
+.hive-spark{position:fixed;width:9px;height:9px;border-radius:50%;pointer-events:none;z-index:60;
+  background:radial-gradient(circle,#FFD9E6,#FF5C8A 55%,transparent 70%)}
+@media (prefers-reduced-motion: reduce){.hex,.hex-in,.hex-tick,.hive-chip{transition:none}.hex:hover{transform:none}}
+/* the grimoire — gentle life; every motion honors reduced-motion */
+.grimoire{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.grimoire svg{transition:filter .6s var(--ease),transform .4s var(--ease)}
+.grimoire:hover svg,.grimoire:focus-visible svg{filter:drop-shadow(0 0 26px rgba(124,92,255,.35))}
+.grimoire:focus-visible{outline:2px solid #7C5CFF;outline-offset:6px;border-radius:8px}
+</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+
+<!-- one shared charm gradient for every tier sigil (as home declares brandG once) -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;pointer-events:none"><defs><linearGradient id="charmG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs></svg>
 
 <nav class="nav" aria-label="Main">
   <div class="wrap nav-inner">
@@ -48,9 +135,10 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/work.html">Work</a>
+      <a class="nav-link" href="/">Home</a>
       <a class="nav-link" href="/pricing.html" aria-current="page">Pricing</a>
-      <a class="nav-link" href="/faq.html">FAQ</a>
+      <a class="nav-link" href="/automation.html">The Hive</a>
+      <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html">Contact</a>
       <a class="btn primary nav-cta" href="/start/">Start your site</a>
     </div>
@@ -59,351 +147,409 @@
 
 <main id="main">
 
-  <!-- ══ HERO — the promise + the bespoke "skyline of tiers" moment ═════════ -->
+  <!-- ══ HERO — every spell, itemized (clean, static) ═════════════════════ -->
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">Pricing</p>
-      <h1 class="hero-mega reveal">Plain prices. One clear <em class="accent">climb</em>.</h1>
-      <p class="lede reveal">Own your site outright with a one-time build — no subscription to keep it. Add a monthly care plan only if you want us minding it. <strong>You own everything. No lock-in.</strong></p>
-      <div class="actions reveal" aria-label="What holds on every plan" style="margin-top:1.8rem">
-        <span class="badge">You own everything</span>
-        <span class="badge">One-page contract</span>
-        <span class="badge">Yours on final payment</span>
-        <span class="badge">Free preview first</span>
+      <h1 class="hero-mega reveal">Every spell, <em class="accent">itemized</em>.</h1>
+      <p class="lede reveal">No mystery, no menus to decode. Here&rsquo;s each site I build and exactly what it does for you, plus <strong>the Hive</strong>: six apps that answer missed calls, fill your calendar, and tend your reviews while you work. Pick the working that fits, or name a bigger vision and I&rsquo;ll quote it. <strong>You own every build outright on the final payment.</strong></p>
+      <div class="actions reveal">
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+      </div>
+      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">Plain money, no tricks: 50% to begin a build and the balance on delivery (the two smallest, Card and Card Plus, are simply paid up front). Wards and Hive apps are month-to-month, cancel anytime.</p>
+
+      <!-- ── THE GRIMOIRE · the cauldron & the seven-pointed seal (pure inline SVG;
+           slow turn + cursor drift + click-to-flare, all silenced by reduced-motion) ── -->
+      <figure class="reveal grimoire" id="grimoire" tabindex="0" style="max-width:640px;margin:2.6rem auto 0;display:block" role="img" aria-label="A cauldron brews on a dark field, luminous runes rising from the brew into a great seven-pointed star turning slowly inside a floating spell-circle — the working being cast.">
+        <svg viewBox="0 0 1000 600" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+          <defs>
+            <radialGradient id="pc-halo" cx="50%" cy="40%" r="55%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".34"/><stop offset="46%" stop-color="#7C5CFF" stop-opacity=".09"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
+            <linearGradient id="pc-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5C8A"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
+            <linearGradient id="pc-cover" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A2668"/><stop offset="1" stop-color="#1C1136"/></linearGradient>
+            <filter id="pc-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <rect width="1000" height="600" fill="url(#pc-halo)"/>
+          <g fill="#C8BEFF"><circle cx="150" cy="86" r="2" opacity=".7"/><circle cx="255" cy="150" r="1.4" opacity=".5"/><circle cx="820" cy="78" r="2.2" opacity=".7"/><circle cx="898" cy="168" r="1.5" opacity=".5"/><circle cx="762" cy="206" r="1.2" opacity=".45"/><circle cx="120" cy="228" r="1.5" opacity=".5"/><circle cx="500" cy="30" r="1.6" opacity=".55"/><circle cx="626" cy="88" r="1.2" opacity=".4"/><circle cx="372" cy="52" r="1.3" opacity=".45"/></g>
+          <g transform="translate(500 232)" filter="url(#pc-glow)" fill="none" stroke="url(#pc-arc)">
+            <circle r="160" stroke-width="2" opacity=".9"/><circle r="140" stroke-width="1" opacity=".45"/>
+            <g stroke-width="2" opacity=".7">
+              <line x1="0" y1="-138" x2="0" y2="-158"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(25.7)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(51.4)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(77.1)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(102.9)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(128.6)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(154.3)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(180)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(205.7)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(231.4)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(257.1)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(282.9)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(308.6)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(334.3)"/>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="95s" repeatCount="indefinite"/>
+            </g>
+            <g class="grim-star">
+              <path d="M0,-130 L56.4,117.1 L-101.6,-81.1 L126.7,28.9 L-126.7,28.9 L101.6,-81.1 L-56.4,117.1 Z" stroke-width="2.5" opacity=".92" fill="url(#pc-arc)" fill-opacity=".07"/>
+              <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="160s" repeatCount="indefinite"/>
+            </g>
+            <g fill="url(#pc-arc)" stroke="none"><path d="M0,-20 L5.5,-5.5 L20,0 L5.5,5.5 L0,20 L-5.5,5.5 L-20,0 L-5.5,-5.5 Z" opacity=".95"/></g>
+          </g>
+          <g stroke="#C8BEFF" fill="none" stroke-width="2" stroke-linecap="round" filter="url(#pc-glow)"><path d="M446,448 q-10,-30 6,-60" opacity=".45"/><path d="M556,452 q12,-32 -4,-62" opacity=".45"/><g opacity=".8"><path d="M472,424 l0,-14 M466,417 l12,0"/></g><g opacity=".7"><path d="M536,430 l0,-14 M530,430 l12,-6"/></g><g opacity=".85"><path d="M504,404 l-6,-12 l12,0 z"/></g></g>
+          <g filter="url(#pc-glow)" transform="translate(500 480)">
+            <ellipse cx="0" cy="66" rx="200" ry="32" fill="#7C5CFF" opacity=".14"/>
+            <g stroke="#5A3FA0" stroke-width="7" stroke-linecap="round" fill="none"><path d="M-56,44 q-5,16 -13,24"/><path d="M56,44 q5,16 13,24"/></g>
+            <path d="M-96,-24 C-106,16 -62,52 0,52 C62,52 106,16 96,-24 Z" fill="url(#pc-cover)" stroke="#5A3FA0" stroke-width="1.5"/>
+            <g fill="url(#pc-arc)"><path d="M-32,42 C-25,54 -23,60 -23,66 A9,9 0 0 1 -41,66 C-41,60 -39,54 -32,42 Z" opacity=".6" transform="rotate(-9 -32 60)"/><path d="M32,42 C39,54 41,60 41,66 A9,9 0 0 1 23,66 C23,60 25,54 32,42 Z" opacity=".6" transform="rotate(9 32 60)"/><path d="M0,30 C9,47 11,56 11,64 A11,11 0 0 1 -11,64 C-11,56 -9,47 0,30 Z" opacity=".85"/><path d="M-16,56 C-12,63 -11,66 -11,69 A5.5,5.5 0 0 1 -22,69 C-22,66 -21,63 -16,56 Z" opacity=".75"/><path d="M16,56 C20,63 21,66 21,69 A5.5,5.5 0 0 1 10,69 C10,66 11,63 16,56 Z" opacity=".75"/></g>
+            <ellipse cx="0" cy="-24" rx="100" ry="20" fill="url(#pc-cover)" stroke="#5A3FA0" stroke-width="1.5"/>
+            <ellipse class="grim-brew" cx="0" cy="-24" rx="84" ry="14" fill="url(#pc-arc)" opacity=".9"/>
+            <ellipse cx="-18" cy="-27" rx="34" ry="6" fill="#C8BEFF" opacity=".5"/>
+            <g fill="#C8BEFF"><circle cx="-30" cy="-48" r="4" opacity=".8"/><circle cx="10" cy="-62" r="3" opacity=".6"/><circle cx="42" cy="-52" r="2.5" opacity=".7"/></g>
+          </g>
+        </svg>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ══ THE TWO CHAPTERS — the spellbook (toggle rig, zero new JS) ════════ -->
+  <section class="section">
+    <div class="wrap" data-billing="once">
+      <div class="book-head">
+        <p class="eyebrow reveal">The spellbook</p>
+        <h2 class="reveal">Choose your <em class="accent">working</em>.</h2>
+        <p class="lede reveal" style="margin-top:1rem">Thirteen spells across two chapters. Each names exactly what it conjures for your business — point at any leaf and its sigil catches.</p>
+
+        <div class="toggle reveal" role="group" aria-label="Choose a chapter" style="margin-top:1.6rem">
+          <button type="button" data-value="once" aria-pressed="true">Conjure once</button>
+          <button type="button" data-value="monthly" aria-pressed="false">Ward monthly</button>
+        </div>
       </div>
 
-      <!-- ── THE SKYLINE OF TIERS · signature interactive nocturne ────────────
-           A night skyline where each building is one rung of the price ladder:
-           they rise left→right, and the higher the tier the more windows light.
-           The recommended rung wears the one permitted gold halo + star. Move
-           the spark and the whole street warms; idle, it drifts and breathes;
-           no pointer / reduced motion → it simply stays lit. Inline SVG, no
-           loads. Reuses .spellstage so sourcery.js animates it as-is. -->
-      <div class="hero-stage reveal">
-        <figure class="spellstage" data-win-x="600" data-win-y="330" data-range="520"
-                role="img" aria-label="A night skyline drawn as a price ladder: eight buildings rise from left to right under a violet moon, from a short one-window Card at $200 to a towering Flagship at $3,000, each taller building lit with more warm windows. The third rung — Site, at $600 — is haloed gold as the recommended pick.">
-          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
-               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-            <defs>
-              <linearGradient id="pk-sky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0B0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
-              </linearGradient>
-              <radialGradient id="pk-moon" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="pk-pane" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#FFDDA2"/><stop offset=".5" stop-color="#F6AE5C"/><stop offset="1" stop-color="#DE7A32"/>
-              </linearGradient>
-              <radialGradient id="pk-pool" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFB460" stop-opacity=".6"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="pk-gold" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFE29A" stop-opacity=".85"/><stop offset="55%" stop-color="#FFD166" stop-opacity=".3"/><stop offset="100%" stop-color="#FFD166" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="pk-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="pk-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
-              </radialGradient>
-            </defs>
+      <div class="cast" style="margin-top:2.5rem">
 
-            <!-- sky + moon -->
-            <rect width="1200" height="640" fill="url(#pk-sky)"/>
-            <circle cx="1052" cy="118" r="250" fill="url(#pk-moon)"/>
-            <circle cx="1052" cy="118" r="40" fill="#E9E3FF" opacity=".9"/>
-            <circle cx="1038" cy="106" r="6" fill="#CFC6F0" opacity=".5"/><circle cx="1068" cy="130" r="4.5" fill="#CFC6F0" opacity=".45"/><circle cx="1058" cy="104" r="3.5" fill="#CFC6F0" opacity=".4"/>
+        <!-- ══ CHAPTER I — CONJURE ONCE · the Workings ══ -->
+        <div class="when-once">
+          <p class="eyebrow" style="margin-bottom:.6rem">Chapter I · Conjure once</p>
+          <p class="lede chapter-intro">Cast once. Pay for the working and it&rsquo;s yours — the site, the domain, the words — to keep and to carry, forever.</p>
 
-            <!-- stars -->
-            <g fill="#D6CDF7">
-              <circle class="st-twinkle" cx="110" cy="72" r="1.6"/><circle class="st-twinkle" cx="240" cy="120" r="1.2"/>
-              <circle class="st-twinkle" cx="360" cy="58" r="1.7"/><circle class="st-twinkle" cx="470" cy="112" r="1.1"/>
-              <circle class="st-twinkle" cx="600" cy="64" r="1.5"/><circle class="st-twinkle" cx="720" cy="128" r="1.2"/>
-              <circle class="st-twinkle" cx="150" cy="176" r="1.2"/><circle class="st-twinkle" cx="330" cy="196" r="1.3"/>
-              <circle class="st-twinkle" cx="820" cy="70" r="1.3"/><circle class="st-twinkle" cx="540" cy="150" r="1.1"/>
-              <circle class="st-twinkle" cx="900" cy="150" r="1.2"/><circle class="st-twinkle" cx="1160" cy="230" r="1.4"/>
-            </g>
+          <div class="grid cols-3">
 
-            <!-- faint distant skyline near the horizon -->
-            <path d="M0 512 V478 H60 V500 H130 V470 H210 V498 H300 V482 H400 V500 H500 V474 H600 V498 H720 V486 H840 V500 H960 V478 H1070 V500 H1160 V484 H1200 V520 Z" fill="#0C0819" opacity=".85"/>
+            <!-- Card -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M16 6.2 L18.2 13.8 L25.8 16 L18.2 18.2 L16 25.8 L13.8 18.2 L6.2 16 L13.8 13.8 Z" fill="url(#charmG)"/></svg>
+              <h3>Card</h3>
+              <p class="truename">First Light.</p>
+              <p class="price"><span class="num">$200</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">One striking page that makes you real online — the spell that says you exist, and you&rsquo;re open.</p>
+              <ul>
+                <li>Who you are and what you do, said in one glance</li>
+                <li>Tap to call, tap for directions — right on the screen</li>
+                <li>Your hours and a map, always current</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- street / ground -->
-            <rect x="0" y="520" width="1200" height="120" fill="#08060F"/>
-            <rect x="0" y="520" width="1200" height="2" fill="#241C3C"/>
-            <path d="M0 586 H1200" stroke="#140F26" stroke-width="2"/>
+            <!-- Card Plus -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><line x1="7" y1="24" x2="15" y2="16" stroke="url(#charmG)" stroke-width="2.4" stroke-linecap="round" opacity=".7"/><path d="M18 6.5 L19.9 13 L26.4 15 L19.9 17 L18 23.5 L16.1 17 L9.6 15 L16.1 13 Z" fill="url(#charmG)"/></svg>
+              <h3>Card Plus</h3>
+              <p class="truename">The Told Tale.</p>
+              <p class="price"><span class="num">$350</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">Your whole story on one flowing scroll — richer, warmer, more you.</p>
+              <ul>
+                <li>Everything in First Light, told fuller</li>
+                <li>A photo gallery that shows the work at its best</li>
+                <li>Real words from real customers, in their own voice</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- gold halo behind the recommended rung (Site · $600) -->
-            <ellipse cx="388" cy="392" rx="118" ry="196" fill="url(#pk-gold)"/>
+            <!-- Site · recommended -->
+            <article class="price-card recommended reveal">
+              <span class="flag">My pick</span>
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g fill="url(#charmG)"><path d="M8.5 20 l1.4 4 4 1.4 -4 1.4 -1.4 4 -1.4 -4 -4 -1.4 4 -1.4 z"/><path d="M16 8 l1.7 5 5 1.7 -5 1.7 -1.7 5 -1.7 -5 -5 -1.7 5 -1.7 z"/><path d="M23.5 20 l1.4 4 4 1.4 -4 1.4 -1.4 4 -1.4 -4 -4 -1.4 4 -1.4 z"/></g></svg>
+              <h3>Site</h3>
+              <p class="truename">The Standing Hall.</p>
+              <p class="price"><span class="num">$600</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">A proper multi-room site — a real home on the web the town can find.</p>
+              <ul>
+                <li>Home, services, about, contact — each its own page</li>
+                <li>Custom-drawn around your trade, never a template</li>
+                <li>Written and built to be found for what you do</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- ═ THE LADDER OF BUILDINGS · eight rungs, rising ═════════════ -->
-            <!-- facades (dark) -->
-            <g>
-              <rect x="60"   y="430" width="104" height="90"  fill="#100B1E"/>
-              <rect x="198"  y="389" width="104" height="131" fill="#0C081A"/>
-              <rect x="336"  y="347" width="104" height="173" fill="#150E26"/><!-- recommended, a touch warmer-dark -->
-              <rect x="474"  y="306" width="104" height="214" fill="#0C081A"/>
-              <rect x="612"  y="264" width="104" height="256" fill="#100B1E"/>
-              <rect x="750"  y="223" width="104" height="297" fill="#0C081A"/>
-              <rect x="888"  y="181" width="104" height="339" fill="#100B1E"/>
-              <rect x="1026" y="140" width="104" height="380" fill="#0C081A"/>
-            </g>
+            <!-- Site Plus -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><rect x="7" y="8" width="18" height="13" rx="2" fill="none" stroke="url(#charmG)" stroke-width="1.4" opacity=".55"/><g fill="url(#charmG)"><path d="M11 18 l1.1 3.1 3.1 1.1 -3.1 1.1 -1.1 3.1 -1.1 -3.1 -3.1 -1.1 3.1 -1.1 z"/><path d="M16 13 l1.3 3.6 3.6 1.3 -3.6 1.3 -1.3 3.6 -1.3 -3.6 -3.6 -1.3 3.6 -1.3 z"/><path d="M21 18 l1.1 3.1 3.1 1.1 -3.1 1.1 -1.1 3.1 -1.1 -3.1 -3.1 -1.1 3.1 -1.1 z"/></g></svg>
+              <h3>Site Plus</h3>
+              <p class="truename">The Long Gallery.</p>
+              <p class="price"><span class="num">$900</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">A fuller site with room to show your work over time.</p>
+              <ul>
+                <li>Everything in the Standing Hall, with more rooms</li>
+                <li>A portfolio that lets the work speak — or a living blog</li>
+                <li>Space that keeps growing as you do</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- warm cornice glow along each roofline (rises with the lit level) -->
-            <g class="st-lit-soft" fill="#B7702E">
-              <rect x="58"   y="425" width="108" height="6" rx="2"/>
-              <rect x="196"  y="384" width="108" height="6" rx="2"/>
-              <rect x="334"  y="342" width="108" height="6" rx="2"/>
-              <rect x="472"  y="301" width="108" height="6" rx="2"/>
-              <rect x="610"  y="259" width="108" height="6" rx="2"/>
-              <rect x="748"  y="218" width="108" height="6" rx="2"/>
-              <rect x="886"  y="176" width="108" height="6" rx="2"/>
-              <rect x="1024" y="135" width="108" height="6" rx="2"/>
-            </g>
+            <!-- Pro -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g fill="none" stroke="url(#charmG)" stroke-width="1.5" opacity=".6"><circle cx="16" cy="16" r="8.5"/><g stroke-linecap="round"><line x1="16" y1="5.5" x2="16" y2="8"/><line x1="16" y1="24" x2="16" y2="26.5"/><line x1="5.5" y1="16" x2="8" y2="16"/><line x1="24" y1="16" x2="26.5" y2="16"/><line x1="9" y1="9" x2="10.8" y2="10.8"/><line x1="21.2" y1="21.2" x2="23" y2="23"/><line x1="23" y1="9" x2="21.2" y2="10.8"/><line x1="10.8" y1="21.2" x2="9" y2="23"/></g></g><path d="M16 10.5 l1.4 4.1 4.1 1.4 -4.1 1.4 -1.4 4.1 -1.4 -4.1 -4.1 -1.4 4.1 -1.4 z" fill="url(#charmG)"/></svg>
+              <h3>Pro</h3>
+              <p class="truename">The Working Charm.</p>
+              <p class="price"><span class="num">$1,300</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">A site with a real tool alive inside it — it doesn&rsquo;t just tell, it does.</p>
+              <ul>
+                <li>A full custom site with one working tool built in</li>
+                <li>Take booking requests, send quotes, or run a live menu</li>
+                <li>Every enquiry reaches you ready to answer</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- the lit windows — MORE windows as the tier climbs -->
-            <g class="st-lit" fill="url(#pk-pane)">
-              <!-- Card (1) -->
-              <rect x="97" y="452" width="30" height="18" rx="2"/>
-              <!-- Card Plus (2) -->
-              <rect x="235" y="411" width="30" height="18" rx="2"/><rect x="235" y="437" width="30" height="18" rx="2"/>
-              <!-- Site (3) -->
-              <rect x="373" y="369" width="30" height="18" rx="2"/><rect x="373" y="395" width="30" height="18" rx="2"/><rect x="373" y="421" width="30" height="18" rx="2"/>
-              <!-- Site Plus (4) -->
-              <rect x="511" y="328" width="30" height="18" rx="2"/><rect x="511" y="354" width="30" height="18" rx="2"/><rect x="511" y="380" width="30" height="18" rx="2"/><rect x="511" y="406" width="30" height="18" rx="2"/>
-              <!-- Pro (5) -->
-              <rect x="649" y="286" width="30" height="18" rx="2"/><rect x="649" y="312" width="30" height="18" rx="2"/><rect x="649" y="338" width="30" height="18" rx="2"/><rect x="649" y="364" width="30" height="18" rx="2"/><rect x="649" y="390" width="30" height="18" rx="2"/>
-              <!-- Pro Plus (6) -->
-              <rect x="787" y="245" width="30" height="18" rx="2"/><rect x="787" y="271" width="30" height="18" rx="2"/><rect x="787" y="297" width="30" height="18" rx="2"/><rect x="787" y="323" width="30" height="18" rx="2"/><rect x="787" y="349" width="30" height="18" rx="2"/><rect x="787" y="375" width="30" height="18" rx="2"/>
-              <!-- Signature (7) -->
-              <rect x="925" y="203" width="30" height="18" rx="2"/><rect x="925" y="229" width="30" height="18" rx="2"/><rect x="925" y="255" width="30" height="18" rx="2"/><rect x="925" y="281" width="30" height="18" rx="2"/><rect x="925" y="307" width="30" height="18" rx="2"/><rect x="925" y="333" width="30" height="18" rx="2"/><rect x="925" y="359" width="30" height="18" rx="2"/>
-              <!-- Flagship (8) -->
-              <rect x="1063" y="162" width="30" height="18" rx="2"/><rect x="1063" y="188" width="30" height="18" rx="2"/><rect x="1063" y="214" width="30" height="18" rx="2"/><rect x="1063" y="240" width="30" height="18" rx="2"/><rect x="1063" y="266" width="30" height="18" rx="2"/><rect x="1063" y="292" width="30" height="18" rx="2"/><rect x="1063" y="318" width="30" height="18" rx="2"/><rect x="1063" y="344" width="30" height="18" rx="2"/>
-            </g>
-            <!-- glossy sill highlight on each window -->
-            <g class="st-lit" fill="#FFEFD2">
-              <rect x="97" y="452" width="30" height="4" rx="2"/>
-              <rect x="235" y="411" width="30" height="4" rx="2"/><rect x="235" y="437" width="30" height="4" rx="2"/>
-              <rect x="373" y="369" width="30" height="4" rx="2"/><rect x="373" y="395" width="30" height="4" rx="2"/><rect x="373" y="421" width="30" height="4" rx="2"/>
-              <rect x="511" y="328" width="30" height="4" rx="2"/><rect x="511" y="354" width="30" height="4" rx="2"/><rect x="511" y="380" width="30" height="4" rx="2"/><rect x="511" y="406" width="30" height="4" rx="2"/>
-              <rect x="649" y="286" width="30" height="4" rx="2"/><rect x="649" y="312" width="30" height="4" rx="2"/><rect x="649" y="338" width="30" height="4" rx="2"/><rect x="649" y="364" width="30" height="4" rx="2"/><rect x="649" y="390" width="30" height="4" rx="2"/>
-              <rect x="787" y="245" width="30" height="4" rx="2"/><rect x="787" y="271" width="30" height="4" rx="2"/><rect x="787" y="297" width="30" height="4" rx="2"/><rect x="787" y="323" width="30" height="4" rx="2"/><rect x="787" y="349" width="30" height="4" rx="2"/><rect x="787" y="375" width="30" height="4" rx="2"/>
-              <rect x="925" y="203" width="30" height="4" rx="2"/><rect x="925" y="229" width="30" height="4" rx="2"/><rect x="925" y="255" width="30" height="4" rx="2"/><rect x="925" y="281" width="30" height="4" rx="2"/><rect x="925" y="307" width="30" height="4" rx="2"/><rect x="925" y="333" width="30" height="4" rx="2"/><rect x="925" y="359" width="30" height="4" rx="2"/>
-              <rect x="1063" y="162" width="30" height="4" rx="2"/><rect x="1063" y="188" width="30" height="4" rx="2"/><rect x="1063" y="214" width="30" height="4" rx="2"/><rect x="1063" y="240" width="30" height="4" rx="2"/><rect x="1063" y="266" width="30" height="4" rx="2"/><rect x="1063" y="292" width="30" height="4" rx="2"/><rect x="1063" y="318" width="30" height="4" rx="2"/><rect x="1063" y="344" width="30" height="4" rx="2"/>
-            </g>
+            <!-- Pro Plus -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="url(#charmG)" stroke-width="1.5" opacity=".55"/><g fill="url(#charmG)"><path d="M13 15 l1.1 3.1 3.1 1.1 -3.1 1.1 -1.1 3.1 -1.1 -3.1 -3.1 -1.1 3.1 -1.1 z"/><path d="M19 12 l1.1 3.1 3.1 1.1 -3.1 1.1 -1.1 3.1 -1.1 -3.1 -3.1 -1.1 3.1 -1.1 z"/></g></svg>
+              <h3>Pro Plus</h3>
+              <p class="truename">The Greater Working.</p>
+              <p class="price"><span class="num">$1,800</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">A larger, wholly bespoke site with art of its own — and a tool that works.</p>
+              <ul>
+                <li>Custom graphics and illustration drawn for you alone</li>
+                <li>A built-in tool doing real work — booking, quotes, or menu</li>
+                <li>More pages, more polish, all commissioned</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- warm light pooling on the pavement at each base -->
-            <g class="st-pool">
-              <ellipse cx="112"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="250"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="388"  cy="524" rx="70" ry="16" fill="url(#pk-pool)"/>
-              <ellipse cx="526"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="664"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="802"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="940"  cy="524" rx="62" ry="14" fill="url(#pk-pool)"/>
-              <ellipse cx="1078" cy="524" rx="66" ry="15" fill="url(#pk-pool)"/>
-            </g>
+            <!-- Signature -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M9 12 l3 3 4 -5 4 5 3 -3 -1 7 h-12 z" fill="url(#charmG)" opacity=".7"/><path d="M16 8 l1.5 4.4 4.4 1.5 -4.4 1.5 -1.5 4.4 -1.5 -4.4 -4.4 -1.5 4.4 -1.5 z" fill="url(#charmG)"/><path d="M9 24 q7 -3 14 0" fill="none" stroke="url(#charmG)" stroke-width="1.6" stroke-linecap="round" opacity=".6"/></svg>
+              <h3>Signature</h3>
+              <p class="truename">The Showpiece.</p>
+              <p class="price"><span class="num">$2,400</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">A site people remember — hand-drawn, alive, and it sells.</p>
+              <ul>
+                <li>Hand-drawn illustration and motion that moves as they scroll</li>
+                <li>An advanced tool: a small shop, calendar booking, or a members&rsquo; area</li>
+                <li>The kind of build that makes the town ask who made it</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- the gold recommended star, crowning the Site rung -->
-            <circle cx="388" cy="322" r="26" fill="url(#pk-gold)"/>
-            <path d="M388 309 l3.6 10.4 10.4 3.6 -10.4 3.6 -3.6 10.4 -3.6 -10.4 -10.4 -3.6 10.4 -3.6 z" fill="#FFD166"/>
-            <circle cx="388" cy="323" r="2.4" fill="#FFF3D0"/>
+            <!-- Flagship -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g fill="url(#charmG)"><circle cx="16" cy="5.5" r="1.3"/><circle cx="26.5" cy="16" r="1.3"/><circle cx="16" cy="26.5" r="1.3"/><circle cx="5.5" cy="16" r="1.3"/><circle cx="23.4" cy="8.6" r="1.1"/><circle cx="8.6" cy="23.4" r="1.1"/></g><g stroke="url(#charmG)" stroke-width=".7" opacity=".3"><line x1="16" y1="16" x2="16" y2="5.5"/><line x1="16" y1="16" x2="26.5" y2="16"/><line x1="16" y1="16" x2="16" y2="26.5"/><line x1="16" y1="16" x2="5.5" y2="16"/></g><path d="M16 10 l1.6 4.6 4.6 1.6 -4.6 1.6 -1.6 4.6 -1.6 -4.6 -4.6 -1.6 4.6 -1.6 z" fill="url(#charmG)"/></svg>
+              <h3>Flagship</h3>
+              <p class="truename">The Masterwork.</p>
+              <p class="price"><span class="num">$3,000</span><span class="per">once</span></p>
+              <p style="color:var(--muted)">The full working of the craft — the kind that stops people cold.</p>
+              <ul>
+                <li>Every pixel conjured from scratch, all of it yours</li>
+                <li>Craft on the level I build my own name at</li>
+                <li>The site people screenshot</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start your site</a>
+            </article>
 
-            <!-- price ticks — the ladder read as an axis (real prices, no promises) -->
-            <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="15" text-anchor="middle" fill="#8A7CB6">
-              <text x="112" y="560">$200</text>
-              <text x="250" y="560">$350</text>
-              <text x="388" y="560" fill="#FFD166" font-weight="700">$600</text>
-              <text x="526" y="560">$900</text>
-              <text x="664" y="560">$1,300</text>
-              <text x="802" y="560">$1,800</text>
-              <text x="940" y="560">$2,400</text>
-              <text x="1078" y="560">$3,000</text>
-            </g>
+            <!-- Beyond — no price -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g fill="url(#charmG)"><circle cx="11" cy="12" r="1.4"/><circle cx="17" cy="9" r="1.2"/><circle cx="21" cy="14" r="1.3"/><circle cx="19" cy="20" r="1.1"/></g><g stroke="url(#charmG)" stroke-width="1" stroke-dasharray="1.5 2.5" stroke-linecap="round" opacity=".7"><path d="M11 12 L17 9 L21 14 L19 20"/><path d="M19 20 q6 2 10 8" opacity=".5"/></g></svg>
+              <h3>Beyond</h3>
+              <p class="truename">Name the Vision.</p>
+              <p style="color:var(--muted)">Bigger than the book can hold? Tell me the vision — <em class="truename" style="font-size:1em">I&rsquo;ll quote the spell.</em> No lists, no limits.</p>
+              <ul>
+                <li>A wholly custom commission, scoped to what you&rsquo;re building</li>
+                <li>Every idea on the table — nothing ruled out</li>
+                <li>One honest quote, once I understand the vision</li>
+              </ul>
+              <a class="btn primary" href="/start/">Tell me the vision</a>
+            </article>
 
-            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
-            <g class="spell-spark" transform="translate(300,250)">
-              <circle class="spark-glow" r="34" fill="url(#pk-glow)"/>
-              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#pk-core)"/>
-              <circle r="2.6" fill="#FFFFFF"/>
-            </g>
-          </svg>
-        </figure>
-        <figcaption class="stage-caption">
-          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>Eight rungs, one night skyline — the more we build, the more windows light. <em>Start where your budget fits; climb when you&rsquo;re ready.</em> <span class="badge">Interactive</span></span>
-        </figcaption>
+          </div>
+        </div>
+
+        <!-- ══ CHAPTER II — WARD MONTHLY · the Wards ══ -->
+        <div class="when-monthly">
+          <p class="eyebrow" style="margin-bottom:.6rem">Chapter II · Ward monthly</p>
+          <p class="lede chapter-intro">A standing enchantment that keeps the light burning. Month to month — start it, pause it, or lift it whenever you like.</p>
+
+          <div class="grid cols-3">
+
+            <!-- Host -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M16 7 C20 12 20.5 15 20.5 17.5 A4.5 4.5 0 0 1 11.5 17.5 C11.5 15 12 12 16 7 Z" fill="url(#charmG)"/></svg>
+              <h3>Host</h3>
+              <p class="truename">The Ember.</p>
+              <p class="price"><span class="num">$15</span><span class="per">/mo</span></p>
+              <p style="color:var(--muted)">Your site kept online, fast and safe — the light that never goes out.</p>
+              <ul>
+                <li>Hosting, security, and backups, all handled</li>
+                <li>Quick on every phone, watched over</li>
+                <li>One thing off your plate, for good</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start this ward</a>
+            </article>
+
+            <!-- Care Lite -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M9 15 a7 7 0 1 0 6 8 a5.5 5.5 0 1 1 -6 -8 z" fill="url(#charmG)" opacity=".5"/><path d="M16 9 C19 12.6 19.4 15 19.4 17 A3.4 3.4 0 0 1 12.6 17 C12.6 15 13 12.6 16 9 Z" fill="url(#charmG)"/></svg>
+              <h3>Care Lite</h3>
+              <p class="truename">The Kept Flame.</p>
+              <p class="price"><span class="num">$29</span><span class="per">/mo</span></p>
+              <p style="color:var(--muted)">Everything warded — plus changes whenever you need them.</p>
+              <ul>
+                <li>All of the Ember</li>
+                <li>A couple of changes a month, whenever — just say the word</li>
+                <li>New hours, a new price, a fresh photo: done for you</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start this ward</a>
+            </article>
+
+            <!-- Care · recommended -->
+            <article class="price-card recommended reveal">
+              <span class="flag">My pick</span>
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M7 11 h18 a2 2 0 0 1 2 2 v7 a2 2 0 0 1 -2 2 h-9 l-5 4 v-4 h-4 a2 2 0 0 1 -2 -2 v-7 a2 2 0 0 1 2 -2 z" fill="none" stroke="url(#charmG)" stroke-width="1.4" opacity=".55"/><path d="M16 12 C18.4 14.8 18.7 16.6 18.7 18.2 A2.7 2.7 0 0 1 13.3 18.2 C13.3 16.6 13.6 14.8 16 12 Z" fill="url(#charmG)"/></svg>
+              <h3>Care</h3>
+              <p class="truename">The Open Line.</p>
+              <p class="price"><span class="num">$59</span><span class="per">/mo</span></p>
+              <p style="color:var(--muted)">Text any change, any time — and a plain note on how it&rsquo;s doing.</p>
+              <ul>
+                <li>Unlimited changes: text it, it&rsquo;s live, usually same day</li>
+                <li>A monthly note in plain English — is it working?</li>
+                <li>A studio that knows your site inside out — no dashboards, no runaround</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start this ward</a>
+            </article>
+
+            <!-- Care Plus -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.4" stroke-linecap="round" opacity=".5"><line x1="16" y1="9" x2="16" y2="5.5"/><line x1="9.6" y1="11.6" x2="7.2" y2="9.2"/><line x1="22.4" y1="11.6" x2="24.8" y2="9.2"/></g><path d="M13 24 L16 12 L19 24 Z" fill="url(#charmG)" opacity=".6"/><path d="M16 10 C18.2 12.6 18.5 14.2 18.5 15.6 A2.5 2.5 0 0 1 13.5 15.6 C13.5 14.2 13.8 12.6 16 10 Z" fill="url(#charmG)"/></svg>
+              <h3>Care Plus</h3>
+              <p class="truename">The Beacon.</p>
+              <p class="price"><span class="num">$99</span><span class="per">/mo</span></p>
+              <p style="color:var(--muted)">Everything on the Open Line — plus steady work to help the right people find you.</p>
+              <ul>
+                <li>Ongoing get-found work and help gathering real reviews</li>
+                <li>Your requests jump the line</li>
+                <li>The ward that makes your light carry across town</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start this ward</a>
+            </article>
+
+            <!-- Partner -->
+            <article class="price-card reveal">
+              <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M12 11 C15 14.4 15.4 16.4 15.4 18.2 A3.4 3.4 0 0 1 8.6 18.2 C8.6 16.4 9 14.4 12 11 Z" fill="url(#charmG)"/><path d="M21 13 C23.2 15.6 23.5 17.1 23.5 18.5 A2.5 2.5 0 0 1 18.5 18.5 C18.5 17.1 18.8 15.6 21 13 Z" fill="url(#charmG)" opacity=".7"/></svg>
+              <h3>Partner</h3>
+              <p class="truename">The Standing Watch.</p>
+              <p class="price"><span class="num">$159</span><span class="per">/mo</span></p>
+              <p style="color:var(--muted)">A real web-partner in your corner, minding your whole presence.</p>
+              <ul>
+                <li>Everything on the Beacon, and then some</li>
+                <li>A studio watching over your whole online presence</li>
+                <li>Proactive ideas and seasonal refreshes — first call when anything&rsquo;s up</li>
+              </ul>
+              <a class="btn primary" href="/start/">Start this ward</a>
+            </article>
+
+          </div>
+
+          <p class="terms" style="max-width:44em;margin-top:2rem">Every ward is month-to-month — start, pause, or lift it anytime. No contracts, no exit fees. A brand-new working (a fresh feature, a redesign) is a quoted piece from the workings above.</p>
+        </div>
+
       </div>
     </div>
   </section>
 
-  <!-- ══ THE MENU — bright room, the two honest groups ═════════════════════ -->
-  <section class="section daylight" id="plans">
+  <!-- ══ THE HIVE — automation priced + the interactive builder ═══════════
+       The ONE place prices live. What each app does, exactly, lives on
+       /automation.html. The demo number there is REAL, never an animation. -->
+  <section class="section" id="the-hive">
     <div class="wrap">
+      <p class="eyebrow reveal">AI integration &amp; automation</p>
+      <h2 class="reveal">The Hive, <em class="accent">priced</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Six apps that catch missed calls, fill your calendar, gather reviews, answer after hours, bring regulars back, and chase invoices. <a href="/automation.html">Exactly what each one does &rarr;</a></p>
 
-      <!-- GROUP ONE · OWN IT ONCE -->
-      <p class="eyebrow reveal">Own it once</p>
-      <h2 class="reveal">Buy the build. <em class="accent">Own it</em>.</h2>
-      <p class="lede reveal">One price, paid once — then the site is yours for good. Every tier has a plain, honest ceiling so you know exactly what you&rsquo;re getting.</p>
+      <ul class="reveal" style="margin-top:2rem;max-width:44em">
+        <li><strong>The Responder</strong> — miss a call, the customer gets a text in seconds · <strong>$99/mo</strong>, $0 down</li>
+        <li><strong>Online booking</strong> — a link that fills your calendar, reminders included · $200 setup + <strong>$29/mo</strong></li>
+        <li><strong>Review engine</strong> — the ask after every job, a drafted reply for every review · $150 setup + <strong>$69/mo</strong></li>
+        <li><strong>After-hours answering</strong> — your site answers the 9pm questions from facts you approve · $250 setup + <strong>$69/mo</strong></li>
+        <li><strong>Customer follow-ups</strong> — a note in your voice that brings regulars back · $150 setup + <strong>$49/mo</strong></li>
+        <li><strong>Getting paid</strong> — invoices that chase themselves, deposits up front · <strong>$200 one-time</strong></li>
+      </ul>
+      <p class="terms reveal" style="margin-top:1rem;max-width:44em">Apps stack: two take 10% off every month, three take 15% off and halve the app setup fees, four take 20%, and all five run for a flat $219/mo. Try it:</p>
 
-      <div class="grid cols-3 reveal" style="margin-top:2.5rem">
-
-        <div class="price-card">
-          <h3>Card</h3>
-          <span class="badge">1 page</span>
-          <div class="price"><span class="num">$200</span><span class="per">once</span></div>
-          <p>One sharp page — who you are, what you do, and how to reach you.</p>
+      <div id="build-your-hive" class="reveal">
+        <div class="comb" role="group" aria-label="Choose the apps for your hive — selecting more apps lowers the monthly price">
+          <div class="comb-row">
+            <button type="button" class="hex" aria-pressed="false" data-name="The Responder" data-mo="99" data-setup="0">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">The Responder</span><span class="hex-price">$99/mo &middot; $0 down</span></span>
+            </button>
+            <button type="button" class="hex" aria-pressed="false" data-name="Online booking" data-mo="29" data-setup="200">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Online booking</span><span class="hex-price">$29/mo + $200 setup</span></span>
+            </button>
+          </div>
+          <div class="comb-row">
+            <button type="button" class="hex" aria-pressed="false" data-name="Review engine" data-mo="69" data-setup="150">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Review engine</span><span class="hex-price">$69/mo + $150 setup</span></span>
+            </button>
+            <div class="hex hex-core" id="combCore">
+              <span class="hex-in"><span class="hex-total" id="combTotal">$0<small>/mo</small></span><span class="hive-chip" id="combChip"></span></span>
+            </div>
+            <button type="button" class="hex" aria-pressed="false" data-name="After-hours answering" data-mo="69" data-setup="250">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">After-hours answering</span><span class="hex-price">$69/mo + $250 setup</span></span>
+            </button>
+          </div>
+          <div class="comb-row">
+            <button type="button" class="hex" aria-pressed="false" data-name="Customer follow-ups" data-mo="49" data-setup="150">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Customer follow-ups</span><span class="hex-price">$49/mo + $150 setup</span></span>
+            </button>
+            <button type="button" class="hex" aria-pressed="false" data-name="Getting paid" data-mo="0" data-setup="200" data-once="1">
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Getting paid</span><span class="hex-price">$200, one-time</span></span>
+            </button>
+          </div>
         </div>
 
-        <div class="price-card">
-          <h3>Card Plus</h3>
-          <span class="badge">1 rich page · gallery</span>
-          <div class="price"><span class="num">$350</span><span class="per">once</span></div>
-          <p>A richer single page with a real gallery to show the work.</p>
+        <div class="hive-bill">
+          <div aria-live="polite">
+            <p class="lede" id="billLine" style="margin:0">Your hive is empty &mdash; tap a cell to begin.</p>
+            <p class="terms" id="billNote" style="margin-top:.6rem">Month-to-month, cancel anytime. Setup is paid once, when the app is wired.</p>
+          </div>
+          <div class="actions" style="margin-top:1.4rem">
+            <a class="btn primary" href="/start/">Start with this hive</a>
+            <a class="btn ghost" href="/automation.html">What each app does</a>
+          </div>
         </div>
-
-        <div class="price-card recommended">
-          <span class="flag">Recommended</span>
-          <h3>Site</h3>
-          <span class="badge">up to 4 pages · basic SEO</span>
-          <div class="price"><span class="num">$600</span><span class="per">once</span></div>
-          <p>A proper little site, built to be found — the sweet spot for most shops.</p>
-        </div>
-
-        <div class="price-card">
-          <h3>Site Plus</h3>
-          <span class="badge">up to 6 pages · portfolio/blog</span>
-          <div class="price"><span class="num">$900</span><span class="per">once</span></div>
-          <p>Room for a portfolio or a blog you&rsquo;ll actually keep up.</p>
-        </div>
-
-        <div class="price-card">
-          <h3>Pro</h3>
-          <span class="badge">up to 9 pages · 1 system</span>
-          <div class="price"><span class="num">$1,300</span><span class="per">once</span></div>
-          <p>A working site with one tool — booking requests, quotes, or a live menu. No payments.</p>
-        </div>
-
-        <div class="price-card">
-          <h3>Pro Plus</h3>
-          <span class="badge">up to 12 pages · bespoke graphics</span>
-          <div class="price"><span class="num">$1,800</span><span class="per">once</span></div>
-          <p>Bespoke graphics and one working tool, built around your trade.</p>
-        </div>
-
-        <div class="price-card">
-          <h3>Signature</h3>
-          <span class="badge">up to 15 pages · illustration + motion</span>
-          <div class="price"><span class="num">$2,400</span><span class="per">once</span></div>
-          <p>Hand-drawn illustration and animation, plus one advanced system — a small store (up to 20 items), calendar booking, or a gated page.</p>
-        </div>
-
-        <div class="price-card">
-          <h3>Flagship</h3>
-          <span class="badge">&asymp;20 pages · fully bespoke</span>
-          <div class="price"><span class="num">$3,000</span><span class="per">once</span></div>
-          <p>The full daarx-level build — fully bespoke, around twenty pages, and any one complex system.</p>
-        </div>
-
       </div>
-
-      <p class="reveal" style="margin-top:1.5rem;color:var(--muted);max-width:44em">Bigger than Flagship? Larger stores, custom tools, or a full brand build — we scope it together as a custom quote.</p>
-      <div class="actions reveal" style="margin-top:1.5rem">
-        <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact.html">Ask which tier fits</a>
-      </div>
-
-      <!-- GROUP TWO · MONTHLY CARE -->
-      <div style="margin-top:3.75rem">
-        <p class="eyebrow reveal">Monthly care <span class="badge" style="text-transform:none;letter-spacing:0">Optional</span></p>
-        <h2 class="reveal" style="font-size:clamp(1.6rem,3.4vw,2.3rem)">Let us mind it. <em class="accent">Or don&rsquo;t</em>.</h2>
-        <p class="lede reveal">You own the build either way. Care is an add-on for when you&rsquo;d rather text a change than make it — pick a size, cancel anytime.</p>
-
-        <div class="grid cols-3 reveal" style="margin-top:2.25rem">
-
-          <div class="price-card">
-            <h3>Host</h3>
-            <span class="badge">online only</span>
-            <div class="price"><span class="num">$15</span><span class="per">/mo</span></div>
-            <p>Your site online, fast and safe. No changes included.</p>
-          </div>
-
-          <div class="price-card">
-            <h3>Care Lite</h3>
-            <span class="badge">2 small changes / mo</span>
-            <div class="price"><span class="num">$29</span><span class="per">/mo</span></div>
-            <p>Two small changes a month, handled for you — just send a text.</p>
-          </div>
-
-          <div class="price-card">
-            <h3>Care</h3>
-            <span class="badge">unlimited small changes</span>
-            <div class="price"><span class="num">$59</span><span class="per">/mo</span></div>
-            <p>Unlimited small changes, plus a plain-English monthly note.</p>
-          </div>
-
-          <div class="price-card">
-            <h3>Care Plus</h3>
-            <span class="badge">+ get-found &middot; priority</span>
-            <div class="price"><span class="num">$99</span><span class="per">/mo</span></div>
-            <p>Everything in Care, plus get-found work, reviews, and priority turnaround.</p>
-          </div>
-
-          <div class="price-card">
-            <h3>Partner</h3>
-            <span class="badge">proactive</span>
-            <div class="price"><span class="num">$159</span><span class="per">/mo</span></div>
-            <p>A proactive web-person minding your corner of the web — we come to you with ideas.</p>
-          </div>
-
-        </div>
-
-        <p class="terms reveal" style="margin-top:1.75rem;max-width:46em">Care covers <strong>small changes</strong> — a new price, new hours, a swapped photo, a line of copy. A new page, a new feature, or a redesign is a quoted mini-project from the Own-it-once list. Cancel care anytime; the site stays yours.</p>
-        <p class="reveal" style="margin-top:1rem;color:var(--muted);max-width:46em">We never promise rankings — nobody honest can. Get-found work is your best shot at being found and recommended, and the monthly note shows how it&rsquo;s actually doing. Results vary.</p>
-      </div>
-
     </div>
   </section>
 
-  <!-- ══ HOW IT WORKS — the plain terms, on the night street ═══════════════ -->
+  <!-- ══ SEALING THE PACT — how it's cast (bright room, honest terms) ══════ -->
+  <section class="section daylight">
+    <div class="wrap">
+      <p class="eyebrow reveal">How it&rsquo;s cast</p>
+      <h2 class="reveal">Plain magic, plain <em class="accent">terms</em>.</h2>
+      <div class="grid cols-3" style="margin-top:2.5rem">
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><path d="M12 9.4l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg>
+          <h3>Pick your working</h3>
+          <p>Choose the tier that fits, or name a bigger vision and I&rsquo;ll quote it honestly. No account to make, no lock-in.</p>
+        </div>
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="#7C5CFF" stroke="none"/></svg>
+          <h3>Half to begin the working</h3>
+          <p>50% starts the build (the two smallest are paid up front), and you shape it as it comes together — nothing is locked until you love it.</p>
+        </div>
+        <div class="card reveal">
+          <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="12" r="4"/><path d="M11.5 12H21l-2 2.5M16 12v3"/><path d="M8 11.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z" stroke="none" fill="#7C5CFF"/></svg>
+          <h3>It&rsquo;s yours the moment it&rsquo;s paid</h3>
+          <p>Every file, the domain, and all the code — keep it, move it, carry it anywhere. No lock-in, ever.</p>
+        </div>
+      </div>
+      <p class="terms reveal" style="margin-top:1.75rem;max-width:46em">Wards are separate and month-to-month — cancel any month, no spell binds you.</p>
+    </div>
+  </section>
+
+  <!-- ══ THE CLOSE — mirror home ══════════════════════════════════════════ -->
   <section class="section">
     <div class="wrap">
-      <p class="eyebrow reveal">How it works</p>
-      <h2 class="reveal">Simple terms, <em class="accent">plainly</em> said.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Own the build once; add a care plan only if you want one. The two stack — or they don&rsquo;t. Your call, no pressure.</p>
-
-      <div class="grid cols-2" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <span class="num mint" style="font-size:1.4rem">01</span>
-          <h3 style="margin-top:.4rem">Half down to start</h3>
-          <p>A 50% deposit begins the build. The $200 and $350 cards are paid in full up front — no half-measures on the small ones.</p>
-        </div>
-        <div class="card reveal">
-          <span class="num mint" style="font-size:1.4rem">02</span>
-          <h3 style="margin-top:.4rem">Yours on final payment</h3>
-          <p>When the last payment clears, the site, its content, and your domain transfer to you. No lock-in, no hostages.</p>
-        </div>
-        <div class="card reveal">
-          <span class="num mint" style="font-size:1.4rem">03</span>
-          <h3 style="margin-top:.4rem">A one-page contract</h3>
-          <p>One plain page — scope, price, timeline. No fine print, nothing to decode, nothing hidden.</p>
-        </div>
-        <div class="card reveal">
-          <span class="num mint" style="font-size:1.4rem">04</span>
-          <h3 style="margin-top:.4rem">Revisions to get it right</h3>
-          <p>Rounds of changes are part of every build. Once you&rsquo;re past those, extra rounds run about <span class="num">$75</span> each.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ THE CLOSE ═════════════════════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <h2 class="reveal">See your site before you spend a <em class="accent">cent</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Start with a free preview — no card, no commitment. Rather ask which tier fits first? A real person answers.</p>
+      <h2 class="reveal">Tell me what you need — I&rsquo;ll cast the right <em class="accent">spell</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">Start a build, add The Responder, or take both — it&rsquo;s all handled end to end. Not sure which working fits? Ask first; a real person answers.</p>
       <div class="actions reveal" style="margin-top:2rem">
-        <a class="btn primary" href="/start/">See your site — free</a>
-        <a class="btn ghost" href="/contact.html">Talk to a person</a>
+        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
     </div>
   </section>
@@ -418,27 +564,175 @@
           <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
           <span class="brand-name">Site&nbsp;Sourcery</span>
         </a>
-        <p class="footer-tag">Custom websites for local businesses — built, hosted, and run for you. Change anything by sending a text.</p>
-        <p class="footer-honest">Everything on this site is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
+        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
+        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
       </div>
       <nav class="footer-links" aria-label="Pages">
         <a href="/">Home</a>
-        <a href="/work.html">Work</a>
         <a href="/pricing.html">Pricing</a>
+        <a href="/automation.html">The Hive</a>
         <a href="/how-it-works.html">How it works</a>
+        <a href="/about.html">About</a>
         <a href="/faq.html">FAQ</a>
+        <a href="/terms.html">Terms</a>
         <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
       <div class="footer-contact">
-        <p class="footer-person">One accountable person — not a queue, not a ticket.</p>
+        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
         <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+10000000000">(000) 000-0000</a>
+        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
     <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
   </div>
 </footer>
 
+<script src="sourcery.js" defer></script>
+<script>
+/* the grimoire's small life: drift with the cursor, flare on a click.
+   Self-contained; fully still under prefers-reduced-motion. */
+(function(){
+  var fig=document.getElementById('grimoire');if(!fig)return;
+  var svg=fig.querySelector('svg'),NS='http://www.w3.org/2000/svg';
+  var rm=window.matchMedia('(prefers-reduced-motion: reduce)');
+  function setMotion(){
+    if(!svg.pauseAnimations)return;
+    if(rm.matches){svg.pauseAnimations();}else{svg.unpauseAnimations();}
+  }
+  setMotion();
+  if(rm.addEventListener)rm.addEventListener('change',setMotion);
+  fig.addEventListener('mousemove',function(e){
+    if(rm.matches)return;
+    var r=fig.getBoundingClientRect();
+    var x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    svg.style.transform='translate('+(x*10).toFixed(1)+'px,'+(y*6).toFixed(1)+'px)';
+  });
+  fig.addEventListener('mouseleave',function(){svg.style.transform='';});
+  var brew=svg.querySelector('.grim-brew'),star=svg.querySelector('.grim-star');
+  fig.addEventListener('keydown',function(e){
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();fig.click();}
+  });
+  fig.addEventListener('click',function(){
+    if(rm.matches||!fig.animate)return;
+    if(star)star.animate([{filter:'brightness(1)'},{filter:'brightness(1.9)'},{filter:'brightness(1)'}],{duration:900,easing:'ease-out'});
+    if(brew)brew.animate([{filter:'brightness(1)'},{filter:'brightness(1.8)'},{filter:'brightness(1)'}],{duration:700,easing:'ease-out'});
+    for(var i=0;i<12;i++){
+      var c=document.createElementNS(NS,'circle');
+      var x=500+(Math.random()*120-60);
+      c.setAttribute('cx',x);c.setAttribute('cy',452);
+      c.setAttribute('r',(1.5+Math.random()*2.2).toFixed(1));
+      c.setAttribute('fill',['#C8BEFF','#FF5C8A','#7C5CFF'][Math.floor(Math.random()*3)]);
+      svg.appendChild(c);
+      var dx=(500-x)*.6+(Math.random()*40-20),dy=160+Math.random()*140;
+      var a=c.animate(
+        [{transform:'translate(0,0)',opacity:1},{transform:'translate('+dx.toFixed(0)+'px,-'+dy.toFixed(0)+'px)',opacity:0}],
+        {duration:800+Math.random()*700,easing:'cubic-bezier(.2,.6,.25,1)'});
+      a.onfinish=(function(el){return function(){el.remove()}})(c);
+    }
+  });
+})();
+</script>
+<script>
+/* the hive builder: pick cells, the comb reprices itself.
+   Ladder: 2 apps 10% · 3 = 15% + app setups halved · 4 = 20% · all 5 = flat $219/mo.
+   Self-contained; count-up + sparks are skipped under prefers-reduced-motion. */
+(function(){
+  var root=document.getElementById('build-your-hive');if(!root)return;
+  var cells=[].slice.call(root.querySelectorAll('.hex[aria-pressed]'));
+  var core=document.getElementById('combCore'),total=document.getElementById('combTotal'),
+      chip=document.getElementById('combChip'),line=document.getElementById('billLine'),
+      note=document.getElementById('billNote');
+  var rm=window.matchMedia('(prefers-reduced-motion: reduce)');
+  var LADDER={2:.10,3:.15,4:.20};
+  var shownMo=0,displayed=0;
+
+  function money(n){return '$'+n.toLocaleString('en-US')}
+
+  function render(){
+    var on=cells.filter(function(c){return c.getAttribute('aria-pressed')==='true'});
+    var apps=on.filter(function(c){return !c.dataset.once});
+    var n=apps.length;
+    var gross=apps.reduce(function(a,c){return a+ +c.dataset.mo},0);
+    var pct=LADDER[n]||0;
+    var netMo=n===5?219:Math.round(gross*(1-pct));
+    var setupMonthly=apps.reduce(function(a,c){return a+ +c.dataset.setup},0);
+    var setupOnce=on.filter(function(c){return c.dataset.once}).reduce(function(a,c){return a+ +c.dataset.setup},0);
+    var halved=n>=3;
+    var setupFull=setupMonthly+setupOnce;
+    var setup=(halved?Math.round(setupMonthly/2):setupMonthly)+setupOnce;
+    var savedMo=gross-netMo;
+
+    if(n>0){setTotal(netMo,'/mo');}
+    else if(on.length>0){setTotal(setup,' once');}
+    else{setTotal(0,'/mo');}
+    chip.textContent=n>=5?'THE WHOLE HIVE':(n>=2?Math.round(pct*100)+'% off':(n===1?'add one \u2014 10% off both':''));
+    chip.classList.toggle('on',n>=1);
+
+    if(!on.length){
+      line.innerHTML='Your hive is empty \u2014 tap a cell to begin.';
+    }else{
+      var names=on.map(function(c){return c.dataset.name}).join(' + ');
+      var parts=[];
+      if(n>0){
+        parts.push('<strong>'+money(netMo)+'/mo</strong>'+(savedMo>0?' <span style="color:var(--muted)">(was '+money(gross)+' \u2014 you save '+money(savedMo)+' every month)</span>':''));
+      }
+      if(setup>0){
+        parts.push(money(setup)+' setup'+(halved&&setupMonthly>0?' <span style="color:var(--muted)">(app setups halved'+(setupOnce>0?'; one-time work not discounted':'')+')</span>':''));
+      }else if(n>0){
+        parts.push('$0 setup');
+      }
+      line.innerHTML=(n===5?'The whole hive':names)+' \u2014 '+parts.join(' \u00b7 ');
+    }
+    note.textContent=n>=3?'Month-to-month, cancel anytime. Three apps or more halve the app setup fees (one-time work is not discounted).':'Month-to-month, cancel anytime. Setup is paid once, when the app is wired.';
+  }
+
+  function setTotal(target,suffix){
+    if(rm.matches||!window.requestAnimationFrame){shownMo=target;displayed=target;total.innerHTML=money(target)+'<small>'+suffix+'</small>';return;}
+    var from=displayed,t0=null;shownMo=target;
+    function step(ts){
+      if(t0===null)t0=ts;
+      var k=Math.min((ts-t0)/450,1);k=1-Math.pow(1-k,3);
+      displayed=Math.round(from+(target-from)*k);
+      total.innerHTML=money(displayed)+'<small>'+suffix+'</small>';
+      if(k<1&&shownMo===target)requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function spark(fromEl){
+    if(rm.matches||!fromEl.animate)return;
+    var a=fromEl.getBoundingClientRect(),b=core.getBoundingClientRect();
+    var el=document.createElement('span');el.className='hive-spark';
+    el.style.left=(a.left+a.width/2-4)+'px';el.style.top=(a.top+a.height/2-4)+'px';
+    document.body.appendChild(el);
+    var anim=el.animate(
+      [{transform:'translate(0,0) scale(1)',opacity:1},
+       {transform:'translate('+(b.left+b.width/2-(a.left+a.width/2))+'px,'+(b.top+b.height/2-(a.top+a.height/2))+'px) scale(.4)',opacity:.2}],
+      {duration:500,easing:'cubic-bezier(.3,.7,.3,1)'});
+    anim.onfinish=function(){
+      el.remove();
+      if(core.animate)core.animate([{filter:'brightness(1)'},{filter:'brightness(1.7)'},{filter:'brightness(1)'}],{duration:420,easing:'ease-out'});
+    };
+  }
+
+  var startBtn=root.querySelector('.hive-bill .btn.primary');
+  function syncStart(){
+    if(!startBtn)return;
+    var on=cells.filter(function(c){return c.getAttribute('aria-pressed')==='true'});
+    startBtn.href=on.length?'/start/?after=hive&hive='+encodeURIComponent(on.map(function(c){return c.dataset.name}).join(',')):'/start/';
+  }
+  cells.forEach(function(c){
+    c.addEventListener('click',function(){
+      var now=c.getAttribute('aria-pressed')!=='true';
+      c.setAttribute('aria-pressed',now?'true':'false');
+      if(now)spark(c);
+      render();syncStart();
+    });
+  });
+  render();syncStart();
+})();
+</script>
 </body>
 </html>

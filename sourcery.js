@@ -21,7 +21,9 @@
   var d = document, root = d.documentElement;
   var THEME_KEY = 'ss-theme';
   var THEME_COLORS = { dark: '#0B0912', light: '#FBFAFF' };
-  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var reduceMq = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
+  var reduce = reduceMq ? reduceMq.matches : false;
+  if (reduceMq && reduceMq.addEventListener) reduceMq.addEventListener('change', function (e) { reduce = e.matches; });
 
   /* ── 0 · js gate — reveal styles only apply when JS is truly here ──────── */
   root.classList.add('js');
@@ -62,11 +64,13 @@
   function cast(el, swap) {
     if (!el) { if (swap) swap(); return; }
     if (reduce || !el.classList.contains('cast')) { if (swap) swap(); return; }
+    if (el._castT1) clearTimeout(el._castT1);
+    if (el._castT2) clearTimeout(el._castT2);
     el.classList.remove('casting');
     void el.offsetWidth;                      /* restart the animation */
     el.classList.add('casting');
-    if (swap) setTimeout(swap, 280);          /* behind the sweep's leading edge */
-    setTimeout(function () { el.classList.remove('casting'); }, 700);
+    if (swap) el._castT1 = setTimeout(swap, 280);   /* behind the sweep's leading edge */
+    el._castT2 = setTimeout(function () { el.classList.remove('casting'); }, 700);
   }
 
   /* ── 3 · MOBILE NAV — sheet + aria, closes on Escape / link tap ─────────── */
@@ -212,7 +216,11 @@
             var t = d.querySelector(castSel);
             if (t) { cast(t); if (t.dataset.demoStep !== undefined) t.dataset.demoStep = String(mi); }
           }
-          if (once && mi === msgs.length - 1) { caret.remove(); alive = false; return; }
+          if (mi === msgs.length - 1) {
+            passes++;
+            /* finite by design: two full passes, then rest on the last message (WCAG 2.2.2) */
+            if (once || passes >= 2) { caret.remove(); alive = false; return; }
+          }
           tick(hold, 2600);
         }
       }
