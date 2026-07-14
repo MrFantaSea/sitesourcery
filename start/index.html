@@ -16,14 +16,14 @@
 <script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Start your project — tell us about your business · Site Sourcery</title>
-<meta name="description" content="Tell us about your business in a few taps — a custom website, The Responder (the missed-call text-back when you can't), or both. A real person reads every brief. No account, no card, nothing installed.">
+<meta name="description" content="Send a custom website inquiry or register non-binding interest in the pre-launch Hive automation concept. This is not a checkout, order, reservation, or authorization for automated messaging.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/start/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
 <meta property="og:title" content="Start your project — tell us about your business · Site Sourcery">
-<meta property="og:description" content="Tell us about your business — a custom website, The Responder (the missed-call text-back when you can't), or both. A real person reads every brief.">
+<meta property="og:description" content="A website inquiry form with a separate, non-binding pre-launch interest path for the planned Hive automation concept.">
 <meta property="og:url" content="https://sitesourcery.com/start/">
 <meta property="og:image" content="https://sitesourcery.com/og.png">
 <meta property="og:image:width" content="1200">
@@ -33,7 +33,7 @@
 <meta name="twitter:title" content="Start your project · Site Sourcery">
 <meta name="twitter:description" content="Tell us about your business and we'll build it. A real person reads every brief — no account, no card.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"Start your project — Site Sourcery","description":"An honest intake for a local business: tell us about your business and what you're after — a hand-built custom website, The Responder (missed-call text-back and AI integration), or both. A real person reads every brief. You own what you buy and can cancel monthly plans anytime.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:hello@sitesourcery.com","tel:+13217882555"]}
+{"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"An inquiry form for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:hello@sitesourcery.com","tel:+13217882555"]}
 </script>
 <link rel="stylesheet" href="../style.css">
 <style>
@@ -117,7 +117,7 @@
     <div class="wrap">
       <p class="eyebrow reveal">Start your project</p>
       <h1 class="hero-mega reveal">Tell us about your <em class="accent">business</em>.</h1>
-      <p class="lede reveal">Not a checkout. Not a magic button. Just a few plain questions so we understand what you do and what you need — a custom website, <strong>The Responder</strong> (the assistant that texts a customer back when you miss the call), or both. Send it and a real person reads every one, usually the same day.</p>
+      <p class="lede reveal">Not a checkout and not an order. These questions help us understand a custom website request or non-binding interest in <strong>The Responder</strong>, a proposed missed-call workflow that is not yet a public production service. A real person reviews the inquiry.</p>
 
       <div class="hero-stage reveal">
         <figure class="spellstage" style="--lit:1;cursor:default" role="img"
@@ -226,10 +226,10 @@
             </g>
           </svg>
         </figure>
-        <figcaption class="stage-caption">
+        <div class="stage-caption">
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
           <span>Your brief lands with the studio, and <em>a real person reads it</em> — not a bot.</span>
-        </figcaption>
+        </div>
       </div>
     </div>
   </section>
@@ -249,34 +249,34 @@
           <input type="hidden" name="from_name" value="Site Sourcery · Start page">
           <input type="hidden" name="redirect" value="https://sitesourcery.com/thanks.html">
           <!-- honeypot: real people leave it empty; bots fill it and get dropped -->
-          <input type="checkbox" name="botcheck" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <input type="checkbox" name="botcheck" class="honeypot" tabindex="-1" aria-hidden="true">
 
           <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
 
           <div class="field">
             <label for="f-name">Your name <span class="req" aria-hidden="true">*</span></label>
-            <input class="input" id="f-name" name="Your name" type="text" autocomplete="name"
+            <input class="input" id="f-name" name="Your name" type="text" autocomplete="name" maxlength="100"
                    placeholder="e.g. Sam Harris" required>
           </div>
 
           <div class="field">
             <label for="f-biz">What's the business called? <span class="req" aria-hidden="true">*</span></label>
             <p class="hint">Exactly how you'd want it on the sign.</p>
-            <input class="input" id="f-biz" name="Business name" type="text" autocomplete="organization"
+            <input class="input" id="f-biz" name="Business name" type="text" autocomplete="organization" maxlength="160"
                    placeholder="e.g. Harris Plumbing &amp; Heating" required>
           </div>
 
           <div class="field">
             <label for="f-do">What do you do, and what town? <span class="req" aria-hidden="true">*</span></label>
             <p class="hint">Your trade and the place customers picture when they think of you.</p>
-            <input class="input" id="f-do" name="Trade and town" type="text"
+            <input class="input" id="f-do" name="Trade and town" type="text" maxlength="200"
                    placeholder="e.g. Plumber in Sewell, NJ" required>
           </div>
 
           <div class="field">
             <label for="f-reach">Best way to reach you <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">A phone or email so we can send your draft back. We keep it private — nothing else.</p>
-            <input class="input" id="f-reach" name="Reach me at" type="text" autocomplete="tel"
+            <p class="hint">A phone or email so we can reply. We use it only for this inquiry and any project you ask us to begin.</p>
+            <input class="input" id="f-reach" name="Reach me at" type="text" maxlength="254"
                    placeholder="(856) 555-0142 or you@email.com" required>
           </div>
 
@@ -292,14 +292,14 @@
                 A website
               </label>
               <label class="pick">
-                <input type="radio" name="What you're after" value="Hive apps (automation)">
+                <input type="radio" name="What you're after" value="Pre-launch Hive interest (automation concept)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l5.2 3v6l-5.2 3-5.2-3V6z"/><path d="M12 15v6M6.8 18l5.2-3 5.2 3"/></svg>
-                Hive apps
+                Hive interest <span class="opt">pre-launch</span>
               </label>
               <label class="pick">
-                <input type="radio" name="What you're after" value="Both">
+                <input type="radio" name="What you're after" value="Website plus pre-launch Hive interest">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.5-.8z"/></svg>
-                Both
+                Website + Hive interest
               </label>
               <label class="pick">
                 <input type="radio" name="What you're after" value="Not sure yet">
@@ -311,38 +311,42 @@
 
           <fieldset class="field" id="hive-picks" style="border:0;padding:0;margin:0 0 1.1rem">
             <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
-              After Hive apps? Tick the ones you want <span class="opt">optional</span>
+              Which proposed Hive workflows interest you? <span class="opt">optional · non-binding</span>
             </legend>
-            <p class="hint" style="margin-bottom:.65rem">Stacking is cheaper — two take 10% off the monthlies, all five run for a flat $219/mo.</p>
+            <p class="hint" style="margin-bottom:.65rem">Pre-launch estimates only: the proposed model discounts multi-app bundles and models all five monthly apps at $219/mo.</p>
             <div class="picker">
-              <label class="pick"><input type="checkbox" name="Hive apps" value="The Responder ($99/mo)">The Responder</label>
-              <label class="pick"><input type="checkbox" name="Hive apps" value="Online booking ($200 + $29/mo)">Online booking</label>
-              <label class="pick"><input type="checkbox" name="Hive apps" value="Review engine ($150 + $69/mo)">Review engine</label>
-              <label class="pick"><input type="checkbox" name="Hive apps" value="After-hours answering ($250 + $69/mo)">After-hours answering</label>
-              <label class="pick"><input type="checkbox" name="Hive apps" value="Customer follow-ups ($150 + $49/mo)">Customer follow-ups</label>
-              <label class="pick"><input type="checkbox" name="Hive apps" value="Getting paid ($200 one-time)">Getting paid</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Responder" value="Responder interest (estimated $99/mo)" data-name="The Responder">The Responder</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Booking" value="Booking interest (estimated $200 + $29/mo)" data-name="Online booking">Online booking</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Reviews" value="Review workflow interest (estimated $150 + $69/mo)" data-name="Review engine">Review workflow</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Answering" value="After-hours interest (estimated $250 + $69/mo)" data-name="After-hours answering">After-hours site answers</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Follow-ups" value="Follow-up interest (estimated $150 + $49/mo)" data-name="Customer follow-ups">Customer follow-ups</label>
+              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Payments" value="Payment setup interest (estimated $200 once)" data-name="Getting paid">Payment setup</label>
             </div>
           </fieldset>
 
           <div class="field">
             <label for="f-more">Tell us about it <span class="opt">optional</span></label>
             <p class="hint">What you're hoping for, what's not working now, a deadline — anything. The more we know, the better the first draft.</p>
-            <textarea class="input" id="f-more" name="What they're after"
+            <textarea class="input" id="f-more" name="What they're after" maxlength="3000"
                       placeholder="e.g. I've got no site and I keep missing calls when I'm on a job. Want to look legit and stop losing work to voicemail."></textarea>
           </div>
 
           <div class="field">
             <label for="f-url">Have a website now? <span class="opt">optional</span></label>
             <p class="hint">Paste it and we'll bring your own photos and details across. No site yet? Skip it.</p>
-            <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url"
+            <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url" maxlength="2048"
                    placeholder="yourbusiness.com">
+          </div>
+
+          <div class="field">
+            <label><input type="checkbox" name="Privacy acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this brief and the contact detail I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>. If I provide a phone number, I authorize a call or text about this inquiry; this is not marketing consent.</label>
           </div>
 
           <div class="sendrow">
             <button class="btn primary" type="submit">Send my brief</button>
             <p class="fineprint">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
-              <span>This comes straight to the studio — a real person reads every one, usually the same day. No account, no card, nothing installed. We never share your details.</span>
+              <span>Web3Forms processes this brief so it can reach the studio. A real person reads it; no account, card, or install is required. See our <a href="/privacy.html">Privacy Notice</a>.</span>
             </p>
             <p class="orline">Prefer to talk first? <a href="tel:+13217882555">Call (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com?subject=A%20question%20before%20we%20start">email us</a>.</p>
           </div>
@@ -356,20 +360,20 @@
               <li><b>You send this.</b> It lands with the studio and is usually read the same day.</li>
               <li><b>We build a custom draft.</b> By hand, from scratch, designed for your trade — never a template with your name dropped in.</li>
               <li><b>You look it over.</b> Nothing goes live under your name until you're happy with it.</li>
-              <li><b>You own it.</b> Buy a site once and it's yours — your domain, your content, no lock-in. Monthly plans cancel anytime.</li>
+              <li><b>You own the website after final payment.</b> Hive interest is separate and non-binding; no Hive service is currently offered.</li>
             </ol>
           </div>
 
           <div class="card">
             <h3 style="font-size:1.15rem">Want both doors?</h3>
-            <p style="color:var(--muted);margin-top:.5rem">Most owners take both: a site that brings the calls in, and <strong>The Responder</strong> so a missed call still becomes a booked job. Tick &ldquo;Both&rdquo; and we'll fit them together.</p>
+            <p style="color:var(--muted);margin-top:.5rem">Choose &ldquo;Website + Hive interest&rdquo; only to discuss a website plus non-binding interest in <strong>The Responder</strong>. The Responder is not currently available, and no inquiry reserves service or promises an outcome.</p>
             <div class="actions" style="margin-top:1.1rem">
               <a class="btn ghost" href="/automation.html">See the Hive</a>
               <a class="btn ghost" href="/pricing.html">See pricing</a>
             </div>
           </div>
 
-          <p class="footer-trust" style="margin:0">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+          <p class="footer-trust" style="margin:0">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
           <p class="terms" style="border:0;padding:0">Every site we show as ours — like <a href="/">this one</a> and <a href="https://daarx.money/">daarx.money</a> — is real and built exactly this way. No borrowed logos, no stock testimonials, no rankings promised.</p>
         </aside>
 
@@ -388,8 +392,8 @@
           <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
           <span class="brand-name">Site&nbsp;Sourcery</span>
         </a>
-        <p class="footer-tag">Get found. Never miss the call. Hand-built custom websites, plus the Hive — six apps that text missed callers back, fill your calendar, and keep your reviews tended.</p>
-        <p class="footer-trust">I run the system myself, I&rsquo;m local, and if it ever breaks you have my number.</p>
+        <p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p>
+        <p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
         <p class="footer-honest">Everything here is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
       </div>
       <nav class="footer-links" aria-label="Pages">
@@ -400,6 +404,7 @@
         <a href="/about.html">About</a>
         <a href="/faq.html">FAQ</a>
         <a href="/terms.html">Terms</a>
+        <a href="/privacy.html">Privacy</a>
         <a href="/contact.html">Contact</a>
         <a href="/start/">Start your site</a>
       </nav>
@@ -421,12 +426,12 @@
     var q=new URLSearchParams(location.search);
     var hive=(q.get('hive')||'').split(',').filter(Boolean);
     if(q.get('after')==='hive'){
-      var r=document.querySelector('input[name="What you\'re after"][value="Hive apps (automation)"]');
+      var r=document.querySelector('input[name="What you\'re after"][value="Pre-launch Hive interest (automation concept)"]');
       if(r)r.checked=true;
     }
     if(hive.length){
       document.querySelectorAll('#hive-picks input[type=checkbox]').forEach(function(c){
-        var nm=c.value.replace(/\s*\(.*$/,'');
+        var nm=c.dataset.name||c.value.replace(/\s*\(.*$/,'');
         if(hive.indexOf(nm)>-1)c.checked=true;
       });
     }

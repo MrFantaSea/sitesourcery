@@ -42,20 +42,6 @@
        transition style on the site.
    ════════════════════════════════════════════════════════════════════════ */
 
-/* ── OPTIONAL SAME-ORIGIN FONT DROP-INS ────────────────────────────────────
-   Vendor the two OFL faces at assets/fonts/ and these light up; until then
-   the declared fallbacks hold the layout perfectly. NEVER a remote URL. */
-@font-face{
-  font-family:'Bricolage Grotesque';
-  src:url('assets/fonts/BricolageGrotesque.woff2') format('woff2');
-  font-weight:200 800;font-style:normal;font-display:swap;
-}
-@font-face{
-  font-family:'Instrument Serif';
-  src:url('assets/fonts/InstrumentSerif-Italic.woff2') format('woff2');
-  font-weight:400;font-style:italic;font-display:swap;
-}
-
 /* ══ 1 · TOKENS ═══════════════════════════════════════════════════════════
    Every component paints with these, so the Daylight room and the light
    theme are just token re-declarations. Dark (Nightfall) is the brand default. */
@@ -174,7 +160,7 @@ strong,b{color:var(--text);font-weight:650}
 
 /* skip link */
 .skip{position:fixed;top:.75rem;left:.75rem;z-index:100;transform:translateY(-250%);
-  background:var(--violet);color:#F6F4FF;font-weight:650;font-size:.9rem;
+  background:#5B3FD4;color:#F6F4FF;font-weight:650;font-size:.9rem;
   padding:.7rem 1rem;border-radius:var(--r-sm);transition:transform .18s var(--ease)}
 .skip:focus{transform:none}
 
@@ -651,6 +637,8 @@ select.input{appearance:none;
 .stage-caption .sigil{flex:0 0 auto}
 .stage-caption em{font-family:var(--font-accent);font-style:italic;
   color:var(--text);font-size:1.05em;letter-spacing:0}
+.spellstage .stage-caption{color:#C9C3E5;padding:0 1rem 1rem}
+.spellstage .stage-caption em{color:#F6F4FF}
 
 /* standalone brand sparkle — a reusable mark, gently alive on hover */
 .sigil{display:inline-block;width:1.1em;height:1.1em;vertical-align:-.15em;
