@@ -1,0 +1,24 @@
+{
+  "name": "site-sourcery",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": "20.20.2"
+  },
+  "scripts": {
+    "check": "npm run check:html && npm run check:static",
+    "check:html": "html-validate \"**/*.html\"",
+    "check:static": "node scripts/check-static.mjs",
+    "test": "npm run check"
+  },
+  "devDependencies": {
+    "html-validate": "10.17.0"
+  },
+  "siteQuality": {
+    "origin": "https://sitesourcery.com",
+    "allowedFormActions": [
+      "https://api.web3forms.com/submit"
+    ],
+    "expectedForms": 2
+  }
+}
