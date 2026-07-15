@@ -320,19 +320,29 @@ strong,b{color:var(--text);font-weight:650}
 
 /* mobile sheet */
 @media (max-width:52rem){
-  .nav-toggle{display:inline-flex}
-  .nav-menu{position:absolute;top:100%;left:0;right:0;
+  /* Without JavaScript, keep every destination visible and let the taller
+     navigation scroll with the page. The compact sheet is a JS enhancement. */
+  .nav{position:relative}
+  .nav-inner{flex-wrap:wrap}
+  .nav-menu{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem;
+    align-items:stretch;padding:.5rem 0 1rem}
+  html:not(.js) .nav-menu .nav-link,html:not(.js) .nav-menu .nav-cta{justify-content:center;margin:0}
+  .js .nav{position:sticky}
+  .js .nav-inner{flex-wrap:nowrap}
+  .js .nav-toggle{display:inline-flex}
+  .js .nav-menu{position:absolute;top:100%;left:0;right:0;width:auto;
     display:grid;gap:.25rem;align-items:stretch;
+    grid-template-columns:minmax(0,1fr);
     max-height:calc(100dvh - 64px);overflow-y:auto;
     padding:.75rem max(1.25rem,env(safe-area-inset-right)) 1.25rem max(1.25rem,env(safe-area-inset-left));
     background:var(--surface);border-bottom:1px solid var(--hairline);
     box-shadow:var(--lift);
     visibility:hidden;opacity:0;transform:translateY(-6px);
     transition:opacity .24s var(--ease),transform .24s var(--ease),visibility 0s .24s}
-  .nav-menu.open{visibility:visible;opacity:1;transform:none;transition-delay:0s}
+  .js .nav-menu.open{visibility:visible;opacity:1;transform:none;transition-delay:0s}
   .nav-link{min-height:48px;font-size:1.05rem}
   .nav-link::after{bottom:.6rem}
-  .nav-cta{margin:.5rem 0 0;justify-content:center}
+  .js .nav-cta{margin:.5rem 0 0;justify-content:center}
 }
 
 /* ══ 8 · SURFACES ═════════════════════════════════════════════════════════ */
