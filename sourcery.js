@@ -115,7 +115,10 @@
       entries.forEach(function (en) {
         if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
       });
-    }, { threshold: 0.2 });
+    /* A percentage threshold can never be reached by a section taller than the
+       viewport (the former 20% threshold hid long Terms/Privacy documents).
+       Reveal when an element crosses the lower viewport gate instead. */
+    }, { threshold: 0, rootMargin: '0px 0px -12% 0px' });
     nodes.forEach(function (n) { io.observe(n); });
   }
 
