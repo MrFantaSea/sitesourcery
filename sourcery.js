@@ -234,14 +234,33 @@
     });
   }
 
-  /* ── 8b · THE STOREFRONT — the signature "one window still glowing" ──────
-     A four-point sigil-spark eases toward the pointer inside .spellstage and
-     the window's warmth (--lit, 0→1) tracks how near the spark is. Untouched,
-     the spark drifts a slow orbit and the window breathes warmly lit. No
-     pointer / reduced-motion: the window simply stays lit, spark parked.       */
+  /* ── 8b · THE STOREFRONT — painted scene + resilient SVG fallback ────
+     The production WebP receives a restrained pointer-light. If that asset is
+     absent, the retained inline SVG uses the original sigil/window interaction.
+     Touch and reduced-motion visitors receive a complete static scene.        */
   function wireStorefront() {
     var stage = d.querySelector('.spellstage');
     if (!stage) return;
+    var arcaneScene = stage.querySelector('.arcane-scene');
+    if (arcaneScene) {
+      if (reduce) return;
+      var coarsePointer = window.matchMedia &&
+        matchMedia('(hover: none), (pointer: coarse)').matches;
+      if (!coarsePointer) {
+        stage.addEventListener('pointermove', function (e) {
+          if (reduce) return;
+          var bounds = stage.getBoundingClientRect();
+          if (!bounds.width || !bounds.height) return;
+          stage.style.setProperty('--spell-x', ((e.clientX - bounds.left) / bounds.width * 100).toFixed(1) + '%');
+          stage.style.setProperty('--spell-y', ((e.clientY - bounds.top) / bounds.height * 100).toFixed(1) + '%');
+        });
+        stage.addEventListener('pointerleave', function () {
+          stage.style.setProperty('--spell-x', '50%');
+          stage.style.setProperty('--spell-y', '46%');
+        });
+      }
+      return;
+    }
     var svg = stage.querySelector('svg');
     var spark = stage.querySelector('.spell-spark');
     if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;

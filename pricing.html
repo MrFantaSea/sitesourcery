@@ -70,7 +70,7 @@
 
 /* ── the hive builder: honeycomb cells, pure CSS hexes ── */
 .comb{--hex:clamp(112px,17vw,170px);display:flex;flex-direction:column;align-items:center;margin-top:2.4rem}
-@media (max-width:430px){.comb{--hex:calc((100vw - 3.4rem)/3 - 7px)}.hex-price{display:none}}
+@media (max-width:430px){.comb{--hex:calc((100vw - 3.4rem)/3 - 7px)}.hex-price,.hive-chip{display:none}}
 .comb-row{display:flex;gap:10px}
 .comb-row+.comb-row{margin-top:calc(var(--hex)*-0.2)}
 .hex{position:relative;width:var(--hex);height:calc(var(--hex)*1.1547);border:0;padding:0;
@@ -93,8 +93,10 @@
 .hex[aria-pressed="true"] .hex-tick{opacity:1}
 .hex-core,.hex-core:hover{cursor:default;transform:none}
 .hex-core .hex-in{background:#0F0B1E}
-.hex-total{font-size:clamp(1.02rem,2.6vw,1.55rem);font-weight:800;color:#fff}
-.hex-total small{display:block;font-size:.6em;font-weight:600;color:#B8B2D4}
+.hex-total{display:grid;gap:.4rem;width:100%;font-size:clamp(.9rem,2.2vw,1.28rem);font-weight:800;color:#fff}
+.hex-total-line{display:block;line-height:1;font-variant-numeric:tabular-nums}
+.hex-total-line+.hex-total-line{border-top:1px solid rgba(200,190,255,.22);padding-top:.42rem}
+.hex-total small{display:block;margin-top:.16rem;font-size:.6em;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:#B8B2D4}
 .hive-chip{margin-top:.3rem;padding:.14rem .55rem;border-radius:999px;
   border:1px solid rgba(124,92,255,.5);font-size:.68rem;color:#C8BEFF;opacity:0;transition:opacity .3s}
 .hive-chip.on{opacity:1}
@@ -475,7 +477,7 @@
               <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Review engine</span><span class="hex-price">$69/mo + $150 setup</span></span>
             </button>
             <div class="hex hex-core" id="combCore">
-              <span class="hex-in"><span class="hex-total" id="combTotal">$0<small>/mo</small></span><span class="hive-chip" id="combChip"></span></span>
+              <span class="hex-in"><span class="hex-total" id="combTotal"><span class="hex-total-line">$0<small>per month</small></span><span class="hex-total-line">$0<small>due once</small></span></span><span class="hive-chip" id="combChip"></span></span>
             </div>
             <button type="button" class="hex" aria-pressed="false" data-name="After-hours answering" data-mo="69" data-setup="250">
               <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">After-hours answering</span><span class="hex-price">$69/mo + $250 setup</span></span>
@@ -492,8 +494,8 @@
         </div>
 
         <div class="hive-bill">
-          <div aria-live="polite">
-            <p class="lede" id="billLine" style="margin:0">Your hive is empty &mdash; tap a cell to begin.</p>
+          <div>
+            <p class="lede" id="billLine" role="status" aria-live="polite" aria-atomic="true" style="margin:0">Your hive is empty &mdash; tap a cell to begin.</p>
             <p class="terms" id="billNote" style="margin-top:.6rem">Planning estimate only — no Hive service or subscription is currently offered.</p>
           </div>
           <div class="actions" style="margin-top:1.4rem">
@@ -636,7 +638,7 @@
       note=document.getElementById('billNote');
   var rm=window.matchMedia('(prefers-reduced-motion: reduce)');
   var LADDER={2:.10,3:.15,4:.20};
-  var shownMo=0,displayed=0;
+  var renderId=0,displayedMo=0,displayedOnce=0;
 
   function money(n){return '$'+n.toLocaleString('en-US')}
 
@@ -650,14 +652,12 @@
     var setupMonthly=apps.reduce(function(a,c){return a+ +c.dataset.setup},0);
     var setupOnce=on.filter(function(c){return c.dataset.once}).reduce(function(a,c){return a+ +c.dataset.setup},0);
     var halved=n>=3;
-    var setupFull=setupMonthly+setupOnce;
-    var setup=(halved?Math.round(setupMonthly/2):setupMonthly)+setupOnce;
+    var effectiveSetup=halved?Math.round(setupMonthly/2):setupMonthly;
+    var dueOnce=effectiveSetup+setupOnce;
     var savedMo=gross-netMo;
 
-    if(n>0){setTotal(netMo,'/mo');}
-    else if(on.length>0){setTotal(setup,' once');}
-    else{setTotal(0,'/mo');}
-    chip.textContent=n>=5?'THE WHOLE HIVE':(n>=2?Math.round(pct*100)+'% off':(n===1?'add one \u2014 10% off both':''));
+    setTotals(netMo,dueOnce);
+    chip.textContent=n>=5?'WHOLE HIVE \u00b7 $219/MO':(n>=2?Math.round(pct*100)+'% off monthly':(n===1?'add 1 monthly \u00b7 10% off':''));
     chip.classList.toggle('on',n>=1);
 
     if(!on.length){
@@ -668,25 +668,31 @@
       if(n>0){
         parts.push('<strong>'+money(netMo)+'/mo</strong>'+(savedMo>0?' <span style="color:var(--muted)">(was '+money(gross)+' \u2014 you save '+money(savedMo)+' every month)</span>':''));
       }
-      if(setup>0){
-        parts.push(money(setup)+' setup'+(halved&&setupMonthly>0?' <span style="color:var(--muted)">(app setups halved'+(setupOnce>0?'; one-time work not discounted':'')+')</span>':''));
-      }else if(n>0){
-        parts.push('$0 setup');
-      }
+      if(effectiveSetup>0)parts.push(money(effectiveSetup)+' app setup'+(halved?' <span style="color:var(--muted)">(halved)</span>':''));
+      else if(n>0)parts.push('$0 app setup');
+      if(setupOnce>0)parts.push(money(setupOnce)+' one-time work');
       line.innerHTML=(n===5?'The whole hive':names)+' \u2014 '+parts.join(' \u00b7 ');
     }
     note.textContent=n>=3?'Planning estimate only. The proposed model halves app setup estimates at three apps; one-time work is not discounted.':'Planning estimate only — no Hive service, subscription, setup, or discount is currently offered.';
   }
 
-  function setTotal(target,suffix){
-    if(rm.matches||!window.requestAnimationFrame){shownMo=target;displayed=target;total.innerHTML=money(target)+'<small>'+suffix+'</small>';return;}
-    var from=displayed,t0=null;shownMo=target;
+  function writeTotals(monthly,once){
+    total.innerHTML='<span class="hex-total-line">'+money(monthly)+'<small>per month</small></span><span class="hex-total-line">'+money(once)+'<small>due once</small></span>';
+  }
+
+  function setTotals(targetMo,targetOnce){
+    renderId+=1;
+    var id=renderId;
+    if(rm.matches||!window.requestAnimationFrame){displayedMo=targetMo;displayedOnce=targetOnce;writeTotals(targetMo,targetOnce);return;}
+    var fromMo=displayedMo,fromOnce=displayedOnce,t0=null;
     function step(ts){
+      if(rm.matches){displayedMo=targetMo;displayedOnce=targetOnce;writeTotals(targetMo,targetOnce);return;}
       if(t0===null)t0=ts;
       var k=Math.min((ts-t0)/450,1);k=1-Math.pow(1-k,3);
-      displayed=Math.round(from+(target-from)*k);
-      total.innerHTML=money(displayed)+'<small>'+suffix+'</small>';
-      if(k<1&&shownMo===target)requestAnimationFrame(step);
+      displayedMo=Math.round(fromMo+(targetMo-fromMo)*k);
+      displayedOnce=Math.round(fromOnce+(targetOnce-fromOnce)*k);
+      writeTotals(displayedMo,displayedOnce);
+      if(k<1&&id===renderId)requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }

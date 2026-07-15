@@ -2,9 +2,9 @@
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — index.html · HOME · "SPELLCAST"
      Two doors: custom websites + The Responder. Get found · never miss the call.
-     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
-     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
-     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     Self-contained: loads ONLY same-origin style.css, sourcery.js, and the
+     optimized storefront WebP. Remaining graphics are inline SVG. No CDNs,
+     remote fonts, trackers, or runtime fetches.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
@@ -59,7 +59,7 @@
 
 <main id="main">
 
-  <!-- ══ HERO — the 5-second answer + the signature "one window glowing" ══ -->
+  <!-- ══ HERO — the 5-second answer + the enchanted storefront ══ -->
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow reveal">Custom websites · Hive pre-launch research</p>
@@ -73,13 +73,17 @@
       <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">Website work has one accountable contact. The Hive remains a separate pre-launch concept. No stock testimonials, borrowed logos, or rankings are claimed.</p>
 
       <!-- ── THE STOREFRONT · signature interactive nocturne ──────────────────
-           A hand-authored Main Street after dark. Every shop is dark but one:
-           move the spark (it follows your cursor; drifts on its own when idle)
-           and the warmth of the window rises with it. No pointer / reduced
-           motion → the window simply stays lit. Pure inline SVG, no loads. -->
+           A bespoke enchanted Main Street scene. Pointer movement reveals a
+           restrained spell-light; touch and reduced-motion visitors receive
+           the same complete scene without depending on animation. -->
       <div class="hero-stage reveal">
-        <figure class="spellstage" data-win-x="600" data-win-y="404" data-range="440"
-                role="img" aria-label="A dark Main Street at night with a single storefront — yours — glowing warm from within, its lamp lit and its sign softly aglow while the neighbouring shops stay dark.">
+        <figure class="spellstage arcane-stage" data-win-x="600" data-win-y="404" data-range="440"
+                role="img" aria-label="An enchanted Main Street at midnight, where an old-world storefront awakens under violet spell-light, warm windows, floating runes, and trails of luminous magic.">
+          <img class="arcane-scene" src="assets/site-sourcery-main-street-v2.webp" width="1672" height="941" alt="" decoding="async" fetchpriority="high">
+          <span class="arcane-pointer-light" aria-hidden="true"></span>
+          <span class="arcane-rune rune-one" aria-hidden="true">&#10022;</span>
+          <span class="arcane-rune rune-two" aria-hidden="true">&#10023;</span>
+          <span class="arcane-rune rune-three" aria-hidden="true">&#10022;</span>
           <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
                preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
             <defs>
@@ -243,7 +247,7 @@
 
         <figcaption class="stage-caption">
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>Main&nbsp;Street after dark — <em>one window still glowing.</em> That&rsquo;s your shop, lit.<span class="stage-hint"> Move the spark with your cursor. <span class="badge">Interactive</span></span></span>
+          <span>Not just another site on the street. <em>Your business, under a better spell.</em><span class="stage-hint"> Move through the scene. <span class="badge">Interactive</span></span></span>
         </figcaption>
         </figure>
       </div>

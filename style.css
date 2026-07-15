@@ -1,15 +1,15 @@
 /* ════════════════════════════════════════════════════════════════════════
    SITE SOURCERY — style.css · "SPELLCAST"
-   Main Street after dark, one window still glowing.
+   An enchanted Main Street storefront after dark.
 
    Velvet-dark product-site polish warmed into a lit shop window: violet-black
    canvas, ONE charm gradient (violet→rose), big bright type, generous air,
    soft 16px surfaces. Money & process happen in bright Daylight sections.
    One serif-italic word per headline is the human wink.
 
-   SELF-CONTAINED, ALWAYS. Zero external loads: system font stack (optional
-   same-origin WOFF2 drop-ins below), inline SVG only, no @import, no remote
-   url(). Serve under CSP `default-src 'self' data:`.
+   SELF-CONTAINED, ALWAYS. Same-origin loads only: system font stack (optional
+   WOFF2 drop-ins below), one optimized WebP, and inline SVG; no @import or
+   remote url(). Serve under CSP `default-src 'self' data:`.
 
    ─────────────────────────────────────────────────────────────────────────
    PAGE-BUILDER PATTERN (every page):
@@ -567,11 +567,11 @@ select.input{appearance:none;
 
 /* ════════════════════════════════════════════════════════════════════════
    19 · SPELLCAST — the signature visual language
-   "Main Street after dark, one window still glowing."
+   "An enchanted Main Street storefront after dark."
 
-   A hand-authored nocturne. Everything below is scene-only and INTENTIONALLY
-   nocturnal in BOTH themes — the night street is the brand, it never flips to
-   day. The page chrome around it still themes normally.
+   A painted nocturne with an inline-SVG fallback retained in the document.
+   Everything below is scene-only and INTENTIONALLY nocturnal in BOTH themes;
+   the page chrome around it still themes normally.
 
    WARM LIGHT is a scene-only pigment (the glow from the window), NOT a UI
    accent — it never appears on buttons/badges, so the mint/gold discipline
@@ -586,9 +586,9 @@ select.input{appearance:none;
      .stage-caption   the one-line identity caption under a stage
      .sigil           standalone brand sparkle (glows on hover)
      .hero-mega       colossal hero headline scale
-   Driven by sourcery.js → wireStorefront(): a spark eases toward the pointer
-   (idle-drifts + breathes when untouched) and --lit tracks its nearness to
-   the window. No pointer / reduced-motion → the window simply stays lit.
+   Driven by sourcery.js → wireStorefront(): the production scene receives a
+   restrained pointer-light. The older SVG spark remains as a no-asset fallback.
+   Touch and reduced-motion users receive the complete static scene.
    ════════════════════════════════════════════════════════════════════════ */
 
 /* warm window pigments — scene-only, shared by both themes */
@@ -613,6 +613,26 @@ select.input{appearance:none;
   border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(124,92,255,.14),
     inset 0 -60px 90px -40px rgba(0,0,0,.7)}
 .spellstreet{display:block;width:100%;height:auto}
+
+/* the home-page nocturne uses a production-painted scene while preserving the
+   original inline SVG below it as source history */
+.arcane-stage{--spell-x:50%;--spell-y:46%;cursor:crosshair}
+.arcane-stage>.spellstreet{display:none}
+.arcane-scene{position:relative;z-index:0;display:block;width:100%;height:auto;
+  aspect-ratio:1672/941;object-fit:cover;object-position:center;filter:saturate(1.03) contrast(1.04)}
+.arcane-pointer-light{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(circle 16rem at var(--spell-x) var(--spell-y),
+    rgba(235,222,255,.3) 0,rgba(124,92,255,.19) 22%,rgba(255,92,138,.08) 46%,transparent 72%);
+  mix-blend-mode:screen;transition:opacity .35s var(--ease)}
+.arcane-stage .stage-caption{position:relative;z-index:4;margin:0;padding:1rem;
+  background:linear-gradient(90deg,rgba(7,5,15,.96),rgba(15,9,30,.92))}
+.arcane-rune{position:absolute;z-index:2;pointer-events:none;color:#F1E8FF;
+  font-size:clamp(.72rem,1.6vw,1.15rem);text-shadow:0 0 8px #fff,0 0 22px #9E7CFF;
+  animation:arcane-drift 6.5s var(--ease) infinite}
+.rune-one{left:17%;top:26%}.rune-two{right:19%;top:19%;animation-delay:-2.3s}
+.rune-three{right:31%;bottom:26%;animation-delay:-4.6s}
+@keyframes arcane-drift{0%,100%{opacity:.22;transform:translateY(0) rotate(0)}
+  45%{opacity:.9;transform:translateY(-12px) rotate(36deg)}70%{opacity:.35;transform:translateY(-18px) rotate(75deg)}}
 
 /* opacity layers the spark controls — default fully lit (no-JS friendly) */
 .st-lit{opacity:var(--lit)}
@@ -653,8 +673,12 @@ a:hover .sigil,.sigil:hover{transform:rotate(90deg) scale(1.08);
 
 @media (prefers-reduced-motion:reduce){
   .spell-spark .spark-glow,.st-twinkle{animation:none!important}
+  .arcane-rune{animation:none!important;opacity:.55}
   .spellstage{--lit:1!important;cursor:default}
+  .stage-hint{display:none}
 }
+
+@media (hover:none),(pointer:coarse){.arcane-stage{cursor:default}}
 
 /* ════════════════════════════════════════════════════════════════════════
    20 · TWO DOORS — the home's spine (get found · never miss a call)
