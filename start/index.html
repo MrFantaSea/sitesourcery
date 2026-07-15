@@ -259,6 +259,7 @@
           <input type="checkbox" name="botcheck" class="honeypot" tabindex="-1" aria-hidden="true">
 
           <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
+          <p class="hint" style="margin:-.7rem 0 1.4rem">Keep this high level. Please do not send passwords, login codes, API keys, card or bank details, customer lists, health information, or other private records.</p>
 
           <div class="field">
             <label for="f-name">Your name <span class="req" aria-hidden="true">*</span></label>
@@ -285,6 +286,13 @@
             <p class="hint">A phone or email so we can reply. We use it only for this inquiry and any project you ask us to begin.</p>
             <input class="input" id="f-reach" name="Reach me at" type="text" maxlength="254"
                    placeholder="(856) 555-0142 or you@email.com" required>
+          </div>
+
+          <div class="field">
+            <label for="f-approver">One decision maker <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">Name the one person who will approve the scope and send the final grouped feedback. If that is you, enter your own name again; if it is someone else, name them only with their permission.</p>
+            <input class="input" id="f-approver" name="Single project decision maker" type="text" autocomplete="name" maxlength="100"
+                   placeholder="e.g. Sam Harris" required>
           </div>
 
           <fieldset class="field" style="border:0;padding:0;margin:0 0 1.1rem">
@@ -315,6 +323,75 @@
               </label>
             </div>
           </fieldset>
+
+          <div class="field">
+            <label for="f-tier">Website tier or working budget <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">Choose the closest published build. This records your starting point; the written scope still controls before any payment.</p>
+            <select class="input" id="f-tier" name="Website tier or working budget" required>
+              <option value="" selected disabled>Choose the closest fit</option>
+              <option value="Not sure — recommend a website tier">Not sure — recommend a tier</option>
+              <option value="Card — $200">Card — $200</option>
+              <option value="Card Plus — $350">Card Plus — $350</option>
+              <option value="Site — $600">Site — $600</option>
+              <option value="Site Plus — $900">Site Plus — $900</option>
+              <option value="Pro — $1,300">Pro — $1,300</option>
+              <option value="Pro Plus — $1,800">Pro Plus — $1,800</option>
+              <option value="Signature — $2,400">Signature — $2,400</option>
+              <option value="Flagship — $3,000">Flagship — $3,000</option>
+              <option value="Beyond/custom — written quote required">Beyond / custom — written quote required</option>
+              <option value="No website — Hive research interest only">No website — Hive research interest only</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-pages">Desired pages <span class="opt">optional for Hive-only interest</span></label>
+            <p class="hint">List the pages or sections you expect: for example Home, Services, About, Contact, Gallery, Menu, Shop, or Booking.</p>
+            <textarea class="input" id="f-pages" name="Desired website pages" maxlength="1000" rows="3"
+                      placeholder="Home, Services, About, Contact, and a project gallery"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="f-function">Desired tool or function <span class="opt">optional</span></label>
+            <p class="hint">Describe the job, not private data or account credentials: quote requests, booking intake, a menu, a small shop, a calculator, or something else.</p>
+            <textarea class="input" id="f-function" name="Desired website tool or function" maxlength="1000" rows="3"
+                      placeholder="A quote-request form that sends the job details to my inbox"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="f-care">Website Care interest <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">Care is separate from the one-time build. Pick a starting preference; we will confirm the exact plan and limits in writing.</p>
+            <select class="input" id="f-care" name="Website Care interest" required>
+              <option value="" selected disabled>Choose a Care preference</option>
+              <option value="Not sure — explain the Care plans">Not sure — explain the plans</option>
+              <option value="No Care requested">No Care requested</option>
+              <option value="Host — $15/mo">Host — $15/mo</option>
+              <option value="Care Lite — $29/mo">Care Lite — $29/mo</option>
+              <option value="Care — $59/mo">Care — $59/mo</option>
+              <option value="Care Plus — $99/mo">Care Plus — $99/mo</option>
+              <option value="Partner — $159/mo">Partner — $159/mo</option>
+              <option value="Not applicable — Hive research interest only">Not applicable — Hive research interest only</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-deadline">Desired launch date <span class="opt">optional</span></label>
+            <p class="hint">A target helps us plan; it is not accepted as a deadline until the signed scope confirms it.</p>
+            <input class="input" id="f-deadline" name="Desired launch date" type="date">
+          </div>
+
+          <div class="field">
+            <label for="f-assets">Content and asset readiness <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">Tell us only the readiness level. Do not send files, passwords, customer data, or licensed material through this first brief.</p>
+            <select class="input" id="f-assets" name="Content and asset readiness" required>
+              <option value="" selected disabled>Choose the closest description</option>
+              <option value="Ready — approved words, logo, and photos are available">Ready — approved words, logo, and photos are available</option>
+              <option value="Partly ready — some words or assets still needed">Partly ready — some words or assets still needed</option>
+              <option value="Need help creating or organizing most content">Need help creating or organizing most content</option>
+              <option value="Nothing prepared yet">Nothing prepared yet</option>
+              <option value="Not sure yet">Not sure yet</option>
+              <option value="Not applicable — Hive research interest only">Not applicable — Hive research interest only</option>
+            </select>
+          </div>
 
           <fieldset class="field" id="hive-picks" style="border:0;padding:0;margin:0 0 1.1rem">
             <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
