@@ -1,0 +1,203 @@
+/* SITE SOURCERY — MIDNIGHT ATELIER INNER-WORLD SHELL
+   Shared scene language for every route beyond the homepage. Page-specific
+   modules load after this file and can change the chamber without breaking
+   the workshop's common threshold, typography, or navigation. */
+
+body.atelier-inner{
+  color-scheme:dark;
+  --bg:#090611;--surface:#120c1d;--surface-2:#1a1128;
+  --hairline:#38274c;--text:#f9f2ff;--muted:#c7b9d0;--link:#d1bcff;
+  --scrim:rgba(9,6,17,.84);--on-charm:#fff;
+  --lift:0 3px 10px rgba(0,0,0,.32),0 32px 90px -42px rgba(0,0,0,.9);
+  --ring:0 0 0 2px #090611,0 0 0 4px #a887ff;
+  min-height:100svh;background:#090611;
+}
+body.atelier-inner::before{
+  z-index:-3;
+  background:
+    radial-gradient(68rem 40rem at 88% 7%,rgba(126,74,194,.18),transparent 66%),
+    radial-gradient(52rem 36rem at -8% 42%,rgba(188,70,121,.09),transparent 66%),
+    linear-gradient(180deg,#090611 0%,#0c0713 56%,#08050e 100%);
+}
+body.atelier-inner::after{
+  content:"";position:fixed;z-index:-2;inset:0;pointer-events:none;opacity:.36;
+  background-image:
+    linear-gradient(rgba(219,188,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(219,188,255,.035) 1px,transparent 1px);
+  background-size:4rem 4rem;
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent 82%);mask-image:linear-gradient(180deg,#000,transparent 82%);
+}
+
+/* The same guarded threshold on every chamber. */
+.atelier-inner .nav{
+  background:rgba(8,5,14,.76);border-color:rgba(225,199,255,.14);
+  -webkit-backdrop-filter:blur(20px) saturate(1.18);backdrop-filter:blur(20px) saturate(1.18);
+  box-shadow:0 1px 0 rgba(255,232,190,.035),0 16px 42px rgba(0,0,0,.15);
+}
+.atelier-inner .nav::after{
+  content:"";position:absolute;left:50%;bottom:-1px;width:min(38rem,58vw);height:1px;translate:-50% 0;
+  background:linear-gradient(90deg,transparent,rgba(185,134,255,.62),rgba(255,214,148,.45),transparent);
+}
+.atelier-inner .brand-mark{filter:drop-shadow(0 0 9px rgba(181,126,255,.58))}
+.atelier-inner .brand-name{color:#fff7ff;letter-spacing:-.025em}
+.atelier-inner .nav-link{color:#cfc1d6}
+.atelier-inner .nav-link:hover,.atelier-inner .nav-link:focus-visible,.atelier-inner .nav-link[aria-current="page"]{color:#fff8ff}
+.atelier-inner .nav-link[aria-current="page"]::after{box-shadow:0 0 14px rgba(174,112,255,.7)}
+.atelier-inner .nav-cta{box-shadow:0 10px 30px rgba(113,65,190,.3)}
+
+.atelier-inner main{position:relative;isolation:isolate;overflow:clip}
+.atelier-inner main::before{
+  content:"";position:absolute;z-index:-1;top:2rem;left:50%;width:min(96vw,92rem);height:min(96vw,92rem);
+  translate:-50% -48%;border:1px solid rgba(210,173,255,.08);border-radius:50%;pointer-events:none;
+  box-shadow:inset 0 0 0 4.5rem rgba(180,126,244,.008),inset 0 0 0 9rem rgba(180,126,244,.006);
+}
+.atelier-inner main::after{
+  content:"✦";position:absolute;z-index:-1;top:7.2rem;left:50%;translate:-50% 0;
+  color:rgba(244,209,151,.12);font-size:clamp(8rem,28vw,25rem);line-height:1;
+  text-shadow:0 0 90px rgba(155,91,230,.18);pointer-events:none;
+}
+
+/* Inner heroes are worktables: proposition on the left, bespoke artifact on
+   the right. Pages without an artifact become a centered title chamber. */
+.atelier-inner .hero{position:relative;overflow:visible;padding-block:clamp(4.5rem,10vw,8rem) clamp(3.5rem,8vw,6rem)}
+.atelier-inner .hero::after{
+  content:"";position:absolute;left:50%;bottom:0;width:min(72rem,calc(100% - 2.5rem));height:1px;translate:-50% 0;
+  background:linear-gradient(90deg,transparent,rgba(210,173,255,.27) 18% 82%,transparent);
+}
+.atelier-inner .hero>.wrap{position:relative;display:grid;align-items:center;gap:clamp(2.2rem,6vw,5.4rem)}
+.atelier-inner .hero>.wrap:has(.hero-stage),
+.atelier-inner .hero>.wrap:has(>figure){grid-template-columns:minmax(0,.84fr) minmax(22rem,1.16fr)}
+.atelier-inner .hero>.wrap:has(.hero-stage)>:not(.hero-stage),
+.atelier-inner .hero>.wrap:has(>figure)>:not(figure){grid-column:1}
+.atelier-inner .hero>.wrap>.hero-stage,
+.atelier-inner .hero>.wrap>figure{grid-column:2;grid-row:1/span 8;min-width:0;margin:0!important}
+.atelier-inner .hero .eyebrow{align-self:end;color:#ddcde8;margin:0 0 .2rem}
+.atelier-inner .hero h1{font-size:clamp(3rem,6.3vw,6.1rem);line-height:.94;letter-spacing:-.048em;max-width:10.5ch;
+  text-shadow:0 4px 40px rgba(0,0,0,.68)}
+.atelier-inner .hero .hero-title{font-size:clamp(2.8rem,5.6vw,5.3rem)}
+.atelier-inner .hero .lede{font-size:clamp(1.03rem,1.7vw,1.24rem);line-height:1.58;color:#d6c9dc;max-width:38rem;margin-top:.2rem}
+.atelier-inner .hero .actions{margin-top:.3rem}
+.atelier-inner .hero .terms,.atelier-inner .hero .footer-trust{color:#aa9caf;font-size:.81rem;line-height:1.6}
+
+/* Existing hand-drawn scenes become illuminated artifacts instead of loose SVGs. */
+.atelier-inner .hero-stage,.atelier-inner .hero>.wrap>figure{
+  position:relative;isolation:isolate;padding:.45rem;border:1px solid rgba(225,198,255,.2);border-radius:28px;
+  background:linear-gradient(145deg,rgba(34,20,48,.86),rgba(8,5,13,.96));
+  box-shadow:0 42px 100px -45px #000,0 0 48px rgba(130,77,199,.09),inset 0 0 0 1px rgba(255,236,200,.035);
+}
+.atelier-inner .hero-stage::before,.atelier-inner .hero>.wrap>figure::before{
+  content:"";position:absolute;z-index:2;inset:.45rem;border:1px solid rgba(255,230,185,.08);border-radius:22px;pointer-events:none;
+  box-shadow:inset 0 -7rem 7rem -7rem rgba(0,0,0,.75);
+}
+.atelier-inner .hero-stage::after,.atelier-inner .hero>.wrap>figure::after{
+  content:"";position:absolute;z-index:-1;left:14%;right:14%;bottom:-1.5rem;height:2.7rem;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(164,103,235,.26),transparent 68%);filter:blur(8px);pointer-events:none;
+}
+.atelier-inner .hero-stage figure{border:0!important;border-radius:22px!important;overflow:hidden;background:#0b0711}
+.atelier-inner .hero-stage svg,.atelier-inner .hero>.wrap>figure>svg{border-radius:22px;overflow:hidden}
+.atelier-inner .stage-caption{border-color:rgba(221,191,255,.16);background:rgba(12,7,19,.9)}
+
+/* One uninterrupted corridor, with different chambers instead of card stacks. */
+.atelier-inner .section{position:relative;padding-block:clamp(5rem,10vw,8.5rem)}
+.atelier-inner .section+.section::before{
+  content:"✦";position:absolute;top:-.7rem;left:50%;translate:-50% 0;display:grid;place-items:center;
+  width:1.5rem;height:1.5rem;border:1px solid rgba(195,149,255,.32);border-radius:50%;
+  background:#0a0611;color:#dec7ff;font-size:.58rem;box-shadow:0 0 28px rgba(130,75,204,.25);
+}
+.atelier-inner .section.daylight{
+  color-scheme:dark;--bg:#100a19;--surface:#191025;--surface-2:#211431;
+  --hairline:#3c2950;--text:#faf3ff;--muted:#c8bad0;--link:#d1bcff;--mint:#56dcb4;
+  --on-charm:#fff;--lift:0 3px 10px rgba(0,0,0,.3),0 28px 70px -35px rgba(0,0,0,.8);
+  background:
+    radial-gradient(52rem 28rem at 18% 20%,rgba(132,77,196,.11),transparent 68%),
+    linear-gradient(180deg,#0d0815,#120a1a 52%,#0d0815);
+}
+.atelier-inner .section>.wrap>.eyebrow{color:#d8c7e3}
+.atelier-inner .section h2{font-size:clamp(2.25rem,5.4vw,4.9rem);line-height:1;letter-spacing:-.042em;max-width:14ch}
+.atelier-inner .section h2+.lede{color:#cbbdd2;margin-top:1rem}
+
+/* Cabinet panels, price folios, proofs, and form surfaces. */
+.atelier-inner .card,.atelier-inner .price-card,.atelier-inner .prose,
+.atelier-inner .shop-window,.atelier-inner form{
+  position:relative;border-color:rgba(220,187,255,.18);background:
+    linear-gradient(145deg,rgba(27,16,39,.92),rgba(12,8,18,.96));
+  box-shadow:0 24px 65px -42px #000,inset 0 1px rgba(255,238,205,.035);
+}
+.atelier-inner .card::before,.atelier-inner .price-card::before,.atelier-inner .prose::before,
+.atelier-inner form::before{
+  content:"";position:absolute;inset:.55rem;pointer-events:none;
+  border-top:1px solid rgba(241,215,255,.07);border-left:1px solid rgba(241,215,255,.045);border-radius:12px;
+}
+.atelier-inner .card,.atelier-inner .price-card{overflow:hidden;transition:transform .35s var(--ease),border-color .3s var(--ease),box-shadow .35s var(--ease)}
+.atelier-inner .card::after,.atelier-inner .price-card::after{
+  content:"";position:absolute;left:1.25rem;right:55%;bottom:0;height:1px;background:linear-gradient(90deg,#9e72ef,transparent);opacity:.62;
+}
+.atelier-inner .card:hover,.atelier-inner .price-card:hover{transform:translateY(-5px);border-color:rgba(225,195,255,.34);box-shadow:0 34px 82px -42px #000,0 0 32px rgba(136,82,207,.1)}
+.atelier-inner .price-card.recommended{border-color:rgba(201,153,255,.48);box-shadow:0 30px 85px -46px #000,0 0 42px rgba(138,83,211,.16)}
+.atelier-inner .flag{background:linear-gradient(90deg,rgba(126,79,191,.45),rgba(93,49,130,.2));border-color:rgba(224,194,255,.22);color:#f6eaff}
+.atelier-inner .badge{background:rgba(95,62,128,.34);border-color:rgba(222,190,255,.22);color:#eadcff}
+.atelier-inner .input,.atelier-inner input,.atelier-inner textarea,.atelier-inner select{
+  background:rgba(8,5,13,.78);border-color:rgba(214,180,248,.2);color:#faf4ff;
+}
+.atelier-inner .input:focus,.atelier-inner input:focus,.atelier-inner textarea:focus,.atelier-inner select:focus{
+  border-color:#a879ef;box-shadow:0 0 0 3px rgba(155,99,230,.14);
+}
+.atelier-inner .prose{max-width:58rem;padding:clamp(1.5rem,5vw,4.5rem);border:1px solid rgba(222,189,255,.18);border-radius:22px}
+.atelier-inner .prose h2{max-width:none;font-size:clamp(1.55rem,3vw,2.25rem);padding-top:1.6rem;border-top:1px solid rgba(216,181,248,.12)}
+.atelier-inner .prose h2:first-of-type{padding-top:0;border:0}
+.atelier-inner .legal-meta{color:#b9a8c0}
+.atelier-inner .faq-item{border-color:rgba(217,183,248,.17);background:rgba(20,12,29,.84);box-shadow:0 18px 50px -42px #000}
+.atelier-inner .faq-item[open]{border-color:rgba(201,155,247,.38);background:linear-gradient(145deg,rgba(30,18,42,.96),rgba(13,8,19,.98))}
+
+.atelier-inner .btn.primary{background:linear-gradient(135deg,#6e4ae0,#c53f72);color:#fff;box-shadow:0 10px 31px rgba(100,57,172,.27)}
+.atelier-inner .btn.primary:hover{background:linear-gradient(135deg,#7b56ea,#d14c7e);box-shadow:0 15px 40px rgba(108,61,183,.38)}
+.atelier-inner .btn.ghost{background:rgba(18,10,27,.56);border-color:rgba(225,199,255,.24);color:#f7effb;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.atelier-inner .btn.ghost:hover{background:rgba(34,19,49,.78);border-color:#c5a8ec}
+
+.atelier-inner .footer{margin-top:0;background:#07040c;border-color:rgba(221,191,255,.12)}
+.atelier-inner .footer::before{content:"";display:block;width:min(64rem,80vw);height:1px;margin:0 auto 4rem;background:linear-gradient(90deg,transparent,rgba(182,130,246,.38),rgba(248,210,149,.24),transparent)}
+
+/* Transitional and compact destination pages still feel like real chambers. */
+.atelier-inner.atelier-compact main{display:grid;align-items:center;min-height:calc(100svh - 4rem)}
+.atelier-inner.atelier-compact .hero{width:100%}
+.atelier-inner.atelier-compact .hero>.wrap{justify-items:center;text-align:center;max-width:52rem}
+.atelier-inner.atelier-compact .hero h1{max-width:13ch}
+.atelier-inner.atelier-compact .hero .lede{margin-inline:auto}
+.atelier-inner.atelier-compact .hero .actions{justify-content:center}
+.portal-redirect .hero>.wrap{gap:1.15rem}
+.redirect-sigil{position:relative;display:grid;place-items:center;width:clamp(6rem,16vw,9rem);aspect-ratio:1;margin:.35rem auto;
+  border:1px solid rgba(213,175,255,.24);border-radius:50%;color:#f6dca7;
+  background:radial-gradient(circle,rgba(244,213,159,.1),rgba(129,74,196,.13) 45%,transparent 70%);
+  box-shadow:inset 0 0 42px rgba(131,75,198,.16),0 0 45px rgba(131,75,198,.11)}
+.redirect-sigil::before,.redirect-sigil::after{content:"";position:absolute;inset:15%;border:1px solid rgba(226,195,255,.24);transform:rotate(45deg)}
+.redirect-sigil::after{inset:30%;transform:none}
+.redirect-sigil span{position:relative;z-index:1;font-size:clamp(1.5rem,4vw,2.5rem);text-shadow:0 0 25px rgba(255,215,151,.65)}
+
+@media (max-width:58rem){
+  .atelier-inner .hero>.wrap:has(.hero-stage),.atelier-inner .hero>.wrap:has(>figure){grid-template-columns:minmax(0,1fr)}
+  .atelier-inner .hero>.wrap:has(.hero-stage)>:not(.hero-stage),.atelier-inner .hero>.wrap:has(>figure)>:not(figure),
+  .atelier-inner .hero>.wrap>.hero-stage,.atelier-inner .hero>.wrap>figure{grid-column:1;grid-row:auto}
+  .atelier-inner .hero h1{max-width:12ch}
+  .atelier-inner .hero>.wrap>.hero-stage,.atelier-inner .hero>.wrap>figure{width:100%;max-width:48rem;margin-top:1rem!important}
+}
+@media (max-width:44rem){
+  body.atelier-inner::after{background-size:2.7rem 2.7rem;opacity:.24}
+  .atelier-inner main::after{top:9rem}
+  .atelier-inner .hero{padding-block:3.8rem 4.2rem}
+  .atelier-inner .hero h1{font-size:clamp(2.7rem,14vw,4.4rem)}
+  .atelier-inner .hero>.wrap{gap:1.5rem}
+  .atelier-inner .hero-stage,.atelier-inner .hero>.wrap>figure{padding:.3rem;border-radius:20px}
+  .atelier-inner .hero-stage::before,.atelier-inner .hero>.wrap>figure::before{inset:.3rem;border-radius:16px}
+  .atelier-inner .hero-stage figure,.atelier-inner .hero-stage svg,.atelier-inner .hero>.wrap>figure>svg{border-radius:16px!important}
+  .atelier-inner .section{padding-block:4.5rem}
+  .atelier-inner .section h2{font-size:clamp(2.05rem,11vw,3.4rem)}
+  .atelier-inner .prose{padding:1.3rem;border-radius:16px}
+}
+@media (max-width:25rem){
+  .atelier-inner .hero h1{font-size:clamp(2.4rem,13.5vw,3.35rem)}
+  .atelier-inner .hero .actions{align-items:stretch}.atelier-inner .hero .btn{width:100%;justify-content:center}
+}
+@media (hover:none),(pointer:coarse){.atelier-inner .card:hover,.atelier-inner .price-card:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){.atelier-inner .card,.atelier-inner .price-card{transition:none}.atelier-inner .card:hover,.atelier-inner .price-card:hover{transform:none}}
+@media (forced-colors:active){body.atelier-inner::after,.atelier-inner main::before,.atelier-inner main::after{display:none}.atelier-inner .card,.atelier-inner .price-card,.atelier-inner .prose{border:1px solid CanvasText}}
+@media print{body.atelier-inner{--bg:#fff;--surface:#fff;--surface-2:#fff;--text:#111;--muted:#333;color-scheme:light;background:#fff}.atelier-inner .nav,.atelier-inner .footer,body.atelier-inner::before,body.atelier-inner::after,.atelier-inner main::before,.atelier-inner main::after{display:none!important}.atelier-inner .hero,.atelier-inner .section{padding-block:1.5rem}.atelier-inner .card,.atelier-inner .price-card,.atelier-inner .prose{background:#fff;color:#111;box-shadow:none;border:1px solid #bbb}}

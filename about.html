@@ -1,489 +1,89 @@
 <!DOCTYPE html>
-<!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — about.html · THE ACCOUNTABLE HUMAN · "SPELLCAST"
-     Step through the glowing window: the desk where your site gets built.
-     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
-     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
-     The only http(s) URLs below are hyperlinks/metadata, never loads.
-     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>About — Site Sourcery</title>
-<meta name="description" content="Site Sourcery is a professional studio that hand-builds custom websites for local businesses. Its planned Hive automation line is in pre-launch validation and is not yet a public production service.">
+<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>About Site Sourcery — a local web studio that answers</title>
+<meta name="description" content="Site Sourcery is a one-person studio building and maintaining custom websites for local businesses, while separately validating a proposed missed-call automation service.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/about.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="About — Site Sourcery">
-<meta property="og:description" content="A professional studio builds custom websites for local businesses. The Hive automation line is a pre-launch plan, not a live service.">
-<meta property="og:url" content="https://sitesourcery.com/about.html">
-<meta property="og:image" content="https://sitesourcery.com/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:image" content="https://sitesourcery.com/og.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="About — Site Sourcery">
-<meta name="twitter:description" content="A professional studio builds your site, runs it, and answers when you call. You own everything. Cancel anytime.">
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"AboutPage","name":"About — Site Sourcery","url":"https://sitesourcery.com/about.html","mainEntity":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","telephone":"+1-321-788-2555","description":"A professional studio building custom websites for local businesses. Its Hive automation line is in pre-launch validation and is not described as an available service."}}
-</script>
+<meta property="og:type" content="website"><meta property="og:site_name" content="Site Sourcery"><meta property="og:title" content="About Site Sourcery"><meta property="og:description" content="A one-person studio for hand-built local-business websites, with The Responder clearly separated as a proposed pre-launch service."><meta property="og:url" content="https://sitesourcery.com/about.html"><meta property="og:image" content="https://sitesourcery.com/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="About Site Sourcery"><meta name="twitter:description" content="Hand-built websites from a local studio that answers. The proposed Responder remains pre-launch.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/about.html","description":"One-person studio that hand-builds and maintains custom websites for local businesses while separately validating a proposed missed-call workflow.","telephone":"+1-321-788-2555","email":"hello@sitesourcery.com","parentOrganization":{"@type":"Organization","name":"Desiderata Labs LLC"}}</script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-story.css">
 </head>
-<body>
+<body class="atelier-inner page-about atelier-story">
 <a class="skip" href="#main">Skip to content</a>
-
-<!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
-<nav class="nav" aria-label="Main">
-  <div class="wrap nav-inner">
-    <a class="brand" href="/">
-      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
-      <span class="brand-name">Site&nbsp;Sourcery</span>
-    </a>
-    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
-      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-    <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/">Home</a>
-      <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/automation.html">The Hive</a>
-      <a class="nav-link" href="/terms.html">Terms</a>
-      <a class="nav-link" href="/contact.html">Contact</a>
-      <a class="btn primary nav-cta" href="/start/">Start your site</a>
-    </div>
-  </div>
-</nav>
+<nav class="nav" aria-label="Main"><div class="wrap nav-inner"><a class="brand" href="/"><svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg><span class="brand-name">Site&nbsp;Sourcery</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><div class="nav-menu" id="nav-menu"><a class="nav-link" href="/">Home</a><a class="nav-link" href="/pricing.html">Pricing</a><a class="nav-link" href="/automation.html">The Hive</a><a class="nav-link" href="/terms.html">Terms</a><a class="nav-link" href="/contact.html">Contact</a><a class="btn primary nav-cta" href="/start/">Start your site</a></div></div></nav>
 
 <main id="main">
-
-  <!-- ══ HERO — the human, and the signature "behind the glowing window" ══ -->
-  <section class="hero">
-    <div class="wrap">
-      <p class="eyebrow reveal">About</p>
-      <h1 class="hero-mega reveal">Hand-built sites, run by a studio that <em class="accent">answers</em>.</h1>
-      <p class="lede reveal">Site Sourcery is a one-person studio that hand-builds custom websites for local businesses. It is also validating <strong>The Responder</strong>, a proposed missed-call workflow that is not yet operating as a public production service. One accountable studio stands behind the work, without a call-centre runaround.</p>
-      <div class="actions reveal">
-        <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+  <section class="story-hero provenance-hero" aria-labelledby="about-title">
+    <div class="story-shell story-hero-grid">
+      <div class="story-copy">
+        <p class="story-kicker reveal"><span>THE MASTER&rsquo;S ATELIER</span><i></i> LOCAL / ACCOUNTABLE</p>
+        <h1 id="about-title" class="reveal">Built at one desk.<br> <em>Answered by one studio.</em></h1>
+        <p class="story-lede reveal">Site Sourcery is a one-person studio that hand-builds custom websites for local businesses. One accountable studio stands behind the work, without a call-centre runaround.</p>
+        <div class="actions reveal"><a class="btn primary" href="/start/">Start your site</a><a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a></div>
+        <p class="story-boundary reveal"><b>WEBSITE WORK</b> Available for inquiry. <span><b>THE RESPONDER</b> Proposed; not operating as a public production service.</span></p>
       </div>
-      <p class="footer-trust reveal" style="margin-top:1.6rem">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-
-      <!-- ── THE DESK · signature interactive nocturne ────────────────────────
-           On the homepage you saw the one lit window from the street. This
-           steps through it. The maker's desk after dark: a cool monitor (the
-           digital half) and a warm desk lamp (the human half). Move the spark
-           (it follows your cursor; drifts on its own when idle) and the lamp
-           warms the room and lights the mark on the wall. No pointer /
-           reduced motion → the lamp simply stays lit. Pure inline SVG, no loads. -->
-      <div class="hero-stage reveal">
-        <figure class="spellstage" data-win-x="700" data-win-y="330" data-range="460"
-                role="img" aria-label="Behind the glowing shop window: a maker&rsquo;s desk at night. A cool monitor shows a small website being built; a warm desk lamp pools light across the desk and lifts the quiet tools of the studio.">
-          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
-               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-            <defs>
-              <linearGradient id="wk-wall" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0A0714"/><stop offset=".6" stop-color="#130B21"/><stop offset="1" stop-color="#170F29"/>
-              </linearGradient>
-              <linearGradient id="wk-night" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0B0716"/><stop offset=".6" stop-color="#160C26"/><stop offset="1" stop-color="#1E1236"/>
-              </linearGradient>
-              <radialGradient id="wk-moon" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CFC6FF" stop-opacity=".85"/><stop offset="60%" stop-color="#8C78FF" stop-opacity=".14"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="wk-desk" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#2A1B0E"/><stop offset="1" stop-color="#170D05"/>
-              </linearGradient>
-              <radialGradient id="wk-pool" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFB65F" stop-opacity=".62"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".22"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="wk-cone" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#FFCE86" stop-opacity=".55"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
-              </linearGradient>
-              <linearGradient id="wk-shade" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#FFE0AC"/><stop offset="1" stop-color="#E08A3A"/>
-              </linearGradient>
-              <linearGradient id="wk-frame" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#3A2A16"/><stop offset=".5" stop-color="#241631"/><stop offset="1" stop-color="#1B1226"/>
-              </linearGradient>
-              <linearGradient id="wk-refl" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#FFAF5C" stop-opacity=".45"/><stop offset="100%" stop-color="#FFAF5C" stop-opacity="0"/>
-              </linearGradient>
-              <radialGradient id="wk-scr" cx="50%" cy="30%" r="80%">
-                <stop offset="0" stop-color="#171331"/><stop offset="100%" stop-color="#0A0818"/>
-              </radialGradient>
-              <radialGradient id="wk-scrglow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#8C78FF" stop-opacity=".42"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="wk-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="wk-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
-              </radialGradient>
-            </defs>
-
-            <!-- room: back wall + floor -->
-            <rect width="1200" height="640" fill="url(#wk-wall)"/>
-            <rect x="0" y="470" width="1200" height="170" fill="#0A0716"/>
-            <rect x="0" y="470" width="1200" height="2" fill="#241C3C" opacity=".8"/>
-            <path d="M0 556 H1200" stroke="#140F26" stroke-width="2"/>
-
-            <!-- BACK WINDOW · the night street just outside (cool, always there) -->
-            <g>
-              <rect x="92" y="92" width="252" height="212" rx="4" fill="#150E28"/>
-              <rect x="104" y="104" width="228" height="188" rx="2" fill="url(#wk-night)"/>
-              <circle cx="150" cy="150" r="120" fill="url(#wk-moon)"/>
-              <circle cx="150" cy="150" r="22" fill="#E9E3FF" opacity=".9"/>
-              <circle cx="141" cy="143" r="4" fill="#CFC6F0" opacity=".5"/><circle cx="159" cy="156" r="3" fill="#CFC6F0" opacity=".45"/>
-              <g fill="#D6CDF7">
-                <circle class="st-twinkle" cx="232" cy="132" r="1.5"/><circle class="st-twinkle" cx="286" cy="160" r="1.2"/>
-                <circle class="st-twinkle" cx="256" cy="200" r="1.3"/><circle class="st-twinkle" cx="304" cy="126" r="1.1"/>
-                <circle class="st-twinkle" cx="200" cy="122" r="1.2"/><circle class="st-twinkle" cx="300" cy="212" r="1.4"/>
-              </g>
-              <!-- far storefronts across the street: one warm dot still glowing -->
-              <rect x="120" y="238" width="196" height="54" fill="#0C0A1C"/>
-              <rect x="146" y="252" width="18" height="22" fill="#221D3A"/><rect x="180" y="252" width="18" height="22" fill="#221D3A"/>
-              <rect x="236" y="252" width="18" height="22" fill="#221D3A"/><rect x="272" y="252" width="18" height="22" fill="#221D3A"/>
-              <rect x="210" y="250" width="18" height="24" fill="#F6AE5C" opacity=".85"/><!-- a neighbour, lit -->
-              <!-- muntins + frame -->
-              <g stroke="#2A2038" stroke-width="4"><line x1="218" y1="104" x2="218" y2="292"/><line x1="104" y1="198" x2="332" y2="198"/></g>
-              <rect x="92" y="92" width="252" height="212" rx="4" fill="none" stroke="#221831" stroke-width="6"/>
-              <rect x="86" y="300" width="264" height="8" rx="3" fill="#1C142C"/><!-- sill -->
-            </g>
-
-            <!-- ═ FRAMED MAKER'S MARK on the wall · warm-lit sigil ═════════════ -->
-            <!-- hook -->
-            <path d="M934 78 l-9 26 h18 z" fill="#221831"/>
-            <line x1="934" y1="80" x2="934" y2="104" stroke="#2A2038" stroke-width="2"/>
-            <!-- warm wash the lamp throws across the mark -->
-            <ellipse class="st-pool" cx="934" cy="228" rx="150" ry="170" fill="url(#wk-pool)" opacity="0"/>
-            <!-- frame -->
-            <rect x="828" y="104" width="214" height="252" rx="8" fill="url(#wk-frame)"/>
-            <rect class="st-lit-soft" x="828" y="104" width="214" height="252" rx="8" fill="none" stroke="#C6862F" stroke-width="3"/>
-            <!-- mat + field -->
-            <rect x="848" y="124" width="174" height="212" rx="3" fill="#0E0B18"/>
-            <rect class="st-lit-soft" x="848" y="124" width="174" height="212" rx="3" fill="#3B2A16" opacity=".9"/>
-            <!-- the brand's own sigil, framed like a signature (the identity, not a face) -->
-            <path class="st-lit" d="M935 168 l8.4 24.6 24.6 8.4 -24.6 8.4 -8.4 24.6 -8.4 -24.6 -24.6 -8.4 24.6 -8.4 z" fill="url(#wk-core)"/>
-            <g class="st-lit-soft" stroke="#8A6A3E" stroke-width="4" stroke-linecap="round">
-              <line x1="892" y1="288" x2="978" y2="288"/><line x1="906" y1="306" x2="964" y2="306"/>
-            </g>
-            <!-- warm inner rim of the frame -->
-            <rect class="st-lit" x="831" y="107" width="208" height="246" rx="7" fill="none" stroke="#FFD79A" stroke-width="1.4" opacity=".65"/>
-
-            <!-- ═ THE DESK ═════════════════════════════════════════════════════ -->
-            <!-- warm light pooling on the desk + reflection (under the props) -->
-            <ellipse class="st-pool" cx="720" cy="452" rx="240" ry="46" fill="url(#wk-pool)"/>
-            <!-- desk top -->
-            <rect x="70" y="432" width="1060" height="30" rx="6" fill="url(#wk-desk)"/>
-            <rect x="70" y="460" width="1060" height="12" fill="#120B06"/>
-            <rect class="st-lit-soft" x="70" y="432" width="1060" height="4" rx="2" fill="#7A4E22"/><!-- lit desk edge -->
-            <rect class="st-pool" x="600" y="436" width="240" height="24" fill="url(#wk-refl)"/><!-- warm reflection -->
-            <!-- legs -->
-            <rect x="150" y="472" width="14" height="84" fill="#0E0906"/><rect x="1036" y="472" width="14" height="84" fill="#0E0906"/>
-
-            <!-- ═ MONITOR · the digital half (cool, always on) ═════════════════ -->
-            <ellipse cx="300" cy="436" rx="70" ry="9" fill="#0C0A16"/>
-            <rect x="294" y="392" width="12" height="42" fill="#1C1730"/>
-            <rect x="262" y="426" width="76" height="10" rx="4" fill="#1C1730"/>
-            <ellipse cx="300" cy="320" rx="210" ry="150" fill="url(#wk-scrglow)"/><!-- cool screen glow -->
-            <rect x="150" y="230" width="300" height="172" rx="12" fill="#0B0916" stroke="#2A2444" stroke-width="3"/>
-            <rect x="162" y="242" width="276" height="148" rx="4" fill="url(#wk-scr)"/>
-            <!-- a small site being built on the screen -->
-            <g>
-              <path d="M182 266 l2.4 7 7 2.4 -7 2.4 -2.4 7 -2.4 -7 -7 -2.4 7 -2.4 z" fill="#A78BFA"/>
-              <rect x="200" y="266" width="34" height="6" rx="3" fill="#4A4370"/>
-              <circle cx="404" cy="270" r="3" fill="#4A4370"/><circle cx="416" cy="270" r="3" fill="#4A4370"/>
-              <rect x="182" y="292" width="150" height="9" rx="4" fill="#E9E4FF"/>
-              <rect x="182" y="308" width="112" height="9" rx="4" fill="#E9E4FF"/>
-              <rect x="300" y="308" width="4" height="11" fill="#A78BFA"/><!-- the build caret -->
-              <rect x="182" y="332" width="120" height="44" rx="6" fill="#171331" stroke="#332B57"/>
-              <rect x="196" y="346" width="52" height="6" rx="3" fill="#6D5AB0"/>
-              <rect x="196" y="360" width="80" height="5" rx="2.5" fill="#3E366A"/>
-              <rect x="316" y="332" width="106" height="44" rx="6" fill="#171331" stroke="#332B57"/>
-              <rect x="330" y="346" width="52" height="6" rx="3" fill="#6D5AB0"/>
-              <rect x="330" y="360" width="72" height="5" rx="2.5" fill="#3E366A"/>
-            </g>
-
-            <!-- keyboard in front of the monitor -->
-            <rect x="196" y="446" width="216" height="10" rx="4" fill="#171223"/>
-            <g fill="#241C38"><rect x="204" y="448" width="12" height="4" rx="1"/><rect x="222" y="448" width="12" height="4" rx="1"/><rect x="240" y="448" width="12" height="4" rx="1"/><rect x="258" y="448" width="12" height="4" rx="1"/><rect x="276" y="448" width="12" height="4" rx="1"/><rect x="294" y="448" width="60" height="4" rx="1"/><rect x="360" y="448" width="12" height="4" rx="1"/><rect x="378" y="448" width="12" height="4" rx="1"/></g>
-
-            <!-- ═ THE DESK LAMP · the human half (warm source) ═════════════════ -->
-            <!-- warm cone of light from the shade down to the desk -->
-            <path class="st-pool" d="M742 214 L806 214 L858 452 L636 452 Z" fill="url(#wk-cone)"/>
-            <!-- base + articulated arm -->
-            <ellipse cx="930" cy="440" rx="46" ry="9" fill="#15101E"/>
-            <rect x="912" y="420" width="36" height="20" rx="4" fill="#1B1530"/>
-            <line x1="930" y1="424" x2="884" y2="304" stroke="#241C3C" stroke-width="8" stroke-linecap="round"/>
-            <line x1="884" y1="304" x2="782" y2="204" stroke="#241C3C" stroke-width="8" stroke-linecap="round"/>
-            <circle cx="930" cy="424" r="8" fill="#2E2648"/><circle cx="884" cy="304" r="8" fill="#2E2648"/>
-            <!-- shade + bulb -->
-            <path d="M736 208 q38 -34 76 -4 l-38 42 z" fill="#1E1730"/>
-            <path class="st-lit-soft" d="M742 210 q34 -28 66 -2 l-30 34 z" fill="url(#wk-shade)"/>
-            <circle class="st-lit" cx="774" cy="242" r="9" fill="#FFE6BE"/>
-            <circle class="st-lit" cx="774" cy="242" r="20" fill="url(#wk-pool)"/>
-
-            <!-- ═ DESK PROPS · warm-lit human details ══════════════════════════ -->
-            <!-- coffee mug + steam -->
-            <g class="st-lit-soft">
-              <path d="M642 402 h44 v22 a22 22 0 0 1 -44 0 z" fill="#3A2412"/>
-              <path d="M686 406 q16 2 16 12 t-16 12" fill="none" stroke="#3A2412" stroke-width="5"/>
-              <ellipse cx="664" cy="402" rx="22" ry="6" fill="#5A3C1E"/>
-              <path d="M656 392 q-6 -12 4 -22 M672 392 q6 -12 -4 -22" stroke="#7A5A34" stroke-width="3" fill="none" stroke-linecap="round" opacity=".7"/>
-            </g>
-            <!-- small plant on the desk -->
-            <g class="st-lit-soft">
-              <path d="M556 404 q-14 -30 -3 -52 M556 404 q3 -34 16 -50 M556 404 q15 -22 30 -30" stroke="#2E5A32" stroke-width="5" fill="none" stroke-linecap="round"/>
-              <path d="M544 404 h26 l-4 22 h-18 z" fill="#3A2414"/>
-            </g>
-            <!-- pen cup + a couple of papers -->
-            <g class="st-lit-soft">
-              <rect x="838" y="404" width="26" height="30" rx="4" fill="#2A1E12"/>
-              <line x1="846" y1="404" x2="842" y2="380" stroke="#8A6A3E" stroke-width="3" stroke-linecap="round"/>
-              <line x1="854" y1="404" x2="856" y2="376" stroke="#A78BFA" stroke-width="3" stroke-linecap="round"/>
-              <line x1="860" y1="404" x2="866" y2="382" stroke="#8A6A3E" stroke-width="3" stroke-linecap="round"/>
-              <rect x="470" y="420" width="70" height="14" rx="2" fill="#2A2016" transform="rotate(-6 505 427)"/>
-            </g>
-
-            <!-- the empty chair pulled up to the desk (foreground silhouette) -->
-            <path d="M470 560 v-150 a16 16 0 0 1 16 -16 h150 a16 16 0 0 1 16 16 v150" fill="none" stroke="#0C0A16" stroke-width="26" stroke-linecap="round"/>
-            <rect x="486" y="404" width="150" height="150" rx="14" fill="#0C0A16"/>
-
-            <!-- the roaming sigil-spark (JS moves it; static + charming without JS) -->
-            <g class="spell-spark" transform="translate(420,250)">
-              <circle class="spark-glow" r="34" fill="url(#wk-glow)"/>
-              <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="url(#wk-core)"/>
-              <circle r="2.6" fill="#FFFFFF"/>
-            </g>
-          </svg>
-        </figure>
-        <div class="stage-caption">
-          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>Behind the glowing window — <em>the desk where your site gets built.</em> Move the spark; the lamp warms, the mark lights. <span class="badge">Interactive</span></span>
-        </div>
-      </div>
+      <figure class="atelier-desk reveal" aria-labelledby="desk-caption">
+        <svg viewBox="0 0 820 760" role="img" aria-label="A midnight atelier desk with a glowing website blueprint, hand tools, lamp, and a framed Site Sourcery maker's mark.">
+          <defs><linearGradient id="ad-wall" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#130b20"/><stop offset="1" stop-color="#08050e"/></linearGradient><radialGradient id="ad-warm"><stop stop-color="#ffc878" stop-opacity=".75"/><stop offset="1" stop-color="#ffc878" stop-opacity="0"/></radialGradient><linearGradient id="ad-paper"><stop stop-color="#35234b"/><stop offset="1" stop-color="#171024"/></linearGradient><linearGradient id="ad-sigil"><stop stop-color="#b99aff"/><stop offset="1" stop-color="#ff7aa1"/></linearGradient><filter id="ad-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <rect width="820" height="760" fill="url(#ad-wall)"/><g class="shelf-lines"><path d="M58 166H762M58 338H762"/><path d="M88 118v48M142 98v68M660 116v50M714 82v84"/></g>
+          <g class="bottles"><path d="M86 122h38v44H86zM148 106h28v60h-28zM654 120h40v46h-40zM712 95h28v71h-28z"/><circle cx="105" cy="122" r="8"/><circle cx="162" cy="106" r="7"/></g>
+          <g class="maker-frame"><rect x="302" y="56" width="216" height="235" rx="6"/><rect x="323" y="78" width="174" height="192"/><path d="M410 112l15 45 45 15-45 15-15 45-15-45-45-15 45-15z" fill="url(#ad-sigil)" filter="url(#ad-glow)"/><path d="M358 244H462"/></g>
+          <ellipse cx="586" cy="510" rx="260" ry="250" fill="url(#ad-warm)"/><path class="lamp-cone" d="M611 248L710 248L774 618H468Z"/><g class="desk-lamp"><path d="M675 600L633 374L540 250"/><circle cx="633" cy="374" r="10"/><path d="M492 250q52-65 105 0l-52 45z"/><circle cx="545" cy="284" r="12"/></g>
+          <path class="desk-top" d="M48 610H772V652H48Z"/><path d="M105 652V735M715 652V735" stroke="#25142f" stroke-width="18"/>
+          <g class="blueprint"><path d="M148 402L562 372L596 575L182 604Z" fill="url(#ad-paper)"/><path d="M206 441L392 427M210 472L346 462M216 514L370 503M410 421L530 412V526H426Z"/><path class="blueprint-sigil" d="M495 440l8 23 23 8-23 8-8 23-8-23-23-8 23-8z"/></g>
+          <g class="tools"><path d="M618 554l42-74M636 560l63-55"/><circle cx="611" cy="568" r="20"/><rect x="92" y="538" width="78" height="58" rx="7"/><path d="M106 538q25-48 50 0"/></g>
+          <g class="desk-sparks"><circle cx="228" cy="383" r="3"/><circle cx="602" cy="324" r="2"/><circle cx="704" cy="446" r="3"/></g>
+        </svg>
+        <figcaption id="desk-caption"><span>PROVENANCE / ONE LOCAL STUDIO</span><b>The desk where the work is designed, built, and cared for.</b></figcaption>
+      </figure>
     </div>
   </section>
 
-  <!-- ═ THE PERSON ═ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">The studio behind it</p>
-      <h2 class="reveal">Who you&rsquo;re <em class="accent">actually</em> hiring.</h2>
-      <div class="grid cols-2" style="margin-top:2.5rem;align-items:start">
-
-        <!-- The brand IS the identity. No name, no face to hide behind — the sigil
-             is the signature, and the number below is the accountability. -->
-        <figure class="card reveal" style="text-align:center;padding-top:1.75rem">
-          <div class="shop-window" style="max-width:18rem;margin:0 auto;box-shadow:none">
-            <div class="shop-bar"><span class="num" style="font-size:.8rem;color:var(--muted)">Site Sourcery</span><span class="badge">Local studio</span></div>
-            <svg viewBox="0 0 320 300" width="100%" role="img" aria-label="The Site Sourcery sigil — the brand is the identity, a real local studio behind it." style="background:var(--surface-2);display:block">
-              <defs>
-                <radialGradient id="ph-warm" cx="50%" cy="42%" r="70%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".22"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
-                <linearGradient id="ph-sig" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient>
-              </defs>
-              <rect width="320" height="300" fill="url(#ph-warm)"/>
-              <circle cx="160" cy="132" r="74" fill="url(#ph-warm)"/>
-              <path d="M160 58 l16.5 51 51 16.5 -51 16.5 -16.5 51 -16.5 -51 -51 -16.5 51 -16.5 z" fill="url(#ph-sig)"/>
-              <circle cx="160" cy="125" r="4" fill="#FFFFFF"/>
-              <g stroke="#2A2444" stroke-width="5" stroke-linecap="round"><line x1="96" y1="238" x2="224" y2="238"/><line x1="120" y1="262" x2="200" y2="262"/></g>
-            </svg>
-          </div>
-          <figcaption style="margin-top:1.1rem">
-            <p style="margin:0 auto;font-weight:650;color:var(--text)">The brand is the promise.</p>
-            <p style="margin:.35rem auto 0;color:var(--muted);font-size:.95rem;max-width:20rem">No call centre, no runaround. A real local studio — and the number below reaches a real person.</p>
-            <p style="margin:.7rem auto 0;font-size:.95rem"><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><br><a href="tel:+13217882555" class="num">(321) 788-2555</a></p>
-          </figcaption>
-        </figure>
-
-        <div>
-          <p class="reveal">We hand-build custom websites for local businesses — bakeries, plumbers, barbers, the shops that hold a town together. Not templates. Your hours, your prices, your photos, your voice, designed for your trade.</p>
-          <p class="reveal" style="margin-top:1rem">Then we keep it running: hosting, updates, changes. On a Care plan you just <strong>text us in plain English</strong> — &ldquo;add Saturday hours&rdquo; — and it gets done, usually the same day. No dashboard, no app, nothing to learn.</p>
-          <p class="reveal" style="margin-top:1rem">The next planned line is <strong>The Responder</strong>: a missed-call text-back workflow. It remains subject to provider and carrier onboarding, consent and opt-out controls, monitoring, and end-to-end testing; it is not currently offered.</p>
-          <p class="reveal" style="margin-top:1rem">And <strong>you own everything</strong> the whole time — the site, the domain, the words. If you ever leave, it all goes with you. We&rsquo;d rather earn your business every month than lock you in.</p>
-          <p class="reveal" style="margin-top:1rem">The same care on every build. When something needs fixing at 7am, a real person fixes it.</p>
+  <section class="story-section provenance-section" aria-labelledby="provenance-title">
+    <div class="story-shell">
+      <header class="story-intro reveal"><p class="story-index">I / THE PROVENANCE LEDGER</p><h2 id="provenance-title">Know who stands<br><em>behind the work.</em></h2><p>No call centre, no runaround. The number below reaches a real person.</p></header>
+      <div class="provenance-ledger reveal">
+        <div class="maker-seal"><span class="seal-star" aria-hidden="true"></span><b>SITE SOURCERY</b><small>LOCAL STUDIO / DESIDERATA LABS LLC</small><a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><a href="tel:+13217882555">(321) 788-2555</a></div>
+        <div class="provenance-tabs js-story-only" role="tablist" aria-label="Studio commitments"><button id="proof-tab-craft" type="button" role="tab" aria-selected="true" aria-controls="proof-craft" data-proof-tab="craft">THE CRAFT</button><button id="proof-tab-care" type="button" role="tab" aria-selected="false" aria-controls="proof-care" data-proof-tab="care" tabindex="-1">THE CARE</button><button id="proof-tab-ownership" type="button" role="tab" aria-selected="false" aria-controls="proof-ownership" data-proof-tab="ownership" tabindex="-1">THE OWNERSHIP</button></div>
+        <div class="proof-panels">
+          <div id="proof-craft" role="tabpanel" aria-labelledby="proof-tab-craft" data-proof-panel="craft"><p class="panel-code">LEDGER ENTRY / 01</p><h3>Hand-built for the business in front of me.</h3><p>We hand-build custom websites for local businesses—bakeries, plumbers, barbers, the shops that hold a town together. Not templates. Your hours, prices, photos, and voice, designed for your trade.</p><p>A real, hand-built site has clear service and location facts, phone-first contact paths, and a strong technical foundation. Buy once, from $200; the completed build is yours on final payment.</p></div>
+          <div id="proof-care" role="tabpanel" aria-labelledby="proof-tab-care" data-proof-panel="care"><p class="panel-code">LEDGER ENTRY / 02</p><h3>Care without a control-panel handoff.</h3><p>Care can keep the site running and current. From $29/mo, you can <strong>text agreed changes in plain English</strong>—“add Saturday hours”—with no dashboard, app, or homework.</p><p>On Care ($59/mo) and up, once a month I send a plain-English note: call-button taps, customer-confirmed bookings, and where the site stands. Real numbers from your own site—never guarantees, never jargon.</p></div>
+          <div id="proof-ownership" role="tabpanel" aria-labelledby="proof-tab-ownership" data-proof-panel="ownership"><p class="panel-code">LEDGER ENTRY / 03</p><h3>The brand is the promise.</h3><p><strong>You own everything</strong>—the completed site, domain, and agreed content—on final payment. Care is month-to-month; ending it never takes the paid build away. No hostage files and no lock-in.</p><p>We would rather earn your business than trap it. When something needs fixing, a real person handles it within the support scope of your plan.</p></div>
         </div>
       </div>
+      <div class="studio-principles reveal"><article><span>01</span><h3>You text. I handle it.</h3><p>With Care from $29/mo, send agreed changes in plain English—no dashboard to learn.</p></article><article><span>02</span><h3>You own it all.</h3><p>Site, domain, and agreed content are yours on final payment. Leave anytime.</p></article><article><span>03</span><h3>You see it working.</h3><p>Care from $59/mo includes a plain monthly note using real numbers, never guarantees.</p></article></div>
     </div>
   </section>
 
-  <!-- ═ WHY A PERSON ═ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">Why it works</p>
-      <h2 class="reveal">Why a studio beats a <em class="accent">platform</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <h3>You text. It&rsquo;s done.</h3>
-          <p>Website builders hand you homework. On a Care plan, you say what you want changed and it&rsquo;s live before you think about it again — no dashboard to learn.</p>
-        </div>
-        <div class="card reveal">
-          <h3>You own it all.</h3>
-          <p>Site, domain, content — yours on the final payment. Cancel anytime and take everything with you. No hostage files, no lock-in, ever.</p>
-        </div>
-        <div class="card reveal">
-          <h3>You see it working.</h3>
-          <p>On a Care plan, once a month I send a plain-English note: calls, bookings, where you stand. Real numbers from your own site — never guarantees, never jargon.</p>
-        </div>
+  <section class="story-section comparison-exhibit" id="the-difference" aria-labelledby="difference-title">
+    <div class="story-shell">
+      <header class="story-intro reveal"><p class="story-index">II / THE HONEST EXHIBIT</p><h2 id="difference-title">Three doors,<br><em>plainly displayed.</em></h2><p>Each is a fair pick for somebody. Here is what each really hands you.</p></header>
+      <div class="gallery-wall reveal">
+        <article class="gallery-piece"><div class="piece-number">I</div><span class="piece-label">THE SELF-BUILD</span><h3>Do it yourself</h3><p>Often the cheapest way in—if you have the hours.</p><ul><li>You do the setup and ongoing work yourself</li><li>Many tools begin with a reusable template</li><li>Some platforms require a continuing subscription to stay online</li><li>Performance reporting varies by platform and plan</li></ul><small>RIGHT FOR / HANDS-ON OWNERS</small></article>
+        <article class="gallery-piece"><div class="piece-number">II</div><span class="piece-label">THE HANDOFF</span><h3>Agencies &amp; freelancers</h3><p>Truly custom work is possible across a wide range of prices.</p><ul><li>Many use a project deposit or up-front invoice</li><li>Some hand off at launch; others offer ongoing retainers</li><li>Later changes may be separately scoped and billed</li><li>Reporting depends on the agreement</li></ul><small>RIGHT FOR / PROJECT HANDOFFS</small></article>
+        <article class="gallery-piece featured"><div class="piece-number">III</div><span class="piece-label">THE WORKING ATELIER</span><h3>Site Sourcery</h3><p>Built for you, with optional month-to-month Care.</p><ul><li>A custom site that makes services clear, credible, and easy to contact</li><li>Text-to-change starts with Care Lite at $29/mo</li><li>The monthly performance note starts with Care at $59/mo</li><li>The proposed Responder stays separate from services available now</li><li>The completed build is yours on final payment; Care is month-to-month</li></ul><a class="btn primary" href="/pricing.html">See pricing</a><small>RIGHT FOR / OWNERS WHO WANT THE WHOLE JOB</small></article>
       </div>
+      <p class="exhibit-note reveal">Grouped by common delivery models—no brands named, none invented. Site Sourcery website builds are buy-once and yours on final payment; Care is described separately. The Responder is pre-launch and has no active subscription terms.</p>
     </div>
   </section>
 
-  <!-- ═ THE HONEST COMPARISON (folded in from the-difference, 2026-07-13) ═ -->
-  <section class="section daylight" id="the-difference">
-    <div class="wrap">
-      <p class="eyebrow reveal">Your options, honestly</p>
-      <h2 class="reveal">The three doors, <em class="accent">plainly</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Each is a fair pick for somebody — here&rsquo;s what each really hands you.</p>
+  <section class="story-section two-rooms" aria-labelledby="rooms-title"><div class="story-shell"><header class="story-intro reveal"><p class="story-index">III / TWO WORKSHOP ROOMS</p><h2 id="rooms-title">One live service.<br>One line still being <em>proven.</em></h2><p>The website service is available for inquiry now. The second door shows a future missed-call workflow; it cannot promise a job and is unavailable until its launch gates pass.</p></header><div class="room-doors reveal"><article class="room live"><span>ROOM / OPEN</span><h3>Build your place</h3><p>A custom website with clear service and location facts, phone-first contact paths, and a strong technical foundation. Buy once, from $200; the completed build is yours on final payment.</p><a class="btn ghost" href="/pricing.html">See website pricing</a></article><article class="room sealed"><span>ROOM / SEALED</span><h3>The Responder</h3><p>Planned behavior: after a missed call, an approved text is attempted where permitted. The displayed $99/mo and bundle figures are estimates for feedback, not current offers.</p><p>Provider and carrier onboarding, consent and opt-out controls, monitoring, and end-to-end testing remain; it is not currently offered.</p><a class="btn ghost" href="/automation.html">Read the pre-launch requirements</a></article></div></div></section>
 
-      <div class="grid cols-3" style="margin-top:2rem">
+  <section class="story-section house-rules" aria-labelledby="rules-title"><div class="story-shell"><header class="story-intro reveal"><p class="story-index">IV / HOUSE RULES</p><h2 id="rules-title">The honest<br><em>fine print.</em></h2></header><div class="rules-ledger reveal"><article><b>01 / ONLY REAL WORK</b><h3>No borrowed proof.</h3><p>Open <a href="https://daarx.money/">daarx.money</a>, a live production site we built and run. No borrowed logos, no invented clients. Our own shops join it as they go live.</p></article><article><b>02 / NO PROMISED RANKINGS</b><h3>No imaginary certainty.</h3><p>Nobody can guarantee where you show up in search. I never promise a #1 ranking. We build clear service and location pages, useful phone paths, and a strong technical foundation so people and search systems can understand what you do.</p></article><article><b>03 / NO INVENTED PRAISE</b><h3>No fictional applause.</h3><p>You will not find a star rating or testimonial here that did not happen. When real clients say real things, they will be here—with their names on them.</p></article></div><p class="accountable-line reveal">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p></div></section>
 
-        <div class="price-card reveal">
-          <h3>Do it yourself</h3>
-          <p style="color:var(--muted)">Cheapest way in — if you have the hours.</p>
-          <ul>
-            <li>You do all the work, and keep doing it</li>
-            <li>A template dressed up as custom</li>
-            <li>Often locked to their platform — stop paying, it&rsquo;s gone</li>
-            <li>No one tells you if it&rsquo;s actually working</li>
-          </ul>
-        </div>
-
-        <div class="price-card reveal">
-          <h3>Agencies &amp; freelancers</h3>
-          <p style="color:var(--muted)">Truly custom is possible — at a price.</p>
-          <ul>
-            <li>A big upfront invoice before anything exists</li>
-            <li>They build it, hand it over, and move on</li>
-            <li>Every change after that is an email and an invoice</li>
-            <li>Proof it&rsquo;s working usually isn&rsquo;t part of the deal</li>
-          </ul>
-        </div>
-
-        <div class="price-card recommended reveal">
-          <span class="flag">The whole job</span>
-          <h3>Site Sourcery</h3>
-          <p style="color:var(--muted)">Built for you, then run for you — month after month.</p>
-          <ul>
-            <li>A custom site that makes your services clear, credible, and easy to contact</li>
-            <li>Change anything by sending a text</li>
-            <li>The Meter — a plain monthly note that it&rsquo;s working</li>
-            <li>The proposed Responder remains clearly separated from services available now</li>
-            <li>You own everything. Cancel anytime.</li>
-          </ul>
-          <a class="btn primary" href="/pricing.html">See pricing</a>
-        </div>
-
-      </div>
-
-      <p class="reveal" style="margin-top:2rem;color:var(--muted)">Grouped by how they&rsquo;re built — no brands named, none invented. Website builds are buy-once and yours to keep; care is described separately. The Responder is pre-launch and has no active subscription terms.</p>
-    </div>
-  </section>
-
-
-  <!-- ═ TWO DOORS · one live service, one pre-launch research line ═ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">Two workshop rooms</p>
-      <h2 class="reveal">One live service. One line still being <em class="accent">proven</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">The website service is available for inquiry now. The second door shows the intended outcome of a future missed-call workflow, but it cannot promise a job and is not available until its launch gates pass.</p>
-      <div class="grid cols-2 reveal" style="margin-top:2.5rem">
-        <div class="card">
-          <h3>Build your place · a custom website</h3>
-          <p>A real, hand-built site — never a template with your name dropped in — with clear service and location facts, phone-first contact paths, and a strong technical foundation. Buy once, from $200; you own it outright.</p>
-          <div class="actions" style="margin-top:1.1rem">
-            <a class="btn ghost" href="/pricing.html">See website pricing</a>
-          </div>
-        </div>
-        <div class="card">
-          <h3>Never miss a call · The Responder</h3>
-          <p>Planned behavior: after a missed call, an approved text is attempted where permitted. The displayed $99/mo and bundle figures are estimates for feedback, not current offers. <a href="/automation.html">Read the pre-launch requirements</a>.</p>
-          <div class="actions" style="margin-top:1.1rem">
-            <a class="btn ghost" href="/automation.html">See The Responder</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═ HONESTY RULES ═ -->
-  <section class="section daylight">
-    <div class="wrap">
-      <p class="eyebrow reveal">House rules</p>
-      <h2 class="reveal">The honest <em class="accent">fine print</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <h3>Only real work</h3>
-          <p>We keep a live production site we built and run — daarx.money — that you can open right now. No borrowed logos, no invented clients. Our own shops join it as they go live.</p>
-        </div>
-        <div class="card reveal">
-          <h3>No promised rankings</h3>
-          <p>Nobody can guarantee where you show up in search — anyone who does is selling you something. I never promise a #1 ranking. We build clear service and location pages, useful phone paths, and a strong technical foundation so people and search systems can understand what you do.</p>
-        </div>
-        <div class="card reveal">
-          <h3>No invented praise</h3>
-          <p>You won&rsquo;t find a star rating or a testimonial here that didn&rsquo;t happen. When real clients say real things, they&rsquo;ll be here — with their names on them.</p>
-        </div>
-      </div>
-      <p class="footer-trust reveal" style="margin-top:2rem">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-    </div>
-  </section>
-
-  <!-- ═ CTA ═ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">Say hello</p>
-      <h2 class="reveal">Talk to the studio that&rsquo;d <em class="accent">build it</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Tell us about your business. You&rsquo;ll get a straight answer from a real person who&rsquo;d do the work.</p>
-      <div class="actions reveal" style="margin-top:1.8rem">
-        <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
-      </div>
-      <p class="reveal" style="margin-top:1.2rem;color:var(--muted)">Prefer to write? <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> — a real person answers.</p>
-    </div>
-  </section>
-
+  <section class="story-section final-commission"><div class="story-shell reveal"><p class="story-index">THE ATELIER IS OPEN</p><h2>Talk to the studio that would <em>build it.</em></h2><p>Tell us about your business. You will get a straight answer from a real person who would do the work.</p><div class="actions"><a class="btn primary" href="/start/">Start your site</a><a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a><a class="btn ghost" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a></div></div></section>
 </main>
 
-<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
-<footer class="footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <a class="brand" href="/">
-          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
-          <span class="brand-name">Site&nbsp;Sourcery</span>
-        </a>
-        <p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p>
-        <p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
-      </div>
-      <nav class="footer-links" aria-label="Pages">
-        <a href="/">Home</a>
-        <a href="/pricing.html">Pricing</a>
-        <a href="/automation.html">The Hive</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/about.html">About</a>
-        <a href="/faq.html">FAQ</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/contact.html">Contact</a>
-        <a href="/start/">Start your site</a>
-      </nav>
-      <div class="footer-contact">
-        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
-        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
-      </div>
-    </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
-  </div>
-</footer>
-
+<footer class="footer"><div class="wrap"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="/"><svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg><span class="brand-name">Site&nbsp;Sourcery</span></a><p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p><p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p><p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p></div><nav class="footer-links" aria-label="Pages"><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/automation.html">The Hive</a><a href="/how-it-works.html">How it works</a><a href="/about.html" aria-current="page">About</a><a href="/faq.html">FAQ</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a><a href="/contact.html">Contact</a><a href="/start/">Start your site</a></nav><div class="footer-contact"><p class="footer-person">Custom-built, locally run, honestly priced.</p><a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a></div></div><p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p></div></footer>
 <script src="sourcery.js" defer></script>
+<script src="atelier-story.js" defer></script>
 </body>
 </html>

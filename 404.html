@@ -17,8 +17,10 @@
 <meta name="theme-color" content="#0B0912">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/atelier-inner.css">
+<link rel="stylesheet" href="/atelier-utility.css">
 </head>
-<body>
+<body class="atelier-inner page-not-found">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
@@ -51,7 +53,7 @@
              Night, violet→rose. The wand throws a grey puff and a few dim,
              broken sparks instead of a clean sigil — the page you wanted
              simply didn't appear. Pure inline SVG, no loads. -->
-        <div class="reveal" style="width:100%;max-width:20rem">
+        <div hidden>
           <svg viewBox="0 0 320 260" width="320" height="260" role="img"
                aria-label="A tiny wizard at night waving a wand — but the spell has fizzled into a puff of smoke and a few dim, broken sparks instead of a page.">
             <defs>
@@ -112,21 +114,37 @@
           </svg>
         </div>
 
-        <p class="eyebrow reveal" style="margin-top:.4rem">404 · page not found</p>
-        <span class="code reveal">404</span>
-        <h1 class="reveal" style="font-size:clamp(1.9rem,5vw,2.8rem)">This spell fizzled.</h1>
-        <p class="reveal">You wandered off the map after dark — the page you were after isn&rsquo;t here, or it never was. No harm done. Let me point you back toward the light.</p>
+        <section class="instrument lost-map reveal" aria-label="Paths back to Site Sourcery">
+          <div class="lost-map-field" aria-hidden="true">
+            <svg viewBox="0 0 500 500" focusable="false">
+              <path class="lost-path" d="M250 250C174 188 125 112 62 74M250 250C326 165 387 142 448 105M250 250C337 305 381 362 441 424M250 250C170 308 132 373 57 425"/>
+              <circle class="lost-node" cx="62" cy="74" r="4"/><circle class="lost-node" cx="448" cy="105" r="4"/><circle class="lost-node" cx="441" cy="424" r="4"/><circle class="lost-node" cx="57" cy="425" r="4"/>
+            </svg>
+          </div>
+          <div class="lost-portal" aria-hidden="true"><span>404</span></div>
+          <a class="lost-route home" href="/">HOME</a>
+          <a class="lost-route pricing" href="/pricing.html">PRICING</a>
+          <a class="lost-route hive" href="/automation.html">THE HIVE</a>
+          <a class="lost-route contact" href="/contact.html">CONTACT</a>
+        </section>
 
-        <div class="actions reveal">
-          <a class="btn primary" href="/">Back to home</a>
-          <a class="btn ghost" href="/start/">Start your site</a>
+        <div class="lost-copy">
+          <p class="eyebrow reveal" style="margin-top:.4rem">404 · page not found</p>
+          <span class="code reveal">404</span>
+          <h1 class="reveal" style="font-size:clamp(1.9rem,5vw,2.8rem)">This spell fizzled.</h1>
+          <p class="reveal">You wandered off the map after dark — the page you were after isn&rsquo;t here, or it never was. No harm done. Let me point you back toward the light.</p>
+
+          <div class="actions reveal">
+            <a class="btn primary" href="/">Back to home</a>
+            <a class="btn ghost" href="/start/">Start your site</a>
+          </div>
+
+          <p class="terms reveal" style="max-width:32em;margin-top:.4rem">Or head straight for
+            <a href="/pricing.html">pricing</a>,
+            <a href="/automation.html">The&nbsp;Responder</a>, or
+            <a href="/contact.html">contact</a>.
+            Stuck? Call us on <a href="tel:+13217882555">(321)&nbsp;788-2555</a> and reach a real person.</p>
         </div>
-
-        <p class="terms reveal" style="max-width:32em;margin-top:.4rem">Or head straight for
-          <a href="/pricing.html">pricing</a>,
-          <a href="/automation.html">The&nbsp;Responder</a>, or
-          <a href="/contact.html">contact</a>.
-          Stuck? Call us on <a href="tel:+13217882555">(321)&nbsp;788-2555</a> and reach a real person.</p>
       </div>
     </div>
   </section>
@@ -163,7 +181,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

@@ -3,7 +3,7 @@
      SITE SOURCERY — terms.html · "SPELLCAST"
      The terms, cast plainly and honestly — a fair pact, not fine print.
      Deposit → balance on delivery → you own everything on final payment.
-     Month-to-month care & The Responder, one-tap cancel. Honest ship dates.
+     Month-to-month website Care, a sealed pre-launch Hive, and honest dates.
      Loads exactly /style.css + /sourcery.js. Zero remote loads.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
@@ -27,11 +27,13 @@
 <meta name="twitter:image" content="https://sitesourcery.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Terms — the pact, in plain words · Site Sourcery">
-<meta name="twitter:description" content="Deposit to start, balance on delivery, and website ownership after final payment. Hive automation remains pre-launch and is not covered as an active subscription.">
+<meta name="twitter:description" content="Card and Card Plus paid up front; larger builds 50% to start, balance on delivery, and website ownership after final payment. Hive remains pre-launch.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-utility.css">
 <script src="sourcery.js" defer></script>
 </head>
-<body>
+<body class="atelier-inner page-terms">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ══ SHARED NAV — verbatim from the foundation; Terms carries aria-current ══ -->
@@ -179,13 +181,25 @@
   <!-- ══ THE TERMS — long-form prose, cast plainly ═══════════════════════════ -->
   <section class="section">
     <div class="wrap">
-      <div class="prose reveal">
+      <div class="prose reveal pact-prose">
 
-        <p class="legal-meta">Site Sourcery &middot; Desiderata Labs LLC &middot; Last updated 11 July 2026</p>
+        <p class="legal-meta">Site Sourcery &middot; Desiderata Labs LLC &middot; Last updated 15 July 2026</p>
 
         <p>We keep these short and honest. If anything below is unclear, <a href="/contact.html">ask us</a> before you pay a cent &mdash; we&rsquo;d rather explain it twice than have you sign something you&rsquo;re unsure of.</p>
 
-        <h2>Paying for a website build</h2>
+        <nav class="pact-index" aria-label="Terms sections">
+          <a href="#paying"><span>01</span> Paying for a build</a>
+          <a href="#ownership"><span>02</span> Ownership</a>
+          <a href="#revisions"><span>03</span> Revisions</a>
+          <a href="#monthly"><span>04</span> Care &amp; Hive</a>
+          <a href="#automation-boundaries"><span>05</span> Automation boundaries</a>
+          <a href="#your-content"><span>06</span> Your content</a>
+          <a href="#ship-dates"><span>07</span> Ship dates</a>
+          <a href="#refunds"><span>08</span> Refunds</a>
+          <a href="#honest-bit"><span>09</span> The honest bit</a>
+        </nav>
+
+        <h2 id="paying">Paying for a website build</h2>
         <p>Custom builds are buy-once. Here&rsquo;s the money, start to finish:</p>
         <ul>
           <li><strong>A 50% deposit to start.</strong> Once we&rsquo;ve agreed on the tier and what it includes, half up front reserves your spot and starts the work.</li>
@@ -193,42 +207,42 @@
           <li><strong>The balance is due on delivery.</strong> When the site is built and you&rsquo;ve seen it, you pay the rest and it goes live. No surprise line items &mdash; the price we agreed is the price.</li>
         </ul>
 
-        <h2>You own everything once it&rsquo;s paid off</h2>
+        <h2 id="ownership">You own everything once it&rsquo;s paid off</h2>
         <p>This is the part that matters most. <strong>The moment your build is paid in full, all of it is yours</strong> &mdash; the site, the code, the content, the domain. It&rsquo;s not rented, it&rsquo;s not locked to our platform, and it doesn&rsquo;t vanish if you ever stop working with us.</p>
         <ul>
           <li>You keep your own domain in your own name. If we register one for you, we hand it over.</li>
           <li>Leave whenever you like and take the whole site with you &mdash; we&rsquo;ll help you move it. No lock-in, ever.</li>
-          <li>Until the final payment is made, the finished files stay with us &mdash; that&rsquo;s the only thing the last payment is holding.</li>
+          <li>Until the final payment for the agreed work is made, the finished files stay with us &mdash; that&rsquo;s the only thing the last payment is holding.</li>
         </ul>
 
-        <h2>Revisions &mdash; getting it right</h2>
-        <p>Every build includes a set number of revision rounds &mdash; the bigger the build, the more rounds. A round means you look it over, send your changes in one batch, and we make them.</p>
+        <h2 id="revisions">Revisions &mdash; getting it right</h2>
+        <p>Every build includes revision rounds stated in the written proposal before payment. A round means you look it over, send your changes in one batch, and we make them.</p>
         <ul>
           <li>Your included rounds cover the normal back-and-forth of getting a site exactly right.</li>
           <li>Need more after that? Each extra round is a small flat fee, quoted before we do it, so you&rsquo;re never surprised.</li>
           <li>A &ldquo;revision&rdquo; is tweaking what we agreed to build. A brand-new page or a change of direction is new work, quoted separately and plainly before we start.</li>
         </ul>
 
-        <h2>Monthly care &amp; the proposed Hive</h2>
+        <h2 id="monthly">Monthly care &amp; the proposed Hive</h2>
         <p>Optional website Care plans start at $15/mo and are described as month-to-month. The Hive automation line, including the proposed $99/mo Responder concept, is not publicly operating and is not an active offer or subscription. Any future Hive agreement must identify the production provider stack, data flows, permissions, fees, service limits, cancellation, export, retention, and shutdown terms before activation.</p>
         <ul>
           <li><strong>Website Care has no long contract.</strong> You pay for the month you&rsquo;re in.</li>
           <li><strong>Cancel Care by text or email.</strong> It stops at the end of your current paid month; we confirm the effective date in writing.</li>
           <li>Hive setup fees, bundle discounts, and monthly figures on this site are planning estimates only. They do not create a purchase right, price guarantee, queue position, or service reservation.</li>
-          <li>Cancelling a care plan never touches the site you already own &mdash; that stays yours. You just stop getting the monthly updates.</li>
+          <li>At the end of the paid Care month, hosting, backups, updates, changes, and other plan features stop. You keep the paid website files and domain control, and we will help move the site to hosting you control.</li>
         </ul>
 
-        <h2>Automation, messaging &amp; AI boundaries</h2>
-        <p>Hive services depend on the exact provider stack and workflow agreed for your project. Before a production launch, we document the enabled channels, providers, data flows, limits, and any usage-based charges. A demo, mock-up, or advertised capability is not a promise that every carrier, number, integration, or third-party platform will support it.</p>
+        <h2 id="automation-boundaries">Automation, messaging &amp; AI boundaries</h2>
+        <p>Any future Hive service would depend on the exact provider stack and workflow agreed for a project. Before any production launch, the written agreement would document enabled channels, providers, data flows, limits, and usage-based charges. A concept, mock-up, or advertised capability is not a promise that every carrier, number, integration, or third-party platform will support it.</p>
         <ul>
-          <li><strong>You remain responsible for lawful customer contact.</strong> You must have the rights and consent required for the phone numbers, messages, review requests, follow-ups, and other customer data you ask the system to process. We help configure opt-out handling, but you remain responsible for your campaign content and contact lists.</li>
-          <li><strong>No emergency or high-risk use.</strong> Hive tools are not emergency, medical, legal, financial, safety-critical, or human-resources decision systems. Keep an ordinary way for people to reach you and review important messages yourself.</li>
+          <li><strong>A future customer would remain responsible for lawful contact.</strong> A production agreement would require the rights and consent needed for phone numbers, messages, review requests, follow-ups, and other customer data. The setup would include documented opt-out handling, while the customer would remain responsible for campaign content and contact lists.</li>
+          <li><strong>No emergency or high-risk use.</strong> Any future Hive tools would not be emergency, medical, legal, financial, safety-critical, or human-resources decision systems. A production customer would need an ordinary contact path and human review for important messages.</li>
           <li><strong>Automations can fail or be delayed.</strong> Carriers and third-party services can filter, delay, reject, rate-limit, or change their products. Any future support scope must be written into the production agreement; uninterrupted delivery and business results will not be guaranteed.</li>
-          <li><strong>AI output needs human judgment.</strong> Where a workflow uses AI, it may misunderstand, omit context, or produce an inaccurate response. We configure narrow uses and escalation rules, and you must approve material customer-facing content and monitor the live service.</li>
+          <li><strong>AI output would need human judgment.</strong> Where a future workflow used AI, it could misunderstand, omit context, or produce an inaccurate response. A production setup would require narrow uses, escalation rules, approval of material customer-facing content, and human monitoring.</li>
           <li><strong>Privacy comes first.</strong> We minimize data and identify the production processors before launch. The <a href="/privacy.html">Privacy Notice</a> explains our own website and inquiry handling; a customer deployment may also need a project-specific data-processing schedule and your own customer-facing privacy notice.</li>
         </ul>
 
-        <h2>Your content is your responsibility</h2>
+        <h2 id="your-content">Your content is your responsibility</h2>
         <p>We&rsquo;ll write, polish, and lay out the words and pictures we agree on. But the photos, logos, and details you hand us need to be genuinely yours to use.</p>
         <ul>
           <li>Only send images, logos, and text you own or have permission to use. If you&rsquo;re not sure, tell us and we&rsquo;ll help you find something you can use freely.</li>
@@ -236,22 +250,22 @@
           <li>If a claim on your site needs to be true by law (licensing, certifications, guarantees), that&rsquo;s on you to stand behind.</li>
         </ul>
 
-        <h2>Honest ship dates</h2>
+        <h2 id="ship-dates">Honest ship dates</h2>
         <p>We&rsquo;ll give you a real timeline before we start, and hold to it. If something is going to run late, you&rsquo;ll hear it early &mdash; not on the day it was due.</p>
         <ul>
           <li>The clock starts when we have your deposit and the content we need. The most common delay is waiting on photos or copy from your side, so the sooner those land, the sooner you&rsquo;re live.</li>
           <li>We&rsquo;d rather quote a date we can beat than one we can&rsquo;t keep. No vanity deadlines.</li>
         </ul>
 
-        <h2>Refunds &amp; walking away</h2>
+        <h2 id="refunds">Refunds &amp; walking away</h2>
         <p>Life happens, and we&rsquo;d rather part on good terms than hold anyone hostage.</p>
         <ul>
-          <li>The deposit covers design work already done, so it&rsquo;s non-refundable once we&rsquo;ve started &mdash; but if we haven&rsquo;t begun yet, tell us and we&rsquo;ll return it.</li>
-          <li>Cancel a build mid-way and you only owe for the work completed to that point, and you keep whatever&rsquo;s finished.</li>
-          <li>Monthly plans are never refunded for a partial month, but they&rsquo;re never locked either &mdash; cancel and you simply aren&rsquo;t billed again.</li>
+          <li>Cancel before work begins and we return the initial payment. After work begins, the initial payment &mdash; including a Card or Card Plus up-front payment &mdash; is credited against reserved time and completed work.</li>
+          <li>If you cancel mid-build, we send a written closeout showing the work completed and the fees earned. Any unearned balance is returned; if earned fees exceed the initial payment, the difference is due. Transferable partial files are delivered after all earned fees are paid.</li>
+          <li>A current Care month is not partly refunded. Cancellation ends billing after that paid month and the hosting handoff described above applies.</li>
         </ul>
 
-        <h2>The honest bit</h2>
+        <h2 id="honest-bit">The honest bit</h2>
         <p>I build a clear, fast local foundation so people and search systems can understand what you do &mdash; but <strong>we never promise a #1 ranking</strong>, and we won&rsquo;t invent reviews, borrow someone else&rsquo;s logos, or show you results that didn&rsquo;t happen. Search results and call volume depend on a lot that&rsquo;s outside anyone&rsquo;s control, so results vary and are never guaranteed. What we do guarantee is a real, hand-built site, a fair price, and a studio you can actually reach.</p>
 
         <p class="footer-trust" style="margin-top:2rem">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
@@ -297,7 +311,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

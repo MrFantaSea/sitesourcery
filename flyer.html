@@ -256,12 +256,50 @@ body.mode-half .sheet.full{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}
 </style>
+<style>
+/* Midnight Atelier print edition — an illuminated commission broadside. */
+:root{
+  --ink:#171021;--body:#44384d;--muted:#6e6075;--line:#d8c9df;--line2:#cdbbd5;
+  --brand:#7248c7;--brand-strong:#4d287e;--brand-soft:#efe6f5;
+  --accent:#9d3e68;--accent-bright:#dc6091;--accent-ink:#843154;--accent-soft:#f6e4ec;
+  --surface:#f9f3e8;--ok:#376f5f;
+}
+body{background:#0a0611}
+.toolbar{background:rgba(10,6,17,.97);color:#f7ecfb;border-color:#38254a;box-shadow:0 18px 50px rgba(0,0,0,.38)}
+.toolbar .tb-title{color:#f7ecfb}.toolbar .tb-title .dot{color:#efc880}.toolbar .tb-group,.toolbar .tb-hint{color:#b9a8c2}
+.toolbar button{border-color:#4a345d;background:#171021;color:#f3e8f8;border-radius:4px}.toolbar button.on{background:linear-gradient(135deg,#7650d6,#ad416f);border-color:#b68aef}.toolbar .tb-print{background:#9d3e68;border-color:#bd6488}
+.stage{background:radial-gradient(circle at 50% 4%,rgba(128,76,195,.2),transparent 42rem),#090610}
+.sheet{border:1px solid #3b2947;background-color:var(--surface);background-image:linear-gradient(rgba(93,58,112,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(93,58,112,.035) 1px,transparent 1px);background-size:.33in .33in;box-shadow:0 0 0 7px #120b1c,0 34px 100px rgba(0,0,0,.66)}
+.sheet.full{padding:.4in .46in .34in;gap:.08in}
+.sheet.full::before{content:"";position:absolute;inset:.17in;z-index:0;pointer-events:none;border:1px solid rgba(91,53,111,.28);clip-path:polygon(0 0,calc(100% - .18in) 0,100% .18in,100% 100%,.18in 100%,0 calc(100% - .18in))}
+.sheet.full>*{position:relative;z-index:1}
+.sheet.full>div:first-child{padding:.13in .16in;border:1px solid rgba(232,208,255,.18);background:#130c1d;color:#f9effc}
+.sheet.full>div:first-child .brandlock .nm{color:#fff}.sheet.full>div:first-child .tagline{color:#bfaec7}.sheet.full>div:first-child .region{background:rgba(238,202,255,.1);color:#ead4fa;border:1px solid rgba(238,202,255,.18)}
+.mark{border-radius:4px;background:linear-gradient(135deg,#845bdc,#bd4c7c);box-shadow:0 0 18px rgba(132,91,220,.28)}
+.hook{position:relative;overflow:hidden;padding:.2in .24in .22in;background:linear-gradient(125deg,#120a1d,#24102c 58%,#32162a);color:#fff;clip-path:polygon(0 0,calc(100% - .18in) 0,100% .18in,100% 100%,.18in 100%,0 calc(100% - .18in))}
+.hook::before{content:"MIDNIGHT ATELIER / COMMISSION NOTICE";display:block;margin-bottom:.1in;color:#efc880;font-weight:800;font-size:7.5pt;letter-spacing:.16em}
+.hook::after{content:"✦";position:absolute;right:.25in;top:.05in;color:rgba(240,204,143,.16);font-size:88pt;line-height:1;transform:rotate(12deg)}
+.hook h1{position:relative;color:#fff;font-size:32pt;z-index:1}.hook .lead{position:relative;color:#f6edf8;font-size:13.2pt;z-index:1}.hook .lead .soft{color:#d4c4d9}.hl{color:#efc880;box-shadow:inset 0 -.16em rgba(220,96,145,.36)}.pop{color:#efc880}
+.steps{position:relative;gap:1px;padding-top:.04in;background:#cdbbd5;border:1px solid #cdbbd5}
+.steps::before{content:"THE COMMISSION PATH";position:absolute;left:.12in;top:-.14in;padding:0 .06in;background:var(--surface);color:#76508c;font-weight:800;font-size:6.8pt;letter-spacing:.13em}
+.step{position:relative;border:0;border-radius:0;padding:.12in .14in .13in;background:rgba(255,252,246,.9);box-shadow:none}
+.step .n{border-radius:50% 50% 48% 52%;background:#7549c4;box-shadow:0 0 0 3px #efe5f2;color:#fff}.step.warm .n{background:#9d3e68}.step h2{font-family:Georgia,'Times New Roman',serif;font-size:11.7pt}.step .time{color:#7549c4}.step.warm .time{color:#843154}
+.offer{border:1px solid #bfa9c8;border-radius:2px;padding:.17in .22in;background:linear-gradient(135deg,rgba(239,230,245,.88),rgba(250,244,233,.95) 55%);box-shadow:inset .06in 0 #7449c2}
+.offer .allin{border-radius:2px;background:#843154}.offer .price .amt{font-family:Georgia,'Times New Roman',serif}.incl li svg{color:#7549c4}
+.band{border-radius:2px;background:linear-gradient(135deg,#241236,#4d2352 58%,#6e2b4d);clip-path:polygon(0 0,calc(100% - .18in) 0,100% .18in,100% 100%,.18in 100%,0 calc(100% - .18in));box-shadow:inset 0 0 0 1px rgba(243,218,255,.16)}
+.band::before{content:"";position:absolute;inset:.08in;border:1px solid rgba(242,215,255,.1);pointer-events:none}.band::after{border:1px solid rgba(239,200,128,.16);border-radius:0;transform:rotate(45deg);background:none}
+.band .say h2{font-family:Georgia,'Times New Roman',serif;font-weight:700}.band .say h2 .warm,.urlrow .url .slash{color:#efc880}.qrcard{border-radius:3px;border:1px solid rgba(94,53,113,.35);box-shadow:.06in .06in 0 rgba(239,200,128,.55)}
+.urlrow .url{font-family:Georgia,'Times New Roman',serif}.foot{padding-top:.06in;border-top:1px solid rgba(92,57,109,.22)}
+.sheet.half{background-color:var(--surface)}.half-card{position:relative;padding:.34in .4in}.half-card::before{content:"MIDNIGHT ATELIER / SOUTH JERSEY";position:absolute;right:.4in;top:.13in;color:#856995;font-weight:800;font-size:6.4pt;letter-spacing:.12em}.half-card .h{font-family:Georgia,'Times New Roman',serif;font-size:24pt}.half-card .oline{border-radius:3px;background:#f2e4eb;border-color:#d9b7c8}.half-card .cta{padding:.1in;background:linear-gradient(105deg,rgba(113,70,183,.08),transparent)}
+@media screen and (max-width:360px){.stage{padding-inline:0}.sheet{transform:scale(.36)}.sheet.full,.sheet.half{margin-bottom:calc(-11in * .64)}}
+@media print{.sheet{border:0;box-shadow:none}.stage{background:#fff}}
+</style>
 </head>
 <body class="mode-full paper-letter"
       data-qr-target="https://sitesourcery.com/start">
 
 <!-- ── control bar (screen only, never prints) ───────────────── -->
-<div class="toolbar" role="toolbar" aria-label="Flyer preview controls">
+<nav class="toolbar" aria-label="Flyer preview controls">
   <span class="tb-title">Site&nbsp;Sourcery <span class="dot">•</span> print flyer</span>
   <span class="tb-group">Layout:
     <button type="button" data-mode="full" class="on">Full page</button>
@@ -273,7 +311,7 @@ body.mode-half .sheet.full{display:none}
   </span>
   <button type="button" class="tb-print" onclick="window.print()">Print…</button>
   <span class="tb-hint">Print at 100% · margins: None · this bar doesn’t print</span>
-</div>
+</nav>
 
 <div class="stage">
 
@@ -300,7 +338,7 @@ body.mode-half .sheet.full{display:none}
     <!-- hook -->
     <div class="hook">
       <h1>No website?<br>Or stuck with an <span class="hl">ugly one?</span></h1>
-      <p class="lead"><span class="soft">A custom site, built by hand for</span> <b>your</b> <span class="soft">business —</span> <span class="pop">from&nbsp;$200</span><span class="soft">, and</span> <span class="pop">you own it</span><span class="soft">.</span></p>
+      <p class="lead"><span class="soft">A custom site, built by hand for</span> <b>your</b> <span class="soft">business —</span> <span class="pop">from&nbsp;$200</span><span class="soft">, and</span> <span class="pop">yours on final payment</span><span class="soft">.</span></p>
     </div>
 
     <!-- steps -->
@@ -315,7 +353,7 @@ body.mode-half .sheet.full{display:none}
         <div class="n">2</div>
         <h2>I build it by hand</h2>
         <p>A real custom site, shaped with you as it comes together — never a template.</p>
-        <span class="time">Days, not months</span>
+        <span class="time">Timeline quoted by scope; small sites are often measured in days</span>
       </div>
       <div class="step warm">
         <div class="n">3</div>
@@ -328,14 +366,14 @@ body.mode-half .sheet.full{display:none}
     <!-- offer -->
     <div class="offer">
       <div>
-        <span class="allin">Buy once · own it outright</span>
+        <span class="allin">Buy once · own it on final payment</span>
         <div class="price"><span class="amt" data-price>$200</span><span class="per" data-per>+ once</span></div>
-        <p class="say">Eight builds, $200 to $3,000 — <b>yours on the final payment.</b> Optional care from $15/mo.</p>
+        <p class="say">Eight builds, $200 to $3,000 — <b>yours on the final payment.</b> Hosting starts at $15/mo; text-to-change starts at $29/mo.</p>
       </div>
       <ul class="incl">
         <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Custom-built by hand for your business</li>
-        <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>You own it — no renting your own site</li>
-        <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Optional care: hosting, updates, text-to-change</li>
+        <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>You own the completed build on final payment</li>
+        <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Optional Care: hosting from $15; text-to-change from $29</li>
         <li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.4l3.1 3.1L13 4.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Planned Responder: pre-launch interest only — not live</li>
       </ul>
     </div>
@@ -397,7 +435,7 @@ body.mode-half .sheet.full{display:none}
         <div class="txt">
           <span class="eyebrow blue"><span class="dot"></span>Scan, or visit</span>
           <div class="url">sitesourcery.com<span class="slash">/start</span></div>
-          <div class="fine">Built by hand · You own it · No catch</div>
+          <div class="fine">Built by hand · Yours on final payment · No catch</div>
         </div>
       </div>
     </article>
@@ -427,7 +465,7 @@ body.mode-half .sheet.full{display:none}
         <div class="txt">
           <span class="eyebrow blue"><span class="dot"></span>Scan, or visit</span>
           <div class="url">sitesourcery.com<span class="slash">/start</span></div>
-          <div class="fine">Built by hand · You own it · No catch</div>
+          <div class="fine">Built by hand · Yours on final payment · No catch</div>
         </div>
       </div>
     </article>

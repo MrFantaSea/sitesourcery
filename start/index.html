@@ -36,6 +36,8 @@
 {"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"An inquiry form for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:hello@sitesourcery.com","tel:+13217882555"]}
 </script>
 <link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../atelier-inner.css">
+<link rel="stylesheet" href="../atelier-utility.css">
 <style>
 /* page-scoped: the commission layout + service chips. Built ONLY on the shared
    Spellcast tokens so it reads as the same shop. Nothing here touches style.css. */
@@ -86,7 +88,7 @@
 .honeypot{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
 </style>
 </head>
-<body>
+<body class="atelier-inner page-start">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ══ SHARED NAV — verbatim; aria-current on the active (Start) CTA ══ -->
@@ -117,7 +119,7 @@
     <div class="wrap">
       <p class="eyebrow reveal">Start your project</p>
       <h1 class="hero-mega reveal">Tell us about your <em class="accent">business</em>.</h1>
-      <p class="lede reveal">Not a checkout and not an order. These questions help us understand a custom website request or non-binding interest in <strong>The Responder</strong>, a proposed missed-call workflow that is not yet a public production service. A real person reviews the inquiry.</p>
+      <p class="lede reveal">Not a checkout and not an order. These questions help us understand a custom website request or non-binding interest in any proposed <strong>Hive workflow</strong>, including The Responder. No Hive workflow is yet a public production service. A real person reviews the inquiry.</p>
 
       <div class="hero-stage reveal">
         <figure class="spellstage" style="--lit:1;cursor:default" role="img"
@@ -230,6 +232,11 @@
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
           <span>Your brief lands with the studio, and <em>a real person reads it</em> — not a bot.</span>
         </div>
+        <section class="commission-status" aria-label="Project inquiry path">
+          <span><b>01 / TELL US</b>Your business and the problem</span>
+          <span><b>02 / SCOPE</b>A real reply and plain proposal</span>
+          <span><b>03 / APPROVE</b>Work starts only after agreement</span>
+        </section>
       </div>
     </div>
   </section>
@@ -335,7 +342,7 @@
             <label for="f-url">Have a website now? <span class="opt">optional</span></label>
             <p class="hint">Paste it and we'll bring your own photos and details across. No site yet? Skip it.</p>
             <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url" maxlength="2048"
-                   placeholder="yourbusiness.com">
+                   placeholder="https://yourbusiness.com">
           </div>
 
           <div class="field">
@@ -357,7 +364,7 @@
           <div class="card">
             <p class="eyebrow" style="margin-bottom:1.2rem">What happens next</p>
             <ol class="steps">
-              <li><b>You send this.</b> It lands with the studio and is usually read the same day.</li>
+              <li><b>You send this.</b> It lands with the studio and is usually read the same business day; after-hours and weekend replies may take longer.</li>
               <li><b>We reply and scope it.</b> We clarify the fit, tier, deliverables, and timing before sending a plain proposal.</li>
               <li><b>You approve the start.</b> Website work begins only after you accept the scope and make the deposit or up-front payment described in the terms.</li>
               <li><b>We build; you inspect.</b> The custom site is made by hand, reviewed by you, and never goes live under your name until you approve it.</li>
@@ -367,7 +374,7 @@
 
           <div class="card">
             <h3 style="font-size:1.15rem">Want both doors?</h3>
-            <p style="color:var(--muted);margin-top:.5rem">Choose &ldquo;Website + Hive interest&rdquo; only to discuss a website plus non-binding interest in <strong>The Responder</strong>. The Responder is not currently available, and no inquiry reserves service or promises an outcome.</p>
+            <p style="color:var(--muted);margin-top:.5rem">Choose &ldquo;Website + Hive interest&rdquo; only to discuss a website plus non-binding interest in any proposed Hive workflow, including <strong>The Responder</strong>. The Hive is not currently available, and no inquiry reserves service or promises an outcome.</p>
             <div class="actions" style="margin-top:1.1rem">
               <a class="btn ghost" href="/automation.html">See the Hive</a>
               <a class="btn ghost" href="/pricing.html">See pricing</a>
@@ -415,7 +422,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

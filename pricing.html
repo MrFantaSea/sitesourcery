@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — pricing.html · "THE WORKSHOP"
-     The spellbook of workings & wards: two chapters — builds you own and care
-     that keeps them running — plus The Responder. A clean, static hero; no
-     interactive contraptions on this page.
-     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
-     graphics inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
+     A two-chapter commission ledger: live website builds and care, followed
+     by a sealed, interactive planning model for the pre-launch Hive.
+     Graphics are inline SVG; scripts and styles are same-origin.
      The only http(s) URLs below are hyperlinks/metadata, never loads.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
@@ -21,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
 <meta property="og:title" content="Pricing — Site Sourcery · every spell, itemized">
-<meta property="og:description" content="Exactly what you get, tier by tier. One-time builds from $200, month-to-month care from $15. 50% to begin; you own everything on the final payment.">
+<meta property="og:description" content="One-time builds from $200 and care from $15. Card and Card Plus are paid up front; larger builds are 50% to begin. The completed build is yours on final payment.">
 <meta property="og:url" content="https://sitesourcery.com/pricing.html">
 <meta property="og:image" content="https://sitesourcery.com/og.png">
 <meta property="og:image:width" content="1200">
@@ -29,11 +27,11 @@
 <meta name="twitter:image" content="https://sitesourcery.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Pricing — Site Sourcery">
-<meta name="twitter:description" content="Every spell, itemized. Builds from $200, care from $15. You own everything.">
+<meta name="twitter:description" content="Every spell, itemized. Builds from $200, care from $15. The completed website is yours on final payment.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","slogan":"Custom websites for local businesses — built, hosted, and run for you.","description":"Custom websites for local businesses, priced plainly. One-time builds you own outright, and month-to-month care that keeps them running. 50% to begin, the balance on delivery, and everything is yours on the final payment.","makesOffer":{"@type":"OfferCatalog","name":"Workings & Wards","itemListElement":[
+{"@context":"https://schema.org","@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","email":"hello@sitesourcery.com","slogan":"Custom websites for local businesses — built, hosted, and run for you.","description":"Custom websites for local businesses, priced plainly. Card and Card Plus are paid in full up front; larger builds are 50% to begin with the balance on delivery. The completed build is yours on final payment, and optional Care is month-to-month.","makesOffer":{"@type":"OfferCatalog","name":"Workings & Wards","itemListElement":[
 {"@type":"OfferCatalog","name":"Conjure once — the Workings (one-time builds you own)","itemListElement":[
-{"@type":"Offer","name":"Card","price":"200","priceCurrency":"USD","description":"One striking page that makes you real online — who you are and what you do at a glance, tap-to-call and tap-for-directions, your hours and a map kept current."},
+{"@type":"Offer","name":"Card","price":"200","priceCurrency":"USD","description":"One striking page that makes you real online — who you are and what you do at a glance, tap-to-call and tap-for-directions, with your hours and map correct at launch."},
 {"@type":"Offer","name":"Card Plus","price":"350","priceCurrency":"USD","description":"Your whole story on one flowing scroll — everything on Card told fuller, a photo gallery that shows the work at its best, and real words from real customers."},
 {"@type":"Offer","name":"Site","price":"600","priceCurrency":"USD","description":"A proper multi-page site — home, services, about and contact each its own page, custom-drawn around your trade and written to be found for what you do."},
 {"@type":"Offer","name":"Site Plus","price":"900","priceCurrency":"USD","description":"A fuller site with room to show your work over time — a portfolio that lets the work speak, or a living blog, with space that keeps growing as you do."},
@@ -45,12 +43,14 @@
 {"@type":"OfferCatalog","name":"Ward monthly — the Wards (month-to-month care)","itemListElement":[
 {"@type":"Offer","name":"Host","price":"15","priceCurrency":"USD","description":"Your site kept online, fast and safe — hosting, security, and backups all handled, watched over, quick on every phone."},
 {"@type":"Offer","name":"Care Lite","price":"29","priceCurrency":"USD","description":"Everything in Host, plus a couple of changes a month whenever you need them — new hours, a new price, a fresh photo, done for you."},
-{"@type":"Offer","name":"Care","price":"59","priceCurrency":"USD","description":"Text any change any time and it goes live, usually the same day, plus a plain-English monthly note on how the site is doing — a studio that knows your site."},
+{"@type":"Offer","name":"Care","price":"59","priceCurrency":"USD","description":"Request agreed content changes by text, usually handled the same business day, plus a plain-English monthly performance note — a studio that knows your site."},
 {"@type":"Offer","name":"Care Plus","price":"99","priceCurrency":"USD","description":"Everything in Care, plus ongoing get-found work and help gathering real reviews, with your requests jumping the line."},
 {"@type":"Offer","name":"Partner","price":"159","priceCurrency":"USD","description":"A real web-partner in your corner minding your whole online presence — proactive ideas, seasonal refreshes, and first call when anything's up."}
 ]}]}}
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-commerce.css">
 <noscript><style>.when-once,.when-monthly{display:block!important}.toggle{display:none!important}</style></noscript>
 <style>
 /* page-scoped: the tier sigils + the two-chapter book. System CSS untouched. */
@@ -112,7 +112,7 @@
 .grimoire:focus-visible{outline:2px solid #7C5CFF;outline-offset:6px;border-radius:8px}
 </style>
 </head>
-<body>
+<body class="atelier-inner page-pricing">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- one shared charm gradient for every tier sigil (as home declares brandG once) -->
@@ -140,65 +140,83 @@
 
 <main id="main">
 
-  <!-- ══ HERO — every spell, itemized (clean, static) ═════════════════════ -->
+  <!-- ══ HERO — the master commission ledger ════════════════════════════ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow reveal">Pricing</p>
-      <h1 class="hero-mega reveal">Every spell, <em class="accent">itemized</em>.</h1>
-      <p class="lede reveal">No mystery, no menus to decode. Here&rsquo;s each website tier and what it is designed to include. Below that, <strong>the Hive</strong> is shown separately as a pre-launch automation concept with planning estimates, not a current offer. <strong>You own every website build outright on the final payment.</strong></p>
+      <p class="commerce-status reveal">Website commissions are open</p>
+      <p class="eyebrow reveal">The master commission ledger</p>
+      <h1 class="hero-mega reveal">Every working, <em class="accent">written down</em>.</h1>
+      <p class="lede reveal">The live offer is simple: custom websites you own, plus optional month-to-month website care. The separate Hive chapter is a <strong>pre-launch research concept</strong>—nothing in it can be purchased, subscribed to, demonstrated live, or deployed today.</p>
+      <nav class="offer-gates reveal" aria-label="Choose an offer type">
+        <a class="offer-gate" href="#website-commissions"><small>Live offer</small><b>Website commissions</b><span>One-time builds from $200 + optional care.</span></a>
+        <a class="offer-gate hive" href="#the-hive"><small>Pre-launch research</small><b>The proposed Hive</b><span>Non-binding planning estimates. No purchase.</span></a>
+      </nav>
       <div class="actions reveal">
-        <a class="btn primary" href="/start/">Start your site</a>
+        <a class="btn primary" href="/start/">Start your website</a>
         <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
-      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem">Website terms: 50% to begin a build and the balance on delivery (the two smallest, Card and Card Plus, are paid up front). Website care is month-to-month. Hive figures below are non-binding pre-launch estimates, not subscription terms.</p>
+      <p class="terms reveal" style="max-width:40em;margin-top:1.3rem"><strong>Website terms:</strong> 50% to begin and the balance on delivery; Card and Card Plus are paid up front. Website care is month-to-month. <strong>Hive figures are planning estimates only—not prices you can accept.</strong></p>
 
-      <!-- ── THE GRIMOIRE · the cauldron & the seven-pointed seal (pure inline SVG;
-           slow turn + cursor drift + click-to-flare, all silenced by reduced-motion) ── -->
-      <figure class="reveal grimoire" id="grimoire" tabindex="0" style="max-width:640px;margin:2.6rem auto 0;display:block" role="img" aria-label="A cauldron brews on a dark field, luminous runes rising from the brew into a great seven-pointed star turning slowly inside a floating spell-circle — the working being cast.">
-        <svg viewBox="0 0 1000 600" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
+      <figure class="reveal grimoire commission-grimoire" id="grimoire" tabindex="0" role="img" aria-label="An illuminated commission ledger lies open. The left page records live website tiers and ownership terms. The right page seals the Hive as pre-launch research that is not for sale.">
+        <svg viewBox="0 0 1000 650" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
           <defs>
-            <radialGradient id="pc-halo" cx="50%" cy="40%" r="55%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".34"/><stop offset="46%" stop-color="#7C5CFF" stop-opacity=".09"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
-            <linearGradient id="pc-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5C8A"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
-            <linearGradient id="pc-cover" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A2668"/><stop offset="1" stop-color="#1C1136"/></linearGradient>
-            <filter id="pc-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <radialGradient id="ledgerHalo" cx="50%" cy="48%" r="55%"><stop offset="0" stop-color="#9f72ff" stop-opacity=".3"/><stop offset=".58" stop-color="#7c5cff" stop-opacity=".08"/><stop offset="1" stop-color="#09050e" stop-opacity="0"/></radialGradient>
+            <linearGradient id="ledgerPage" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2a1b34"/><stop offset="1" stop-color="#120b1b"/></linearGradient>
+            <linearGradient id="ledgerEdge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f2c77f"/><stop offset=".48" stop-color="#ff668f"/><stop offset="1" stop-color="#9f72ff"/></linearGradient>
+            <filter id="ledgerGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
-          <rect width="1000" height="600" fill="url(#pc-halo)"/>
-          <g fill="#C8BEFF"><circle cx="150" cy="86" r="2" opacity=".7"/><circle cx="255" cy="150" r="1.4" opacity=".5"/><circle cx="820" cy="78" r="2.2" opacity=".7"/><circle cx="898" cy="168" r="1.5" opacity=".5"/><circle cx="762" cy="206" r="1.2" opacity=".45"/><circle cx="120" cy="228" r="1.5" opacity=".5"/><circle cx="500" cy="30" r="1.6" opacity=".55"/><circle cx="626" cy="88" r="1.2" opacity=".4"/><circle cx="372" cy="52" r="1.3" opacity=".45"/></g>
-          <g transform="translate(500 232)" filter="url(#pc-glow)" fill="none" stroke="url(#pc-arc)">
-            <circle r="160" stroke-width="2" opacity=".9"/><circle r="140" stroke-width="1" opacity=".45"/>
-            <g stroke-width="2" opacity=".7">
-              <line x1="0" y1="-138" x2="0" y2="-158"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(25.7)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(51.4)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(77.1)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(102.9)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(128.6)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(154.3)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(180)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(205.7)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(231.4)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(257.1)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(282.9)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(308.6)"/><line x1="0" y1="-138" x2="0" y2="-158" transform="rotate(334.3)"/>
-              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="95s" repeatCount="indefinite"/>
-            </g>
-            <g class="grim-star">
-              <path d="M0,-130 L56.4,117.1 L-101.6,-81.1 L126.7,28.9 L-126.7,28.9 L101.6,-81.1 L-56.4,117.1 Z" stroke-width="2.5" opacity=".92" fill="url(#pc-arc)" fill-opacity=".07"/>
-              <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="160s" repeatCount="indefinite"/>
-            </g>
-            <g fill="url(#pc-arc)" stroke="none"><path d="M0,-20 L5.5,-5.5 L20,0 L5.5,5.5 L0,20 L-5.5,5.5 L-20,0 L-5.5,-5.5 Z" opacity=".95"/></g>
+          <rect width="1000" height="650" fill="#08050d"/><rect width="1000" height="650" fill="url(#ledgerHalo)"/>
+          <g fill="#e8d6ff"><circle cx="88" cy="95" r="2" opacity=".7"/><circle cx="222" cy="53" r="1.4" opacity=".5"/><circle cx="812" cy="81" r="1.8" opacity=".65"/><circle cx="914" cy="184" r="1.4" opacity=".55"/><circle cx="106" cy="504" r="1.5" opacity=".5"/></g>
+          <ellipse cx="500" cy="568" rx="405" ry="46" fill="#000" opacity=".58"/>
+          <path d="M76 121Q278 74 486 132V557Q278 499 76 548Z" fill="#1b1025" stroke="url(#ledgerEdge)" stroke-opacity=".45" stroke-width="8"/>
+          <path d="M514 132Q722 74 924 121V548Q722 499 514 557Z" fill="#1b1025" stroke="url(#ledgerEdge)" stroke-opacity=".38" stroke-width="8"/>
+          <g class="book-page-live">
+            <path d="M91 135Q284 94 486 148V538Q282 487 91 529Z" fill="url(#ledgerPage)" stroke="#f2c77f" stroke-opacity=".35"/>
+            <text x="126" y="176" fill="#f2c77f" font-family="Georgia,serif" font-size="18" letter-spacing="3">WEBSITE COMMISSIONS</text>
+            <text x="126" y="204" fill="#81e8c8" font-family="monospace" font-size="12" letter-spacing="2">LIVE OFFER · YOU OWN THE BUILD</text>
+            <path d="M124 224H452" stroke="#f2c77f" stroke-opacity=".4"/>
+            <g font-family="monospace" font-size="13"><g fill="#f7eefb"><text x="126" y="258">CARD</text><text x="400" y="258" text-anchor="end">$200</text><text x="126" y="296">SITE</text><text x="400" y="296" text-anchor="end">$600</text><text x="126" y="334">PRO</text><text x="400" y="334" text-anchor="end">$1,300</text><text x="126" y="372">SIGNATURE</text><text x="400" y="372" text-anchor="end">$2,400</text><text x="126" y="410">FLAGSHIP</text><text x="400" y="410" text-anchor="end">$3,000</text></g><g stroke="#b995e8" stroke-opacity=".26"><path class="book-rule" d="M126 269H448M126 307H448M126 345H448M126 383H448M126 421H448"/></g></g>
+            <rect x="122" y="452" width="328" height="50" rx="6" fill="#6be0bd" fill-opacity=".08" stroke="#6be0bd" stroke-opacity=".35"/>
+            <text x="140" y="476" fill="#c8ffed" font-family="monospace" font-size="12">50% TO BEGIN · BALANCE ON DELIVERY</text><text x="140" y="493" fill="#9ccaba" font-family="monospace" font-size="10">CARD + CARD PLUS PAID UP FRONT</text>
           </g>
-          <g stroke="#C8BEFF" fill="none" stroke-width="2" stroke-linecap="round" filter="url(#pc-glow)"><path d="M446,448 q-10,-30 6,-60" opacity=".45"/><path d="M556,452 q12,-32 -4,-62" opacity=".45"/><g opacity=".8"><path d="M472,424 l0,-14 M466,417 l12,0"/></g><g opacity=".7"><path d="M536,430 l0,-14 M530,430 l12,-6"/></g><g opacity=".85"><path d="M504,404 l-6,-12 l12,0 z"/></g></g>
-          <g filter="url(#pc-glow)" transform="translate(500 480)">
-            <ellipse cx="0" cy="66" rx="200" ry="32" fill="#7C5CFF" opacity=".14"/>
-            <g stroke="#5A3FA0" stroke-width="7" stroke-linecap="round" fill="none"><path d="M-56,44 q-5,16 -13,24"/><path d="M56,44 q5,16 13,24"/></g>
-            <path d="M-96,-24 C-106,16 -62,52 0,52 C62,52 106,16 96,-24 Z" fill="url(#pc-cover)" stroke="#5A3FA0" stroke-width="1.5"/>
-            <g fill="url(#pc-arc)"><path d="M-32,42 C-25,54 -23,60 -23,66 A9,9 0 0 1 -41,66 C-41,60 -39,54 -32,42 Z" opacity=".6" transform="rotate(-9 -32 60)"/><path d="M32,42 C39,54 41,60 41,66 A9,9 0 0 1 23,66 C23,60 25,54 32,42 Z" opacity=".6" transform="rotate(9 32 60)"/><path d="M0,30 C9,47 11,56 11,64 A11,11 0 0 1 -11,64 C-11,56 -9,47 0,30 Z" opacity=".85"/><path d="M-16,56 C-12,63 -11,66 -11,69 A5.5,5.5 0 0 1 -22,69 C-22,66 -21,63 -16,56 Z" opacity=".75"/><path d="M16,56 C20,63 21,66 21,69 A5.5,5.5 0 0 1 10,69 C10,66 11,63 16,56 Z" opacity=".75"/></g>
-            <ellipse cx="0" cy="-24" rx="100" ry="20" fill="url(#pc-cover)" stroke="#5A3FA0" stroke-width="1.5"/>
-            <ellipse class="grim-brew" cx="0" cy="-24" rx="84" ry="14" fill="url(#pc-arc)" opacity=".9"/>
-            <ellipse cx="-18" cy="-27" rx="34" ry="6" fill="#C8BEFF" opacity=".5"/>
-            <g fill="#C8BEFF"><circle cx="-30" cy="-48" r="4" opacity=".8"/><circle cx="10" cy="-62" r="3" opacity=".6"/><circle cx="42" cy="-52" r="2.5" opacity=".7"/></g>
+          <g class="book-page-sealed">
+            <path d="M514 148Q716 94 909 135V529Q718 487 514 538Z" fill="url(#ledgerPage)" stroke="#ff668f" stroke-opacity=".28"/>
+            <text x="552" y="176" fill="#ff9eb9" font-family="Georgia,serif" font-size="18" letter-spacing="3">THE HIVE</text>
+            <text x="552" y="204" fill="#ffb8cb" font-family="monospace" font-size="12" letter-spacing="2">PRE-LAUNCH RESEARCH</text>
+            <path d="M550 224H876" stroke="#ff668f" stroke-opacity=".35"/>
+            <g transform="translate(714 345)" filter="url(#ledgerGlow)">
+              <circle r="92" fill="#ff668f" fill-opacity=".045" stroke="#ff668f" stroke-opacity=".34"/>
+              <circle class="book-sigil" r="72" fill="none" stroke="#9f72ff" stroke-opacity=".55" stroke-dasharray="3 9"/>
+              <path d="M0-55L48-27V27L0 55L-48 27V-27Z" fill="#160b21" stroke="url(#ledgerEdge)" stroke-width="2"/>
+              <path d="M0-28L6-6L28 0L6 6L0 28L-6 6L-28 0L-6-6Z" fill="url(#ledgerEdge)"/>
+            </g>
+            <rect x="548" y="452" width="328" height="50" rx="6" fill="#ff668f" fill-opacity=".07" stroke="#ff668f" stroke-opacity=".34"/>
+            <text x="712" y="476" text-anchor="middle" fill="#ffd0dd" font-family="monospace" font-size="12">NO PURCHASE · NO SUBSCRIPTION</text><text x="712" y="493" text-anchor="middle" fill="#bd98a6" font-family="monospace" font-size="10">PLANNING ESTIMATES ARE NON-BINDING</text>
           </g>
+          <path d="M486 132Q500 118 514 132V557Q500 572 486 557Z" fill="#0a0610" stroke="#a579de" stroke-opacity=".28"/>
+          <path class="book-ward-glow" d="M512 150Q714 97 906 137" stroke="#f2c77f" stroke-width="2" opacity="0" filter="url(#ledgerGlow)"/>
         </svg>
+        <figcaption class="artifact-caption"><b>MASTER LEDGER / TWO DIFFERENT CHAPTERS</b><span>Live website offer ≠ pre-launch Hive research</span></figcaption>
       </figure>
     </div>
   </section>
 
+  <nav class="offer-rail" aria-label="Offer status">
+    <div class="offer-rail-inner">
+      <a href="#website-commissions"><i aria-hidden="true"></i><span><b>Website builds + care</b><small>Available now · ownership terms published</small></span><strong>Live offer</strong></a>
+      <a class="research" href="#the-hive"><i aria-hidden="true"></i><span><b>The proposed Hive</b><small>No purchase, subscription, demo, or deployment</small></span><strong>Pre-launch</strong></a>
+    </div>
+  </nav>
+
   <!-- ══ THE TWO CHAPTERS — the spellbook (toggle rig, zero new JS) ════════ -->
-  <section class="section">
+  <section class="section" id="website-commissions">
     <div class="wrap" data-billing="once">
       <div class="book-head">
-        <p class="eyebrow reveal">The spellbook</p>
-        <h2 class="reveal">Choose your <em class="accent">working</em>.</h2>
-        <p class="lede reveal" style="margin-top:1rem">Thirteen spells across two chapters. Each names exactly what it conjures for your business — point at any leaf and its sigil catches.</p>
+        <p class="commerce-status reveal">Live website offer</p>
+        <p class="eyebrow reveal">Website commission spellbook</p>
+        <h2 class="reveal">Build once—or keep it <em class="accent">warded</em>.</h2>
+        <p class="lede reveal" style="margin-top:1rem">These are the services you can actually commission today. Use the chapter switch to compare one-time website builds with optional month-to-month website care.</p>
+        <div class="chapter-state reveal"><span>Published website prices</span><span>Build ownership on final payment</span><span>Care cancels anytime</span></div>
 
         <div class="toggle reveal" role="group" aria-label="Choose a chapter" style="margin-top:1.6rem">
           <button type="button" data-value="once" aria-pressed="true">Conjure once</button>
@@ -211,7 +229,26 @@
         <!-- ══ CHAPTER I — CONJURE ONCE · the Workings ══ -->
         <div class="when-once">
           <p class="eyebrow" style="margin-bottom:.6rem">Chapter I · Conjure once</p>
-          <p class="lede chapter-intro">Cast once. Pay for the working and it&rsquo;s yours — the site, the domain, the words — to keep and to carry, forever.</p>
+          <p class="lede chapter-intro">Cast once. On final payment, the completed working is yours &mdash; the site, the domain, the words &mdash; to keep and to carry, forever.</p>
+
+          <div class="commission-ledger">
+            <div class="ledger-head"><strong>LIVE OFFER / WEBSITE BUILDS</strong><span>ONE-TIME COMMISSION PRICES</span></div>
+            <table class="tier-table">
+              <thead><tr><th>Tier</th><th>Best fit</th><th>Defining scope</th><th>Price</th></tr></thead>
+              <tbody>
+                <tr><td>Card<small>First Light</small></td><td>Essential presence</td><td>One page, calls, directions, hours, map</td><td>$200 once</td></tr>
+                <tr><td>Card Plus<small>The Told Tale</small></td><td>Rich one-page story</td><td>Fuller copy, gallery, customer words</td><td>$350 once</td></tr>
+                <tr><td>Site<small>The Standing Hall</small></td><td>Core local-business site</td><td>Home, services, about, contact</td><td>$600 once</td></tr>
+                <tr><td>Site Plus<small>The Long Gallery</small></td><td>Growing body of work</td><td>Portfolio or blog with more room</td><td>$900 once</td></tr>
+                <tr><td>Pro<small>The Working Charm</small></td><td>A site that does a job</td><td>One working tool: requests, quotes, or menu</td><td>$1,300 once</td></tr>
+                <tr><td>Pro Plus<small>The Greater Working</small></td><td>Bespoke art + tool</td><td>More pages, custom graphics, working tool</td><td>$1,800 once</td></tr>
+                <tr><td>Signature<small>The Showpiece</small></td><td>Memorable flagship presence</td><td>Illustration, motion, advanced tool</td><td>$2,400 once</td></tr>
+                <tr><td>Flagship<small>The Masterwork</small></td><td>The full commission</td><td>Wholly bespoke, built from scratch</td><td>$3,000 once</td></tr>
+              </tbody>
+            </table>
+            <p class="ledger-note"><b>OWNERSHIP</b><span>You own the completed website build on final payment. Card and Card Plus are paid up front; other builds are 50% to begin and the balance on delivery.</span></p>
+            <p class="ledger-note"><b>TOOL BOUNDARY</b><span>A site-tier tool is a one-time website-native form, embed, calendar, shop, or similar scoped feature. The Hive describes proposed managed, synced workflows with reminders, monitoring, and ongoing operation; no Hive service is currently available.</span></p>
+          </div>
 
           <div class="grid cols-3">
 
@@ -225,7 +262,7 @@
               <ul>
                 <li>Who you are and what you do, said in one glance</li>
                 <li>Tap to call, tap for directions — right on the screen</li>
-                <li>Your hours and a map, always current</li>
+                <li>Your hours and map, correct at launch</li>
               </ul>
               <a class="btn primary" href="/start/">Start your site</a>
             </article>
@@ -312,7 +349,7 @@
               <h3>Signature</h3>
               <p class="truename">The Showpiece.</p>
               <p class="price"><span class="num">$2,400</span><span class="per">once</span></p>
-              <p style="color:var(--muted)">A site people remember — hand-drawn, alive, and it sells.</p>
+              <p style="color:var(--muted)">A memorable site designed to help visitors understand, trust, and act.</p>
               <ul>
                 <li>Hand-drawn illustration and motion that moves as they scroll</li>
                 <li>An advanced tool: a small shop, calendar booking, or a members&rsquo; area</li>
@@ -357,6 +394,10 @@
         <div class="when-monthly">
           <p class="eyebrow" style="margin-bottom:.6rem">Chapter II · Ward monthly</p>
           <p class="lede chapter-intro">A standing enchantment that keeps the light burning. Month to month — start it, pause it, or lift it whenever you like.</p>
+          <div class="hive-threshold" style="border-left-color:var(--commerce-mint);border-color:rgba(107,224,189,.25);background:rgba(29,78,64,.14)">
+            <div class="hive-threshold-mark" style="color:#c8ffed;border-color:rgba(107,224,189,.3);background:rgba(107,224,189,.07)">&#10003;</div>
+            <div><b style="color:#d7fff3">Available website Care &mdash; not Hive automation</b><p>Care runs $15&ndash;$159/mo: managed hosting starts at $15, text-to-change at $29, and the monthly performance note at $59. Plans are month-to-month and can be canceled without exit fees.</p></div>
+          </div>
 
           <div class="grid cols-3">
 
@@ -397,9 +438,10 @@
               <h3>Care</h3>
               <p class="truename">The Open Line.</p>
               <p class="price"><span class="num">$59</span><span class="per">/mo</span></p>
-              <p style="color:var(--muted)">Text any change, any time — and a plain note on how it&rsquo;s doing.</p>
+              <p style="color:var(--muted)">Request agreed changes by text &mdash; and get a plain note on how the site is doing.</p>
               <ul>
-                <li>Unlimited changes: text it, it&rsquo;s live, usually same day</li>
+                <li>Everything in Care Lite, including hosting and requested changes</li>
+                <li>Agreed content changes within plan scope, usually handled the same business day</li>
                 <li>A monthly note in plain English — is it working?</li>
                 <li>A studio that knows your site inside out — no dashboards, no runaround</li>
               </ul>
@@ -448,22 +490,32 @@
   <!-- ══ THE HIVE — proposed pricing model + interactive estimator ════════ -->
   <section class="section" id="the-hive">
     <div class="wrap">
-      <p class="eyebrow reveal">Pre-launch planning estimates · automation</p>
-      <h2 class="reveal">The proposed Hive, <em class="accent">modeled</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">The Hive is not a public production service and these figures are not current offers or quotes. This estimator shows a possible pricing model while provider costs, carrier requirements, operating controls, and end-to-end tests are completed. <a href="/automation.html">Read the status and requirements &rarr;</a></p>
+      <div class="hive-threshold reveal">
+        <div class="hive-threshold-mark" aria-hidden="true">&#10006;</div>
+        <div><b>Sealed pre-launch annex · nothing here is for sale</b><p>No Hive purchase, subscription, live demo, setup, discount, or deployment is currently offered. This is research separate from the live website business above.</p></div>
+      </div>
+      <p class="commerce-status prelaunch reveal">Pre-launch research · non-binding estimates</p>
+      <p class="eyebrow reveal">The proposed Hive estimator</p>
+      <h2 class="reveal">Model the idea—not a <em class="accent">purchase</em>.</h2>
+      <p class="lede reveal" style="margin-top:1rem">The Hive is not a public production service. These figures are planning estimates for feedback, not current offers, quotes, or terms you can accept. Provider costs, carrier requirements, operating controls, and end-to-end tests remain unfinished. <a href="/automation.html">Read the status and requirements &rarr;</a></p>
 
-      <ul class="reveal" style="margin-top:2rem;max-width:44em">
-        <li><strong>The Responder</strong> — target: an approved missed-call text-back · proposed <strong>$99/mo</strong>, $0 setup</li>
-        <li><strong>Online booking</strong> — a link that fills your calendar, reminders included · $200 setup + <strong>$29/mo</strong></li>
-        <li><strong>Review engine</strong> — the ask after every job, a drafted reply for every review · $150 setup + <strong>$69/mo</strong></li>
-        <li><strong>After-hours answering</strong> — your site answers the 9pm questions from facts you approve · $250 setup + <strong>$69/mo</strong></li>
-        <li><strong>Customer follow-ups</strong> — a note in your voice that brings regulars back · $150 setup + <strong>$49/mo</strong></li>
-        <li><strong>Getting paid</strong> — invoices that chase themselves, deposits up front · <strong>$200 one-time</strong></li>
+      <div class="hive-estimate-key reveal" role="group" aria-label="How to read the planning estimates">
+        <div class="estimate-key monthly"><b>Proposed recurring estimate</b><span>Shown as “per month.” Monthly workflow cells can change this number.</span></div>
+        <div class="estimate-key once"><b>Proposed one-time estimate</b><span>Shown as “due once.” “Getting paid” changes only this number and adds $0/month.</span></div>
+      </div>
+
+      <ul class="reveal hive-proposal-list" style="margin-top:2rem;max-width:48em">
+        <li><strong>The Responder</strong> — proposed recurring estimate: <strong>$99/mo</strong>; proposed setup estimate: <strong>$0 once</strong></li>
+        <li><strong>Online booking</strong> — proposed recurring estimate: <strong>$29/mo</strong>; proposed setup estimate: <strong>$200 once</strong></li>
+        <li><strong>Review engine</strong> — proposed recurring estimate: <strong>$69/mo</strong>; proposed setup estimate: <strong>$150 once</strong></li>
+        <li><strong>After-hours answering</strong> — proposed recurring estimate: <strong>$69/mo</strong>; proposed setup estimate: <strong>$250 once</strong></li>
+        <li><strong>Customer follow-ups</strong> — proposed recurring estimate: <strong>$49/mo</strong>; proposed setup estimate: <strong>$150 once</strong></li>
+        <li><strong>Getting paid</strong> — proposed <strong>$200 one-time</strong> estimate; <strong>$0/mo</strong> recurring estimate</li>
       </ul>
-      <p class="terms reveal" style="margin-top:1rem;max-width:44em">Proposed bundle model: two take 10% off the estimated monthlies, three take 15% off and halve the estimated app setup fees, four take 20%, and all five model at $219/mo. This is for feedback only:</p>
+      <p class="terms reveal" style="margin-top:1rem;max-width:48em">Research model only: two monthly workflows model 10% off estimated monthlies; three model 15% off plus half the estimated app setup amounts; four model 20% off; all five monthly workflows model $219/mo. The one-time “Getting paid” concept is never included in those monthly discounts.</p>
 
       <div id="build-your-hive" class="reveal">
-        <div class="comb" role="group" aria-label="Choose the apps for your hive — selecting more apps lowers the monthly price">
+        <div class="comb" role="group" aria-label="Choose proposed Hive concepts. Five cells affect the recurring estimate; Getting paid affects only the one-time estimate and adds zero dollars per month.">
           <div class="comb-row">
             <button type="button" class="hex" aria-pressed="false" data-name="The Responder" data-mo="99" data-setup="0">
               <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">The Responder</span><span class="hex-price">$99/mo &middot; $0 down</span></span>
@@ -488,15 +540,19 @@
               <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Customer follow-ups</span><span class="hex-price">$49/mo + $150 setup</span></span>
             </button>
             <button type="button" class="hex" aria-pressed="false" data-name="Getting paid" data-mo="0" data-setup="200" data-once="1">
-              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Getting paid</span><span class="hex-price">$200, one-time</span></span>
+              <span class="hex-in"><span class="hex-tick" aria-hidden="true">&#10022;</span><span class="hex-name">Getting paid</span><span class="hex-price">$200 once &middot; adds $0/mo</span></span>
             </button>
           </div>
         </div>
 
         <div class="hive-bill">
           <div>
+            <div class="estimate-split" role="group" aria-label="Current planning totals">
+              <div class="estimate-total monthly"><b id="estimateMonthly">$0/mo</b><span>Proposed recurring estimate</span></div>
+              <div class="estimate-total once"><b id="estimateOnce">$0 once</b><span>Proposed due-once estimate</span></div>
+            </div>
             <p class="lede" id="billLine" role="status" aria-live="polite" aria-atomic="true" style="margin:0">Your hive is empty &mdash; tap a cell to begin.</p>
-            <p class="terms" id="billNote" style="margin-top:.6rem">Planning estimate only — no Hive service or subscription is currently offered.</p>
+            <p class="terms" id="billNote" style="margin-top:.6rem">Planning estimate only — no Hive service, purchase, subscription, setup, discount, or deployment is currently offered.</p>
           </div>
           <div class="actions" style="margin-top:1.4rem">
             <a class="btn primary" href="/start/?after=hive">Register interest in this concept</a>
@@ -577,11 +633,12 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 
 <script src="sourcery.js" defer></script>
+<script src="atelier-commerce.js" defer></script>
 <script>
 /* the grimoire's small life: drift with the cursor, flare on a click.
    Self-contained; fully still under prefers-reduced-motion. */
@@ -635,7 +692,8 @@
   var cells=[].slice.call(root.querySelectorAll('.hex[aria-pressed]'));
   var core=document.getElementById('combCore'),total=document.getElementById('combTotal'),
       chip=document.getElementById('combChip'),line=document.getElementById('billLine'),
-      note=document.getElementById('billNote');
+      note=document.getElementById('billNote'),monthlyOut=document.getElementById('estimateMonthly'),
+      onceOut=document.getElementById('estimateOnce');
   var rm=window.matchMedia('(prefers-reduced-motion: reduce)');
   var LADDER={2:.10,3:.15,4:.20};
   var renderId=0,displayedMo=0,displayedOnce=0;
@@ -657,27 +715,24 @@
     var savedMo=gross-netMo;
 
     setTotals(netMo,dueOnce);
-    chip.textContent=n>=5?'WHOLE HIVE \u00b7 $219/MO':(n>=2?Math.round(pct*100)+'% off monthly':(n===1?'add 1 monthly \u00b7 10% off':''));
+    chip.textContent=n>=5?'ALL MONTHLY \u00b7 $219/MO':(n>=2?Math.round(pct*100)+'% off monthly':(n===1?'add 1 monthly \u00b7 10% off':''));
     chip.classList.toggle('on',n>=1);
 
     if(!on.length){
       line.innerHTML='Your hive is empty \u2014 tap a cell to begin.';
     }else{
       var names=on.map(function(c){return c.dataset.name}).join(' + ');
-      var parts=[];
-      if(n>0){
-        parts.push('<strong>'+money(netMo)+'/mo</strong>'+(savedMo>0?' <span style="color:var(--muted)">(was '+money(gross)+' \u2014 you save '+money(savedMo)+' every month)</span>':''));
-      }
-      if(effectiveSetup>0)parts.push(money(effectiveSetup)+' app setup'+(halved?' <span style="color:var(--muted)">(halved)</span>':''));
-      else if(n>0)parts.push('$0 app setup');
-      if(setupOnce>0)parts.push(money(setupOnce)+' one-time work');
-      line.innerHTML=(n===5?'The whole hive':names)+' \u2014 '+parts.join(' \u00b7 ');
+      var saving=savedMo>0?' <span style="color:var(--muted)">(modeled from '+money(gross)+'/mo; '+money(savedMo)+'/mo lower)</span>':'';
+      line.innerHTML='<strong>Recurring planning estimate: '+money(netMo)+'/mo.</strong>'+saving+
+        ' <strong>Due-once planning estimate: '+money(dueOnce)+'.</strong> Selected concepts: '+(n===5&&on.length===5?'all five monthly workflows':names)+'.';
     }
-    note.textContent=n>=3?'Planning estimate only. The proposed model halves app setup estimates at three apps; one-time work is not discounted.':'Planning estimate only — no Hive service, subscription, setup, or discount is currently offered.';
+    note.textContent=n>=3?'Planning estimate only. The research model halves setup estimates attached to monthly workflows when three or more monthly workflows are selected. The standalone Getting paid estimate is not discounted. Nothing is currently for sale.':'Planning estimate only — no Hive service, purchase, subscription, setup, discount, or deployment is currently offered.';
   }
 
   function writeTotals(monthly,once){
     total.innerHTML='<span class="hex-total-line">'+money(monthly)+'<small>per month</small></span><span class="hex-total-line">'+money(once)+'<small>due once</small></span>';
+    if(monthlyOut)monthlyOut.textContent=money(monthly)+'/mo';
+    if(onceOut)onceOut.textContent=money(once)+' once';
   }
 
   function setTotals(targetMo,targetOnce){
@@ -717,7 +772,7 @@
   function syncStart(){
     if(!startBtn)return;
     var on=cells.filter(function(c){return c.getAttribute('aria-pressed')==='true'});
-    startBtn.href=on.length?'/start/?after=hive&hive='+encodeURIComponent(on.map(function(c){return c.dataset.name}).join(',')):'/start/';
+    startBtn.href=on.length?'/start/?after=hive&hive='+encodeURIComponent(on.map(function(c){return c.dataset.name}).join(',')):'/start/?after=hive';
   }
   cells.forEach(function(c){
     c.addEventListener('click',function(){

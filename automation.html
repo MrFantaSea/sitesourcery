@@ -1,15 +1,10 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
      SITE SOURCERY — automation.html · "SPELLCAST"
-     THE HIVE — AI integration & automation. The Responder is the flagship
-     app; this page is the hive around it: booking, reviews, after-hours
-     answering, follow-ups, getting paid — stack more, pay less, with the
-     interactive Build-your-hive comb. Ladder: 2=20% · 3=25%+half setups ·
-     4=20% · all five = flat $219/mo. (2=10% · 3=15%+half app setups)
-     Outcomes only — the machinery underneath is never named (white-label).
-     Self-contained: loads ONLY same-origin style.css + sourcery.js. All
-     graphics inline SVG. No CDNs, no fonts, no trackers, no fetch.
-     The only http(s) URLs below are hyperlinks/metadata, never loads.
+     THE HIVE — a sealed, six-cell research chamber for proposed automation
+     workflows. No live app, quote, setup, demo, purchase, or deployment is
+     offered here. The interactive chamber explains the launch requirements;
+     the pricing page carries the separate non-binding planning model.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
@@ -37,7 +32,10 @@
 {"@context":"https://schema.org","@type":"WebPage","name":"The Hive — proposed automation services","url":"https://sitesourcery.com/automation.html","description":"A pre-launch description of planned Site Sourcery automation workflows. The page does not represent them as currently available services.","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"}}
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-commerce.css">
 <script src="sourcery.js" defer></script>
+<script src="atelier-commerce.js" defer></script>
 <style>
 /* page-scoped: menu sigils + truenames (mirrors pricing.html). System CSS untouched. */
 .tier-sigil{width:30px;height:30px;flex:0 0 auto;opacity:.85;
@@ -52,7 +50,7 @@
 
 </style>
 </head>
-<body>
+<body class="atelier-inner page-hive">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- one shared charm gradient for every sigil (as pricing declares charmG once) -->
@@ -80,59 +78,52 @@
 
 <main id="main">
 
-  <!-- ══ HERO — the workshop ══════════════════════════════════════════════ -->
+  <!-- ══ HERO — the six-cell control chamber ═════════════════════════════ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow reveal">Pre-launch concept · AI integration &amp; automation</p>
-      <h1 class="hero-mega reveal">Meet <em class="accent">the Hive</em>.</h1>
-      <p class="lede reveal">The Hive is a planned set of six workflows for missed calls, booking, reviews, after-hours questions, follow-ups, and invoices. It is not publicly operating yet. Provider setup, carrier registration, consent and opt-out handling, data-flow review, and end-to-end tests must pass before any production onboarding.</p>
+      <p class="commerce-status prelaunch reveal">Pre-launch research · not publicly operating</p>
+      <p class="eyebrow reveal">The six-cell control chamber</p>
+      <h1 class="hero-mega reveal">The Hive is still in the <em class="accent">lab</em>.</h1>
+      <p class="lede reveal">Six workflows are being scoped for missed calls, booking, reviews, after-hours questions, follow-ups, and invoices. Each cell below is a requirement under review—not a live app, demo, subscription, or deployable service.</p>
       <div class="actions reveal">
         <a class="btn primary" href="/start/?after=hive">Register non-binding interest</a>
+        <a class="btn ghost" href="/pricing.html#website-commissions">See live website pricing</a>
         <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
       </div>
-      <p class="terms reveal" style="max-width:38em;margin-top:1.6rem"><strong>Status:</strong> no Hive purchase, subscription, live demo, or deployment is currently offered. Prices and bundle terms shown below are proposals for feedback, not quotes. An inquiry creates no obligation and does not authorize automated calls or texts.</p>
+      <p class="terms reveal" style="max-width:40em;margin-top:1.3rem"><strong>Status:</strong> no Hive purchase, subscription, live demo, setup, or deployment is currently offered. Proposed figures are non-binding planning estimates for feedback—not quotes. An inquiry creates no obligation and does not authorize automated calls or texts.</p>
 
-      <!-- ── THE WORKSHOP · the shop's star and its orbiting familiars (inline SVG, gentle SMIL pulse only) ── -->
-      <figure class="reveal" style="max-width:640px;margin:2.6rem auto 0;display:block" role="img" aria-label="Concept illustration: a glowing shop with six orbs representing the six proposed Hive workflows. This is not a live-service diagram.">
-        <svg viewBox="0 0 1000 520" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-          <defs>
-            <radialGradient id="au-halo" cx="50%" cy="50%" r="55%"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".3"/><stop offset="50%" stop-color="#7C5CFF" stop-opacity=".08"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
-            <linearGradient id="au-arc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5C8A"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
-            <filter id="au-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          </defs>
-          <rect width="1000" height="520" fill="url(#au-halo)"/>
-          <g fill="#C8BEFF"><circle cx="140" cy="80" r="2" opacity=".7"/><circle cx="250" cy="420" r="1.4" opacity=".5"/><circle cx="850" cy="90" r="2" opacity=".7"/><circle cx="890" cy="380" r="1.5" opacity=".5"/><circle cx="500" cy="34" r="1.5" opacity=".55"/><circle cx="120" cy="300" r="1.3" opacity=".45"/><circle cx="640" cy="60" r="1.2" opacity=".4"/></g>
-          <g transform="translate(500 260)">
-            <circle r="176" fill="none" stroke="url(#au-arc)" stroke-width="1.2" stroke-dasharray="3 9" opacity=".5">
-              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="120s" repeatCount="indefinite"/>
-            </circle>
-            <!-- threads: shop → familiars -->
-            <g stroke="url(#au-arc)" stroke-width="1.4" opacity=".45" filter="url(#au-glow)">
-              <line x1="0" y1="0" x2="0" y2="-176"/><line x1="0" y1="0" x2="152" y2="-88"/><line x1="0" y1="0" x2="152" y2="88"/><line x1="0" y1="0" x2="0" y2="176"/><line x1="0" y1="0" x2="-152" y2="88"/><line x1="0" y1="0" x2="-152" y2="-88"/>
-              <animate attributeName="opacity" values=".3;.6;.3" dur="7s" repeatCount="indefinite"/>
-            </g>
-            <!-- the shop: the brand star, haloed -->
-            <g filter="url(#au-glow)">
-              <circle r="52" fill="#141026" stroke="url(#au-arc)" stroke-width="2"/>
-              <path d="M0,-30 L6.7,-6.7 L30,0 L6.7,6.7 L0,30 L-6.7,6.7 L-30,0 L-6.7,-6.7 Z" fill="url(#au-arc)"/>
-            </g>
-            <!-- the familiars: six orbs, each with its glyph -->
-            <g filter="url(#au-glow)">
-              <g transform="translate(0 -176)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><rect x="-8" y="-13" width="16" height="26" rx="4"/><line x1="-3" y1="9" x2="3" y2="9"/></g></g>
-              <g transform="translate(152 -88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><rect x="-12" y="-10" width="24" height="22" rx="3"/><line x1="-12" y1="-3" x2="12" y2="-3"/><line x1="-6" y1="-14" x2="-6" y2="-8"/><line x1="6" y1="-14" x2="6" y2="-8"/></g></g>
-              <g transform="translate(152 88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><path d="M0,-12 L3.7,-3.7 L13,-2.5 L6,4 L8,13 L0,8.5 L-8,13 L-6,4 L-13,-2.5 L-3.7,-3.7 Z" fill="none" stroke="#C8BEFF" stroke-width="2" stroke-linejoin="round"/></g>
-              <g transform="translate(0 176)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><path d="M4,-13 A13,13 0 1 0 13,4 A10,10 0 0 1 4,-13 Z" fill="none" stroke="#C8BEFF" stroke-width="2.2" stroke-linejoin="round"/></g>
-              <g transform="translate(-152 88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linejoin="round"><rect x="-13" y="-9" width="26" height="18" rx="3"/><path d="M-13,-9 L0,2 L13,-9"/></g></g>
-              <g transform="translate(-152 -88)"><circle r="34" fill="#141026" stroke="url(#au-arc)" stroke-width="1.6"/><g stroke="#C8BEFF" stroke-width="2.2" fill="none" stroke-linecap="round"><circle r="12"/><line x1="0" y1="-6" x2="0" y2="6"/><line x1="-4" y1="-6" x2="4" y2="-6"/><line x1="-4" y1="6" x2="4" y2="6"/></g></g>
-            </g>
-          </g>
-        </svg>
-      </figure>
+      <div class="hive-chamber reveal" data-hive-chamber>
+        <div class="chamber-bar"><span>HIVE::CONCEPT_CHAMBER / SIX CELLS</span><strong>PRE-LAUNCH · NO LIVE SIGNAL</strong></div>
+        <div class="hive-constellation" role="tablist" aria-label="Inspect proposed Hive workflow cells">
+          <svg class="constellation-lines" viewBox="0 0 700 540" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M350 270L350 92M350 270L546 178M350 270L546 362M350 270L350 448M350 270L154 362M350 270L154 178"/><path d="M350 92L546 178L546 362L350 448L154 362L154 178Z"/><circle cx="350" cy="270" r="6"/></svg>
+          <div class="hive-core" aria-hidden="true"><b>THE<br>HIVE</b><small>CONCEPT</small></div>
+          <a class="hive-cell c1" id="cell-tab-responder" role="tab" aria-selected="true" aria-controls="hive-readout-responder" data-cell="responder" href="#hive-readout-responder"><span>Responder</span></a>
+          <a class="hive-cell c2" id="cell-tab-booking" role="tab" aria-selected="false" aria-controls="hive-readout-booking" data-cell="booking" tabindex="-1" href="#hive-readout-booking"><span>Booking</span></a>
+          <a class="hive-cell c3" id="cell-tab-reviews" role="tab" aria-selected="false" aria-controls="hive-readout-reviews" data-cell="reviews" tabindex="-1" href="#hive-readout-reviews"><span>Reviews</span></a>
+          <a class="hive-cell c4" id="cell-tab-after" role="tab" aria-selected="false" aria-controls="hive-readout-after" data-cell="after" tabindex="-1" href="#hive-readout-after"><span>After hours</span></a>
+          <a class="hive-cell c5" id="cell-tab-followups" role="tab" aria-selected="false" aria-controls="hive-readout-followups" data-cell="followups" tabindex="-1" href="#hive-readout-followups"><span>Follow-ups</span></a>
+          <a class="hive-cell c6" id="cell-tab-payments" role="tab" aria-selected="false" aria-controls="hive-readout-payments" data-cell="payments" tabindex="-1" href="#hive-readout-payments"><span>Getting paid</span></a>
+        </div>
+        <p class="sr-only" aria-live="polite"></p>
+        <div class="chamber-readouts">
+          <div class="chamber-panel is-active" id="hive-readout-responder" role="tabpanel" aria-labelledby="cell-tab-responder"><div><p class="panel-code">CELL 01 / MISSED-CALL TARGET</p><h2>The Responder</h2></div><p>Approved missed-call text-back, subject to provider, carrier, law, consent, and opt-out controls.</p><div class="chamber-estimate"><b>$99/mo · $0 setup</b><span>Planning estimate · not for sale</span></div></div>
+          <div class="chamber-panel" id="hive-readout-booking" role="tabpanel" aria-labelledby="cell-tab-booking"><div><p class="panel-code">CELL 02 / CALENDAR TARGET</p><h2>Online booking</h2></div><p>A booking link, service rules, calendar sync, confirmations, reminders, and customer changes.</p><div class="chamber-estimate"><b>$29/mo + $200 once</b><span>Planning estimate · not for sale</span></div></div>
+          <div class="chamber-panel" id="hive-readout-reviews" role="tabpanel" aria-labelledby="cell-tab-reviews"><div><p class="panel-code">CELL 03 / REPUTATION TARGET</p><h2>Review engine</h2></div><p>Approved review requests, one follow-up, drafted replies, and a monthly tally.</p><div class="chamber-estimate"><b>$69/mo + $150 once</b><span>Planning estimate · not for sale</span></div></div>
+          <div class="chamber-panel" id="hive-readout-after" role="tabpanel" aria-labelledby="cell-tab-after"><div><p class="panel-code">CELL 04 / AFTER-HOURS TARGET</p><h2>After-hours answering</h2></div><p>A disclosed automated helper constrained to facts the customer approves.</p><div class="chamber-estimate"><b>$69/mo + $250 once</b><span>Planning estimate · not for sale</span></div></div>
+          <div class="chamber-panel" id="hive-readout-followups" role="tabpanel" aria-labelledby="cell-tab-followups"><div><p class="panel-code">CELL 05 / RETURN-VISIT TARGET</p><h2>Customer follow-ups</h2></div><p>Customer-approved text or email messages with consent and unsubscribe handling.</p><div class="chamber-estimate"><b>$49/mo + $150 once</b><span>Planning estimate · not for sale</span></div></div>
+          <div class="chamber-panel" id="hive-readout-payments" role="tabpanel" aria-labelledby="cell-tab-payments"><div><p class="panel-code">CELL 06 / ONE-TIME PAYMENT SETUP TARGET</p><h2>Getting paid</h2></div><p>Customer-owned payment accounts, professional invoices, reminders, deposits, and a walkthrough.</p><div class="chamber-estimate"><b>$200 once · $0/mo</b><span>One-time planning estimate · not for sale</span></div></div>
+        </div>
+        <p class="chamber-caption">Conceptual chamber. No live integrations, customer data, operational telemetry, or service availability are shown.</p>
+      </div>
     </div>
   </section>
 
+  <aside class="prelaunch-rail" aria-label="Hive launch status">
+    <div class="wrap"><span class="seal" aria-hidden="true">&#10006;</span><div><b>No purchase · no subscription · no demo · no deployment</b><p>Provider setup, carrier registration, consent and opt-out handling, data-flow review, tests, monitoring, and support controls must pass first.</p></div><a href="/pricing.html#website-commissions">Websites are available &#8594;</a></div>
+  </aside>
+
   <!-- ══ HOW IT RUNS — three steps ════════════════════════════════════════ -->
-  <section class="section">
+  <section class="section hive-gates">
     <div class="wrap">
       <p class="eyebrow reveal">Planned delivery process</p>
       <h2 class="reveal">You name it. We scope it. Then we <em class="accent">prove</em> it.</h2>
@@ -140,11 +131,11 @@
         <div class="card reveal">
           <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <h3>Name the chore</h3>
-          <p>Anything you do by hand twice a week, or lose sleep over missing. If a machine should be doing it, say so — the answer is almost always &ldquo;yes, I can set that up.&rdquo;</p>
+          <p>Anything you do by hand twice a week, or lose sleep over missing. Bring us the chore as research input and we&rsquo;ll tell you whether it belongs on the roadmap; no automation quote or setup is currently offered.</p>
         </div>
         <div class="card reveal">
           <svg class="step-glyph" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-          <h3>I wire it up</h3>
+          <h3>A test would come next</h3>
           <p>After providers, permissions, costs, consent, retention, and failure handling are documented, a test configuration can be built on accounts you control. Nothing becomes customer-facing before an agreed acceptance test.</p>
         </div>
         <div class="card reveal">
@@ -159,13 +150,14 @@
   <!-- ══ THE HIVE, CELL BY CELL — exactly what each app does ══════════════ -->
   <section class="section" id="the-apps">
     <div class="wrap">
+      <p class="commerce-status prelaunch reveal">Six proposed workflows · zero live services</p>
       <p class="eyebrow reveal">The proposed Hive, cell by cell</p>
       <h2 class="reveal">Six workflows. What each one is <em class="accent">intended</em> to do.</h2>
       <p class="lede reveal" style="margin-top:1rem">These descriptions are requirements under review, not evidence of a live service. <a href="/pricing.html#the-hive">The pricing page</a> shows planning estimates and lets you model a possible bundle.</p>
 
-      <div class="grid cols-2" style="margin-top:2.5rem">
+      <div class="grid cols-2 hive-cell-ledger" style="margin-top:2.5rem">
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-responder">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M12 11 C15 14.4 15.4 16.4 15.4 18.2 A3.4 3.4 0 0 1 8.6 18.2 C8.6 16.4 9 14.4 12 11 Z" fill="url(#charmG)"/><path d="M21 13 C23.2 15.6 23.5 17.1 23.5 18.5 A2.5 2.5 0 0 1 18.5 18.5 C18.5 17.1 18.8 15.6 21 13 Z" fill="url(#charmG)" opacity=".7"/></svg>
           <h3>The Responder <span class="per" style="font-weight:400">· missed-call text-back</span></h3>
           <p style="color:var(--muted)">Target behavior: after an unanswered call, an approved message is sent only where the provider, carrier, law, and customer permissions allow it.</p>
@@ -177,10 +169,10 @@
             <li>Required carrier registration and opt-out handling must complete before activation</li>
             <li>No public launch date or carrier-approval timeline is promised</li>
           </ul>
-          <p class="terms">Proposed for businesses whose hands are full when the phone rings. Planning estimate: $99/mo, $0 setup; not currently for sale.</p>
+          <p class="terms"><strong>Planning estimate:</strong> $99/mo recurring + $0 setup once. Pre-launch only; not currently for sale.</p>
         </article>
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-booking">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linejoin="round"><rect x="8" y="9" width="16" height="15" rx="2"/><line x1="8" y1="14" x2="24" y2="14"/><line x1="12" y1="6.5" x2="12" y2="11"/><line x1="20" y1="6.5" x2="20" y2="11"/></g><path d="M16 15.5 l1.2 3.3 3.3 1.2 -3.3 1.2 -1.2 3.3 -1.2 -3.3 -3.3 -1.2 3.3 -1.2 z" fill="url(#charmG)"/></svg>
           <h3>Online booking</h3>
           <p style="color:var(--muted)">A booking page that fills your calendar while you work — no phone-tag, no double-booking.</p>
@@ -191,10 +183,10 @@
             <li>Confirmation and reminder texts go out automatically — fewer no-shows</li>
             <li>Reschedule and cancel links that update everything on their own</li>
           </ul>
-          <p class="terms">For anyone booked by the hour — salons, barbers, groomers, tutors, cleaners. $200 setup, $29/mo.</p>
+          <p class="terms"><strong>Planning estimate:</strong> $29/mo recurring + $200 setup once. Pre-launch only; not currently for sale.</p>
         </article>
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-reviews">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M16 7 l2.2 5.4 5.8 .5 -4.4 3.8 1.3 5.7 -4.9 -3 -4.9 3 1.3 -5.7 -4.4 -3.8 5.8 -.5 z" fill="none" stroke="url(#charmG)" stroke-width="1.6" stroke-linejoin="round"/><path d="M16 12 l1 2.4 2.6 .2 -2 1.7 .6 2.6 -2.2 -1.4 -2.2 1.4 .6 -2.6 -2 -1.7 2.6 -.2 z" fill="url(#charmG)"/></svg>
           <h3>Review engine</h3>
           <p style="color:var(--muted)">Reviews are how a town decides who to call. Most owners never ask — this asks, every time.</p>
@@ -205,10 +197,10 @@
             <li>Rough reviews get a calm, professional draft so you stay gracious in public</li>
             <li>A monthly tally: new reviews, your rating, how you stand</li>
           </ul>
-          <p class="terms">For trades and restaurants that live on the map results. $150 setup, $69/mo.</p>
+          <p class="terms"><strong>Planning estimate:</strong> $69/mo recurring + $150 setup once. Pre-launch only; not currently for sale.</p>
         </article>
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-after-hours">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><path d="M19 8 A9.5 9.5 0 1 0 24.5 20 A7.5 7.5 0 0 1 19 8 Z" fill="none" stroke="url(#charmG)" stroke-width="1.6" stroke-linejoin="round"/><path d="M22 9.5 l.8 2.2 2.2 .8 -2.2 .8 -.8 2.2 -.8 -2.2 -2.2 -.8 2.2 -.8 z" fill="url(#charmG)"/></svg>
           <h3>After-hours answering</h3>
           <p style="color:var(--muted)">A small chat window on your website that answers the questions people ask at 9pm.</p>
@@ -217,12 +209,12 @@
             <li>Points people to booking or takes a message; it says plainly that it&rsquo;s automated</li>
             <li>Anything it can&rsquo;t answer becomes a name and number texted straight to you</li>
             <li>A transcript each morning, so you see every question your customers actually ask</li>
-            <li>Updated whenever your facts change — new prices, new hours, same day</li>
+            <li>Would be updated when approved facts change, with timing defined in any production agreement</li>
           </ul>
-          <p class="terms">For restaurants, gyms, contractors — anyone fielding the same ten questions. $250 setup, $69/mo.</p>
+          <p class="terms"><strong>Planning estimate:</strong> $69/mo recurring + $250 setup once. Pre-launch only; not currently for sale.</p>
         </article>
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-followups">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linejoin="round"><rect x="7" y="10" width="18" height="13" rx="2"/><path d="M7 10 L16 18 L25 10"/></g><path d="M24 6 l.9 2.4 2.4 .9 -2.4 .9 -.9 2.4 -.9 -2.4 -2.4 -.9 2.4 -.9 z" fill="url(#charmG)"/></svg>
           <h3>Customer follow-ups</h3>
           <p style="color:var(--muted)">The cheapest customer is the one you already won. This keeps you in their pocket, gently.</p>
@@ -233,10 +225,10 @@
             <li>Sent by text or email, whichever your customers actually read</li>
             <li>Proper unsubscribe handling, always — friendly, never spammy</li>
           </ul>
-          <p class="terms">For bakeries, caf&eacute;s, salons, shops — anywhere people should come back. $150 setup, $49/mo.</p>
+          <p class="terms"><strong>Planning estimate:</strong> $49/mo recurring + $150 setup once. Pre-launch only; not currently for sale.</p>
         </article>
 
-        <article class="price-card reveal">
+        <article class="price-card reveal" id="hive-cell-payments">
           <svg class="tier-sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="disc" cx="16" cy="16" r="15"/><g stroke="url(#charmG)" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="16" cy="16" r="8.5"/><path d="M19 12.5 h-4.5 a2 2 0 0 0 0 4 h3 a2 2 0 0 1 0 4 H13"/><line x1="16" y1="10.5" x2="16" y2="12.5"/><line x1="16" y1="20.5" x2="16" y2="22.5"/></g></svg>
           <h3>Getting paid</h3>
           <p style="color:var(--muted)">Deposits up front, invoices that chase themselves, cards taken on site. Set up once, yours forever.</p>
@@ -247,7 +239,7 @@
             <li>Deposit collection for bigger jobs, and tap-to-pay on your phone if you want it</li>
             <li>A walkthrough so you can run all of it without me</li>
           </ul>
-          <p class="terms">For trades tired of chasing checks. $200 one-time — no monthly fee to me.</p>
+          <p class="terms"><strong>One-time planning estimate:</strong> $200 once + $0/mo recurring. This cell does not change a monthly estimate. Pre-launch only; not currently for sale.</p>
         </article>
 
       </div>
@@ -265,9 +257,9 @@
       <!-- the growth room -->
       <div class="callout reveal" style="margin-top:1.5rem">
         <p class="eyebrow" style="margin:0">Something else eating your evenings?</p>
-        <p style="margin:0">Quoting, scheduling crews, intake forms, waivers, gift cards, waitlists — if a chore has a shape, there&rsquo;s software for it. Tell me what it is and I&rsquo;ll quote it honestly.</p>
+        <p style="margin:0">Quoting, scheduling crews, intake forms, waivers, gift cards, waitlists — tell us which chores matter most and what safeguards you would expect. This is product research, not a quote, order, or setup request.</p>
         <div class="actions">
-          <a class="btn primary" href="/start/">Name the chore</a>
+          <a class="btn primary" href="/start/?after=hive">Register non-binding interest</a>
         </div>
       </div>
     </div>
@@ -281,7 +273,7 @@
       <div class="grid cols-3" style="margin-top:2.5rem">
         <div class="card reveal">
           <h3>Never a fake human</h3>
-          <p>Nothing I set up pretends to be a person. A helper answers instantly and says what it is — then a real person, you or me, follows through. That&rsquo;s the whole trick, and it&rsquo;s stronger than pretending.</p>
+          <p>Any future helper must identify itself clearly, stay within approved facts, and hand off to a real person. Those requirements must be tested before anything becomes customer-facing.</p>
         </div>
         <div class="card reveal">
           <h3>Customer-controlled by design</h3>
@@ -300,6 +292,11 @@
     <div class="wrap">
       <h2 class="reveal">Help shape one workflow — or the <em class="accent">whole Hive</em>.</h2>
       <p class="lede reveal" style="margin-top:1rem">Tell us which workflow would matter most and what safeguards you would expect. This is product research, not onboarding. Website inquiries remain a separate path.</p>
+      <div class="website-live-gate reveal">
+        <span aria-hidden="true">&#10003;</span>
+        <div><b>Need something available now?</b><p>Custom website commissions are the live offer. They are priced separately and are not a Hive subscription.</p></div>
+        <a class="btn ghost" href="/pricing.html#website-commissions">Compare website tiers</a>
+      </div>
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn primary" href="/start/">Name the chore</a>
         <a class="btn ghost" href="/pricing.html">See website pricing</a>
@@ -340,7 +337,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

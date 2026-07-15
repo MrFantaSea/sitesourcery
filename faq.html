@@ -42,7 +42,10 @@
 <meta name="twitter:title" content="FAQ — Site Sourcery">
 <meta name="twitter:description" content="The real questions, answered plainly. No fine print doing the dodging.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-utility.css">
 <script src="sourcery.js" defer></script>
+<script src="atelier-utility.js" defer></script>
 <style>
 /* ── faq page-scoped: a warm spine lights the open answer — the "one window
    still glowing," at accordion scale. System CSS untouched. ─────────────── */
@@ -57,21 +60,21 @@
 <!-- Honest structured data: mirrors the visible Q&A exactly. No fabricated ratings. -->
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-{"@type":"Question","name":"How do I change my site?","acceptedAnswer":{"@type":"Answer","text":"On a care plan, you text me in plain English — \"Add Saturday hours,\" \"Make the lemon tarts the big photo,\" \"Raise the haircut price to $30.\" I make the change and reply when it's live, usually the same day. There's no dashboard, no app, and nothing to learn. Text-to-change comes with a care plan, from $29/mo; the buy-once build is yours either way."}},
+{"@type":"Question","name":"How do I change my site?","acceptedAnswer":{"@type":"Answer","text":"Care Lite ($29/month) includes up to two requested content changes per month by plain-English text. Care ($59/month) includes agreed plan-scope changes usually handled the same business day plus a monthly performance note. There's no dashboard, app, or software to learn. The paid website build remains yours whether or not you keep Care."}},
 {"@type":"Question","name":"What is The Responder?","acceptedAnswer":{"@type":"Answer","text":"The Responder is a proposed missed-call text-back workflow in the Hive automation plan. It is in pre-launch validation, not a public production service. Carrier registration, provider configuration, consent and opt-out handling, monitoring, and end-to-end tests must be completed before any launch. The displayed $99/month price is a planning estimate, not a current offer."}},
 {"@type":"Question","name":"Is it a bot pretending to be a human?","acceptedAnswer":{"@type":"Answer","text":"The planned workflow must identify automated messages appropriately and must not impersonate a person. Any production configuration would require approved message content, consent and opt-out handling, a human follow-up path, and documented provider behavior."}},
 {"@type":"Question","name":"Can I try it before I buy?","acceptedAnswer":{"@type":"Answer","text":"Not yet. There is no public Responder demo or production onboarding. The published phone number is a normal contact line. A trial will be advertised only after carrier, consent, delivery, failure, monitoring, and security checks pass."}},
-{"@type":"Question","name":"Do I own my site?","acceptedAnswer":{"@type":"Answer","text":"Yes. The design, the words, the photos, and your domain are yours. If you ever leave, I hand everything over and help you move it — no exit fee, no files held hostage. I'd rather you stay because it's working than because you're stuck."}},
-{"@type":"Question","name":"Can I cancel?","acceptedAnswer":{"@type":"Answer","text":"Website care plans are described as month-to-month and cancellable by text or email. The Hive is not currently operating, so there is no Hive subscription to cancel. Any future production agreement must state cancellation, data export, retention, provider, and shutdown terms before activation."}},
+{"@type":"Question","name":"Do I own my site?","acceptedAnswer":{"@type":"Answer","text":"Yes — once the build is paid in full, the completed design, code, agreed content, photos, and domain control are yours. If you ever leave, I hand the paid work over and help you move it — no exit fee and no files held hostage."}},
+{"@type":"Question","name":"Can I cancel?","acceptedAnswer":{"@type":"Answer","text":"Website Care is month-to-month and cancellable by text or email. At the end of the paid month, hosting, backups, updates, changes, and other plan features stop. You keep the paid website files and domain control, and the studio will help move the site to hosting you control. The Hive is not currently operating, so there is no Hive subscription to cancel."}},
 {"@type":"Question","name":"What does it cost?","acceptedAnswer":{"@type":"Answer","text":"Custom websites are listed as buy-once tiers from $200 to $3,000, with optional monthly care from $15 to $159. Hive figures are planning estimates for a service that is not yet offered: the current concept starts with a proposed $99/month Responder and a proposed $219/month five-app bundle. An inquiry is non-binding and is not an order or quote."}},
 {"@type":"Question","name":"Can you guarantee I show up first on Google?","acceptedAnswer":{"@type":"Answer","text":"No. Nobody controls Google, and an honest studio does not promise a ranking. I build fast pages with clean structure and clear service, location, hours, and contact information so people and search systems can understand what you do. Placement and results vary."}},
-{"@type":"Question","name":"How do I know it's working?","acceptedAnswer":{"@type":"Answer","text":"On the Care plan ($59/mo) and up, once a month you get a plain-English note — a sample month reads \"11 calls, 5 jobs booked, 3 new reviews\" — no charts to decode, no login to check. If a number dips, the note says so, and what I'm doing about it. Real numbers only; the sample above is just an illustration, results vary, and I never guarantee them."}},
-{"@type":"Question","name":"Who am I actually working with?","acceptedAnswer":{"@type":"Answer","text":"Site Sourcery, directly. A real person on a real number who knows your site and picks up when you reach out — the same point of contact every time. Everything shown on this site is work I actually built."}},
+{"@type":"Question","name":"How do I know it's working?","acceptedAnswer":{"@type":"Answer","text":"On the Care plan ($59/mo) and up, once a month you get a plain-English note — a sample month reads \"11 call-button taps, 5 customer-confirmed jobs booked, 3 new reviews\" — no charts to decode and no login to check. A tap does not prove a completed call. Real numbers only; the sample is an illustration, results vary, and I never guarantee them."}},
+{"@type":"Question","name":"Who am I actually working with?","acceptedAnswer":{"@type":"Answer","text":"Site Sourcery, directly. A real person on a real number who knows your site, answers when available, and returns messages — the same point of contact every time. Everything shown on this site is work I actually built."}},
 {"@type":"Question","name":"I already have a website or domain. Can you use it?","acceptedAnswer":{"@type":"Answer","text":"Yes. I rebuild it properly and bring your domain across — I handle the move end to end. You keep your address; it just finally points at a site that earns it."}}
 ]}
 </script>
 </head>
-<body>
+<body class="atelier-inner page-faq">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
@@ -251,6 +254,27 @@
     </div>
   </section>
 
+  <section class="section archive-desk js-only" aria-labelledby="archive-desk-title">
+    <div class="wrap">
+      <div class="instrument archive-console reveal">
+        <div class="instrument-bar"><span id="archive-desk-title">Archive query desk</span><span class="instrument-lights" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="archive-console-grid">
+          <div class="archive-query">
+            <label for="faq-query">Search the plain-answer archive</label>
+            <div class="archive-query-line"><span aria-hidden="true">&gt;</span><input id="faq-query" type="search" autocomplete="off" placeholder="Try “own”, “cost”, “Google”, or “Responder”" aria-describedby="faq-query-result"></div>
+            <output id="faq-query-result" for="faq-query" aria-live="polite">11 answers indexed</output>
+          </div>
+          <nav class="archive-index" aria-label="FAQ sections">
+            <a href="#h-daytoday">Day to day</a>
+            <a href="#h-responder">Responder</a>
+            <a href="#h-money">Ownership</a>
+            <a href="#h-found">Being found</a>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ══ DAY TO DAY ══════════════════════════════════════════════════════════ -->
   <section class="section" aria-labelledby="h-daytoday">
     <div class="wrap">
@@ -260,13 +284,13 @@
 
         <details class="faq-item reveal" id="q-changes">
           <summary>How do I change my site?</summary>
-          <p>On a care plan, you <strong>text me in plain English</strong> — &ldquo;Add Saturday hours,&rdquo; &ldquo;Make the lemon tarts the big photo,&rdquo; &ldquo;Raise the haircut price to $30.&rdquo; I make the change and reply when it&rsquo;s live, usually the same day.</p>
-          <p>There&rsquo;s no dashboard, no app, and nothing to learn. Text-to-change comes with a care plan (from $29/mo); the buy-once build is yours either way.</p>
+          <p>With <strong>Care Lite ($29/mo)</strong>, text up to two requested content changes per month in plain English. <strong>Care ($59/mo)</strong> includes agreed plan-scope changes usually handled the same business day, plus a monthly performance note.</p>
+          <p>There&rsquo;s no dashboard, no app, and nothing to learn. The paid website build remains yours whether or not you keep Care.</p>
         </details>
 
         <details class="faq-item reveal" id="q-who">
           <summary>Who am I actually working with?</summary>
-          <p><strong>Site Sourcery, directly.</strong> A real person on a real number who knows your site and picks up when you reach out — the same point of contact every time.</p>
+          <p><strong>Site Sourcery, directly.</strong> A real person on a real number who knows your site, answers when available, and returns messages &mdash; the same point of contact every time.</p>
           <p>Everything shown on this site is work I actually built.</p>
         </details>
 
@@ -317,18 +341,19 @@
 
         <details class="faq-item reveal" id="q-own">
           <summary>Do I own my site?</summary>
-          <p><strong>Yes.</strong> The design, the words, the photos, and your domain are yours. If you ever leave, I hand everything over and help you move it — no exit fee, no files held hostage.</p>
+          <p><strong>Yes &mdash; once the build is paid in full.</strong> The completed design, code, agreed content, photos, and domain control are yours. If you ever leave, I hand the paid work over and help you move it &mdash; no exit fee and no files held hostage.</p>
           <p>I&rsquo;d rather you stay because it&rsquo;s working than because you&rsquo;re stuck.</p>
         </details>
 
         <details class="faq-item reveal" id="q-cancel">
           <summary>Can I cancel?</summary>
-          <p>Website Care is described as month-to-month and cancellable by text or email. The Hive is not currently operating, so there is no Responder subscription to cancel. Any future Hive agreement must state cancellation, data export, retention, provider, and shutdown terms before activation. The website and domain remain yours after final payment.</p>
+          <p>Website Care is month-to-month and cancellable by text or email. At the end of the paid month, hosting, backups, updates, changes, and other plan features stop. You keep the paid website files and domain control, and we will help move the site to hosting you control.</p>
+          <p>The Hive is not currently operating, so there is no Responder subscription to cancel. Any future Hive agreement must state cancellation, data export, retention, provider, and shutdown terms before activation.</p>
         </details>
 
-        <details class="faq-item reveal" id="q-cost">
+        <details class="faq-item reveal" id="q-cost" data-keywords="price prices pricing payment quote budget">
           <summary>What does it cost?</summary>
-          <p><strong>Custom websites are buy-once</strong>: eight tiers from <strong class="num">$200</strong> (Card) up to <strong class="num">$3,000</strong> (Flagship), and you own it outright — no subscription to rent your own site. Optional monthly <strong>care</strong> runs from <strong class="num">$15</strong>/mo up to <strong class="num">$159</strong>/mo and adds hosting, updates, text-to-change, and the monthly note.</p>
+          <p><strong>Custom websites are buy-once</strong>: eight tiers from <strong class="num">$200</strong> (Card) up to <strong class="num">$3,000</strong> (Flagship), and you own the completed build on final payment &mdash; no subscription to rent your own site. Optional <strong>Care</strong> runs from <strong class="num">$15</strong>/mo to <strong class="num">$159</strong>/mo: managed hosting starts at $15, text-to-change at $29, and the monthly performance note at $59.</p>
           <p><strong>The Responder</strong> and other <a href="/automation.html">Hive</a> workflows are not currently for sale. Their <strong class="num">$99</strong>/mo starting point and <strong class="num">$219</strong>/mo bundle are planning estimates for feedback. An inquiry is non-binding; the <a href="/pricing.html">pricing page</a> keeps those estimates separate from current website pricing.</p>
         </details>
 
@@ -352,8 +377,8 @@
 
         <details class="faq-item reveal" id="q-meter">
           <summary>How do I know it&rsquo;s working?</summary>
-          <p>On the Care plan ($59/mo) and up, once a month you get a plain-English note — a sample month reads <strong>&ldquo;11 calls, 5 jobs booked, 3 new reviews&rdquo;</strong> — no charts to decode, no login to check. If a number dips, the note says so, and what I&rsquo;m doing about it.</p>
-          <p>Real numbers only. The sample above is just an illustration — results vary, and I never guarantee them. <a href="/how-it-works.html#the-meter">See how the note works</a>.</p>
+          <p>On the Care plan ($59/mo) and up, once a month you get a plain-English note &mdash; a sample month reads <strong>&ldquo;11 call-button taps, 5 customer-confirmed jobs booked, 3 new reviews&rdquo;</strong> &mdash; no charts to decode and no login to check.</p>
+          <p>A tap does not prove a completed call. Real numbers only. The sample above is just an illustration &mdash; results vary, and I never guarantee them. <a href="/how-it-works.html#the-meter">See how the note works</a>.</p>
         </details>
 
       </div>
@@ -366,7 +391,7 @@
       <div class="card reveal" style="max-width:46rem">
         <p class="eyebrow">Still curious</p>
         <h3 id="h-ask">Ask a person</h3>
-        <p>Anything at all — whether your trade&rsquo;s a fit, what a move would take, what a fair price looks like, or whether you want the calls answered too. A plain answer, no sales script: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> or <a href="tel:+13217882555">(321)&nbsp;788-2555</a>.</p>
+        <p>Anything at all &mdash; whether your trade&rsquo;s a fit, what a move would take, what a fair website price looks like, or which proposed Hive workflow matters to you. Hive questions are research only, not a quote or setup request. A plain answer, no sales script: <a href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a> or <a href="tel:+13217882555">(321)&nbsp;788-2555</a>.</p>
         <div class="actions" style="margin-top:1.25rem">
           <a class="btn primary" href="/start/">Start your site</a>
           <a class="btn ghost" href="/pricing.html">See pricing</a>
@@ -396,7 +421,7 @@
         <a href="/automation.html">The Hive</a>
         <a href="/how-it-works.html">How it works</a>
         <a href="/about.html">About</a>
-        <a href="/faq.html">FAQ</a>
+        <a href="/faq.html" aria-current="page">FAQ</a>
         <a href="/terms.html">Terms</a>
         <a href="/privacy.html">Privacy</a>
         <a href="/contact.html">Contact</a>
@@ -408,7 +433,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

@@ -1,15 +1,4 @@
 <!DOCTYPE html>
-<!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — how-it-works.html · "THE LANTERN WALK"
-     Two offerings, two flows. The website: you talk, I build, you text a
-     change, I run it — a lit shop at the end of the walk. The Responder: you
-     miss a call, your phone texts the customer back, the job waits for you.
-     Self-contained: loads ONLY same-origin style.css + sourcery.js. Every
-     graphic is inline SVG. No CDNs, no remote fonts, no trackers, no fetch.
-     The only http(s) URLs below are hyperlinks/metadata, never loads.
-     The signature nocturne is driven by a tiny page-scoped inline script
-     (no remote load); it degrades to a fully-lit, resolved scene without JS.
-     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -19,659 +8,85 @@
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/how-it-works.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="How it works — Site Sourcery">
-<meta property="og:description" content="How the website process works, plus the requirements for the proposed Responder workflow. The automation service is not live yet.">
-<meta property="og:url" content="https://sitesourcery.com/how-it-works.html">
-<meta property="og:image" content="https://sitesourcery.com/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:image" content="https://sitesourcery.com/og.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="How it works — Site Sourcery">
-<meta name="twitter:description" content="The website delivery process and the pre-launch status of the proposed Responder workflow.">
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"How it works — Site Sourcery","url":"https://sitesourcery.com/how-it-works.html","description":"How a Site Sourcery website build runs, plus the requirements and pre-launch status of the proposed Responder missed-call workflow.","publisher":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","telephone":"+1-321-788-2555","email":"hello@sitesourcery.com"}}
-</script>
+<meta property="og:type" content="article"><meta property="og:site_name" content="Site Sourcery"><meta property="og:title" content="How it works — Site Sourcery"><meta property="og:description" content="How the website process works, plus the requirements for the proposed Responder workflow. The automation service is not live yet."><meta property="og:url" content="https://sitesourcery.com/how-it-works.html"><meta property="og:image" content="https://sitesourcery.com/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:image" content="https://sitesourcery.com/og.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="How it works — Site Sourcery"><meta name="twitter:description" content="The website delivery process and the pre-launch status of the proposed Responder workflow.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"How it works — Site Sourcery","url":"https://sitesourcery.com/how-it-works.html","description":"How a Site Sourcery website build runs, plus the requirements and pre-launch status of the proposed Responder missed-call workflow.","publisher":{"@type":"ProfessionalService","name":"Site Sourcery","url":"https://sitesourcery.com/","telephone":"+1-321-788-2555","email":"hello@sitesourcery.com"}}</script>
 <script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
-<style>
-/* ── page-scoped: THE LANTERN WALK ────────────────────────────────────────
-   Its own night-street stage so the shared wireStorefront() (which claims the
-   first .spellstage) never fights the custom walk below. Reuses the shared
-   nocturne motifs (.spell-spark, .st-twinkle, .sigil, warm tokens). The five
-   glow layers each read a --n1…--n5 (0→1). Defaults are all-lit so a no-JS or
-   reduced-motion visitor simply sees the finished, fully-lit street. */
-.walkstage{--n1:1;--n2:1;--n3:1;--n4:1;--n5:1;
-  position:relative;isolation:isolate;border-radius:var(--r);overflow:hidden;
-  border:1px solid var(--hairline);box-shadow:var(--lift);
-  background:#07050F;             /* stays night in both themes — the brand */
-  cursor:ew-resize}               /* the scrub affordance: drag to walk */
-.walkstage::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;
-  border-radius:inherit;
-  box-shadow:inset 0 0 0 1px rgba(124,92,255,.14),
-             inset 0 -70px 100px -46px rgba(0,0,0,.72)}
-.walkstage svg{display:block;width:100%;height:auto}
-.lw-lit{opacity:var(--n1)}   /* per-lantern layers set their own var inline */
-@media (prefers-reduced-motion:reduce){
-  .walkstage{--n1:1!important;--n2:1!important;--n3:1!important;
-             --n4:1!important;--n5:1!important;cursor:default}
-}
-/* the two-flow route header — a numbered lane label */
-.flow-tag{display:inline-flex;align-items:center;gap:.6rem;
-  font-family:var(--font-display);font-weight:700;font-size:.9rem;letter-spacing:.02em;
-  color:var(--text)}
-.flow-tag .n{display:inline-grid;place-items:center;width:1.9rem;height:1.9rem;
-  border-radius:999px;background:var(--charm);color:var(--on-charm);
-  font-family:var(--font-num);font-weight:650;font-size:.95rem}
-</style>
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-story.css">
 </head>
-<body>
+<body class="atelier-inner page-process atelier-story">
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
-<nav class="nav" aria-label="Main">
-  <div class="wrap nav-inner">
-    <a class="brand" href="/">
-      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
-      <span class="brand-name">Site&nbsp;Sourcery</span>
-    </a>
-    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
-      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-    <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/">Home</a>
-      <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/automation.html">The Hive</a>
-      <a class="nav-link" href="/terms.html">Terms</a>
-      <a class="nav-link" href="/contact.html">Contact</a>
-      <a class="btn primary nav-cta" href="/start/">Start your site</a>
-    </div>
-  </div>
-</nav>
+<nav class="nav" aria-label="Main"><div class="wrap nav-inner"><a class="brand" href="/"><svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg><span class="brand-name">Site&nbsp;Sourcery</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><div class="nav-menu" id="nav-menu"><a class="nav-link" href="/">Home</a><a class="nav-link" href="/pricing.html">Pricing</a><a class="nav-link" href="/automation.html">The Hive</a><a class="nav-link" href="/terms.html">Terms</a><a class="nav-link" href="/contact.html">Contact</a><a class="btn primary nav-cta" href="/start/">Start your site</a></div></div></nav>
 
 <main id="main">
-
-  <!-- ══ HERO — the 5-second answer + the signature "Lantern Walk" ═════════ -->
-  <section class="hero">
-    <div class="wrap">
-      <p class="eyebrow reveal">How it works · both ways</p>
-      <h1 class="hero-mega reveal">You talk. I do <em class="accent">the rest</em>.</h1>
-      <p class="lede reveal">One website service, plus one clearly labeled pre-launch concept. We hand-build your website and can maintain it by request. <strong>The Responder</strong> section below explains a planned missed-call workflow and the gates it must pass before it can be offered. <strong>You own your site on final payment.</strong></p>
-      <div class="actions reveal">
-        <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
+  <section class="story-hero process-hero" aria-labelledby="process-title">
+    <div class="story-hero-glow" aria-hidden="true"></div>
+    <div class="story-shell story-hero-grid">
+      <div class="story-copy">
+        <p class="story-kicker reveal"><span>THE COMMISSION BOOK</span><i></i> WEBSITE WORK / OPEN</p>
+        <h1 id="process-title" class="reveal">A commission,<br> not a <em>checkout.</em></h1>
+        <p class="story-lede reveal">You tell me about the business. I discover what matters, design and build the site, launch it with your approval, then care for it if you choose. <strong>You own your site on final payment.</strong></p>
+        <div class="actions reveal"><a class="btn primary" href="/start/">Begin your commission</a><a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a></div>
+        <p class="story-boundary reveal"><b>AVAILABLE NOW</b> Custom website inquiries. <span><b>SEPARATE / PRE-LAUNCH</b> The Responder and other Hive workflows.</span></p>
       </div>
-
-      <!-- ── THE LANTERN WALK · signature interactive nocturne ────────────────
-           A dark Main Street with four lanterns and, at the end, a shop that
-           glows warm. Walk the path — drag across the scene (or just watch) —
-           and the lit trail follows you, each lantern (a step) catching light
-           in turn, until the shop at the end comes on. No pointer / reduced
-           motion / no JS → the whole street is simply lit. Pure inline SVG. -->
-      <div class="hero-stage reveal">
-        <figure class="walkstage"
-                role="img" aria-label="A dark Main Street path lined with four lanterns leading to a single warm-lit shop. Step one: tell me about your business. Step two: I build your custom site. Step three: you text a change. Step four: I run it — and the shop at the end of the path glows.">
-          <svg class="spellstreet" viewBox="0 0 1200 640" width="1200" height="640"
-               preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-            <defs>
-              <linearGradient id="lw-sky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0B0716"/><stop offset=".55" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
-              </linearGradient>
-              <radialGradient id="lw-moon" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="lw-lamp" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CDB8FF" stop-opacity=".72"/><stop offset="45%" stop-color="#8C74FF" stop-opacity=".3"/><stop offset="100%" stop-color="#8C74FF" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="lw-glass" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#F0E9FF"/><stop offset="55%" stop-color="#B7A0FF"/><stop offset="1" stop-color="#8C74FF"/>
-              </linearGradient>
-              <linearGradient id="lw-pane" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#FFDDA2"/><stop offset=".45" stop-color="#F6AE5C"/><stop offset="1" stop-color="#DE7A32"/>
-              </linearGradient>
-              <radialGradient id="lw-pool" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFB460" stop-opacity=".62"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".2"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="lw-trail" x1="150" y1="0" x2="990" y2="0" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stop-color="#7C5CFF"/><stop offset=".55" stop-color="#B48CFF"/><stop offset="1" stop-color="#FFC27A"/>
-              </linearGradient>
-              <radialGradient id="lw-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".45"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="lw-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
-              </radialGradient>
-            </defs>
-
-            <!-- sky + moon -->
-            <rect width="1200" height="640" fill="url(#lw-sky)"/>
-            <circle cx="196" cy="120" r="230" fill="url(#lw-moon)"/>
-            <circle cx="196" cy="120" r="40" fill="#E9E3FF" opacity=".92"/>
-            <circle cx="182" cy="110" r="6" fill="#CFC6F0" opacity=".5"/><circle cx="212" cy="132" r="5" fill="#CFC6F0" opacity=".45"/><circle cx="204" cy="106" r="3.5" fill="#CFC6F0" opacity=".4"/>
-
-            <!-- stars -->
-            <g fill="#D6CDF7">
-              <circle class="st-twinkle" cx="360" cy="66" r="1.5"/><circle class="st-twinkle" cx="470" cy="120" r="1.1"/>
-              <circle class="st-twinkle" cx="600" cy="60" r="1.6"/><circle class="st-twinkle" cx="710" cy="128" r="1.2"/>
-              <circle class="st-twinkle" cx="820" cy="70" r="1.4"/><circle class="st-twinkle" cx="930" cy="120" r="1.1"/>
-              <circle class="st-twinkle" cx="1040" cy="70" r="1.5"/><circle class="st-twinkle" cx="1130" cy="130" r="1.2"/>
-              <circle class="st-twinkle" cx="540" cy="150" r="1.1"/><circle class="st-twinkle" cx="1000" cy="188" r="1.2"/>
-              <circle class="st-twinkle" cx="760" cy="176" r="1"/><circle class="st-twinkle" cx="880" cy="180" r="1.1"/>
-            </g>
-
-            <!-- far skyline -->
-            <path d="M0 300 V250 H90 V290 H180 V235 H280 V295 H380 V250 H500 V290 H600 V240 H720 V295 H840 V250 H960 V292 H1080 V255 H1200 V300 Z" fill="#0C0819"/>
-            <g fill="#211C3A">
-              <rect x="120" y="262" width="8" height="12"/><rect x="540" y="266" width="8" height="12"/><rect x="1020" y="272" width="8" height="12"/>
-            </g>
-
-            <!-- ground -->
-            <rect x="0" y="300" width="1200" height="340" fill="#08060F"/>
-            <rect x="0" y="404" width="1200" height="1.5" fill="#171130" opacity=".7"/>
-
-            <!-- ═ THE SHOP AT THE END OF THE PATH · the payoff (step four lit) ═ -->
-            <!-- warm light pooling on the pavement, keyed to the shop -->
-            <ellipse cx="972" cy="428" rx="168" ry="40" fill="url(#lw-pool)" style="opacity:var(--n5)"/>
-            <!-- facade -->
-            <rect x="852" y="236" width="232" height="168" fill="#160F26"/>
-            <path d="M848 236 H1088 L1076 214 H860 Z" fill="#1C1330"/>
-            <rect x="848" y="210" width="240" height="7" rx="3" fill="#241838"/>
-            <!-- awning -->
-            <rect x="872" y="300" width="196" height="16" rx="3" fill="#1B1228"/>
-            <rect x="872" y="300" width="196" height="7" rx="3" fill="#8A5726" style="opacity:calc(.18 + .82*var(--n5))"/>
-            <!-- display window -->
-            <rect x="888" y="322" width="150" height="82" rx="3" fill="#0B1320"/>
-            <rect x="888" y="322" width="150" height="82" rx="3" fill="url(#lw-pane)" style="opacity:var(--n5)"/>
-            <!-- interior silhouettes -->
-            <g fill="#2A1A0C" style="opacity:calc(.16 + .84*var(--n5))">
-              <rect x="896" y="380" width="134" height="24"/>
-              <rect x="906" y="340" width="70" height="5" rx="2"/><rect x="906" y="356" width="52" height="5" rx="2"/>
-              <circle cx="928" cy="374" r="8"/><rect x="922" y="374" width="12" height="8"/>
-              <rect x="998" y="366" width="22" height="16" rx="2"/>
-            </g>
-            <!-- pendant lamp -->
-            <line x1="963" y1="322" x2="963" y2="342" stroke="#22160A" stroke-width="1.6"/>
-            <circle cx="963" cy="350" r="14" fill="url(#lw-pool)" style="opacity:var(--n5)"/>
-            <circle cx="963" cy="349" r="4" fill="#FFE6BE" style="opacity:var(--n5)"/>
-            <!-- muntins + frame -->
-            <g stroke="#B87636" stroke-width="2" opacity=".7" style="opacity:calc(.16 + .6*var(--n5))">
-              <line x1="938" y1="322" x2="938" y2="404"/><line x1="988" y1="322" x2="988" y2="404"/>
-              <line x1="888" y1="356" x2="1038" y2="356"/>
-            </g>
-            <rect x="888" y="322" width="150" height="82" rx="3" fill="none" stroke="#150D06" stroke-width="5"/>
-            <!-- door -->
-            <rect x="1044" y="334" width="26" height="70" rx="2" fill="#0E0906"/>
-            <rect x="1048" y="340" width="18" height="30" rx="2" fill="url(#lw-pane)" style="opacity:var(--n5)"/>
-            <rect x="1044" y="334" width="26" height="70" rx="2" fill="none" stroke="#150D06" stroke-width="3"/>
-            <!-- hanging sign with the lit sigil -->
-            <line x1="852" y1="266" x2="892" y2="266" stroke="#2A2038" stroke-width="3" stroke-linecap="round"/>
-            <line x1="880" y1="266" x2="880" y2="280" stroke="#2A2038" stroke-width="2.5"/>
-            <rect x="856" y="280" width="48" height="34" rx="6" fill="#140E22" stroke="#2E2440" stroke-width="1.4"/>
-            <path d="M880 288 l2.8 8 8 2.8 -8 2.8 -2.8 8 -2.8 -8 -8 -2.8 8 -2.8 z" fill="url(#lw-core)" style="opacity:var(--n5)"/>
-
-            <!-- ═ THE PATH · a dark bed with a lit trail that follows the walk ═
-                 .lw-road are the two static bed layers; #lw-walk is the geometry
-                 the script samples AND the glowing trail (its dash reveals up to
-                 the spark). Without JS the trail is drawn whole — a lit street. -->
-            <path class="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
-                  fill="none" stroke="#0F0A1C" stroke-width="30" stroke-linecap="round"/>
-            <path class="lw-road" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
-                  fill="none" stroke="#181233" stroke-width="16" stroke-linecap="round" opacity=".8"/>
-            <path id="lw-walk" d="M150 604 C 300 560 384 528 500 500 C 640 466 742 436 858 402 C 924 383 962 372 990 360"
-                  fill="none" stroke="url(#lw-trail)" stroke-width="5" stroke-linecap="round"/>
-
-            <!-- ═ THE FOUR LANTERNS · one per step, near→far ═══════════════════ -->
-            <!-- Lantern 1 — Tell me -->
-            <g>
-              <ellipse cx="300" cy="560" rx="72" ry="17" fill="url(#lw-lamp)" style="opacity:var(--n1)"/>
-              <rect x="296" y="490" width="8" height="72" rx="3" fill="#17122A"/>
-              <rect x="280" y="558" width="40" height="8" rx="3" fill="#17122A"/>
-              <circle cx="300" cy="472" r="46" fill="url(#lw-lamp)" style="opacity:var(--n1)"/>
-              <path d="M283 452 L317 452 L300 436 Z" fill="#120C22"/>
-              <line x1="300" y1="436" x2="300" y2="426" stroke="#2E2650" stroke-width="2.4"/>
-              <rect x="285" y="452" width="30" height="40" rx="3" fill="#0E0A1C" stroke="#2E2650" stroke-width="1.6"/>
-              <rect x="288" y="455" width="24" height="34" rx="2" fill="url(#lw-glass)" style="opacity:var(--n1)"/>
-              <circle cx="300" cy="472" r="4" fill="#F3EEFF" style="opacity:var(--n1)"/>
-              <text x="300" y="416" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" fill="#3C3660">1</text>
-              <text x="300" y="416" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" fill="#CDB8FF" style="opacity:var(--n1)">1</text>
-            </g>
-            <!-- Lantern 2 — I build -->
-            <g>
-              <ellipse cx="500" cy="494" rx="60" ry="14" fill="url(#lw-lamp)" style="opacity:var(--n2)"/>
-              <rect x="497" y="431" width="7" height="64" rx="3" fill="#17122A"/>
-              <rect x="484" y="492" width="34" height="7" rx="3" fill="#17122A"/>
-              <circle cx="500" cy="414" r="40" fill="url(#lw-lamp)" style="opacity:var(--n2)"/>
-              <path d="M486 397 L514 397 L500 383 Z" fill="#120C22"/>
-              <line x1="500" y1="383" x2="500" y2="374" stroke="#2E2650" stroke-width="2.2"/>
-              <rect x="487" y="397" width="26" height="34" rx="3" fill="#0E0A1C" stroke="#2E2650" stroke-width="1.5"/>
-              <rect x="490" y="400" width="20" height="28" rx="2" fill="url(#lw-glass)" style="opacity:var(--n2)"/>
-              <circle cx="500" cy="414" r="3.5" fill="#F3EEFF" style="opacity:var(--n2)"/>
-              <text x="500" y="366" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="800" fill="#3C3660">2</text>
-              <text x="500" y="366" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="800" fill="#CDB8FF" style="opacity:var(--n2)">2</text>
-            </g>
-            <!-- Lantern 3 — You text -->
-            <g>
-              <ellipse cx="690" cy="442" rx="52" ry="12" fill="url(#lw-lamp)" style="opacity:var(--n3)"/>
-              <rect x="687" y="387" width="6" height="56" rx="3" fill="#17122A"/>
-              <rect x="676" y="440" width="28" height="6" rx="3" fill="#17122A"/>
-              <circle cx="690" cy="372" r="34" fill="url(#lw-lamp)" style="opacity:var(--n3)"/>
-              <path d="M678 360 L702 360 L690 348 Z" fill="#120C22"/>
-              <line x1="690" y1="348" x2="690" y2="340" stroke="#2E2650" stroke-width="2"/>
-              <rect x="679" y="360" width="22" height="30" rx="2.5" fill="#0E0A1C" stroke="#2E2650" stroke-width="1.4"/>
-              <rect x="682" y="363" width="16" height="24" rx="2" fill="url(#lw-glass)" style="opacity:var(--n3)"/>
-              <circle cx="690" cy="372" r="3" fill="#F3EEFF" style="opacity:var(--n3)"/>
-              <text x="690" y="332" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="800" fill="#3C3660">3</text>
-              <text x="690" y="332" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="800" fill="#CDB8FF" style="opacity:var(--n3)">3</text>
-            </g>
-            <!-- Lantern 4 — I run it -->
-            <g>
-              <ellipse cx="858" cy="402" rx="46" ry="10" fill="url(#lw-lamp)" style="opacity:var(--n4)"/>
-              <rect x="855" y="353" width="6" height="50" rx="3" fill="#17122A"/>
-              <rect x="846" y="400" width="24" height="6" rx="3" fill="#17122A"/>
-              <circle cx="858" cy="340" r="30" fill="url(#lw-lamp)" style="opacity:var(--n4)"/>
-              <path d="M847 330 L869 330 L858 319 Z" fill="#120C22"/>
-              <line x1="858" y1="319" x2="858" y2="312" stroke="#2E2650" stroke-width="1.8"/>
-              <rect x="848" y="330" width="20" height="26" rx="2.5" fill="#0E0A1C" stroke="#2E2650" stroke-width="1.3"/>
-              <rect x="851" y="333" width="14" height="20" rx="2" fill="url(#lw-glass)" style="opacity:var(--n4)"/>
-              <circle cx="858" cy="340" r="2.6" fill="#F3EEFF" style="opacity:var(--n4)"/>
-              <text x="858" y="304" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="800" fill="#3C3660">4</text>
-              <text x="858" y="304" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="800" fill="#CDB8FF" style="opacity:var(--n4)">4</text>
-            </g>
-
-            <!-- the roaming sigil-spark — the walker (JS rides it along the path;
-                 parked at the lit shop without JS) -->
-            <g class="spell-spark" transform="translate(990,360)">
-              <circle class="spark-glow" r="30" fill="url(#lw-glow)"/>
-              <path d="M0 -13 L3.4 -3.4 L13 0 L3.4 3.4 L0 13 L-3.4 3.4 L-13 0 L-3.4 -3.4 Z" fill="url(#lw-core)"/>
-              <circle r="2.3" fill="#FFFFFF"/>
-            </g>
-          </svg>
-        </figure>
-        <div class="stage-caption">
-          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>The website walk — <em>four lanterns, four steps,</em> to a shop that glows.<span class="stage-hint"> Drag across to walk the path. <span class="badge">Interactive</span></span></span>
-        </div>
-      </div>
+      <figure class="ritual-map reveal" aria-labelledby="ritual-caption">
+        <svg viewBox="0 0 760 760" role="img" aria-label="An illuminated atelier commission diagram: discovery, design, build, launch, and care orbit a finished shop window.">
+          <defs><radialGradient id="rm-bg"><stop stop-color="#211334"/><stop offset="1" stop-color="#090611"/></radialGradient><linearGradient id="rm-line"><stop stop-color="#7c5cff"/><stop offset=".52" stop-color="#d094ff"/><stop offset="1" stop-color="#ffc074"/></linearGradient><radialGradient id="rm-gold"><stop stop-color="#fff4cc"/><stop offset=".35" stop-color="#ffc071"/><stop offset="1" stop-color="#8a4627"/></radialGradient><filter id="rm-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <rect width="760" height="760" fill="url(#rm-bg)"/><g class="ritual-stars"><circle cx="94" cy="110" r="2"/><circle cx="646" cy="145" r="1.5"/><circle cx="685" cy="585" r="2"/><circle cx="108" cy="626" r="1.5"/></g>
+          <g class="ritual-rings"><circle cx="380" cy="380" r="282"/><circle cx="380" cy="380" r="220"/><circle cx="380" cy="380" r="155"/><path d="M380 98V662M98 380H662M180 180L580 580M580 180L180 580"/></g>
+          <path class="ritual-route" d="M380 98C508 105 635 226 651 353S570 609 420 657S137 558 104 416S218 112 380 98" fill="none" stroke="url(#rm-line)" filter="url(#rm-glow)"/>
+          <g class="ritual-node node-1"><circle cx="380" cy="98" r="28"/><text x="380" y="104">1</text></g><g class="ritual-node node-2"><circle cx="651" cy="353" r="28"/><text x="651" y="359">2</text></g><g class="ritual-node node-3"><circle cx="540" cy="608" r="28"/><text x="540" y="614">3</text></g><g class="ritual-node node-4"><circle cx="218" cy="608" r="28"/><text x="218" y="614">4</text></g><g class="ritual-node node-5"><circle cx="104" cy="353" r="28"/><text x="104" y="359">5</text></g>
+          <g class="finished-shop"><path d="M278 342H482V510H278Z"/><path d="M260 342L299 294H462L500 342Z"/><rect x="306" y="384" width="98" height="90"/><rect x="416" y="392" width="38" height="118"/><path d="M318 352V373M342 352V373M366 352V373M390 352V373M414 352V373M438 352V373"/><circle cx="433" cy="450" r="4" fill="url(#rm-gold)"/></g>
+          <path class="ritual-sigil" d="M380 202l13 39 39 13-39 13-13 39-13-39-39-13 39-13z" fill="url(#rm-gold)" filter="url(#rm-glow)"/>
+        </svg>
+        <figcaption id="ritual-caption"><span>COMMISSION PATH / 05 MOVEMENTS</span><b>One accountable studio from first conversation through care.</b></figcaption>
+      </figure>
     </div>
   </section>
 
-  <!-- ═══ FLOW ONE · THE WEBSITE ═════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="flow-tag reveal" style="margin-bottom:.9rem"><span class="n">1</span> Getting found · your website</p>
-      <h2 class="reveal">Four steps. Yours is the <em class="accent">easy</em> one.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Buy the build once and it&rsquo;s yours. From your first hello to a site that&rsquo;s live, the work is mine.</p>
-      <div class="grid cols-2" style="margin-top:2rem">
-        <div class="card reveal">
-          <p class="eyebrow">Step 1 · You</p>
-          <h3>Tell me about your business</h3>
-          <p>A conversation, not a form. What you do, who calls you, what you want more of. Bring photos if you have them — <strong>I handle everything else.</strong></p>
-        </div>
-        <div class="card reveal">
-          <p class="eyebrow">Step 2 · Me</p>
-          <h3>I build your custom site</h3>
-          <p>Designed by hand for your trade — never a template — with <strong>your town, hours, services, and contact paths made clear</strong> for people and search systems. You look it over, I polish it, and nothing goes live until you approve it.</p>
-        </div>
-        <div class="card reveal">
-          <p class="eyebrow">Step 3 · A text</p>
-          <h3>Change anything by texting me</h3>
-          <p>New hours, new price, new photo — send it like you&rsquo;d text a friend and <strong>it&rsquo;s done, usually the same day.</strong> There&rsquo;s no app to learn. <em>(Text-to-change comes with a care plan, from $29/mo.)</em></p>
-        </div>
-        <div class="card reveal">
-          <p class="eyebrow">Step 4 · Every month</p>
-          <h3>I run it — and prove it</h3>
-          <p>Hosting, updates, security, changes: handled. On a care plan you also get <strong>a plain note each month on what your site actually did.</strong> No charts to decode.</p>
+  <section class="story-section commission-section" id="the-commission" aria-labelledby="commission-title">
+    <div class="story-shell">
+      <header class="story-intro reveal"><p class="story-index">I / THE WEBSITE COMMISSION</p><h2 id="commission-title">Five movements.<br><em>One clear path.</em></h2><p>Buy the build once and it&rsquo;s yours. From your first hello to a site that is live, the work is mine.</p></header>
+      <div class="commission-tabs js-story-only" role="tablist" aria-label="Website commission stages">
+        <button id="stage-tab-discovery" type="button" role="tab" aria-selected="true" aria-controls="stage-discovery" data-stage-tab="discovery"><span>01</span> DISCOVERY</button><button id="stage-tab-design" type="button" role="tab" aria-selected="false" aria-controls="stage-design" data-stage-tab="design" tabindex="-1"><span>02</span> DESIGN</button><button id="stage-tab-build" type="button" role="tab" aria-selected="false" aria-controls="stage-build" data-stage-tab="build" tabindex="-1"><span>03</span> BUILD</button><button id="stage-tab-launch" type="button" role="tab" aria-selected="false" aria-controls="stage-launch" data-stage-tab="launch" tabindex="-1"><span>04</span> LAUNCH</button><button id="stage-tab-care" type="button" role="tab" aria-selected="false" aria-controls="stage-care" data-stage-tab="care" tabindex="-1"><span>05</span> CARE</button>
+      </div>
+      <div class="commission-console reveal">
+        <div class="commission-visual" aria-hidden="true"><span class="orbit orbit-a"></span><span class="orbit orbit-b"></span><i class="console-sigil"></i><b class="console-word">DISCOVERY</b></div>
+        <div class="stage-panels">
+          <div id="stage-discovery" role="tabpanel" aria-labelledby="stage-tab-discovery" data-stage-panel="discovery"><p class="panel-code">MOVEMENT 01 / YOU SPEAK</p><h3>Tell me about your business.</h3><p>Start with the short form, a call, or a conversation: what you do, who calls you, and what you want more of. Bring photos if you have them — <strong>I handle everything else.</strong></p><dl><div><dt>YOU BRING</dt><dd>Your trade, town, priorities, and any photos you already have.</dd></div><div><dt>I LEAVE WITH</dt><dd>A clear brief in your language.</dd></div></dl></div>
+          <div id="stage-design" role="tabpanel" aria-labelledby="stage-tab-design" data-stage-panel="design"><p class="panel-code">MOVEMENT 02 / THE PLAN</p><h3>Your business becomes a place.</h3><p>I shape the information, visual direction, service paths, and contact moments around your trade—not around a generic template.</p><dl><div><dt>DESIGNED FOR</dt><dd>Your customers, your voice, your phone.</dd></div><div><dt>NOT USED</dt><dd>A template with your name dropped in.</dd></div></dl></div>
+          <div id="stage-build" role="tabpanel" aria-labelledby="stage-tab-build" data-stage-panel="build"><p class="panel-code">MOVEMENT 03 / I BUILD</p><h3>I build your custom site.</h3><p>Designed by hand for your trade, with <strong>your town, hours, services, and contact paths made clear</strong> for people and search systems.</p><dl><div><dt>FOUNDATION</dt><dd>Fast, accessible, phone-first, technically clear.</dd></div><div><dt>REVIEW</dt><dd>You look it over; I polish it.</dd></div></dl></div>
+          <div id="stage-launch" role="tabpanel" aria-labelledby="stage-tab-launch" data-stage-panel="launch"><p class="panel-code">MOVEMENT 04 / YOUR APPROVAL</p><h3>Nothing goes live until you approve it.</h3><p>We review the finished work together. Once approved and finally paid, the website build is yours: your domain, design, words, and photos.</p><dl><div><dt>OWNERSHIP</dt><dd>Yours on final payment.</dd></div><div><dt>LOCK-IN</dt><dd>None. Leave and take it all.</dd></div></dl></div>
+          <div id="stage-care" role="tabpanel" aria-labelledby="stage-tab-care" data-stage-panel="care"><p class="panel-code">MOVEMENT 05 / OPTIONAL CARE</p><h3>Text a change. I run it.</h3><p>Care Lite ($29/mo) includes up to two requested content changes per month. <strong>Care ($59/mo) and up</strong> includes agreed plan-scope changes usually handled the same business day, plus a monthly performance note.</p><dl><div><dt>HANDLED</dt><dd>Hosting, updates, security, and the changes included by tier.</dd></div><div><dt>CARE</dt><dd>Month-to-month; plan features end after the paid month and hosting handoff.</dd></div></dl></div>
         </div>
       </div>
-
-      <!-- the texting demo — honestly labeled -->
-      <div class="demo reveal" style="margin-top:3rem">
-        <div class="demo-phone" role="group" aria-label="A text conversation: you send a plain-English request, I reply when it's done">
-          <p class="bubble sent" data-type='["Add Saturday hours — 9 to 1.","Swap the big photo for the new van.","Put the fall special on the front page."]'>Add Saturday hours — 9 to 1.</p>
-          <p class="bubble">Done — it&rsquo;s live. Anything else?</p>
-        </div>
-        <div>
-          <span class="badge">A demonstration</span>
-          <h3 style="margin-top:.9rem">This is the whole interface.</h3>
-          <p style="color:var(--muted);margin-top:.5rem">No login. No control panel. No &ldquo;how do I&hellip;&rdquo; Your website changes because you said so, in your own words — and I confirm when it&rsquo;s done. That&rsquo;s the point.</p>
-        </div>
-      </div>
+      <div class="text-interface reveal"><div class="message-thread" role="group" aria-label="A text conversation: you send a plain-English request, I reply when it is done"><p class="message sent">Add Saturday hours — 9 to 1.</p><p class="message reply">Done — it&rsquo;s live. Anything else?</p></div><div><p class="story-index">THE ENTIRE INTERFACE</p><h3>No dashboard. No homework.</h3><p>Your website changes because you said so, in your own words—and I confirm when it is done. That is the point.</p></div></div>
     </div>
   </section>
 
-  <!-- ═══ FLOW TWO · THE RESPONDER ════════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="flow-tag reveal" style="margin-bottom:.9rem"><span class="n">2</span> Pre-launch concept · The Responder</p>
-      <h2 class="reveal">A missed-call workflow we still have to <em class="accent">prove</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">The Responder is the first planned workflow in the Hive automation menu. The target is an approved text after an unanswered call, but it is not a public production service. Carrier registration, provider setup, permission and opt-out handling, monitoring, and end-to-end failure tests remain launch gates.</p>
-
-      <!-- the missed-call scene — a sleeping shop, a phone awake, a text sent -->
-      <div class="hero-stage reveal" style="margin-top:2.25rem">
-        <figure class="spellstage" style="--lit:1"
-                role="img" aria-label="Night. A dark, sleeping shop. Beside it a phone glows awake: a missed call arrives and a warm text-back bubble is sent — a little spark hovering by the phone.">
-          <svg class="spellstreet" viewBox="0 0 1200 460" width="1200" height="460" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-            <defs>
-              <linearGradient id="fm-sky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0B0716"/><stop offset=".6" stop-color="#120A20"/><stop offset="1" stop-color="#1B1030"/>
-              </linearGradient>
-              <radialGradient id="fm-moon" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".5"/><stop offset="55%" stop-color="#8C78FF" stop-opacity=".12"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="fm-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="42%" stop-color="#7C5CFF" stop-opacity=".42"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="fm-phone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#211A3C"/><stop offset="1" stop-color="#160F28"/></linearGradient>
-              <linearGradient id="fm-bub" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient>
-              <radialGradient id="fm-core" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/></radialGradient>
-            </defs>
-
-            <!-- sky + moon -->
-            <rect width="1200" height="460" fill="url(#fm-sky)"/>
-            <circle cx="240" cy="96" r="200" fill="url(#fm-moon)"/>
-            <circle cx="240" cy="96" r="36" fill="#E9E3FF" opacity=".9"/>
-            <circle cx="227" cy="86" r="5" fill="#CFC6F0" opacity=".5"/><circle cx="256" cy="108" r="4" fill="#CFC6F0" opacity=".45"/>
-            <g fill="#D6CDF7">
-              <circle class="st-twinkle" cx="120" cy="60" r="1.4"/><circle class="st-twinkle" cx="430" cy="70" r="1.2"/>
-              <circle class="st-twinkle" cx="560" cy="52" r="1.5"/><circle class="st-twinkle" cx="150" cy="150" r="1.1"/>
-              <circle class="st-twinkle" cx="700" cy="70" r="1.2"/><circle class="st-twinkle" cx="1090" cy="70" r="1.3"/>
-            </g>
-
-            <!-- ground -->
-            <rect x="0" y="330" width="1200" height="130" fill="#08060F"/>
-            <rect x="0" y="330" width="1200" height="1.5" fill="#171130" opacity=".7"/>
-
-            <!-- ═ the sleeping shop (dark, "zzz") ═ -->
-            <g>
-              <rect x="120" y="150" width="300" height="180" fill="#100B20"/>
-              <path d="M112 150 H428 L414 122 H126 Z" fill="#160F26"/>
-              <rect x="150" y="196" width="96" height="110" rx="5" fill="#1A142E"/>
-              <rect x="264" y="196" width="120" height="80" rx="5" fill="#1A142E"/>
-              <rect x="300" y="284" width="48" height="46" fill="#150F28"/>
-              <!-- faint cold window mullions -->
-              <g stroke="#241C3C" stroke-width="2"><line x1="198" y1="196" x2="198" y2="306"/><line x1="150" y1="248" x2="246" y2="248"/></g>
-              <!-- the shop sleeps -->
-              <g fill="#3A3160" font-family="Georgia,serif" font-style="italic">
-                <text x="300" y="150" font-size="30">z</text><text x="330" y="126" font-size="22">z</text><text x="354" y="108" font-size="16">z</text>
-              </g>
-            </g>
-
-            <!-- ═ the phone, awake ═ -->
-            <circle cx="820" cy="212" r="180" fill="url(#fm-glow)"/>
-            <rect x="726" y="70" width="188" height="272" rx="30" fill="url(#fm-phone)" stroke="#3A3160" stroke-width="2"/>
-            <rect x="746" y="104" width="148" height="204" rx="12" fill="#0C0A1C"/>
-            <rect x="788" y="84" width="64" height="8" rx="4" fill="#3A3160"/>
-
-            <!-- missed call row -->
-            <g font-family="Arial,sans-serif">
-              <circle cx="778" cy="140" r="15" fill="#2A2350"/>
-              <path d="M771 135 a6 6 0 0 1 6 -1 l4 5 -4 4 a12 12 0 0 0 6 6 l4 -4 5 4 a6 6 0 0 1 -1 6 c-10 4 -22 -7 -19 -18 z" fill="#B8B2D4"/>
-              <rect x="804" y="132" width="80" height="7" rx="3.5" fill="#4A4270"/>
-              <rect x="804" y="146" width="52" height="6" rx="3" fill="#39335A"/>
-            </g>
-
-            <!-- the text-back bubble the Responder sent -->
-            <g>
-              <rect x="770" y="188" width="118" height="70" rx="16" fill="url(#fm-bub)"/>
-              <path d="M796 258 l-12 20 l28 -14 z" fill="url(#fm-bub)"/>
-              <rect x="784" y="208" width="90" height="7" rx="3.5" fill="#FFFFFF" opacity=".92"/>
-              <rect x="784" y="224" width="68" height="7" rx="3.5" fill="#FFFFFF" opacity=".7"/>
-              <rect x="784" y="240" width="44" height="7" rx="3.5" fill="#FFFFFF" opacity=".5"/>
-            </g>
-
-            <!-- the little spark hovering by the phone -->
-            <g class="spell-spark" transform="translate(690,150)">
-              <circle class="spark-glow" r="26" fill="url(#fm-glow)"/>
-              <path d="M0 -13 L3.4 -3.4 L13 0 L3.4 3.4 L0 13 L-3.4 3.4 L-13 0 L-3.4 -3.4 Z" fill="url(#fm-core)"/>
-              <circle r="2.3" fill="#FFFFFF"/>
-            </g>
-
-            <!-- caption sigil at the shop sign -->
-            <line x1="120" y1="176" x2="156" y2="176" stroke="#2A2038" stroke-width="3" stroke-linecap="round"/>
-            <rect x="126" y="176" width="44" height="30" rx="6" fill="#140E22" stroke="#2E2440" stroke-width="1.3"/>
-            <path d="M148 183 l2.4 6.8 6.8 2.4 -6.8 2.4 -2.4 6.8 -2.4 -6.8 -6.8 -2.4 6.8 -2.4 z" fill="#2E2650"/>
-          </svg>
-        </figure>
-        <div class="stage-caption">
-          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG2)"/></svg>
-          <span>Concept illustration — <em>not a live-service demonstration.</em> It shows the intended missed-call flow.</span>
-        </div>
-      </div>
-
-      <!-- the three beats of the Responder flow -->
-      <div class="grid cols-3" style="margin-top:2.5rem">
-        <div class="card reveal">
-          <p class="eyebrow">Beat 1 · The call</p>
-          <h3>You can&rsquo;t pick up</h3>
-          <p>You&rsquo;re on a ladder, under a sink, mid-cut. The call rings out and goes to voicemail — the moment most jobs quietly slip to the next name in the search.</p>
-        </div>
-        <div class="card reveal">
-          <p class="eyebrow">Beat 2 · The text-back</p>
-          <h3>An approved text is attempted</h3>
-          <p>The intended system would send an appropriately identified, pre-approved message only where provider, carrier, consent, and legal requirements permit it. Delivery timing cannot be guaranteed.</p>
-        </div>
-        <div class="card reveal">
-          <p class="eyebrow">Beat 3 · The job</p>
-          <h3>A human follows up</h3>
-          <p>The owner would still need to review the conversation and call back. No automation can promise that a caller waits or that a job is won.</p>
-        </div>
-      </div>
-
-      <!-- the other Hive apps add -->
-      <div class="does reveal" style="margin-top:1.75rem">
-        <div class="do">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h5l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v5a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg>
-          <h4>Miss a call, they get a text</h4>
-          <p>The core Responder concept. The $99/mo figure is a planning estimate; existing-number support and bundle discounts are unconfirmed until provider onboarding and launch.</p>
-        </div>
-        <div class="do">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.5-.8z"/></svg>
-          <h4>Reviews, replied</h4>
-          <p>The proposed Review workflow would prepare a draft for human review. It is another planned Hive component, not a service currently operating.</p>
-        </div>
-        <div class="do">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.5 21a2 2 0 0 1-3 0"/></svg>
-          <h4>Reminders that stick</h4>
-          <p>The proposed booking workflow would support reminders after configuration and consent review. It is not currently available.</p>
-        </div>
-      </div>
-
-      <!-- truthful pre-launch status; there is no live demo -->
-      <div class="callout reveal" style="margin-top:2.5rem">
-        <p class="eyebrow" style="margin:0">No public demo yet</p>
-        <p style="margin:0">The business phone number is a normal contact line, not an automated Responder trial. A demo will be labeled live only after the full carrier, consent, delivery, failure, monitoring, privacy, and security checklist passes.</p>
-        <div class="actions">
-          <a class="btn primary" href="/automation.html">See the launch requirements</a>
-          <a class="btn ghost" href="/start/?after=hive">Register interest</a>
-        </div>
-      </div>
-      <p class="terms reveal" style="max-width:44em">Pre-launch concept only. There is no current Responder subscription, live demo, or production support promise.</p>
+  <section class="story-section sealed-annex" aria-labelledby="annex-title">
+    <div class="story-shell annex-grid">
+      <div class="annex-copy reveal"><p class="story-index">II / SEALED ANNEX · PRE-LAUNCH</p><h2 id="annex-title">The Responder is a plan we still have to <em>prove.</em></h2><p>The Responder is the first planned workflow in the Hive automation menu. The target is an approved text after an unanswered call, but it is not a public production service.</p><div class="annex-status"><b>NOT LIVE</b><span>No current subscription</span><span>No production support promise</span><span>No public demo</span></div></div>
+      <figure class="responder-device reveal"><svg viewBox="0 0 640 720" role="img" aria-label="A sealed concept exhibit showing a missed call becoming a proposed text-back. It is not a live-service demonstration."><defs><radialGradient id="rd-halo"><stop stop-color="#b16cff" stop-opacity=".5"/><stop offset="1" stop-color="#b16cff" stop-opacity="0"/></radialGradient><linearGradient id="rd-phone"><stop stop-color="#25163a"/><stop offset="1" stop-color="#0d0816"/></linearGradient><linearGradient id="rd-bubble"><stop stop-color="#7c5cff"/><stop offset="1" stop-color="#ff5c8a"/></linearGradient></defs><rect width="640" height="720" fill="#08050e"/><circle cx="320" cy="350" r="290" fill="url(#rd-halo)"/><g class="sealed-rings"><circle cx="320" cy="350" r="250"/><circle cx="320" cy="350" r="215" stroke-dasharray="3 12"/></g><rect x="188" y="96" width="264" height="490" rx="42" fill="url(#rd-phone)" stroke="#5a3c78"/><rect x="213" y="150" width="214" height="368" rx="16" fill="#0b0712"/><rect x="276" y="116" width="88" height="9" rx="5" fill="#60427d"/><g class="missed-call"><circle cx="255" cy="215" r="20"/><path d="M245 207c9-4 24 11 20 20l-8 4c-10-3-17-10-20-20z"/><rect x="287" y="201" width="106" height="10" rx="5"/><rect x="287" y="224" width="70" height="8" rx="4"/></g><g class="reply-bubble"><rect x="245" y="294" width="157" height="110" rx="24" fill="url(#rd-bubble)"/><path d="M270 402l-20 34 48-26z" fill="#8a57ed"/><rect x="269" y="324" width="108" height="9" rx="5"/><rect x="269" y="347" width="84" height="9" rx="5"/><rect x="269" y="370" width="56" height="9" rx="5"/></g><path class="seal-mark" d="M320 600l12 36 36 12-36 12-12 36-12-36-36-12 36-12z"/></svg><figcaption><b>CONCEPT ILLUSTRATION</b><span>Not a live-service demonstration.</span></figcaption></figure>
+    </div>
+    <div class="story-shell">
+      <div class="gate-sequence reveal"><article><span>01</span><h3>You cannot pick up</h3><p>You are on a ladder, under a sink, mid-cut. The call rings out and goes to voicemail.</p></article><article><span>02</span><h3>An approved text is attempted</h3><p>The intended system would send an appropriately identified, pre-approved message only where provider, carrier, consent, and legal requirements permit it. Delivery timing cannot be guaranteed.</p></article><article><span>03</span><h3>A human follows up</h3><p>The owner would still need to review the conversation and call back. No automation can promise that a caller waits or that a job is won.</p></article></div>
+      <div class="launch-gates reveal"><p class="story-index">THE LOCKS ON THIS DOOR</p><ul><li>Carrier registration</li><li>Provider setup</li><li>Permission and opt-out handling</li><li>Monitoring</li><li>End-to-end failure tests</li><li>Privacy and security review</li></ul><p>The business phone number is a normal contact line, not an automated Responder trial. A demo will be labeled live only after the full checklist passes.</p><div class="actions"><a class="btn primary" href="/automation.html">See the launch requirements</a><a class="btn ghost" href="/start/?after=hive">Register interest</a></div><small>Pre-launch concept only. There is no current Responder subscription, live demo, or production support promise. The $99/mo figure is a planning estimate; existing-number support and bundle discounts are unconfirmed until provider onboarding and launch. The proposed Review workflow would prepare a draft for human review. The proposed booking workflow would support reminders after configuration and consent review. Neither is currently available.</small></div>
     </div>
   </section>
 
-  <!-- ═══ THE DEAL — daylight ════════════════════════════════════════════ -->
-  <section class="section daylight" id="the-operator">
-    <div class="wrap">
-      <p class="eyebrow reveal">The deal, either way</p>
-      <h2 class="reveal">Done for you. Owned <em class="accent">by you</em>.</h2>
-      <div class="grid cols-3" style="margin-top:2rem">
-        <div class="card reveal">
-          <h3>We do the work</h3>
-          <p>Website building, hosting, updates, and agreed changes have one studio contact. Missed-call text-back is excluded until the separate Hive service passes its launch gates.</p>
-        </div>
-        <div class="card reveal">
-          <h3>You own your site</h3>
-          <p>Your domain, your design, your words and photos. <strong>Leave anytime and take it all with you</strong> — I&rsquo;ll even help you move it.</p>
-        </div>
-        <div class="card reveal">
-          <h3>Cancel anytime</h3>
-          <p>The website build is yours after final payment. Care is described as month-to-month. The Hive is pre-launch, so there are no active Hive subscriptions; future terms must be reviewed before any activation.</p>
-        </div>
-      </div>
-    </div>
-  </section>
+  <section class="story-section ownership-section" id="the-operator" aria-labelledby="ownership-title"><div class="story-shell"><header class="story-intro reveal"><p class="story-index">III / TERMS OF THE CRAFT</p><h2 id="ownership-title">Done for you.<br>Owned <em>by you.</em></h2></header><div class="covenant reveal"><article><span>THE WORK</span><h3>One studio contact.</h3><p>Website building, hosting, updates, and agreed changes have one studio contact. Missed-call text-back is excluded until the separate Hive service passes its launch gates.</p></article><article><span>THE OWNERSHIP</span><h3>Take the paid build with you.</h3><p>On final payment, the completed domain, design, agreed words, photos, and code are yours. <strong>Leave anytime and take the paid build with you</strong>—I will even help you move it.</p></article><article><span>THE CARE</span><h3>Month-to-month.</h3><p>The website build is yours after final payment. Care is described as month-to-month. The Hive is pre-launch, so there are no active Hive subscriptions; future terms must be reviewed before any activation.</p></article></div></div></section>
 
-  <!-- ═══ THE MONTHLY NOTE ═══════════════════════════════════════════════ -->
-  <section class="section" id="the-meter">
-    <div class="wrap">
-      <p class="eyebrow reveal">The Meter · the monthly note</p>
-      <h2 class="reveal">Proof, once a <em class="accent">month</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">On the Care plan ($59/mo) and up, I send one short note a month with your real numbers — so you never wonder what you&rsquo;re paying for. Nothing to log into; it comes to you.</p>
-      <div class="meter reveal" style="margin-top:2rem;max-width:40rem;--mint:var(--text)">
-        <header><span>A sample month, in one note</span> <span class="badge">Sample — not real numbers</span></header>
-        <div class="cells">
-          <div class="stat"><span class="num">11</span><span class="stat-label">calls from the site</span></div>
-          <div class="stat"><span class="num">5</span><span class="stat-label">jobs booked</span></div>
-          <div class="stat"><span class="num">3</span><span class="stat-label">new reviews</span></div>
-        </div>
-        <p class="terms">And beside the numbers, a few honest lines: what I changed for you that month, what went quiet and why, what I&rsquo;m watching. A slow month shows up too — with what I&rsquo;m doing about it.</p>
-      </div>
-      <div class="grid cols-3" style="margin-top:1.5rem">
-        <div class="card reveal"><h3>Calls</h3><p>Taps on your call button. <strong>Counted, not guessed.</strong></p></div>
-        <div class="card reveal"><h3>Booked</h3><p>You tell me which calls became work. <strong>I never assume</strong> — or round up.</p></div>
-        <div class="card reveal"><h3>Reviews</h3><p>Real ones from real customers. <strong>I never write them.</strong></p></div>
-      </div>
-      <p class="terms reveal" style="margin-top:1.25rem;max-width:42em">A sample, not a promise — results vary by trade and town, and I never guarantee anyone&rsquo;s numbers. No puffed-up &ldquo;views,&rdquo; no mystery scores: every figure is a real thing that happened.</p>
-    </div>
-  </section>
+  <section class="story-section meter-chamber" id="the-meter" aria-labelledby="meter-title"><div class="story-shell meter-grid"><header class="story-intro reveal"><p class="story-index">IV / THE MONTHLY NOTE</p><h2 id="meter-title">Proof, once a <em>month.</em></h2><p>On the Care plan ($59/mo) and up, I send one short note a month with your real numbers—so you never wonder what you are paying for. Nothing to log into; it comes to you.</p></header><div class="meter-ledger reveal"><div class="ledger-head"><span>A SAMPLE MONTH</span><b>NOT REAL NUMBERS</b></div><div class="ledger-stats"><div><strong>11</strong><span>call-button taps</span></div><div><strong>5</strong><span>customer-confirmed jobs</span></div><div><strong>3</strong><span>new reviews</span></div></div><p>Call-button taps are counted, not guessed, but a tap does not prove a completed call. You tell me which contacts became work; I never assume or round up. Reviews are real ones from real customers; I never write them.</p><small>A sample, not a promise. Results vary by trade and town, and I never guarantee anyone&rsquo;s numbers. A slow month shows up too—with what I am doing about it.</small></div></div></section>
 
-  <!-- ═══ CROSS-SELL + CLOSING CTA ═══════════════════════════════════════ -->
-  <section class="section">
-    <div class="wrap">
-      <p class="eyebrow reveal">Both doors, one studio</p>
-      <h2 class="reveal">Start with what is <em class="accent">ready</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">A website inquiry can start now. The Responder is a separate pre-launch concept; register non-binding interest if you want launch updates, with no reservation or availability promise.</p>
-
-      <div class="grid cols-2 reveal" style="margin-top:2.5rem">
-        <div class="card">
-          <h3>Getting a site?</h3>
-          <p>Interested in missed-call automation later? Register non-binding interest in The Responder while its provider, carrier, consent, monitoring, and testing requirements are completed.</p>
-          <div class="actions" style="margin-top:1.1rem">
-            <a class="btn ghost" href="/start/?after=hive">Register Responder interest</a>
-          </div>
-        </div>
-        <div class="card">
-          <h3>Here for The Responder?</h3>
-          <p>Want a site to match — one that makes the phone ring in the first place? I&rsquo;ll build you one.</p>
-          <div class="actions" style="margin-top:1.1rem">
-            <a class="btn ghost" href="/pricing.html">See website pricing</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="actions reveal" style="margin-top:2rem">
-        <a class="btn primary" href="/start/">Start your site</a>
-        <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
-      </div>
-    </div>
-  </section>
-
+  <section class="story-section final-commission"><div class="story-shell reveal"><p class="story-index">THE FIRST DOOR IS OPEN</p><h2>Start with what is <em>ready.</em></h2><p>A website inquiry can start now. The Responder is a separate pre-launch concept; register non-binding interest if you want launch updates, with no reservation or availability promise.</p><div class="actions"><a class="btn primary" href="/start/">Start your site</a><a class="btn ghost" href="/pricing.html">See website pricing</a><a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a></div></div></section>
 </main>
 
-<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
-<footer class="footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <a class="brand" href="/">
-          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
-          <span class="brand-name">Site&nbsp;Sourcery</span>
-        </a>
-        <p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p>
-        <p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-        <p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
-      </div>
-      <nav class="footer-links" aria-label="Pages">
-        <a href="/">Home</a>
-        <a href="/pricing.html">Pricing</a>
-        <a href="/automation.html">The Hive</a>
-        <a href="/how-it-works.html" aria-current="page">How it works</a>
-        <a href="/about.html">About</a>
-        <a href="/faq.html">FAQ</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/contact.html">Contact</a>
-        <a href="/start/">Start your site</a>
-      </nav>
-      <div class="footer-contact">
-        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
-        <a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a>
-        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
-      </div>
-    </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
-  </div>
-</footer>
-
+<footer class="footer"><div class="wrap"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="/"><svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg><span class="brand-name">Site&nbsp;Sourcery</span></a><p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p><p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p><p class="footer-honest">Everything here is work I actually built. No stock testimonials, no borrowed logos, no rankings promised.</p></div><nav class="footer-links" aria-label="Pages"><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/automation.html">The Hive</a><a href="/how-it-works.html" aria-current="page">How it works</a><a href="/about.html">About</a><a href="/faq.html">FAQ</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a><a href="/contact.html">Contact</a><a href="/start/">Start your site</a></nav><div class="footer-contact"><p class="footer-person">Custom-built, locally run, honestly priced.</p><a class="footer-mail" href="mailto:hello@sitesourcery.com">hello@sitesourcery.com</a><a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a></div></div><p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p></div></footer>
 <script src="sourcery.js" defer></script>
-<script>
-/* ── THE LANTERN WALK · page-scoped driver ────────────────────────────────
-   Rides the spark along #lw-walk; the lit trail (dash) follows it; each of
-   the five glow layers (--n1…--n5) catches light as the walk passes its
-   fraction. Idle → the walk loops slowly; pointer → drag-to-walk scrub.
-   No .walkstage / reduced-motion / no getTotalLength → leave the street lit. */
-(function () {
-  var stage = document.querySelector('.walkstage');
-  if (!stage) return;
-  var svg = stage.querySelector('svg');
-  var path = stage.querySelector('#lw-walk');
-  var spark = stage.querySelector('.spell-spark');
-  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var nodes = [
-    { v: '--n1', at: 0.16 }, { v: '--n2', at: 0.40 }, { v: '--n3', at: 0.62 },
-    { v: '--n4', at: 0.82 }, { v: '--n5', at: 1.00 }
-  ];
-  function lightAll(x) { nodes.forEach(function (n) { stage.style.setProperty(n.v, x); }); }
-  if (reduce || !path || !path.getTotalLength) { lightAll(1); return; }
-
-  var L = path.getTotalLength();
-  path.style.strokeDasharray = L;            // the trail is revealed up to the spark
-
-  function place(p) {
-    var pp = p < 0 ? 0 : p > 1 ? 1 : p;
-    var pt = path.getPointAtLength(pp * L);
-    if (spark) spark.setAttribute('transform', 'translate(' + pt.x.toFixed(1) + ',' + pt.y.toFixed(1) + ')');
-    path.style.strokeDashoffset = (L * (1 - pp)).toFixed(1);
-    nodes.forEach(function (n) {
-      var lit = (pp - (n.at - 0.14)) / 0.14;
-      lit = lit < 0 ? 0 : lit > 1 ? 1 : lit;
-      stage.style.setProperty(n.v, lit.toFixed(3));
-    });
-  }
-
-  var coarse = window.matchMedia && matchMedia('(hover: none), (pointer: coarse)').matches;
-  var p = 0, target = 0, scrub = false, running = false, visible = true, last = null;
-
-  function frame(now) {
-    if (!visible) { running = false; return; }
-    if (last === null) last = now;
-    var dt = (now - last) / 1000; last = now;
-    if (dt > 0.1) dt = 0.1;                   // clamp after a tab-switch
-    if (scrub) { p += (target - p) * 0.16; }
-    else { p += dt * 0.16; if (p > 1.2) p = 0; } // ~7.5s loop with a beat at the lit shop
-    place(p);
-    requestAnimationFrame(frame);
-  }
-  function start() { if (!running) { running = true; last = null; requestAnimationFrame(frame); } }
-
-  if (!coarse) {
-    stage.addEventListener('pointermove', function (e) {
-      var r = svg.getBoundingClientRect(); if (!r.width) return;
-      target = (e.clientX - r.left) / r.width;
-      target = target < 0 ? 0 : target > 1 ? 1 : target;
-      scrub = true; start();
-    });
-    stage.addEventListener('pointerleave', function () { scrub = false; last = null; });
-  }
-
-  if ('IntersectionObserver' in window) {
-    new IntersectionObserver(function (en) {
-      visible = en[0].isIntersecting; if (visible) start();
-    }, { threshold: 0.05 }).observe(stage);
-  } else { start(); }
-})();
-</script>
+<script src="atelier-story.js" defer></script>
 </body>
 </html>

@@ -20,7 +20,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
 <meta property="og:title" content="Contact — a real person answers · Site Sourcery">
-<meta property="og:description" content="Call, text, or send a note — a real person answers, usually the same day. No phone tree, no chatbot.">
+<meta property="og:description" content="Call, text, or send a note — a real person answers, usually the same business day. No phone tree, no chatbot.">
 <meta property="og:url" content="https://sitesourcery.com/contact.html">
 <meta property="og:image" content="https://sitesourcery.com/og.png">
 <meta property="og:image:width" content="1200">
@@ -28,10 +28,12 @@
 <meta name="twitter:image" content="https://sitesourcery.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Contact — a real person answers · Site Sourcery">
-<meta name="twitter:description" content="Call, text, or send a note — a real person answers, usually the same day. No phone tree, no chatbot.">
+<meta name="twitter:description" content="Call, text, or send a note — a real person answers, usually the same business day. No phone tree, no chatbot.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="atelier-inner.css">
+<link rel="stylesheet" href="atelier-utility.css">
 </head>
-<body>
+<body class="atelier-inner page-contact">
 <a class="skip" href="#main">Skip to content</a>
 
 <!-- ══ SHARED NAV — paste verbatim on every page; set aria-current="page" ══ -->
@@ -248,6 +250,11 @@
           <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
           <span>The light&rsquo;s still on &mdash; <em>someone&rsquo;s still here.</em> A real person is answering.<span class="stage-hint"> Move the spark with your cursor. <span class="badge">Interactive</span></span></span>
         </div>
+        <section class="observatory-status" aria-label="Studio contact status">
+          <div><small>Window</small><strong>Studio direct</strong></div>
+          <div><small>Operator</small><strong>Real person</strong></div>
+          <div><small>Hive</small><strong>Pre-launch concept</strong></div>
+        </section>
       </div>
     </div>
   </section>
@@ -257,12 +264,12 @@
     <div class="wrap">
       <p class="eyebrow reveal">Three ways to reach us</p>
       <h2 class="reveal">Whatever&rsquo;s <em class="accent">easiest</em> for you.</h2>
-      <div class="grid cols-3" style="margin-top:2.5rem">
+      <div class="grid cols-3 contact-routes" style="margin-top:2.5rem">
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><path d="M6 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="M9 18h2" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round"/></svg>
           <h3>Call or text</h3>
-          <p>Fastest way to reach us. Texting is also how you&rsquo;ll change your site later, so try it now. If a call goes to voicemail, leave your name &mdash; you&rsquo;ll hear back.</p>
-          <p style="margin-top:.75rem"><a class="num" href="tel:+13217882555">(321)&nbsp;788-2555</a></p>
+          <p>Fastest way to reach us. Clients with Care from $29/mo can also request agreed site changes by text. If a call goes to voicemail, leave your name &mdash; you&rsquo;ll hear back.</p>
+          <p style="margin-top:.75rem"><a class="num" href="tel:+13217882555">Call (321)&nbsp;788-2555</a> &middot; <a href="sms:+13217882555">Text us</a></p>
         </div>
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="m4 7.5 8 5.5 8-5.5" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -291,7 +298,7 @@
         <!-- Real working form: POSTs to the Web3Forms service, which emails me
              the note. No page-load, no tracker —
              just a form submit, the one remote request this site allows. -->
-        <form class="card reveal" action="https://api.web3forms.com/submit" method="POST">
+        <form class="card reveal observatory-form" action="https://api.web3forms.com/submit" method="POST">
           <!-- Web3Forms access key — wired (public by design) -->
           <input type="hidden" name="access_key" value="39f30a9b-381d-49e2-8f1a-6be6f4970d4e">
           <input type="hidden" name="subject" value="New note from sitesourcery.com">
@@ -324,12 +331,12 @@
           <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">Web3Forms processes this note so it can reach our inbox; see the <a href="/privacy.html">Privacy Notice</a>. Prefer not to use the form? <a href="tel:+13217882555">Call or text (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com">email us directly</a>.</p>
         </form>
 
-        <div class="reveal">
+        <div class="reveal transmission-log">
           <h3>What happens next</h3>
           <ul style="list-style:none;display:grid;gap:1rem;margin-top:1rem">
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-              <span><strong>A real person replies</strong> &mdash; usually the same day, worst case the next morning. No autoresponder pretending to care.</span>
+              <span><strong>A real person replies</strong> &mdash; usually the same business day. Replies may take longer after hours, on weekends, or during active builds. No autoresponder pretending to care.</span>
             </li>
             <li style="display:flex;gap:.75rem;align-items:baseline">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="flex:0 0 auto;transform:translateY(3px)"><path d="M4 12.5l5 5L20 6.5" stroke="#7C5CFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -340,7 +347,7 @@
               <span><strong>Nothing to lose</strong> &mdash; asking costs nothing, and there&rsquo;s no obligation. We limit your details to answering the inquiry and use the processors identified in our privacy notice.</span>
             </li>
           </ul>
-          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> answers the big three &mdash; you own your site, you can cancel anytime, and changes happen by text.</p>
+          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> explains ownership after final payment, month-to-month Care, and which Care tiers include text-to-change or a monthly note.</p>
         </div>
       </div>
     </div>
@@ -355,7 +362,7 @@
       <div class="grid cols-2 reveal" style="margin-top:2.5rem">
         <div class="card">
           <h3>&ldquo;People can&rsquo;t find me.&rdquo;</h3>
-          <p>That&rsquo;s the website door: a hand-built custom site that makes your services, location, and contact paths easy to understand and act on. Buy once, from $200 &mdash; you own it.</p>
+          <p>That&rsquo;s the website door: a hand-built custom site that makes your services, location, and contact paths easy to understand and act on. Buy once, from $200 &mdash; the completed build is yours on final payment.</p>
           <div class="actions" style="margin-top:1.1rem">
             <a class="btn ghost" href="/pricing.html">See website pricing</a>
           </div>
@@ -377,6 +384,7 @@
       <h2 class="reveal">Rather just <em class="accent">see</em> it first?</h2>
       <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients &mdash; take a look at a live production site we built and run, open right now. Then decide.</p>
       <div class="actions reveal" style="margin-top:2rem">
+        <a class="btn ghost" href="https://daarx.money/">Open daarx.money</a>
         <a class="btn primary" href="/start/">Start your site
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </a>
@@ -418,7 +426,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; You own your site. Cancel anytime.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 
