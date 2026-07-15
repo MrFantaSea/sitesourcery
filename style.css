@@ -772,3 +772,293 @@ a:hover .sigil,.sigil:hover{transform:rotate(90deg) scale(1.08);
   color:transparent;-webkit-text-fill-color:transparent}
 .error p{color:var(--muted);max-width:34em}
 .error .actions{justify-content:center}
+
+/* ════════════════════════════════════════════════════════════════════════
+   23 · THE ARCANE DIGITAL ATELIER · immersive home
+
+   The homepage is one continuous workshop, not a stack of generic cards.
+   These styles are deliberately scoped to .atelier-page so the mature
+   shared system on every other route remains untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+
+body.atelier-page{
+  color-scheme:dark;
+  --bg:#090611;--surface:#120C1D;--surface-2:#1A1128;
+  --hairline:#322445;--text:#F8F1FF;--muted:#C2B5CE;--link:#C9B4FF;
+  --scrim:rgba(9,6,17,.82);--on-charm:#FFFFFF;
+  --lift:0 2px 8px rgba(0,0,0,.3),0 30px 90px -35px rgba(0,0,0,.86);
+  --ring:0 0 0 2px #090611,0 0 0 4px #A887FF;
+  background:#090611;
+}
+body.atelier-page::before{
+  background:
+    radial-gradient(72rem 46rem at 82% 18%,rgba(114,67,196,.15),transparent 65%),
+    radial-gradient(58rem 40rem at 4% 55%,rgba(180,69,119,.08),transparent 65%),
+    #090611;
+}
+.atelier-page .nav{background:rgba(9,6,17,.78);border-color:rgba(220,191,255,.12)}
+.atelier-page .footer{margin-top:0;background:#08050E;border-color:rgba(220,191,255,.12)}
+.atelier-main{position:relative;isolation:isolate;background:#090611}
+.atelier-main::before{content:"";position:absolute;z-index:-1;inset:84svh 50% 0 auto;
+  width:1px;background:linear-gradient(180deg,transparent,rgba(175,132,255,.28) 9%,
+  rgba(255,191,116,.2) 48%,rgba(175,132,255,.22) 78%,transparent);pointer-events:none}
+
+/* ── full-bleed workshop hero ─────────────────────────────────────────── */
+.atelier-hero{position:relative;isolation:isolate;min-height:calc(100svh - 4rem);
+  overflow:hidden;background:#090611}
+.atelier-hero::before{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(6,3,11,.94) 0%,rgba(8,4,15,.77) 38%,rgba(8,4,15,.17) 70%,rgba(8,4,15,.38) 100%),
+    linear-gradient(0deg,#090611 0%,transparent 24%,transparent 80%,rgba(5,3,10,.35) 100%)}
+.atelier-hero-media{position:absolute;z-index:-2;inset:0;overflow:hidden;background:
+  radial-gradient(circle at 72% 42%,#4B2A5E 0,#171020 28%,#090611 68%)}
+.atelier-hero-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:center;filter:saturate(1.08) contrast(1.04) brightness(.88);
+  transform:scale(1.035) translate(var(--drift-x,0),var(--drift-y,0));
+  transition:transform 1.1s var(--ease)}
+.atelier-aura{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle 18rem at var(--field-x,68%) var(--field-y,42%),
+    rgba(255,238,197,.19),rgba(166,101,255,.13) 30%,rgba(121,70,190,.05) 52%,transparent 72%);
+  mix-blend-mode:screen;transition:opacity .35s var(--ease)}
+.atelier-dust{position:absolute;z-index:1;color:#F8DDA2;font-size:clamp(.6rem,1vw,.9rem);
+  text-shadow:0 0 10px #FFEBC2,0 0 24px #9B6BFF;pointer-events:none;
+  animation:atelier-float 7s var(--ease) infinite}
+.dust-one{left:57%;top:25%}.dust-two{left:79%;top:42%;animation-delay:-2.6s}
+.dust-three{left:67%;top:71%;animation-delay:-4.9s}
+@keyframes atelier-float{0%,100%{opacity:.18;transform:translateY(0) rotate(0)}
+  45%{opacity:.9;transform:translateY(-16px) rotate(62deg)}72%{opacity:.32;transform:translateY(-24px) rotate(110deg)}}
+.atelier-hero-inner{position:relative;z-index:2;display:grid;align-items:center;
+  min-height:calc(100svh - 11.5rem);padding-block:clamp(5rem,12vw,9rem)}
+.atelier-hero-copy{max-width:47rem}
+.atelier-hero-copy h1{font-size:clamp(3rem,7.4vw,6.85rem);line-height:.96;
+  letter-spacing:-.045em;max-width:11.5ch;text-shadow:0 4px 36px rgba(0,0,0,.62)}
+.atelier-hero-copy .eyebrow{color:#E3D4ED;margin-bottom:1.25rem}
+.atelier-hero-lede{font-size:clamp(1.08rem,2vw,1.35rem);line-height:1.55;
+  color:#E3D8E9;max-width:37rem;margin-top:1.5rem;text-shadow:0 2px 18px rgba(0,0,0,.75)}
+.atelier-hero-copy .actions{margin-top:2rem}
+.btn.atelier-glass{background:rgba(17,10,28,.5);border-color:rgba(237,218,255,.3);
+  color:#FAF5FF;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.btn.atelier-glass:hover,.btn.atelier-glass:focus-visible{background:rgba(34,19,51,.72);
+  border-color:#C9B4FF;box-shadow:0 10px 34px rgba(0,0,0,.35)}
+.atelier-honesty{margin-top:1.3rem;color:#C6B9CD;font-size:.83rem;line-height:1.55;max-width:41rem}
+.atelier-threshold{position:relative;z-index:3;border-block:1px solid rgba(237,218,255,.14);
+  background:linear-gradient(90deg,rgba(12,7,19,.92),rgba(27,14,38,.88),rgba(12,7,19,.92));
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.atelier-threshold-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  padding-block:1.35rem;gap:1.5rem}
+.atelier-threshold p{display:grid;gap:.12rem;max-width:none;padding-left:1rem;
+  border-left:1px solid rgba(211,177,255,.25)}
+.atelier-threshold strong{font-family:var(--font-display);font-size:1rem;color:#FFF6E7}
+.atelier-threshold span{font-size:.78rem;color:#BBAFC4;letter-spacing:.02em}
+.atelier-threshold .threshold-live{border-left-color:#4ED4A8}
+.atelier-threshold .threshold-live span{color:#AEEBD7}
+.atelier-threshold .threshold-forge{border-left-color:#9F78F6}
+
+/* ── continuous chapter rhythm ───────────────────────────────────────── */
+.atelier-section{position:relative;padding-block:clamp(5.5rem,11vw,9rem)}
+.atelier-section::after{content:"✦";position:absolute;z-index:1;left:50%;bottom:-.7rem;
+  translate:-50% 0;width:1.6rem;height:1.6rem;display:grid;place-items:center;
+  border:1px solid rgba(188,146,255,.35);border-radius:50%;background:#0A0612;
+  color:#DCC5FF;font-size:.65rem;box-shadow:0 0 30px rgba(124,92,255,.32)}
+.atelier-heading{display:grid;gap:1rem;max-width:49rem;margin-bottom:clamp(2.4rem,6vw,4.5rem)}
+.atelier-heading .eyebrow{margin:0}
+.atelier-heading h2{font-size:clamp(2.35rem,6vw,5.25rem);
+  line-height:1;letter-spacing:-.04em;max-width:12ch}
+
+/* ── two physical doors ───────────────────────────────────────────────── */
+.portal-section{background:
+  radial-gradient(55rem 35rem at 50% 42%,rgba(104,60,154,.16),transparent 68%),
+  linear-gradient(180deg,#090611,#0D0815 60%,#090611)}
+.portal-stage{position:relative;isolation:isolate;overflow:hidden;border-radius:28px;
+  border:1px solid rgba(225,196,255,.2);background:#0B0711;box-shadow:0 45px 110px -50px #000}
+.portal-stage::after{content:"";position:absolute;z-index:1;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(255,232,185,.06),inset 0 -14rem 12rem -7rem rgba(3,1,7,.92)}
+.portal-stage>img{display:block;width:100%;aspect-ratio:7/4;object-fit:cover;
+  object-position:center;filter:saturate(1.06) contrast(1.04)}
+.portal-stage>.atelier-aura{z-index:1}
+.portal-choices{position:absolute;z-index:2;inset:auto 1.25rem 1.25rem;
+  display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);align-items:end;gap:1rem}
+.portal-choice{display:grid;align-content:end;gap:.55rem;min-height:14rem;padding:clamp(1.3rem,3vw,2.1rem);
+  border:1px solid rgba(238,218,255,.22);border-radius:18px;
+  background:linear-gradient(145deg,rgba(15,9,23,.7),rgba(17,9,26,.91));
+  color:#F8F1FF;text-decoration:none;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  transition:transform .35s var(--ease),border-color .3s var(--ease),box-shadow .35s var(--ease)}
+.portal-choice::before{content:"";position:absolute;inset:auto 12% 0;height:2px;
+  background:var(--charm);opacity:.65;transform:scaleX(.25);transition:transform .4s var(--ease)}
+.portal-choice:hover,.portal-choice:focus-visible{transform:translateY(-6px);
+  border-color:rgba(255,229,180,.58);box-shadow:0 20px 55px rgba(0,0,0,.48),0 0 34px rgba(143,94,236,.17)}
+.portal-choice:hover::before,.portal-choice:focus-visible::before{transform:scaleX(1)}
+.portal-choice-forge{min-height:12.5rem;background:linear-gradient(145deg,rgba(15,9,23,.76),rgba(12,8,18,.94));
+  border-color:rgba(197,166,224,.17)}
+.portal-kicker{font-size:.72rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#D6C5E4}
+.portal-choice-ready .portal-kicker{color:#BFF3DE}
+.portal-choice strong{font-family:var(--font-display);font-size:clamp(1.55rem,3vw,2.25rem);line-height:1}
+.portal-choice>span:not(.portal-kicker):not(.portal-enter){font-size:.92rem;line-height:1.5;color:#D2C6D8;max-width:31rem}
+.portal-enter{font-size:.85rem;font-weight:700;color:#F8DDA2;margin-top:.35rem}
+.portal-footnote{font-size:.82rem;color:#AFA2B9;margin:1rem auto 0;text-align:center;max-width:52rem}
+
+/* ── interactive service grimoire ────────────────────────────────────── */
+.grimoire-section{background:
+  radial-gradient(50rem 34rem at 22% 58%,rgba(129,75,180,.13),transparent 65%),#090611}
+.service-grimoire{position:relative;display:grid;grid-template-columns:minmax(15rem,19rem) minmax(0,1fr);
+  overflow:hidden;border:1px solid rgba(226,197,255,.2);border-radius:24px;
+  background:linear-gradient(135deg,#130C1C,#0B0711 68%);box-shadow:0 40px 110px -55px #000}
+.service-grimoire::before{content:"";position:absolute;z-index:2;top:1.3rem;bottom:1.3rem;left:calc(min(19rem,27%) - 1px);
+  width:1px;background:linear-gradient(transparent,rgba(255,218,156,.34),transparent);pointer-events:none}
+.folio-tabs{display:none;align-content:start;padding:1.15rem;background:rgba(28,17,38,.58)}
+.js .folio-tabs{display:grid}
+.folio-tabs button{display:grid;grid-template-columns:2.15rem 1fr;align-items:center;gap:.75rem;
+  min-height:5.3rem;padding:.85rem;border:1px solid transparent;border-radius:12px;
+  background:transparent;color:#C6B9CD;text-align:left;font:inherit;cursor:pointer;
+  transition:background .25s var(--ease),border-color .25s var(--ease),color .25s var(--ease)}
+.folio-tabs button:hover,.folio-tabs button:focus-visible{color:#F8F1FF;background:rgba(255,255,255,.035)}
+.folio-tabs button[aria-pressed="true"]{color:#FFF7E9;background:rgba(137,83,201,.14);
+  border-color:rgba(210,173,255,.25);box-shadow:inset 3px 0 #9F78F6}
+.folio-tabs button>span:last-child{display:grid;gap:.15rem}
+.folio-tabs strong{font-family:var(--font-display);font-size:1rem;color:inherit}
+.folio-tabs small{font-size:.72rem;color:#9F92AA;letter-spacing:.04em}
+.folio-number{display:grid;place-items:center;width:2rem;height:2rem;border:1px solid currentColor;border-radius:50%;
+  font-family:var(--font-accent);font-style:italic;font-size:.8rem;opacity:.75}
+.folio-workbench{min-width:0;padding:clamp(1.5rem,5vw,4rem)}
+.folio-panel{display:grid;grid-template-columns:clamp(6rem,13vw,9.5rem) minmax(0,1fr);
+  align-items:start;gap:clamp(1.3rem,4vw,3rem);animation:folio-open .52s var(--ease) both}
+.folio-panel[hidden]{display:none}
+@keyframes folio-open{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.folio-sigil{aspect-ratio:1;display:grid;place-items:center;position:relative;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,231,187,.12),rgba(127,77,196,.13) 48%,transparent 70%);
+  border:1px solid rgba(210,173,255,.22);box-shadow:inset 0 0 38px rgba(116,70,175,.18),0 0 42px rgba(116,70,175,.12)}
+.folio-sigil::before,.folio-sigil::after{content:"";position:absolute;inset:12%;border:1px solid rgba(236,210,255,.24);
+  transform:rotate(45deg)}
+.folio-sigil::after{inset:27%;transform:rotate(0)}
+.folio-sigil span{position:relative;z-index:1;font-size:clamp(1.6rem,4vw,2.8rem);color:#F9E0AE;
+  text-shadow:0 0 24px rgba(255,212,139,.52)}
+.folio-overline{font-size:.73rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#CDB9DC;margin-bottom:.75rem}
+.folio-panel h3{font-size:clamp(1.75rem,4vw,3.1rem);max-width:14ch;line-height:1.04;margin-bottom:1rem}
+.folio-panel h3+p{color:#C8BBCF;max-width:42rem}
+.folio-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
+  margin:1.65rem 0;background:rgba(221,190,255,.14);border:1px solid rgba(221,190,255,.14);border-radius:12px;overflow:hidden}
+.folio-facts div{display:grid;gap:.22rem;padding:.9rem;background:#110A19}
+.folio-facts dt{font-size:.66rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9E8DA8}
+.folio-facts dd{font-size:.85rem;color:#EEE3F2;line-height:1.4}
+
+/* With JavaScript unavailable, the selector vanishes and every complete
+   chapter remains visible in a single, readable workbench. */
+html:not(.js) .service-grimoire{grid-template-columns:minmax(0,1fr)}
+html:not(.js) .service-grimoire::before{display:none}
+html:not(.js) .folio-workbench{display:grid;gap:2rem}
+
+/* ── process constellation + actual shipped proof ────────────────────── */
+.ritual-section{background:
+  radial-gradient(50rem 30rem at 74% 30%,rgba(129,73,184,.12),transparent 68%),
+  linear-gradient(180deg,#090611,#0D0815)}
+.ritual-path{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;
+  padding:0;margin:0;background:linear-gradient(90deg,transparent,rgba(205,169,255,.2) 8% 92%,transparent)}
+.ritual-path li{position:relative;display:grid;gap:1.2rem;padding:1.6rem clamp(1rem,2.5vw,1.7rem);
+  background:linear-gradient(180deg,rgba(18,11,27,.96),rgba(11,7,17,.97));min-height:18rem}
+.ritual-path li::after{content:"";position:absolute;right:-4px;top:2.8rem;width:7px;height:7px;border-radius:50%;
+  background:#D2A7FF;box-shadow:0 0 16px #9861EC}
+.ritual-path li:last-child::after{display:none}
+.ritual-mark{font-family:var(--font-num);font-size:.75rem;color:#D5C0E4;letter-spacing:.08em}
+.ritual-mark::after{content:"";display:block;width:2.4rem;height:1px;margin-top:.75rem;background:var(--charm)}
+.ritual-path h3{font-size:clamp(1.2rem,2vw,1.55rem);margin-bottom:.55rem}
+.ritual-path p{font-size:.9rem;line-height:1.55;color:#BDB0C5}
+/* two truthful live-project portals: proof that the atelier changes visual
+   languages instead of reskinning one house style */
+.worlds-intro{display:grid;gap:.8rem;max-width:48rem;margin-top:clamp(3.5rem,8vw,6rem)}
+.worlds-intro .eyebrow{margin:0}
+.worlds-intro h3{font-size:clamp(1.8rem,4vw,3.4rem);line-height:1.03;max-width:17ch}
+.worlds-intro p:last-child{color:#BFB2C8}
+.world-portals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1rem,3vw,1.6rem);margin-top:2rem}
+.world-portal{position:relative;isolation:isolate;display:block;min-height:clamp(25rem,48vw,36rem);
+  overflow:hidden;border:1px solid rgba(225,196,255,.2);border-radius:22px;color:#FFF8FF;text-decoration:none;
+  background:#0B0711;box-shadow:0 28px 80px -42px #000;transition:transform .4s var(--ease),border-color .35s var(--ease),box-shadow .4s var(--ease)}
+.world-portal>img{position:absolute;z-index:-2;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;
+  filter:saturate(1.04) contrast(1.03);transition:transform .8s var(--ease),filter .5s var(--ease)}
+.world-portal-shade{position:absolute;z-index:-1;inset:0;background:
+  linear-gradient(180deg,rgba(5,3,8,.04) 25%,rgba(6,3,10,.38) 52%,rgba(6,3,10,.95) 100%),
+  linear-gradient(90deg,rgba(4,2,7,.4),transparent 70%)}
+.world-portal-copy{position:absolute;inset:auto 0 0;display:grid;gap:.55rem;padding:clamp(1.4rem,4vw,2.4rem)}
+.world-portal-copy small{display:flex;align-items:center;gap:.55rem;font-size:.68rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:#BFEEDC}
+.world-portal-copy strong{font-family:var(--font-display);font-size:clamp(2rem,5vw,3.8rem);line-height:.95}
+.world-portal-copy em{font:normal .9rem/1.5 var(--font-body);color:#D2C6D8;max-width:30rem}
+.world-portal-copy b{margin-top:.55rem;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#F8DDA2}
+.world-portal:hover,.world-portal:focus-visible{transform:translateY(-7px);border-color:rgba(255,226,174,.55);
+  box-shadow:0 38px 100px -42px #000,0 0 36px rgba(150,94,232,.13)}
+.world-portal:hover>img,.world-portal:focus-visible>img{transform:scale(1.035);filter:saturate(1.12) contrast(1.04)}
+
+/* ── the commission desk ─────────────────────────────────────────────── */
+.atelier-commission{position:relative;isolation:isolate;overflow:hidden;padding-block:clamp(7rem,15vw,12rem);
+  border-top:1px solid rgba(229,200,255,.14);background:
+  radial-gradient(48rem 34rem at 50% 48%,rgba(111,61,164,.2),transparent 70%),
+  linear-gradient(180deg,#0D0815,#08050E)}
+.atelier-commission::before,.atelier-commission::after{content:"";position:absolute;z-index:-1;top:50%;width:38vw;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(226,192,255,.34))}
+.atelier-commission::before{left:0}.atelier-commission::after{right:0;transform:scaleX(-1)}
+.atelier-commission-inner{display:grid;justify-items:center;text-align:center;gap:1.3rem}
+.atelier-commission-inner .eyebrow{margin:0}
+.atelier-commission-inner h2{font-size:clamp(2.6rem,7vw,6.5rem);line-height:.98;letter-spacing:-.045em;max-width:12ch}
+.atelier-commission-inner .lede{max-width:39rem}
+.atelier-commission-inner .actions{justify-content:center;margin-top:.5rem}
+.atelier-commission-glow{position:absolute;z-index:-1;left:50%;top:49%;translate:-50% -50%;display:grid;place-items:center;
+  width:min(75vw,48rem);aspect-ratio:1;border:1px solid rgba(198,153,255,.09);border-radius:50%;
+  box-shadow:inset 0 0 100px rgba(106,62,160,.08)}
+.atelier-commission-glow::before,.atelier-commission-glow::after{content:"";position:absolute;inset:17%;border:1px solid rgba(198,153,255,.11);transform:rotate(45deg)}
+.atelier-commission-glow::after{inset:34%;transform:rotate(0)}
+.atelier-commission-glow span{font-size:clamp(2rem,5vw,4rem);color:rgba(249,217,163,.18);text-shadow:0 0 80px #A86FFF}
+.atelier-commission-note{font-size:.78rem;color:#A99CAC;max-width:45rem}
+
+/* ── responsive atelier ──────────────────────────────────────────────── */
+@media (max-width:64rem){
+  .atelier-threshold-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .service-grimoire::before{left:16rem}
+  .ritual-path{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ritual-path li::after{display:none}
+}
+@media (max-width:52rem){
+  .atelier-hero::before{background:linear-gradient(90deg,rgba(6,3,11,.92),rgba(7,4,12,.58) 80%),
+    linear-gradient(0deg,#090611,transparent 35%)}
+  .atelier-hero-image{object-position:62% center;filter:saturate(1.04) contrast(1.04) brightness(.7)}
+  .atelier-hero-copy{max-width:38rem}
+  .service-grimoire{grid-template-columns:minmax(0,1fr)}
+  .service-grimoire::before{display:none}
+  .folio-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:.3rem}
+  .folio-tabs button{min-height:4.6rem}
+  .folio-workbench{border-top:1px solid rgba(226,197,255,.16)}
+}
+@media (max-width:44rem){
+  .atelier-main::before{display:none}
+  .atelier-threshold-grid{grid-template-columns:minmax(0,1fr);gap:.75rem}
+  .atelier-threshold p{grid-template-columns:8.5rem 1fr;align-items:baseline}
+  .portal-stage{overflow:visible;background:transparent;border:0;box-shadow:none}
+  .portal-stage::after{display:none}
+  .portal-stage>img{border:1px solid rgba(225,196,255,.2);border-radius:20px;aspect-ratio:4/3}
+  .portal-choices{position:relative;inset:auto;grid-template-columns:minmax(0,1fr);margin-top:1rem}
+  .portal-choice{min-height:0}
+  .folio-panel{grid-template-columns:minmax(0,1fr)}
+  .folio-sigil{width:5.2rem}
+  .folio-facts{grid-template-columns:minmax(0,1fr)}
+  .ritual-path{grid-template-columns:minmax(0,1fr);gap:.75rem;background:transparent}
+  .ritual-path li{min-height:0}
+  .world-portals{grid-template-columns:minmax(0,1fr)}
+  .world-portal{min-height:28rem}
+}
+@media (max-width:32rem){
+  .atelier-hero-copy h1{font-size:clamp(2.75rem,14vw,4rem)}
+  .folio-tabs{grid-template-columns:minmax(0,1fr)}
+  .folio-tabs button{min-height:4rem}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .atelier-hero-image{transform:none!important;transition:none!important}
+  .atelier-dust{animation:none!important;opacity:.45}
+  .folio-panel{animation:none!important}
+  .portal-choice:hover,.portal-choice:focus-visible{transform:none}
+  .world-portal:hover,.world-portal:focus-visible,.world-portal:hover>img,.world-portal:focus-visible>img{transform:none}
+  .atelier-aura{display:none}
+}
+
+@media print{
+  .atelier-hero{min-height:auto}.atelier-hero-media,.atelier-aura,.atelier-dust,.atelier-commission-glow{display:none}
+  .atelier-hero-inner{min-height:auto}.portal-stage>img{display:none}.portal-choices{position:static}
+  .atelier-page .folio-panel{display:grid!important}
+}

@@ -196,7 +196,7 @@
       el.setAttribute('aria-label', msgs[0]);
       el.appendChild(textNode); el.appendChild(caret);
 
-      var mi = 0, ci = 0, alive = true;
+      var mi = 0, ci = 0, alive = true, passes = 0;
       /* pause politely while off-screen */
       var visible = true;
       if ('IntersectionObserver' in window) {
@@ -331,6 +331,72 @@
     });
   }
 
+  /* ── 9 · ARCANE FIELDS — restrained light + depth in painted scenes ─────
+     Pointer-only enhancement. Touch, reduced-motion, and JS-off visitors see
+     the same finished artwork without needing to discover an interaction. */
+  function wireArcaneFields() {
+    if (reduce) return;
+    var coarse = window.matchMedia && matchMedia('(hover: none), (pointer: coarse)').matches;
+    if (coarse) return;
+    d.querySelectorAll('[data-arcane-field]').forEach(function (field) {
+      field.addEventListener('pointermove', function (e) {
+        var bounds = field.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        var x = Math.max(0, Math.min(1, (e.clientX - bounds.left) / bounds.width));
+        var y = Math.max(0, Math.min(1, (e.clientY - bounds.top) / bounds.height));
+        field.style.setProperty('--field-x', (x * 100).toFixed(1) + '%');
+        field.style.setProperty('--field-y', (y * 100).toFixed(1) + '%');
+        field.style.setProperty('--drift-x', ((0.5 - x) * 9).toFixed(1) + 'px');
+        field.style.setProperty('--drift-y', ((0.5 - y) * 6).toFixed(1) + 'px');
+      });
+      field.addEventListener('pointerleave', function () {
+        field.style.setProperty('--field-x', '68%');
+        field.style.setProperty('--field-y', '42%');
+        field.style.setProperty('--drift-x', '0px');
+        field.style.setProperty('--drift-y', '0px');
+      });
+    });
+  }
+
+  /* ── 10 · SERVICE GRIMOIRE — an accessible chapter selector ────────────
+     The source contains every chapter, fully visible with JS off. Once this
+     enhancement boots, one panel is shown at a time and buttons expose state
+     through aria-pressed. Arrow keys move between chapter buttons. */
+  function wireGrimoires() {
+    d.querySelectorAll('[data-grimoire]').forEach(function (book) {
+      var tabs = Array.prototype.slice.call(book.querySelectorAll('[data-folio]'));
+      var panels = Array.prototype.slice.call(book.querySelectorAll('[data-folio-panel]'));
+      if (!tabs.length || !panels.length) return;
+
+      function openChapter(name, focus) {
+        tabs.forEach(function (tab) {
+          var active = tab.dataset.folio === name;
+          tab.setAttribute('aria-pressed', String(active));
+          if (active && focus) tab.focus();
+        });
+        panels.forEach(function (panel) {
+          panel.hidden = panel.dataset.folioPanel !== name;
+        });
+      }
+
+      tabs.forEach(function (tab, index) {
+        tab.addEventListener('click', function () { openChapter(tab.dataset.folio, false); });
+        tab.addEventListener('keydown', function (e) {
+          var next = null;
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (index + 1) % tabs.length;
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (index - 1 + tabs.length) % tabs.length;
+          if (e.key === 'Home') next = 0;
+          if (e.key === 'End') next = tabs.length - 1;
+          if (next === null) return;
+          e.preventDefault();
+          openChapter(tabs[next].dataset.folio, true);
+        });
+      });
+      var chosen = tabs.find(function (tab) { return tab.getAttribute('aria-pressed') === 'true'; }) || tabs[0];
+      openChapter(chosen.dataset.folio, false);
+    });
+  }
+
   /* ── boot ───────────────────────────────────────────────────────────────── */
   function boot() {
     wireThemeButtons();
@@ -341,6 +407,8 @@
     wireTypewriters();
     wireCastTriggers();
     wireStorefront();
+    wireArcaneFields();
+    wireGrimoires();
   }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', boot);
   else boot();
