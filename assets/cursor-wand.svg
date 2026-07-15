@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="wand" x1="7" y1="7" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD166"/>
+      <stop offset=".42" stop-color="#FF5C8A"/>
+      <stop offset="1" stop-color="#7C5CFF"/>
+    </linearGradient>
+  </defs>
+  <!-- The gold spark is centered on the CSS hotspot at 4,4. -->
+  <path d="M7.5 7.5 28 28" stroke="#0B0912" stroke-width="6" stroke-linecap="round"/>
+  <path d="M7.5 7.5 28 28" stroke="url(#wand)" stroke-width="3.25" stroke-linecap="round"/>
+  <path d="m23.6 23.6 4.4 4.4" stroke="#F6F4FF" stroke-width="1.2" stroke-linecap="round" opacity=".82"/>
+  <path d="M4 0.8v6.4M0.8 4h6.4M1.75 1.75l4.5 4.5m0-4.5-4.5 4.5" stroke="#0B0912" stroke-width="3.1" stroke-linecap="round"/>
+  <path d="M4 0.8v6.4M0.8 4h6.4M1.75 1.75l4.5 4.5m0-4.5-4.5 4.5" stroke="#FFD166" stroke-width="1.35" stroke-linecap="round"/>
+</svg>

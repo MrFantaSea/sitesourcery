@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="wand-active" x1="7" y1="7" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD166"/>
+      <stop offset=".32" stop-color="#FF5C8A"/>
+      <stop offset="1" stop-color="#7C5CFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Same 4,4 hotspot and wand silhouette; the orbiting sparks signal action. -->
+  <path d="M7.5 7.5 28 28" stroke="#0B0912" stroke-width="6" stroke-linecap="round"/>
+  <path d="M7.5 7.5 28 28" stroke="url(#wand-active)" stroke-width="3.25" stroke-linecap="round"/>
+  <path d="m23.6 23.6 4.4 4.4" stroke="#F6F4FF" stroke-width="1.2" stroke-linecap="round" opacity=".9"/>
+  <circle cx="10.2" cy="2.2" r="1.2" fill="#FF5C8A" stroke="#0B0912" stroke-width="1"/>
+  <circle cx="2.1" cy="10.1" r="1" fill="#A78BFA" stroke="#0B0912" stroke-width="1"/>
+  <path d="M4 .5v7M.5 4h7M1.5 1.5l5 5m0-5-5 5" stroke="#0B0912" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M4 .5v7M.5 4h7M1.5 1.5l5 5m0-5-5 5" stroke="#FFD166" stroke-width="1.55" stroke-linecap="round"/>
+</svg>

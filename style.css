@@ -1072,3 +1072,31 @@ html:not(.js) .folio-workbench{display:grid;gap:2rem}
   .atelier-hero-inner{min-height:auto}.portal-stage>img{display:none}.portal-choices{position:static}
   .atelier-page .folio-panel{display:grid!important}
 }
+
+/* ── enchanted cursor ──────────────────────────────────────────────────
+   A 32px SVG is the largest dependable cross-browser cursor canvas. Its
+   gold spark is the click point, so both related variants share hotspot 4 4.
+   Custom art is reserved for fine, hover-capable pointers; text editing,
+   disabled controls, touch/coarse input, and high-contrast modes retain the
+   platform cursors users depend on. */
+@media (hover:hover) and (pointer:fine){
+  html,body,body *{cursor:url("/assets/cursor-wand.svg") 4 4,auto}
+  body :is(a[href],button,summary,select,label[for],[role="button"],
+    input[type="button"],input[type="submit"],input[type="reset"],
+    input[type="checkbox"],input[type="radio"],input[type="range"],
+    [tabindex]:not([tabindex="-1"]),.spellstage,.arcane-stage){
+    cursor:url("/assets/cursor-wand-active.svg") 4 4,pointer
+  }
+  body :is(input:not([type]),input[type="text"],input[type="email"],input[type="tel"],
+    input[type="url"],input[type="search"],input[type="number"],textarea,[contenteditable="true"]){cursor:text}
+  body :is(button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]){cursor:not-allowed!important}
+}
+@media (hover:none),(pointer:coarse),(forced-colors:active){
+  html,body,body *{cursor:auto}
+  body :is(a[href],button,summary,select,label[for],[role="button"],
+    input[type="button"],input[type="submit"],input[type="reset"],
+    input[type="checkbox"],input[type="radio"],input[type="range"]){cursor:pointer!important}
+  body :is(input:not([type]),input[type="text"],input[type="email"],input[type="tel"],
+    input[type="url"],input[type="search"],input[type="number"],textarea,[contenteditable="true"]){cursor:text}
+  body :is(button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]){cursor:not-allowed!important}
+}
