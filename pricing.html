@@ -46,6 +46,27 @@
 {"@type":"Offer","name":"Care","price":"59","priceCurrency":"USD","description":"Everything in Host plus up to four total agreed content edits or 60 minutes of edit work per paid month, whichever limit is reached first, and a plain-English monthly performance note."},
 {"@type":"Offer","name":"Care Plus","price":"99","priceCurrency":"USD","description":"Everything in Care plus one findability or review action, within up to two total service hours per paid month."},
 {"@type":"Offer","name":"Partner","price":"159","priceCurrency":"USD","description":"Everything in Care Plus plus proactive review, one quarterly refresh, one 30-minute call per month, and up to three total service hours per paid month. Social posting, advertising, email campaigns, and 24/7 support are excluded."}
+]},
+{"@type":"OfferCatalog","name":"SS-ADDONS-2026.1 — capped one-time website add-ons; eligible base tier and signed scope required","itemListElement":[
+{"@type":"Offer","sku":"card_micro_section","name":"Card micro-section","price":"80","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Card only. One simple section in the existing Card system with up to 100 drafted words. Not sold standalone."},
+{"@type":"Offer","sku":"card_plus_story_section","name":"Card Plus story section","price":"95","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":2},"description":"Card Plus only. Price is per section; each uses the existing system and includes up to 125 drafted words. Not sold standalone."},
+{"@type":"Offer","sku":"same_system_page","name":"Additional same-system page","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"225","maxPrice":"350","priceCurrency":"USD","unitText":"one additional page"},"eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Site through Signature only, with tier-specific public prices. One public page reusing the approved system; no Card, Card Plus, or Flagship."},
+{"@type":"Offer","sku":"copy_expansion","name":"Copy expansion","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"75","maxPrice":"180","priceCurrency":"USD","unitText":"one capped copy expansion"},"eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Card through Signature only, with tier-specific word allowances and public prices; approved layouts only."},
+{"@type":"Offer","sku":"supplied_photo_pack","name":"Supplied-photo preparation pack","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"60","maxPrice":"180","priceCurrency":"USD","unitText":"one capped supplied-photo pack"},"eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Card through Signature only, with tier-specific photo allowances and public prices; no photography or retouching."},
+{"@type":"Offer","sku":"static_portfolio_pack","name":"Static portfolio pack","price":"200","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Site Plus, Pro, Pro Plus, or Signature only. Four supplied cards in an already-approved static portfolio collection; no detail pages and no Flagship eligibility."},
+{"@type":"Offer","sku":"extra_revision_round","name":"Additional grouped revision round","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"90","maxPrice":"450","priceCurrency":"USD","unitText":"one grouped revision round"},"eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Tier-specific price for one consolidated preference-feedback round inside the accepted scope; defects and new scope are excluded."},
+{"@type":"Offer","sku":"priority_production_window","name":"Priority production window","priceSpecification":{"@type":"UnitPriceSpecification","minPrice":"125","maxPrice":"900","priceCurrency":"USD","unitText":"one capacity-confirmed priority window"},"eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Tier-specific price; offered only after capacity confirmation and paid-ready status. No deadline or outcome guarantee."},
+{"@type":"Offer","sku":"additional_ordinary_connection","name":"Additional domain or provider connection","price":"175","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":2},"description":"Price per additional client-owned ordinary connection. Card and Card Plus allow one; Site through Flagship allow two. Provider fees are separate."},
+{"@type":"Offer","sku":"standard_menu_data_pack","name":"Standard menu or catalog data pack","price":"175","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Pro through Flagship with the supplied-data menu already included. Adds ten supplied entries, to a maximum of forty."},
+{"@type":"Offer","sku":"hosted_shop_product_pack","name":"Hosted shop product pack","price":"300","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Signature or Flagship with the hosted shop already included. Adds five supplied simple products, to a maximum of fifteen; provider fees are separate."},
+{"@type":"Offer","sku":"hosted_booking_service","name":"Additional hosted booking service","price":"250","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Signature or Flagship with hosted booking already included. One additional service using the same provider, resource, calendar, and ordinary rules."},
+{"@type":"Offer","sku":"hosted_member_page_pack","name":"Hosted member-page pack","price":"300","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"Signature or Flagship with the hosted member area already included. Two supplied-content protected pages using the same role, provider, and template."}
+]},
+{"@type":"OfferCatalog","name":"Optional capped Care overflow packs","itemListElement":[
+{"@type":"Offer","sku":"care_lite","name":"Care Lite overflow","price":"50","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"At most one per website per paid month: up to two additional micro-edits or thirty additional minutes, whichever limit is reached first."},
+{"@type":"Offer","sku":"care","name":"Care overflow","price":"95","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"At most one per website per paid month: up to four additional ordinary existing-content edits or sixty additional minutes, whichever limit is reached first."},
+{"@type":"Offer","sku":"care_plus","name":"Care Plus overflow","price":"95","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"At most one per website per paid month: up to sixty additional minutes of otherwise-eligible work; no extra findability action."},
+{"@type":"Offer","sku":"partner","name":"Partner overflow","price":"95","priceCurrency":"USD","eligibleQuantity":{"@type":"QuantitativeValue","maxValue":1},"description":"At most one per website per paid month: up to sixty additional minutes of otherwise-eligible work; no extra call, review, or refresh."}
 ]}]}}
 </script>
 <link rel="stylesheet" href="style.css">
@@ -110,6 +131,43 @@
 .grimoire svg{transition:filter .6s var(--ease),transform .4s var(--ease)}
 .grimoire:hover svg,.grimoire:focus-visible svg{filter:drop-shadow(0 0 26px rgba(124,92,255,.35))}
 .grimoire:focus-visible{outline:2px solid #7C5CFF;outline-offset:6px;border-radius:8px}
+
+/* Capped website additions stay ledger-like and deliberately non-calculating.
+   They are part of the live one-time build chapter, never the Hive comb. */
+.addon-ledger{margin-top:3rem;padding:clamp(1.2rem,3vw,2rem);border:1px solid rgba(107,224,189,.28);
+  border-radius:18px;background:linear-gradient(145deg,rgba(29,78,64,.16),rgba(20,16,38,.72));
+  box-shadow:0 24px 70px rgba(0,0,0,.2)}
+.addon-ledger-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.addon-catalog-id{font:650 .72rem/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.08em;
+  color:#b9ebdc;border:1px solid rgba(107,224,189,.24);border-radius:999px;padding:.38rem .68rem}
+.addon-rules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.65rem;margin:1.4rem 0}
+.addon-rule{border:1px solid rgba(107,224,189,.2);border-radius:12px;padding:.9rem;background:rgba(7,24,20,.34)}
+.addon-rule b{display:block;color:#d7fff3;font-size:.84rem;margin-bottom:.3rem}
+.addon-rule span{display:block;color:var(--muted);font-size:.8rem;line-height:1.45}
+.addon-group{border-top:1px solid rgba(200,190,255,.17)}
+.addon-group:last-of-type{border-bottom:1px solid rgba(200,190,255,.17)}
+.addon-group>summary{cursor:pointer;padding:1rem .15rem;font-weight:800;color:var(--text)}
+.addon-group>summary::marker{color:var(--commerce-mint)}
+.addon-group>summary:focus-visible{outline:2px solid #FFD9E6;outline-offset:4px;border-radius:4px}
+.addon-list{display:grid;gap:.85rem;padding:0 0 1.2rem}
+.addon-item{padding:1rem;border:1px solid var(--hairline);border-radius:12px;background:rgba(12,9,24,.52)}
+.addon-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:.7rem;flex-wrap:wrap}
+.addon-item h4{font-size:1rem;margin:0;color:var(--text)}
+.addon-item>p{margin:.45rem 0 0;color:var(--muted);font-size:.86rem;line-height:1.52}
+.addon-prices{display:flex;flex-wrap:wrap;gap:.42rem;margin:.7rem 0 0}
+.addon-prices>div{display:flex;gap:.38rem;align-items:baseline;border:1px solid rgba(107,224,189,.2);
+  border-radius:999px;padding:.32rem .58rem;background:rgba(29,78,64,.12)}
+.addon-prices dt{font-size:.7rem;color:#b9ebdc}.addon-prices dd{margin:0;font-weight:800;font-size:.78rem;color:#fff}
+.addon-boundary{border-left:2px solid rgba(255,92,138,.55);padding-left:.65rem}
+.addon-boundary strong{color:#ffd1dd}
+.addon-never{margin-top:1rem;padding:1rem;border-radius:12px;border:1px solid rgba(255,92,138,.22);
+  background:rgba(68,21,39,.12);color:var(--muted);font-size:.86rem;line-height:1.55}
+.addon-never strong{color:#ffd1dd}
+.care-overflow{margin-top:1.6rem}
+.care-overflow .addon-item{background:rgba(29,78,64,.1)}
+@media (max-width:760px){.addon-rules{grid-template-columns:1fr 1fr}}
+@media (max-width:460px){.addon-rules{grid-template-columns:1fr}.addon-prices>div{width:100%;justify-content:space-between}}
+@media (prefers-reduced-motion:reduce){.addon-group>summary{scroll-behavior:auto}}
 </style>
 </head>
 <body class="atelier-inner page-pricing">
@@ -252,6 +310,7 @@
             <p class="ledger-note"><b>ADVANCED PROVIDER TOOL</b><span>One client-owned hosted commerce, calendar, or member provider configured within the written scope. Provider subscriptions, transaction charges, and other provider fees are separate.</span></p>
             <p class="ledger-note"><b>HOW PAGES COUNT</b><span>Each public page or post URL counts toward the tier&rsquo;s page allowance. Collection entries can instead appear together as cards on an included collection page.</span></p>
             <p class="ledger-note"><b>OWNERSHIP &amp; HIVE</b><span>You own the completed website build on final payment. Card and Card Plus are paid up front; other builds are 50% to begin and the balance on delivery. Website tools are part of a scoped build; the proposed managed Hive remains unavailable.</span></p>
+            <p class="ledger-note"><b>NEED A LITTLE MORE?</b><span>Choose the closest base tier first, then review the <a href="#website-add-ons">capped one-time website add-ons</a>. They are not standalone purchases and never turn a smaller capability class into a larger one.</span></p>
           </div>
 
           <div class="grid cols-3">
@@ -402,6 +461,144 @@
             </article>
 
           </div>
+
+          <section class="addon-ledger reveal" id="website-add-ons" aria-labelledby="website-addons-title">
+            <div class="addon-ledger-head">
+              <div>
+                <p class="commerce-status">Live website offer &middot; one-time additions</p>
+                <h3 id="website-addons-title">Capped website add-ons</h3>
+              </div>
+              <span class="addon-catalog-id">SS-ADDONS-2026.1</span>
+            </div>
+            <p class="lede" id="website-addons-rules" style="margin-top:.75rem;max-width:48em">Choose a published base website tier first. These are small, capped additions to an eligible build &mdash; not standalone services, Care allowances, or a way to assemble a larger tier piece by piece.</p>
+
+            <div class="addon-rules">
+              <div class="addon-rule"><b>Base tier required</b><span>No add-on is sold by itself. &ldquo;Not sure&rdquo; is fine for an inquiry; the signed scope must name the base tier.</span></div>
+              <div class="addon-rule"><b>Caps are hard boundaries</b><span>Each row states its eligible tiers and maximum quantity. A build may use at most one scope-expansion add-on type.</span></div>
+              <div class="addon-rule"><b>Signed quote only</b><span>Selecting an item in the inquiry is non-binding. Only the signed Scope &amp; Job Manifest confirms eligibility, quantity, and total price.</span></div>
+              <div class="addon-rule"><b>Upgrade when capability changes</b><span>New art, motion, tool, CMS, automation, or other capability classes require the proper tier or Beyond scope.</span></div>
+            </div>
+
+            <details class="addon-group" open>
+              <summary>Pages, words &amp; supplied content</summary>
+              <div class="addon-list">
+                <article class="addon-item" id="addon-card-micro-section" data-addon-id="card_micro_section" data-price-cents="8000">
+                  <div class="addon-item-head"><h4>Card micro-section</h4><span class="price"><span class="num">$80</span> once</span></div>
+                  <p>One simple section in the existing Card system, with up to 100 drafted words.</p>
+                  <dl class="addon-prices"><div><dt>Card only</dt><dd>$80 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> a second public page, a form, original art, motion, or a different layout system crosses the Card capability line and requires another tier.</p>
+                </article>
+
+                <article class="addon-item" id="addon-card-plus-story-section" data-addon-id="card_plus_story_section" data-price-cents="9500">
+                  <div class="addon-item-head"><h4>Card Plus story section</h4><span class="price"><span class="num">$95</span> each</span></div>
+                  <p>One story section in the existing Card Plus system, with up to 125 drafted words.</p>
+                  <dl class="addon-prices"><div><dt>Card Plus only</dt><dd>$95 each &middot; max 2</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> a second public page, a form, original art, motion, or a different layout system requires the appropriate larger tier.</p>
+                </article>
+
+                <article class="addon-item" id="addon-same-system-page" data-addon-id="same_system_page" data-tier-prices="site:22500,site_plus:27500,pro:27500,pro_plus:32500,signature:35000">
+                  <div class="addon-item-head"><h4>Additional same-system page</h4><span class="price"><span class="num">$225&ndash;$350</span> once</span></div>
+                  <p>One public page reusing the approved visual system, with up to 4 sections, 350 drafted words, and 3 supplied photos.</p>
+                  <dl class="addon-prices">
+                    <div><dt>Site</dt><dd>$225 &middot; max 1</dd></div><div><dt>Site Plus</dt><dd>$275 &middot; max 1</dd></div><div><dt>Pro</dt><dd>$275 &middot; max 1</dd></div><div><dt>Pro Plus</dt><dd>$325 &middot; max 1</dd></div><div><dt>Signature</dt><dd>$350 &middot; max 1</dd></div>
+                  </dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> not available for Card, Card Plus, or Flagship. A new page system, CMS, dashboard, account area, advanced interaction, or Flagship overflow requires a tier upgrade or Beyond scope.</p>
+                </article>
+
+                <article class="addon-item" id="addon-copy-expansion" data-addon-id="copy_expansion" data-tier-prices="card:7500,card_plus:12500,site:18000,site_plus:18000,pro:18000,pro_plus:18000,signature:18000">
+                  <div class="addon-item-head"><h4>Copy expansion</h4><span class="price"><span class="num">$75&ndash;$180</span> once</span></div>
+                  <p>Additional professionally drafted and edited copy inside layouts already approved in the signed scope.</p>
+                  <dl class="addon-prices">
+                    <div><dt>Card &middot; +100 words</dt><dd>$75 &middot; max 1</dd></div><div><dt>Card Plus &middot; +200 words</dt><dd>$125 &middot; max 1</dd></div><div><dt>Site through Signature &middot; +300 words</dt><dd>$180 &middot; max 1</dd></div>
+                  </dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> this expands copy only; it does not add layouts, pages, research-heavy claims, a new direction, or Flagship scope.</p>
+                </article>
+
+                <article class="addon-item" id="addon-supplied-photo-pack" data-addon-id="supplied_photo_pack" data-tier-prices="card:6000,card_plus:10000,site:12000,site_plus:12000,pro:12000,pro_plus:15000,signature:18000">
+                  <div class="addon-item-head"><h4>Supplied-photo preparation pack</h4><span class="price"><span class="num">$60&ndash;$180</span> once</span></div>
+                  <p>Compression, crop, placement, and appropriate alternative text in existing modules. Photography and retouching are not included.</p>
+                  <dl class="addon-prices">
+                    <div><dt>Card &middot; 2 photos</dt><dd>$60 &middot; max 1</dd></div><div><dt>Card Plus &middot; 4 photos</dt><dd>$100 &middot; max 1</dd></div><div><dt>Site / Site Plus / Pro &middot; 4</dt><dd>$120 &middot; max 1</dd></div><div><dt>Pro Plus &middot; 6</dt><dd>$150 &middot; max 1</dd></div><div><dt>Signature &middot; 8</dt><dd>$180 &middot; max 1</dd></div>
+                  </dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> supplied photos must fit approved modules. New photography, compositing, major retouching, custom art, or Flagship overflow is separately scoped.</p>
+                </article>
+
+                <article class="addon-item" id="addon-static-portfolio-pack" data-addon-id="static_portfolio_pack" data-price-cents="20000">
+                  <div class="addon-item-head"><h4>Static portfolio pack</h4><span class="price"><span class="num">$200</span> once</span></div>
+                  <p>Four supplied portfolio cards in an already-approved collection layout. Each card includes one supplied image, one link, and up to 40 supplied words; no detail pages.</p>
+                  <dl class="addon-prices"><div><dt>Site Plus / Pro / Pro Plus / Signature</dt><dd>$200 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> the signed scope must already include a static portfolio-card collection. Flagship is not eligible. Detail URLs, a CMS, self-publishing, filtering, or a new collection type require a different scope.</p>
+                </article>
+              </div>
+            </details>
+
+            <details class="addon-group">
+              <summary>Review, scheduling &amp; ordinary connections</summary>
+              <div class="addon-list">
+                <article class="addon-item" id="addon-extra-revision-round" data-addon-id="extra_revision_round" data-tier-prices="card:9000,card_plus:12000,site:15000,site_plus:18000,pro:22500,pro_plus:27500,signature:35000,flagship:45000">
+                  <div class="addon-item-head"><h4>Additional grouped revision round</h4><span class="price"><span class="num">$90&ndash;$450</span> once</span></div>
+                  <p>One consolidated preference-feedback round from the named decision maker, entirely inside the accepted scope.</p>
+                  <dl class="addon-prices">
+                    <div><dt>Card</dt><dd>$90 &middot; max 1</dd></div><div><dt>Card Plus</dt><dd>$120 &middot; max 1</dd></div><div><dt>Site</dt><dd>$150 &middot; max 1</dd></div><div><dt>Site Plus</dt><dd>$180 &middot; max 1</dd></div><div><dt>Pro</dt><dd>$225 &middot; max 1</dd></div><div><dt>Pro Plus</dt><dd>$275 &middot; max 1</dd></div><div><dt>Signature</dt><dd>$350 &middot; max 1</dd></div><div><dt>Flagship</dt><dd>$450 &middot; max 1</dd></div>
+                  </dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> a new page, direction, art, motion, tool, integration, or restructure is new scope &mdash; not revision feedback.</p>
+                </article>
+
+                <article class="addon-item" id="addon-priority-production-window" data-addon-id="priority_production_window" data-tier-prices="card:12500,card_plus:15000,site:20000,site_plus:30000,pro:40000,pro_plus:55000,signature:75000,flagship:90000">
+                  <div class="addon-item-head"><h4>Priority production window</h4><span class="price"><span class="num">$125&ndash;$900</span> once</span></div>
+                  <p>Capacity-confirmed queue priority. It does not reduce QA, add scope, create an emergency service, or guarantee a delivery or business outcome.</p>
+                  <dl class="addon-prices">
+                    <div><dt>Card</dt><dd>$125 &middot; max 1</dd></div><div><dt>Card Plus</dt><dd>$150 &middot; max 1</dd></div><div><dt>Site</dt><dd>$200 &middot; max 1</dd></div><div><dt>Site Plus</dt><dd>$300 &middot; max 1</dd></div><div><dt>Pro</dt><dd>$400 &middot; max 1</dd></div><div><dt>Pro Plus</dt><dd>$550 &middot; max 1</dd></div><div><dt>Signature</dt><dd>$750 &middot; max 1</dd></div><div><dt>Flagship</dt><dd>$900 &middot; max 1</dd></div>
+                  </dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> offered only when the studio confirms capacity and the project is signed, paid, and ready to begin. Third-party review or provider timing remains outside our control.</p>
+                </article>
+
+                <article class="addon-item" id="addon-additional-ordinary-connection" data-addon-id="additional_ordinary_connection" data-price-cents="17500">
+                  <div class="addon-item-head"><h4>Additional domain or provider connection</h4><span class="price"><span class="num">$175</span> each</span></div>
+                  <p>One additional client-owned domain or ordinary endpoint: up to 5 DNS record changes, verification, redirect, and SSL check.</p>
+                  <dl class="addon-prices"><div><dt>Card / Card Plus</dt><dd>$175 each &middot; max 1</dd></div><div><dt>Site through Flagship</dt><dd>$175 each &middot; max 2</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> requires timely access to a client-owned provider account. Credential recovery, email migration, complex DNS cleanup, and provider or license fees are separate.</p>
+                </article>
+              </div>
+            </details>
+
+            <details class="addon-group">
+              <summary>Capacity inside an already-included website tool</summary>
+              <div class="addon-list">
+                <article class="addon-item" id="addon-standard-menu-data-pack" data-addon-id="standard_menu_data_pack" data-price-cents="17500">
+                  <div class="addon-item-head"><h4>Standard menu or catalog data pack</h4><span class="price"><span class="num">$175</span> once</span></div>
+                  <p>Ten supplied entries in an already-approved menu or catalog schema, bringing that tool&rsquo;s maximum to 40 entries.</p>
+                  <dl class="addon-prices"><div><dt>Pro through Flagship with included supplied-data menu</dt><dd>$175 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> this adds entries, not a second tool, new schema, CMS, database, checkout, or managed automation.</p>
+                </article>
+
+                <article class="addon-item" id="addon-hosted-shop-product-pack" data-addon-id="hosted_shop_product_pack" data-price-cents="30000">
+                  <div class="addon-item-head"><h4>Hosted shop product pack</h4><span class="price"><span class="num">$300</span> once</span></div>
+                  <p>Five additional supplied simple products in an included hosted shop, bringing its maximum to 15.</p>
+                  <dl class="addon-prices"><div><dt>Signature / Flagship with included hosted shop</dt><dd>$300 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> provider subscription, transaction, license, shipping, tax, custom checkout, inventory, and product-data cleanup costs are separate.</p>
+                </article>
+
+                <article class="addon-item" id="addon-hosted-booking-service" data-addon-id="hosted_booking_service" data-price-cents="25000">
+                  <div class="addon-item-head"><h4>Additional hosted booking service</h4><span class="price"><span class="num">$250</span> once</span></div>
+                  <p>One additional service using the same included provider, resource, calendar, and ordinary booking rules.</p>
+                  <dl class="addon-prices"><div><dt>Signature / Flagship with included hosted booking calendar</dt><dd>$250 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> another provider, resource, calendar, location, complex rules, payments, custom logic, or automation requires a different scope. Provider fees are separate.</p>
+                </article>
+
+                <article class="addon-item" id="addon-hosted-member-page-pack" data-addon-id="hosted_member_page_pack" data-price-cents="30000">
+                  <div class="addon-item-head"><h4>Hosted member-page pack</h4><span class="price"><span class="num">$300</span> once</span></div>
+                  <p>Two supplied-content protected pages using the same included role, provider, and template, bringing that provider&rsquo;s maximum to 7 pages.</p>
+                  <dl class="addon-prices"><div><dt>Signature / Flagship with included hosted member area</dt><dd>$300 &middot; max 1</dd></div></dl>
+                  <p class="addon-boundary"><strong>Boundary:</strong> new roles, custom authentication, dashboards, databases, user-generated content, or provider migration require another scope. Provider fees are separate.</p>
+                </article>
+              </div>
+            </details>
+
+            <p class="addon-never"><strong>Not à la carte:</strong> the universal quality floor; a new art, motion, form, tool, CMS, backend, database, API, authentication, checkout, or managed-automation capability class; a second tool; Flagship overflow; unlimited revisions or Care; emergency or after-hours guarantees; and credential recovery or complex provider migration. The proposed Hive remains separate and unavailable. Unused tier allowances are not credits, and add-on discounts are not offered.</p>
+            <p class="terms" style="margin-top:1rem">Public prices show the stated unit only. Your inquiry is non-binding; the signed Scope &amp; Job Manifest is the only order and confirms the eligible base tier, selected unit, quantity, provider dependencies, fees, and final total. If the request crosses a capability line or the appropriate tier is the better fit, the quote uses that tier or Beyond.</p>
+            <div class="actions" style="margin-top:1.25rem"><a class="btn primary" href="/start/?after=website#website-addons">Flag add-ons in my website brief</a><a class="btn ghost" href="/terms.html#paying">Read the scope rules</a></div>
+          </section>
         </div>
 
         <!-- ══ CHAPTER II — WARD MONTHLY · the Wards ══ -->
@@ -494,6 +691,30 @@
             </article>
 
           </div>
+
+          <details class="addon-group care-overflow reveal">
+            <summary>Need one capped Care overflow pack?</summary>
+            <div class="addon-list">
+              <p class="terms" style="margin:0">Before overflow, we show the next Care plan first when one exists: Lite to Care is +$30/month, Care to Care Plus is +$40/month, and Care Plus to Partner is +$60/month; overflow remains optional when the plan itself is not the better fit.</p>
+              <p class="terms" style="margin:0">One optional overflow pack may be approved per website per paid month. It extends only otherwise-eligible work in the current Care class, does not roll over, and cannot fund a new page, redesign, feature, provider, or capability. Host has no overflow pack.</p>
+              <article class="addon-item" data-care-overflow-id="care_lite" data-price-cents="5000">
+                <div class="addon-item-head"><h4>Care Lite overflow</h4><span class="price"><span class="num">$50</span> once that month</span></div>
+                <p>Up to 2 additional micro-edits or 30 additional minutes, whichever limit is reached first. Maximum: one pack per website per paid month.</p>
+              </article>
+              <article class="addon-item" data-care-overflow-id="care" data-price-cents="9500">
+                <div class="addon-item-head"><h4>Care overflow</h4><span class="price"><span class="num">$95</span> once that month</span></div>
+                <p>Up to 4 additional ordinary existing-content edits or 60 additional minutes, whichever limit is reached first. Maximum: one pack per website per paid month.</p>
+              </article>
+              <article class="addon-item" data-care-overflow-id="care_plus" data-price-cents="9500">
+                <div class="addon-item-head"><h4>Care Plus overflow</h4><span class="price"><span class="num">$95</span> once that month</span></div>
+                <p>Up to 60 additional minutes of otherwise-eligible website Care work. Maximum: one pack per website per paid month. No additional findability action is included.</p>
+              </article>
+              <article class="addon-item" data-care-overflow-id="partner" data-price-cents="9500">
+                <div class="addon-item-head"><h4>Partner overflow</h4><span class="price"><span class="num">$95</span> once that month</span></div>
+                <p>Up to 60 additional minutes of otherwise-eligible website Care work. Maximum: one pack per website per paid month. No additional call, review, or refresh is included.</p>
+              </article>
+            </div>
+          </details>
 
           <p class="terms" style="max-width:48em;margin-top:2rem">Monthly caps are the public service boundary, not unlimited production. A new feature, redesign, campaign, or work beyond the selected cap requires a separate quote or written change order. Care can be canceled without an exit fee; at the end of the paid month its hosting and plan features stop, while ownership of the paid build remains yours and a hosting move can be arranged.</p>
         </div>

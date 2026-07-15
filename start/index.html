@@ -67,6 +67,16 @@
   box-shadow:0 4px 18px rgba(124,92,255,.28)}
 .pick:has(input:checked) svg{opacity:1}
 .pick:focus-within{outline:2px solid var(--violet);outline-offset:2px}
+.addon-picker-group{margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--hairline)}
+.addon-picker-group>p{margin:0 0 .65rem;color:var(--text);font-size:.84rem;font-weight:750}
+.addon-picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+.addon-picks .pick{width:100%;border-radius:12px;align-items:flex-start;padding:.72rem .82rem;line-height:1.35}
+.addon-picks .pick>span{display:grid;gap:.16rem}
+.addon-picks .pick b{font-size:.84rem;color:inherit}
+.addon-picks .pick small{font-size:.73rem;color:inherit;opacity:.84;font-weight:550}
+.addon-picks .pick:has(input:disabled){opacity:.5;cursor:not-allowed}
+.addon-status{min-height:1.35em;margin:.65rem 0 0;color:var(--muted);font-size:.8rem}
+@media(max-width:38rem){.addon-picks{grid-template-columns:1fr}}
 
 .sendrow{display:grid;gap:.9rem;margin-top:1.6rem}
 .sendrow .btn{width:100%}
@@ -255,6 +265,7 @@
           <input type="hidden" name="subject" value="New project brief — Site Sourcery">
           <input type="hidden" name="from_name" value="Site Sourcery · Start page">
           <input type="hidden" name="redirect" value="https://sitesourcery.com/thanks.html">
+          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.1">
           <!-- honeypot: real people leave it empty; bots fill it and get dropped -->
           <input type="checkbox" name="botcheck" class="honeypot" tabindex="-1" aria-hidden="true">
 
@@ -325,9 +336,9 @@
           </fieldset>
 
           <div class="field">
-            <label for="f-tier">Website tier or working budget <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Choose the closest published build. This records your starting point; the written scope still controls before any payment.</p>
-            <select class="input" id="f-tier" name="Website tier or working budget" required>
+            <label for="f-tier">Base website tier <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">Every website add-on requires an eligible base build. Choose the closest tier; &ldquo;not sure&rdquo; is fine for this inquiry, but the signed Scope &amp; Job Manifest must name the base tier before work begins.</p>
+            <select class="input" id="f-tier" name="Base website tier" required>
               <option value="" selected disabled>Choose the closest fit</option>
               <option value="Not sure — recommend a website tier">Not sure — recommend a tier</option>
               <option value="Card — $200">Card — $200</option>
@@ -344,6 +355,13 @@
           </div>
 
           <div class="field">
+            <label for="f-budget">Overall working budget <span class="opt">optional</span></label>
+            <p class="hint">Include the base build and any add-ons you are considering. A range or &ldquo;scope first&rdquo; is fine; this is not a quote or payment authorization.</p>
+            <input class="input" id="f-budget" name="Overall working budget" type="text" maxlength="100"
+                   placeholder="e.g. $1,500–$2,000 total, or scope first">
+          </div>
+
+          <div class="field">
             <label for="f-pages">Desired pages <span class="opt">optional for Hive-only interest</span></label>
             <p class="hint">List the pages or sections you expect: for example Home, Services, About, Contact, Gallery, Menu, Shop, or Booking.</p>
             <textarea class="input" id="f-pages" name="Desired website pages" maxlength="1000" rows="3"
@@ -351,10 +369,69 @@
           </div>
 
           <div class="field">
+            <label for="f-total-urls">Expected total public pages or URLs <span class="opt">optional</span></label>
+            <p class="hint">Count each public page or post URL. Static cards displayed together on one collection page do not each need a separate URL.</p>
+            <input class="input" id="f-total-urls" name="Expected total public pages or URLs" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 6">
+          </div>
+
+          <div class="field">
             <label for="f-function">Desired tool or function <span class="opt">optional</span></label>
             <p class="hint">Describe the job, not private data or account credentials: quote requests, booking intake, a menu, a small shop, a calculator, or something else.</p>
             <textarea class="input" id="f-function" name="Desired website tool or function" maxlength="1000" rows="3"
                       placeholder="A quote-request form that sends the job details to my inbox"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="f-provider">Existing provider name <span class="opt">optional</span></label>
+            <p class="hint">Name only, such as Squarespace Domains, Calendly, Shopify, or Stripe. Do not send a password, login code, recovery code, API key, or other credential.</p>
+            <input class="input" id="f-provider" name="Existing provider name only" type="text" maxlength="160" autocomplete="off"
+                   placeholder="Provider name only — no login details">
+          </div>
+
+          <fieldset class="field" id="website-addons" aria-describedby="website-addons-help" style="border:0;padding:0;margin:0 0 1.1rem">
+            <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
+              Website build add-ons you are considering <span class="opt">optional · non-binding</span>
+            </legend>
+            <p class="hint" id="website-addons-help">Catalog SS-ADDONS-2026.1. A base tier is required; every item has eligibility and a cap. You may choose at most one scope-expansion type. Selecting another replaces the earlier scope-expansion choice. The signed Scope &amp; Job Manifest is the only order and may use a tier upgrade instead.</p>
+
+            <div class="addon-picker-group">
+              <p id="addon-scope-label">Pages, words &amp; supplied content · choose at most one type</p>
+              <div class="addon-picks">
+                <label class="pick"><input id="card_micro_section" type="checkbox" name="Website add-on interest - card_micro_section" value="Card micro-section — $80 — max 1" data-addon-id="card_micro_section" data-scope-expansion><span><b>Card micro-section</b><small>Card · $80 · max 1</small></span></label>
+                <label class="pick"><input id="card_plus_story_section" type="checkbox" name="Website add-on interest - card_plus_story_section" value="Card Plus story section — $95 each — max 2" data-addon-id="card_plus_story_section" data-scope-expansion><span><b>Card Plus story section</b><small>Card Plus · $95 each · max 2</small></span></label>
+                <label class="pick"><input id="same_system_page" type="checkbox" name="Website add-on interest - same_system_page" value="Additional same-system page — $225–$350 — max 1" data-addon-id="same_system_page" data-scope-expansion><span><b>Additional same-system page</b><small>Site–Signature · $225–$350 · max 1</small></span></label>
+                <label class="pick"><input id="copy_expansion" type="checkbox" name="Website add-on interest - copy_expansion" value="Copy expansion — $75–$180 — max 1" data-addon-id="copy_expansion" data-scope-expansion><span><b>Copy expansion</b><small>Card–Signature · $75–$180 · max 1</small></span></label>
+                <label class="pick"><input id="supplied_photo_pack" type="checkbox" name="Website add-on interest - supplied_photo_pack" value="Supplied-photo preparation pack — $60–$180 — max 1" data-addon-id="supplied_photo_pack" data-scope-expansion><span><b>Supplied-photo preparation pack</b><small>Card–Signature · $60–$180 · max 1</small></span></label>
+                <label class="pick"><input id="static_portfolio_pack" type="checkbox" name="Website add-on interest - static_portfolio_pack" value="Static portfolio pack — $200 — max 1" data-addon-id="static_portfolio_pack" data-scope-expansion><span><b>Static portfolio pack</b><small>Site Plus / Pro / Pro Plus / Signature · $200 · max 1</small></span></label>
+              </div>
+            </div>
+
+            <div class="addon-picker-group">
+              <p id="addon-ops-label">Review, scheduling &amp; ordinary connections</p>
+              <div class="addon-picks">
+                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $90–$450 — max 1" data-addon-id="extra_revision_round"><span><b>Additional grouped revision round</b><small>Eligible base tier price · $90–$450 · max 1</small></span></label>
+                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $125–$900 — max 1" data-addon-id="priority_production_window"><span><b>Priority production window</b><small>Capacity-confirmed only · $125–$900 · max 1</small></span></label>
+                <label class="pick"><input id="additional_ordinary_connection" type="checkbox" name="Website add-on interest - additional_ordinary_connection" value="Additional domain or provider connection — $175 each — max 1 or 2 by tier" data-addon-id="additional_ordinary_connection"><span><b>Additional domain or provider connection</b><small>$175 each · max 1 Card tiers / 2 Site–Flagship</small></span></label>
+              </div>
+            </div>
+
+            <div class="addon-picker-group">
+              <p id="addon-tool-label">Capacity inside an already-included website tool · also shares the one scope-expansion type limit</p>
+              <div class="addon-picks">
+                <label class="pick"><input id="standard_menu_data_pack" type="checkbox" name="Website add-on interest - standard_menu_data_pack" value="Standard menu or catalog data pack — $175 — max 1" data-addon-id="standard_menu_data_pack" data-scope-expansion><span><b>Standard menu or catalog data pack</b><small>Pro–Flagship with included menu · $175 · max 1</small></span></label>
+                <label class="pick"><input id="hosted_shop_product_pack" type="checkbox" name="Website add-on interest - hosted_shop_product_pack" value="Hosted shop product pack — $300 — max 1" data-addon-id="hosted_shop_product_pack" data-scope-expansion><span><b>Hosted shop product pack</b><small>Signature / Flagship with included shop · $300 · max 1</small></span></label>
+                <label class="pick"><input id="hosted_booking_service" type="checkbox" name="Website add-on interest - hosted_booking_service" value="Additional hosted booking service — $250 — max 1" data-addon-id="hosted_booking_service" data-scope-expansion><span><b>Additional hosted booking service</b><small>Signature / Flagship with included booking · $250 · max 1</small></span></label>
+                <label class="pick"><input id="hosted_member_page_pack" type="checkbox" name="Website add-on interest - hosted_member_page_pack" value="Hosted member-page pack — $300 — max 1" data-addon-id="hosted_member_page_pack" data-scope-expansion><span><b>Hosted member-page pack</b><small>Signature / Flagship with included member area · $300 · max 1</small></span></label>
+              </div>
+            </div>
+            <p class="addon-status" id="website-addons-status" aria-live="polite"></p>
+          </fieldset>
+
+          <div class="field">
+            <label for="f-addon-details">Requested add-on quantities or details <span class="opt">optional</span></label>
+            <p class="hint">Give quantities and the plain job to be done. Do not send credentials, account recovery details, payment data, customer records, or private provider data.</p>
+            <textarea class="input" id="f-addon-details" name="Requested website add-on quantities or details" maxlength="1200" rows="3"
+                      placeholder="e.g. 2 Card Plus story sections, 1 revision round, and one extra domain connection"></textarea>
           </div>
 
           <div class="field">
@@ -505,14 +582,20 @@
 
 <script src="../sourcery.js" defer></script>
 <script>
-/* prefill: /start/?after=hive&hive=The+Responder,Online+booking pre-ticks the boxes */
+/* Safe prefill only: query values select visible inquiry choices; they never
+   calculate a total, create an order, or bypass the signed-scope review. */
 (function(){
   try{
     var q=new URLSearchParams(location.search);
     var hive=(q.get('hive')||'').split(',').filter(Boolean);
+    var addonIds=(q.get('addons')||'').split(',').filter(Boolean);
     if(q.get('after')==='hive'){
       var r=document.querySelector('input[name="What you\'re after"][value="Pre-launch Hive interest (automation concept)"]');
       if(r)r.checked=true;
+    }
+    if(q.get('after')==='website'){
+      var w=document.querySelector('input[name="What you\'re after"][value="A website"]');
+      if(w)w.checked=true;
     }
     if(hive.length){
       document.querySelectorAll('#hive-picks input[type=checkbox]').forEach(function(c){
@@ -520,6 +603,50 @@
         if(hive.indexOf(nm)>-1)c.checked=true;
       });
     }
+
+    var tierMap={
+      'card':'Card — $200','card-plus':'Card Plus — $350','site':'Site — $600',
+      'site-plus':'Site Plus — $900','pro':'Pro — $1,300','pro-plus':'Pro Plus — $1,800',
+      'signature':'Signature — $2,400','flagship':'Flagship — $3,000',
+      'beyond':'Beyond/custom — written quote required'
+    };
+    var tier=document.getElementById('f-tier'),tierValue=tierMap[q.get('tier')];
+    if(tier&&tierValue){
+      Array.prototype.some.call(tier.options,function(o){if(o.value===tierValue){tier.value=tierValue;return true}return false});
+    }
+
+    var addonInputs=[].slice.call(document.querySelectorAll('#website-addons input[data-addon-id]'));
+    var allowed=new Set(addonInputs.map(function(c){return c.dataset.addonId}));
+    var firstScope=null;
+    addonIds.forEach(function(id){
+      if(!allowed.has(id))return;
+      var c=document.getElementById(id);if(!c)return;
+      if(c.hasAttribute('data-scope-expansion')){
+        if(firstScope)return;
+        firstScope=c;
+      }
+      c.checked=true;
+    });
+
+    var status=document.getElementById('website-addons-status');
+    function describeScope(current,replaced){
+      if(!status)return;
+      if(replaced)status.textContent='Scope-expansion choice updated. Only '+current.closest('label').innerText.trim().split('\n')[0]+' remains selected as the scope-expansion type.';
+      else if(current&&current.checked)status.textContent='One scope-expansion type selected. Choose a quantity in the details field where the catalog allows more than one unit.';
+      else status.textContent='';
+    }
+    addonInputs.filter(function(c){return c.hasAttribute('data-scope-expansion')}).forEach(function(c){
+      c.addEventListener('change',function(){
+        var replaced=false;
+        if(c.checked){
+          addonInputs.forEach(function(other){
+            if(other!==c&&other.hasAttribute('data-scope-expansion')&&other.checked){other.checked=false;replaced=true}
+          });
+        }
+        describeScope(c,replaced);
+      });
+    });
+    if(firstScope)describeScope(firstScope,false);
   }catch(e){}
 })();
 </script>
