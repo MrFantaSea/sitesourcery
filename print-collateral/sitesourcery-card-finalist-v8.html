@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Site Sourcery — finalist V8</title>
+<style>
+:root{--black:#09070c;--white:#f8f6f1;--ink:#17131d;--violet:#7047ee;--rose:#e15b8c;--gold:#f2c66d;--sans:"Avenir Next","Avenir","Segoe UI","Inter","Inter Tight",system-ui,-apple-system,sans-serif;--serif:"Bodoni MT","Didot","Baskerville","Times New Roman",serif;--mono:"SFMono-Regular","SF Mono",Consolas,monospace}
+*{box-sizing:border-box;margin:0}html,body{background:#d8d4cf;color:var(--ink);font-family:var(--sans)}body{padding:28px;display:grid;gap:28px;justify-content:center}.page{position:relative;width:3.75in;height:2.25in;overflow:hidden;box-shadow:0 20px 60px rgba(20,15,22,.27)}.safe{position:absolute;inset:.25in;z-index:4}.label{margin-bottom:-18px;color:#6e6870;font:700 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.front{background:radial-gradient(circle at 78% 48%,#171021 0,transparent 42%),var(--black);color:#fbf7ff}.front::before{content:"";position:absolute;inset:.13in;border:1px solid rgba(225,204,241,.16);z-index:3}.wand-medallion{position:absolute;right:.19in;top:.38in;width:1.38in;height:1.38in;border-radius:50%;z-index:1;background:conic-gradient(from 215deg,#402b91,#7047ee 18%,#b05de5 34%,#f08cb6 46%,#ffd58a 51%,#e15b8c 60%,#7047ee 78%,#30206e);box-shadow:0 .11in .24in rgba(0,0,0,.55),0 0 .24in rgba(112,71,238,.28),inset .035in .035in .06in rgba(255,255,255,.58),inset -.05in -.06in .08in rgba(26,8,55,.72)}.wand-medallion::before{content:"";position:absolute;inset:.15in;border-radius:50%;background:radial-gradient(circle at 38% 28%,#37224f 0,#171020 36%,#09070c 76%);box-shadow:inset .035in .04in .07in rgba(255,255,255,.12),inset -.04in -.05in .08in #020103,0 0 0 1px rgba(255,255,255,.2)}.wand-medallion::after{content:"";position:absolute;left:.2in;right:.2in;top:.11in;height:.28in;border-radius:50%;background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0));filter:blur(.025in);opacity:.55}.wand-art{position:absolute;inset:.22in;z-index:2;width:.94in;height:.94in;filter:drop-shadow(.035in .055in .035in rgba(0,0,0,.85)) drop-shadow(0 0 .07in rgba(184,130,255,.55))}.front .safe{display:grid;grid-template-columns:.18in 1fr;gap:.2in}.spine{border-right:1px solid rgba(225,204,241,.2);display:flex;align-items:end}.spine span{writing-mode:vertical-rl;transform:rotate(180deg);font:700 4.6pt/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#9489a0}.content{display:flex;flex-direction:column;justify-content:space-between;gap:.14in}.brand{display:flex;align-items:center;gap:.055in;font:800 5.7pt/1 var(--mono);letter-spacing:.16em;text-transform:uppercase}.brand-star{width:.12in;height:.12in}.front h1{position:relative;z-index:2;font:400 17.4pt/1.08 var(--serif);letter-spacing:-.01em;max-width:1.62in;text-shadow:0 2px 8px #09070c}.front h1 em{display:block;color:#c8afff;letter-spacing:.02em}.front-foot{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:end;font:650 5.2pt/1.34 var(--mono);letter-spacing:.025em;color:#bbb1c1}.front-foot strong{display:block;color:#fff;font-size:5.7pt}.front-foot span{text-align:right;font-size:4.8pt;letter-spacing:.12em}
+.back{background:var(--white)}.back::before{content:"";position:absolute;left:0;top:0;bottom:0;width:.055in;background:linear-gradient(var(--violet),var(--rose))}.back .safe{left:.32in;display:grid;grid-template-columns:1.48in 1.42in;gap:.16in;align-items:stretch}.person{display:flex;flex-direction:column;justify-content:center}.person .brandline{display:flex;align-items:center;gap:.06in;margin-bottom:.14in;color:#655d68;font:750 5.2pt/1 var(--mono);letter-spacing:.13em;text-transform:uppercase}.person .mini{width:.11in;height:.11in}.person h2{font:400 15.5pt/.95 var(--serif);letter-spacing:-.035em}.person .title{margin-top:.045in;color:#7556ce;font:700 5.7pt/1.2 var(--sans);letter-spacing:.03em}.details{display:grid;gap:.033in;margin-top:.15in;padding-top:.1in;border-top:1px solid #d8d3dc;color:#26212a;font:600 5.8pt/1.2 var(--mono)}.details span:first-child{font-weight:800}.qr{display:grid;place-content:center;text-align:center;border-left:1px solid #d8d3dc;padding-left:.12in}.qr img{display:block;width:1.25in;height:1.25in;background:#fff}.qr p{margin-top:.055in;color:#6d6570;font:800 4.9pt/1 var(--mono);letter-spacing:.13em;text-transform:uppercase}.footer-note{position:absolute;left:.32in;bottom:.13in;color:#8d8690;font:700 4.35pt/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+@page{size:3.75in 2.25in;margin:0}@media print{html,body{background:#fff}body{display:block;padding:0}.label{display:none}.page{box-shadow:none;break-after:page}.page:last-child{break-after:auto}}
+</style>
+</head>
+<body>
+<p class="label">Finalist V8 · V2 × V4 × V7</p>
+<section class="page front" aria-label="Site Sourcery finalist identity side">
+  <div class="wand-medallion" aria-hidden="true">
+    <svg class="wand-art" viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="wandBody" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#fff4c7"/>
+          <stop offset=".22" stop-color="#f2c66d"/>
+          <stop offset=".55" stop-color="#8c55df"/>
+          <stop offset=".78" stop-color="#422577"/>
+          <stop offset="1" stop-color="#160d25"/>
+        </linearGradient>
+        <radialGradient id="wandStar" cx=".34" cy=".25" r=".8">
+          <stop stop-color="#fff"/>
+          <stop offset=".18" stop-color="#ffe9a7"/>
+          <stop offset=".52" stop-color="#e87aa7"/>
+          <stop offset=".8" stop-color="#8b58f5"/>
+          <stop offset="1" stop-color="#3a1f70"/>
+        </radialGradient>
+      </defs>
+      <g transform="rotate(-38 50 50)">
+        <path d="M47 78h6l3 15H44z" fill="url(#wandBody)" stroke="#f7d995" stroke-width="1.2"/>
+        <rect x="46.5" y="27" width="7" height="57" rx="3.5" fill="url(#wandBody)" stroke="rgba(255,255,255,.65)" stroke-width="1.1"/>
+        <path d="M49 31v45" stroke="#fff" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>
+        <g transform="rotate(33 50 25.2)">
+          <path d="M50 4l5.2 16.1L71 25.2l-15.8 5.1L50 46.4l-5.2-16.1L29 25.2l15.8-5.1z" fill="url(#wandStar)" stroke="#fff0bd" stroke-width="1.2"/>
+          <path d="M42 17q8-8 16 0" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".78"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="safe">
+    <div class="spine"><span>sitesourcery.com</span></div>
+    <div class="content">
+      <div class="brand">Site Sourcery <svg class="brand-star" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="v8g"><stop stop-color="#7047EE"/><stop offset="1" stop-color="#E15B8C"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#v8g)"/></svg></div>
+      <h1>Web Studio</h1>
+      <div class="front-foot"><span>EST. 2026<br>SOUTH JERSEY</span></div>
+    </div>
+  </div>
+</section>
+<p class="label">Finalist V8 · V2 contact side</p>
+<section class="page back" aria-label="Site Sourcery finalist contact side">
+  <div class="safe">
+    <div class="person">
+      <p class="brandline"><svg class="mini" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="#7047EE"/></svg> Site Sourcery</p>
+      <h2>Zack Hendrix</h2>
+      <p class="title">Founder &amp; Web Sorcerer</p>
+      <div class="details"><span>sitesourcery.com</span><span>sitesourcery@proton.me</span><span>(856) 244-1220</span></div>
+    </div>
+    <div class="qr"><img src="assets/qr-start.svg" alt="QR code for sitesourcery.com/start"><p>Scan</p></div>
+  </div>
+</section>
+</body>
+</html>
