@@ -11,6 +11,7 @@ const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
 const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");
+const containmentWorkflow = await readFile(path.join(root, ".github/workflows/containment.yml"), "utf8");
 const quality = packageJson.siteQuality ?? {};
 const siteOrigin = String(quality.origin ?? "").replace(/\/$/, "");
 const allowedFormActions = new Set(quality.allowedFormActions ?? []);
@@ -47,6 +48,12 @@ if (inquiryOnly && (releaseControl.state !== "hold" || releaseControl.allowsDepl
 if (releaseControl.allowsDeployment === true && releaseControl.state !== "cleared") {
   report("data/release-control.json", "deployment authority requires state=cleared");
 }
+if (releaseControl.allowsCommercialDeployment !== releaseControl.allowsDeployment) {
+  report("data/release-control.json", "commercial deployment flags must agree");
+}
+if (typeof releaseControl.allowsContainmentDeployment !== "boolean") {
+  report("data/release-control.json", "containment deployment authority must be an explicit boolean");
+}
 for (const marker of [
   "run: npm test",
   "data/release-control.json",
@@ -54,6 +61,15 @@ for (const marker of [
   "path: _site",
 ]) {
   if (!pagesWorkflow.includes(marker)) report(".github/workflows/pages.yml", `missing controlled-release marker ${JSON.stringify(marker)}`);
+}
+for (const marker of [
+  "production_sha",
+  "remove_path",
+  "allowsContainmentDeployment",
+  "prepare-containment.mjs",
+  "target/_site",
+]) {
+  if (!containmentWorkflow.includes(marker)) report(".github/workflows/containment.yml", `missing containment marker ${JSON.stringify(marker)}`);
 }
 
 function decodeHtmlAttribute(value) {

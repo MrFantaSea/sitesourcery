@@ -1,7 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "state": "hold",
   "allowsDeployment": false,
+  "allowsCommercialDeployment": false,
+  "allowsContainmentDeployment": false,
   "reason": "Founder rollup Gate 10/11, canonical contact, mail delivery, and controlled-release evidence remain open.",
+  "containmentReason": "Emergency removal is implemented but remains disabled until the founder authorizes the containment-only production lane.",
   "updatedAt": "2026-07-22"
 }

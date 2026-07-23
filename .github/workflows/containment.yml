@@ -1,0 +1,81 @@
+name: Containment-only Pages deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_sha:
+        description: Exact full commit currently serving in production
+        required: true
+        type: string
+      remove_path:
+        description: One top-level demo path to remove
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out current control plane
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: control
+      - name: Enforce containment authority and exact inputs
+        env:
+          PRODUCTION_SHA: ${{ inputs.production_sha }}
+          REMOVE_PATH: ${{ inputs.remove_path }}
+        run: |
+          node -e "const c=require('./control/data/release-control.json');if(c.allowsContainmentDeployment!==true){console.error('Containment deployment held:',c.containmentReason);process.exit(1)}"
+          node -e "if(!/^[a-f0-9]{40}$/.test(process.env.PRODUCTION_SHA)){throw Error('production_sha must be a full lowercase Git commit')}if(!/^[a-z0-9][a-z0-9-]*$/.test(process.env.REMOVE_PATH)){throw Error('remove_path must be one lowercase top-level public path')}"
+      - name: Check out the exact production source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.production_sha }}
+          path: target
+      - name: Use production-pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Install production-locked dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Prepare one-path removal from the production tree
+        env:
+          REMOVE_PATH: ${{ inputs.remove_path }}
+        run: node control/scripts/prepare-containment.mjs target "$REMOVE_PATH"
+      - name: Run complete checks on the contained tree
+        working-directory: target
+        run: npm test
+      - name: Build public-only containment artifact
+        working-directory: target
+        run: npm run build:pages
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Package exact containment artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: target/_site
+
+  deploy:
+    environment:
+      name: github-pages-containment
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    needs: validate
+    steps:
+      - name: Deploy validated containment artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
