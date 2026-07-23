@@ -6,9 +6,11 @@
     "node": "20.20.2"
   },
   "scripts": {
-    "check": "npm run check:html && npm run check:static",
+    "check": "npm run check:html && npm run check:pricing && npm run check:static",
     "check:html": "html-validate \"**/*.html\"",
+    "check:pricing": "node scripts/check-pricing.mjs",
     "check:static": "node scripts/check-static.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
     "test": "npm run check"
   },
   "devDependencies": {
@@ -16,9 +18,7 @@
   },
   "siteQuality": {
     "origin": "https://sitesourcery.com",
-    "allowedFormActions": [
-      "https://api.web3forms.com/submit"
-    ],
+    "allowedFormActions": [],
     "expectedForms": 2
   }
 }

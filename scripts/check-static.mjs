@@ -3,14 +3,18 @@ import path from "node:path";
 import vm from "node:vm";
 
 const root = process.cwd();
-const ignoredDirectories = new Set([".git", "node_modules"]);
+const ignoredDirectories = new Set([".git", "_site", "node_modules"]);
 const errors = [];
 const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
+const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
+const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");
 const quality = packageJson.siteQuality ?? {};
 const siteOrigin = String(quality.origin ?? "").replace(/\/$/, "");
 const allowedFormActions = new Set(quality.allowedFormActions ?? []);
+const inquiryOnly = publicCatalog.offerState === "inquiry-only";
 
 async function walk(directory = root) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -35,6 +39,21 @@ for (const file of htmlFiles) htmlSources.set(file, await readFile(path.join(roo
 
 function report(file, message) {
   errors.push(`${file}: ${message}`);
+}
+
+if (inquiryOnly && (releaseControl.state !== "hold" || releaseControl.allowsDeployment !== false)) {
+  report("data/release-control.json", "inquiry-only catalog requires a held deployment state");
+}
+if (releaseControl.allowsDeployment === true && releaseControl.state !== "cleared") {
+  report("data/release-control.json", "deployment authority requires state=cleared");
+}
+for (const marker of [
+  "run: npm test",
+  "data/release-control.json",
+  "run: npm run build:pages",
+  "path: _site",
+]) {
+  if (!pagesWorkflow.includes(marker)) report(".github/workflows/pages.yml", `missing controlled-release marker ${JSON.stringify(marker)}`);
 }
 
 function decodeHtmlAttribute(value) {
@@ -174,21 +193,29 @@ function checkForms(file, html) {
     const remote = /^https?:\/\//i.test(action);
     if (/^http:\/\//i.test(action)) report(file, `form ${index + 1} uses an insecure action`);
     if (remote && method !== "post") report(file, `remote form ${index + 1} must use POST`);
-    if (remote && allowedFormActions.size && !allowedFormActions.has(action)) {
+    if (remote && !allowedFormActions.has(action)) {
       report(file, `remote form ${index + 1} has an unapproved action ${JSON.stringify(action)}`);
     }
-    if (action === "https://api.web3forms.com/submit") {
-      const inputs = [...form[2].matchAll(/<input\b([^>]*)>/gi)].map((match) => match[1]);
-      const hasAccessKey = inputs.some((attrs) => attribute(attrs, "name") === "access_key" && attribute(attrs, "value"));
-      const hasConsent = inputs.some((attrs) =>
-        (attribute(attrs, "type") ?? "text").toLowerCase() === "checkbox"
-        && attribute(attrs, "name") !== "botcheck"
-        && hasAttribute(attrs, "required")
-      );
-      if (!hasAccessKey) report(file, `Web3Forms form ${index + 1} is missing its access key`);
-      if (!hasConsent) report(file, `Web3Forms form ${index + 1} is missing a required consent checkbox`);
-      if (!/href\s*=\s*["'][^"']*(?:privacy|policies)[^"']*["']/i.test(form[2])) {
-        report(file, `Web3Forms form ${index + 1} does not link its privacy/policy notice`);
+    if (inquiryOnly) {
+      if (action) report(file, `form ${index + 1} must not have an action while the public catalog is inquiry-only`);
+      if (attribute(form[1], "data-commercial-state") !== "hold") {
+        report(file, `form ${index + 1} must declare data-commercial-state="hold" while the public catalog is inquiry-only`);
+      }
+      if ((attribute(form[1], "onsubmit") ?? "").replace(/\s+/g, " ").trim() !== "return false") {
+        report(file, `form ${index + 1} must block submit events while the public catalog is inquiry-only`);
+      }
+      if (/\bname\s*=\s*["']access_key["']/i.test(form[2])) {
+        report(file, `form ${index + 1} exposes a provider access key field while submission is held`);
+      }
+      const submitControls = [
+        ...form[2].matchAll(/<button\b([^>]*)>/gi),
+        ...form[2].matchAll(/<input\b([^>]*)>/gi),
+      ].map((match) => match[1]).filter((attrs) => {
+        const type = (attribute(attrs, "type") ?? "submit").toLowerCase();
+        return type === "submit";
+      });
+      if (submitControls.some((attrs) => !hasAttribute(attrs, "disabled"))) {
+        report(file, `form ${index + 1} has an enabled submit control while the public catalog is inquiry-only`);
       }
     }
   }

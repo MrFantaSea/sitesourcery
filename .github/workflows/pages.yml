@@ -1,0 +1,60 @@
+name: Controlled Pages deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    outputs:
+      release_allowed: ${{ steps.release.outputs.allowed }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Use pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Run complete site checks
+        run: npm test
+      - name: Enforce release authority
+        id: release
+        run: node -e "const fs=require('node:fs');const c=require('./data/release-control.json');if(c.state==='hold'&&c.allowsDeployment===false){console.log('Pages deployment held:',c.reason);fs.appendFileSync(process.env.GITHUB_OUTPUT,'allowed=false\n');}else if(c.state==='cleared'&&c.allowsDeployment===true){fs.appendFileSync(process.env.GITHUB_OUTPUT,'allowed=true\n');}else{console.error('Invalid release-control state');process.exit(1)}"
+      - name: Build public-only artifact
+        run: npm run build:pages
+      - name: Configure Pages
+        if: steps.release.outputs.allowed == 'true'
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Package exact validated tree
+        if: steps.release.outputs.allowed == 'true'
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: _site
+
+  deploy:
+    if: needs.validate.outputs.release_allowed == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    needs: validate
+    steps:
+      - name: Deploy validated artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

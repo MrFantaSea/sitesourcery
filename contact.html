@@ -5,7 +5,7 @@
      Self-contained: loads ONLY same-origin style.css + sourcery.js. All
      graphics inline SVG. No CDNs, no remote fonts, no trackers.
      The ONE allowed remote request is the contact form's POST to the
-     form service (Web3Forms) — a submit action, never a page load.
+     commercial form transmission is held; no remote provider key is present.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
@@ -52,7 +52,7 @@
       <a class="nav-link" href="/automation.html">The Hive</a>
       <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html" aria-current="page">Contact</a>
-      <a class="btn primary nav-cta" href="/start/">Start your site</a>
+      <a class="btn primary nav-cta" href="/start/">Send an inquiry</a>
     </div>
   </div>
 </nav>
@@ -268,7 +268,7 @@
         <div class="card reveal">
           <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-bottom:.75rem"><path d="M6 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="#7C5CFF" stroke-width="1.8" fill="none"/><path d="M9 18h2" stroke="#FF5C8A" stroke-width="1.8" stroke-linecap="round"/></svg>
           <h3>Call or text</h3>
-          <p>Fastest way to reach us. Clients with Care from $29/mo can also request agreed site changes by text. If a call goes to voicemail, leave your name &mdash; you&rsquo;ll hear back.</p>
+          <p>Fastest way to reach us. The non-binding Care preview starts capped edit service at $69/mo, but no Care plan is activated here. If a call goes to voicemail, leave your name &mdash; you&rsquo;ll hear back.</p>
           <p style="margin-top:.75rem"><a class="num" href="tel:+13217882555">Call (321)&nbsp;788-2555</a> &middot; <a href="sms:+13217882555">Text us</a></p>
         </div>
         <div class="card reveal">
@@ -295,17 +295,10 @@
       <p class="lede reveal" style="margin-top:1rem">Your business name, town, and what you&rsquo;re hoping for is plenty. For the Responder, describe the workflow you would need; compatibility cannot be assessed until providers, carriers, and compliance requirements are reviewed.</p>
 
       <div class="grid cols-2" style="margin-top:2.5rem;align-items:start">
-        <!-- Real working form: POSTs to the Web3Forms service, which emails me
-             the note. No page-load, no tracker —
-             just a form submit, the one remote request this site allows. -->
-        <form class="card reveal observatory-form" action="https://api.web3forms.com/submit" method="POST">
-          <!-- Web3Forms access key — wired (public by design) -->
-          <input type="hidden" name="access_key" value="39f30a9b-381d-49e2-8f1a-6be6f4970d4e">
-          <input type="hidden" name="subject" value="New note from sitesourcery.com">
-          <input type="hidden" name="from_name" value="Site Sourcery contact form">
-          <!-- honeypot: real people leave this empty; bots fill it and get dropped -->
-          <input type="hidden" name="redirect" value="https://sitesourcery.com/thanks.html">
-          <input type="checkbox" name="botcheck" tabindex="-1" style="display:none" aria-hidden="true">
+        <!-- Commercial form submission is intentionally held. No remote form
+             provider or access key is present in this source. -->
+        <form class="card reveal observatory-form" data-commercial-state="hold" onsubmit="return false" aria-describedby="contact-hold-note">
+          <p class="terms" id="contact-hold-note" style="margin:0 0 1rem"><strong>Form submission is temporarily held.</strong> This page will not transmit or save what you type. Use the phone or email link below for a general, non-binding inquiry; never send credentials, payment data, customer records, or other sensitive material.</p>
           <div class="field">
             <label for="f-name">Your name</label>
             <input class="input" id="f-name" name="name" type="text" autocomplete="name" maxlength="100" required>
@@ -325,10 +318,10 @@
           <div class="field">
             <label><input type="checkbox" name="privacy_acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this submission and the contact detail I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>. If I provide a phone number, I authorize a call or text about this inquiry; this is not marketing consent.</label>
           </div>
-          <button class="btn primary" type="submit">Send your note
+          <button class="btn primary" type="submit" disabled aria-disabled="true">Note submission held
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           </button>
-          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">Web3Forms processes this note so it can reach our inbox; see the <a href="/privacy.html">Privacy Notice</a>. Prefer not to use the form? <a href="tel:+13217882555">Call or text (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com">email us directly</a>.</p>
+          <p class="field hint" style="margin:1rem 0 0;font-size:.875rem">No remote form service receives this note while commercial intake is held; see the <a href="/privacy.html">Privacy Notice</a>. <a href="tel:+13217882555">Call or text (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com">email us directly</a> for a general inquiry.</p>
         </form>
 
         <div class="reveal transmission-log">
@@ -347,7 +340,7 @@
               <span><strong>Nothing to lose</strong> &mdash; asking costs nothing, and there&rsquo;s no obligation. We limit your details to answering the inquiry and use the processors identified in our privacy notice.</span>
             </li>
           </ul>
-          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> explains ownership after final payment, month-to-month Care, and which Care tiers include text-to-change or a monthly note.</p>
+          <p style="margin-top:1.5rem;color:var(--muted)">Curious first? The <a href="/faq.html">FAQ</a> explains qualified ownership, the non-binding Care model, and exactly what counts inside each service-time cap.</p>
         </div>
       </div>
     </div>
@@ -358,11 +351,11 @@
     <div class="wrap">
       <p class="eyebrow reveal">Not sure which you need?</p>
       <h2 class="reveal">Tell us the problem &mdash; we&rsquo;ll point you at the <em class="accent">door</em>.</h2>
-      <p class="lede reveal" style="margin-top:1rem">Website work is available for inquiry. The second door is product research for a separate pre-launch automation concept, not a service you can order today.</p>
+      <p class="lede reveal" style="margin-top:1rem">General website questions may be sent by phone or email, but public form submission, quoting, payment, Care activation, and production remain held. The second door is separate pre-launch automation research.</p>
       <div class="grid cols-2 reveal" style="margin-top:2.5rem">
         <div class="card">
           <h3>&ldquo;People can&rsquo;t find me.&rdquo;</h3>
-          <p>That&rsquo;s the website door: a hand-built custom site that makes your services, location, and contact paths easy to understand and act on. Buy once, from $200 &mdash; the completed build is yours on final payment.</p>
+          <p>That&rsquo;s the website door: a non-binding planning model beginning with a $350 one-page Card. Replacement scope starts with the verified current footprint; capabilities, transition, outside costs, content responsibility, and qualified ownership remain explicit.</p>
           <div class="actions" style="margin-top:1.1rem">
             <a class="btn ghost" href="/pricing.html">See website pricing</a>
           </div>
@@ -385,7 +378,7 @@
       <p class="lede reveal" style="margin-top:1rem">No borrowed logos, no invented clients &mdash; take a look at a live production site we built and run, open right now. Then decide.</p>
       <div class="actions reveal" style="margin-top:2rem">
         <a class="btn ghost" href="https://daarx.money/">Open daarx.money</a>
-        <a class="btn primary" href="/start/">Start your site
+        <a class="btn primary" href="/start/">Send an inquiry
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </a>
         <a class="btn ghost" href="tel:+13217882555">Call (321)&nbsp;788-2555</a>
@@ -418,7 +411,7 @@
         <a href="/terms.html">Terms</a>
         <a href="/privacy.html">Privacy</a>
         <a href="/contact.html">Contact</a>
-        <a href="/start/">Start your site</a>
+        <a href="/start/">Send an inquiry</a>
       </nav>
       <div class="footer-contact">
         <p class="footer-person">Custom-built, locally run, honestly priced.</p>
@@ -426,7 +419,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Pricing is non-binding &middot; Ownership follows the written scope &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 

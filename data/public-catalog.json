@@ -1,0 +1,293 @@
+{
+  "version": "SS-COMMERCIAL-2026.3",
+  "currency": "USD",
+  "offerState": "inquiry-only",
+  "notice": "Non-binding pricing preview. Verified scope and written acceptance are required; inquiry does not authorize work or billing.",
+  "sourceCatalogDigest": "10ad7a1e555ec55bd42488382de2eae3ed4f8489cb5243bb25677ca68ac1cbe0",
+  "tierCatalogId": "SS-TIERS-2026.3",
+  "addonCatalogId": "SS-ADDONS-2026.3",
+  "careCatalogId": "SS-CARE-2026.3",
+  "buildTiers": [
+    {
+      "id": "card",
+      "label": "Card",
+      "priceCents": 35000,
+      "limits": {
+        "craftedPages": 1,
+        "sections": 5,
+        "uniqueLayouts": 1,
+        "contentWords": 500,
+        "suppliedMedia": 2,
+        "includedForms": 0,
+        "includedConnections": 1,
+        "revisions": 1
+      }
+    },
+    {
+      "id": "card-plus",
+      "label": "Card Plus",
+      "priceCents": 60000,
+      "limits": {
+        "craftedPages": 1,
+        "sections": 8,
+        "uniqueLayouts": 1,
+        "contentWords": 900,
+        "suppliedMedia": 8,
+        "includedForms": 0,
+        "includedConnections": 1,
+        "revisions": 1
+      }
+    },
+    {
+      "id": "site",
+      "label": "Site",
+      "priceCents": 100000,
+      "limits": {
+        "craftedPages": 4,
+        "sections": 16,
+        "uniqueLayouts": 4,
+        "contentWords": 1800,
+        "suppliedMedia": 12,
+        "includedForms": 1,
+        "includedConnections": 1,
+        "revisions": 2
+      }
+    },
+    {
+      "id": "site-plus",
+      "label": "Site Plus",
+      "priceCents": 160000,
+      "limits": {
+        "craftedPages": 7,
+        "sections": 28,
+        "uniqueLayouts": 7,
+        "contentWords": 3000,
+        "suppliedMedia": 24,
+        "includedForms": 1,
+        "includedConnections": 1,
+        "revisions": 2
+      }
+    },
+    {
+      "id": "signature",
+      "label": "Signature",
+      "priceCents": 240000,
+      "limits": {
+        "craftedPages": 10,
+        "sections": 40,
+        "uniqueLayouts": 10,
+        "contentWords": 4500,
+        "suppliedMedia": 36,
+        "includedForms": 1,
+        "includedConnections": 1,
+        "revisions": 3
+      }
+    },
+    {
+      "id": "flagship",
+      "label": "Flagship",
+      "priceCents": 360000,
+      "limits": {
+        "craftedPages": 15,
+        "sections": 60,
+        "uniqueLayouts": 15,
+        "contentWords": 7000,
+        "suppliedMedia": 60,
+        "includedForms": 1,
+        "includedConnections": 1,
+        "revisions": 4
+      }
+    }
+  ],
+  "buildAddons": [
+    {
+      "id": "bespoke_visual",
+      "label": "Custom visual composition",
+      "priceCents": 50000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "One direction and one revision using supplied or licensed assets; original illustration is custom."
+    },
+    {
+      "id": "motion_system",
+      "label": "Motion direction",
+      "priceCents": 40000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "Up to three named components or states, including reduced-motion behavior; not three whole pages."
+    },
+    {
+      "id": "basic_form",
+      "label": "Basic contact form",
+      "priceCents": 20000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": [
+        "card",
+        "card-plus"
+      ],
+      "tierPricesCents": null,
+      "boundary": "One recipient, at most five fields, no upload, branching, account, or automation."
+    },
+    {
+      "id": "standard_tool",
+      "label": "Standard interactive tool",
+      "priceCents": 45000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "One documented input/output model within six implementation hours; basic forms and ordinary embeds are excluded."
+    },
+    {
+      "id": "hosted_provider",
+      "label": "Hosted provider setup",
+      "priceCents": 70000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "One client-owned account, one location or resource, at most five services/products, one journey, and test completion."
+    },
+    {
+      "id": "static_collection",
+      "label": "Static collection",
+      "priceCents": 30000,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "One supplied collection in one reusable layout without detail URLs, CMS, filtering, or self-publishing."
+    },
+    {
+      "id": "copy_expansion",
+      "label": "Additional content shaping",
+      "priceCents": 20000,
+      "maxQuantity": 3,
+      "unit": "500 supplied/approved words",
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "Light drafting/editing from supplied approved facts; interviews, research, regulated claims, and substantial net-new writing are custom."
+    },
+    {
+      "id": "additional_connection",
+      "label": "Additional domain or provider connection",
+      "priceCents": 20000,
+      "maxQuantity": 2,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": null,
+      "boundary": "One client-owned ordinary endpoint with at most five DNS changes, verification, redirect, and SSL check."
+    },
+    {
+      "id": "extra_revision_round",
+      "label": "Additional grouped revision round",
+      "priceCents": null,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": {
+        "card": 12500,
+        "card-plus": 17500,
+        "site": 25000,
+        "site-plus": 30000,
+        "signature": 40000,
+        "flagship": 55000
+      },
+      "boundary": "Adjustments to the approved direction; replacement content, direction, pages, capabilities, or restructuring are new scope."
+    },
+    {
+      "id": "priority_production_window",
+      "label": "Priority production window",
+      "priceCents": null,
+      "maxQuantity": 1,
+      "unit": null,
+      "eligibleTiers": null,
+      "tierPricesCents": {
+        "card": 20000,
+        "card-plus": 30000,
+        "site": 45000,
+        "site-plus": 65000,
+        "signature": 90000,
+        "flagship": 120000
+      },
+      "boundary": "Available only after capacity is confirmed and complete materials, acceptance, and required payment are present."
+    }
+  ],
+  "architectureBands": [
+    {
+      "min": 3,
+      "max": 5,
+      "priceCents": 35000
+    },
+    {
+      "min": 6,
+      "max": 10,
+      "priceCents": 65000
+    },
+    {
+      "min": 11,
+      "max": 15,
+      "priceCents": 95000
+    }
+  ],
+  "migration": {
+    "firstRecords": 100,
+    "firstPriceCents": 35000,
+    "nextRecords": 100,
+    "nextPriceCents": 20000,
+    "maxRecords": 500
+  },
+  "carePlans": [
+    {
+      "id": "host",
+      "label": "Host",
+      "monthlyCents": 2500,
+      "includedMinutes": 0,
+      "editCap": 0,
+      "approvedOverflowCentsPerHour": null,
+      "maxOverflowMinutes": null
+    },
+    {
+      "id": "care-lite",
+      "label": "Care Lite",
+      "monthlyCents": 6900,
+      "includedMinutes": 30,
+      "editCap": 3,
+      "approvedOverflowCentsPerHour": null,
+      "maxOverflowMinutes": null
+    },
+    {
+      "id": "care",
+      "label": "Care",
+      "monthlyCents": 11900,
+      "includedMinutes": 60,
+      "editCap": 6,
+      "approvedOverflowCentsPerHour": null,
+      "maxOverflowMinutes": null
+    },
+    {
+      "id": "care-plus",
+      "label": "Care Plus",
+      "monthlyCents": 19900,
+      "includedMinutes": 120,
+      "editCap": 10,
+      "approvedOverflowCentsPerHour": null,
+      "maxOverflowMinutes": null
+    },
+    {
+      "id": "partner",
+      "label": "Partner",
+      "monthlyCents": 34900,
+      "includedMinutes": 240,
+      "editCap": 16,
+      "approvedOverflowCentsPerHour": 15000,
+      "maxOverflowMinutes": 60
+    }
+  ],
+  "projectionDigest": "7be1e59262f9ab9268eca301a1706e9dd858d20eee9ab77ec28667203d33b4b8"
+}

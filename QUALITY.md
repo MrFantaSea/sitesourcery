@@ -1,6 +1,6 @@
 # Static site quality checks
 
-The `Site quality` workflow validates every HTML page, resolves repository-local links, assets, and fragments, parses local and inline JavaScript plus JSON-LD, and checks the static safety contract of both inquiry forms. It does not contact Web3Forms or any other external service.
+The `Site quality` workflow validates every HTML page, resolves repository-local links, assets, and fragments, parses local and inline JavaScript plus JSON-LD, checks public pricing against `data/public-catalog.json`, and enforces the held-state safety contract of both inquiry forms. It does not contact any external service.
 
 Run the same locked checks locally with:
 

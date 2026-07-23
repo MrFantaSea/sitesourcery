@@ -1,28 +1,28 @@
 <!DOCTYPE html>
 <!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — start/index.html · START YOUR PROJECT · "SPELLCAST"
+     SITE SOURCERY — start/index.html · SEND AN INQUIRY · "SPELLCAST"
      Built inside the dark violet→pink Spellcast system to match every other
      page: same nav, footer, favicon, theme-color, palette, anonymous studio.
      Content = an honest intake ("tell us about your business"), NOT a free
-     preview and NOT a magic button. A real WORKING submit (form-service POST to
-     Web3Forms with the wired Web3Forms access key). A real person reads every one.
+     preview and NOT a magic button. Commercial form submission is intentionally
+     held; no remote form provider or access key is present in this source.
      Self-contained: loads ONLY same-origin ../style.css + ../sourcery.js. All
      graphics inline SVG. No CDNs, no fonts, no trackers. The only cross-origin
-     request is the allowed form POST to api.web3forms.com on submit.
+     request occurs from this form while the commercial hold is active.
      ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Start your project — tell us about your business · Site Sourcery</title>
+<title>Send an inquiry — tell us about your business · Site Sourcery</title>
 <meta name="description" content="Send a custom website inquiry or register non-binding interest in the pre-launch Hive automation concept. This is not a checkout, order, reservation, or authorization for automated messaging.">
 <meta name="theme-color" content="#0B0912">
 <link rel="canonical" href="https://sitesourcery.com/start/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Start your project — tell us about your business · Site Sourcery">
+<meta property="og:title" content="Send an inquiry — tell us about your business · Site Sourcery">
 <meta property="og:description" content="A website inquiry form with a separate, non-binding pre-launch interest path for the planned Hive automation concept.">
 <meta property="og:url" content="https://sitesourcery.com/start/">
 <meta property="og:image" content="https://sitesourcery.com/og.png">
@@ -30,7 +30,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:image" content="https://sitesourcery.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Start your project · Site Sourcery">
+<meta name="twitter:title" content="Send an inquiry · Site Sourcery">
 <meta name="twitter:description" content="Tell us about your business and a real person will reply. No account, card, or automatic order.">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"An inquiry form for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:hello@sitesourcery.com","tel:+13217882555"]}
@@ -117,7 +117,7 @@
       <a class="nav-link" href="/automation.html">The Hive</a>
       <a class="nav-link" href="/terms.html">Terms</a>
       <a class="nav-link" href="/contact.html">Contact</a>
-      <a class="btn primary nav-cta" href="/start/" aria-current="page">Start your site</a>
+      <a class="btn primary nav-cta" href="/start/" aria-current="page">Send an inquiry</a>
     </div>
   </div>
 </nav>
@@ -127,9 +127,9 @@
   <!-- ══ HERO — the honest start + a bespoke "send the brief" nocturne ══ -->
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow reveal">Start your project</p>
+      <p class="eyebrow reveal">Website inquiry</p>
       <h1 class="hero-mega reveal">Tell us about your <em class="accent">business</em>.</h1>
-      <p class="lede reveal">Not a checkout and not an order. These questions help us understand a custom website request or non-binding interest in any proposed <strong>Hive workflow</strong>, including The Responder. No Hive workflow is yet a public production service. A real person reviews the inquiry.</p>
+      <p class="lede reveal"><strong>Not a checkout, order, quote, reservation, or authority to begin work.</strong> These questions help us review a website request against the non-binding SS-TIERS-2026.3 and SS-ADDONS-2026.3 planning model, or record interest in a proposed Hive workflow. A real person reviews every inquiry.</p>
 
       <div class="hero-stage reveal">
         <figure class="spellstage" style="--lit:1;cursor:default" role="img"
@@ -257,19 +257,14 @@
       <div class="commission">
 
         <!-- ── THE BRIEF (intake) ─────────────────────────────────────────── -->
-        <form class="brief reveal" id="brief" method="POST" action="https://api.web3forms.com/submit"
-              aria-label="Tell us about your business">
+        <form class="brief reveal" id="brief" data-commercial-state="hold" onsubmit="return false"
+              aria-label="Tell us about your business" aria-describedby="commercial-hold-note">
 
-          <!-- ══ WEB3FORMS access key — wired (public by design) ══ -->
-          <input type="hidden" name="access_key" value="39f30a9b-381d-49e2-8f1a-6be6f4970d4e">
-          <input type="hidden" name="subject" value="New project brief — Site Sourcery">
-          <input type="hidden" name="from_name" value="Site Sourcery · Start page">
-          <input type="hidden" name="redirect" value="https://sitesourcery.com/thanks.html">
-          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.1">
-          <!-- honeypot: real people leave it empty; bots fill it and get dropped -->
-          <input type="checkbox" name="botcheck" class="honeypot" tabindex="-1" aria-hidden="true">
+          <input type="hidden" name="Website tier catalog ID" value="SS-TIERS-2026.3">
+          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.3">
 
           <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
+          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held.</strong> You may review the questions, but this page will not transmit or save what you type. Use the phone or email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
           <p class="hint" style="margin:-.7rem 0 1.4rem">Keep this high level. Please do not send passwords, login codes, API keys, card or bank details, customer lists, health information, or other private records.</p>
 
           <div class="field">
@@ -294,7 +289,7 @@
 
           <div class="field">
             <label for="f-reach">Best way to reach you <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">A phone or email so we can reply. We use it only for this inquiry and any project you ask us to begin.</p>
+            <p class="hint">A phone or email so we can reply. We use it only for this inquiry and any later project communication you explicitly authorize.</p>
             <input class="input" id="f-reach" name="Reach me at" type="text" maxlength="254"
                    placeholder="(856) 555-0142 or you@email.com" required>
           </div>
@@ -336,22 +331,34 @@
           </fieldset>
 
           <div class="field">
+            <label for="f-url">Do you have a website now? <span class="opt">required for a replacement quote</span></label>
+            <p class="hint">Paste the public address so we can inventory every current page, location, tool, and content collection before we recommend a tier. No site yet? Skip it.</p>
+            <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url" maxlength="2048"
+                   placeholder="https://yourbusiness.com">
+          </div>
+
+          <div class="field">
+            <label for="f-current-urls">Current public pages or URLs <span class="opt">required for a replacement quote</span></label>
+            <p class="hint">Your best count is enough for this brief. We verify it before quoting, and every existing URL gets a written keep, merge, redirect, or retire decision.</p>
+            <input class="input" id="f-current-urls" name="Current public pages or URLs" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 10">
+          </div>
+
+          <div class="field">
             <label for="f-tier">Base website tier <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Every website add-on requires an eligible base build. Choose the closest tier; &ldquo;not sure&rdquo; is fine for this inquiry, but the signed Scope &amp; Job Manifest must name the base tier before work begins.</p>
+            <p class="hint">Planning catalog SS-TIERS-2026.3 prices delivered public footprint, not teaser size or capability count. For a replacement, start from the current verified site unless an approved architecture plan says otherwise. Base content capacity assumes client-supplied facts and light editing. Site and larger bands have capacity for at most one basic form only when explicitly named in the written scope; no form is inferred from page count. Card and Card Plus may add one bounded basic form.</p>
             <select class="input" id="f-tier" name="Base website tier" required>
               <option value="" selected disabled>Choose the closest fit</option>
               <option value="Not sure — recommend a website tier">Not sure — recommend a tier</option>
-              <option value="Card — $200">Card — $200</option>
-              <option value="Card Plus — $350">Card Plus — $350</option>
-              <option value="Site — $600">Site — $600</option>
-              <option value="Site Plus — $900">Site Plus — $900</option>
-              <option value="Pro — $1,300">Pro — $1,300</option>
-              <option value="Pro Plus — $1,800">Pro Plus — $1,800</option>
-              <option value="Signature — $2,400">Signature — $2,400</option>
-              <option value="Flagship — $3,000">Flagship — $3,000</option>
-              <option value="Beyond/custom — written quote required">Beyond / custom — written quote required</option>
+              <option value="Card — $350" data-tier-id="card" data-price-cents="35000" data-page-cap="1" data-section-cap="5" data-included-forms="0">Card — $350 · 1 page, up to 5 sections</option>
+              <option value="Card Plus — $600" data-tier-id="card-plus" data-price-cents="60000" data-page-cap="1" data-section-cap="8" data-included-forms="0">Card Plus — $600 · 1 page, up to 8 sections</option>
+              <option value="Site — $1,000" data-tier-id="site" data-price-cents="100000" data-page-cap="4" data-section-cap="16" data-included-forms="1">Site — $1,000 · up to 4 pages · explicitly scoped form capacity</option>
+              <option value="Site Plus — $1,600" data-tier-id="site-plus" data-price-cents="160000" data-page-cap="7" data-section-cap="28" data-included-forms="1">Site Plus — $1,600 · up to 7 pages · explicitly scoped form capacity</option>
+              <option value="Signature — $2,400" data-tier-id="signature" data-price-cents="240000" data-page-cap="10" data-section-cap="40" data-included-forms="1">Signature — $2,400 · up to 10 pages · explicitly scoped form capacity</option>
+              <option value="Flagship — $3,600" data-tier-id="flagship" data-price-cents="360000" data-page-cap="15" data-section-cap="60" data-included-forms="1">Flagship — $3,600 · up to 15 pages · explicitly scoped form capacity</option>
+              <option value="Beyond/custom — written quote required" data-tier-id="beyond">Beyond / custom — written quote required</option>
               <option value="No website — Hive research interest only">No website — Hive research interest only</option>
             </select>
+            <p class="hint" id="tier-scope-status" aria-live="polite"></p>
           </div>
 
           <div class="field">
@@ -375,6 +382,12 @@
           </div>
 
           <div class="field">
+            <label for="f-total-sections">Expected sections on a one-page site <span class="opt">optional</span></label>
+            <p class="hint">This distinguishes the 5-section Card band from denser scopes. A one-page site may route to a higher band when its section or layout density exceeds the smaller tier&rsquo;s cap.</p>
+            <input class="input" id="f-total-sections" name="Expected one-page sections" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7">
+          </div>
+
+          <div class="field">
             <label for="f-function">Desired tool or function <span class="opt">optional</span></label>
             <p class="hint">Describe the job, not private data or account credentials: quote requests, booking intake, a menu, a small shop, a calculator, or something else.</p>
             <textarea class="input" id="f-function" name="Desired website tool or function" maxlength="1000" rows="3"
@@ -392,36 +405,35 @@
             <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
               Website build add-ons you are considering <span class="opt">optional · non-binding</span>
             </legend>
-            <p class="hint" id="website-addons-help">Catalog SS-ADDONS-2026.1. A base tier is required; every item has eligibility and a cap. You may choose at most one scope-expansion type. Selecting another replaces the earlier scope-expansion choice. The signed Scope &amp; Job Manifest is the only order and may use a tier upgrade instead.</p>
+            <p class="hint" id="website-addons-help">Planning catalog SS-ADDONS-2026.3. The footprint band comes first; capabilities and transition work are then itemized. Selecting anything here records interest only and cannot create a quote, order, or authorization.</p>
 
             <div class="addon-picker-group">
-              <p id="addon-scope-label">Pages, words &amp; supplied content · choose at most one type</p>
+              <p id="addon-scope-label">Design, content &amp; website capabilities</p>
               <div class="addon-picks">
-                <label class="pick"><input id="card_micro_section" type="checkbox" name="Website add-on interest - card_micro_section" value="Card micro-section — $80 — max 1" data-addon-id="card_micro_section" data-scope-expansion><span><b>Card micro-section</b><small>Card · $80 · max 1</small></span></label>
-                <label class="pick"><input id="card_plus_story_section" type="checkbox" name="Website add-on interest - card_plus_story_section" value="Card Plus story section — $95 each — max 2" data-addon-id="card_plus_story_section" data-scope-expansion><span><b>Card Plus story section</b><small>Card Plus · $95 each · max 2</small></span></label>
-                <label class="pick"><input id="same_system_page" type="checkbox" name="Website add-on interest - same_system_page" value="Additional same-system page — $225–$350 — max 1" data-addon-id="same_system_page" data-scope-expansion><span><b>Additional same-system page</b><small>Site–Signature · $225–$350 · max 1</small></span></label>
-                <label class="pick"><input id="copy_expansion" type="checkbox" name="Website add-on interest - copy_expansion" value="Copy expansion — $75–$180 — max 1" data-addon-id="copy_expansion" data-scope-expansion><span><b>Copy expansion</b><small>Card–Signature · $75–$180 · max 1</small></span></label>
-                <label class="pick"><input id="supplied_photo_pack" type="checkbox" name="Website add-on interest - supplied_photo_pack" value="Supplied-photo preparation pack — $60–$180 — max 1" data-addon-id="supplied_photo_pack" data-scope-expansion><span><b>Supplied-photo preparation pack</b><small>Card–Signature · $60–$180 · max 1</small></span></label>
-                <label class="pick"><input id="static_portfolio_pack" type="checkbox" name="Website add-on interest - static_portfolio_pack" value="Static portfolio pack — $200 — max 1" data-addon-id="static_portfolio_pack" data-scope-expansion><span><b>Static portfolio pack</b><small>Site Plus / Pro / Pro Plus / Signature · $200 · max 1</small></span></label>
+                <label class="pick"><input id="bespoke_visual" type="checkbox" name="Website add-on interest - bespoke_visual" value="Custom visual composition — $500 — max 1" data-addon-id="bespoke_visual" data-max-quantity="1"><span><b>Custom visual composition</b><small>One direction + one revision using supplied/licensed assets · $500 · max 1</small></span></label>
+                <label class="pick"><input id="motion_system" type="checkbox" name="Website add-on interest - motion_system" value="Motion direction — $400 — max 1" data-addon-id="motion_system" data-max-quantity="1"><span><b>Motion direction</b><small>Up to 3 named components/states · $400 · max 1</small></span></label>
+                <label class="pick"><input id="basic_form" type="checkbox" name="Website add-on interest - basic_form" value="Basic contact form — $200 — Card or Card Plus only — max 1" data-addon-id="basic_form" data-max-quantity="1" data-eligible-tiers="card,card-plus"><span><b>Basic contact form</b><small>Card/Card Plus only · up to 5 fields · one recipient · $200 · max 1</small></span></label>
+                <label class="pick"><input id="standard_tool" type="checkbox" name="Website add-on interest - standard_tool" value="Standard interactive tool — $450 — max 1" data-addon-id="standard_tool" data-max-quantity="1"><span><b>Standard interactive tool</b><small>One documented input/output model within 6 implementation hours · $450 · max 1</small></span></label>
+                <label class="pick"><input id="hosted_provider" type="checkbox" name="Website add-on interest - hosted_provider" value="Hosted provider setup — $700 — max 1" data-addon-id="hosted_provider" data-max-quantity="1"><span><b>Hosted provider setup</b><small>One account/location/resource · up to 5 services/products · $700 · max 1</small></span></label>
+                <label class="pick"><input id="static_collection" type="checkbox" name="Website add-on interest - static_collection" value="Static collection system — $300 — max 1" data-addon-id="static_collection" data-max-quantity="1"><span><b>Static collection system</b><small>Menu, catalog, team, or portfolio collection · $300 · max 1</small></span></label>
+                <label class="pick"><input id="copy_expansion" type="checkbox" name="Website add-on interest - copy_expansion" value="Additional content shaping — $200 per 500 supplied/approved words — max 3" data-addon-id="copy_expansion" data-max-quantity="3"><span><b>Additional content shaping</b><small>Light drafting/editing from supplied facts · $200 per 500 words · max 3</small></span></label>
               </div>
             </div>
 
             <div class="addon-picker-group">
               <p id="addon-ops-label">Review, scheduling &amp; ordinary connections</p>
               <div class="addon-picks">
-                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $90–$450 — max 1" data-addon-id="extra_revision_round"><span><b>Additional grouped revision round</b><small>Eligible base tier price · $90–$450 · max 1</small></span></label>
-                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $125–$900 — max 1" data-addon-id="priority_production_window"><span><b>Priority production window</b><small>Capacity-confirmed only · $125–$900 · max 1</small></span></label>
-                <label class="pick"><input id="additional_ordinary_connection" type="checkbox" name="Website add-on interest - additional_ordinary_connection" value="Additional domain or provider connection — $175 each — max 1 or 2 by tier" data-addon-id="additional_ordinary_connection"><span><b>Additional domain or provider connection</b><small>$175 each · max 1 Card tiers / 2 Site–Flagship</small></span></label>
+                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $125–$550 — max 1" data-addon-id="extra_revision_round" data-max-quantity="1" data-tier-prices="card:12500,card-plus:17500,site:25000,site-plus:30000,signature:40000,flagship:55000"><span><b>Additional grouped revision round</b><small>Base-tier price · $125–$550 · max 1</small></span></label>
+                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $200–$1,200 — max 1" data-addon-id="priority_production_window" data-max-quantity="1" data-tier-prices="card:20000,card-plus:30000,site:45000,site-plus:65000,signature:90000,flagship:120000"><span><b>Priority production window</b><small>Capacity-confirmed only · $200–$1,200 · max 1</small></span></label>
+                <label class="pick"><input id="additional_connection" type="checkbox" name="Website add-on interest - additional_connection" value="Additional domain or provider connection — $200 each — max 2" data-addon-id="additional_connection" data-max-quantity="2"><span><b>Additional domain or provider connection</b><small>$200 each · max 2</small></span></label>
               </div>
             </div>
 
             <div class="addon-picker-group">
-              <p id="addon-tool-label">Capacity inside an already-included website tool · also shares the one scope-expansion type limit</p>
+              <p id="addon-tool-label">Existing-site transition &amp; migration</p>
               <div class="addon-picks">
-                <label class="pick"><input id="standard_menu_data_pack" type="checkbox" name="Website add-on interest - standard_menu_data_pack" value="Standard menu or catalog data pack — $175 — max 1" data-addon-id="standard_menu_data_pack" data-scope-expansion><span><b>Standard menu or catalog data pack</b><small>Pro–Flagship with included menu · $175 · max 1</small></span></label>
-                <label class="pick"><input id="hosted_shop_product_pack" type="checkbox" name="Website add-on interest - hosted_shop_product_pack" value="Hosted shop product pack — $300 — max 1" data-addon-id="hosted_shop_product_pack" data-scope-expansion><span><b>Hosted shop product pack</b><small>Signature / Flagship with included shop · $300 · max 1</small></span></label>
-                <label class="pick"><input id="hosted_booking_service" type="checkbox" name="Website add-on interest - hosted_booking_service" value="Additional hosted booking service — $250 — max 1" data-addon-id="hosted_booking_service" data-scope-expansion><span><b>Additional hosted booking service</b><small>Signature / Flagship with included booking · $250 · max 1</small></span></label>
-                <label class="pick"><input id="hosted_member_page_pack" type="checkbox" name="Website add-on interest - hosted_member_page_pack" value="Hosted member-page pack — $300 — max 1" data-addon-id="hosted_member_page_pack" data-scope-expansion><span><b>Hosted member-page pack</b><small>Signature / Flagship with included member area · $300 · max 1</small></span></label>
+                <label class="pick"><input id="architecture_redirect" type="checkbox" name="Website add-on interest - architecture_redirect" value="Architecture and redirect plan — $350–$950 for 3–15 affected URLs" data-addon-id="architecture_redirect"><span><b>Architecture and redirect plan</b><small>3–5 URLs $350 · 6–10 $650 · 11–15 $950</small></span></label>
+                <label class="pick"><input id="structured_data_migration" type="checkbox" name="Website add-on interest - structured_data_migration" value="Structured data migration — first 100 clean entries $350, next 100 increments $200, max 500" data-addon-id="structured_data_migration"><span><b>Structured data migration</b><small>First 100 $350 · each next 100 $200 · max 500 clean entries</small></span></label>
               </div>
             </div>
             <p class="addon-status" id="website-addons-status" aria-live="polite"></p>
@@ -429,23 +441,23 @@
 
           <div class="field">
             <label for="f-addon-details">Requested add-on quantities or details <span class="opt">optional</span></label>
-            <p class="hint">Give quantities and the plain job to be done. Do not send credentials, account recovery details, payment data, customer records, or private provider data.</p>
+            <p class="hint">Give quantities and the plain job to be done—especially URLs to preserve or merge and records to migrate. Do not send credentials, payment data, customer records, or private provider data.</p>
             <textarea class="input" id="f-addon-details" name="Requested website add-on quantities or details" maxlength="1200" rows="3"
-                      placeholder="e.g. 2 Card Plus story sections, 1 revision round, and one extra domain connection"></textarea>
+                      placeholder="e.g. preserve 8 pages, merge 2 location pages with redirects, migrate about 180 menu entries"></textarea>
           </div>
 
           <div class="field">
             <label for="f-care">Website Care interest <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Care is separate from the one-time build. Pick a starting preference; we will confirm the exact plan and limits in writing.</p>
+            <p class="hint">Care is separate from the one-time build. These are non-binding planning figures. Communication, research, editing, QA, reporting, calls, and deployment all count inside the stated service-time cap; lower plans have no overflow packs.</p>
             <select class="input" id="f-care" name="Website Care interest" required>
               <option value="" selected disabled>Choose a Care preference</option>
               <option value="Not sure — explain the Care plans">Not sure — explain the plans</option>
               <option value="No Care requested">No Care requested</option>
-              <option value="Host — $15/mo">Host — $15/mo</option>
-              <option value="Care Lite — $29/mo">Care Lite — $29/mo</option>
-              <option value="Care — $59/mo">Care — $59/mo</option>
-              <option value="Care Plus — $99/mo">Care Plus — $99/mo</option>
-              <option value="Partner — $159/mo">Partner — $159/mo</option>
+              <option value="Host — $25/mo" data-care-plan-id="host" data-monthly-cents="2500" data-edit-cap="0" data-included-minutes="0">Host — $25/mo · 0 edits / 0 minutes</option>
+              <option value="Care Lite — $69/mo" data-care-plan-id="care-lite" data-monthly-cents="6900" data-edit-cap="3" data-included-minutes="30">Care Lite — $69/mo · up to 3 edits or 30 minutes</option>
+              <option value="Care — $119/mo" data-care-plan-id="care" data-monthly-cents="11900" data-edit-cap="6" data-included-minutes="60">Care — $119/mo · up to 6 edits or 60 minutes</option>
+              <option value="Care Plus — $199/mo" data-care-plan-id="care-plus" data-monthly-cents="19900" data-edit-cap="10" data-included-minutes="120">Care Plus — $199/mo · up to 10 edits or 120 minutes</option>
+              <option value="Partner — $349/mo" data-care-plan-id="partner" data-monthly-cents="34900" data-edit-cap="16" data-included-minutes="240">Partner — $349/mo · up to 16 edits or 240 minutes</option>
               <option value="Not applicable — Hive research interest only">Not applicable — Hive research interest only</option>
             </select>
           </div>
@@ -493,21 +505,14 @@
           </div>
 
           <div class="field">
-            <label for="f-url">Have a website now? <span class="opt">optional</span></label>
-            <p class="hint">Paste it and we'll bring your own photos and details across. No site yet? Skip it.</p>
-            <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url" maxlength="2048"
-                   placeholder="https://yourbusiness.com">
-          </div>
-
-          <div class="field">
             <label><input type="checkbox" name="Privacy acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this brief and the contact detail I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>. If I provide a phone number, I authorize a call or text about this inquiry; this is not marketing consent.</label>
           </div>
 
           <div class="sendrow">
-            <button class="btn primary" type="submit">Send my brief</button>
+            <button class="btn primary" type="submit" disabled aria-disabled="true">Brief submission held</button>
             <p class="fineprint">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
-              <span>Web3Forms processes this brief so it can reach the studio. A real person reads it; no account, card, or install is required. See our <a href="/privacy.html">Privacy Notice</a>.</span>
+              <span>No remote form service receives this brief while commercial intake is held. Nothing typed here is transmitted or saved. See our <a href="/privacy.html">Privacy Notice</a>.</span>
             </p>
             <p class="orline">Prefer to talk first? <a href="tel:+13217882555">Call (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com?subject=A%20question%20before%20we%20start">email us</a>.</p>
           </div>
@@ -520,9 +525,9 @@
             <ol class="steps">
               <li><b>You send this.</b> It lands with the studio and is usually read the same business day; after-hours and weekend replies may take longer.</li>
               <li><b>We reply and scope it.</b> We clarify the fit, tier, deliverables, and timing before sending a plain proposal.</li>
-              <li><b>You approve the start.</b> Website work begins only after you accept the scope and make the deposit or up-front payment described in the terms.</li>
+              <li><b>Commercial review comes first.</b> An inquiry cannot start work. A project may begin only after a coverage-complete scope, written authorization, and any required payment.</li>
               <li><b>We build; you inspect.</b> The custom site is made by hand, reviewed by you, and never goes live under your name until you approve it.</li>
-              <li><b>You own the website after final payment.</b> Hive interest is separate and non-binding; no Hive service is currently offered.</li>
+              <li><b>Ownership is written precisely.</b> Original custom deliverables for an approved scope transfer after final payment; supplied and third-party material keeps its existing ownership or license.</li>
             </ol>
           </div>
 
@@ -568,7 +573,7 @@
         <a href="/terms.html">Terms</a>
         <a href="/privacy.html">Privacy</a>
         <a href="/contact.html">Contact</a>
-        <a href="/start/">Start your site</a>
+        <a href="/start/">Send an inquiry</a>
       </nav>
       <div class="footer-contact">
         <p class="footer-person">Custom-built, locally run, honestly priced.</p>
@@ -576,7 +581,7 @@
         <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Website builds are yours after final payment &middot; Care is month-to-month &middot; Hive remains pre-launch.</p>
+    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Pricing is non-binding &middot; Ownership follows the written scope &middot; Hive remains pre-launch.</p>
   </div>
 </footer>
 
@@ -604,49 +609,90 @@
       });
     }
 
-    var tierMap={
-      'card':'Card — $200','card-plus':'Card Plus — $350','site':'Site — $600',
-      'site-plus':'Site Plus — $900','pro':'Pro — $1,300','pro-plus':'Pro Plus — $1,800',
-      'signature':'Signature — $2,400','flagship':'Flagship — $3,000',
-      'beyond':'Beyond/custom — written quote required'
-    };
-    var tier=document.getElementById('f-tier'),tierValue=tierMap[q.get('tier')];
+    var tier=document.getElementById('f-tier');
+    var tierOptions=tier?[].slice.call(tier.options).filter(function(option){return option.dataset.tierId}):[];
+    var tierMap=Object.fromEntries(tierOptions.map(function(option){return [option.dataset.tierId,option.value]}));
+    var tierValue=tierMap[q.get('tier')];
     if(tier&&tierValue){
       Array.prototype.some.call(tier.options,function(o){if(o.value===tierValue){tier.value=tierValue;return true}return false});
     }
 
+    var currentUrls=document.getElementById('f-current-urls');
+    var deliveredUrls=document.getElementById('f-total-urls');
+    var onePageSections=document.getElementById('f-total-sections');
+    var tierStatus=document.getElementById('tier-scope-status');
+    var tierOrder=tierOptions.map(function(option){return option.dataset.tierId});
+    var tierByValue=Object.fromEntries(Object.entries(tierMap).map(function(entry){return [entry[1],entry[0]]}));
+    function positiveInteger(input){
+      var raw=input&&input.value.trim();
+      if(!raw||!/^\d+$/.test(raw))return 0;
+      var value=Number(raw);
+      return Number.isSafeInteger(value)&&value>0?value:0;
+    }
+    function floorFor(limitKey,count){
+      var match=tierOptions.find(function(option){
+        if(option.dataset.tierId==='beyond')return false;
+        return Number(option.dataset[limitKey])>=count;
+      });
+      return match?match.dataset.tierId:'beyond';
+    }
+    function floorForScope(count,sections){
+      var pageFloor=floorFor('pageCap',count),sectionFloor=floorFor('sectionCap',sections);
+      return tierOrder.indexOf(pageFloor)>=tierOrder.indexOf(sectionFloor)?pageFloor:sectionFloor;
+    }
+    function enforceFootprintFloor(){
+      var currentCount=positiveInteger(currentUrls);
+      var deliveredCount=positiveInteger(deliveredUrls);
+      var sections=positiveInteger(onePageSections);
+      var count=Math.max(currentCount,deliveredCount,sections?1:0);
+      if(!count){if(tierStatus)tierStatus.textContent='';return}
+      var floor=floorForScope(count,sections),selected=tierByValue[tier&&tier.value];
+      if(selected&&tierOrder.indexOf(selected)<tierOrder.indexOf(floor)){
+        tier.value=tierMap[floor];
+        tier.dispatchEvent(new Event('change'));
+      }
+      if(tierStatus){
+        tierStatus.textContent=count+' reported public URL'+(count===1?'':'s')+(sections?' and '+sections+' section'+(sections===1?'':'s'):'')+' creates a provisional '+tierMap[floor]+' routing floor. A higher band may serve fewer pages when density requires it. This is not a quote; current-site coverage, layouts, capabilities, transition work, and commercial approval still require human verification.';
+      }
+    }
+    [currentUrls,deliveredUrls,onePageSections].forEach(function(input){if(input)input.addEventListener('input',enforceFootprintFloor)});
+    if(tier)tier.addEventListener('change',enforceFootprintFloor);
+    enforceFootprintFloor();
+
     var addonInputs=[].slice.call(document.querySelectorAll('#website-addons input[data-addon-id]'));
     var allowed=new Set(addonInputs.map(function(c){return c.dataset.addonId}));
-    var firstScope=null;
     addonIds.forEach(function(id){
       if(!allowed.has(id))return;
       var c=document.getElementById(id);if(!c)return;
-      if(c.hasAttribute('data-scope-expansion')){
-        if(firstScope)return;
-        firstScope=c;
-      }
       c.checked=true;
     });
 
     var status=document.getElementById('website-addons-status');
-    function describeScope(current,replaced){
+    var eligibilityNote='';
+    function describeAddons(){
       if(!status)return;
-      if(replaced)status.textContent='Scope-expansion choice updated. Only '+current.closest('label').innerText.trim().split('\n')[0]+' remains selected as the scope-expansion type.';
-      else if(current&&current.checked)status.textContent='One scope-expansion type selected. Choose a quantity in the details field where the catalog allows more than one unit.';
-      else status.textContent='';
+      var count=addonInputs.filter(function(c){return c.checked}).length;
+      var summary=count?count+' addition interest'+(count===1?'':'s')+' selected. This is not a price calculation; eligibility, quantities, URL coverage, and commercial authority still require human review.':'';
+      status.textContent=[eligibilityNote,summary].filter(Boolean).join(' ');
     }
-    addonInputs.filter(function(c){return c.hasAttribute('data-scope-expansion')}).forEach(function(c){
-      c.addEventListener('change',function(){
-        var replaced=false;
-        if(c.checked){
-          addonInputs.forEach(function(other){
-            if(other!==c&&other.hasAttribute('data-scope-expansion')&&other.checked){other.checked=false;replaced=true}
-          });
+    function reconcileAddonEligibility(){
+      var tierId=tierByValue[tier&&tier.value];
+      eligibilityNote='';
+      addonInputs.forEach(function(input){
+        var eligibility=(input.dataset.eligibleTiers||'').split(',').filter(Boolean);
+        if(!eligibility.length)return;
+        var allowed=!tierId||eligibility.indexOf(tierId)>-1;
+        input.disabled=!allowed;
+        if(!allowed&&input.checked){
+          input.checked=false;
+          eligibilityNote='Basic form interest was removed because this tier already has capacity for one explicitly scoped basic form.';
         }
-        describeScope(c,replaced);
       });
-    });
-    if(firstScope)describeScope(firstScope,false);
+      describeAddons();
+    }
+    addonInputs.forEach(function(c){c.addEventListener('change',describeAddons)});
+    if(tier)tier.addEventListener('change',reconcileAddonEligibility);
+    reconcileAddonEligibility();
   }catch(e){}
 })();
 </script>
