@@ -9,6 +9,13 @@ const errors = [];
 const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
 const canonicalCustomerMailbox = "sitesourcery@proton.me";
 const prohibitedLegacyMailbox = "hello@sitesourcery.com";
+const writableCardFile = "print-collateral/sitesourcery-card-finalist-v9.html";
+const writableCardPdfFile = "print-collateral/sitesourcery-card-finalist-v9.pdf";
+const frozenPrintCollateral = Object.freeze({
+  "print-collateral/sitesourcery-card-finalist-v8.html": "84fd4b4b1d782b50b42d65b1539898a6e52af29eca31377f1e44c8f41ceee51b",
+  "print-collateral/sitesourcery-card-finalist-v8.pdf": "579b8cec150205000008c7f919b7569b604c190175f47808e97f9dcf0ffff3ad",
+  "print-collateral/assets/qr-start.svg": "044f1f0148e4c848c8708c4cba8dce8f7696a5b09151f4ae38c11561592ae8f3",
+});
 const mailboxSurfaces = new Set([
   "404.html",
   "about.html",
@@ -64,6 +71,58 @@ for (const file of htmlFiles) htmlSources.set(file, await readFile(path.join(roo
 
 function report(file, message) {
   errors.push(`${file}: ${message}`);
+}
+
+for (const [file, expectedDigest] of Object.entries(frozenPrintCollateral)) {
+  if (!fileSet.has(file)) {
+    report(file, "frozen print-collateral dependency is missing");
+    continue;
+  }
+  const actualDigest = createHash("sha256").update(await readFile(path.join(root, file))).digest("hex");
+  if (actualDigest !== expectedDigest) {
+    report(file, `frozen print-collateral dependency changed: expected ${expectedDigest}, received ${actualDigest}`);
+  }
+}
+
+if (!fileSet.has(writableCardPdfFile)) {
+  report(writableCardPdfFile, "generated writable-back V9 print artifact is missing");
+} else {
+  const pdf = await readFile(path.join(root, writableCardPdfFile));
+  if (!pdf.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+    report(writableCardPdfFile, "generated writable-back V9 print artifact is not a PDF");
+  }
+}
+
+const writableCard = htmlSources.get(writableCardFile);
+if (writableCard === undefined) {
+  report(writableCardFile, "writable-back V9 card source is missing");
+} else {
+  const requiredMarkers = [
+    '<section class="page back" aria-label="Site Sourcery writable contact side" data-print-side="writable-back" data-back-stock="uncoated-writable" data-back-finishes="none">',
+    '<p class="demo-label">Client Demo URL</p>',
+    '<span class="scheme">https://</span>',
+    'data-writable-width-in="2.62"',
+    'data-writable-height-in="0.50"',
+    'data-print-width-in="0.80"',
+    ".back{background:#fff}",
+    ".back::before{content:\"\";position:absolute;left:0;top:0;bottom:0;width:.19in;",
+    ".qr img{display:block;width:.8in;height:.8in;background:#fff}",
+    ".write-space{width:2.62in;height:.50in;background:#fff;",
+    "@page{size:3.75in 2.25in;margin:0}",
+    "uncoated and writable",
+    "no gloss, UV, aqueous coating, soft-touch, or laminate",
+    "physical blue/black ballpoint dry-and-smudge test",
+    canonicalCustomerMailbox,
+  ];
+  for (const marker of requiredMarkers) {
+    if (!writableCard.includes(marker)) report(writableCardFile, `missing writable-back print marker ${JSON.stringify(marker)}`);
+  }
+  if (/\(\d{3}\)\s*\d{3}-\d{4}/.test(writableCard) || /\btel:/i.test(writableCard)) {
+    report(writableCardFile, "must omit the unconfirmed phone number");
+  }
+  if (!writableCard.includes("<h1>Web Studio</h1>") || !writableCard.includes("<span>EST. 2026<br>SOUTH JERSEY</span>")) {
+    report(writableCardFile, "must preserve the V8 front identity");
+  }
 }
 
 function stableStringify(value) {
