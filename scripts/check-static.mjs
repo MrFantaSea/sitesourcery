@@ -7,6 +7,21 @@ const root = process.cwd();
 const ignoredDirectories = new Set([".git", "_site", "node_modules"]);
 const errors = [];
 const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
+const canonicalCustomerMailbox = "sitesourcery@proton.me";
+const prohibitedLegacyMailbox = "hello@sitesourcery.com";
+const mailboxSurfaces = new Set([
+  "404.html",
+  "about.html",
+  "automation.html",
+  "contact.html",
+  "faq.html",
+  "how-it-works.html",
+  "index.html",
+  "pricing.html",
+  "privacy.html",
+  "start/index.html",
+  "terms.html",
+]);
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
@@ -318,6 +333,18 @@ function checkForms(file, html) {
 
 for (const file of htmlFiles) {
   const html = htmlSources.get(file);
+  if (html.toLowerCase().includes(prohibitedLegacyMailbox)) {
+    report(file, `prohibited legacy mailbox ${prohibitedLegacyMailbox} remains`);
+  }
+  if (mailboxSurfaces.has(file) && !html.toLowerCase().includes(canonicalCustomerMailbox)) {
+    report(file, `canonical customer mailbox ${canonicalCustomerMailbox} is missing`);
+  }
+  for (const match of html.matchAll(/\bhref\s*=\s*(?:"mailto:([^"]+)"|'mailto:([^']+)')/gi)) {
+    const destination = decodeHtmlAttribute(match[1] ?? match[2]).split("?", 1)[0].toLowerCase();
+    if (destination !== canonicalCustomerMailbox) {
+      report(file, `mailto link must use canonical customer mailbox ${canonicalCustomerMailbox}; received ${destination}`);
+    }
+  }
   const markup = html
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, "<script$1></script>")
