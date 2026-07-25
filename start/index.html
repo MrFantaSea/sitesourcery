@@ -31,9 +31,9 @@
 <meta name="twitter:image" content="https://sitesourcery.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Send an inquiry · Site Sourcery">
-<meta name="twitter:description" content="Tell us about your business and a real person will reply. No account, card, or automatic order.">
+<meta name="twitter:description" content="Review the held inquiry questions, then email the studio. No account, card, automatic order, or form transmission.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"An inquiry form for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:sitesourcery@proton.me","tel:+13217882555"]}
+{"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"A read-only preview of inquiry questions for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, form submission, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:sitesourcery@proton.me"]}
 </script>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="../atelier-inner.css">
@@ -267,7 +267,7 @@
               onsubmit="return false"
               aria-label="Tell us about your business" aria-disabled="true" aria-describedby="commercial-hold-note">
           <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
-          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held. Do not enter any information in these fields.</strong> You may review the questions, but this page will not transmit or save what you type. Use the phone or email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
+          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held. Do not enter any information in these fields.</strong> You may review the questions, but this page will not transmit or save what you type. Use the email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
           <p class="hint" style="margin:-.7rem 0 1.4rem">Keep this high level. Please do not send passwords, login codes, API keys, card or bank details, customer lists, health information, or other private records.</p>
 
           <fieldset data-no-entry-barrier="true" disabled aria-disabled="true" style="border:0;padding:0;margin:0;min-inline-size:0">
@@ -300,10 +300,10 @@
           </div>
 
           <div class="field">
-            <label for="f-reach">Best way to reach you <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">A phone or email so we can reply. We use it only for this inquiry and any later project communication you explicitly authorize.</p>
-            <input class="input" id="f-reach" name="Reach me at" type="text" maxlength="254"
-                   placeholder="(856) 555-0142 or you@email.com" required>
+            <label for="f-reach">Email address <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">An email address for a reply. We use it only for this inquiry and any later project communication you explicitly authorize.</p>
+            <input class="input" id="f-reach" name="Email address" type="email" autocomplete="email" maxlength="254"
+                   placeholder="you@example.com" required>
           </div>
 
           <div class="field">
@@ -528,7 +528,7 @@
           </div>
 
           <div class="field">
-            <label><input type="checkbox" name="Privacy acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this brief and the contact detail I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>. If I provide a phone number, I authorize a call or text about this inquiry; this is not marketing consent.</label>
+            <label><input type="checkbox" name="Privacy acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this brief and the email address I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>.</label>
           </div>
 
           <div class="sendrow">
@@ -537,7 +537,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
               <span>No remote form service receives this brief while commercial intake is held. Nothing typed here is transmitted or saved. See our <a href="/privacy.html">Privacy Notice</a>.</span>
             </p>
-            <p class="orline">Prefer to talk first? <a href="tel:+13217882555">Call (321)&nbsp;788-2555</a> or <a href="mailto:sitesourcery@proton.me?subject=A%20question%20before%20we%20start">email us</a>.</p>
+            <p class="orline">Have a question first? <a href="mailto:sitesourcery@proton.me?subject=A%20question%20before%20we%20start">Email the studio</a>.</p>
           </div>
           </fieldset>
         </form>
@@ -547,7 +547,7 @@
           <div class="card">
             <p class="eyebrow" style="margin-bottom:1.2rem">What happens next</p>
             <ol class="steps">
-              <li><b>You send this.</b> It lands with the studio and is usually read the same business day; after-hours and weekend replies may take longer.</li>
+              <li><b>You email the studio.</b> The held form does not send anything. A real person reviews direct email when available; no response time is guaranteed.</li>
               <li><b>We reply and scope it.</b> We clarify the fit, tier, deliverables, and timing before sending a plain proposal.</li>
               <li><b>Commercial review comes first.</b> An inquiry cannot start work. A project may begin only after a coverage-complete scope, written authorization, and any required payment.</li>
               <li><b>We build; you inspect.</b> The custom site is made by hand, reviewed by you, and never goes live under your name until you approve it.</li>
@@ -602,7 +602,6 @@
       <div class="footer-contact">
         <p class="footer-person">Custom-built, locally run, honestly priced.</p>
         <a class="footer-mail" href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>
-        <a class="footer-tel" href="tel:+13217882555">(321) 788-2555</a>
       </div>
     </div>
     <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Pricing is non-binding &middot; Ownership follows the written scope &middot; Hive remains pre-launch.</p>

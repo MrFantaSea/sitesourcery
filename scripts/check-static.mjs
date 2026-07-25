@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import vm from "node:vm";
+import { buildPagesArtifact, excludedTopLevel } from "./build-pages.mjs";
 
 const root = process.cwd();
 const ignoredDirectories = new Set([".git", "_site", "node_modules"]);
@@ -28,6 +30,7 @@ const mailboxSurfaces = new Set([
   "privacy.html",
   "start/index.html",
   "terms.html",
+  "thanks.html",
 ]);
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
@@ -63,6 +66,8 @@ async function walk(directory = root) {
 const files = await walk();
 const fileSet = new Set(files);
 const htmlFiles = files.filter((file) => file.endsWith(".html"));
+const deployableHtmlFiles = htmlFiles.filter((file) => !file.startsWith("print-collateral/"));
+const deployableHtmlFileSet = new Set(deployableHtmlFiles);
 const cssFiles = files.filter((file) => file.endsWith(".css"));
 const jsFiles = files.filter((file) => file.endsWith(".js"));
 const htmlSources = new Map();
@@ -153,6 +158,22 @@ if (releaseControl.allowsDeployment === true && releaseControl.state !== "cleare
 if (releaseControl.allowsCommercialDeployment !== releaseControl.allowsDeployment) {
   report("data/release-control.json", "commercial deployment flags must agree");
 }
+if (excludedTopLevel.filter((entry) => entry === "print-collateral").length !== 1) {
+  report("scripts/build-pages.mjs", "Pages artifact must actively exclude print-collateral exactly once");
+}
+const scratchBuildRoot = await mkdtemp(path.join(tmpdir(), "sitesourcery-pages-check-"));
+try {
+  const scratchArtifact = path.join(scratchBuildRoot, "_site");
+  buildPagesArtifact({ root, output: scratchArtifact });
+  try {
+    await lstat(path.join(scratchArtifact, "print-collateral"));
+    report("scripts/build-pages.mjs", "built Pages artifact contains excluded print-collateral");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+} finally {
+  await rm(scratchBuildRoot, { recursive: true, force: true });
+}
 if (typeof releaseControl.allowsContainmentDeployment !== "boolean") {
   report("data/release-control.json", "containment deployment authority must be an explicit boolean");
 }
@@ -178,9 +199,61 @@ for (const marker of [
 function decodeHtmlAttribute(value) {
   return value
     .replace(/&amp;/gi, "&")
-    .replace(/&#(?:x0*23|0*35);/gi, "#")
+    .replace(/&#x([0-9a-f]+);?/gi, (_, digits) => decodeCodePoint(digits, 16))
+    .replace(/&#([0-9]+);?/g, (_, digits) => decodeCodePoint(digits, 10))
     .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;|&apos;/gi, "'");
+    .replace(/&apos;/gi, "'")
+    .replace(/&colon;/gi, ":")
+    .replace(/&lpar;/gi, "(")
+    .replace(/&rpar;/gi, ")")
+    .replace(/&plus;/gi, "+")
+    .replace(/&hyphen;|&minus;/gi, "-")
+    .replace(/&period;/gi, ".")
+    .replace(/&nbsp;/gi, " ");
+}
+
+function decodeCodePoint(digits, radix) {
+  const value = Number.parseInt(digits, radix);
+  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) {
+    return "\ufffd";
+  }
+  return String.fromCodePoint(value);
+}
+
+const publicPhonePattern = /(?:\+?1[-.\s]*)?\(?\d{3}\)?[-.\s]+\d{3}[-.\s]+\d{4}/i;
+
+function checkJsonLdContactValues(file, value, trail = "$") {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => checkJsonLdContactValues(file, entry, `${trail}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, entry] of Object.entries(value)) {
+    const nextTrail = `${trail}.${key}`;
+    if (key.toLowerCase() === "telephone") {
+      report(file, `deployable JSON-LD must omit telephone at ${nextTrail}`);
+    }
+    if (key.toLowerCase() === "email" && (
+      typeof entry !== "string"
+      || entry.toLowerCase() !== canonicalCustomerMailbox
+    )) {
+      report(file, `deployable JSON-LD email must be ${canonicalCustomerMailbox} at ${nextTrail}`);
+    }
+    if (typeof entry === "string") {
+      const decoded = decodeHtmlAttribute(entry);
+      if (/\b(?:tel|sms):/i.test(decoded)) {
+        report(file, `deployable JSON-LD contains a phone route at ${nextTrail}`);
+      }
+      if (decoded.toLowerCase().includes(prohibitedLegacyMailbox)) {
+        report(file, `deployable JSON-LD contains prohibited mailbox ${prohibitedLegacyMailbox} at ${nextTrail}`);
+      }
+      if (publicPhonePattern.test(decoded)) {
+        report(file, `deployable JSON-LD contains an unverified phone number at ${nextTrail}`);
+      }
+    } else {
+      checkJsonLdContactValues(file, entry, nextTrail);
+    }
+  }
 }
 
 function attribute(attributes, name) {
@@ -190,6 +263,33 @@ function attribute(attributes, name) {
 
 function hasAttribute(attributes, name) {
   return new RegExp(`(?:^|\\s)${name}(?:\\s|=|$)`, "i").test(attributes);
+}
+
+function fieldsetRanges(markup) {
+  const ranges = [];
+  const stack = [];
+  const pattern = /<\/?fieldset\b[^>]*>/gi;
+  for (const match of markup.matchAll(pattern)) {
+    if (/^<\//.test(match[0])) {
+      const opened = stack.pop();
+      if (opened) {
+        ranges.push({
+          ...opened,
+          closeStart: match.index,
+          end: match.index + match[0].length,
+        });
+      }
+      continue;
+    }
+    const attributes = /^<fieldset\b([^>]*)>$/i.exec(match[0])?.[1] ?? "";
+    stack.push({
+      attributes,
+      openStart: match.index,
+      contentStart: match.index + match[0].length,
+      depth: stack.length,
+    });
+  }
+  return ranges;
 }
 
 function localizeReference(rawValue) {
@@ -306,6 +406,7 @@ function checkJavaScript(file, source, label = file) {
 function checkForms(file, html) {
   const forms = [...html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form\s*>/gi)];
   for (const [index, form] of forms.entries()) {
+    const formBody = form[2].replace(/<!--[\s\S]*?-->/g, (comment) => " ".repeat(comment.length));
     counts.forms += 1;
     const action = attribute(form[1], "action") ?? "";
     const method = (attribute(form[1], "method") ?? "get").toLowerCase();
@@ -329,24 +430,33 @@ function checkForms(file, html) {
       if ((attribute(form[1], "onsubmit") ?? "").replace(/\s+/g, " ").trim() !== "return false") {
         report(file, `form ${index + 1} must block submit events while the public catalog is inquiry-only`);
       }
-      if (/\bname\s*=\s*["']access_key["']/i.test(form[2])) {
+      if (/\bname\s*=\s*["']access_key["']/i.test(formBody)) {
         report(file, `form ${index + 1} exposes a provider access key field while submission is held`);
       }
-      const fieldsets = [...form[2].matchAll(/<fieldset\b([^>]*)>/gi)].map((match) => match[1]);
-      const hasNoEntryBarrier = fieldsets.some((attrs) =>
-        attribute(attrs, "data-no-entry-barrier") === "true"
-        && hasAttribute(attrs, "disabled")
-        && attribute(attrs, "aria-disabled") === "true"
+      const fieldsets = fieldsetRanges(formBody);
+      const barrierCandidates = fieldsets.filter((fieldset) =>
+        attribute(fieldset.attributes, "data-no-entry-barrier") === "true"
       );
+      const barrier = barrierCandidates.length === 1 ? barrierCandidates[0] : null;
+      const hasNoEntryBarrier = barrier
+        && barrier.depth === 0
+        && hasAttribute(barrier.attributes, "disabled")
+        && attribute(barrier.attributes, "aria-disabled") === "true";
       if (!hasNoEntryBarrier) {
-        report(file, `form ${index + 1} must wrap its controls in a disabled data-no-entry-barrier fieldset`);
+        report(file, `form ${index + 1} must contain exactly one outer disabled data-no-entry-barrier fieldset`);
       }
-      if (!form[2].includes("Do not enter any information in these fields.")) {
+      const controls = [...formBody.matchAll(/<(?:button|input|select|textarea)\b/gi)];
+      if (!barrier || controls.some((control) =>
+        control.index < barrier.contentStart || control.index >= barrier.closeStart
+      )) {
+        report(file, `form ${index + 1} has an interactive control outside its no-entry barrier`);
+      }
+      if (!formBody.includes("Do not enter any information in these fields.")) {
         report(file, `form ${index + 1} must explicitly tell visitors not to enter information`);
       }
       const submitControls = [
-        ...form[2].matchAll(/<button\b([^>]*)>/gi),
-        ...form[2].matchAll(/<input\b([^>]*)>/gi),
+        ...formBody.matchAll(/<button\b([^>]*)>/gi),
+        ...formBody.matchAll(/<input\b([^>]*)>/gi),
       ].map((match) => match[1]).filter((attrs) => {
         const type = (attribute(attrs, "type") ?? "submit").toLowerCase();
         return type === "submit";
@@ -369,7 +479,7 @@ function checkForms(file, html) {
           report(file, `brief form must bind ${name}=${JSON.stringify(expected)}`);
         }
       }
-      const hiddenInputs = [...form[2].matchAll(/<input\b([^>]*)>/gi)]
+      const hiddenInputs = [...formBody.matchAll(/<input\b([^>]*)>/gi)]
         .map((match) => match[1])
         .filter((attrs) => (attribute(attrs, "type") ?? "text").toLowerCase() === "hidden");
       const expectedInputs = {
@@ -392,14 +502,17 @@ function checkForms(file, html) {
 
 for (const file of htmlFiles) {
   const html = htmlSources.get(file);
-  if (html.toLowerCase().includes(prohibitedLegacyMailbox)) {
+  const decodedHtml = decodeHtmlAttribute(html);
+  if (decodedHtml.toLowerCase().includes(prohibitedLegacyMailbox)) {
     report(file, `prohibited legacy mailbox ${prohibitedLegacyMailbox} remains`);
   }
-  if (mailboxSurfaces.has(file) && !html.toLowerCase().includes(canonicalCustomerMailbox)) {
+  if (mailboxSurfaces.has(file) && !decodedHtml.toLowerCase().includes(canonicalCustomerMailbox)) {
     report(file, `canonical customer mailbox ${canonicalCustomerMailbox} is missing`);
   }
-  for (const match of html.matchAll(/\bhref\s*=\s*(?:"mailto:([^"]+)"|'mailto:([^']+)')/gi)) {
-    const destination = decodeHtmlAttribute(match[1] ?? match[2]).split("?", 1)[0].toLowerCase();
+  for (const match of html.matchAll(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const href = decodeHtmlAttribute(match[1] ?? match[2]);
+    if (!href.toLowerCase().startsWith("mailto:")) continue;
+    const destination = href.slice("mailto:".length).split("?", 1)[0].toLowerCase();
     if (destination !== canonicalCustomerMailbox) {
       report(file, `mailto link must use canonical customer mailbox ${canonicalCustomerMailbox}; received ${destination}`);
     }
@@ -424,8 +537,9 @@ for (const file of htmlFiles) {
     inlineNumber += 1;
     if (type === "application/ld+json") {
       try {
-        JSON.parse(source);
+        const parsed = JSON.parse(source);
         counts.jsonLd += 1;
+        if (deployableHtmlFileSet.has(file)) checkJsonLdContactValues(file, parsed);
       } catch (error) {
         report(file, `JSON-LD block ${inlineNumber} is invalid: ${error.message}`);
       }
@@ -436,6 +550,36 @@ for (const file of htmlFiles) {
     }
   }
   checkForms(file, html);
+}
+
+for (const file of deployableHtmlFiles) {
+  const html = decodeHtmlAttribute(htmlSources.get(file));
+  if (/\b(?:tel|sms):/i.test(html)) {
+    report(file, "deployable HTML must use the verified email-only public contact posture");
+  }
+  if (/"telephone"\s*:/i.test(html)) {
+    report(file, "deployable structured data must omit telephone while the public contact posture is email-only");
+  }
+  if (publicPhonePattern.test(html)) {
+    report(file, "deployable HTML contains an unverified public phone number");
+  }
+  if (/Site Sourcery is an alternate name used by/i.test(html)) {
+    report(file, "must not claim alternate-name use while New Jersey registration is pending");
+  }
+  if (/(?:number below reaches a real person|published business number|real person on a real number|call or email|same business day)/i.test(html)) {
+    report(file, "deployable HTML contradicts the verified email-only public contact posture");
+  }
+}
+
+for (const file of ["privacy.html", "terms.html"]) {
+  const html = htmlSources.get(file) ?? "";
+  for (const marker of [
+    "Site Sourcery is a service brand operated by",
+    "New Jersey alternate-name registration is pending",
+    "Desiderata Labs LLC as the legal seller",
+  ]) {
+    if (!html.includes(marker)) report(file, `missing pending-name/legal-seller marker ${JSON.stringify(marker)}`);
+  }
 }
 
 for (const file of cssFiles) checkCssReferences(file, await readFile(path.join(root, file), "utf8"));
