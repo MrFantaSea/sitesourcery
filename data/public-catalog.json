@@ -1,12 +1,12 @@
 {
-  "version": "SS-COMMERCIAL-2026.3",
+  "version": "SS-COMMERCIAL-2026.4",
   "currency": "USD",
   "offerState": "inquiry-only",
   "notice": "Non-binding pricing preview. Verified scope and written acceptance are required; inquiry does not authorize work or billing.",
-  "sourceCatalogDigest": "10ad7a1e555ec55bd42488382de2eae3ed4f8489cb5243bb25677ca68ac1cbe0",
-  "tierCatalogId": "SS-TIERS-2026.3",
-  "addonCatalogId": "SS-ADDONS-2026.3",
-  "careCatalogId": "SS-CARE-2026.3",
+  "sourceCatalogDigest": "5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335",
+  "tierCatalogId": "SS-TIERS-2026.4",
+  "addonCatalogId": "SS-ADDONS-2026.4",
+  "careCatalogId": "SS-CARE-2026.4",
   "buildTiers": [
     {
       "id": "card",
@@ -99,27 +99,50 @@
       }
     }
   ],
+  "scaleRule": {
+    "id": "scale",
+    "label": "Scale",
+    "baseTierId": "flagship",
+    "minimumCapacityUnits": 1,
+    "maximumCapacityUnits": 15,
+    "maximumCraftedPages": 30,
+    "unitPriceCents": 24000,
+    "allowancePerUnit": {
+      "craftedPages": 1,
+      "sections": 4,
+      "uniqueLayouts": 1,
+      "contentWords": 500,
+      "suppliedMedia": 4
+    },
+    "boundary": "Automatically priced only through 30 delivered crafted pages and the matching normalized capacity. Larger or denser work requires a component-specific custom exception."
+  },
+  "creativityLevels": [
+    {
+      "id": "essential",
+      "label": "Essential",
+      "premiumBasisPoints": 0,
+      "minimumPremiumCents": 0,
+      "maximumMotionComponents": 0,
+      "boundary": "Polished custom layout system, typography, color, responsive behavior, accessibility, performance, and restrained functional interactions; no bespoke art direction or motion system."
+    },
+    {
+      "id": "distinctive",
+      "label": "Distinctive",
+      "premiumBasisPoints": 2500,
+      "minimumPremiumCents": 50000,
+      "maximumMotionComponents": 3,
+      "boundary": "One original art direction, custom hero/compositions, supporting graphics, and up to three purposeful motion components in the approved footprint."
+    },
+    {
+      "id": "atelier",
+      "label": "Atelier",
+      "premiumBasisPoints": 5000,
+      "minimumPremiumCents": 120000,
+      "maximumMotionComponents": 8,
+      "boundary": "Bespoke visual storytelling with several major compositions, a custom graphic system, and ambient or scroll-led motion with reduced-motion treatment; video, complex 3D, games, and application interfaces remain custom."
+    }
+  ],
   "buildAddons": [
-    {
-      "id": "bespoke_visual",
-      "label": "Custom visual composition",
-      "priceCents": 50000,
-      "maxQuantity": 1,
-      "unit": null,
-      "eligibleTiers": null,
-      "tierPricesCents": null,
-      "boundary": "One direction and one revision using supplied or licensed assets; original illustration is custom."
-    },
-    {
-      "id": "motion_system",
-      "label": "Motion direction",
-      "priceCents": 40000,
-      "maxQuantity": 1,
-      "unit": null,
-      "eligibleTiers": null,
-      "tierPricesCents": null,
-      "boundary": "Up to three named components or states, including reduced-motion behavior; not three whole pages."
-    },
     {
       "id": "basic_form",
       "label": "Basic contact form",
@@ -240,7 +263,7 @@
     "firstPriceCents": 35000,
     "nextRecords": 100,
     "nextPriceCents": 20000,
-    "maxRecords": 500
+    "maxRecords": 1000
   },
   "carePlans": [
     {
@@ -249,8 +272,7 @@
       "monthlyCents": 2500,
       "includedMinutes": 0,
       "editCap": 0,
-      "approvedOverflowCentsPerHour": null,
-      "maxOverflowMinutes": null
+      "overflow": null
     },
     {
       "id": "care-lite",
@@ -258,8 +280,7 @@
       "monthlyCents": 6900,
       "includedMinutes": 30,
       "editCap": 3,
-      "approvedOverflowCentsPerHour": null,
-      "maxOverflowMinutes": null
+      "overflow": null
     },
     {
       "id": "care",
@@ -267,8 +288,7 @@
       "monthlyCents": 11900,
       "includedMinutes": 60,
       "editCap": 6,
-      "approvedOverflowCentsPerHour": null,
-      "maxOverflowMinutes": null
+      "overflow": null
     },
     {
       "id": "care-plus",
@@ -276,8 +296,7 @@
       "monthlyCents": 19900,
       "includedMinutes": 120,
       "editCap": 10,
-      "approvedOverflowCentsPerHour": null,
-      "maxOverflowMinutes": null
+      "overflow": null
     },
     {
       "id": "partner",
@@ -285,9 +304,13 @@
       "monthlyCents": 34900,
       "includedMinutes": 240,
       "editCap": 16,
-      "approvedOverflowCentsPerHour": 15000,
-      "maxOverflowMinutes": 60
+      "overflow": {
+        "billingMode": "metered_started_minute",
+        "rateCentsPerStartedMinute": 250,
+        "maximumCents": 15000,
+        "maximumMinutes": 60
+      }
     }
   ],
-  "projectionDigest": "7be1e59262f9ab9268eca301a1706e9dd858d20eee9ab77ec28667203d33b4b8"
+  "projectionDigest": "655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5"
 }

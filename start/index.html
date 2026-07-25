@@ -129,7 +129,7 @@
     <div class="wrap">
       <p class="eyebrow reveal">Website inquiry</p>
       <h1 class="hero-mega reveal">Tell us about your <em class="accent">business</em>.</h1>
-      <p class="lede reveal"><strong>Not a checkout, order, quote, reservation, or authority to begin work.</strong> These questions help us review a website request against the non-binding SS-TIERS-2026.3 and SS-ADDONS-2026.3 planning model, or record interest in a proposed Hive workflow. A real person reviews every inquiry.</p>
+      <p class="lede reveal"><strong>Not a checkout, order, quote, reservation, or authority to begin work.</strong> These questions help us review a website request against the non-binding SS-TIERS-2026.4 and SS-ADDONS-2026.4 planning model, or record interest in a proposed Hive workflow. A real person reviews every inquiry.</p>
 
       <div class="hero-stage reveal">
         <figure class="spellstage" style="--lit:1;cursor:default" role="img"
@@ -257,15 +257,27 @@
       <div class="commission">
 
         <!-- ── THE BRIEF (intake) ─────────────────────────────────────────── -->
-        <form class="brief reveal" id="brief" data-commercial-state="hold" onsubmit="return false"
-              aria-label="Tell us about your business" aria-describedby="commercial-hold-note">
-
-          <input type="hidden" name="Website tier catalog ID" value="SS-TIERS-2026.3">
-          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.3">
-
+        <form class="brief reveal" id="brief" data-commercial-state="hold" data-no-entry="true"
+              data-commercial-catalog-id="SS-COMMERCIAL-2026.4"
+              data-tier-catalog-id="SS-TIERS-2026.4"
+              data-addon-catalog-id="SS-ADDONS-2026.4"
+              data-care-catalog-id="SS-CARE-2026.4"
+              data-source-catalog-digest="5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335"
+              data-projection-digest="655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5"
+              onsubmit="return false"
+              aria-label="Tell us about your business" aria-disabled="true" aria-describedby="commercial-hold-note">
           <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
-          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held.</strong> You may review the questions, but this page will not transmit or save what you type. Use the phone or email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
+          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held. Do not enter any information in these fields.</strong> You may review the questions, but this page will not transmit or save what you type. Use the phone or email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
           <p class="hint" style="margin:-.7rem 0 1.4rem">Keep this high level. Please do not send passwords, login codes, API keys, card or bank details, customer lists, health information, or other private records.</p>
+
+          <fieldset data-no-entry-barrier="true" disabled aria-disabled="true" style="border:0;padding:0;margin:0;min-inline-size:0">
+            <legend style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Submission temporarily unavailable</legend>
+          <input type="hidden" name="Website commercial catalog ID" value="SS-COMMERCIAL-2026.4">
+          <input type="hidden" name="Website tier catalog ID" value="SS-TIERS-2026.4">
+          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.4">
+          <input type="hidden" name="Website Care catalog ID" value="SS-CARE-2026.4">
+          <input type="hidden" name="Website source catalog digest" value="5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335">
+          <input type="hidden" name="Website projection digest" value="655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5">
 
           <div class="field">
             <label for="f-name">Your name <span class="req" aria-hidden="true">*</span></label>
@@ -345,7 +357,7 @@
 
           <div class="field">
             <label for="f-tier">Base website tier <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Planning catalog SS-TIERS-2026.3 prices delivered public footprint, not teaser size or capability count. For a replacement, start from the current verified site unless an approved architecture plan says otherwise. Base content capacity assumes client-supplied facts and light editing. Site and larger bands have capacity for at most one basic form only when explicitly named in the written scope; no form is inferred from page count. Card and Card Plus may add one bounded basic form.</p>
+            <p class="hint">Planning catalog SS-TIERS-2026.4 prices delivered public footprint, not teaser size or creative intensity. For a replacement, start from the current verified site unless an approved architecture plan says otherwise. Scale continues the footprint formula through 30 crafted pages. Site and larger bands have capacity for at most one basic form only when explicitly named in the written scope; no form is inferred from page count. Card and Card Plus may add one bounded basic form.</p>
             <select class="input" id="f-tier" name="Base website tier" required>
               <option value="" selected disabled>Choose the closest fit</option>
               <option value="Not sure — recommend a website tier">Not sure — recommend a tier</option>
@@ -355,10 +367,23 @@
               <option value="Site Plus — $1,600" data-tier-id="site-plus" data-price-cents="160000" data-page-cap="7" data-section-cap="28" data-included-forms="1">Site Plus — $1,600 · up to 7 pages · explicitly scoped form capacity</option>
               <option value="Signature — $2,400" data-tier-id="signature" data-price-cents="240000" data-page-cap="10" data-section-cap="40" data-included-forms="1">Signature — $2,400 · up to 10 pages · explicitly scoped form capacity</option>
               <option value="Flagship — $3,600" data-tier-id="flagship" data-price-cents="360000" data-page-cap="15" data-section-cap="60" data-included-forms="1">Flagship — $3,600 · up to 15 pages · explicitly scoped form capacity</option>
-              <option value="Beyond/custom — written quote required" data-tier-id="beyond">Beyond / custom — written quote required</option>
+              <option value="Scale — formula through 30 pages" data-tier-id="scale" data-page-cap="30" data-section-cap="120" data-included-forms="1">Scale — $3,600 + $240/unit · up to 30 crafted pages</option>
+              <option value="Custom exception — written component price required" data-tier-id="beyond">Custom exception — published boundary exceeded</option>
               <option value="No website — Hive research interest only">No website — Hive research interest only</option>
             </select>
             <p class="hint" id="tier-scope-status" aria-live="polite"></p>
+          </div>
+
+          <div class="field">
+            <label for="f-creativity">Creative direction <span class="req" aria-hidden="true">*</span></label>
+            <p class="hint">This is independent of site size. The percentage applies only to the footprint—not migration, redirects, providers, other systems, or Care.</p>
+            <select class="input" id="f-creativity" name="Creative direction" required>
+              <option value="" selected disabled>Choose the closest creative fit</option>
+              <option value="Essential — included" data-creativity-level="essential" data-premium-basis-points="0" data-minimum-premium-cents="0" data-max-motion-components="0">Essential — polished custom build, included</option>
+              <option value="Distinctive — plus 25 percent of footprint, 500 dollar minimum" data-creativity-level="distinctive" data-premium-basis-points="2500" data-minimum-premium-cents="50000" data-max-motion-components="3">Distinctive — +25% of footprint · $500 minimum</option>
+              <option value="Atelier — plus 50 percent of footprint, 1200 dollar minimum" data-creativity-level="atelier" data-premium-basis-points="5000" data-minimum-premium-cents="120000" data-max-motion-components="8">Atelier — +50% of footprint · $1,200 minimum</option>
+              <option value="Not sure — recommend a creative level">Not sure — recommend a level</option>
+            </select>
           </div>
 
           <div class="field">
@@ -405,13 +430,11 @@
             <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
               Website build add-ons you are considering <span class="opt">optional · non-binding</span>
             </legend>
-            <p class="hint" id="website-addons-help">Planning catalog SS-ADDONS-2026.3. The footprint band comes first; capabilities and transition work are then itemized. Selecting anything here records interest only and cannot create a quote, order, or authorization.</p>
+            <p class="hint" id="website-addons-help">Planning catalog SS-ADDONS-2026.4. The footprint and creative level come first; functional, data, and transition work are then itemized. Selecting anything here records interest only and cannot create a quote, order, or authorization.</p>
 
             <div class="addon-picker-group">
-              <p id="addon-scope-label">Design, content &amp; website capabilities</p>
+              <p id="addon-scope-label">Content &amp; website capabilities</p>
               <div class="addon-picks">
-                <label class="pick"><input id="bespoke_visual" type="checkbox" name="Website add-on interest - bespoke_visual" value="Custom visual composition — $500 — max 1" data-addon-id="bespoke_visual" data-max-quantity="1"><span><b>Custom visual composition</b><small>One direction + one revision using supplied/licensed assets · $500 · max 1</small></span></label>
-                <label class="pick"><input id="motion_system" type="checkbox" name="Website add-on interest - motion_system" value="Motion direction — $400 — max 1" data-addon-id="motion_system" data-max-quantity="1"><span><b>Motion direction</b><small>Up to 3 named components/states · $400 · max 1</small></span></label>
                 <label class="pick"><input id="basic_form" type="checkbox" name="Website add-on interest - basic_form" value="Basic contact form — $200 — Card or Card Plus only — max 1" data-addon-id="basic_form" data-max-quantity="1" data-eligible-tiers="card,card-plus"><span><b>Basic contact form</b><small>Card/Card Plus only · up to 5 fields · one recipient · $200 · max 1</small></span></label>
                 <label class="pick"><input id="standard_tool" type="checkbox" name="Website add-on interest - standard_tool" value="Standard interactive tool — $450 — max 1" data-addon-id="standard_tool" data-max-quantity="1"><span><b>Standard interactive tool</b><small>One documented input/output model within 6 implementation hours · $450 · max 1</small></span></label>
                 <label class="pick"><input id="hosted_provider" type="checkbox" name="Website add-on interest - hosted_provider" value="Hosted provider setup — $700 — max 1" data-addon-id="hosted_provider" data-max-quantity="1"><span><b>Hosted provider setup</b><small>One account/location/resource · up to 5 services/products · $700 · max 1</small></span></label>
@@ -423,8 +446,8 @@
             <div class="addon-picker-group">
               <p id="addon-ops-label">Review, scheduling &amp; ordinary connections</p>
               <div class="addon-picks">
-                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $125–$550 — max 1" data-addon-id="extra_revision_round" data-max-quantity="1" data-tier-prices="card:12500,card-plus:17500,site:25000,site-plus:30000,signature:40000,flagship:55000"><span><b>Additional grouped revision round</b><small>Base-tier price · $125–$550 · max 1</small></span></label>
-                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $200–$1,200 — max 1" data-addon-id="priority_production_window" data-max-quantity="1" data-tier-prices="card:20000,card-plus:30000,site:45000,site-plus:65000,signature:90000,flagship:120000"><span><b>Priority production window</b><small>Capacity-confirmed only · $200–$1,200 · max 1</small></span></label>
+                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $125–$550 through Flagship — max 1" data-addon-id="extra_revision_round" data-max-quantity="1" data-tier-prices="card:12500,card-plus:17500,site:25000,site-plus:30000,signature:40000,flagship:55000"><span><b>Additional grouped revision round</b><small>Card–Flagship $125–$550 · Scale custom component price · max 1</small></span></label>
+                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $200–$1,200 through Flagship — max 1" data-addon-id="priority_production_window" data-max-quantity="1" data-tier-prices="card:20000,card-plus:30000,site:45000,site-plus:65000,signature:90000,flagship:120000"><span><b>Priority production window</b><small>Card–Flagship $200–$1,200 · Scale custom component price · capacity-confirmed only</small></span></label>
                 <label class="pick"><input id="additional_connection" type="checkbox" name="Website add-on interest - additional_connection" value="Additional domain or provider connection — $200 each — max 2" data-addon-id="additional_connection" data-max-quantity="2"><span><b>Additional domain or provider connection</b><small>$200 each · max 2</small></span></label>
               </div>
             </div>
@@ -433,7 +456,7 @@
               <p id="addon-tool-label">Existing-site transition &amp; migration</p>
               <div class="addon-picks">
                 <label class="pick"><input id="architecture_redirect" type="checkbox" name="Website add-on interest - architecture_redirect" value="Architecture and redirect plan — $350–$950 for 3–15 affected URLs" data-addon-id="architecture_redirect"><span><b>Architecture and redirect plan</b><small>3–5 URLs $350 · 6–10 $650 · 11–15 $950</small></span></label>
-                <label class="pick"><input id="structured_data_migration" type="checkbox" name="Website add-on interest - structured_data_migration" value="Structured data migration — first 100 clean entries $350, next 100 increments $200, max 500" data-addon-id="structured_data_migration"><span><b>Structured data migration</b><small>First 100 $350 · each next 100 $200 · max 500 clean entries</small></span></label>
+                <label class="pick"><input id="structured_data_migration" type="checkbox" name="Website add-on interest - structured_data_migration" value="Structured data migration — first 100 clean entries $350, next 100 increments $200, max 1000" data-addon-id="structured_data_migration"><span><b>Structured data migration</b><small>First 100 $350 · each next 100 $200 · max 1,000 clean entries</small></span></label>
               </div>
             </div>
             <p class="addon-status" id="website-addons-status" aria-live="polite"></p>
@@ -516,6 +539,7 @@
             </p>
             <p class="orline">Prefer to talk first? <a href="tel:+13217882555">Call (321)&nbsp;788-2555</a> or <a href="mailto:hello@sitesourcery.com?subject=A%20question%20before%20we%20start">email us</a>.</p>
           </div>
+          </fieldset>
         </form>
 
         <!-- ── THE RAIL — honest reassurance, no fake urgency ─────────────── -->

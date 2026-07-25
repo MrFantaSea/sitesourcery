@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import vm from "node:vm";
@@ -9,6 +10,14 @@ const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
+const expectedCatalogIdentity = Object.freeze({
+  version: "SS-COMMERCIAL-2026.4",
+  tierCatalogId: "SS-TIERS-2026.4",
+  addonCatalogId: "SS-ADDONS-2026.4",
+  careCatalogId: "SS-CARE-2026.4",
+  sourceCatalogDigest: "5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335",
+  projectionDigest: "655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5",
+});
 const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
 const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");
 const containmentWorkflow = await readFile(path.join(root, ".github/workflows/containment.yml"), "utf8");
@@ -42,6 +51,25 @@ function report(file, message) {
   errors.push(`${file}: ${message}`);
 }
 
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+for (const [field, expected] of Object.entries(expectedCatalogIdentity)) {
+  if (publicCatalog[field] !== expected) {
+    report("data/public-catalog.json", `${field} must be ${expected}; received ${publicCatalog[field] ?? "missing"}`);
+  }
+}
+const { projectionDigest: ignoredProjectionDigest, ...projectionPayload } = publicCatalog;
+const recomputedProjectionDigest = createHash("sha256").update(stableStringify(projectionPayload)).digest("hex");
+if (publicCatalog.projectionDigest !== recomputedProjectionDigest) {
+  report("data/public-catalog.json", `projectionDigest does not match the independently recomputed semantic projection digest ${recomputedProjectionDigest}`);
+}
+
 if (inquiryOnly && (releaseControl.state !== "hold" || releaseControl.allowsDeployment !== false)) {
   report("data/release-control.json", "inquiry-only catalog requires a held deployment state");
 }
@@ -56,6 +84,7 @@ if (typeof releaseControl.allowsContainmentDeployment !== "boolean") {
 }
 for (const marker of [
   "run: npm test",
+  "--require-root-lineage",
   "data/release-control.json",
   "run: npm run build:pages",
   "path: _site",
@@ -217,11 +246,29 @@ function checkForms(file, html) {
       if (attribute(form[1], "data-commercial-state") !== "hold") {
         report(file, `form ${index + 1} must declare data-commercial-state="hold" while the public catalog is inquiry-only`);
       }
+      if (attribute(form[1], "data-no-entry") !== "true") {
+        report(file, `form ${index + 1} must declare data-no-entry="true" while the public catalog is inquiry-only`);
+      }
+      if (attribute(form[1], "aria-disabled") !== "true") {
+        report(file, `form ${index + 1} must declare aria-disabled="true" while the public catalog is inquiry-only`);
+      }
       if ((attribute(form[1], "onsubmit") ?? "").replace(/\s+/g, " ").trim() !== "return false") {
         report(file, `form ${index + 1} must block submit events while the public catalog is inquiry-only`);
       }
       if (/\bname\s*=\s*["']access_key["']/i.test(form[2])) {
         report(file, `form ${index + 1} exposes a provider access key field while submission is held`);
+      }
+      const fieldsets = [...form[2].matchAll(/<fieldset\b([^>]*)>/gi)].map((match) => match[1]);
+      const hasNoEntryBarrier = fieldsets.some((attrs) =>
+        attribute(attrs, "data-no-entry-barrier") === "true"
+        && hasAttribute(attrs, "disabled")
+        && attribute(attrs, "aria-disabled") === "true"
+      );
+      if (!hasNoEntryBarrier) {
+        report(file, `form ${index + 1} must wrap its controls in a disabled data-no-entry-barrier fieldset`);
+      }
+      if (!form[2].includes("Do not enter any information in these fields.")) {
+        report(file, `form ${index + 1} must explicitly tell visitors not to enter information`);
       }
       const submitControls = [
         ...form[2].matchAll(/<button\b([^>]*)>/gi),
@@ -232,6 +279,38 @@ function checkForms(file, html) {
       });
       if (submitControls.some((attrs) => !hasAttribute(attrs, "disabled"))) {
         report(file, `form ${index + 1} has an enabled submit control while the public catalog is inquiry-only`);
+      }
+    }
+    if (file === "start/index.html" && attribute(form[1], "id") === "brief") {
+      const expectedAttributes = {
+        "data-commercial-catalog-id": publicCatalog.version,
+        "data-tier-catalog-id": publicCatalog.tierCatalogId,
+        "data-addon-catalog-id": publicCatalog.addonCatalogId,
+        "data-care-catalog-id": publicCatalog.careCatalogId,
+        "data-source-catalog-digest": publicCatalog.sourceCatalogDigest,
+        "data-projection-digest": publicCatalog.projectionDigest,
+      };
+      for (const [name, expected] of Object.entries(expectedAttributes)) {
+        if (attribute(form[1], name) !== expected) {
+          report(file, `brief form must bind ${name}=${JSON.stringify(expected)}`);
+        }
+      }
+      const hiddenInputs = [...form[2].matchAll(/<input\b([^>]*)>/gi)]
+        .map((match) => match[1])
+        .filter((attrs) => (attribute(attrs, "type") ?? "text").toLowerCase() === "hidden");
+      const expectedInputs = {
+        "Website commercial catalog ID": publicCatalog.version,
+        "Website tier catalog ID": publicCatalog.tierCatalogId,
+        "Website add-on catalog ID": publicCatalog.addonCatalogId,
+        "Website Care catalog ID": publicCatalog.careCatalogId,
+        "Website source catalog digest": publicCatalog.sourceCatalogDigest,
+        "Website projection digest": publicCatalog.projectionDigest,
+      };
+      for (const [name, expected] of Object.entries(expectedInputs)) {
+        const matches = hiddenInputs.filter((attrs) => attribute(attrs, "name") === name);
+        if (matches.length !== 1 || attribute(matches[0] ?? "", "value") !== expected) {
+          report(file, `brief form must submit exactly one ${JSON.stringify(name)} value bound to ${JSON.stringify(expected)}`);
+        }
       }
     }
   }

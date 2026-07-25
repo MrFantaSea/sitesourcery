@@ -32,6 +32,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run complete site checks
         run: npm test
+      - name: Verify root source to published catalog lineage
+        run: node scripts/check-pricing.mjs --require-root-lineage
       - name: Enforce release authority
         id: release
         run: node -e "const fs=require('node:fs');const c=require('./data/release-control.json');if(c.state==='hold'&&c.allowsDeployment===false){console.log('Pages deployment held:',c.reason);fs.appendFileSync(process.env.GITHUB_OUTPUT,'allowed=false\n');}else if(c.state==='cleared'&&c.allowsDeployment===true){fs.appendFileSync(process.env.GITHUB_OUTPUT,'allowed=true\n');}else{console.error('Invalid release-control state');process.exit(1)}"
