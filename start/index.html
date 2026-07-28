@@ -1,723 +1,123 @@
 <!DOCTYPE html>
-<!-- ══════════════════════════════════════════════════════════════════════════
-     SITE SOURCERY — start/index.html · SEND AN INQUIRY · "SPELLCAST"
-     Built inside the dark violet→pink Spellcast system to match every other
-     page: same nav, footer, favicon, theme-color, palette, anonymous studio.
-     Content = an honest intake ("tell us about your business"), NOT a free
-     preview and NOT a magic button. Commercial form submission is intentionally
-     held; no remote form provider or access key is present in this source.
-     Self-contained: loads ONLY same-origin ../style.css + ../sourcery.js. All
-     graphics inline SVG. No CDNs, no fonts, no trackers. The only cross-origin
-     request occurs from this form while the commercial hold is active.
-     ══════════════════════════════════════════════════════════════════════════ -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<script>try{var t=localStorage.getItem('ss-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Send an inquiry — tell us about your business · Site Sourcery</title>
-<meta name="description" content="Send a custom website inquiry or register non-binding interest in the pre-launch Hive automation concept. This is not a checkout, order, reservation, or authorization for automated messaging.">
-<meta name="theme-color" content="#0B0912">
-<link rel="canonical" href="https://sitesourcery.com/start/">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%23FF5C8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%230B0912'/%3E%3Cpath d='M16 4.5l2.9 8.6L27.5 16l-8.6 2.9L16 27.5l-2.9-8.6L4.5 16l8.6-2.9z' fill='url(%23g)'/%3E%3C/svg%3E">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Site Sourcery">
-<meta property="og:title" content="Send an inquiry — tell us about your business · Site Sourcery">
-<meta property="og:description" content="A website inquiry form with a separate, non-binding pre-launch interest path for the planned Hive automation concept.">
-<meta property="og:url" content="https://sitesourcery.com/start/">
-<meta property="og:image" content="https://sitesourcery.com/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:image" content="https://sitesourcery.com/og.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Send an inquiry · Site Sourcery">
-<meta name="twitter:description" content="Review the held inquiry questions, then email the studio. No account, card, automatic order, or form transmission.">
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"Start an inquiry — Site Sourcery","description":"A read-only preview of inquiry questions for custom website work or non-binding interest in the pre-launch Hive automation concept. It is not a checkout, order, service reservation, form submission, or authorization for automated messaging.","url":"https://sitesourcery.com/start/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"},"significantLink":["mailto:sitesourcery@proton.me"]}
-</script>
-<link rel="stylesheet" href="../style.css">
-<link rel="stylesheet" href="../atelier-inner.css">
-<link rel="stylesheet" href="../atelier-utility.css">
-<style>
-/* page-scoped: the commission layout + service chips. Built ONLY on the shared
-   Spellcast tokens so it reads as the same shop. Nothing here touches style.css. */
-.commission{display:grid;gap:clamp(1.5rem,4vw,2.75rem);margin-top:2.5rem}
-@media (min-width:60rem){
-  .commission{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);align-items:start;gap:3rem}
-}
-.brief{background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);
-  padding:clamp(1.4rem,4vw,2.4rem);box-shadow:var(--lift);min-width:0}
-.brief .field:last-of-type{margin-bottom:0}
-.req{color:var(--rose)}
-.opt{font-weight:500;color:var(--muted);font-size:.8em;letter-spacing:.04em;text-transform:uppercase}
-
-/* service picker — radio pills painted with the one charm */
-.picker{display:flex;flex-wrap:wrap;gap:.6rem}
-.pick{position:relative;display:inline-flex;align-items:center;gap:.55em;cursor:pointer;
-  min-height:48px;padding:.6rem 1.05rem;border-radius:999px;
-  background:var(--surface-2);border:1px solid var(--hairline);
-  color:var(--muted);font-weight:600;font-size:.95rem;
-  -webkit-tap-highlight-color:transparent;
-  transition:color .18s var(--ease),border-color .18s var(--ease),
-             background .18s var(--ease),box-shadow .2s var(--ease),transform .12s var(--ease)}
-.pick svg{width:1.15em;height:1.15em;flex:0 0 auto;opacity:.85}
-.pick input{position:absolute;width:1px;height:1px;opacity:0;margin:0;pointer-events:none}
-.pick:hover{color:var(--text);border-color:var(--violet);transform:translateY(-1px)}
-.pick:has(input:checked){color:var(--on-charm);background:var(--charm);border-color:transparent;
-  box-shadow:0 4px 18px rgba(124,92,255,.28)}
-.pick:has(input:checked) svg{opacity:1}
-.pick:focus-within{outline:2px solid var(--violet);outline-offset:2px}
-.addon-picker-group{margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--hairline)}
-.addon-picker-group>p{margin:0 0 .65rem;color:var(--text);font-size:.84rem;font-weight:750}
-.addon-picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
-.addon-picks .pick{width:100%;border-radius:12px;align-items:flex-start;padding:.72rem .82rem;line-height:1.35}
-.addon-picks .pick>span{display:grid;gap:.16rem}
-.addon-picks .pick b{font-size:.84rem;color:inherit}
-.addon-picks .pick small{font-size:.73rem;color:inherit;opacity:.84;font-weight:550}
-.addon-picks .pick:has(input:disabled){opacity:.5;cursor:not-allowed}
-.addon-status{min-height:1.35em;margin:.65rem 0 0;color:var(--muted);font-size:.8rem}
-@media(max-width:38rem){.addon-picks{grid-template-columns:1fr}}
-
-.sendrow{display:grid;gap:.9rem;margin-top:1.6rem}
-.sendrow .btn{width:100%}
-.fineprint{display:flex;gap:.6em;align-items:flex-start;
-  color:var(--muted);font-size:.85rem;line-height:1.55;max-width:38em}
-.fineprint svg{width:1.1em;height:1.1em;flex:0 0 auto;margin-top:.15em;color:var(--link)}
-.orline{color:var(--muted);font-size:.9rem;text-align:center;margin-top:.2rem}
-
-/* the reassurance rail */
-.rail{display:grid;gap:1.25rem;min-width:0}
-@media (min-width:60rem){ .rail{position:sticky;top:5.5rem} }
-.steps{list-style:none;display:grid;gap:1.05rem;margin:0;counter-reset:step}
-.steps li{position:relative;padding-left:2.75rem;counter-increment:step;color:var(--muted)}
-.steps li::before{content:counter(step);position:absolute;left:0;top:-.1rem;
-  width:1.9rem;height:1.9rem;display:grid;place-items:center;border-radius:50%;
-  background:var(--surface-2);border:1px solid var(--hairline);
-  font-family:var(--font-num);font-size:.95rem;font-weight:650;color:var(--link)}
-.steps li b{color:var(--text);font-weight:650}
-.honeypot{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08070c">
+  <title>Find the right starting point · Site Sourcery</title>
+  <meta name="description" content="Answer a short set of plain-language questions and find the closest Site Sourcery path for a website, working system, domain, care, or focused creative work.">
+  <link rel="canonical" href="https://sitesourcery.com/start/">
+  <link rel="stylesheet" href="/vnext.css">
+  <script src="/vnext.js" defer></script>
 </head>
-<body class="atelier-inner page-start">
-<a class="skip" href="#main">Skip to content</a>
-
-<!-- ══ SHARED NAV — verbatim; aria-current on the active (Start) CTA ══ -->
-<nav class="nav" aria-label="Main">
-  <div class="wrap nav-inner">
-    <a class="brand" href="/">
-      <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="brandG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#brandG)"/></svg>
-      <span class="brand-name">Site&nbsp;Sourcery</span>
-    </a>
-    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
-      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="bar-top" d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="bar-bottom" d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-    <div class="nav-menu" id="nav-menu">
-      <a class="nav-link" href="/">Home</a>
-      <a class="nav-link" href="/pricing.html">Pricing</a>
-      <a class="nav-link" href="/automation.html">The Hive</a>
-      <a class="nav-link" href="/terms.html">Terms</a>
-      <a class="nav-link" href="/contact.html">Contact</a>
-      <a class="btn primary nav-cta" href="/start/" aria-current="page">Send an inquiry</a>
-    </div>
-  </div>
-</nav>
-
-<main id="main">
-
-  <!-- ══ HERO — the honest start + a bespoke "send the brief" nocturne ══ -->
-  <section class="hero">
-    <div class="wrap">
-      <p class="eyebrow reveal">Website inquiry</p>
-      <h1 class="hero-mega reveal">Tell us about your <em class="accent">business</em>.</h1>
-      <p class="lede reveal"><strong>Not a checkout, order, quote, reservation, or authority to begin work.</strong> These questions help us review a website request against the non-binding SS-TIERS-2026.4 and SS-ADDONS-2026.4 planning model, or record interest in a proposed Hive workflow. A real person reviews every inquiry.</p>
-
-      <div class="hero-stage reveal">
-        <figure class="spellstage" style="--lit:1;cursor:default" role="img"
-                aria-label="A wizard's night workbench: a glowing scroll — your brief — lifts on a trail of sparks toward a warm lit window where the studio is at work.">
-          <svg class="spellstreet" viewBox="0 0 1200 560" width="1200" height="560" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">
-            <defs>
-              <linearGradient id="sk-sky" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#0B0716"/><stop offset=".6" stop-color="#130B22"/><stop offset="1" stop-color="#1B1030"/>
-              </linearGradient>
-              <radialGradient id="sk-moon" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#C8BEFF" stop-opacity=".45"/><stop offset="60%" stop-color="#8C78FF" stop-opacity=".1"/><stop offset="100%" stop-color="#8C78FF" stop-opacity="0"/>
-              </radialGradient>
-              <linearGradient id="sk-scroll" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#FFE9C6"/><stop offset="1" stop-color="#F4C98C"/>
-              </linearGradient>
-              <linearGradient id="sk-charm" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/>
-              </linearGradient>
-              <radialGradient id="sk-warm" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFB460" stop-opacity=".75"/><stop offset="55%" stop-color="#FF9646" stop-opacity=".22"/><stop offset="100%" stop-color="#FF9646" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="sk-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#CBB8FF" stop-opacity=".9"/><stop offset="45%" stop-color="#7C5CFF" stop-opacity=".4"/><stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
-              </radialGradient>
-              <radialGradient id="sk-core" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#FFFFFF"/><stop offset="42%" stop-color="#CDB8FF"/><stop offset="100%" stop-color="#7C5CFF"/>
-              </radialGradient>
-            </defs>
-
-            <!-- sky, moon, stars -->
-            <rect width="1200" height="560" fill="url(#sk-sky)"/>
-            <circle cx="1010" cy="110" r="240" fill="url(#sk-moon)"/>
-            <circle cx="1010" cy="110" r="40" fill="#E9E3FF" opacity=".9"/>
-            <g fill="#D6CDF7">
-              <circle class="st-twinkle" cx="120" cy="70" r="1.6"/><circle class="st-twinkle" cx="250" cy="120" r="1.2"/>
-              <circle class="st-twinkle" cx="360" cy="60" r="1.7"/><circle class="st-twinkle" cx="520" cy="96" r="1.1"/>
-              <circle class="st-twinkle" cx="700" cy="70" r="1.4"/><circle class="st-twinkle" cx="150" cy="180" r="1.2"/>
-              <circle class="st-twinkle" cx="860" cy="120" r="1.3"/><circle class="st-twinkle" cx="1130" cy="230" r="1.2"/>
-            </g>
-
-            <!-- ═ THE WIZARD'S WORKSHOP on the right — the warm lit studio window ═ -->
-            <rect x="828" y="150" width="300" height="320" fill="#160F26"/>
-            <path d="M824 150 H1132 L1120 124 H836 Z" fill="#1C1330"/>
-            <rect x="824" y="120" width="308" height="8" rx="3" fill="#241838"/>
-            <!-- warm pool on the floor -->
-            <ellipse class="st-pool" cx="978" cy="500" rx="240" ry="52" fill="url(#sk-warm)"/>
-            <!-- the lit window -->
-            <rect x="872" y="196" width="212" height="150" rx="5" fill="#0B1320"/>
-            <rect class="st-lit" x="872" y="196" width="212" height="150" rx="5" fill="url(#sk-warm)"/>
-            <rect class="st-lit" x="884" y="208" width="188" height="126" rx="4" fill="#FFD79A" opacity=".55"/>
-            <!-- desk silhouette + a person at work (dark against the warm light) -->
-            <g class="st-lit-soft" fill="#2A1A0C">
-              <rect x="892" y="300" width="172" height="34"/>
-              <circle cx="978" cy="272" r="20"/><rect x="958" y="292" width="40" height="26" rx="6"/>
-              <rect x="1006" y="286" width="46" height="6" rx="3"/><rect x="1006" y="300" width="34" height="6" rx="3"/>
-            </g>
-            <!-- muntins -->
-            <g class="st-lit-soft" stroke="#B87636" stroke-width="2.5" opacity=".65">
-              <line x1="978" y1="196" x2="978" y2="346"/><line x1="872" y1="271" x2="1084" y2="271"/>
-            </g>
-            <rect x="872" y="196" width="212" height="150" rx="5" fill="none" stroke="#150D06" stroke-width="6"/>
-            <!-- hanging sigil sign -->
-            <line x1="828" y1="240" x2="878" y2="240" stroke="#2A2038" stroke-width="4" stroke-linecap="round"/>
-            <line x1="864" y1="240" x2="864" y2="256" stroke="#2A2038" stroke-width="3"/>
-            <rect x="834" y="256" width="60" height="42" rx="7" fill="#140E22" stroke="#2E2440" stroke-width="1.5"/>
-            <path class="st-lit" d="M864 266 l3.4 9.6 9.6 3.4 -9.6 3.4 -3.4 9.6 -3.4 -9.6 -9.6 -3.4 9.6 -3.4 z" fill="url(#sk-core)"/>
-
-            <!-- ═ THE BRIEF — a glowing scroll lifting from the left on a trail of sparks ═ -->
-            <!-- the spark-trail arc -->
-            <path d="M150 430 C 340 250, 560 250, 760 300" fill="none" stroke="url(#sk-charm)" stroke-width="3"
-                  stroke-linecap="round" stroke-dasharray="2 16" opacity=".9"/>
-            <g fill="url(#sk-core)">
-              <circle cx="300" cy="300" r="3.2"/><circle cx="430" cy="272" r="4"/><circle cx="560" cy="270" r="3"/>
-              <circle cx="660" cy="284" r="3.6"/>
-            </g>
-
-            <!-- the scroll itself -->
-            <g transform="translate(150,360) rotate(-9)">
-              <circle cx="70" cy="55" r="120" fill="url(#sk-glow)"/>
-              <!-- rolled ends -->
-              <rect x="-6" y="14" width="152" height="20" rx="10" fill="#C9A05E"/>
-              <rect x="-6" y="86" width="152" height="20" rx="10" fill="#C9A05E"/>
-              <!-- parchment -->
-              <rect x="4" y="26" width="132" height="72" rx="4" fill="url(#sk-scroll)"/>
-              <!-- lines of "your words" -->
-              <g stroke="#B98A45" stroke-width="4" stroke-linecap="round" opacity=".8">
-                <line x1="22" y1="44" x2="118" y2="44"/><line x1="22" y1="58" x2="104" y2="58"/>
-                <line x1="22" y1="72" x2="120" y2="72"/><line x1="22" y1="86" x2="86" y2="86"/>
-              </g>
-              <!-- wax seal in the charm -->
-              <circle cx="126" cy="98" r="15" fill="url(#sk-charm)" stroke="#0D0818" stroke-width="1.5"/>
-              <path d="M126 90 l2.3 6.6 6.7 .2 -5.3 4.1 1.9 6.6 -5.6 -3.8 -5.6 3.8 1.9 -6.6 -5.3 -4.1 6.7 -.2 z" fill="#FFFFFF" opacity=".92"/>
-            </g>
-
-            <!-- foreground quill dipping ink, lower-left -->
-            <g transform="translate(120,470)">
-              <path d="M0 40 C 40 -30, 120 -50, 150 -70 C 120 -20, 90 20, 40 44 Z" fill="#2A2140" stroke="#3A3160" stroke-width="1.5"/>
-              <path d="M20 34 C 60 -6, 100 -26, 140 -60" fill="none" stroke="#4A4270" stroke-width="1.5" opacity=".7"/>
-            </g>
-
-            <!-- the little sigil-spark, hovering by the scroll -->
-            <g transform="translate(360,250)">
-              <circle class="spark-glow" r="26" fill="url(#sk-glow)"/>
-              <path d="M0 -14 L4 -4 L14 0 L4 4 L0 14 L-4 4 L-14 0 L-4 -4 Z" fill="url(#sk-core)"/>
-              <circle r="2.4" fill="#FFFFFF"/>
-            </g>
-          </svg>
-        </figure>
-        <div class="stage-caption">
-          <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="capG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#capG)"/></svg>
-          <span>Your brief lands with the studio, and <em>a real person reads it</em> — not a bot.</span>
-        </div>
-        <section class="commission-status" aria-label="Project inquiry path">
-          <span><b>01 / TELL US</b>Your business and the problem</span>
-          <span><b>02 / SCOPE</b>A real reply and plain proposal</span>
-          <span><b>03 / APPROVE</b>Work starts only after agreement</span>
-        </section>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ THE COMMISSION — the intake form + the reassurance rail ══ -->
-  <section class="section" style="padding-top:0">
-    <div class="wrap">
-      <div class="commission">
-
-        <!-- ── THE BRIEF (intake) ─────────────────────────────────────────── -->
-        <form class="brief reveal" id="brief" data-commercial-state="hold" data-no-entry="true"
-              data-commercial-catalog-id="SS-COMMERCIAL-2026.4"
-              data-tier-catalog-id="SS-TIERS-2026.4"
-              data-addon-catalog-id="SS-ADDONS-2026.4"
-              data-care-catalog-id="SS-CARE-2026.4"
-              data-source-catalog-digest="5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335"
-              data-projection-digest="655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5"
-              onsubmit="return false"
-              aria-label="Tell us about your business" aria-disabled="true" aria-describedby="commercial-hold-note">
-          <h2 class="eyebrow" style="margin-bottom:1.4rem;font-size:.85rem">Your brief</h2>
-          <p class="terms" id="commercial-hold-note" style="margin:-.7rem 0 1.4rem"><strong>Submission is temporarily held. Do not enter any information in these fields.</strong> You may review the questions, but this page will not transmit or save what you type. Use the email link below for a general, non-binding inquiry; do not email credentials, payment data, customer records, or other sensitive material.</p>
-          <p class="hint" style="margin:-.7rem 0 1.4rem">Keep this high level. Please do not send passwords, login codes, API keys, card or bank details, customer lists, health information, or other private records.</p>
-
-          <fieldset data-no-entry-barrier="true" disabled aria-disabled="true" style="border:0;padding:0;margin:0;min-inline-size:0">
-            <legend style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Submission temporarily unavailable</legend>
-          <input type="hidden" name="Website commercial catalog ID" value="SS-COMMERCIAL-2026.4">
-          <input type="hidden" name="Website tier catalog ID" value="SS-TIERS-2026.4">
-          <input type="hidden" name="Website add-on catalog ID" value="SS-ADDONS-2026.4">
-          <input type="hidden" name="Website Care catalog ID" value="SS-CARE-2026.4">
-          <input type="hidden" name="Website source catalog digest" value="5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335">
-          <input type="hidden" name="Website projection digest" value="655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5">
-
-          <div class="field">
-            <label for="f-name">Your name <span class="req" aria-hidden="true">*</span></label>
-            <input class="input" id="f-name" name="Your name" type="text" autocomplete="name" maxlength="100"
-                   placeholder="e.g. Sam Harris" required>
-          </div>
-
-          <div class="field">
-            <label for="f-biz">What's the business called? <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Exactly how you'd want it on the sign.</p>
-            <input class="input" id="f-biz" name="Business name" type="text" autocomplete="organization" maxlength="160"
-                   placeholder="e.g. Harris Plumbing &amp; Heating" required>
-          </div>
-
-          <div class="field">
-            <label for="f-do">What do you do, and what town? <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Your trade and the place customers picture when they think of you.</p>
-            <input class="input" id="f-do" name="Trade and town" type="text" maxlength="200"
-                   placeholder="e.g. Plumber in Sewell, NJ" required>
-          </div>
-
-          <div class="field">
-            <label for="f-reach">Email address <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">An email address for a reply. We use it only for this inquiry and any later project communication you explicitly authorize.</p>
-            <input class="input" id="f-reach" name="Email address" type="email" autocomplete="email" maxlength="254"
-                   placeholder="you@example.com" required>
-          </div>
-
-          <div class="field">
-            <label for="f-approver">One decision maker <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Name the one person who will approve the scope and send the final grouped feedback. If that is you, enter your own name again; if it is someone else, name them only with their permission.</p>
-            <input class="input" id="f-approver" name="Single project decision maker" type="text" autocomplete="name" maxlength="100"
-                   placeholder="e.g. Sam Harris" required>
-          </div>
-
-          <fieldset class="field" style="border:0;padding:0;margin:0 0 1.1rem">
-            <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
-              Which are you after? <span class="req" aria-hidden="true">*</span>
-            </legend>
-            <p class="hint" style="margin-bottom:.65rem">Not sure? Pick the closest — we'll sort it out together.</p>
-            <div class="picker">
-              <label class="pick">
-                <input type="radio" name="What you're after" value="A website" required>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 21h8"/></svg>
-                A website
-              </label>
-              <label class="pick">
-                <input type="radio" name="What you're after" value="Pre-launch Hive interest (automation concept)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l5.2 3v6l-5.2 3-5.2-3V6z"/><path d="M12 15v6M6.8 18l5.2-3 5.2 3"/></svg>
-                Hive interest <span class="opt">pre-launch</span>
-              </label>
-              <label class="pick">
-                <input type="radio" name="What you're after" value="Website plus pre-launch Hive interest">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.5-.8z"/></svg>
-                Website + Hive interest
-              </label>
-              <label class="pick">
-                <input type="radio" name="What you're after" value="Not sure yet">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-                Not sure yet
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="field">
-            <label for="f-url">Do you have a website now? <span class="opt">required for a replacement quote</span></label>
-            <p class="hint">Paste the public address so we can inventory every current page, location, tool, and content collection before we recommend a tier. No site yet? Skip it.</p>
-            <input class="input" id="f-url" name="Existing website" type="url" inputmode="url" autocomplete="url" maxlength="2048"
-                   placeholder="https://yourbusiness.com">
-          </div>
-
-          <div class="field">
-            <label for="f-current-urls">Current public pages or URLs <span class="opt">required for a replacement quote</span></label>
-            <p class="hint">Your best count is enough for this brief. We verify it before quoting, and every existing URL gets a written keep, merge, redirect, or retire decision.</p>
-            <input class="input" id="f-current-urls" name="Current public pages or URLs" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 10">
-          </div>
-
-          <div class="field">
-            <label for="f-tier">Base website tier <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Planning catalog SS-TIERS-2026.4 prices delivered public footprint, not teaser size or creative intensity. For a replacement, start from the current verified site unless an approved architecture plan says otherwise. Scale continues the footprint formula through 30 crafted pages. Site and larger bands have capacity for at most one basic form only when explicitly named in the written scope; no form is inferred from page count. Card and Card Plus may add one bounded basic form.</p>
-            <select class="input" id="f-tier" name="Base website tier" required>
-              <option value="" selected disabled>Choose the closest fit</option>
-              <option value="Not sure — recommend a website tier">Not sure — recommend a tier</option>
-              <option value="Card — $350" data-tier-id="card" data-price-cents="35000" data-page-cap="1" data-section-cap="5" data-included-forms="0">Card — $350 · 1 page, up to 5 sections</option>
-              <option value="Card Plus — $600" data-tier-id="card-plus" data-price-cents="60000" data-page-cap="1" data-section-cap="8" data-included-forms="0">Card Plus — $600 · 1 page, up to 8 sections</option>
-              <option value="Site — $1,000" data-tier-id="site" data-price-cents="100000" data-page-cap="4" data-section-cap="16" data-included-forms="1">Site — $1,000 · up to 4 pages · explicitly scoped form capacity</option>
-              <option value="Site Plus — $1,600" data-tier-id="site-plus" data-price-cents="160000" data-page-cap="7" data-section-cap="28" data-included-forms="1">Site Plus — $1,600 · up to 7 pages · explicitly scoped form capacity</option>
-              <option value="Signature — $2,400" data-tier-id="signature" data-price-cents="240000" data-page-cap="10" data-section-cap="40" data-included-forms="1">Signature — $2,400 · up to 10 pages · explicitly scoped form capacity</option>
-              <option value="Flagship — $3,600" data-tier-id="flagship" data-price-cents="360000" data-page-cap="15" data-section-cap="60" data-included-forms="1">Flagship — $3,600 · up to 15 pages · explicitly scoped form capacity</option>
-              <option value="Scale — formula through 30 pages" data-tier-id="scale" data-page-cap="30" data-section-cap="120" data-included-forms="1">Scale — $3,600 + $240/unit · up to 30 crafted pages</option>
-              <option value="Custom exception — written component price required" data-tier-id="beyond">Custom exception — published boundary exceeded</option>
-              <option value="No website — Hive research interest only">No website — Hive research interest only</option>
-            </select>
-            <p class="hint" id="tier-scope-status" aria-live="polite"></p>
-          </div>
-
-          <div class="field">
-            <label for="f-creativity">Creative direction <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">This is independent of site size. The percentage applies only to the footprint—not migration, redirects, providers, other systems, or Care.</p>
-            <select class="input" id="f-creativity" name="Creative direction" required>
-              <option value="" selected disabled>Choose the closest creative fit</option>
-              <option value="Essential — included" data-creativity-level="essential" data-premium-basis-points="0" data-minimum-premium-cents="0" data-max-motion-components="0">Essential — polished custom build, included</option>
-              <option value="Distinctive — plus 25 percent of footprint, 500 dollar minimum" data-creativity-level="distinctive" data-premium-basis-points="2500" data-minimum-premium-cents="50000" data-max-motion-components="3">Distinctive — +25% of footprint · $500 minimum</option>
-              <option value="Atelier — plus 50 percent of footprint, 1200 dollar minimum" data-creativity-level="atelier" data-premium-basis-points="5000" data-minimum-premium-cents="120000" data-max-motion-components="8">Atelier — +50% of footprint · $1,200 minimum</option>
-              <option value="Not sure — recommend a creative level">Not sure — recommend a level</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="f-budget">Overall working budget <span class="opt">optional</span></label>
-            <p class="hint">Include the base build and any add-ons you are considering. A range or &ldquo;scope first&rdquo; is fine; this is not a quote or payment authorization.</p>
-            <input class="input" id="f-budget" name="Overall working budget" type="text" maxlength="100"
-                   placeholder="e.g. $1,500–$2,000 total, or scope first">
-          </div>
-
-          <div class="field">
-            <label for="f-pages">Desired pages <span class="opt">optional for Hive-only interest</span></label>
-            <p class="hint">List the pages or sections you expect: for example Home, Services, About, Contact, Gallery, Menu, Shop, or Booking.</p>
-            <textarea class="input" id="f-pages" name="Desired website pages" maxlength="1000" rows="3"
-                      placeholder="Home, Services, About, Contact, and a project gallery"></textarea>
-          </div>
-
-          <div class="field">
-            <label for="f-total-urls">Expected total public pages or URLs <span class="opt">optional</span></label>
-            <p class="hint">Count each public page or post URL. Static cards displayed together on one collection page do not each need a separate URL.</p>
-            <input class="input" id="f-total-urls" name="Expected total public pages or URLs" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 6">
-          </div>
-
-          <div class="field">
-            <label for="f-total-sections">Expected sections on a one-page site <span class="opt">optional</span></label>
-            <p class="hint">This distinguishes the 5-section Card band from denser scopes. A one-page site may route to a higher band when its section or layout density exceeds the smaller tier&rsquo;s cap.</p>
-            <input class="input" id="f-total-sections" name="Expected one-page sections" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 7">
-          </div>
-
-          <div class="field">
-            <label for="f-function">Desired tool or function <span class="opt">optional</span></label>
-            <p class="hint">Describe the job, not private data or account credentials: quote requests, booking intake, a menu, a small shop, a calculator, or something else.</p>
-            <textarea class="input" id="f-function" name="Desired website tool or function" maxlength="1000" rows="3"
-                      placeholder="A quote-request form that sends the job details to my inbox"></textarea>
-          </div>
-
-          <div class="field">
-            <label for="f-provider">Existing provider name <span class="opt">optional</span></label>
-            <p class="hint">Name only, such as Squarespace Domains, Calendly, Shopify, or Stripe. Do not send a password, login code, recovery code, API key, or other credential.</p>
-            <input class="input" id="f-provider" name="Existing provider name only" type="text" maxlength="160" autocomplete="off"
-                   placeholder="Provider name only — no login details">
-          </div>
-
-          <fieldset class="field" id="website-addons" aria-describedby="website-addons-help" style="border:0;padding:0;margin:0 0 1.1rem">
-            <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
-              Website build add-ons you are considering <span class="opt">optional · non-binding</span>
-            </legend>
-            <p class="hint" id="website-addons-help">Planning catalog SS-ADDONS-2026.4. The footprint and creative level come first; functional, data, and transition work are then itemized. Selecting anything here records interest only and cannot create a quote, order, or authorization.</p>
-
-            <div class="addon-picker-group">
-              <p id="addon-scope-label">Content &amp; website capabilities</p>
-              <div class="addon-picks">
-                <label class="pick"><input id="basic_form" type="checkbox" name="Website add-on interest - basic_form" value="Basic contact form — $200 — Card or Card Plus only — max 1" data-addon-id="basic_form" data-max-quantity="1" data-eligible-tiers="card,card-plus"><span><b>Basic contact form</b><small>Card/Card Plus only · up to 5 fields · one recipient · $200 · max 1</small></span></label>
-                <label class="pick"><input id="standard_tool" type="checkbox" name="Website add-on interest - standard_tool" value="Standard interactive tool — $450 — max 1" data-addon-id="standard_tool" data-max-quantity="1"><span><b>Standard interactive tool</b><small>One documented input/output model within 6 implementation hours · $450 · max 1</small></span></label>
-                <label class="pick"><input id="hosted_provider" type="checkbox" name="Website add-on interest - hosted_provider" value="Hosted provider setup — $700 — max 1" data-addon-id="hosted_provider" data-max-quantity="1"><span><b>Hosted provider setup</b><small>One account/location/resource · up to 5 services/products · $700 · max 1</small></span></label>
-                <label class="pick"><input id="static_collection" type="checkbox" name="Website add-on interest - static_collection" value="Static collection system — $300 — max 1" data-addon-id="static_collection" data-max-quantity="1"><span><b>Static collection system</b><small>Menu, catalog, team, or portfolio collection · $300 · max 1</small></span></label>
-                <label class="pick"><input id="copy_expansion" type="checkbox" name="Website add-on interest - copy_expansion" value="Additional content shaping — $200 per 500 supplied/approved words — max 3" data-addon-id="copy_expansion" data-max-quantity="3"><span><b>Additional content shaping</b><small>Light drafting/editing from supplied facts · $200 per 500 words · max 3</small></span></label>
-              </div>
-            </div>
-
-            <div class="addon-picker-group">
-              <p id="addon-ops-label">Review, scheduling &amp; ordinary connections</p>
-              <div class="addon-picks">
-                <label class="pick"><input id="extra_revision_round" type="checkbox" name="Website add-on interest - extra_revision_round" value="Additional grouped revision round — $125–$550 through Flagship — max 1" data-addon-id="extra_revision_round" data-max-quantity="1" data-tier-prices="card:12500,card-plus:17500,site:25000,site-plus:30000,signature:40000,flagship:55000"><span><b>Additional grouped revision round</b><small>Card–Flagship $125–$550 · Scale custom component price · max 1</small></span></label>
-                <label class="pick"><input id="priority_production_window" type="checkbox" name="Website add-on interest - priority_production_window" value="Priority production window — $200–$1,200 through Flagship — max 1" data-addon-id="priority_production_window" data-max-quantity="1" data-tier-prices="card:20000,card-plus:30000,site:45000,site-plus:65000,signature:90000,flagship:120000"><span><b>Priority production window</b><small>Card–Flagship $200–$1,200 · Scale custom component price · capacity-confirmed only</small></span></label>
-                <label class="pick"><input id="additional_connection" type="checkbox" name="Website add-on interest - additional_connection" value="Additional domain or provider connection — $200 each — max 2" data-addon-id="additional_connection" data-max-quantity="2"><span><b>Additional domain or provider connection</b><small>$200 each · max 2</small></span></label>
-              </div>
-            </div>
-
-            <div class="addon-picker-group">
-              <p id="addon-tool-label">Existing-site transition &amp; migration</p>
-              <div class="addon-picks">
-                <label class="pick"><input id="architecture_redirect" type="checkbox" name="Website add-on interest - architecture_redirect" value="Architecture and redirect plan — $350–$950 for 3–15 affected URLs" data-addon-id="architecture_redirect"><span><b>Architecture and redirect plan</b><small>3–5 URLs $350 · 6–10 $650 · 11–15 $950</small></span></label>
-                <label class="pick"><input id="structured_data_migration" type="checkbox" name="Website add-on interest - structured_data_migration" value="Structured data migration — first 100 clean entries $350, next 100 increments $200, max 1000" data-addon-id="structured_data_migration"><span><b>Structured data migration</b><small>First 100 $350 · each next 100 $200 · max 1,000 clean entries</small></span></label>
-              </div>
-            </div>
-            <p class="addon-status" id="website-addons-status" aria-live="polite"></p>
-          </fieldset>
-
-          <div class="field">
-            <label for="f-addon-details">Requested add-on quantities or details <span class="opt">optional</span></label>
-            <p class="hint">Give quantities and the plain job to be done—especially URLs to preserve or merge and records to migrate. Do not send credentials, payment data, customer records, or private provider data.</p>
-            <textarea class="input" id="f-addon-details" name="Requested website add-on quantities or details" maxlength="1200" rows="3"
-                      placeholder="e.g. preserve 8 pages, merge 2 location pages with redirects, migrate about 180 menu entries"></textarea>
-          </div>
-
-          <div class="field">
-            <label for="f-care">Website Care interest <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Care is separate from the one-time build. These are non-binding planning figures. Communication, research, editing, QA, reporting, calls, and deployment all count inside the stated service-time cap; lower plans have no overflow packs.</p>
-            <select class="input" id="f-care" name="Website Care interest" required>
-              <option value="" selected disabled>Choose a Care preference</option>
-              <option value="Not sure — explain the Care plans">Not sure — explain the plans</option>
-              <option value="No Care requested">No Care requested</option>
-              <option value="Host — $25/mo" data-care-plan-id="host" data-monthly-cents="2500" data-edit-cap="0" data-included-minutes="0">Host — $25/mo · 0 edits / 0 minutes</option>
-              <option value="Care Lite — $69/mo" data-care-plan-id="care-lite" data-monthly-cents="6900" data-edit-cap="3" data-included-minutes="30">Care Lite — $69/mo · up to 3 edits or 30 minutes</option>
-              <option value="Care — $119/mo" data-care-plan-id="care" data-monthly-cents="11900" data-edit-cap="6" data-included-minutes="60">Care — $119/mo · up to 6 edits or 60 minutes</option>
-              <option value="Care Plus — $199/mo" data-care-plan-id="care-plus" data-monthly-cents="19900" data-edit-cap="10" data-included-minutes="120">Care Plus — $199/mo · up to 10 edits or 120 minutes</option>
-              <option value="Partner — $349/mo" data-care-plan-id="partner" data-monthly-cents="34900" data-edit-cap="16" data-included-minutes="240">Partner — $349/mo · up to 16 edits or 240 minutes</option>
-              <option value="Not applicable — Hive research interest only">Not applicable — Hive research interest only</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="f-deadline">Desired launch date <span class="opt">optional</span></label>
-            <p class="hint">A target helps us plan; it is not accepted as a deadline until the signed scope confirms it.</p>
-            <input class="input" id="f-deadline" name="Desired launch date" type="date">
-          </div>
-
-          <div class="field">
-            <label for="f-assets">Content and asset readiness <span class="req" aria-hidden="true">*</span></label>
-            <p class="hint">Tell us only the readiness level. Do not send files, passwords, customer data, or licensed material through this first brief.</p>
-            <select class="input" id="f-assets" name="Content and asset readiness" required>
-              <option value="" selected disabled>Choose the closest description</option>
-              <option value="Ready — approved words, logo, and photos are available">Ready — approved words, logo, and photos are available</option>
-              <option value="Partly ready — some words or assets still needed">Partly ready — some words or assets still needed</option>
-              <option value="Need help creating or organizing most content">Need help creating or organizing most content</option>
-              <option value="Nothing prepared yet">Nothing prepared yet</option>
-              <option value="Not sure yet">Not sure yet</option>
-              <option value="Not applicable — Hive research interest only">Not applicable — Hive research interest only</option>
-            </select>
-          </div>
-
-          <fieldset class="field" id="hive-picks" style="border:0;padding:0;margin:0 0 1.1rem">
-            <legend style="font-size:.9rem;font-weight:600;color:var(--text);padding:0;margin-bottom:.15rem">
-              Which proposed Hive workflows interest you? <span class="opt">optional · non-binding</span>
-            </legend>
-            <p class="hint" style="margin-bottom:.65rem">Pre-launch estimates only: the proposed model discounts multi-app bundles and models all five monthly apps at $219/mo.</p>
-            <div class="picker">
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Responder" value="Responder interest (estimated $99/mo)" data-name="The Responder">The Responder</label>
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Booking" value="Booking interest (estimated $200 + $29/mo)" data-name="Online booking">Online booking</label>
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Reviews" value="Review workflow interest (estimated $150 + $69/mo)" data-name="Review engine">Review workflow</label>
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Answering" value="After-hours interest (estimated $250 + $69/mo)" data-name="After-hours answering">After-hours site answers</label>
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Follow-ups" value="Follow-up interest (estimated $150 + $49/mo)" data-name="Customer follow-ups">Customer follow-ups</label>
-              <label class="pick"><input type="checkbox" name="Proposed Hive workflow - Payments" value="Payment setup interest (estimated $200 once)" data-name="Getting paid">Payment setup</label>
-            </div>
-          </fieldset>
-
-          <div class="field">
-            <label for="f-more">Tell us about it <span class="opt">optional</span></label>
-            <p class="hint">What you're hoping for, what's not working now, a deadline — anything. The more we know, the better we can scope the right first step.</p>
-            <textarea class="input" id="f-more" name="What they're after" maxlength="3000"
-                      placeholder="e.g. I've got no site and I keep missing calls when I'm on a job. Want to look legit and stop losing work to voicemail."></textarea>
-          </div>
-
-          <div class="field">
-            <label><input type="checkbox" name="Privacy acknowledgement" value="Agreed" required> I agree that Desiderata Labs LLC may use this brief and the email address I provide to answer this inquiry, as described in the <a href="/privacy.html">Privacy Notice</a>.</label>
-          </div>
-
-          <div class="sendrow">
-            <button class="btn primary" type="submit" disabled aria-disabled="true">Brief submission held</button>
-            <p class="fineprint">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
-              <span>No remote form service receives this brief while commercial intake is held. Nothing typed here is transmitted or saved. See our <a href="/privacy.html">Privacy Notice</a>.</span>
-            </p>
-            <p class="orline">Have a question first? <a href="mailto:sitesourcery@proton.me?subject=A%20question%20before%20we%20start">Email the studio</a>.</p>
-          </div>
-          </fieldset>
-        </form>
-
-        <!-- ── THE RAIL — honest reassurance, no fake urgency ─────────────── -->
-        <aside class="rail reveal" aria-label="What happens after you send">
-          <div class="card">
-            <p class="eyebrow" style="margin-bottom:1.2rem">What happens next</p>
-            <ol class="steps">
-              <li><b>You email the studio.</b> The held form does not send anything. A real person reviews direct email when available; no response time is guaranteed.</li>
-              <li><b>We reply and scope it.</b> We clarify the fit, tier, deliverables, and timing before sending a plain proposal.</li>
-              <li><b>Commercial review comes first.</b> An inquiry cannot start work. A project may begin only after a coverage-complete scope, written authorization, and any required payment.</li>
-              <li><b>We build; you inspect.</b> The custom site is made by hand, reviewed by you, and never goes live under your name until you approve it.</li>
-              <li><b>Ownership is written precisely.</b> Original custom deliverables for an approved scope transfer after final payment; supplied and third-party material keeps its existing ownership or license.</li>
-            </ol>
-          </div>
-
-          <div class="card">
-            <h3 style="font-size:1.15rem">Want both doors?</h3>
-            <p style="color:var(--muted);margin-top:.5rem">Choose &ldquo;Website + Hive interest&rdquo; only to discuss a website plus non-binding interest in any proposed Hive workflow, including <strong>The Responder</strong>. The Hive is not currently available, and no inquiry reserves service or promises an outcome.</p>
-            <div class="actions" style="margin-top:1.1rem">
-              <a class="btn ghost" href="/automation.html">See the Hive</a>
-              <a class="btn ghost" href="/pricing.html">See pricing</a>
-            </div>
-          </div>
-
-          <p class="footer-trust" style="margin:0">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-          <p class="terms" style="border:0;padding:0">Every site we show as ours — like <a href="/">this one</a> and <a href="https://daarx.money/">daarx.money</a> — is real and built exactly this way. No borrowed logos, no stock testimonials, no rankings promised.</p>
-        </aside>
-
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<!-- ══ SHARED FOOTER — paste verbatim on every page ════════════════════ -->
-<footer class="footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <a class="brand" href="/">
-          <svg class="brand-mark" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="footG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF5C8A"/></linearGradient></defs><path d="M16 2.5l3.3 10.2L29.5 16l-10.2 3.3L16 29.5l-3.3-10.2L2.5 16l10.2-3.3z" fill="url(#footG)"/></svg>
-          <span class="brand-name">Site&nbsp;Sourcery</span>
-        </a>
-        <p class="footer-tag">Hand-built custom websites, plus a carefully scoped Hive automation line now in pre-launch validation.</p>
-        <p class="footer-trust">Website work has one accountable contact. The Hive remains a separate pre-launch concept.</p>
-        <p class="footer-honest">Everything here is work we actually built. No stock testimonials, no borrowed logos, no rankings promised.</p>
-      </div>
-      <nav class="footer-links" aria-label="Pages">
-        <a href="/">Home</a>
-        <a href="/pricing.html">Pricing</a>
-        <a href="/automation.html">The Hive</a>
-        <a href="/how-it-works.html">How it works</a>
-        <a href="/about.html">About</a>
-        <a href="/faq.html">FAQ</a>
-        <a href="/terms.html">Terms</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/contact.html">Contact</a>
-        <a href="/start/">Send an inquiry</a>
+<body class="vnext-page">
+  <a class="skip-link" href="#main">Skip to starting paths</a>
+  <header class="site-header" data-header>
+    <div class="site-shell header-inner">
+      <a class="site-brand" href="/" aria-label="Site Sourcery home">Site Sourcery</a>
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="primary-menu" data-menu-button>
+        <span>Menu</span>
+        <i aria-hidden="true"></i>
+      </button>
+      <nav class="site-nav" id="primary-menu" data-primary-nav data-menu aria-label="Primary">
+        <a href="/#websites" data-nav-section="websites">Websites</a>
+        <a href="/hive/">Working systems</a>
+        <a href="/solutions/">Services</a>
+        <a href="/work/">Work</a>
+        <a href="/about/">About</a>
+        <a class="nav-start" href="/start/">Start</a>
       </nav>
-      <div class="footer-contact">
-        <p class="footer-person">Custom-built, locally run, honestly priced.</p>
-        <a class="footer-mail" href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>
-      </div>
     </div>
-    <p class="footer-legal">&copy; 2026 Site Sourcery &middot; Desiderata Labs LLC &middot; Pricing is non-binding &middot; Ownership follows the written scope &middot; Hive remains pre-launch.</p>
-  </div>
-</footer>
+  </header>
+  <main id="main">
+    <section class="hero start-hero">
+      <div class="site-shell start-layout">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Start by situation</p>
+          <h1>You do not need to diagnose the job.</h1>
+          <p class="lede">Choose the outcome that feels closest. A short, fail-closed path will protect migration and replacement work instead of forcing it into the wrong product—and the direct human route stays open.</p>
+          <p class="start-direct-link"><a href="#direct-contact">Skip the chooser and contact the studio</a></p>
+        </div>
 
-<script src="../sourcery.js" defer></script>
-<script>
-/* Safe prefill only: query values select visible inquiry choices; they never
-   calculate a total, create an order, or bypass the signed-scope review. */
-(function(){
-  try{
-    var q=new URLSearchParams(location.search);
-    var hive=(q.get('hive')||'').split(',').filter(Boolean);
-    var addonIds=(q.get('addons')||'').split(',').filter(Boolean);
-    if(q.get('after')==='hive'){
-      var r=document.querySelector('input[name="What you\'re after"][value="Pre-launch Hive interest (automation concept)"]');
-      if(r)r.checked=true;
-    }
-    if(q.get('after')==='website'){
-      var w=document.querySelector('input[name="What you\'re after"][value="A website"]');
-      if(w)w.checked=true;
-    }
-    if(hive.length){
-      document.querySelectorAll('#hive-picks input[type=checkbox]').forEach(function(c){
-        var nm=c.dataset.name||c.value.replace(/\s*\(.*$/,'');
-        if(hive.indexOf(nm)>-1)c.checked=true;
-      });
-    }
+        <noscript>
+          <div class="boundary-note start-noscript" role="note">
+            <strong>The guided chooser needs JavaScript, but every starting path remains available.</strong>
+            <span>Open <a href="/custom/">Custom websites</a>, <a href="/hive/">working systems</a>, or <a href="/solutions/">focused services</a> directly—or <a href="#direct-contact">contact the studio below</a>.</span>
+          </div>
+        </noscript>
 
-    var tier=document.getElementById('f-tier');
-    var tierOptions=tier?[].slice.call(tier.options).filter(function(option){return option.dataset.tierId}):[];
-    var tierMap=Object.fromEntries(tierOptions.map(function(option){return [option.dataset.tierId,option.value]}));
-    var tierValue=tierMap[q.get('tier')];
-    if(tier&&tierValue){
-      Array.prototype.some.call(tier.options,function(o){if(o.value===tierValue){tier.value=tierValue;return true}return false});
-    }
+        <div class="start-chooser reveal" data-start-chooser hidden>
+          <div class="chooser-step" data-start-step="need">
+            <p class="card-kicker">Question 1 · What needs to change?</p>
+            <h2>Pick the outcome, not the jargon.</h2>
+            <div class="chooser-options">
+              <button type="button" data-start-path="website"><strong>A website</strong><small>Make a new site or safely replace an existing one.</small></button>
+              <button type="button" data-start-path="system"><strong>A working system</strong><small>Stop a repetitive handoff from falling through.</small></button>
+              <button type="button" data-start-path="service"><strong>A supporting service</strong><small>Assessment, domains, email, care, commerce, interfaces, studio work, or connections.</small></button>
+            </div>
+          </div>
 
-    var currentUrls=document.getElementById('f-current-urls');
-    var deliveredUrls=document.getElementById('f-total-urls');
-    var onePageSections=document.getElementById('f-total-sections');
-    var tierStatus=document.getElementById('tier-scope-status');
-    var tierOrder=tierOptions.map(function(option){return option.dataset.tierId});
-    var tierByValue=Object.fromEntries(Object.entries(tierMap).map(function(entry){return [entry[1],entry[0]]}));
-    function positiveInteger(input){
-      var raw=input&&input.value.trim();
-      if(!raw||!/^\d+$/.test(raw))return 0;
-      var value=Number(raw);
-      return Number.isSafeInteger(value)&&value>0?value:0;
-    }
-    function floorFor(limitKey,count){
-      var match=tierOptions.find(function(option){
-        if(option.dataset.tierId==='beyond')return false;
-        return Number(option.dataset[limitKey])>=count;
-      });
-      return match?match.dataset.tierId:'beyond';
-    }
-    function floorForScope(count,sections){
-      var pageFloor=floorFor('pageCap',count),sectionFloor=floorFor('sectionCap',sections);
-      return tierOrder.indexOf(pageFloor)>=tierOrder.indexOf(sectionFloor)?pageFloor:sectionFloor;
-    }
-    function enforceFootprintFloor(){
-      var currentCount=positiveInteger(currentUrls);
-      var deliveredCount=positiveInteger(deliveredUrls);
-      var sections=positiveInteger(onePageSections);
-      var count=Math.max(currentCount,deliveredCount,sections?1:0);
-      if(!count){if(tierStatus)tierStatus.textContent='';return}
-      var floor=floorForScope(count,sections),selected=tierByValue[tier&&tier.value];
-      if(selected&&tierOrder.indexOf(selected)<tierOrder.indexOf(floor)){
-        tier.value=tierMap[floor];
-        tier.dispatchEvent(new Event('change'));
-      }
-      if(tierStatus){
-        tierStatus.textContent=count+' reported public URL'+(count===1?'':'s')+(sections?' and '+sections+' section'+(sections===1?'':'s'):'')+' creates a provisional '+tierMap[floor]+' routing floor. A higher band may serve fewer pages when density requires it. This is not a quote; current-site coverage, layouts, capabilities, transition work, and commercial approval still require human verification.';
-      }
-    }
-    [currentUrls,deliveredUrls,onePageSections].forEach(function(input){if(input)input.addEventListener('input',enforceFootprintFloor)});
-    if(tier)tier.addEventListener('change',enforceFootprintFloor);
-    enforceFootprintFloor();
+          <div class="chooser-step" data-start-step="detail" hidden>
+            <button class="chooser-back" type="button" data-start-back><span aria-hidden="true">←</span> Back</button>
+            <p class="card-kicker">Next question · Choose the closest fit</p>
+            <h2 data-start-question tabindex="-1">Is this new or replacing something?</h2>
+            <div class="chooser-options" data-start-options></div>
+          </div>
 
-    var addonInputs=[].slice.call(document.querySelectorAll('#website-addons input[data-addon-id]'));
-    var allowed=new Set(addonInputs.map(function(c){return c.dataset.addonId}));
-    addonIds.forEach(function(id){
-      if(!allowed.has(id))return;
-      var c=document.getElementById(id);if(!c)return;
-      c.checked=true;
-    });
+          <div class="chooser-result" data-start-result role="status" aria-live="polite" tabindex="-1" hidden>
+            <p class="card-kicker">Recommended next step</p>
+            <h2 data-start-result-title>Custom</h2>
+            <p data-start-result-copy></p>
+            <div class="chooser-actions">
+              <a class="button button-primary" data-start-result-action href="/custom/">See the recommendation</a>
+              <button class="button" type="button" data-start-restart>Start over</button>
+            </div>
+            <p class="chooser-human"><a href="#direct-contact">I would rather ask a human</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    var status=document.getElementById('website-addons-status');
-    var eligibilityNote='';
-    function describeAddons(){
-      if(!status)return;
-      var count=addonInputs.filter(function(c){return c.checked}).length;
-      var summary=count?count+' addition interest'+(count===1?'':'s')+' selected. This is not a price calculation; eligibility, quantities, URL coverage, and commercial authority still require human review.':'';
-      status.textContent=[eligibilityNote,summary].filter(Boolean).join(' ');
-    }
-    function reconcileAddonEligibility(){
-      var tierId=tierByValue[tier&&tier.value];
-      eligibilityNote='';
-      addonInputs.forEach(function(input){
-        var eligibility=(input.dataset.eligibleTiers||'').split(',').filter(Boolean);
-        if(!eligibility.length)return;
-        var allowed=!tierId||eligibility.indexOf(tierId)>-1;
-        input.disabled=!allowed;
-        if(!allowed&&input.checked){
-          input.checked=false;
-          eligibilityNote='Basic form interest was removed because this tier already has capacity for one explicitly scoped basic form.';
-        }
-      });
-      describeAddons();
-    }
-    addonInputs.forEach(function(c){c.addEventListener('change',describeAddons)});
-    if(tier)tier.addEventListener('change',reconcileAddonEligibility);
-    reconcileAddonEligibility();
-  }catch(e){}
-})();
-</script>
+    <section class="section section-dark" id="direct-contact" data-intake-state="open">
+      <div class="site-shell contact-panel">
+        <div class="reveal">
+          <p class="eyebrow">Prefer a direct conversation?</p>
+          <h2>Bring the situation. The polished brief can wait.</h2>
+          <p>Share what is not working, what you want people to do, and anything that already exists. Project inquiries are open, and Site Sourcery can help identify the right path from there.</p>
+        </div>
+        <div class="reveal">
+          <p class="card-kicker">Reach the studio</p>
+          <a href="tel:+18562441220">(856) 244-1220</a>
+          <a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>
+          <a class="button button-quiet" href="/contact/">See what to send</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="site-shell footer-grid">
+      <div class="footer-intro">
+        <strong>Site Sourcery</strong>
+        <p>Distinctive websites and carefully built working systems.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <strong>Explore</strong>
+        <a href="/faq/">FAQ</a>
+        <a href="/contact/">Contact</a>
+        <a href="/legal/">Legal</a>
+        <a href="/legal/privacy/">Privacy</a>
+        <a href="/legal/website-terms/">Website terms</a>
+      </nav>
+      <address class="footer-contact">
+        <strong>Contact</strong>
+        <a href="tel:+18562441220">(856) 244-1220</a>
+        <a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>
+      </address>
+    </div>
+    <div class="site-shell footer-legal">
+      <p>Desiderata Labs LLC · filed alternate name SITESOURCERY</p>
+      <p>© 2026 Site Sourcery. Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY. Desiderata Labs LLC is the legal seller.</p>
+    </div>
+  </footer>
 </body>
 </html>

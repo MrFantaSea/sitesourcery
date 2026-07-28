@@ -1,0 +1,432 @@
+name: Exact public-truth reconciliation deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      control_sha:
+        description: Exact full commit containing the public-truth-only release control
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact full commit containing the audited public-truth candidate
+        required: true
+        type: string
+      production_predecessor:
+        description: Exact full commit verified as the currently served predecessor
+        required: true
+        type: string
+      authority_receipt_sha256:
+        description: SHA-256 of the exact public-truth-only authority receipt
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    permissions:
+      contents: read
+      pages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact_id: ${{ steps.pages-artifact.outputs.artifact-id }}
+    steps:
+      - name: Check out current release control
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject branch-tip or control substitution
+        working-directory: control
+        env:
+          CONTROL_SHA: ${{ inputs.control_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CONTROL_SHA"
+          test "$GITHUB_SHA" = "$CONTROL_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$CONTROL_SHA"
+      - name: Enforce exact public-truth-only authority
+        env:
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PRODUCTION_PREDECESSOR: ${{ inputs.production_predecessor }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          node - <<'NODE'
+          const c = require("./control/data/release-control.json");
+          const control = process.env.CONTROL_SHA;
+          const candidate = process.env.CANDIDATE_SHA;
+          const predecessor = process.env.PRODUCTION_PREDECESSOR;
+          const receipt = process.env.AUTHORITY_RECEIPT_SHA256;
+          const fullCommit = /^[0-9a-f]{40}$/;
+          const sha256 = /^[0-9a-f]{64}$/;
+          if (!fullCommit.test(control) || /^([0-9a-f])\1{39}$/.test(control)) throw new Error("control_sha must be one non-degenerate full lowercase commit");
+          if (!fullCommit.test(candidate) || /^([0-9a-f])\1{39}$/.test(candidate)) throw new Error("candidate_sha must be one non-degenerate full lowercase commit");
+          if (!fullCommit.test(predecessor) || /^([0-9a-f])\1{39}$/.test(predecessor)) throw new Error("production_predecessor must be one non-degenerate full lowercase commit");
+          if (!sha256.test(receipt) || /^([0-9a-f])\1{63}$/.test(receipt)) throw new Error("authority_receipt_sha256 must be one non-degenerate lowercase SHA-256");
+          if (predecessor !== "eff8195640db58390d03eefbe863248220994e37") throw new Error("unexpected production predecessor");
+          if (c.state !== "hold" || c.allowsDeployment !== false || c.allowsCommercialDeployment !== false) throw new Error("commercial/general deployment must remain held");
+          if (c.allowsContainmentDeployment !== false) throw new Error("containment authority cannot be combined with public-truth authority");
+          if (c.allowsPublicTruthReconciliationDeployment !== true) throw new Error("public-truth authority remains held");
+          const p = c.publicTruthReconciliation;
+          if (!p || p.state !== "cleared") throw new Error("public-truth control must be cleared");
+          if (p.requiredProductionPredecessor !== predecessor) throw new Error("production predecessor does not match release control");
+          if (p.approvedCandidateSha !== candidate) throw new Error("candidate does not match release control");
+          if (p.authorityReceiptSha256 !== receipt) throw new Error("authority receipt does not match release control");
+          NODE
+      - name: Check out the exact audited candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject branch-tip or candidate substitution
+        working-directory: target
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node - <<'NODE'
+          const catalog = require("./data/public-catalog.json");
+          const c = require("./data/release-control.json");
+          if (catalog.offerState !== "inquiry-only") throw new Error("candidate must remain inquiry-only");
+          if (c.state !== "hold" || c.allowsDeployment !== false || c.allowsCommercialDeployment !== false) throw new Error("candidate commercial/general authority must remain held");
+          if (c.allowsPublicTruthReconciliationDeployment !== false) throw new Error("candidate bytes must remain nonauthorizing");
+          NODE
+      - name: Use candidate-pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Install candidate-locked dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Install exact reviewed Chromium
+        working-directory: control
+        run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
+      - name: Run complete candidate checks
+        working-directory: target
+        run: npm test
+      - name: Verify candidate catalog to public-surface lineage
+        working-directory: target
+        run: npm run check:catalog
+      - name: Build the exact inquiry-only artifact
+        working-directory: target
+        run: npm run build:pages
+      - name: Verify exact candidate source and artifact
+        working-directory: target
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PRODUCTION_PREDECESSOR: ${{ inputs.production_predecessor }}
+        run: |
+          node scripts/verify-public-truth-release.mjs \
+            --mode candidate \
+            --root "$PWD" \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --production-predecessor "$PRODUCTION_PREDECESSOR"
+      - name: Audit the exact candidate artifact with current controls
+        run: node control/scripts/audit-artifact-from-sitemap.mjs target/_site
+      - name: Copy the exact candidate artifact into the control checkout
+        run: |
+          test ! -e control/_site
+          cp -a target/_site control/_site
+      - name: Observe the currently served Pages predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-verifier' \
+            'https://api.github.com/repos/MrFantaSea/sitesourcery/pages/builds/latest' \
+            --output control/pages-latest.json
+      - name: Verify authority receipt input against exact control bytes
+        working-directory: control
+        env:
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          test "$(sha256sum data/public-truth-authority.json | awk '{print $1}')" = "$AUTHORITY_RECEIPT_SHA256"
+      - name: Verify exact control, receipt, predecessor, runtime, and copied artifact
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          PRODUCTION_PREDECESSOR: ${{ inputs.production_predecessor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          node scripts/verify-public-truth-release.mjs \
+            --mode control \
+            --root "$PWD" \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --production-predecessor "$PRODUCTION_PREDECESSOR" \
+            --control-sha "$CONTROL_SHA" \
+            --authority-receipt data/public-truth-authority.json
+      - name: Reject artifact mutation after control verification
+        run: diff --no-dereference --recursive target/_site control/_site
+      - name: Package exact validated public artifact
+        run: |
+          tar \
+            --create \
+            --file "$RUNNER_TEMP/artifact.tar" \
+            --dereference \
+            --hard-dereference \
+            --directory target/_site \
+            --exclude=.git \
+            --exclude=.github \
+            .
+          test -s "$RUNNER_TEMP/artifact.tar"
+      - name: Upload exact validated public artifact
+        id: pages-artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          archive: true
+
+  deploy:
+    permissions:
+      actions: read
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    needs: validate
+    steps:
+      - name: Check out exact release control after the environment gate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Use control-pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: control/.nvmrc
+      - name: Download and extract the exact validated artifact
+        env:
+          ARTIFACT_ID: ${{ needs.validate.outputs.artifact_id }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$ARTIFACT_ID" in
+            ''|*[!0-9]*) echo "invalid artifact id" >&2; exit 1 ;;
+          esac
+          archive="$RUNNER_TEMP/public-truth-artifact.zip"
+          artifact_tar="$RUNNER_TEMP/public-truth-artifact.tar"
+          metadata="$RUNNER_TEMP/public-truth-artifact-metadata.json"
+          run_artifacts="$RUNNER_TEMP/public-truth-run-artifacts.json"
+          zip_inventory="$RUNNER_TEMP/public-truth-zip-inventory.txt"
+          site="$RUNNER_TEMP/public-truth-site"
+          mkdir "$site"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-predeploy' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" \
+            --output "$metadata"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-predeploy' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages&per_page=100" \
+            --output "$run_artifacts"
+          ARTIFACT_METADATA="$metadata" RUN_ARTIFACTS="$run_artifacts" node - <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const id = process.env.ARTIFACT_ID;
+          const runId = process.env.GITHUB_RUN_ID;
+          const controlSha = process.env.CONTROL_SHA;
+          const artifact = JSON.parse(readFileSync(process.env.ARTIFACT_METADATA, "utf8"));
+          const run = JSON.parse(readFileSync(process.env.RUN_ARTIFACTS, "utf8"));
+          if (String(artifact.id) !== id) throw new Error("artifact metadata ID mismatch");
+          if (artifact.name !== "github-pages") throw new Error("artifact metadata name mismatch");
+          if (artifact.expired !== false) throw new Error("artifact is expired");
+          if (!artifact.workflow_run || String(artifact.workflow_run.id) !== runId) {
+            throw new Error("artifact workflow-run mismatch");
+          }
+          if (artifact.workflow_run.head_sha !== controlSha) throw new Error("artifact control-head mismatch");
+          if (run.total_count !== 1 || !Array.isArray(run.artifacts) || run.artifacts.length !== 1) {
+            throw new Error("current run must contain exactly one github-pages artifact");
+          }
+          if (String(run.artifacts[0].id) !== id || run.artifacts[0].name !== "github-pages") {
+            throw new Error("current-run artifact identity mismatch");
+          }
+          NODE
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-predeploy' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            --output "$archive"
+          unzip -Z1 "$archive" > "$zip_inventory"
+          test "$(wc -l < "$zip_inventory")" -eq 1
+          test "$(sed -n '1p' "$zip_inventory")" = "artifact.tar"
+          unzip -p "$archive" artifact.tar > "$artifact_tar"
+          test -s "$artifact_tar"
+          ARTIFACT_TAR="$artifact_tar" SITE_ROOT="$site" python3 - <<'PY'
+          import os
+          import shutil
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          archive = Path(os.environ["ARTIFACT_TAR"])
+          site = Path(os.environ["SITE_ROOT"]).resolve()
+          max_members = 1024
+          max_expanded_bytes = 128 * 1024 * 1024
+          seen = set()
+          plan = []
+          total = 0
+
+          with tarfile.open(archive, mode="r:") as bundle:
+              members = bundle.getmembers()
+              if not 1 <= len(members) <= max_members:
+                  raise SystemExit("artifact member count is outside the allowed bound")
+              for member in members:
+                  raw = member.name
+                  if any(ord(char) < 32 or ord(char) == 127 for char in raw):
+                      raise SystemExit("artifact member name contains a control character")
+                  if raw in (".", "./"):
+                      if not member.isdir():
+                          raise SystemExit("artifact root member must be a directory")
+                      continue
+                  name = raw[2:] if raw.startswith("./") else raw
+                  path = PurePosixPath(name)
+                  normalized = path.as_posix()
+                  if (
+                      not name
+                      or path.is_absolute()
+                      or normalized != name
+                      or ".." in path.parts
+                      or member.issym()
+                      or member.islnk()
+                      or not (member.isdir() or member.isreg())
+                  ):
+                      raise SystemExit(f"unsafe artifact member: {raw!r}")
+                  if normalized in seen:
+                      raise SystemExit(f"duplicate artifact member: {normalized!r}")
+                  seen.add(normalized)
+                  total += member.size if member.isreg() else 0
+                  if total > max_expanded_bytes:
+                      raise SystemExit("artifact expanded size exceeds the allowed bound")
+                  target = (site / normalized).resolve()
+                  if site != target and site not in target.parents:
+                      raise SystemExit(f"artifact member escapes extraction root: {raw!r}")
+                  plan.append((member, target))
+
+              for member, target in plan:
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                      target.chmod(0o755)
+                      continue
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  source = bundle.extractfile(member)
+                  if source is None:
+                      raise SystemExit(f"artifact file has no readable payload: {member.name!r}")
+                  with source, target.open("xb") as output:
+                      shutil.copyfileobj(source, output)
+                  if target.stat().st_size != member.size:
+                      raise SystemExit(f"artifact file size mismatch: {member.name!r}")
+                  target.chmod(0o644)
+          PY
+          echo "SITE_ARTIFACT_ROOT=$site" >> "$GITHUB_ENV"
+      - name: Re-observe the served predecessor after the environment gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-predeploy' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages/builds/latest" \
+            --output control/pages-latest.json
+      - name: Revalidate receipt, predecessor, control, and exact uploaded bytes
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          PRODUCTION_PREDECESSOR: ${{ inputs.production_predecessor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          node scripts/verify-public-truth-release.mjs \
+            --mode predeploy \
+            --root "$PWD" \
+            --artifact-root "$SITE_ARTIFACT_ROOT" \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --production-predecessor "$PRODUCTION_PREDECESSOR" \
+            --control-sha "$CONTROL_SHA" \
+            --authority-receipt data/public-truth-authority.json
+      - name: Deploy exact validated public-truth artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        with:
+          artifact_name: github-pages

@@ -1,0 +1,604 @@
+(function () {
+  "use strict";
+
+  var compiler = window.AbracadabraCompiler;
+  var maker = document.getElementById("spark-maker");
+  var bootStatus = document.getElementById("spark-boot-status");
+  if (!compiler || !maker || !bootStatus) {
+    if (bootStatus) {
+      bootStatus.textContent = "Abracadabra could not open. Reload this page to try again; the maker remains locked.";
+    }
+    return;
+  }
+
+  var steps = Array.prototype.slice.call(maker.querySelectorAll("[data-step]"));
+  var progress = Array.prototype.slice.call(maker.querySelectorAll("[data-progress-step]"));
+  var errorsBox = document.getElementById("spark-errors");
+  var errorsList = errorsBox.querySelector("ul");
+  var truthReview = document.getElementById("spark-truth-review");
+  var truthConfirmed = document.getElementById("truth-confirmed");
+  var preview = document.getElementById("spark-preview");
+  var versionStatus = document.getElementById("spark-version-status");
+  var versionList = document.getElementById("spark-version-list");
+  var undoButton = document.getElementById("previous-version");
+  var openButton = document.getElementById("open-version");
+  var downloadButton = document.getElementById("download-version");
+  var makeButton = document.getElementById("make-preview");
+  var returnBar = maker.querySelector("[data-return-bar]");
+  var returnButton = maker.querySelector("[data-return-preview]");
+  var sampleButton = maker.querySelector("[data-load-sample]");
+  var clearDraftButton = maker.querySelector("[data-clear-draft]");
+  var versions = [];
+  var currentVersionIndex = -1;
+  var currentStep = "facts";
+  var reviewedDigest = "";
+  var reviewedRaw = null;
+  var cleanDraftFingerprint = "";
+  var draftHasTrustedEdits = false;
+
+  var labels = Object.freeze({
+    businessName: "Business name",
+    summary: "What the business does",
+    about: "About",
+    offerings: "Offerings",
+    location: "Location or service area",
+    hours: "Hours",
+    phone: "Phone",
+    email: "Email",
+    website: "Outside website",
+    primaryAction: "Emphasized contact action",
+    theme: "Look",
+    truthConfirmed: "Review confirmation",
+    pageDetails: "Supporting page detail",
+    contact: "Visitor next step"
+  });
+
+  function cloneRaw(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function element(name) {
+    return maker.querySelector('[name="' + name + '"]');
+  }
+
+  function value(name) {
+    var control = element(name);
+    return control ? control.value : "";
+  }
+
+  function collectRawFacts() {
+    var selectedTheme = maker.querySelector('input[name="theme"]:checked');
+    return {
+      businessName: value("businessName"),
+      summary: value("summary"),
+      about: value("about"),
+      offerings: value("offerings"),
+      location: value("location"),
+      hours: value("hours"),
+      phone: value("phone"),
+      email: value("email"),
+      website: value("website"),
+      primaryAction: value("primaryAction"),
+      theme: selectedTheme ? selectedTheme.value : ""
+    };
+  }
+
+  function comparableRaw(raw) {
+    var comparable = {};
+    Object.keys(raw).forEach(function (name) {
+      comparable[name] = typeof raw[name] === "string"
+        ? raw[name].replace(/\r\n?/gu, "\n").trim()
+        : raw[name];
+    });
+    return comparable;
+  }
+
+  function draftFingerprint(raw) {
+    try {
+      return "normalized:" + normalizedDigest(compiler.normalizeFacts(raw));
+    } catch (_error) {
+      return "raw:" + compiler.stableStringify(comparableRaw(raw));
+    }
+  }
+
+  function markDraftClean() {
+    cleanDraftFingerprint = draftFingerprint(collectRawFacts());
+    draftHasTrustedEdits = false;
+  }
+
+  function hasMeaningfulUnsavedChanges() {
+    return draftHasTrustedEdits
+      && draftFingerprint(collectRawFacts()) !== cleanDraftFingerprint;
+  }
+
+  function confirmDraftReplacement(message) {
+    return !hasMeaningfulUnsavedChanges() || window.confirm(message);
+  }
+
+  function normalizedDigest(normalized) {
+    return compiler.sha256(compiler.stableStringify(normalized));
+  }
+
+  function clearReviewedSnapshot() {
+    reviewedDigest = "";
+    reviewedRaw = null;
+    truthConfirmed.checked = false;
+  }
+
+  function clearErrors() {
+    errorsList.replaceChildren();
+    errorsBox.hidden = true;
+    maker.querySelectorAll("input,textarea,select,button").forEach(function (control) {
+      if (control && control.removeAttribute) control.removeAttribute("aria-invalid");
+    });
+  }
+
+  function showErrors(errors) {
+    clearErrors();
+    errors.forEach(function (error) {
+      var item = document.createElement("li");
+      var name = labels[error.field] || error.field;
+      item.textContent = name + ": " + error.message;
+      errorsList.appendChild(item);
+      var control = element(error.field);
+      if (control && control.setAttribute) control.setAttribute("aria-invalid", "true");
+    });
+    errorsBox.hidden = false;
+    errorsBox.focus();
+  }
+
+  function validate(raw) {
+    try {
+      return compiler.normalizeFacts(raw);
+    } catch (error) {
+      if (error && Array.isArray(error.errors)) {
+        showErrors(error.errors);
+        return null;
+      }
+      showErrors([{ field: "facts", message: "Abracadabra could not validate these business details." }]);
+      return null;
+    }
+  }
+
+  function setStep(name, options) {
+    var settings = options || {};
+    currentStep = name;
+    steps.forEach(function (step) { step.hidden = step.getAttribute("data-step") !== name; });
+    progress.forEach(function (item) {
+      if (item.getAttribute("data-progress-step") === name) item.setAttribute("aria-current", "step");
+      else item.removeAttribute("aria-current");
+    });
+    returnBar.hidden = currentVersionIndex < 0 || name === "preview";
+    clearErrors();
+    if (name === "truth") {
+      var raw = collectRawFacts();
+      var normalized = validate(raw);
+      if (!normalized) {
+        setStep("facts", { focus: false });
+        return;
+      }
+      truthConfirmed.checked = false;
+      reviewedRaw = cloneRaw(raw);
+      reviewedDigest = normalizedDigest(normalized);
+      renderTruth(normalized);
+    }
+    if (settings.focus !== false) {
+      var active = steps.find(function (step) { return step.getAttribute("data-step") === name; });
+      if (active) {
+        active.setAttribute("tabindex", "-1");
+        active.focus();
+      }
+    }
+  }
+
+  function reviewRow(term, description) {
+    var group = document.createElement("div");
+    var title = document.createElement("dt");
+    var body = document.createElement("dd");
+    title.textContent = term;
+    body.textContent = description;
+    group.append(title, body);
+    return group;
+  }
+
+  function renderTruth(normalized) {
+    var list = document.createElement("dl");
+    list.append(reviewRow("Business name", normalized.businessName));
+    list.append(reviewRow("What it does", normalized.summary));
+    list.append(reviewRow("Look", normalized.theme.charAt(0).toUpperCase() + normalized.theme.slice(1)));
+    if (normalized.about) list.append(reviewRow("About", normalized.about));
+    if (normalized.offerings.length) list.append(reviewRow("Offerings", normalized.offerings.join(" · ")));
+    if (normalized.location) list.append(reviewRow("Location or service area", normalized.location));
+    if (normalized.hours) list.append(reviewRow("Hours", normalized.hours));
+    if (normalized.phone) list.append(reviewRow("Phone", normalized.phone.display));
+    if (normalized.email) list.append(reviewRow("Email", normalized.email.display));
+    if (normalized.website) list.append(reviewRow("Outside website", normalized.website.display));
+    var actionLabels = {
+      none: "Keep supplied contact actions equal",
+      phone: "Phone",
+      email: "Email",
+      website: "Outside website"
+    };
+    list.append(reviewRow("Emphasized contact action", actionLabels[normalized.primaryAction]));
+    truthReview.replaceChildren(list);
+  }
+
+  function fillForm(raw) {
+    [
+      "businessName",
+      "summary",
+      "about",
+      "offerings",
+      "location",
+      "hours",
+      "phone",
+      "email",
+      "website",
+      "primaryAction"
+    ].forEach(function (name) {
+      var control = element(name);
+      if (control) control.value = raw[name] || (name === "primaryAction" ? "none" : "");
+    });
+    var theme = maker.querySelector('input[name="theme"][value="' + raw.theme + '"]');
+    if (theme) theme.checked = true;
+    clearReviewedSnapshot();
+    markDraftClean();
+  }
+
+  function emitDraftChanged() {
+    window.dispatchEvent(new CustomEvent("abracadabra:draftchange", {
+      detail: { raw: cloneRaw(collectRawFacts()) }
+    }));
+  }
+
+  function emitVersionMade(version, reviewAttested) {
+    window.dispatchEvent(new CustomEvent("abracadabra:versionmade", {
+      detail: {
+        raw: cloneRaw(version.raw),
+        result: cloneRaw(version.result),
+        reviewAttested: reviewAttested === true
+      }
+    }));
+  }
+
+  function emitVersionSelected(version) {
+    window.dispatchEvent(new CustomEvent("abracadabra:versionselected", {
+      detail: {
+        platformVersionId: version && version.platformVersionId
+          ? String(version.platformVersionId)
+          : null
+      }
+    }));
+  }
+
+  function loadProjectState(project) {
+    if (!confirmDraftReplacement(
+      "Open this project? Your unsaved draft edits will be replaced."
+    )) return false;
+    var savedVersions = project && Array.isArray(project.versions) ? project.versions : [];
+    versions = savedVersions.map(function (saved) {
+      if (!saved || !saved.rawFacts || !saved.artifact) return null;
+      try {
+        var result = compiler.compileSite(saved.rawFacts);
+        if (
+          result.artifactDigest !== saved.artifact.digest
+          || result.html !== saved.artifact.html
+        ) return null;
+        return {
+          platformVersionId: saved.id,
+          raw: cloneRaw(saved.rawFacts),
+          result: result
+        };
+      } catch (_error) {
+        return null;
+      }
+    }).filter(Boolean);
+    var currentId = project && project.serving ? project.serving.currentVersionId : null;
+    currentVersionIndex = versions.findIndex(function (version) {
+      return version.platformVersionId === currentId;
+    });
+    if (currentVersionIndex < 0 && versions.length) currentVersionIndex = versions.length - 1;
+    var draft = project && project.draft && project.draft.rawFacts
+      ? project.draft.rawFacts
+      : currentVersionIndex >= 0
+        ? versions[currentVersionIndex].raw
+        : { theme: "clear", primaryAction: "none" };
+    fillForm(draft);
+    if (currentVersionIndex >= 0) {
+      renderCurrentVersion("Resumed.");
+      setStep("preview", { focus: false });
+    } else {
+      preview.removeAttribute("srcdoc");
+      versionList.replaceChildren();
+      renderCurrentVersion();
+      setStep("facts", { focus: false });
+    }
+    markDraftClean();
+    return true;
+  }
+
+  function themeLabel(theme) {
+    return String(theme).charAt(0).toUpperCase() + String(theme).slice(1);
+  }
+
+  function versionSummary(version) {
+    var summary = version && version.result && version.result.facts
+      ? String(version.result.facts.summary || "")
+      : "";
+    return summary.length > 58 ? summary.slice(0, 57).trimEnd() + "…" : summary;
+  }
+
+  function renderCurrentVersion(message) {
+    var current = versions[currentVersionIndex];
+    if (!current) {
+      preview.removeAttribute("srcdoc");
+      versionStatus.textContent = "No version has been made.";
+      undoButton.disabled = true;
+      openButton.disabled = true;
+      downloadButton.disabled = true;
+      return;
+    }
+    preview.srcdoc = current.result.html;
+    versionStatus.textContent = (message ? message + " " : "")
+      + "Version " + (currentVersionIndex + 1) + " · "
+      + themeLabel(current.result.theme) + " · "
+      + current.result.facts.businessName + ".";
+    undoButton.disabled = currentVersionIndex <= 0;
+    openButton.disabled = false;
+    downloadButton.disabled = false;
+    renderHistory();
+  }
+
+  function renderHistory() {
+    versionList.replaceChildren();
+    versions.forEach(function (version, index) {
+      var item = document.createElement("li");
+      var button = document.createElement("button");
+      var active = index === currentVersionIndex;
+      button.type = "button";
+      button.textContent = "Version " + (index + 1) + " · " + themeLabel(version.result.theme)
+        + " · " + version.result.facts.businessName + " — " + versionSummary(version);
+      if (active) button.setAttribute("aria-current", "true");
+      button.addEventListener("click", function () {
+        if (!confirmDraftReplacement(
+          "Restore this made version? Your unsaved draft edits will be replaced."
+        )) return;
+        currentVersionIndex = index;
+        fillForm(version.raw);
+        renderCurrentVersion("Restored.");
+        setStep("preview");
+        emitVersionSelected(version);
+      });
+      item.appendChild(button);
+      versionList.appendChild(item);
+    });
+  }
+
+  function makePreview() {
+    clearErrors();
+    var raw = collectRawFacts();
+    var normalized = validate(raw);
+    if (!normalized) return;
+    var currentDigest = normalizedDigest(normalized);
+    if (!reviewedDigest || !reviewedRaw || currentDigest !== reviewedDigest) {
+      reviewedRaw = cloneRaw(raw);
+      reviewedDigest = currentDigest;
+      truthConfirmed.checked = false;
+      renderTruth(normalized);
+      showErrors([{
+        field: "truthConfirmed",
+        message: "The business details changed after review. Read the updated review and confirm it again."
+      }]);
+      truthConfirmed.setAttribute("aria-invalid", "true");
+      return;
+    }
+    if (!truthConfirmed.checked) {
+      showErrors([{ field: "truthConfirmed", message: "Confirm the reviewed business details before making the preview." }]);
+      truthConfirmed.setAttribute("aria-invalid", "true");
+      truthConfirmed.focus();
+      return;
+    }
+    var reviewAttested = truthConfirmed.checked === true;
+    var result;
+    try {
+      result = compiler.compileSite(reviewedRaw);
+    } catch (error) {
+      showErrors(error && Array.isArray(error.errors)
+        ? error.errors
+        : [{ field: "facts", message: "Abracadabra could not make this preview." }]);
+      return;
+    }
+
+    var existingIndex = versions.findIndex(function (version) {
+      return version.result.artifactDigest === result.artifactDigest;
+    });
+    if (existingIndex !== -1) {
+      currentVersionIndex = existingIndex;
+      fillForm(versions[existingIndex].raw);
+      renderCurrentVersion("That version already exists; restored.");
+      setStep("preview");
+      emitVersionMade(versions[existingIndex], reviewAttested);
+      return;
+    }
+    versions.push({ raw: cloneRaw(reviewedRaw), result: result, platformVersionId: null });
+    currentVersionIndex = versions.length - 1;
+    markDraftClean();
+    renderCurrentVersion("Made.");
+    setStep("preview");
+    emitVersionMade(versions[currentVersionIndex], reviewAttested);
+  }
+
+  function safeFilename(name) {
+    var slug = String(name)
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .slice(0, 48);
+    return slug ? slug + "-website.html" : "my-website.html";
+  }
+
+  function fileForCurrentVersion() {
+    var current = versions[currentVersionIndex];
+    return current
+      ? new Blob([current.result.html], { type: "text/html;charset=utf-8" })
+      : null;
+  }
+
+  function downloadCurrent() {
+    var current = versions[currentVersionIndex];
+    if (!current) return;
+    var file = fileForCurrentVersion();
+    var objectUrl = URL.createObjectURL(file);
+    var link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = safeFilename(current.result.facts.businessName);
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 1000);
+    versionStatus.textContent = "Download started for version " + (currentVersionIndex + 1)
+      + ". Check your Downloads folder.";
+  }
+
+  function openCurrentPreview() {
+    var file = fileForCurrentVersion();
+    if (!file) return;
+    var objectUrl = URL.createObjectURL(file);
+    var link = document.createElement("a");
+    link.href = objectUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
+    versionStatus.textContent = "Working preview requested in a new tab.";
+  }
+
+  function loadFictionalSample() {
+    if (!confirmDraftReplacement(
+      "Load the fictional sample? Your unsaved draft edits will be replaced, and your made versions will stay available."
+    )) return;
+    fillForm({
+      businessName: "Juniper & Clay",
+      summary: "Plants, pottery, and useful objects for calmer rooms.",
+      about: "Juniper & Clay is a fictional neighborhood shop used to demonstrate this maker.\n\nThe sample contains no real customer or business claims.",
+      offerings: "Indoor plants\nHandmade pottery\nPlant care supplies",
+      location: "South Jersey",
+      hours: "Tuesday–Saturday, 10–6",
+      phone: "(856) 555-0142",
+      email: "hello@example.com",
+      website: "",
+      primaryAction: "email",
+      theme: "warm"
+    });
+    emitDraftChanged();
+    setStep("facts", { focus: false });
+    bootStatus.hidden = false;
+    bootStatus.textContent = "Fictional sample loaded. Replace any detail before using the result.";
+    element("businessName").focus();
+  }
+
+  function clearDraft() {
+    if (!confirmDraftReplacement(
+      "Clear this draft? Your unsaved edits will be removed, and your made versions will stay available."
+    )) return;
+    fillForm({ theme: "clear", primaryAction: "none" });
+    emitDraftChanged();
+    setStep("facts", { focus: false });
+    bootStatus.hidden = false;
+    bootStatus.textContent = currentVersionIndex < 0
+      ? "Draft cleared."
+      : "Draft cleared. Your made versions are still available.";
+    element("businessName").focus();
+  }
+
+  function handleDraftEdit(event) {
+    clearErrors();
+    if (event.isTrusted && event.target !== truthConfirmed) {
+      draftHasTrustedEdits = draftFingerprint(collectRawFacts()) !== cleanDraftFingerprint;
+    }
+    if (currentStep === "truth" && event.target !== truthConfirmed) {
+      clearReviewedSnapshot();
+    }
+    if (event.target !== truthConfirmed) emitDraftChanged();
+  }
+
+  maker.addEventListener("input", handleDraftEdit);
+  maker.addEventListener("change", handleDraftEdit);
+
+  maker.querySelectorAll("[data-next]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var raw = collectRawFacts();
+      if (!validate(raw)) return;
+      setStep(button.getAttribute("data-next"));
+    });
+  });
+  maker.querySelectorAll("[data-back]").forEach(function (button) {
+    button.addEventListener("click", function () { setStep(button.getAttribute("data-back")); });
+  });
+  maker.querySelector("[data-edit-facts]").addEventListener("click", function () {
+    setStep("facts");
+  });
+  maker.querySelector("[data-edit-look]").addEventListener("click", function () {
+    setStep("vibe");
+  });
+
+  makeButton.addEventListener("click", makePreview);
+  undoButton.addEventListener("click", function () {
+    if (currentVersionIndex <= 0) return;
+    if (!confirmDraftReplacement(
+      "Restore the previous made version? Your unsaved draft edits will be replaced."
+    )) return;
+    currentVersionIndex -= 1;
+    fillForm(versions[currentVersionIndex].raw);
+    renderCurrentVersion("Undone.");
+    emitVersionSelected(versions[currentVersionIndex]);
+  });
+  openButton.addEventListener("click", openCurrentPreview);
+  downloadButton.addEventListener("click", downloadCurrent);
+  returnButton.addEventListener("click", function () { setStep("preview"); });
+  sampleButton.addEventListener("click", loadFictionalSample);
+  clearDraftButton.addEventListener("click", clearDraft);
+  window.addEventListener("beforeunload", function (event) {
+    if (!hasMeaningfulUnsavedChanges()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  maker.inert = false;
+  maker.removeAttribute("inert");
+  maker.setAttribute("aria-disabled", "false");
+  bootStatus.textContent = "Abracadabra ready. Your local draft stays in this tab.";
+  bootStatus.hidden = true;
+  markDraftClean();
+  setStep("facts", { focus: false });
+  window.SiteSourceryAbracadabraMaker = Object.freeze({
+    getCurrentVersion: function () {
+      return currentVersionIndex >= 0 ? cloneRaw(versions[currentVersionIndex]) : null;
+    },
+    getDraft: function () {
+      return cloneRaw(collectRawFacts());
+    },
+    loadProject: loadProjectState,
+    markCurrentPlatformVersion: function (versionId) {
+      if (currentVersionIndex >= 0) versions[currentVersionIndex].platformVersionId = String(versionId || "");
+    },
+    selectPlatformVersion: function (versionId) {
+      var target = versions.findIndex(function (version) {
+        return version.platformVersionId === String(versionId || "");
+      });
+      if (target < 0) return false;
+      currentVersionIndex = target;
+      fillForm(versions[target].raw);
+      renderCurrentVersion("Selected for release.");
+      setStep("preview");
+      emitVersionSelected(versions[target]);
+      return true;
+    }
+  });
+}());

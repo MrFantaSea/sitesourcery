@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       remove_path:
-        description: One top-level demo path to remove
+        description: One exact reviewed predecessor root HTML route to remove
         required: true
         type: string
 
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - name: Check out current control plane
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -36,12 +36,17 @@ jobs:
           REMOVE_PATH: ${{ inputs.remove_path }}
         run: |
           node -e "const c=require('./control/data/release-control.json');if(c.allowsContainmentDeployment!==true){console.error('Containment deployment held:',c.containmentReason);process.exit(1)}"
-          node -e "if(!/^[a-f0-9]{40}$/.test(process.env.PRODUCTION_SHA)){throw Error('production_sha must be a full lowercase Git commit')}if(!/^[a-z0-9][a-z0-9-]*$/.test(process.env.REMOVE_PATH)){throw Error('remove_path must be one lowercase top-level public path')}"
+          node -e "if(!/^[a-f0-9]{40}$/.test(process.env.PRODUCTION_SHA)){throw Error('production_sha must be a full lowercase Git commit')}if(!/^[a-z0-9][a-z0-9-]*\\.html$/.test(process.env.REMOVE_PATH)){throw Error('remove_path must be one exact lowercase root HTML file')}"
       - name: Check out the exact production source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.production_sha }}
           path: target
+      - name: Check out an untouched baseline source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.production_sha }}
+          path: baseline
       - name: Use production-pinned Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -51,16 +56,42 @@ jobs:
       - name: Install production-locked dependencies
         working-directory: target
         run: npm ci --ignore-scripts
+      - name: Install exact reviewed Chromium
+        working-directory: control
+        run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
+      - name: Validate historical HTML before authorized mutation
+        working-directory: target
+        run: npm run check:html
+      - name: Build untouched baseline public projection with current controls
+        env:
+          PRODUCTION_SHA: ${{ inputs.production_sha }}
+        run: |
+          node control/scripts/build-contained-artifact.mjs \
+            baseline \
+            "$PRODUCTION_SHA" \
+            --baseline \
+            baseline/_site
+      - name: Audit untouched baseline public projection with current controls
+        run: node control/scripts/audit-artifact-from-sitemap.mjs baseline/_site
       - name: Prepare one-path removal from the production tree
         env:
+          PRODUCTION_SHA: ${{ inputs.production_sha }}
           REMOVE_PATH: ${{ inputs.remove_path }}
-        run: node control/scripts/prepare-containment.mjs target "$REMOVE_PATH"
-      - name: Run complete checks on the contained tree
-        working-directory: target
-        run: npm test
-      - name: Build public-only containment artifact
-        working-directory: target
-        run: npm run build:pages
+        run: node control/scripts/prepare-containment.mjs target "$PRODUCTION_SHA" "$REMOVE_PATH"
+      - name: Build the contained predecessor exactly once with current controls
+        env:
+          PRODUCTION_SHA: ${{ inputs.production_sha }}
+          REMOVE_PATH: ${{ inputs.remove_path }}
+        run: |
+          node control/scripts/build-contained-artifact.mjs \
+            target \
+            "$PRODUCTION_SHA" \
+            "$REMOVE_PATH" \
+            target/_site
+      - name: Audit the exact contained artifact with current controls
+        env:
+          REMOVE_PATH: ${{ inputs.remove_path }}
+        run: node control/scripts/audit-artifact-from-sitemap.mjs target/_site "/$REMOVE_PATH"
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Package exact containment artifact

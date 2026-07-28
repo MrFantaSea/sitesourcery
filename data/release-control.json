@@ -1,10 +1,18 @@
 {
-  "version": 2,
+  "version": 3,
   "state": "hold",
   "allowsDeployment": false,
   "allowsCommercialDeployment": false,
   "allowsContainmentDeployment": false,
-  "reason": "Founder rollup Gate 10/11, canonical contact, mail delivery, and controlled-release evidence remain open.",
+  "allowsPublicTruthReconciliationDeployment": false,
+  "publicTruthReconciliation": {
+    "state": "hold",
+    "requiredProductionPredecessor": "eff8195640db58390d03eefbe863248220994e37",
+    "approvedCandidateSha": null,
+    "authorityReceiptSha256": null,
+    "reason": "The open-inquiry, written-scope, checkout-disabled vNext public truth is an undeployed candidate. Exact candidate and authority receipt remain unset."
+  },
+  "reason": "General deployment remains held. The candidate permits project inquiries but no automated checkout or provider effects; publication still requires a separate exact-candidate authority receipt and manual workflow.",
   "containmentReason": "Emergency removal is implemented but remains disabled until the founder authorizes the containment-only production lane.",
-  "updatedAt": "2026-07-22"
+  "updatedAt": "2026-07-28"
 }

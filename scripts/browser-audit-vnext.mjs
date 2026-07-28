@@ -1,0 +1,2752 @@
+#!/usr/bin/env node
+
+import { spawn, spawnSync } from "node:child_process";
+import { access, readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { CANONICAL_ROUTES } from "./check-routes.mjs";
+
+const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const SITE_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
+const DEFAULT_ARTIFACT_ROOT = path.join(SITE_ROOT, "_site");
+export const REVIEWED_CHROMIUM = Object.freeze({
+  version: "Google Chrome for Testing 149.0.7827.55",
+  archiveUrl: "https://storage.googleapis.com/chrome-for-testing-public/149.0.7827.55/linux64/chrome-headless-shell-linux64.zip",
+  archiveSha256: "410c9407d5de3fea80d9398666be06f2aa09154a3fa7b327dc254e336bb4c4b7",
+});
+const DEFAULT_CHROMIUM = [
+  "/home/simtech/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell",
+  "/home/simtech/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell",
+];
+const VIEWPORTS = Object.freeze([
+  Object.freeze({ label: "phone-320", width: 320, height: 720, mobile: true, phone: true }),
+  Object.freeze({ label: "phone-360", width: 360, height: 800, mobile: true, phone: true }),
+  Object.freeze({ label: "phone-390", width: 390, height: 844, mobile: true, phone: true }),
+  Object.freeze({
+    label: "desktop-200pct-reflow",
+    width: 720,
+    height: 500,
+    mobile: false,
+    reflowEquivalent: "1440px display at 200% browser zoom",
+  }),
+  Object.freeze({ label: "tablet-768", width: 768, height: 1024, mobile: false }),
+  Object.freeze({ label: "desktop", width: 1440, height: 1000, mobile: false }),
+]);
+const NO_SCRIPT_VIEWPORT = Object.freeze({
+  label: "phone-390-no-script",
+  width: 390,
+  height: 844,
+  mobile: true,
+});
+const REDUCED_MOTION_VIEWPORT = Object.freeze({
+  label: "phone-390-reduced-motion",
+  width: 390,
+  height: 844,
+  mobile: true,
+});
+const HIVE_COMPONENT_VIEWPORTS = Object.freeze([
+  Object.freeze({ label: "hive-767", width: 767, height: 1024, mobile: false, componentRoute: "/hive/" }),
+  Object.freeze({ label: "hive-768", width: 768, height: 1024, mobile: false, componentRoute: "/hive/" }),
+  Object.freeze({ label: "hive-769", width: 769, height: 1024, mobile: false, componentRoute: "/hive/" }),
+  Object.freeze({ label: "hive-landscape", width: 844, height: 390, mobile: false, componentRoute: "/hive/" }),
+]);
+const ROUTE_TRANSFER_BUDGET_BYTES = 1024 * 1024;
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function chromiumPath() {
+  const requested = process.env.SITESOURCERY_CHROMIUM;
+  const choices = requested ? [requested] : DEFAULT_CHROMIUM;
+  const failures = [];
+  for (const candidate of choices) {
+    try {
+      await access(candidate);
+      const version = spawnSync(candidate, ["--version"], {
+        encoding: "utf8",
+        timeout: 5000,
+      });
+      const observed = version.stdout?.trim() ?? "";
+      if (version.status !== 0 || observed !== REVIEWED_CHROMIUM.version) {
+        failures.push(`${candidate}: expected ${REVIEWED_CHROMIUM.version}; observed ${observed || "no version"}`);
+        continue;
+      }
+      return candidate;
+    } catch {
+      failures.push(`${candidate}: not executable`);
+    }
+  }
+  throw new Error(`no exact reviewed Chromium binary was found (${failures.join("; ")})`);
+}
+
+const CONTENT_TYPES = Object.freeze({
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".webp": "image/webp",
+  ".xml": "application/xml; charset=utf-8",
+});
+
+export function artifactPath(pathname, artifactRoot = DEFAULT_ARTIFACT_ROOT) {
+  const absoluteArtifactRoot = path.resolve(artifactRoot);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = decoded.endsWith("/")
+    ? `${decoded.replace(/^\/+/u, "")}index.html`
+    : decoded.replace(/^\/+/u, "");
+  if (!relative || relative.includes("\0")) return null;
+  const normalized = path.posix.normalize(relative);
+  if (normalized === ".." || normalized.startsWith("../") || normalized !== relative) return null;
+  const candidate = path.resolve(absoluteArtifactRoot, normalized);
+  if (
+    candidate !== absoluteArtifactRoot
+    && !candidate.startsWith(`${absoluteArtifactRoot}${path.sep}`)
+  ) return null;
+  return candidate;
+}
+
+async function startArtifactServer(artifactRoot) {
+  const server = createServer(async (request, response) => {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.writeHead(405, { Allow: "GET, HEAD" });
+      response.end();
+      return;
+    }
+    const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+    const file = artifactPath(pathname, artifactRoot);
+    if (!file) {
+      response.writeHead(400);
+      response.end("Bad request");
+      return;
+    }
+    try {
+      const bytes = await readFile(file);
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Length": bytes.byteLength,
+        "Content-Type": CONTENT_TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream",
+        "X-Content-Type-Options": "nosniff",
+      });
+      response.end(request.method === "HEAD" ? undefined : bytes);
+    } catch (error) {
+      response.writeHead(error?.code === "ENOENT" ? 404 : 500);
+      response.end(error?.code === "ENOENT" ? "Not found" : "Artifact read failed");
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("artifact server did not receive a loopback port");
+  }
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    }),
+  };
+}
+
+async function waitForTarget(port, processState) {
+  const endpoint = `http://127.0.0.1:${port}/json/list`;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (processState.exitCode !== null) {
+      throw new Error(`Chromium exited before audit startup (${processState.exitCode})`);
+    }
+    try {
+      const response = await fetch(endpoint);
+      if (response.ok) {
+        const targets = await response.json();
+        const target = targets.find((entry) => entry.type === "page" && entry.webSocketDebuggerUrl);
+        if (target) return target.webSocketDebuggerUrl;
+      }
+    } catch {
+      // The debugging endpoint is still starting.
+    }
+    await delay(50);
+  }
+  throw new Error("timed out waiting for Chromium debugging target");
+}
+
+function connectCdp(url) {
+  const socket = new WebSocket(url);
+  const pending = new Map();
+  const listeners = new Map();
+  let sequence = 0;
+
+  const opened = new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", reject, { once: true });
+  });
+
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(event.data);
+    if (message.id) {
+      const request = pending.get(message.id);
+      if (!request) return;
+      pending.delete(message.id);
+      if (message.error) request.reject(new Error(`${request.method}: ${message.error.message}`));
+      else request.resolve(message.result);
+      return;
+    }
+    const callbacks = listeners.get(message.method) ?? [];
+    for (const callback of callbacks) callback(message.params ?? {});
+  });
+
+  function on(method, callback) {
+    const callbacks = listeners.get(method) ?? [];
+    callbacks.push(callback);
+    listeners.set(method, callbacks);
+    return () => {
+      listeners.set(method, (listeners.get(method) ?? []).filter((entry) => entry !== callback));
+    };
+  }
+
+  async function send(method, params = {}) {
+    await opened;
+    sequence += 1;
+    const id = sequence;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { method, reject, resolve });
+      socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  async function close() {
+    for (const request of pending.values()) request.reject(new Error("CDP connection closed"));
+    pending.clear();
+    socket.close();
+  }
+
+  return { close, on, send };
+}
+
+async function navigate(cdp, url) {
+  const loaded = new Promise((resolve) => {
+    const off = cdp.on("Page.loadEventFired", () => {
+      off();
+      resolve();
+    });
+  });
+  await cdp.send("Page.navigate", { url });
+  await Promise.race([
+    loaded,
+    delay(8000).then(() => {
+      throw new Error(`timed out loading ${url}`);
+    }),
+  ]);
+  await delay(250);
+}
+
+const AUDIT_EXPRESSION = `(() => {
+  const root = document.documentElement;
+  const body = document.body;
+  const originalX = window.scrollX;
+  window.scrollTo(200, window.scrollY);
+  const reachableX = window.scrollX;
+  window.scrollTo(originalX, window.scrollY);
+  const primary = document.querySelectorAll("[data-primary-nav]");
+  const images = Array.from(document.images);
+  const canonical = document.querySelector('link[rel="canonical"]');
+  const path = location.pathname;
+  const visibleHeaderDescendants = Array.from(
+    document.querySelectorAll(".site-header, .site-header *")
+  ).filter((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && rect.width > 0
+      && rect.height > 0;
+  });
+  const renderedScale = (element) => {
+    let scale = 1;
+    for (let current = element; current && current.nodeType === Node.ELEMENT_NODE; current = current.parentElement) {
+      const style = getComputedStyle(current);
+      const zoom = Number.parseFloat(style.zoom);
+      if (Number.isFinite(zoom) && zoom > 0) scale *= zoom;
+      if (style.transform && style.transform !== "none") {
+        try {
+          const matrix = new DOMMatrixReadOnly(style.transform);
+          const scaleX = Math.hypot(matrix.a, matrix.b);
+          const scaleY = Math.hypot(matrix.c, matrix.d);
+          scale *= Math.min(scaleX, scaleY);
+        } catch {}
+      }
+    }
+    return scale;
+  };
+  const smallText = Array.from(document.querySelectorAll("body *"))
+    .filter((element) => Array.from(element.childNodes).some((node) =>
+      node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0
+    ))
+    .map((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName.toLowerCase(),
+        id: element.id || "",
+        className: typeof element.className === "string" ? element.className : "",
+        pixels: Number.parseFloat(style.fontSize) * renderedScale(element),
+        computedPixels: Number.parseFloat(style.fontSize),
+        source: "text",
+        display: style.display,
+        visibility: style.visibility,
+        width: rect.width,
+        height: rect.height
+      };
+    })
+    .filter((entry) =>
+      entry.display !== "none"
+      && entry.visibility !== "hidden"
+      && entry.width > 0
+      && entry.height > 0
+      && Number.isFinite(entry.pixels)
+      && entry.pixels < 12
+    );
+  const smallPseudoText = Array.from(document.querySelectorAll("body *"))
+    .flatMap((element) => ["::before", "::after"].map((pseudo) => {
+      const style = getComputedStyle(element, pseudo);
+      const content = style.content;
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName.toLowerCase(),
+        id: element.id || "",
+        className: typeof element.className === "string" ? element.className : "",
+        pixels: Number.parseFloat(style.fontSize) * renderedScale(element),
+        computedPixels: Number.parseFloat(style.fontSize),
+        source: pseudo,
+        content,
+        display: style.display,
+        visibility: style.visibility,
+        width: rect.width,
+        height: rect.height
+      };
+    }))
+    .filter((entry) =>
+      entry.content
+      && !["none", "normal", '""', "''"].includes(entry.content)
+      && entry.display !== "none"
+      && entry.visibility !== "hidden"
+      && entry.width > 0
+      && entry.height > 0
+      && Number.isFinite(entry.pixels)
+      && entry.pixels < 12
+    );
+  const typeFloorFailures = [...smallText, ...smallPseudoText]
+    .slice(0, 20);
+  const touchTargetFailures = Array.from(document.querySelectorAll(
+    "a[href], button, summary, input:not([type='hidden']), select, textarea"
+  ))
+    .filter((element) =>
+      !element.matches(".skip-link")
+      && !element.disabled
+      && element.getAttribute("aria-hidden") !== "true"
+    )
+    .map((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName.toLowerCase(),
+        href: element.getAttribute("href") || "",
+        id: element.id || "",
+        className: typeof element.className === "string" ? element.className : "",
+        text: (element.textContent || element.getAttribute("aria-label") || "").trim().slice(0, 80),
+        width: Math.round(rect.width * 10) / 10,
+        height: Math.round(rect.height * 10) / 10,
+        display: style.display,
+        visibility: style.visibility
+      };
+    })
+    .filter((entry) =>
+      entry.display !== "none"
+      && entry.visibility !== "hidden"
+      && entry.width > 0
+      && entry.height > 0
+      && (entry.width < 44 || entry.height < 44)
+    )
+    .slice(0, 30);
+  const result = {
+    path,
+    title: document.title,
+    readyState: document.readyState,
+    h1Count: document.querySelectorAll("h1").length,
+    primaryNavCount: primary.length,
+    viewportWidth: root.clientWidth,
+    documentWidth: Math.max(root.scrollWidth, body ? body.scrollWidth : 0),
+    reachableX,
+    headerOverflow: {
+      bounds: visibleHeaderDescendants
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLowerCase(),
+            id: element.id || "",
+            className: typeof element.className === "string" ? element.className : "",
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width)
+          };
+        })
+        .filter((entry) => entry.left < -1 || entry.right > root.clientWidth + 1),
+      internal: visibleHeaderDescendants
+        .map((element) => ({
+          tag: element.tagName.toLowerCase(),
+          id: element.id || "",
+          className: typeof element.className === "string" ? element.className : "",
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          overflowX: getComputedStyle(element).overflowX
+        }))
+        .filter((entry) => entry.scrollWidth > entry.clientWidth + 1)
+    },
+    widthChain: ["html", "body", ".site-header", ".header-inner", ".site-nav"]
+      .map((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return { selector, missing: true };
+        const rect = element.getBoundingClientRect();
+        return {
+          selector,
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          overflowX: getComputedStyle(element).overflowX
+        };
+      }),
+    wideElements: Array.from(document.querySelectorAll("body *"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName.toLowerCase(),
+          id: element.id || "",
+          className: typeof element.className === "string" ? element.className : "",
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth
+        };
+      })
+      .filter((entry) => entry.left < -1 || entry.right > root.clientWidth + 1)
+      .slice(0, 12),
+    brokenImages: images
+      .filter((image) => !image.complete || image.naturalWidth === 0)
+      .map((image) => image.getAttribute("src") || ""),
+    smallText: typeFloorFailures,
+    touchTargetFailures,
+    loadedBytes: [
+      ...performance.getEntriesByType("navigation"),
+      ...performance.getEntriesByType("resource")
+    ].reduce((total, entry) => total + (entry.decodedBodySize || 0), 0),
+    canonical: canonical ? canonical.href : "",
+    menuReady: null,
+    hiveReady: null,
+    sparkReady: null,
+    startReady: null
+  };
+  const menuButton = document.querySelector("[data-menu-button]");
+  const menu = document.querySelector("[data-menu]");
+  if (menuButton || menu) {
+    result.menuReady = {
+      button: Boolean(menuButton),
+      menu: Boolean(menu),
+      buttonDisplay: menuButton ? getComputedStyle(menuButton).display : "",
+      expanded: menuButton ? menuButton.getAttribute("aria-expanded") : "",
+      open: menu ? menu.hasAttribute("data-open") : false,
+      links: menu ? menu.querySelectorAll("a[href]").length : 0
+    };
+  }
+  const hive = document.querySelector("[data-hive-planner]");
+  if (hive) {
+    const blueprint = hive.querySelector("[data-hive-output]");
+    const title = hive.querySelector("[data-hive-title]");
+    const live = hive.querySelector("[data-hive-live]");
+    result.hiveReady = {
+      enhanced: hive.getAttribute("data-hive-planner-ready"),
+      controls: hive.querySelectorAll("[data-hive-cell]").length,
+      outputLength: (blueprint?.textContent || "").length,
+      plannerColumns: getComputedStyle(hive).gridTemplateColumns.split(/\\s+/u).filter(Boolean).length,
+      blueprintColumns: blueprint
+        ? getComputedStyle(blueprint.querySelector(".hive-blueprint-grid")).gridTemplateColumns
+          .split(/\\s+/u).filter(Boolean).length
+        : 0,
+      titleWidth: title ? Math.round(title.getBoundingClientRect().width) : 0,
+      plannerHeight: Math.round(hive.getBoundingClientRect().height),
+      outputLive: blueprint?.hasAttribute("aria-live") || false,
+      conciseLive: live
+        ? {
+          role: live.getAttribute("role"),
+          politeness: live.getAttribute("aria-live"),
+          atomic: live.getAttribute("aria-atomic"),
+          text: live.textContent.trim()
+        }
+        : null
+    };
+  }
+  const spark = document.querySelector("#spark-maker");
+  if (spark) {
+    result.sparkReady = {
+      inert: spark.hasAttribute("inert"),
+      disabled: spark.getAttribute("aria-disabled"),
+      compiler: typeof window.AbracadabraCompiler
+    };
+  }
+  const startChooser = document.querySelector("[data-start-chooser]");
+  if (startChooser) {
+    const visible = (element) => {
+      if (!element || element.hidden) return false;
+      const style = getComputedStyle(element);
+      return style.display !== "none" && style.visibility !== "hidden";
+    };
+    const startPaths = Array.from(startChooser.querySelectorAll("[data-start-path]"));
+    result.startReady = {
+      visible: visible(startChooser),
+      paths: startPaths.map((pathButton) => pathButton.getAttribute("data-start-path")),
+      pathsVisible: startPaths.every(visible),
+      detailVisible: visible(startChooser.querySelector('[data-start-step="detail"]')),
+      resultVisible: visible(startChooser.querySelector("[data-start-result]"))
+    };
+  }
+  result.helpHeadingLeading = Array.from(
+    document.querySelectorAll(".help-flow-heading h2")
+  ).map((heading) => {
+    const style = getComputedStyle(heading);
+    return {
+      fontSize: Number.parseFloat(style.fontSize),
+      lineHeight: Number.parseFloat(style.lineHeight)
+    };
+  });
+  result.aboutAccountabilitySizes = Array.from(
+    document.querySelectorAll(".about-accountability p")
+  ).map((paragraph) => Number.parseFloat(getComputedStyle(paragraph).fontSize));
+  const abracadabraHeroAction = document.querySelector(
+    ".abracadabra-hero .hero-actions .button-primary"
+  );
+  result.abracadabraHeroAction = abracadabraHeroAction
+    ? (() => {
+      const rect = abracadabraHeroAction.getBoundingClientRect();
+      const style = getComputedStyle(abracadabraHeroAction);
+      const visiblePixels = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      return {
+        bottom: Math.round(rect.bottom * 10) / 10,
+        meaningful: style.display !== "none"
+          && style.visibility === "visible"
+          && visiblePixels >= Math.min(rect.height, 44),
+        top: Math.round(rect.top * 10) / 10,
+        visiblePixels: Math.round(visiblePixels * 10) / 10
+      };
+    })()
+    : null;
+  result.flattenedCreativeSpecimens = document.querySelectorAll(
+    ".creative-specimen [role='img']"
+  ).length;
+  result.workProofDisclosures = Array.from(
+    document.querySelectorAll(".demonstration-card")
+  ).map((card) => {
+    const disclosure = card.querySelector(".artifact-disclosure");
+    const screen = card.querySelector(".demonstration-screen");
+    if (!disclosure || !screen) return { missing: true };
+    const disclosureRect = disclosure.getBoundingClientRect();
+    const screenRect = screen.getBoundingClientRect();
+    return {
+      missing: false,
+      text: disclosure.textContent.trim(),
+      fontSize: Number.parseFloat(getComputedStyle(disclosure).fontSize),
+      overlapsScreen: disclosureRect.bottom > screenRect.top + 1
+        && disclosureRect.top < screenRect.bottom - 1
+    };
+  });
+  return result;
+})()`;
+
+const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
+  const root = document.documentElement;
+  const body = document.body;
+  const visible = (element) => {
+    if (!element || element.hidden || element.closest("[hidden]")) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && Number.parseFloat(style.opacity) > 0
+      && rect.width > 0
+      && rect.height > 0;
+  };
+  const originalX = window.scrollX;
+  window.scrollTo(200, window.scrollY);
+  const reachableX = window.scrollX;
+  window.scrollTo(originalX, window.scrollY);
+  const main = document.querySelector("main");
+  const nav = document.querySelector("[data-primary-nav]");
+  const menuButton = document.querySelector("[data-menu-button]");
+  const startChooser = document.querySelector("[data-start-chooser]");
+  const startFallback = document.querySelector(".start-noscript");
+  const hive = document.querySelector("[data-hive-planner]");
+  const hiveFallback = hive?.previousElementSibling?.matches(".boundary-note")
+    ? hive.previousElementSibling
+    : document.querySelector("#planner noscript .boundary-note");
+  const sparkFallback = document.querySelector(".spark-noscript");
+  const sparkMaker = document.querySelector("#spark-maker");
+  return {
+    brokenImages: Array.from(document.images)
+      .filter((image) => !image.complete || image.naturalWidth === 0)
+      .map((image) => image.getAttribute("src") || ""),
+    documentWidth: Math.max(root.scrollWidth, body ? body.scrollWidth : 0),
+    h1Count: document.querySelectorAll("h1").length,
+    hasJsClass: root.classList.contains("js"),
+    mainTextLength: (main?.innerText || "").trim().length,
+    mainVisible: visible(main),
+    menuButtonVisible: visible(menuButton),
+    navVisibleLinks: nav
+      ? Array.from(nav.querySelectorAll("a[href]")).filter(visible).length
+      : 0,
+    path: location.pathname,
+    reachableX,
+    start: startChooser || startFallback ? {
+      chooserVisible: visible(startChooser),
+      fallbackLinks: startFallback
+        ? Array.from(startFallback.querySelectorAll("a[href]"))
+          .map((link) => link.getAttribute("href") || "")
+        : [],
+      fallbackVisible: visible(startFallback)
+    } : null,
+    hive: hive ? {
+      disabledCells: Array.from(hive.querySelectorAll("[data-hive-cell]"))
+        .filter((control) => control.disabled).length,
+      disabledOperationControls: Array.from(
+        hive.querySelectorAll("[data-hive-pause], [data-hive-download]")
+      ).filter((control) => control.disabled).length,
+      fallbackVisible: visible(hiveFallback)
+    } : null,
+    spark: sparkMaker || sparkFallback ? {
+      fallbackVisible: visible(sparkFallback),
+      makerLocked: Boolean(
+        sparkMaker
+        && (sparkMaker.inert || sparkMaker.getAttribute("aria-disabled") === "true")
+      )
+    } : null,
+    viewportWidth: root.clientWidth
+  };
+})()`;
+
+const REDUCED_MOTION_AUDIT_EXPRESSION = `(() => {
+  const milliseconds = (value) => String(value)
+    .split(",")
+    .map((part) => {
+      const token = part.trim();
+      const amount = Number.parseFloat(token);
+      if (!Number.isFinite(amount)) return Infinity;
+      return token.endsWith("ms") ? amount : amount * 1000;
+    });
+  const identityTransform = (value) => {
+    if (value === "none") return true;
+    try {
+      return new DOMMatrixReadOnly(value).isIdentity;
+    } catch {
+      return false;
+    }
+  };
+  const failures = Array.from(document.querySelectorAll("body *"))
+    .map((element) => {
+      const style = getComputedStyle(element);
+      return {
+        animationMs: Math.max(...milliseconds(style.animationDuration)),
+        className: typeof element.className === "string" ? element.className : "",
+        tag: element.tagName.toLowerCase(),
+        transitionMs: Math.max(...milliseconds(style.transitionDuration))
+      };
+    })
+    .filter((entry) => entry.animationMs > 1 || entry.transitionMs > 1)
+    .slice(0, 20);
+  const revealFailures = Array.from(document.querySelectorAll(".reveal"))
+    .map((element) => {
+      const style = getComputedStyle(element);
+      return {
+        identityTransform: identityTransform(style.transform),
+        opacity: style.opacity,
+        transform: style.transform
+      };
+    })
+    .filter((entry) => entry.opacity !== "1" || !entry.identityTransform)
+    .slice(0, 20);
+  return {
+    failures,
+    h1Count: document.querySelectorAll("h1").length,
+    path: location.pathname,
+    revealFailures,
+    scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior
+  };
+})()`;
+
+const MENU_EXERCISE_EXPRESSION = `(async () => {
+  const button = document.querySelector("[data-menu-button]");
+  const menu = document.querySelector("[data-menu]");
+  if (!button || !menu) return null;
+  const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const root = document.documentElement;
+  const describe = (element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      tag: element.tagName.toLowerCase(),
+      id: element.id || "",
+      className: typeof element.className === "string" ? element.className : "",
+      left: Math.round(rect.left),
+      right: Math.round(rect.right),
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX
+    };
+  };
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && rect.width > 0
+      && rect.height > 0;
+  };
+  button.click();
+  await settle();
+  const menuRect = menu.getBoundingClientRect();
+  const headerDescendants = Array.from(
+    document.querySelectorAll(".site-header, .site-header *")
+  ).filter(visible);
+  const headerOverflow = {
+    bounds: headerDescendants
+      .map(describe)
+      .filter((entry) => entry.left < -1 || entry.right > root.clientWidth + 1),
+    internal: headerDescendants
+      .map(describe)
+      .filter((entry) => entry.scrollWidth > entry.clientWidth + 1)
+  };
+  const destinations = [];
+  for (const link of Array.from(menu.querySelectorAll("a[href]"))) {
+    link.scrollIntoView({ block: "nearest", inline: "nearest" });
+    await settle();
+    const rect = link.getBoundingClientRect();
+    const visibleTop = Math.max(0, menuRect.top);
+    const visibleBottom = Math.min(window.innerHeight, menuRect.bottom);
+    destinations.push({
+      href: link.getAttribute("href") || "",
+      left: Math.round(rect.left),
+      right: Math.round(rect.right),
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      horizontallyContained: rect.left >= -1 && rect.right <= root.clientWidth + 1,
+      verticallyContained: rect.top >= visibleTop - 1 && rect.bottom <= visibleBottom + 1
+    });
+  }
+  const opened = {
+    expanded: button.getAttribute("aria-expanded"),
+    open: menu.hasAttribute("data-open"),
+    firstLinkFocused: document.activeElement === menu.querySelector("a[href]"),
+    rendered: visible(menu),
+    menuLeft: Math.round(menuRect.left),
+    menuRight: Math.round(menuRect.right),
+    headerOverflow,
+    destinations
+  };
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await settle();
+  const escaped = {
+    expanded: button.getAttribute("aria-expanded"),
+    open: menu.hasAttribute("data-open"),
+    buttonFocused: document.activeElement === button
+  };
+  button.click();
+  await settle();
+  const firstLink = menu.querySelector("a[href]");
+  firstLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+  firstLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  await settle();
+  const selected = {
+    expanded: button.getAttribute("aria-expanded"),
+    open: menu.hasAttribute("data-open")
+  };
+  return { escaped, opened, selected };
+})()`;
+
+const SOLUTIONS_SHELF_EXERCISE_EXPRESSION = `(async () => {
+  const target = document.querySelector("#service-shelf");
+  const eyebrow = target?.querySelector(".service-shelf-head .eyebrow");
+  const heading = target?.querySelector(".service-shelf-head h2");
+  const header = document.querySelector(".site-header");
+  const rail = document.querySelector(".anchor-nav");
+  if (!target || !eyebrow || !heading || !header || !rail) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  location.hash = "service-shelf";
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const headerRect = header.getBoundingClientRect();
+  const railRect = rail.getBoundingClientRect();
+  const eyebrowRect = eyebrow.getBoundingClientRect();
+  const headingRect = heading.getBoundingClientRect();
+  const obstructionBottom = Math.max(headerRect.bottom, railRect.bottom);
+  return {
+    hash: location.hash,
+    obstructionBottom: Math.round(obstructionBottom),
+    eyebrowTop: Math.round(eyebrowRect.top),
+    headingTop: Math.round(headingRect.top),
+    headingBottom: Math.round(headingRect.bottom)
+  };
+})()`;
+
+const SETTLE_IMAGES_EXPRESSION = `(async () => {
+  return Promise.all(Array.from(document.images).map(async (image) => {
+    image.loading = "eager";
+    if (!image.complete) {
+      await Promise.race([
+        new Promise((resolve) => {
+          image.addEventListener("load", resolve, { once: true });
+          image.addEventListener("error", resolve, { once: true });
+        }),
+        new Promise((resolve) => setTimeout(resolve, 5000))
+      ]);
+    }
+    return {
+      src: image.getAttribute("src") || "",
+      complete: image.complete,
+      naturalWidth: image.naturalWidth
+    };
+  }));
+})()`;
+
+const CONTROLLER_DRAFT_EXERCISE_EXPRESSION = `(async () => {
+  const set = (name, value) => {
+    const control = document.querySelector('[name="' + name + '"]');
+    if (!control) throw new Error("Missing controller field " + name);
+    if (control.type === "checkbox") control.checked = Boolean(value);
+    else control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const click = (selector) => {
+    const control = document.querySelector(selector);
+    if (!control) throw new Error("Missing controller action " + selector);
+    control.click();
+  };
+  const width = String(window.innerWidth);
+  set("accountName", "Draft Switch Audit");
+  set("organizationName", "Draft Switch Audit " + width);
+  set("accountEmail", "draft-switch-" + width + "@example.com");
+  set("accountPassword", "correct horse battery staple");
+  click("[data-create-account]");
+
+  const createProject = (name, label) => {
+    click("[data-new-project]");
+    set("projectName", name);
+    set("addressLabel", label);
+    set("projectTermsAccepted", true);
+    click("[data-create-project]");
+  };
+  createProject("First rapid-switch project", "rapid-first-" + width);
+  createProject("Second rapid-switch project", "rapid-second-" + width);
+
+  const buttons = Array.from(document.querySelectorAll("[data-project-id]"));
+  const firstButton = buttons.find((button) => button.textContent.includes("First rapid-switch"));
+  const secondButton = buttons.find((button) => button.textContent.includes("Second rapid-switch"));
+  if (!firstButton || !secondButton) throw new Error("Rapid-switch projects were not created");
+  firstButton.click();
+  window.dispatchEvent(new CustomEvent("abracadabra:draftchange", {
+    detail: { raw: { businessName: "First sentinel", summary: "belongs-to-first-" + width } }
+  }));
+  secondButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const key = window.SiteSourceryAbracadabraPlatform.STORE_KEY;
+  let stored = JSON.parse(window.localStorage.getItem(key));
+  let first = stored.projects.find((project) => project.id === firstButton.dataset.projectId);
+  let second = stored.projects.find((project) => project.id === secondButton.dataset.projectId);
+  const afterSwitch = {
+    activeSecond: document.querySelector('[data-project-id][aria-current="true"]')?.dataset.projectId
+      === secondButton.dataset.projectId,
+    firstSummary: first?.draft?.rawFacts?.summary || null,
+    secondSummary: second?.draft?.rawFacts?.summary || null
+  };
+
+  window.dispatchEvent(new CustomEvent("abracadabra:draftchange", {
+    detail: { raw: { businessName: "Second sentinel", summary: "belongs-to-second-" + width } }
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  stored = JSON.parse(window.localStorage.getItem(key));
+  first = stored.projects.find((project) => project.id === firstButton.dataset.projectId);
+  second = stored.projects.find((project) => project.id === secondButton.dataset.projectId);
+  return {
+    afterSwitch,
+    sameProject: {
+      firstSummary: first?.draft?.rawFacts?.summary || null,
+      secondSummary: second?.draft?.rawFacts?.summary || null
+    }
+  };
+})()`;
+
+const GUEST_FIRST_EXERCISE_EXPRESSION = `(async () => {
+  const maker = document.querySelector("#spark-maker");
+  const controlRoom = document.querySelector("#control-room");
+  const workroom = document.querySelector("#workroom");
+  const returning = document.querySelector("[data-open-account]");
+  if (!maker || !controlRoom || !workroom || !returning) return null;
+  const visible = (element) => {
+    if (!element || element.hidden || element.closest("[hidden]")) return false;
+    const style = getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  };
+  const set = (root, name, value) => {
+    const control = root.querySelector('[name="' + name + '"]');
+    if (!control) throw new Error("Missing guest-first field " + name);
+    if (control.type === "checkbox") control.checked = Boolean(value);
+    else control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const click = (root, selector) => {
+    const control = root.querySelector(selector);
+    if (!control) throw new Error("Missing guest-first action " + selector);
+    control.click();
+  };
+  const initial = {
+    accountHidden: controlRoom.hidden,
+    domOrderAligned: workroom.nextElementSibling === controlRoom,
+    makerVisible: visible(maker),
+    returningEnabled: !returning.disabled
+  };
+
+  set(maker, "businessName", "Guest First Studio");
+  set(maker, "summary", "Makes careful website previews before account creation.");
+  set(maker, "about", "A deterministic browser exercise for the guest-first Abracadabra path.");
+  set(maker, "email", "guest-preview@example.com");
+  click(maker, '[data-next="vibe"]');
+  click(maker, '[data-next="truth"]');
+  set(maker, "truthConfirmed", true);
+  click(maker, "#make-preview");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const preview = {
+    accountHidden: controlRoom.hidden,
+    versionCount: maker.querySelectorAll("#spark-version-list li").length,
+    srcdocLength: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "").length
+  };
+
+  click(maker, "[data-save-direction]");
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const saveChoice = {
+    accountVisible: visible(controlRoom),
+    createPanelVisible: visible(document.querySelector('[data-auth-panel="create"]')),
+    domOrderAligned: Boolean(
+      workroom.compareDocumentPosition(controlRoom) & Node.DOCUMENT_POSITION_FOLLOWING
+    ),
+    focusName: document.activeElement?.getAttribute("name") || "",
+    renderedOrderAligned:
+      workroom.getBoundingClientRect().top < controlRoom.getBoundingClientRect().top
+  };
+
+  const page = document;
+  const width = String(window.innerWidth);
+  set(page, "accountName", "Guest First Owner");
+  set(page, "organizationName", "Guest First " + width);
+  set(page, "accountEmail", "guest-first-" + width + "@example.com");
+  set(page, "accountPassword", "correct horse battery staple");
+  click(page, "[data-create-account]");
+  set(page, "projectName", "Carried guest preview");
+  set(page, "addressLabel", "guest-first-" + width);
+  set(page, "projectTermsAccepted", true);
+  click(page, "[data-create-project]");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const activeProject = document.querySelector("[data-active-project]");
+  return {
+    initial,
+    preview,
+    saveChoice,
+    adopted: {
+      activeProjectFocused: document.activeElement === activeProject,
+      activeProjectVisible: visible(activeProject),
+      releaseCount: document.querySelectorAll("[data-release-list] li").length,
+      status: document.querySelector("#platform-status")?.textContent || ""
+    }
+  };
+})()`;
+
+const ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION = `(async () => {
+  const workroom = document.querySelector("#workroom");
+  const controlRoom = document.querySelector("#control-room");
+  const openAccount = document.querySelector("[data-open-account]");
+  if (!workroom || !controlRoom || !openAccount) return null;
+  const calls = [];
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function (options) {
+    calls.push(options || null);
+    return original.call(this, options);
+  };
+  try {
+    openAccount.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+  return {
+    accountVisible: !controlRoom.hidden,
+    behaviors: calls.map((options) => options && options.behavior || "auto"),
+    domOrderAligned: workroom.nextElementSibling === controlRoom,
+    focusName: document.activeElement?.getAttribute("name") || "",
+    renderedOrderAligned:
+      workroom.getBoundingClientRect().top < controlRoom.getBoundingClientRect().top
+  };
+})()`;
+
+const SPARK_EXERCISE_EXPRESSION = `(async () => {
+  const maker = document.querySelector("#spark-maker");
+  const set = (name, value) => {
+    const control = maker.querySelector('[name="' + name + '"]');
+    control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const click = (selector) => {
+    const control = maker.querySelector(selector);
+    control.click();
+  };
+  set("businessName", "Browser Audit Atelier");
+  set("summary", "Builds carefully bounded digital places from supplied facts.");
+  set("about", "A deterministic browser exercise for the working Spark path.");
+  set("offerings", "Architecture\\nArt direction\\nImplementation");
+  set("location", "New Jersey");
+  set("email", "audit@example.com");
+  set("primaryAction", "email");
+  click('[data-next="vibe"]');
+  const arcane = maker.querySelector('input[name="theme"][value="arcane"]');
+  arcane.checked = true;
+  arcane.dispatchEvent(new Event("input", { bubbles: true }));
+  click('[data-next="truth"]');
+  const confirmation = maker.querySelector("#truth-confirmed");
+  confirmation.checked = true;
+  confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+  const hiddenSummary = maker.querySelector('[name="summary"]');
+  hiddenSummary.value = "Builds carefully bounded digital places after a stale review check.";
+  click("#make-preview");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const staleTruth = {
+    previewVisible: !maker.querySelector('[data-step="preview"]').hidden,
+    errorsVisible: !maker.querySelector("#spark-errors").hidden,
+    confirmationChecked: confirmation.checked,
+    reviewUpdated: maker.querySelector("#spark-truth-review").textContent.includes("stale review check")
+  };
+  confirmation.checked = true;
+  confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+  click("#make-preview");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const first = {
+    previewVisible: !maker.querySelector('[data-step="preview"]').hidden,
+    srcdocLength: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "").length,
+    primaryAction: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "")
+      .includes('class="action primary" href="mailto:audit@example.com"'),
+    versions: maker.querySelectorAll("#spark-version-list li").length,
+    downloadEnabled: !maker.querySelector("#download-version").disabled
+  };
+  click("[data-edit-facts]");
+  set("summary", "Builds memorable digital places from explicit reviewed facts.");
+  click('[data-next="vibe"]');
+  click('[data-next="truth"]');
+  confirmation.checked = true;
+  confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+  click("#make-preview");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const undo = maker.querySelector("#previous-version");
+  const second = {
+    versions: maker.querySelectorAll("#spark-version-list li").length,
+    undoEnabled: !undo.disabled
+  };
+  undo.click();
+  const afterUndo = {
+    status: maker.querySelector("#spark-version-status").textContent,
+    selected: maker.querySelectorAll('#spark-version-list button[aria-current="true"]').length
+  };
+  click("[data-edit-facts]");
+  set("summary", "Builds a third branch without deleting either earlier version.");
+  click('[data-next="vibe"]');
+  click('[data-next="truth"]');
+  confirmation.checked = true;
+  confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+  click("#make-preview");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const branch = {
+    versions: maker.querySelectorAll("#spark-version-list li").length,
+    selected: maker.querySelectorAll('#spark-version-list button[aria-current="true"]').length
+  };
+  return { first, second, afterUndo, branch, staleTruth };
+})()`;
+
+const HIVE_EXERCISE_EXPRESSION = `(() => {
+  const root = document.querySelector("[data-hive-planner]");
+  return Array.from(root.querySelectorAll("[data-hive-cell]")).map((button) => {
+    button.click();
+    const output = root.querySelector("[data-hive-output]");
+    const cellId = button.getAttribute("data-hive-cell");
+    const blueprint = window.SiteSourceryHivePlanner.createBlueprint(cellId);
+    const actions = Array.from(root.querySelectorAll("[data-hive-action]"));
+    const pause = root.querySelector("[data-hive-pause]");
+    pause.click();
+    const paused = {
+      root: root.getAttribute("data-hive-paused"),
+      pressed: pause.getAttribute("aria-pressed"),
+      label: pause.textContent
+    };
+    pause.click();
+    return {
+      requested: cellId,
+      active: root.getAttribute("data-hive-active"),
+      outputCell: output.getAttribute("data-hive-output-cell"),
+      selected: root.querySelectorAll('[data-hive-selected="true"]').length,
+      schema: blueprint.schema,
+      status: blueprint.status,
+      liveIntegration: blueprint.liveIntegration,
+      titleMatches: root.querySelector("[data-hive-title]").textContent === blueprint.cell.label,
+      triggerMatches: root.querySelector("[data-hive-trigger]").textContent === blueprint.trigger,
+      boundaryMatches: root.querySelector("[data-hive-boundary]").textContent === blueprint.hardBoundary,
+      actionsMatch: actions.length === blueprint.allowedActions.length
+        && actions.every((item, index) => item.textContent === blueprint.allowedActions[index]),
+      downloadPresent: Boolean(root.querySelector("[data-hive-download]")),
+      paused,
+      resumed: root.getAttribute("data-hive-paused") === "false"
+        && pause.getAttribute("aria-pressed") === "false"
+    };
+  });
+})()`;
+
+export const START_INITIAL_TABLE = Object.freeze([
+  {
+    key: "website",
+    label: "A website",
+    note: "Make a new site or safely replace an existing one.",
+  },
+  {
+    key: "system",
+    label: "A working system",
+    note: "Stop a repetitive handoff from falling through.",
+  },
+  {
+    key: "service",
+    label: "A supporting service",
+    note: "Assessment, domains, email, care, commerce, interfaces, studio work, or connections.",
+  },
+]);
+
+export const START_BRANCH_TABLE = Object.freeze([
+  {
+    key: "website",
+    question: "Is this a new website or a replacement?",
+    options: [
+      {
+        key: "website-new",
+        label: "A new website",
+        note: "There is no existing website to replace: no URLs need preserving, no content needs migrating, and no provider cutover needs managing. Brochure copy or brand facts can still be entered manually.",
+      },
+      {
+        key: "website-replace",
+        label: "Replace an existing site",
+        note: "Something already exists and the change may involve migration or cutover.",
+      },
+    ],
+  },
+  {
+    key: "website-new",
+    question: "How do you want the new website made?",
+    options: [
+      {
+        key: "custom",
+        label: "Make it for me",
+        note: "I want professional judgment, art direction, delivery, or a human revision loop.",
+      },
+      {
+        key: "website-self-service",
+        label: "Let me make one bounded page",
+        note: "I will enter the facts or reusable source material manually; no existing URLs need preserving, no content needs migrating, and no provider cutover needs managing.",
+      },
+    ],
+  },
+  {
+    key: "website-self-service",
+    question: "Does the exact self-service boundary fit?",
+    options: [
+      {
+        key: "abracadabra",
+        label: "Yes · no live-site replacement risk",
+        note: "One page and manual entry fit; no existing URLs need preserving, no content needs migrating, no provider cutover needs managing, and no integrations or human revision are required.",
+      },
+      {
+        key: "self-service-uncertain",
+        label: "I am not completely sure",
+        note: "Keep the decision with a person instead of risking lost content or URLs.",
+      },
+    ],
+  },
+  {
+    key: "website-replace",
+    question: "What must survive or change?",
+    options: [
+      {
+        key: "replace-redirects",
+        label: "Existing URLs or search history",
+        note: "I need an inventory, redirect map, or search-safe replacement.",
+      },
+      {
+        key: "replace-migration",
+        label: "Existing pages, words, or media",
+        note: "Content must be reviewed, moved, reshaped, or preserved.",
+      },
+      {
+        key: "replace-cutover",
+        label: "Providers, integrations, or cutover",
+        note: "The existing host, domain, forms, tools, or release timing matter.",
+      },
+      {
+        key: "replace-uncertain",
+        label: "I do not know what must survive",
+        note: "I want a human to inspect the replacement risk before choosing a product.",
+      },
+    ],
+  },
+  {
+    key: "system",
+    question: "Which handoff keeps falling through?",
+    options: [
+      {
+        key: "hive-missed-call",
+        label: "Missed calls",
+        note: "A legitimate caller reaches nobody and the reason may disappear.",
+      },
+      {
+        key: "hive-booking",
+        label: "Booking",
+        note: "Service, timing, location, or confirmation needs a bounded handoff.",
+      },
+      {
+        key: "hive-review-request",
+        label: "Review requests",
+        note: "Eligible customers need one neutral, permission-aware request.",
+      },
+      {
+        key: "hive-after-hours",
+        label: "After-hours questions",
+        note: "People need approved facts without invented answers or urgency.",
+      },
+      {
+        key: "hive-follow-up",
+        label: "Follow-up",
+        note: "A promised next step keeps disappearing during the day.",
+      },
+      {
+        key: "hive-getting-paid",
+        label: "Getting paid",
+        note: "An exact invoice needs a factual reminder and dispute path.",
+      },
+      {
+        key: "commission",
+        label: "A different workflow",
+        note: "The channels, rules, or handoff need to fit my business.",
+      },
+    ],
+  },
+  {
+    key: "service",
+    question: "Which supporting job is closest?",
+    options: [
+      {
+        key: "assessment",
+        label: "Website assessment",
+        note: "I want evidence and ranked findings before choosing repairs.",
+      },
+      {
+        key: "foundations",
+        label: "Website foundations",
+        note: "Structure, accessibility, speed, metadata, or release quality.",
+      },
+      {
+        key: "care",
+        label: "Care",
+        note: "Maintenance, changes, monitoring, recovery, handoff, and exit.",
+      },
+      {
+        key: "domains",
+        label: "Domains",
+        note: "Buy, connect, renew, or transfer an address.",
+      },
+      {
+        key: "email",
+        label: "Business email",
+        note: "Addresses, routing, authentication, recovery, or migration.",
+      },
+      {
+        key: "commerce",
+        label: "Commerce",
+        note: "Catalog, buying, fulfillment, receipt, refund, or processor path.",
+      },
+      {
+        key: "interfaces",
+        label: "Interfaces",
+        note: "Focused controls for a phone, tablet, counter, kiosk, or display.",
+      },
+      {
+        key: "studio",
+        label: "Studio",
+        note: "Art direction, illustration, motion, editorial, or a campaign piece.",
+      },
+      {
+        key: "network",
+        label: "Connections",
+        note: "Listings, directories, referrals, resources, or community discovery.",
+      },
+    ],
+  },
+]);
+
+export const START_DECISION_TABLE = Object.freeze([
+  { key: "website-custom", path: ["website", "website-new", "custom"], title: "Custom — made for you", action: "Explore Custom", href: "/custom/", copy: "Choose Custom when the work needs professional judgment, distinctive art direction, migration, integrations, or a human revision loop." },
+  { key: "website-abracadabra", path: ["website", "website-new", "website-self-service", "abracadabra"], title: "Abracadabra — make it yourself", action: "Open the local Abracadabra path", href: "/abracadabra/", copy: "Make and download real HTML for one page from facts you enter in this device-local rehearsal. It neither hosts nor publicly publishes; it does not preserve existing URLs, migrate content, manage provider cutover, change DNS, add integrations, or include human revisions." },
+  { key: "website-self-service-uncertain", path: ["website", "website-new", "website-self-service", "self-service-uncertain"], title: "Ask a human before choosing", action: "Contact the studio", href: "/contact/", copy: "If the one-page, manual-entry boundary is not certain, keep the decision with the studio. Nothing needs to be forced into Abracadabra." },
+  { key: "website-replace-redirects", path: ["website", "website-replace", "replace-redirects"], title: "Custom — preserve the route", action: "Explore Custom", href: "/custom/", copy: "Existing URLs, redirects, and search history make this replacement work. Custom inventories what must survive and plans the cutover." },
+  { key: "website-replace-migration", path: ["website", "website-replace", "replace-migration"], title: "Custom — migrate the content", action: "Explore Custom", href: "/custom/", copy: "Existing pages, words, or media need human inventory, judgment, and migration. Abracadabra does not promise that work." },
+  { key: "website-replace-cutover", path: ["website", "website-replace", "replace-cutover"], title: "Custom — plan the cutover", action: "Explore Custom", href: "/custom/", copy: "Provider changes, integrations, forms, domains, and release timing require an explicit migration and cutover plan." },
+  { key: "website-replace-uncertain", path: ["website", "website-replace", "replace-uncertain"], title: "Start with a human review", action: "Contact the studio", href: "/contact/", copy: "An uncertain replacement stays out of self-service until the existing URLs, content, providers, integrations, and cutover risks are understood." },
+  { key: "system-missed-call", path: ["system", "hive-missed-call"], title: "Hive · Missed-call responder", action: "Inspect missed-call responder", href: "/hive/#missed-call", copy: "Inspect the exact trigger, allowed acknowledgement, consent boundary, human handoff, and cell-level pause for an unanswered call." },
+  { key: "system-booking", path: ["system", "hive-booking"], title: "Hive · Booking guide", action: "Inspect booking guide", href: "/hive/#booking", copy: "Inspect a booking handoff that keeps availability provisional and never claims confirmation without the exact provider receipt." },
+  { key: "system-review-request", path: ["system", "hive-review-request"], title: "Hive · Review request", action: "Inspect review request", href: "/hive/#review-request", copy: "Inspect a neutral review request with eligibility, permission, suppression, and dispute boundaries visible." },
+  { key: "system-after-hours", path: ["system", "hive-after-hours"], title: "Hive · After-hours information", action: "Inspect after-hours information", href: "/hive/#after-hours", copy: "Inspect a bounded information path that answers only from approved facts and routes uncertainty or urgency to a person." },
+  { key: "system-follow-up", path: ["system", "hive-follow-up"], title: "Hive · Follow-up", action: "Inspect follow-up", href: "/hive/#follow-up", copy: "Inspect a permission-aware follow-up that preserves the original purpose, owner, due time, and human decision path." },
+  { key: "system-getting-paid", path: ["system", "hive-getting-paid"], title: "Hive · Getting-paid reminder", action: "Inspect getting-paid reminder", href: "/hive/#getting-paid", copy: "Inspect a factual invoice reminder that fails closed on disputes, credits, identity, or balance uncertainty." },
+  { key: "system-commission", path: ["system", "commission"], title: "Commission a working system", action: "Discuss the system", href: "/contact/", copy: "A commission is the better fit when the channels, rules, providers, interface, or handoff need to match the way your business actually works." },
+  { key: "service-assessment", path: ["service", "assessment"], title: "Website assessment", action: "Explore the assessment", href: "/solutions/#assessment", copy: "Choose the assessment for written, severity-ranked findings with screenshot evidence before remediation is scoped." },
+  { key: "service-foundations", path: ["service", "foundations"], title: "Website foundations", action: "Explore foundations", href: "/solutions/#foundations", copy: "Choose foundations for structure, accessibility, performance, metadata, measurement, or release readiness." },
+  { key: "service-care", path: ["service", "care"], title: "Care", action: "Explore Care", href: "/solutions/#care", copy: "Choose Care for a named maintenance, change, monitoring, recovery, handoff, and exit arrangement." },
+  { key: "service-domains", path: ["service", "domains"], title: "Domains", action: "Explore Domains", href: "/solutions/#domains", copy: "Buy with you named as registrant, connect an address you own, manage renewal, plan a transfer, or license monthly use of a Site Sourcery-owned address." },
+  { key: "service-email", path: ["service", "email"], title: "Business email", action: "Explore business email", href: "/solutions/#email", copy: "Choose business email for address roles, domain authentication, routing, recovery, migration, and exit documentation." },
+  { key: "service-commerce", path: ["service", "commerce"], title: "Commerce", action: "Explore Commerce", href: "/solutions/#commerce", copy: "Choose Commerce for the catalog, buying, fulfillment, receipt, refund, and client-owned processor path." },
+  { key: "service-interfaces", path: ["service", "interfaces"], title: "Interfaces", action: "Explore Interfaces", href: "/solutions/#interfaces", copy: "Choose Interfaces for operator-centered controls, permission-aware states, visible failure, and a manual fallback." },
+  { key: "service-studio", path: ["service", "studio"], title: "Studio", action: "Explore Studio", href: "/solutions/#studio", copy: "Choose Studio for a focused art-direction, illustration, motion, editorial, campaign, or physical-to-digital piece." },
+  { key: "service-network", path: ["service", "network"], title: "Connections", action: "Explore Connections", href: "/solutions/#network", copy: "Choose Connections for local listings, directories, referrals, shared resources, or community discovery with removal explicit." },
+]);
+
+export const START_BACK_TABLE = Object.freeze([
+  { key: "website-to-need", path: ["website"], returnsToNeed: true },
+  { key: "new-to-website", path: ["website", "website-new"], previousBranch: "website", previousQuestion: "Is this a new website or a replacement?" },
+  { key: "self-service-to-new", path: ["website", "website-new", "website-self-service"], previousBranch: "website-new", previousQuestion: "How do you want the new website made?" },
+  { key: "replacement-to-website", path: ["website", "website-replace"], previousBranch: "website", previousQuestion: "Is this a new website or a replacement?" },
+  { key: "system-to-need", path: ["system"], returnsToNeed: true },
+  { key: "service-to-need", path: ["service"], returnsToNeed: true },
+]);
+
+function startInitialControlsPass(snapshot) {
+  return Boolean(
+    snapshot
+    && snapshot.humanHref === "#direct-contact"
+    && snapshot.humanTag === "A"
+    && snapshot.humanText === "Skip the chooser and contact the studio"
+    && snapshot.humanControl?.usable
+    && snapshot.pathsVisible
+    && snapshot.pathsAreButtons
+    && snapshot.pathControls?.length === START_INITIAL_TABLE.length
+    && snapshot.pathControls.every(({ usable }) => usable)
+    && JSON.stringify(snapshot.options) === JSON.stringify(START_INITIAL_TABLE)
+    && snapshot.touchFailures?.length === 0
+  );
+}
+
+const START_EXERCISE_EXPRESSION = `(async () => {
+  const root = document.querySelector("[data-start-chooser]");
+  if (!root) return null;
+  const expectedBranches = ${JSON.stringify(START_BRANCH_TABLE)};
+  const expectedLeaves = ${JSON.stringify(START_DECISION_TABLE)};
+  const backCases = ${JSON.stringify(START_BACK_TABLE)};
+  const settle = () => new Promise((resolve) => {
+    let frames = 0;
+    const inspect = () => {
+      frames += 1;
+      const revealState = root.getAttribute("data-start-reveal");
+      if ((frames >= 2 && revealState !== "pending") || frames >= 24) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(inspect);
+    };
+    requestAnimationFrame(inspect);
+  });
+  const visible = (element) => {
+    if (!element || element.hidden) return false;
+    const style = getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  };
+  const describeRenderedVisibility = (element) => {
+    if (!element) {
+      return {
+        ancestorOpacityVisible: false,
+        browserVisible: false,
+        effectiveVisible: false,
+        pointerEventsEnabled: false,
+        rendered: false
+      };
+    }
+    const rect = element.getBoundingClientRect();
+    let ancestorOpacityVisible = true;
+    let pointerEventsEnabled = true;
+    for (let current = element; current; current = current.parentElement) {
+      const currentStyle = getComputedStyle(current);
+      if (Number.parseFloat(currentStyle.opacity || "0") <= 0) {
+        ancestorOpacityVisible = false;
+      }
+      if (currentStyle.pointerEvents === "none") {
+        pointerEventsEnabled = false;
+      }
+    }
+    const hidden = Boolean(element.closest("[hidden]"));
+    const ariaHidden = Boolean(element.closest('[aria-hidden="true"]'));
+    const inert = Boolean(element.closest("[inert]"));
+    const rendered = Boolean(
+      element.getClientRects().length
+      && rect.width > 0
+      && rect.height > 0
+    );
+    const browserVisible = typeof element.checkVisibility === "function"
+      ? element.checkVisibility({
+        checkOpacity: true,
+        checkVisibilityCSS: true,
+        contentVisibilityAuto: true
+      })
+      : rendered && ancestorOpacityVisible;
+    // This predicate covers effective rendered visibility, but does not claim
+    // detection of visual occlusion or clipping by an overlapping/overflowing
+    // element. Those require a separately specified and tested contract.
+    return {
+      ancestorOpacityVisible,
+      ariaHidden,
+      browserVisible,
+      effectiveVisible: Boolean(
+        browserVisible
+        && ancestorOpacityVisible
+        && !hidden
+        && !ariaHidden
+        && !inert
+        && rendered
+      ),
+      hidden,
+      inert,
+      pointerEventsEnabled,
+      rendered
+    };
+  };
+  const touchFailures = () => Array.from(root.querySelectorAll(
+    "a[href], button, summary, input:not([type='hidden']), select, textarea"
+  ))
+    .filter((element) =>
+      !element.matches(".skip-link")
+      && !element.disabled
+      && element.getAttribute("aria-hidden") !== "true"
+      && visible(element)
+    )
+    .map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        height: Math.round(rect.height * 10) / 10,
+        text: (element.textContent || element.getAttribute("aria-label") || "").trim().slice(0, 80),
+        width: Math.round(rect.width * 10) / 10
+      };
+    })
+    .filter((entry) =>
+      entry.width > 0
+      && entry.height > 0
+      && (entry.width < 44 || entry.height < 44)
+    );
+  const focusVisibility = () => {
+    const element = document.activeElement;
+    const rect = element?.getBoundingClientRect();
+    const rendering = describeRenderedVisibility(element);
+    const header = document.querySelector("[data-header]");
+    const headerBottom = header?.getBoundingClientRect().bottom || 0;
+    if (!rect) return { meaningful: false };
+    const visibleTop = Math.max(rect.top, headerBottom);
+    const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+    const visiblePixels = Math.max(0, visibleBottom - visibleTop);
+    return {
+      bottom: Math.round(rect.bottom * 10) / 10,
+      clearOfHeader: rect.top >= headerBottom + 8,
+      effectiveVisibility: rendering,
+      headerBottom: Math.round(headerBottom * 10) / 10,
+      meaningful: rendering.effectiveVisible
+        && rect.width > 0
+        && rect.height > 0
+        && rect.top >= headerBottom + 8
+        && visiblePixels >= Math.min(rect.height, 88),
+      tag: element?.tagName || "",
+      top: Math.round(rect.top * 10) / 10,
+      viewportHeight: window.innerHeight,
+      visiblePixels: Math.round(visiblePixels * 10) / 10
+    };
+  };
+  const pathButton = (path) => root.querySelector('[data-start-path="' + path + '"]');
+  const answerButton = (answer) => root.querySelector('[data-start-answer="' + answer + '"]');
+  const question = () => root.querySelector("[data-start-question]");
+  const options = root.querySelector("[data-start-options]");
+  const result = () => root.querySelector("[data-start-result]");
+  const restart = () => root.querySelector("[data-start-restart]");
+  const firstPath = pathButton("website");
+  const describeUsableControl = (control) => {
+    const rect = control?.getBoundingClientRect();
+    const style = control ? getComputedStyle(control) : null;
+    const rendering = describeRenderedVisibility(control);
+    const displayVisible = style?.display !== "none";
+    const visibilityVisible = style?.visibility === "visible";
+    const opacityVisible = rendering.ancestorOpacityVisible;
+    const contentVisible = style?.contentVisibility !== "hidden";
+    const hidden = rendering.hidden;
+    const ariaHidden = rendering.ariaHidden;
+    const inert = rendering.inert;
+    const ariaDisabled = Boolean(control?.closest('[aria-disabled="true"]'));
+    const disabled = Boolean(
+      control?.matches(":disabled")
+      || control?.hasAttribute("disabled")
+      || ariaDisabled
+    );
+    const rendered = rendering.rendered;
+    const sequentiallyFocusable = Boolean(control && control.tabIndex >= 0);
+    return {
+      ancestorOpacityVisible: rendering.ancestorOpacityVisible,
+      ariaDisabled,
+      ariaHidden,
+      browserVisible: rendering.browserVisible,
+      contentVisible,
+      disabled,
+      displayVisible,
+      height: Math.round((rect?.height || 0) * 10) / 10,
+      hidden,
+      inert,
+      opacityVisible,
+      pointerEventsEnabled: rendering.pointerEventsEnabled,
+      rendered,
+      sequentiallyFocusable,
+      tabIndex: control?.tabIndex ?? -1,
+      tag: control?.tagName || "",
+      text: (control?.textContent || "").trim().replace(/\\s+/g, " "),
+      top: Math.round((rect?.top || 0) * 10) / 10,
+      type: control?.getAttribute("type") || "",
+      usable: Boolean(
+        control
+        && displayVisible
+        && visibilityVisible
+        && opacityVisible
+        && contentVisible
+        && rendering.effectiveVisible
+        && !hidden
+        && !ariaHidden
+        && !inert
+        && !disabled
+        && rendering.pointerEventsEnabled
+        && rendered
+        && sequentiallyFocusable
+      ),
+      viewportVisiblePixels: Math.round(
+        Math.max(0, Math.min(rect?.bottom || 0, window.innerHeight) - Math.max(rect?.top || 0, 0))
+          * 10
+      ) / 10,
+      visibilityVisible,
+      width: Math.round((rect?.width || 0) * 10) / 10
+    };
+  };
+  const probeUsableControlGuard = (control) => {
+    if (!control) return { afterRestore: null, baseline: null, probes: [] };
+    const originalStyle = control.getAttribute("style");
+    const originalAncestorStyle = root.getAttribute("style");
+    const originalAttributes = new Map(
+      ["hidden", "aria-hidden", "aria-disabled", "inert", "disabled", "tabindex"]
+        .map((name) => [name, control.getAttribute(name)])
+    );
+    const originalAncestorAttributes = new Map(
+      ["hidden", "aria-hidden", "aria-disabled", "inert"]
+        .map((name) => [name, root.getAttribute(name)])
+    );
+    const restore = () => {
+      if (originalStyle == null) control.removeAttribute("style");
+      else control.setAttribute("style", originalStyle);
+      if (originalAncestorStyle == null) root.removeAttribute("style");
+      else root.setAttribute("style", originalAncestorStyle);
+      for (const [name, value] of originalAttributes) {
+        if (value == null) control.removeAttribute(name);
+        else control.setAttribute(name, value);
+      }
+      for (const [name, value] of originalAncestorAttributes) {
+        if (value == null) root.removeAttribute(name);
+        else root.setAttribute(name, value);
+      }
+    };
+    const mutate = (name, apply) => {
+      restore();
+      apply();
+      const description = describeUsableControl(control);
+      return { name, rejected: !description.usable };
+    };
+    const baseline = describeUsableControl(control);
+    const probes = [
+      mutate("display-none", () => { control.style.display = "none"; }),
+      mutate("ancestor-display-none", () => { root.style.display = "none"; }),
+      mutate("visibility-hidden", () => { control.style.visibility = "hidden"; }),
+      mutate("ancestor-visibility-hidden", () => { root.style.visibility = "hidden"; }),
+      mutate("opacity-zero", () => { control.style.opacity = "0"; }),
+      mutate("ancestor-opacity-zero", () => { root.style.opacity = "0"; }),
+      mutate("hidden-attribute", () => { control.setAttribute("hidden", ""); }),
+      mutate("ancestor-hidden-attribute", () => { root.setAttribute("hidden", ""); }),
+      mutate("aria-hidden", () => { control.setAttribute("aria-hidden", "true"); }),
+      mutate("ancestor-aria-hidden", () => { root.setAttribute("aria-hidden", "true"); }),
+      mutate("aria-disabled", () => { control.setAttribute("aria-disabled", "true"); }),
+      mutate("ancestor-aria-disabled", () => { root.setAttribute("aria-disabled", "true"); }),
+      mutate("inert", () => { control.setAttribute("inert", ""); }),
+      mutate("ancestor-inert", () => { root.setAttribute("inert", ""); }),
+      mutate("disabled", () => { control.setAttribute("disabled", ""); }),
+      mutate("negative-tabindex", () => { control.setAttribute("tabindex", "-1"); }),
+      mutate("pointer-events-none", () => { control.style.pointerEvents = "none"; }),
+      mutate("ancestor-pointer-events-none", () => { root.style.pointerEvents = "none"; }),
+      mutate("zero-geometry", () => {
+        for (const property of [
+          "border",
+          "height",
+          "max-height",
+          "max-width",
+          "min-height",
+          "min-width",
+          "padding",
+          "width"
+        ]) {
+          control.style.setProperty(property, "0px", "important");
+        }
+        control.style.setProperty("overflow", "hidden", "important");
+      })
+    ];
+    restore();
+    return {
+      afterRestore: describeUsableControl(control),
+      baseline,
+      probes
+    };
+  };
+  const branchSnapshot = (branchKey, stateKey) => {
+    const answerControls = Array.from(options.querySelectorAll("[data-start-answer]"));
+    return {
+      answerControls: answerControls.map((answer) => ({
+        ...describeUsableControl(answer),
+        key: answer.getAttribute("data-start-answer") || ""
+      })),
+      answerControlsValid: answerControls.every((answer) =>
+        answer.tagName === "BUTTON" && answer.getAttribute("type") === "button"
+      ),
+      answers: answerControls.map((answer) => ({
+        key: answer.getAttribute("data-start-answer") || "",
+        label: (answer.querySelector("strong")?.textContent || "").trim(),
+        note: (answer.querySelector("small")?.textContent || "").trim()
+      })),
+      branchKey,
+      backControl: describeUsableControl(root.querySelector("[data-start-back]")),
+      exactFocus: document.activeElement === question(),
+      focusVisibility: focusVisibility(),
+      key: stateKey,
+      questionText: (question()?.textContent || "").trim(),
+      revealState: root.getAttribute("data-start-reveal") || "",
+      touchFailures: touchFailures()
+    };
+  };
+  const resultSnapshot = (stateKey) => ({
+    branchKey: "",
+    exactFocus: document.activeElement === result(),
+    focusVisibility: focusVisibility(),
+    key: stateKey,
+    revealState: root.getAttribute("data-start-reveal") || "",
+    touchFailures: touchFailures()
+  });
+  const rootStyle = getComputedStyle(root);
+  const initialHumanLink = document.querySelector(".start-direct-link a");
+  const initialControlSnapshot = () => ({
+    humanControl: describeUsableControl(initialHumanLink),
+    humanHref: initialHumanLink?.getAttribute("href") || "",
+    humanTag: initialHumanLink?.tagName || "",
+    humanText: (initialHumanLink?.textContent || "").trim(),
+    options: Array.from(root.querySelectorAll("[data-start-path]")).map((path) => ({
+      key: path.getAttribute("data-start-path") || "",
+      label: (path.querySelector("strong")?.textContent || "").trim(),
+      note: (path.querySelector("small")?.textContent || "").trim()
+    })),
+    pathControls: Array.from(root.querySelectorAll("[data-start-path]")).map((path) => ({
+      ...describeUsableControl(path),
+      key: path.getAttribute("data-start-path") || ""
+    })),
+    pathsAreButtons: ["website", "system", "service"].every((path) => {
+      const control = pathButton(path);
+      return control?.tagName === "BUTTON"
+        && control.getAttribute("type") === "button"
+        && !control.hasAttribute("href");
+    }),
+    pathsVisible: ["website", "system", "service"].every((path) => visible(pathButton(path))),
+    touchFailures: touchFailures()
+  });
+  const controlGuardProbes = probeUsableControlGuard(firstPath);
+  const initial = {
+    ...initialControlSnapshot(),
+    controlGuardProbes,
+    motionStable: rootStyle.opacity === "1"
+      && rootStyle.transform === "none"
+      && rootStyle.transitionDuration.split(",").every((duration) => Number.parseFloat(duration) === 0),
+    visible: visible(root),
+    questionTabindex: question()?.getAttribute("tabindex") || "",
+    resultAriaLive: result()?.getAttribute("aria-live") || "",
+    resultRole: result()?.getAttribute("role") || "",
+    resultTabindex: result()?.getAttribute("tabindex") || "",
+    detailVisible: visible(root.querySelector('[data-start-step="detail"]')),
+    resultVisible: visible(result()),
+  };
+
+  const drive = async (path) => {
+    const missing = [];
+    const states = [];
+    const first = pathButton(path[0]);
+    if (!first) return { missing: ["path:" + path[0]], states };
+    first.click();
+    await settle();
+    states.push(branchSnapshot(path[0], path[0]));
+    for (const [index, answer] of path.slice(1).entries()) {
+      const button = answerButton(answer);
+      if (!button) {
+        missing.push("answer:" + answer);
+        break;
+      }
+      button.scrollIntoView({ block: "center", behavior: "auto" });
+      await settle();
+      button.click();
+      await settle();
+      const stateKey = path.slice(0, index + 2).join(">");
+      states.push(
+        expectedBranches.some(({ key }) => key === answer)
+          ? branchSnapshot(answer, stateKey)
+          : resultSnapshot(stateKey)
+      );
+    }
+    return { missing, states };
+  };
+
+  const reset = async () => {
+    restart()?.click();
+    await settle();
+    return {
+      initialControls: initialControlSnapshot(),
+      needVisible: visible(root.querySelector('[data-start-step="need"]')),
+      detailVisible: visible(root.querySelector('[data-start-step="detail"]')),
+      focusVisibility: focusVisibility(),
+      revealState: root.getAttribute("data-start-reveal") || "",
+      resultVisible: visible(result()),
+      firstPathFocused: document.activeElement === firstPath
+    };
+  };
+
+  const leaves = [];
+  for (const expected of expectedLeaves) {
+    const driven = await drive(expected.path);
+    const resultNode = result();
+    const titleNode = root.querySelector("[data-start-result-title]");
+    const copyNode = root.querySelector("[data-start-result-copy]");
+    const actionNode = root.querySelector("[data-start-result-action]");
+    const humanLink = root.querySelector(".chooser-human a");
+    const outcome = {
+      actionControl: describeUsableControl(actionNode),
+      actionText: (actionNode?.textContent || "").trim(),
+      actionTag: actionNode?.tagName || "",
+      copy: (copyNode?.textContent || "").trim(),
+      focused: document.activeElement === resultNode || document.activeElement === titleNode,
+      href: actionNode?.getAttribute("href") || "",
+      humanControl: describeUsableControl(humanLink),
+      humanHref: humanLink?.getAttribute("href") || "",
+      humanTag: humanLink?.tagName || "",
+      humanText: (humanLink?.textContent || "").trim(),
+      key: expected.key,
+      missing: driven.missing,
+      focusVisibility: focusVisibility(),
+      revealState: root.getAttribute("data-start-reveal") || "",
+      restartVisible: visible(restart()),
+      restartControl: describeUsableControl(restart()),
+      states: driven.states,
+      title: (titleNode?.textContent || "").trim(),
+      touchFailures: touchFailures(),
+      visible: visible(resultNode)
+    };
+    outcome.afterRestart = await reset();
+    leaves.push(outcome);
+  }
+
+  const backs = [];
+  for (const backCase of backCases) {
+    const driven = await drive(backCase.path);
+    const beforeQuestion = (question()?.textContent || "").trim();
+    const back = root.querySelector("[data-start-back]");
+    const backVisible = visible(back);
+    const backControl = describeUsableControl(back);
+    back?.click();
+    await settle();
+    const returnedAnswerControls = Array.from(options.querySelectorAll("[data-start-answer]"));
+    backs.push({
+      answerControls: returnedAnswerControls.map((answer) => ({
+        ...describeUsableControl(answer),
+        key: answer.getAttribute("data-start-answer") || ""
+      })),
+      answerControlsValid: returnedAnswerControls
+        .every((answer) => answer.tagName === "BUTTON" && answer.getAttribute("type") === "button"),
+      answers: returnedAnswerControls.map((answer) => ({
+        key: answer.getAttribute("data-start-answer") || "",
+        label: (answer.querySelector("strong")?.textContent || "").trim(),
+        note: (answer.querySelector("small")?.textContent || "").trim()
+      })),
+      backVisible,
+      backControl,
+      beforeQuestion,
+      detailVisible: visible(root.querySelector('[data-start-step="detail"]')),
+      firstPathFocused: document.activeElement === firstPath,
+      focusedQuestion: document.activeElement === question(),
+      focusVisibility: focusVisibility(),
+      key: backCase.key,
+      initialControls: backCase.returnsToNeed ? initialControlSnapshot() : null,
+      missing: driven.missing,
+      needVisible: visible(root.querySelector('[data-start-step="need"]')),
+      previousQuestion: (question()?.textContent || "").trim(),
+      revealState: root.getAttribute("data-start-reveal") || "",
+      resultVisible: visible(result()),
+      states: driven.states,
+      touchFailures: touchFailures()
+    });
+    if (!backCase.returnsToNeed) await reset();
+  }
+
+  return { backs, initial, leaves };
+})()`;
+
+function expectedCanonical(route) {
+  return new URL(route, "https://sitesourcery.com/").href;
+}
+
+export async function auditBrowser({
+  artifactRoot = DEFAULT_ARTIFACT_ROOT,
+  origin,
+  profile = "vnext",
+  routes = CANONICAL_ROUTES,
+} = {}) {
+  if (profile !== "vnext" && profile !== "generic") {
+    throw new Error(`unknown browser-audit profile: ${profile}`);
+  }
+  const binary = await chromiumPath();
+  const absoluteArtifactRoot = path.resolve(artifactRoot);
+  await access(absoluteArtifactRoot);
+  const artifactServer = origin ? null : await startArtifactServer(absoluteArtifactRoot);
+  const auditOrigin = origin ?? artifactServer.origin;
+  const port = 19000 + (process.pid % 10000);
+  const browser = spawn(binary, [
+    "--headless",
+    "--no-sandbox",
+    "--hide-scrollbars",
+    "--disable-gpu",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--no-first-run",
+    `--remote-debugging-address=127.0.0.1`,
+    `--remote-debugging-port=${port}`,
+    "about:blank",
+  ], {
+    cwd: absoluteArtifactRoot,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let browserErrors = "";
+  browser.stderr.setEncoding("utf8");
+  browser.stderr.on("data", (chunk) => {
+    browserErrors += chunk;
+  });
+
+  let cdp;
+  try {
+    const socketUrl = await waitForTarget(port, browser);
+    cdp = connectCdp(socketUrl);
+    await cdp.send("Page.enable");
+    await cdp.send("Runtime.enable");
+
+    const runtimeErrors = [];
+    cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
+      runtimeErrors.push(exceptionDetails?.text ?? "browser exception");
+    });
+    cdp.on("Runtime.consoleAPICalled", ({ type, args }) => {
+      if (type !== "error" && type !== "assert") return;
+      runtimeErrors.push(args?.map((entry) => entry.value ?? entry.description ?? "").join(" ") || type);
+    });
+
+    const errors = [];
+    const results = [];
+    const viewportPlans = profile === "vnext"
+      ? [...VIEWPORTS, ...HIVE_COMPONENT_VIEWPORTS]
+      : VIEWPORTS;
+    for (const viewport of viewportPlans) {
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 1,
+        mobile: viewport.mobile,
+      });
+      const viewportRoutes = viewport.componentRoute
+        ? routes.filter((route) => route === viewport.componentRoute)
+        : routes;
+      for (const route of viewportRoutes) {
+        const beforeErrors = runtimeErrors.length;
+        await navigate(cdp, new URL(route, `${auditOrigin}/`).href);
+        await cdp.send("Runtime.evaluate", {
+          expression: SETTLE_IMAGES_EXPRESSION,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const evaluated = await cdp.send("Runtime.evaluate", {
+          expression: AUDIT_EXPRESSION,
+          returnByValue: true,
+        });
+        const result = evaluated.result?.value;
+        if (!result) {
+          errors.push(`${viewport.label} ${route}: browser audit returned no value`);
+          continue;
+        }
+        const overflow = result.documentWidth - result.viewportWidth;
+        if (result.readyState !== "complete") errors.push(`${viewport.label} ${route}: document did not complete`);
+        if (result.h1Count !== 1) errors.push(`${viewport.label} ${route}: expected one h1; found ${result.h1Count}`);
+        if (profile === "vnext") {
+          if (result.smallText.length) {
+            errors.push(
+              `${viewport.label} ${route}: rendered text fell below 12px `
+              + `${JSON.stringify(result.smallText)}`,
+            );
+          }
+          if (
+            ["phone-390", "tablet-768"].includes(viewport.label)
+            && result.touchTargetFailures.length
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: visible actionable targets fell below 44px `
+              + `${JSON.stringify(result.touchTargetFailures)}`,
+            );
+          }
+          if (result.helpHeadingLeading.some((entry) =>
+            !Number.isFinite(entry.fontSize)
+            || !Number.isFinite(entry.lineHeight)
+            || entry.lineHeight / entry.fontSize > 1.1
+          )) {
+            errors.push(
+              `${viewport.label} ${route}: Abracadabra help heading leading is too loose `
+              + `${JSON.stringify(result.helpHeadingLeading)}`,
+            );
+          }
+          if (result.aboutAccountabilitySizes.some((size) =>
+            !Number.isFinite(size) || size < 15.2
+          )) {
+            errors.push(
+              `${viewport.label} ${route}: About accountability text is below its 15.2px body floor `
+              + `${JSON.stringify(result.aboutAccountabilitySizes)}`,
+            );
+          }
+          if (
+            route === "/abracadabra/"
+            && (!result.abracadabraHeroAction || !result.abracadabraHeroAction.meaningful)
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: primary hero action is not meaningfully visible in the first viewport `
+              + `${JSON.stringify(result.abracadabraHeroAction)}`,
+            );
+          }
+          if (result.flattenedCreativeSpecimens !== 0) {
+            errors.push(
+              `${viewport.label} ${route}: Custom comparison text is flattened by role=img`,
+            );
+          }
+          if (
+            route === "/work/"
+            && (
+              result.workProofDisclosures.length !== 2
+              || result.workProofDisclosures.some((entry) =>
+                entry.missing
+                || entry.fontSize < 12
+                || entry.overlapsScreen
+                || !entry.text.startsWith("Fictional demonstration · ")
+              )
+            )
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: fictional proof disclosure obscures or weakens the proof `
+              + `${JSON.stringify(result.workProofDisclosures)}`,
+            );
+          }
+          if (result.primaryNavCount !== 1) {
+            errors.push(`${viewport.label} ${route}: expected one primary nav; found ${result.primaryNavCount}`);
+          }
+          const usesDisclosureMenu = viewport.width <= 928;
+          if (
+            !result.menuReady
+            || !result.menuReady.button
+            || !result.menuReady.menu
+            || result.menuReady.links < 1
+          ) {
+            errors.push(`${viewport.label} ${route}: shared menu controls are incomplete`);
+          } else if (usesDisclosureMenu) {
+            if (
+              result.menuReady.buttonDisplay === "none"
+              || result.menuReady.expanded !== "false"
+              || result.menuReady.open
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: mobile menu did not start as a closed visible disclosure`,
+              );
+            } else {
+              const exercised = await cdp.send("Runtime.evaluate", {
+                expression: MENU_EXERCISE_EXPRESSION,
+                awaitPromise: true,
+                returnByValue: true,
+              });
+              const menuFlow = exercised.result?.value;
+              if (
+                exercised.exceptionDetails
+                || !menuFlow
+                || menuFlow.opened.expanded !== "true"
+                || !menuFlow.opened.open
+                || !menuFlow.opened.firstLinkFocused
+                || !menuFlow.opened.rendered
+                || menuFlow.escaped.expanded !== "false"
+                || menuFlow.escaped.open
+                || !menuFlow.escaped.buttonFocused
+                || menuFlow.selected.expanded !== "false"
+                || menuFlow.selected.open
+              ) {
+                errors.push(
+                  `${viewport.label} ${route}: mobile menu open/Escape/select exercise failed `
+                  + `${JSON.stringify(menuFlow ?? exercised.exceptionDetails ?? null)}`,
+                );
+              }
+              if (viewport.phone && menuFlow) {
+                if (
+                  menuFlow.opened.menuLeft < -1
+                  || menuFlow.opened.menuRight > result.viewportWidth + 1
+                ) {
+                  errors.push(
+                    `${viewport.label} ${route}: opened primary menu escaped the viewport `
+                    + `${JSON.stringify({
+                      left: menuFlow.opened.menuLeft,
+                      right: menuFlow.opened.menuRight,
+                      viewportWidth: result.viewportWidth,
+                    })}`,
+                  );
+                }
+                if (
+                  menuFlow.opened.headerOverflow.bounds.length
+                  || menuFlow.opened.headerOverflow.internal.length
+                ) {
+                  errors.push(
+                    `${viewport.label} ${route}: opened header descendant overflow `
+                    + `${JSON.stringify(menuFlow.opened.headerOverflow)}`,
+                  );
+                }
+                if (
+                  menuFlow.opened.destinations.length !== result.menuReady.links
+                  || menuFlow.opened.destinations.some((destination) =>
+                    !destination.horizontallyContained
+                    || !destination.verticallyContained
+                  )
+                ) {
+                  errors.push(
+                    `${viewport.label} ${route}: a primary-nav destination could not be `
+                    + `contained in the opened menu viewport `
+                    + `${JSON.stringify(menuFlow.opened.destinations)}`,
+                  );
+                }
+              }
+            }
+          } else if (result.menuReady.buttonDisplay !== "none") {
+            errors.push(`${viewport.label} ${route}: desktop menu button should be hidden`);
+          }
+          if (route === "/solutions/" && viewport.label === "phone-390") {
+            const exercised = await cdp.send("Runtime.evaluate", {
+              expression: SOLUTIONS_SHELF_EXERCISE_EXPRESSION,
+              awaitPromise: true,
+              returnByValue: true,
+            });
+            const shelf = exercised.result?.value;
+            if (
+              exercised.exceptionDetails
+              || !shelf
+              || shelf.hash !== "#service-shelf"
+              || shelf.eyebrowTop < shelf.obstructionBottom - 1
+              || shelf.headingTop < shelf.obstructionBottom - 1
+              || shelf.headingBottom <= shelf.headingTop
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: service-shelf primary anchor is obscured `
+                + `${JSON.stringify(shelf ?? exercised.exceptionDetails ?? null)}`,
+              );
+            }
+          }
+        }
+        if (
+          viewport.phone
+          && (result.headerOverflow.bounds.length || result.headerOverflow.internal.length)
+        ) {
+          errors.push(
+            `${viewport.label} ${route}: closed header descendant overflow `
+            + `${JSON.stringify(result.headerOverflow)}`,
+          );
+        }
+        if (overflow > 1 && result.reachableX > 1) {
+          errors.push(
+            `${viewport.label} ${route}: horizontal document overflow is ${overflow}px; `
+            + `chain ${JSON.stringify(result.widthChain)}; `
+            + `wide elements ${JSON.stringify(result.wideElements)}`,
+          );
+        }
+        if (result.brokenImages.length) {
+          errors.push(`${viewport.label} ${route}: broken images ${result.brokenImages.join(", ")}`);
+        }
+        if (profile === "vnext" && result.loadedBytes > ROUTE_TRANSFER_BUDGET_BYTES) {
+          errors.push(
+            `${viewport.label} ${route}: loaded ${result.loadedBytes} bytes; `
+            + `route budget is ${ROUTE_TRANSFER_BUDGET_BYTES}`,
+          );
+        }
+        if (result.canonical !== expectedCanonical(route)) {
+          errors.push(`${viewport.label} ${route}: wrong canonical ${result.canonical}`);
+        }
+        if (profile === "vnext" && result.hiveReady) {
+          if (
+            result.hiveReady.enhanced !== "true"
+            || result.hiveReady.controls !== 6
+            || result.hiveReady.outputLength < 100
+          ) {
+            errors.push(`${viewport.label} ${route}: Hive planner did not fully enhance`);
+          }
+          if (
+            result.hiveReady.outputLive
+            || !result.hiveReady.conciseLive
+            || result.hiveReady.conciseLive.role !== "status"
+            || result.hiveReady.conciseLive.politeness !== "polite"
+            || result.hiveReady.conciseLive.atomic !== "true"
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: Hive selection announcement is not concise `
+              + `${JSON.stringify(result.hiveReady)}`,
+            );
+          }
+          if (
+            viewport.componentRoute === "/hive/"
+            && (
+              result.hiveReady.plannerColumns !== 1
+              || result.hiveReady.blueprintColumns !== 1
+              || result.hiveReady.titleWidth < 200
+              || result.hiveReady.plannerHeight > 4000
+            )
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: Hive component did not collapse safely `
+              + `${JSON.stringify(result.hiveReady)}`,
+            );
+          }
+          const exercise = await cdp.send("Runtime.evaluate", {
+            expression: HIVE_EXERCISE_EXPRESSION,
+            returnByValue: true,
+          });
+          const cells = exercise.result?.value;
+          if (
+            exercise.exceptionDetails
+            || !Array.isArray(cells)
+            || cells.length !== 6
+            || cells.some((cell) =>
+              cell.requested !== cell.active
+              || cell.requested !== cell.outputCell
+              || cell.selected !== 1
+              || cell.schema !== "sitesourcery.hive-blueprint.v1"
+              || cell.status !== "planning_only"
+              || cell.liveIntegration !== false
+              || !cell.titleMatches
+              || !cell.triggerMatches
+              || !cell.boundaryMatches
+              || !cell.actionsMatch
+              || !cell.downloadPresent
+              || cell.paused.root !== "true"
+              || cell.paused.pressed !== "true"
+              || cell.paused.label !== "Resume this cell"
+              || !cell.resumed
+            )
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: six-cell Hive exercise failed `
+              + `${JSON.stringify(cells ?? exercise.exceptionDetails ?? null)}`,
+            );
+          }
+        }
+        if (profile === "vnext" && result.sparkReady) {
+          if (
+            result.sparkReady.inert
+            || result.sparkReady.disabled !== "false"
+            || result.sparkReady.compiler !== "object"
+          ) {
+            errors.push(`${viewport.label} ${route}: Abracadabra Spark did not fully boot`);
+          }
+          const guestExercise = await cdp.send("Runtime.evaluate", {
+            expression: GUEST_FIRST_EXERCISE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const guestFlow = guestExercise.result?.value;
+          if (
+            guestExercise.exceptionDetails
+            || !guestFlow
+            || !guestFlow.initial.accountHidden
+            || !guestFlow.initial.domOrderAligned
+            || !guestFlow.initial.makerVisible
+            || !guestFlow.initial.returningEnabled
+            || !guestFlow.preview.accountHidden
+            || guestFlow.preview.versionCount !== 1
+            || guestFlow.preview.srcdocLength < 1000
+            || !guestFlow.saveChoice.accountVisible
+            || !guestFlow.saveChoice.createPanelVisible
+            || !guestFlow.saveChoice.domOrderAligned
+            || guestFlow.saveChoice.focusName !== "accountName"
+            || !guestFlow.saveChoice.renderedOrderAligned
+            || !guestFlow.adopted.activeProjectFocused
+            || !guestFlow.adopted.activeProjectVisible
+            || guestFlow.adopted.releaseCount !== 1
+            || !guestFlow.adopted.status.includes("reviewed guest preview was carried into it")
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: guest-first preview and project adoption failed `
+              + `${JSON.stringify(guestFlow ?? guestExercise.exceptionDetails ?? null)}`,
+            );
+          }
+          const controllerExercise = await cdp.send("Runtime.evaluate", {
+            expression: CONTROLLER_DRAFT_EXERCISE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const controllerFlow = controllerExercise.result?.value;
+          const firstSentinel = `belongs-to-first-${viewport.width}`;
+          const secondSentinel = `belongs-to-second-${viewport.width}`;
+          if (
+            controllerExercise.exceptionDetails
+            || !controllerFlow
+            || !controllerFlow.afterSwitch.activeSecond
+            || controllerFlow.afterSwitch.firstSummary !== firstSentinel
+            || controllerFlow.afterSwitch.secondSummary !== null
+            || controllerFlow.sameProject.firstSummary !== firstSentinel
+            || controllerFlow.sameProject.secondSummary !== secondSentinel
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: cross-project draft isolation failed `
+              + `${JSON.stringify(controllerFlow ?? controllerExercise.exceptionDetails ?? null)}`,
+            );
+          }
+          const exercise = await cdp.send("Runtime.evaluate", {
+            expression: SPARK_EXERCISE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const flow = exercise.result?.value;
+          if (
+            exercise.exceptionDetails
+            || !flow
+            || flow.staleTruth.previewVisible
+            || !flow.staleTruth.errorsVisible
+            || flow.staleTruth.confirmationChecked
+            || !flow.staleTruth.reviewUpdated
+            || !flow.first.previewVisible
+            || flow.first.srcdocLength < 1000
+            || !flow.first.primaryAction
+            || flow.first.versions !== 1
+            || !flow.first.downloadEnabled
+            || flow.second.versions !== 2
+            || !flow.second.undoEnabled
+            || !/^Undone\. Version 1/u.test(flow.afterUndo.status)
+            || flow.afterUndo.selected !== 1
+            || flow.branch.versions !== 3
+            || flow.branch.selected !== 1
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: full Spark make/revise/undo exercise failed `
+              + `${JSON.stringify(flow ?? exercise.exceptionDetails ?? null)}`,
+            );
+          }
+        }
+        if (profile === "vnext" && route === "/start/" && !result.startReady) {
+          errors.push(`${viewport.label} ${route}: Start chooser did not initialize`);
+        }
+        if (profile === "vnext" && result.startReady) {
+          if (
+            !result.startReady.visible
+            || result.startReady.paths.join(",") !== "website,system,service"
+            || !result.startReady.pathsVisible
+            || result.startReady.detailVisible
+            || result.startReady.resultVisible
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: Start chooser did not begin on its complete path step `
+              + `${JSON.stringify(result.startReady)}`,
+            );
+          }
+          const exercise = await cdp.send("Runtime.evaluate", {
+            expression: START_EXERCISE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const flow = exercise.result?.value;
+          if (exercise.exceptionDetails || !flow) {
+            errors.push(
+              `${viewport.label} ${route}: Start decision-table exercise failed to run `
+              + `${JSON.stringify(flow ?? exercise.exceptionDetails ?? null)}`,
+            );
+          } else {
+            if (
+              !flow.initial.visible
+              || !startInitialControlsPass(flow.initial)
+              || !flow.initial.motionStable
+              || !flow.initial.controlGuardProbes.baseline.usable
+              || !flow.initial.controlGuardProbes.afterRestore.usable
+              || flow.initial.controlGuardProbes.probes.length !== 19
+              || !flow.initial.controlGuardProbes.probes.every(({ rejected }) => rejected)
+              || flow.initial.questionTabindex !== "-1"
+              || flow.initial.resultTabindex !== "-1"
+              || flow.initial.resultRole !== "status"
+              || flow.initial.resultAriaLive !== "polite"
+              || flow.initial.detailVisible
+              || flow.initial.resultVisible
+              || flow.initial.touchFailures.length
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: Start initial state failed `
+                + `${JSON.stringify(flow.initial)}`,
+              );
+            }
+            if (
+              flow.leaves.length !== START_DECISION_TABLE.length
+              || flow.leaves.map(({ key }) => key).join(",")
+                !== START_DECISION_TABLE.map(({ key }) => key).join(",")
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: Start decision leaf ledger drifted `
+                + `${JSON.stringify(flow.leaves.map(({ key }) => key))}`,
+              );
+            }
+            for (const expected of START_DECISION_TABLE) {
+              const actual = flow.leaves.find(({ key }) => key === expected.key);
+              const stateTouchFailures = actual?.states
+                ?.filter(({ touchFailures }) => touchFailures.length) ?? [];
+              const stateVisibilityFailures = actual?.states
+                ?.filter(({ focusVisibility }) => !focusVisibility.meaningful) ?? [];
+              const stateRevealFailures = actual?.states
+                ?.filter(({ revealState }) => revealState !== "ready") ?? [];
+              const stateFocusFailures = actual?.states
+                ?.filter(({ exactFocus }) => !exactFocus) ?? [];
+              const stateControlFailures = actual?.states
+                ?.filter((state) =>
+                  state.branchKey
+                  && (
+                    !state.answerControlsValid
+                    || !state.answerControls.every(({ usable }) => usable)
+                    || !state.backControl.usable
+                  )
+                ) ?? [];
+              const stateBranchFailures = actual?.states?.filter((state) => {
+                if (!state.branchKey) return false;
+                const branch = START_BRANCH_TABLE.find(({ key }) => key === state.branchKey);
+                return !branch
+                  || state.questionText !== branch.question
+                  || JSON.stringify(state.answers) !== JSON.stringify(branch.options);
+              }) ?? [];
+              if (
+                !actual
+                || actual.missing.length
+                || !actual.visible
+                || !actual.focused
+                || !actual.focusVisibility.meaningful
+                || actual.revealState !== "ready"
+                || actual.actionTag !== "A"
+                || !actual.actionControl.usable
+                || actual.actionControl.viewportVisiblePixels
+                  < Math.min(actual.actionControl.height, 44)
+                || actual.humanHref !== "#direct-contact"
+                || actual.humanTag !== "A"
+                || actual.humanText !== "I would rather ask a human"
+                || !actual.humanControl.usable
+                || actual.restartControl.tag !== "BUTTON"
+                || actual.restartControl.type !== "button"
+                || actual.restartControl.text !== "Start over"
+                || !actual.restartControl.usable
+                || actual.title !== expected.title
+                || actual.actionText !== expected.action
+                || actual.href !== expected.href
+                || actual.copy !== expected.copy
+                || !actual.restartVisible
+                || actual.touchFailures.length
+                || stateTouchFailures.length
+                || stateVisibilityFailures.length
+                || stateRevealFailures.length
+                || stateFocusFailures.length
+                || stateControlFailures.length
+                || stateBranchFailures.length
+                || !actual.afterRestart.needVisible
+                || actual.afterRestart.detailVisible
+                || actual.afterRestart.resultVisible
+                || !actual.afterRestart.firstPathFocused
+                || !actual.afterRestart.focusVisibility.meaningful
+                || actual.afterRestart.revealState !== "ready"
+                || !startInitialControlsPass(actual.afterRestart.initialControls)
+              ) {
+                errors.push(
+                  `${viewport.label} ${route}: Start leaf ${expected.key} failed `
+                  + `${JSON.stringify({
+                    actual,
+                    expected,
+                    stateBranchFailures,
+                    stateControlFailures,
+                    stateFocusFailures,
+                    stateRevealFailures,
+                    stateTouchFailures,
+                    stateVisibilityFailures,
+                  })}`,
+                );
+              }
+            }
+            if (
+              flow.backs.length !== START_BACK_TABLE.length
+              || flow.backs.map(({ key }) => key).join(",")
+                !== START_BACK_TABLE.map(({ key }) => key).join(",")
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: Start Back-state ledger drifted `
+                + `${JSON.stringify(flow.backs.map(({ key }) => key))}`,
+              );
+            }
+            for (const expected of START_BACK_TABLE) {
+              const actual = flow.backs.find(({ key }) => key === expected.key);
+              const stateTouchFailures = actual?.states
+                ?.filter(({ touchFailures }) => touchFailures.length) ?? [];
+              const stateVisibilityFailures = actual?.states
+                ?.filter(({ focusVisibility }) => !focusVisibility.meaningful) ?? [];
+              const stateRevealFailures = actual?.states
+                ?.filter(({ revealState }) => revealState !== "ready") ?? [];
+              const stateFocusFailures = actual?.states
+                ?.filter(({ exactFocus }) => !exactFocus) ?? [];
+              const stateControlFailures = actual?.states
+                ?.filter((state) =>
+                  state.branchKey
+                  && (
+                    !state.answerControlsValid
+                    || !state.answerControls.every(({ usable }) => usable)
+                    || !state.backControl.usable
+                  )
+                ) ?? [];
+              const stateBranchFailures = actual?.states?.filter((state) => {
+                if (!state.branchKey) return false;
+                const branch = START_BRANCH_TABLE.find(({ key }) => key === state.branchKey);
+                return !branch
+                  || state.questionText !== branch.question
+                  || JSON.stringify(state.answers) !== JSON.stringify(branch.options);
+              }) ?? [];
+              const returnedBranch = expected.previousBranch
+                ? START_BRANCH_TABLE.find(({ key }) => key === expected.previousBranch)
+                : null;
+              const returnedCorrectly = expected.returnsToNeed
+                ? actual?.needVisible
+                  && !actual.detailVisible
+                  && !actual.resultVisible
+                  && actual.firstPathFocused
+                  && startInitialControlsPass(actual.initialControls)
+                : !actual?.needVisible
+                  && actual.detailVisible
+                  && !actual.resultVisible
+                  && actual.focusedQuestion
+                  && actual.previousQuestion === expected.previousQuestion
+                  && returnedBranch
+                  && actual.answerControlsValid
+                  && actual.answerControls.every(({ usable }) => usable)
+                  && JSON.stringify(actual.answers) === JSON.stringify(returnedBranch.options);
+              if (
+                !actual
+                || actual.missing.length
+                || !actual.backVisible
+                || actual.backControl.tag !== "BUTTON"
+                || actual.backControl.type !== "button"
+                || actual.backControl.text !== "← Back"
+                || !actual.backControl.usable
+                || !returnedCorrectly
+                || !actual.focusVisibility.meaningful
+                || actual.revealState !== "ready"
+                || actual.touchFailures.length
+                || stateTouchFailures.length
+                || stateVisibilityFailures.length
+                || stateRevealFailures.length
+                || stateFocusFailures.length
+                || stateControlFailures.length
+                || stateBranchFailures.length
+              ) {
+                errors.push(
+                  `${viewport.label} ${route}: Start Back case ${expected.key} failed `
+                  + `${JSON.stringify({
+                    actual,
+                    expected,
+                    stateBranchFailures,
+                    stateControlFailures,
+                    stateFocusFailures,
+                    stateRevealFailures,
+                    stateTouchFailures,
+                    stateVisibilityFailures,
+                  })}`,
+                );
+              }
+            }
+          }
+        }
+        for (const message of runtimeErrors.slice(beforeErrors)) {
+          errors.push(`${viewport.label} ${route}: browser error ${message}`);
+        }
+        results.push({ overflow, route, viewport: viewport.label });
+      }
+    }
+    if (profile === "vnext") {
+      await cdp.send("Emulation.setScriptExecutionDisabled", { value: true });
+      try {
+        await cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: NO_SCRIPT_VIEWPORT.width,
+          height: NO_SCRIPT_VIEWPORT.height,
+          deviceScaleFactor: 1,
+          mobile: NO_SCRIPT_VIEWPORT.mobile,
+        });
+        for (const route of routes) {
+          await navigate(cdp, new URL(route, `${auditOrigin}/`).href);
+          const evaluated = await cdp.send("Runtime.evaluate", {
+            expression: NO_SCRIPT_AUDIT_EXPRESSION,
+            returnByValue: true,
+          });
+          const result = evaluated.result?.value;
+          if (evaluated.exceptionDetails || !result) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: no-script audit returned no value `
+              + `${JSON.stringify(evaluated.exceptionDetails ?? null)}`,
+            );
+            continue;
+          }
+          const overflow = result.documentWidth - result.viewportWidth;
+          if (result.hasJsClass) {
+            errors.push(`${NO_SCRIPT_VIEWPORT.label} ${route}: page claimed JavaScript enhancement`);
+          }
+          if (!result.mainVisible || result.mainTextLength < 80) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: primary content was not meaningfully available`,
+            );
+          }
+          if (result.h1Count !== 1) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: expected one h1; found ${result.h1Count}`,
+            );
+          }
+          if (result.navVisibleLinks !== 6 || result.menuButtonVisible) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: fallback navigation was not fully available `
+              + `${JSON.stringify({
+                menuButtonVisible: result.menuButtonVisible,
+                navVisibleLinks: result.navVisibleLinks,
+              })}`,
+            );
+          }
+          if (overflow > 1 && result.reachableX > 1) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: horizontal document overflow is ${overflow}px`,
+            );
+          }
+          if (result.brokenImages.length) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: broken images ${result.brokenImages.join(", ")}`,
+            );
+          }
+          if (
+            route === "/start/"
+            && (
+              !result.start
+              || result.start.chooserVisible
+              || !result.start.fallbackVisible
+              || result.start.fallbackLinks.join(",")
+                !== "/custom/,/hive/,/solutions/,#direct-contact"
+            )
+          ) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: chooser did not expose its exact no-script routes `
+              + `${JSON.stringify(result.start)}`,
+            );
+          }
+          if (
+            route === "/hive/"
+            && (
+              !result.hive
+              || !result.hive.fallbackVisible
+              || result.hive.disabledCells !== 6
+              || result.hive.disabledOperationControls !== 2
+            )
+          ) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: Hive exposed inert controls without a fallback `
+              + `${JSON.stringify(result.hive)}`,
+            );
+          }
+          if (
+            route === "/abracadabra/app/"
+            && (
+              !result.spark
+              || !result.spark.fallbackVisible
+              || !result.spark.makerLocked
+            )
+          ) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: Abracadabra did not fail closed visibly `
+              + `${JSON.stringify(result.spark)}`,
+            );
+          }
+          results.push({
+            mode: "no-script",
+            overflow,
+            route,
+            viewport: NO_SCRIPT_VIEWPORT.label,
+          });
+        }
+      } finally {
+        await cdp.send("Emulation.setScriptExecutionDisabled", { value: false });
+      }
+      await cdp.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+        media: "screen",
+      });
+      try {
+        await cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: REDUCED_MOTION_VIEWPORT.width,
+          height: REDUCED_MOTION_VIEWPORT.height,
+          deviceScaleFactor: 1,
+          mobile: REDUCED_MOTION_VIEWPORT.mobile,
+        });
+        for (const route of routes) {
+          const beforeErrors = runtimeErrors.length;
+          await navigate(cdp, new URL(route, `${auditOrigin}/`).href);
+          const evaluated = await cdp.send("Runtime.evaluate", {
+            expression: REDUCED_MOTION_AUDIT_EXPRESSION,
+            returnByValue: true,
+          });
+          const result = evaluated.result?.value;
+          if (
+            evaluated.exceptionDetails
+            || !result
+            || result.h1Count !== 1
+            || result.scrollBehavior !== "auto"
+            || result.failures.length
+            || result.revealFailures.length
+          ) {
+            errors.push(
+              `${REDUCED_MOTION_VIEWPORT.label} ${route}: reduced-motion contract failed `
+              + `${JSON.stringify(result ?? evaluated.exceptionDetails ?? null)}`,
+            );
+          }
+          if (route === "/abracadabra/app/") {
+            const transitionAudit = await cdp.send("Runtime.evaluate", {
+              expression: ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION,
+              awaitPromise: true,
+              returnByValue: true,
+            });
+            const transition = transitionAudit.result?.value;
+            if (
+              transitionAudit.exceptionDetails
+              || !transition
+              || !transition.accountVisible
+              || !transition.domOrderAligned
+              || !transition.renderedOrderAligned
+              || transition.focusName !== "signInEmail"
+              || transition.behaviors.length === 0
+              || transition.behaviors.some((behavior) => behavior !== "auto")
+            ) {
+              errors.push(
+                `${REDUCED_MOTION_VIEWPORT.label} ${route}: guest transition order, focus, or motion failed `
+                + `${JSON.stringify(transition ?? transitionAudit.exceptionDetails ?? null)}`,
+              );
+            }
+          }
+          for (const message of runtimeErrors.slice(beforeErrors)) {
+            errors.push(`${REDUCED_MOTION_VIEWPORT.label} ${route}: browser error ${message}`);
+          }
+          results.push({
+            mode: "reduced-motion",
+            route,
+            viewport: REDUCED_MOTION_VIEWPORT.label,
+          });
+        }
+      } finally {
+        await cdp.send("Emulation.setEmulatedMedia", { features: [], media: "" });
+      }
+    }
+    return { errors, results };
+  } finally {
+    if (cdp) await cdp.close();
+    browser.kill("SIGTERM");
+    await Promise.race([
+      new Promise((resolve) => browser.once("exit", resolve)),
+      delay(2000),
+    ]);
+    if (browser.exitCode === null) browser.kill("SIGKILL");
+    if (!cdp && browserErrors) {
+      process.stderr.write(browserErrors.slice(-4000));
+    }
+    if (artifactServer) await artifactServer.close();
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    const requestedArtifactRoot = process.env.SITESOURCERY_ARTIFACT_ROOT
+      ? path.resolve(process.env.SITESOURCERY_ARTIFACT_ROOT)
+      : DEFAULT_ARTIFACT_ROOT;
+    const requestedOrigin = /^https?:\/\//u.test(process.argv[2] ?? "")
+      ? process.argv[2]
+      : undefined;
+    const selectedRoutes = process.argv.slice(requestedOrigin ? 3 : 2);
+    const routes = selectedRoutes.length ? selectedRoutes : CANONICAL_ROUTES;
+    const result = await auditBrowser({
+      artifactRoot: requestedArtifactRoot,
+      origin: requestedOrigin,
+      routes,
+    });
+    if (result.errors.length) {
+      console.error(`Browser audit failed (${result.errors.length}):`);
+      for (const error of result.errors) console.error(`- ${error}`);
+      process.exitCode = 1;
+    } else {
+      console.log(
+        `Browser audit passed: ${routes.length} canonical routes at `
+        + `${VIEWPORTS.length} primary viewports plus ${HIVE_COMPONENT_VIEWPORTS.length} `
+        + `Hive breakpoint views, one no-script phone pass, and one reduced-motion phone pass; `
+        + `no console exceptions, broken images, `
+        + `document overflow, or product boot failures; exact ${REVIEWED_CHROMIUM.version} `
+        + `${requestedOrigin
+          ? `audited ${requestedOrigin}`
+          : `audited artifact ${requestedArtifactRoot}`}.`,
+      );
+    }
+  } catch (error) {
+    console.error(`browser-audit-vnext: ${error.message}`);
+    process.exitCode = 1;
+  }
+}

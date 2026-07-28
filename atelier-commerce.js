@@ -23,9 +23,24 @@
 
   var chamber = doc.querySelector('[data-hive-chamber]');
   if (chamber) {
-    var tabs = Array.prototype.slice.call(chamber.querySelectorAll('[role="tab"][data-cell]'));
-    var panels = Array.prototype.slice.call(chamber.querySelectorAll('[role="tabpanel"]'));
+    var tablist = chamber.querySelector('.hive-constellation');
+    var tabs = Array.prototype.slice.call(chamber.querySelectorAll('[data-cell]'));
+    var panels = Array.prototype.slice.call(chamber.querySelectorAll('.chamber-panel'));
     var live = chamber.querySelector('[aria-live]');
+
+    if (tablist) tablist.setAttribute('role', 'tablist');
+    tabs.forEach(function (tab) {
+      var target = tab.getAttribute('href').slice(1);
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', target);
+    });
+    panels.forEach(function (panel) {
+      var controller = tabs.find(function (tab) {
+        return tab.getAttribute('aria-controls') === panel.id;
+      });
+      panel.setAttribute('role', 'tabpanel');
+      if (controller) panel.setAttribute('aria-labelledby', controller.id);
+    });
 
     function activate(tab, announce) {
       var target = tab.getAttribute('aria-controls');

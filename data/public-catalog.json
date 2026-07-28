@@ -1,12 +1,13 @@
 {
-  "version": "SS-COMMERCIAL-2026.4",
+  "version": "SS-COMMERCIAL-2026.5",
   "currency": "USD",
   "offerState": "inquiry-only",
   "notice": "Non-binding pricing preview. Verified scope and written acceptance are required; inquiry does not authorize work or billing.",
-  "sourceCatalogDigest": "5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335",
-  "tierCatalogId": "SS-TIERS-2026.4",
-  "addonCatalogId": "SS-ADDONS-2026.4",
-  "careCatalogId": "SS-CARE-2026.4",
+  "sourceCatalogDigest": "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+  "tierCatalogId": "SS-TIERS-2026.5",
+  "addonCatalogId": "SS-ADDONS-2026.5",
+  "careCatalogId": "SS-CARE-2026.5",
+  "professionalServiceCatalogId": "SS-PROFESSIONAL-2026.1",
   "buildTiers": [
     {
       "id": "card",
@@ -99,6 +100,30 @@
       }
     }
   ],
+  "customPaymentTerms": {
+    "id": "SS-CUSTOM-PAYMENTS-2026.1",
+    "ownershipTransfersOn": "final_payment",
+    "fullPaymentTierIds": [
+      "card",
+      "card-plus"
+    ],
+    "depositTierIds": [
+      "site",
+      "site-plus",
+      "signature",
+      "flagship",
+      "scale"
+    ],
+    "fullPayment": {
+      "dueBeforeStartBasisPoints": 10000,
+      "dueOnCompletionBasisPoints": 0
+    },
+    "deposit": {
+      "dueBeforeStartBasisPoints": 5000,
+      "dueOnCompletionBasisPoints": 5000
+    },
+    "boundary": "Card and Card Plus require full payment before work starts. Site through Scale require a 50% deposit before work starts and the remaining 50% on completion. Ownership transfers only after final payment."
+  },
   "scaleRule": {
     "id": "scale",
     "label": "Scale",
@@ -312,5 +337,27 @@
       }
     }
   ],
-  "projectionDigest": "655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5"
+  "professionalServices": [
+    {
+      "id": "website-assessment",
+      "mechanismId": "DL-02",
+      "label": "Website assessment",
+      "priceCents": 35000,
+      "deliverable": "A written assessment of the customer’s existing website with screenshot evidence and real findings ranked by severity.",
+      "scopeState": "must_be_stated_before_sale",
+      "turnaroundState": "must_be_stated_before_sale",
+      "buildCredit": {
+        "basisPoints": 10000,
+        "maximumCents": 35000,
+        "eligibleSuccessor": "any_accepted_site_sourcery_build"
+      },
+      "boundary": "The assessment diagnoses the existing website. Remediation is a separately accepted build or service scope.",
+      "placements": [
+        "services",
+        "studio",
+        "custom-diagnostic-entry"
+      ]
+    }
+  ],
+  "projectionDigest": "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a"
 }

@@ -338,7 +338,7 @@ strong,b{color:var(--text);font-weight:650}
     background:var(--surface);border-bottom:1px solid var(--hairline);
     box-shadow:var(--lift);
     visibility:hidden;opacity:0;transform:translateY(-6px);
-    transition:opacity .24s var(--ease),transform .24s var(--ease),visibility 0s .24s}
+    transition:opacity .24s var(--ease),transform .24s var(--ease),visibility 0s}
   .js .nav-menu.open{visibility:visible;opacity:1;transform:none;transition-delay:0s}
   .nav-link{min-height:48px;font-size:1.05rem}
   .nav-link::after{bottom:.6rem}

@@ -10,9 +10,19 @@ const ignoredDirectories = new Set([".git", "_site", "node_modules"]);
 const errors = [];
 const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
 const canonicalCustomerMailbox = "sitesourcery@proton.me";
+const canonicalCustomerPhone = Object.freeze({
+  digits: "8562441220",
+  tel: "tel:+18562441220",
+  jsonLd: "+1-856-244-1220",
+  display: "(856) 244-1220",
+});
 const prohibitedLegacyMailbox = "hello@sitesourcery.com";
+const filedNameLegend = "Site Sourcery is an alternate name of Desiderata Labs LLC. Desiderata Labs LLC is the legal seller.";
+const privacyControllerLegend = "Site Sourcery is an alternate name of Desiderata Labs LLC. Desiderata Labs LLC is the legal seller and controller responsible for information covered by this notice.";
+const productionPredecessor = "eff8195640db58390d03eefbe863248220994e37";
 const writableCardFile = "print-collateral/sitesourcery-card-finalist-v9.html";
 const writableCardPdfFile = "print-collateral/sitesourcery-card-finalist-v9.pdf";
+const writableCardPdfDigest = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d73caf99029c5b3605fc";
 const frozenPrintCollateral = Object.freeze({
   "print-collateral/sitesourcery-card-finalist-v8.html": "84fd4b4b1d782b50b42d65b1539898a6e52af29eca31377f1e44c8f41ceee51b",
   "print-collateral/sitesourcery-card-finalist-v8.pdf": "579b8cec150205000008c7f919b7569b604c190175f47808e97f9dcf0ffff3ad",
@@ -32,20 +42,37 @@ const mailboxSurfaces = new Set([
   "terms.html",
   "thanks.html",
 ]);
+const fullFooterSurfaces = new Set([
+  "404.html",
+  "about.html",
+  "automation.html",
+  "contact.html",
+  "faq.html",
+  "how-it-works.html",
+  "index.html",
+  "pricing.html",
+  "privacy.html",
+  "start/index.html",
+  "terms.html",
+]);
+const zeroEntryGuideSurfaces = new Set(["contact.html", "start/index.html"]);
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const expectedCatalogIdentity = Object.freeze({
-  version: "SS-COMMERCIAL-2026.4",
-  tierCatalogId: "SS-TIERS-2026.4",
-  addonCatalogId: "SS-ADDONS-2026.4",
-  careCatalogId: "SS-CARE-2026.4",
-  sourceCatalogDigest: "5664632f3682c625ea9fff9836a8c113aff85769789872bec070b739d15bc335",
-  projectionDigest: "655f1dba4e4825568d517b290affce1e8ceeb926d6849653a63af5e2c27201f5",
+  version: "SS-COMMERCIAL-2026.5",
+  tierCatalogId: "SS-TIERS-2026.5",
+  addonCatalogId: "SS-ADDONS-2026.5",
+  careCatalogId: "SS-CARE-2026.5",
+  professionalServiceCatalogId: "SS-PROFESSIONAL-2026.1",
+  sourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+  projectionDigest: "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
 });
 const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
 const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");
 const containmentWorkflow = await readFile(path.join(root, ".github/workflows/containment.yml"), "utf8");
+const publicTruthWorkflow = await readFile(path.join(root, ".github/workflows/public-truth-reconciliation.yml"), "utf8");
+const atelierCommerceJavaScript = await readFile(path.join(root, "atelier-commerce.js"), "utf8");
 const quality = packageJson.siteQuality ?? {};
 const siteOrigin = String(quality.origin ?? "").replace(/\/$/, "");
 const allowedFormActions = new Set(quality.allowedFormActions ?? []);
@@ -96,6 +123,10 @@ if (!fileSet.has(writableCardPdfFile)) {
   if (!pdf.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
     report(writableCardPdfFile, "generated writable-back V9 print artifact is not a PDF");
   }
+  const actualDigest = createHash("sha256").update(pdf).digest("hex");
+  if (actualDigest !== writableCardPdfDigest) {
+    report(writableCardPdfFile, `generated writable-back V9 print artifact must match the reviewed exact bytes ${writableCardPdfDigest}; received ${actualDigest}`);
+  }
 }
 
 const writableCard = htmlSources.get(writableCardFile);
@@ -118,12 +149,11 @@ if (writableCard === undefined) {
     "no gloss, UV, aqueous coating, soft-touch, or laminate",
     "physical blue/black ballpoint dry-and-smudge test",
     canonicalCustomerMailbox,
+    canonicalCustomerPhone.tel,
+    canonicalCustomerPhone.display,
   ];
   for (const marker of requiredMarkers) {
     if (!writableCard.includes(marker)) report(writableCardFile, `missing writable-back print marker ${JSON.stringify(marker)}`);
-  }
-  if (/\(\d{3}\)\s*\d{3}-\d{4}/.test(writableCard) || /\btel:/i.test(writableCard)) {
-    report(writableCardFile, "must omit the unconfirmed phone number");
   }
   if (!writableCard.includes("<h1>Web Studio</h1>") || !writableCard.includes("<span>EST. 2026<br>SOUTH JERSEY</span>")) {
     report(writableCardFile, "must preserve the V8 front identity");
@@ -161,6 +191,9 @@ if (releaseControl.allowsCommercialDeployment !== releaseControl.allowsDeploymen
 if (excludedTopLevel.filter((entry) => entry === "print-collateral").length !== 1) {
   report("scripts/build-pages.mjs", "Pages artifact must actively exclude print-collateral exactly once");
 }
+if (excludedTopLevel.filter((entry) => entry === "flyer.html").length !== 1) {
+  report("scripts/build-pages.mjs", "Pages artifact must actively exclude the stale print flyer exactly once");
+}
 const scratchBuildRoot = await mkdtemp(path.join(tmpdir(), "sitesourcery-pages-check-"));
 try {
   const scratchArtifact = path.join(scratchBuildRoot, "_site");
@@ -171,11 +204,61 @@ try {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+  try {
+    await lstat(path.join(scratchArtifact, "flyer.html"));
+    report("scripts/build-pages.mjs", "built Pages artifact contains excluded stale print flyer");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 } finally {
   await rm(scratchBuildRoot, { recursive: true, force: true });
 }
 if (typeof releaseControl.allowsContainmentDeployment !== "boolean") {
   report("data/release-control.json", "containment deployment authority must be an explicit boolean");
+}
+if (typeof releaseControl.allowsPublicTruthReconciliationDeployment !== "boolean") {
+  report("data/release-control.json", "public-truth reconciliation authority must be an explicit boolean");
+}
+const publicTruthControl = releaseControl.publicTruthReconciliation;
+if (!publicTruthControl || typeof publicTruthControl !== "object" || Array.isArray(publicTruthControl)) {
+  report("data/release-control.json", "public-truth reconciliation control must be an explicit object");
+} else {
+  if (publicTruthControl.requiredProductionPredecessor !== productionPredecessor) {
+    report("data/release-control.json", `public-truth reconciliation predecessor must be ${productionPredecessor}`);
+  }
+  if (releaseControl.allowsPublicTruthReconciliationDeployment === false) {
+    if (
+      publicTruthControl.state !== "hold"
+      || publicTruthControl.approvedCandidateSha !== null
+      || publicTruthControl.authorityReceiptSha256 !== null
+    ) {
+      report("data/release-control.json", "held public-truth control must have hold state and null candidate/receipt");
+    }
+  } else {
+    if (
+      releaseControl.state !== "hold"
+      || releaseControl.allowsDeployment !== false
+      || releaseControl.allowsCommercialDeployment !== false
+      || releaseControl.allowsContainmentDeployment !== false
+    ) {
+      report("data/release-control.json", "public-truth-only authority cannot combine with general, commercial, or containment authority");
+    }
+    if (publicTruthControl.state !== "cleared") {
+      report("data/release-control.json", "enabled public-truth control requires state=cleared");
+    }
+    if (
+      !/^[0-9a-f]{40}$/u.test(publicTruthControl.approvedCandidateSha ?? "")
+      || /^([0-9a-f])\1{39}$/u.test(publicTruthControl.approvedCandidateSha ?? "")
+    ) {
+      report("data/release-control.json", "enabled public-truth control requires one exact non-degenerate lowercase candidate commit");
+    }
+    if (
+      !/^[0-9a-f]{64}$/u.test(publicTruthControl.authorityReceiptSha256 ?? "")
+      || /^([0-9a-f])\1{63}$/u.test(publicTruthControl.authorityReceiptSha256 ?? "")
+    ) {
+      report("data/release-control.json", "enabled public-truth control requires one exact non-degenerate authority receipt SHA-256");
+    }
+  }
 }
 for (const marker of [
   "run: npm test",
@@ -194,6 +277,48 @@ for (const marker of [
   "target/_site",
 ]) {
   if (!containmentWorkflow.includes(marker)) report(".github/workflows/containment.yml", `missing containment marker ${JSON.stringify(marker)}`);
+}
+for (const marker of [
+  "workflow_dispatch:",
+  "control_sha:",
+  "candidate_sha:",
+  "production_predecessor:",
+  "authority_receipt_sha256:",
+  productionPredecessor,
+  "allowsPublicTruthReconciliationDeployment !== true",
+  "allowsCommercialDeployment !== false",
+  'catalog.offerState !== "inquiry-only"',
+  'git rev-parse HEAD',
+  "run: npm test",
+  "--require-root-lineage",
+  "run: npm run build:pages",
+  "--directory target/_site",
+  "pages: read",
+  "actions: read",
+  'Authorization: Bearer $GH_TOKEN',
+  "--mode predeploy",
+  "name: github-pages",
+  "artifact_id: ${{ steps.pages-artifact.outputs.artifact-id }}",
+  "ARTIFACT_ID: ${{ needs.validate.outputs.artifact_id }}",
+  "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+  "/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages",
+  "unzip -Z1",
+  "unzip -p",
+  "python3 -",
+  "artifact_name: github-pages",
+]) {
+  if (!publicTruthWorkflow.includes(marker)) {
+    report(".github/workflows/public-truth-reconciliation.yml", `missing exact public-truth marker ${JSON.stringify(marker)}`);
+  }
+}
+if (publicTruthWorkflow.includes("actions/upload-pages-artifact@")) {
+  report(".github/workflows/public-truth-reconciliation.yml", "public-truth workflow must not hide a mutable transitive uploader");
+}
+if ((publicTruthWorkflow.match(/pages\/builds\/latest/gu) ?? []).length !== 2) {
+  report(".github/workflows/public-truth-reconciliation.yml", "public-truth workflow must observe the Pages predecessor before upload and immediately before deployment");
+}
+if (/(?:^|\n)\s+(?:push|pull_request|schedule)\s*:/u.test(publicTruthWorkflow)) {
+  report(".github/workflows/public-truth-reconciliation.yml", "public-truth deployment must be manual workflow_dispatch only");
 }
 
 function decodeHtmlAttribute(value) {
@@ -221,6 +346,12 @@ function decodeCodePoint(digits, radix) {
 }
 
 const publicPhonePattern = /(?:\+?1[-.\s]*)?\(?\d{3}\)?[-.\s]+\d{3}[-.\s]+\d{4}/i;
+const publicPhonePatternGlobal = /(?:\+?1[-.\s]*)?\(?\d{3}\)?[-.\s]+\d{3}[-.\s]+\d{4}/gi;
+
+function normalizedNorthAmericanPhone(value) {
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
 
 function checkJsonLdContactValues(file, value, trail = "$") {
   if (Array.isArray(value)) {
@@ -230,8 +361,11 @@ function checkJsonLdContactValues(file, value, trail = "$") {
   if (!value || typeof value !== "object") return;
   for (const [key, entry] of Object.entries(value)) {
     const nextTrail = `${trail}.${key}`;
-    if (key.toLowerCase() === "telephone") {
-      report(file, `deployable JSON-LD must omit telephone at ${nextTrail}`);
+    if (key.toLowerCase() === "telephone" && (
+      typeof entry !== "string"
+      || normalizedNorthAmericanPhone(entry) !== canonicalCustomerPhone.digits
+    )) {
+      report(file, `deployable JSON-LD telephone must be the designated Google Voice number ${canonicalCustomerPhone.jsonLd} at ${nextTrail}`);
     }
     if (key.toLowerCase() === "email" && (
       typeof entry !== "string"
@@ -241,14 +375,20 @@ function checkJsonLdContactValues(file, value, trail = "$") {
     }
     if (typeof entry === "string") {
       const decoded = decodeHtmlAttribute(entry);
-      if (/\b(?:tel|sms):/i.test(decoded)) {
-        report(file, `deployable JSON-LD contains a phone route at ${nextTrail}`);
+      if (/\bsms:/i.test(decoded)) {
+        report(file, `deployable JSON-LD must not publish an SMS route at ${nextTrail}`);
+      }
+      for (const match of decoded.matchAll(/\btel:[^"',\s<]+/gi)) {
+        if (match[0].toLowerCase() !== canonicalCustomerPhone.tel) {
+          report(file, `deployable JSON-LD phone route must be ${canonicalCustomerPhone.tel} at ${nextTrail}`);
+        }
       }
       if (decoded.toLowerCase().includes(prohibitedLegacyMailbox)) {
         report(file, `deployable JSON-LD contains prohibited mailbox ${prohibitedLegacyMailbox} at ${nextTrail}`);
       }
-      if (publicPhonePattern.test(decoded)) {
-        report(file, `deployable JSON-LD contains an unverified phone number at ${nextTrail}`);
+      const publicPhone = decoded.match(publicPhonePattern)?.[0];
+      if (publicPhone && normalizedNorthAmericanPhone(publicPhone) !== canonicalCustomerPhone.digits) {
+        report(file, `deployable JSON-LD contains a phone number other than the designated Google Voice route at ${nextTrail}`);
       }
     } else {
       checkJsonLdContactValues(file, entry, nextTrail);
@@ -509,6 +649,25 @@ for (const file of htmlFiles) {
   if (mailboxSurfaces.has(file) && !decodedHtml.toLowerCase().includes(canonicalCustomerMailbox)) {
     report(file, `canonical customer mailbox ${canonicalCustomerMailbox} is missing`);
   }
+  if (fullFooterSurfaces.has(file)) {
+    const footer = /<footer\b[^>]*class\s*=\s*(?:"[^"]*\bfooter\b[^"]*"|'[^']*\bfooter\b[^']*')[^>]*>([\s\S]*?)<\/footer\s*>/iu.exec(decodedHtml)?.[1] ?? "";
+    if (!footer) {
+      report(file, "shared footer is missing");
+    } else {
+      if (!footer.includes(canonicalCustomerPhone.tel) || !footer.includes(canonicalCustomerPhone.display)) {
+        report(file, `shared footer must include the canonical call route ${canonicalCustomerPhone.display}`);
+      }
+      if (!footer.toLowerCase().includes(`mailto:${canonicalCustomerMailbox}`)) {
+        report(file, `shared footer must include the canonical mailbox ${canonicalCustomerMailbox}`);
+      }
+      if (!/href\s*=\s*(?:"\/start\/"|'\/start\/')/iu.test(footer)) {
+        report(file, "shared footer must link to /start/");
+      }
+      if (!footer.includes("Site Sourcery is an alternate name of Desiderata Labs LLC")) {
+        report(file, "shared footer must identify the filed alternate name and Desiderata Labs LLC");
+      }
+    }
+  }
   for (const match of html.matchAll(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     const href = decodeHtmlAttribute(match[1] ?? match[2]);
     if (!href.toLowerCase().startsWith("mailto:")) continue;
@@ -550,36 +709,154 @@ for (const file of htmlFiles) {
     }
   }
   checkForms(file, html);
+  if (zeroEntryGuideSurfaces.has(file)) {
+    if (/<(?:form|input|select|textarea)\b/iu.test(markup)) {
+      report(file, "static inquiry guide must not contain a form or data-entry control");
+    }
+    if (/<button\b[^>]*\btype\s*=\s*(?:"submit"|'submit'|submit)(?:\s|>)/iu.test(markup)) {
+      report(file, "static inquiry guide must not contain a submit control");
+    }
+    if (/\bcontenteditable\s*=/iu.test(markup)) {
+      report(file, "static inquiry guide must not contain an editable region");
+    }
+    if (
+      !html.includes('data-commercial-state="hold"')
+      || !html.includes('data-no-entry="true"')
+    ) {
+      report(file, "static inquiry guide must preserve explicit HOLD and no-entry state");
+    }
+    if (!decodedHtml.includes(canonicalCustomerPhone.tel) || !decodedHtml.toLowerCase().includes(`mailto:${canonicalCustomerMailbox}`)) {
+      report(file, "static inquiry guide must retain the direct canonical call and email routes");
+    }
+  }
 }
 
 for (const file of deployableHtmlFiles) {
   const html = decodeHtmlAttribute(htmlSources.get(file));
-  if (/\b(?:tel|sms):/i.test(html)) {
-    report(file, "deployable HTML must use the verified email-only public contact posture");
+  if (/\bsms:/i.test(html)) {
+    report(file, "deployable HTML must not publish an SMS route");
   }
-  if (/"telephone"\s*:/i.test(html)) {
-    report(file, "deployable structured data must omit telephone while the public contact posture is email-only");
+  for (const match of html.matchAll(/\btel:[^"',\s<]+/gi)) {
+    if (match[0].toLowerCase() !== canonicalCustomerPhone.tel) {
+      report(file, `deployable HTML phone route must be ${canonicalCustomerPhone.tel}; received ${match[0]}`);
+    }
   }
-  if (publicPhonePattern.test(html)) {
-    report(file, "deployable HTML contains an unverified public phone number");
+  for (const match of html.matchAll(publicPhonePatternGlobal)) {
+    if (normalizedNorthAmericanPhone(match[0]) !== canonicalCustomerPhone.digits) {
+      report(file, `deployable HTML contains a phone number other than the designated Google Voice number: ${match[0]}`);
+    }
   }
-  if (/Site Sourcery is an alternate name used by/i.test(html)) {
-    report(file, "must not claim alternate-name use while New Jersey registration is pending");
+  if (/New Jersey alternate-name registration is pending/i.test(html)) {
+    report(file, "must not retain pending alternate-name wording after the filed certificate");
   }
-  if (/(?:number below reaches a real person|published business number|real person on a real number|call or email|same business day)/i.test(html)) {
-    report(file, "deployable HTML contradicts the verified email-only public contact posture");
+  if (/(?:same business day|guaranteed response|always answers|answered immediately)/i.test(html)) {
+    report(file, "deployable HTML contains an unsupported phone or response-time promise");
+  }
+  for (const staleClaim of [
+    "register non-binding interest",
+    "monthly care explanation",
+    "monthly care note",
+    "Everything here is work I actually built",
+    "Everything here is work we actually built",
+    "Everything shown here is work we actually built",
+    "Every site we show as ours",
+  ]) {
+    if (html.includes(staleClaim)) report(file, `deployable HTML contains stale or universal proof wording ${JSON.stringify(staleClaim)}`);
   }
 }
 
-for (const file of ["privacy.html", "terms.html"]) {
-  const html = htmlSources.get(file) ?? "";
-  for (const marker of [
-    "Site Sourcery is a service brand operated by",
-    "New Jersey alternate-name registration is pending",
-    "Desiderata Labs LLC as the legal seller",
-  ]) {
-    if (!html.includes(marker)) report(file, `missing pending-name/legal-seller marker ${JSON.stringify(marker)}`);
+const automationHtml = htmlSources.get("automation.html") ?? "";
+for (const marker of [
+  ".invitation-actions .hive-call{min-width:0;flex-direction:column",
+  "An unsupported question could follow an approved human handoff path",
+]) {
+  if (!automationHtml.includes(marker)) report("automation.html", `missing narrow-screen or pre-launch Hive safeguard ${JSON.stringify(marker)}`);
+}
+const hiveCellLinks = [...automationHtml.matchAll(/<a\b[^>]*class=["'][^"']*\bhive-cell\b[^"']*["'][^>]*>/giu)];
+if (hiveCellLinks.length !== 6) {
+  report("automation.html", `expected six progressively enhanced Hive cell links, found ${hiveCellLinks.length}`);
+}
+for (const link of hiveCellLinks) {
+  if (/\b(?:role|tabindex|aria-selected|aria-controls)\s*=/iu.test(link[0])) {
+    report("automation.html", "Hive cells must remain ordinary keyboard-reachable links until JavaScript upgrades the chamber");
   }
+}
+if (!/<nav\b[^>]*class=["'][^"']*\bhive-constellation\b[^"']*["'][^>]*aria-label=/iu.test(automationHtml)) {
+  report("automation.html", "no-JavaScript Hive constellation must remain a labeled navigation region");
+}
+for (const marker of [
+  "querySelectorAll('[data-cell]')",
+  "tablist.setAttribute('role', 'tablist')",
+  "tab.setAttribute('role', 'tab')",
+  "panel.setAttribute('role', 'tabpanel')",
+  "candidate.setAttribute('tabindex', active ? '0' : '-1')",
+]) {
+  if (!atelierCommerceJavaScript.includes(marker)) {
+    report("atelier-commerce.js", `missing progressive Hive tab-upgrade marker ${JSON.stringify(marker)}`);
+  }
+}
+const faqHtml = htmlSources.get("faq.html") ?? "";
+if (!faqHtml.includes(".archive-query-line:focus-within")) {
+  report("faq.html", "FAQ archive query must expose a visible focus-within state");
+}
+if (faqHtml.includes("capped 500-word units")) {
+  report("faq.html", "FAQ structured data must not drift from the visible content-shaping answer");
+}
+
+const termsHtml = htmlSources.get("terms.html") ?? "";
+const privacyHtml = htmlSources.get("privacy.html") ?? "";
+const contactHtml = htmlSources.get("contact.html") ?? "";
+if (!termsHtml.includes(filedNameLegend)) {
+  report("terms.html", `missing exact filed-name/legal-seller legend ${JSON.stringify(filedNameLegend)}`);
+}
+if (!privacyHtml.includes(privacyControllerLegend)) {
+  report("privacy.html", `missing exact filed-name/controller legend ${JSON.stringify(privacyControllerLegend)}`);
+}
+for (const [file, html] of [["terms.html", termsHtml], ["privacy.html", privacyHtml]]) {
+  if (/(?:Site\s*Sourcery|SiteSourcery)\s+LLC/iu.test(html)) {
+    report(file, "must not identify SiteSourcery as a standalone LLC");
+  }
+  if (/service brand operated by/iu.test(html)) {
+    report(file, "must use the exact filed-name legend rather than the superseded service-brand wording");
+  }
+}
+for (const marker of [
+  "the exact accepted document chain: the released MSA, SOW/order, current manifest and scope digest, plus every applicable change and acceptance record",
+  "this public site neither computes nor collects tax",
+  "Website Care is currently unavailable.",
+  "Care cannot inherit from a website build.",
+  "Hive is separate pre-launch research/product scope.",
+  "It is not Website Care, not a website add-on",
+  "This public planning page does not promise a refund amount, deadline, or eligibility result.",
+  "controlled by the exact accepted MSA/SOW/order/change chain",
+]) {
+  if (!termsHtml.includes(marker)) report("terms.html", `missing public-truth boundary ${JSON.stringify(marker)}`);
+}
+for (const forbidden of [
+  "Cancel before work begins and we return the initial payment.",
+  "A current Care month is not partly refunded.",
+  "New Jersey alternate-name registration is pending",
+]) {
+  if (termsHtml.includes(forbidden)) report("terms.html", `forbidden superseded public promise ${JSON.stringify(forbidden)}`);
+}
+for (const marker of [
+  "This notice is limited to the public Site Sourcery website and direct phone or email inquiries.",
+  "Client-project data requires the exact accepted project data schedule",
+  "Hive is separate pre-launch research/product scope",
+  "remains outside Site Sourcery&rsquo;s current production and data-processing scope",
+]) {
+  if (!privacyHtml.includes(marker)) report("privacy.html", `missing privacy-scope boundary ${JSON.stringify(marker)}`);
+}
+for (const marker of [
+  "The designated public call route is Google Voice.",
+  "One designated call route and one designated email route",
+  "This is the designated public Google Voice route",
+  "no response time is promised.",
+]) {
+  if (!contactHtml.includes(marker)) report("contact.html", `missing designated-contact marker ${JSON.stringify(marker)}`);
+}
+if (/verified public (?:contact )?route/iu.test(contactHtml)) {
+  report("contact.html", "must not overclaim the designated phone or mailbox as evidence-verified");
 }
 
 for (const file of cssFiles) checkCssReferences(file, await readFile(path.join(root, file), "utf8"));

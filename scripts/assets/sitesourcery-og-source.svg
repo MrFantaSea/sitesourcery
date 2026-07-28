@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">SiteSourcery — custom websites, scoped to fit</title>
+  <desc id="desc">A dark violet SiteSourcery social card for personalized website scoping by phone or email.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090611"/>
+      <stop offset="0.55" stop-color="#120b22"/>
+      <stop offset="1" stop-color="#24143f"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c5cff"/>
+      <stop offset="1" stop-color="#ff5c8a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#7c5cff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="1000" cy="112" r="280" fill="url(#glow)" filter="url(#soft)"/>
+  <circle cx="1110" cy="560" r="250" fill="#ff5c8a" opacity="0.06" filter="url(#soft)"/>
+  <path d="M0 518 C258 456 386 610 638 526 C836 460 982 400 1200 454 V630 H0Z" fill="#7c5cff" opacity="0.07"/>
+
+  <rect x="54" y="54" width="1092" height="522" rx="22" fill="none" stroke="#d6cdf7" stroke-opacity="0.18" stroke-width="2"/>
+
+  <g transform="translate(82 78)">
+    <circle cx="30" cy="30" r="44" fill="#7c5cff" opacity="0.16" filter="url(#soft)"/>
+    <path d="M30 4 L36.5 23.5 L56 30 L36.5 36.5 L30 56 L23.5 36.5 L4 30 L23.5 23.5Z" fill="url(#brand)"/>
+    <text x="82" y="42" fill="#f6f4ff" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="700">SiteSourcery</text>
+  </g>
+
+  <g transform="translate(82 202)">
+    <text fill="#f6f4ff" font-family="DejaVu Sans, sans-serif" font-size="69" font-weight="700">
+      <tspan x="0" y="0">Custom websites,</tspan>
+      <tspan x="0" y="84">scoped to </tspan><tspan fill="#d99cff">fit.</tspan>
+    </text>
+    <rect x="0" y="190" width="82" height="4" rx="2" fill="url(#brand)"/>
+    <text x="106" y="204" fill="#cfc6f0" font-family="DejaVu Sans, sans-serif" font-size="25" letter-spacing="0.7">Footprint and creative direction priced separately.</text>
+  </g>
+
+  <g transform="translate(82 510)">
+    <rect width="552" height="54" rx="27" fill="#ffffff" fill-opacity="0.06" stroke="#c8beff" stroke-opacity="0.28"/>
+    <circle cx="29" cy="27" r="5" fill="#ff5c8a"/>
+    <text x="49" y="35" fill="#eae2ff" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="600">Personalized scope · (856) 244-1220</text>
+  </g>
+
+  <text x="1118" y="548" text-anchor="end" fill="#b8b2d4" font-family="DejaVu Sans, sans-serif" font-size="20">sitesourcery.com</text>
+</svg>

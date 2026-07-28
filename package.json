@@ -6,12 +6,19 @@
     "node": "20.20.2"
   },
   "scripts": {
-    "check": "npm run check:html && npm run check:pricing && npm run check:static",
-    "check:html": "html-validate \"**/*.html\"",
-    "check:pricing": "node scripts/check-pricing.mjs",
-    "check:static": "node scripts/check-static.mjs",
+    "generate:vnext": "node scripts/generate-site-vnext.mjs",
+    "audit:browser": "node scripts/browser-audit-vnext.mjs",
+    "check": "npm run check:html && npm run check:routes && npm run check:vnext && npm run check:catalog && npm run check:abracadabra",
+    "check:html": "html-validate \"*.html\" \"about/**/*.html\" \"abracadabra/**/*.html\" \"contact/**/*.html\" \"custom/**/*.html\" \"faq/**/*.html\" \"hive/**/*.html\" \"legal/**/*.html\" \"solutions/**/*.html\" \"start/**/*.html\" \"work/**/*.html\"",
+    "check:routes": "node scripts/check-routes.mjs",
+    "check:vnext": "node scripts/check-site-vnext.mjs",
+    "check:catalog": "node scripts/check-pricing.mjs",
+    "check:abracadabra": "node scripts/check-abracadabra-v1.mjs",
+    "test:node": "node --test --test-isolation=none scripts/test/site-vnext.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/hive-planner.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs",
+    "test:public-truth": "node --test --test-isolation=none scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
-    "test": "npm run check"
+    "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
+    "test": "npm run check && npm run test:node && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"
@@ -19,6 +26,6 @@
   "siteQuality": {
     "origin": "https://sitesourcery.com",
     "allowedFormActions": [],
-    "expectedForms": 2
+    "expectedForms": 0
   }
 }

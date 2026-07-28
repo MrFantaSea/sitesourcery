@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Published website · Site Sourcery</title>
+  <meta name="description" content="A locally published Abracadabra website presented by Site Sourcery.">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#0b0810">
+  <link rel="stylesheet" href="/abracadabra/site/viewer.css">
+  <script src="/abracadabra/platform/abracadabra-platform.js" defer></script>
+  <script src="/abracadabra/site/viewer.js" defer></script>
+</head>
+<body data-viewer-state="loading">
+  <a class="skip-link" href="#viewer-main">Skip to the website</a>
+
+  <header class="viewer-bar">
+    <a class="viewer-brand" href="/" aria-label="Site Sourcery home">
+      <span aria-hidden="true"></span>
+      <strong>Site Sourcery</strong>
+    </a>
+    <p class="viewer-identity">
+      <span>Published website</span>
+      <strong id="project-name">Abracadabra</strong>
+    </p>
+    <div class="viewer-tools">
+      <span class="state-chip" id="state-chip" role="status">Opening</span>
+      <button class="quiet-button" type="button" data-export hidden>Download HTML</button>
+    </div>
+  </header>
+
+  <main id="viewer-main" tabindex="-1">
+    <section class="status-stage" id="status-stage" aria-labelledby="status-title" tabindex="-1">
+      <div class="status-card">
+        <div class="status-mark" aria-hidden="true"><span></span></div>
+        <p class="eyebrow" id="status-kicker">Site Sourcery · Abracadabra</p>
+        <h1 id="status-title">Opening the published website.</h1>
+        <p class="status-copy" id="status-copy">Reading the saved project on this device.</p>
+
+        <div class="access-form" id="access-form" hidden>
+          <label for="site-passphrase">Passphrase</label>
+          <div class="access-row">
+            <input id="site-passphrase" name="passphrase" type="password" autocomplete="current-password" required>
+            <button class="primary-button" type="button" data-open-access>Open website</button>
+          </div>
+          <p class="form-note">The passphrase is checked on this device and is never placed in the address.</p>
+          <p class="form-error" id="access-error" role="alert" hidden></p>
+        </div>
+
+        <dl class="status-details" id="status-details" hidden>
+          <div>
+            <dt>Project</dt>
+            <dd id="detail-project">—</dd>
+          </div>
+          <div id="retention-detail" hidden>
+            <dt>Saved through</dt>
+            <dd id="detail-retention">—</dd>
+          </div>
+        </dl>
+
+        <div class="status-actions" id="status-actions" hidden>
+          <button class="primary-button" type="button" data-export>Download saved HTML</button>
+          <a class="quiet-link" href="/abracadabra/app/">Return to Abracadabra</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-stage" id="site-stage" aria-labelledby="site-stage-title" hidden>
+      <h2 class="visually-hidden" id="site-stage-title">Published website</h2>
+      <iframe
+        id="published-site"
+        title="Published Abracadabra website"
+        sandbox=""
+        referrerpolicy="no-referrer"
+      ></iframe>
+    </section>
+  </main>
+
+  <noscript>
+    <div class="noscript-card">
+      <strong>JavaScript is required to open this published website.</strong>
+      <p>Turn it on, then reload this page.</p>
+    </div>
+  </noscript>
+</body>
+</html>

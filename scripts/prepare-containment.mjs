@@ -1,41 +1,74 @@
 import { existsSync, lstatSync, rmSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-
-const [targetRootArg, removePathArg] = process.argv.slice(2);
-const targetRoot = resolve(targetRootArg || '');
-const removePath = String(removePathArg || '').trim();
-const SAFE_PUBLIC_PATH = /^[a-z0-9][a-z0-9-]*$/;
-const PROTECTED = new Set(['assets', 'start']);
+import { fileURLToPath } from 'node:url';
+import { assertContainmentTarget } from './containment-contract.mjs';
 
 function fail(message) {
-  console.error(message);
-  process.exit(1);
+  throw new Error(message);
 }
 
-if (!targetRootArg || !SAFE_PUBLIC_PATH.test(removePath)) {
-  fail('Containment requires a checkout root and one lowercase top-level public path.');
+export function assertExactWorktreeDeletion(porcelain, removePath) {
+  if (typeof porcelain !== 'string') {
+    fail('Containment status must be text.');
+  }
+  const normalized = porcelain.replace(/\r\n/gu, '\n');
+  const lines = normalized.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  if (lines.length !== 1 || lines[0] !== ` D ${removePath}`) {
+    fail('Containment preparation changed bytes outside the exact authorized root file.');
+  }
+  return true;
 }
-if (PROTECTED.has(removePath)) fail(`${removePath} is a protected core path and cannot use the demo-containment lane.`);
 
-const target = resolve(targetRoot, removePath);
-const relation = relative(targetRoot, target);
-if (!relation || relation === '..' || relation.startsWith(`..${sep}`)) fail('Containment path escapes the target checkout.');
-if (!existsSync(target)) fail(`Containment target is absent: ${removePath}`);
-const stat = lstatSync(target);
-if (!stat.isDirectory() || stat.isSymbolicLink()) fail('Containment target must be a real top-level directory.');
+export function prepareContainment(targetRootArg, productionShaArg, removePathArg) {
+  const targetRoot = resolve(targetRootArg || '');
+  const removePath = String(removePathArg || '').trim();
 
-const before = spawnSync('git', ['status', '--porcelain'], { cwd: targetRoot, encoding: 'utf8' });
-if (before.status !== 0 || before.stdout.trim()) fail('The production-target checkout must be clean before containment.');
-rmSync(target, { recursive: true });
+  if (!targetRootArg) fail('Containment requires an exact production checkout root.');
+  assertContainmentTarget(productionShaArg, removePath);
 
-const changed = spawnSync('git', ['status', '--porcelain'], { cwd: targetRoot, encoding: 'utf8' });
-if (changed.status !== 0) fail('Could not inspect the prepared containment artifact.');
-const lines = changed.stdout.trim().split('\n').filter(Boolean);
-if (!lines.length || lines.some((line) => {
-  const path = line.slice(3);
-  return path !== removePath && !path.startsWith(`${removePath}/`);
-})) {
-  fail('Containment preparation changed files outside the authorized top-level path.');
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: targetRoot, encoding: 'utf8' });
+  if (head.status !== 0 || head.stdout.trim() !== productionShaArg) {
+    fail('The containment checkout does not match the exact authorized production commit.');
+  }
+
+  const target = resolve(targetRoot, removePath);
+  const relation = relative(targetRoot, target);
+  if (!relation || relation === '..' || relation.startsWith(`..${sep}`)) {
+    fail('Containment path escapes the target checkout.');
+  }
+  if (!existsSync(target)) fail(`Containment target is absent: ${removePath}`);
+  const stat = lstatSync(target);
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    fail('Containment target must be one real root HTML file.');
+  }
+
+  const before = spawnSync('git', ['status', '--porcelain'], {
+    cwd: targetRoot,
+    encoding: 'utf8',
+  });
+  if (before.status !== 0 || before.stdout !== '') {
+    fail('The production-target checkout must be clean before containment.');
+  }
+  rmSync(target);
+
+  const changed = spawnSync('git', ['status', '--porcelain'], {
+    cwd: targetRoot,
+    encoding: 'utf8',
+  });
+  if (changed.status !== 0) fail('Could not inspect the prepared containment artifact.');
+  assertExactWorktreeDeletion(changed.stdout, removePath);
+  return Object.freeze({ removePath, targetRoot });
 }
-console.log(`Prepared containment-only removal for ${removePath}.`);
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    const [targetRootArg, productionShaArg, removePathArg] = process.argv.slice(2);
+    const result = prepareContainment(targetRootArg, productionShaArg, removePathArg);
+    console.log(`Prepared containment-only removal for ${result.removePath}.`);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}
