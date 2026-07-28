@@ -39,6 +39,7 @@ import {
   RECEIPT_SCHEMA,
   RELEASE_ENVIRONMENT,
   REPOSITORY_FULL_NAME,
+  REVIEWED_PUBLIC_ARTIFACT_PATHS,
   SOURCE_CATALOG_DIGEST,
   SOURCE_ONLY_LEGACY_REDIRECT,
   artifactPublicPath,
@@ -71,6 +72,7 @@ import {
   validateRuntimeAuthorityEnvironment,
   verifyProductionRouteContract,
 } from "../verify-public-truth-release.mjs";
+import { publicFileAllowlist } from "../build-pages.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const CANDIDATE_SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -78,10 +80,29 @@ const SOURCE_MANIFEST_SHA = "ab".repeat(32);
 const ARTIFACT_MANIFEST_SHA = "cd".repeat(32);
 const RECEIPT_SHA = "ef".repeat(32);
 const NOW = Date.parse("2026-07-25T12:15:00.000Z");
+const LEGACY_SOURCE_ONLY_ARTIFACT_PATHS = Object.freeze([
+  "assets/portfolio-daarx-v3.webp",
+  "atelier-commerce.css",
+  "atelier-commerce.js",
+  "atelier-inner.css",
+  "atelier-story.css",
+  "atelier-story.js",
+  "atelier-utility.css",
+  "atelier-utility.js",
+  "sourcery.js",
+  "style.css",
+  "thanks.html",
+]);
 const [CURRENT_WORKFLOW_TEXT, CURRENT_OG_SOURCE_TEXT] = await Promise.all([
   readFile(path.join(PROJECT_ROOT, ".github/workflows/public-truth-reconciliation.yml"), "utf8"),
   readFile(path.join(PROJECT_ROOT, "scripts/assets/sitesourcery-og-source.svg"), "utf8"),
 ]);
+const REVIEWED_ARTIFACT_FILES = Object.freeze(Object.fromEntries(await Promise.all(
+  REVIEWED_PUBLIC_ARTIFACT_PATHS.map(async (file) => [
+    file,
+    await readFile(path.join(PROJECT_ROOT, ...file.split("/"))),
+  ]),
+)));
 
 function clone(value) {
   return structuredClone(value);
@@ -336,6 +357,15 @@ async function withArtifact(files, callback) {
   }
 }
 
+function reviewedArtifactFiles(overrides = {}) {
+  return { ...REVIEWED_ARTIFACT_FILES, ...overrides };
+}
+
+async function withReviewedArtifact(overrides, callback) {
+  const files = reviewedArtifactFiles(overrides);
+  return withArtifact(files, (root) => callback(root, files));
+}
+
 function git(root, ...args) {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr || `git ${args.join(" ")} failed`);
@@ -476,6 +506,18 @@ test("candidate changed-path contract is exact, sorted, unique, and complete", (
 test("artifact exclusion contract covers print, workflow, governance, data, and flyer sources", () => {
   for (const name of [".github", "data", "flyer.html", "print-collateral", "scripts", "QUALITY.md", "package.json"]) {
     assert.ok(EXCLUDED_ARTIFACT_TOP_LEVEL.includes(name), name);
+  }
+});
+
+test("verifier publication ledger independently matches the reviewed 66-file builder ledger", () => {
+  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 66);
+  assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
+  assert.deepEqual(
+    [...REVIEWED_PUBLIC_ARTIFACT_PATHS].sort(),
+    REVIEWED_PUBLIC_ARTIFACT_PATHS,
+  );
+  for (const file of LEGACY_SOURCE_ONLY_ARTIFACT_PATHS) {
+    assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.includes(file), false, file);
   }
 });
 
@@ -1414,9 +1456,9 @@ test("postdeploy proof rejects Web3Forms, access_key, and the retired 321 identi
     ),
     [],
   );
-  await withArtifact({ "index.html": forbidden }, async (root) => {
+  await withReviewedArtifact({ "index.html": forbidden }, async (root, files) => {
     await assert.rejects(
-      () => validateArtifactSafety(root, manifestFor({ "index.html": forbidden })),
+      () => validateArtifactSafety(root, manifestFor(files)),
       /forbidden public markers/u,
     );
   });
@@ -1572,22 +1614,63 @@ test("artifact safety accepts exact static projection with open direct-inquiry g
     '<a href="mailto:sitesourcery@proton.me?subject=Scope">Email</a>',
     "</article>",
   ].join("");
-  const files = { "contact/index.html": guide, "start/index.html": guide, "style.css": "body{}" };
-  await withArtifact(files, async (root) => {
+  await withReviewedArtifact({
+    "contact/index.html": guide,
+    "start/index.html": guide,
+  }, async (root, files) => {
     const source = manifestFor({ ...files, "scripts/build.mjs": "private" });
     const result = await validateArtifactSafety(root, source);
-    assert.equal(result.count, 3);
+    assert.equal(result.count, 66);
+  });
+});
+
+test("artifact projection ignores source-only legacy bytes and rejects them in the artifact", async () => {
+  const sourceOnlyFiles = Object.fromEntries(
+    LEGACY_SOURCE_ONLY_ARTIFACT_PATHS.map((file) => [file, `source-only:${file}`]),
+  );
+  await withReviewedArtifact({}, async (root, files) => {
+    const result = await validateArtifactSafety(
+      root,
+      manifestFor({ ...files, ...sourceOnlyFiles }),
+    );
+    assert.equal(result.count, 66);
+    assert.deepEqual(
+      result.entries.map((entry) => entry.path),
+      REVIEWED_PUBLIC_ARTIFACT_PATHS,
+    );
+  });
+  await withReviewedArtifact(sourceOnlyFiles, async (root, files) => {
+    await assert.rejects(
+      () => validateArtifactSafety(root, manifestFor(files)),
+      (error) => {
+        assert.match(error.message, /artifact is not the exact candidate projection/u);
+        for (const file of LEGACY_SOURCE_ONLY_ARTIFACT_PATHS) {
+          assert.match(error.message, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+        }
+        return true;
+      },
+    );
+  });
+});
+
+test("artifact projection fails closed when source-only bytes replace one reviewed path", async () => {
+  await withReviewedArtifact({}, async (root, files) => {
+    const substituted = {
+      ...files,
+      "thanks.html": "source-only replacement attempt",
+    };
+    delete substituted[".nojekyll"];
+    await assert.rejects(
+      () => validateArtifactSafety(root, manifestFor(substituted)),
+      /source manifest is missing reviewed public artifact path \.nojekyll/u,
+    );
   });
 });
 
 test("current contact and start bytes satisfy the direct-inquiry guide contract", async () => {
-  const files = {
-    "contact/index.html": await readFile(path.join(PROJECT_ROOT, "contact/index.html")),
-    "start/index.html": await readFile(path.join(PROJECT_ROOT, "start/index.html")),
-  };
-  await withArtifact(files, async (root) => {
+  await withReviewedArtifact({}, async (root, files) => {
     const result = await validateArtifactSafety(root, manifestFor(files));
-    assert.equal(result.count, 2);
+    assert.equal(result.count, 66);
   });
 });
 
@@ -1598,9 +1681,9 @@ test("artifact safety permits an exact held form only outside the zero-entry gui
     '<input name="preview"><button type="submit" disabled>Held</button>',
     "</fieldset></form>",
   ].join("");
-  await withArtifact({ "index.html": html }, async (root) => {
-    const result = await validateArtifactSafety(root, manifestFor({ "index.html": html }));
-    assert.equal(result.count, 1);
+  await withReviewedArtifact({ "index.html": html }, async (root, files) => {
+    const result = await validateArtifactSafety(root, manifestFor(files));
+    assert.equal(result.count, 66);
   });
 });
 
@@ -1615,9 +1698,9 @@ test("artifact safety rejects even fully disabled forms on contact and start", a
     "</fieldset></form></article>",
   ].join("");
   for (const file of ["contact/index.html", "start/index.html"]) {
-    await withArtifact({ [file]: disabledForm }, async (root) => {
+    await withReviewedArtifact({ [file]: disabledForm }, async (root, files) => {
       await assert.rejects(
-        () => validateArtifactSafety(root, manifestFor({ [file]: disabledForm })),
+        () => validateArtifactSafety(root, manifestFor(files)),
         /direct-inquiry guide contains forbidden <form>/u,
         file,
       );
@@ -1642,19 +1725,19 @@ test("direct-inquiry guides require open-intake markers, direct routes, and no e
     [valid.replace("</article>", "<textarea>Draft</textarea></article>"), /forbidden <textarea>/u],
   ];
   for (const [html, expected] of mutations) {
-    await withArtifact({ "contact/index.html": html }, async (root) => {
-      await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "contact/index.html": html })), expected);
+    await withReviewedArtifact({ "contact/index.html": html }, async (root, files) => {
+      await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), expected);
     });
   }
 });
 
 test("artifact safety rejects content and manifest mutation", async () => {
-  await withArtifact({ "index.html": "mutated" }, async (root) => {
-    const source = manifestFor({ "index.html": "reviewed" });
+  await withReviewedArtifact({ "index.html": "mutated" }, async (root) => {
+    const source = manifestFor(reviewedArtifactFiles({ "index.html": "reviewed" }));
     await assert.rejects(() => validateArtifactSafety(root, source), /exact candidate projection/u);
   });
-  await withArtifact({ "index.html": "reviewed", "extra.html": "extra" }, async (root) => {
-    const source = manifestFor({ "index.html": "reviewed" });
+  await withReviewedArtifact({ "extra.html": "extra" }, async (root) => {
+    const source = manifestFor(reviewedArtifactFiles());
     await assert.rejects(() => validateArtifactSafety(root, source), /extra: extra\.html/u);
   });
 });
@@ -1668,8 +1751,8 @@ test("artifact safety rejects print, governance, development, and private leakag
     ".env.production",
     "assets/signing-key.pem",
   ]) {
-    await withArtifact({ "index.html": "safe", [file]: "private" }, async (root) => {
-      const source = manifestFor({ "index.html": "safe", [file]: "private" });
+    await withReviewedArtifact({ [file]: "private" }, async (root, files) => {
+      const source = manifestFor(files);
       await assert.rejects(() => validateArtifactSafety(root, source), /development, governance, or private path|exact candidate projection/u, file);
     });
   }
@@ -1683,32 +1766,32 @@ test("artifact safety rejects active, malformed, or partially enabled forms", as
     '<form data-commercial-state="hold" data-no-entry="true" onsubmit="return false" aria-disabled="true"><fieldset data-no-entry-barrier="true" disabled aria-disabled="true"><button type="submit">Send</button></fieldset></form>',
   ];
   for (const html of forms) {
-    await withArtifact({ "index.html": html }, async (root) => {
-      await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": html })), /form|submit/u);
+    await withReviewedArtifact({ "index.html": html }, async (root, files) => {
+      await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /form|submit/u);
     });
   }
 });
 
 test("artifact safety rejects payment endpoints and browser network sinks", async () => {
   const payment = '<a href="https://buy.stripe.com/example">Pay</a>';
-  await withArtifact({ "index.html": payment }, async (root) => {
-    await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": payment })), /payment-provider/u);
+  await withReviewedArtifact({ "index.html": payment }, async (root, files) => {
+    await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /payment-provider/u);
   });
   const localCheckout = '<a href="/checkout/">Order</a>';
-  await withArtifact({ "index.html": localCheckout }, async (root) => {
-    await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": localCheckout })), /payment or ordering route/u);
+  await withReviewedArtifact({ "index.html": localCheckout }, async (root, files) => {
+    await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /payment or ordering route/u);
   });
   const network = "fetch('/collect')";
-  await withArtifact({ "index.html": "safe", "sourcery.js": network }, async (root) => {
-    await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": "safe", "sourcery.js": network })), /network sink/u);
+  await withReviewedArtifact({ "sourcery.js": network }, async (root, files) => {
+    await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /network sink/u);
   });
   const enable = 'button.removeAttribute("disabled")';
-  await withArtifact({ "index.html": "safe", "sourcery.js": enable }, async (root) => {
-    await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": "safe", "sourcery.js": enable })), /enable or submit/u);
+  await withReviewedArtifact({ "sourcery.js": enable }, async (root, files) => {
+    await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /enable or submit/u);
   });
   const inlineNetwork = "<script>navigator.sendBeacon('/collect')</script>";
-  await withArtifact({ "index.html": inlineNetwork }, async (root) => {
-    await assert.rejects(() => validateArtifactSafety(root, manifestFor({ "index.html": inlineNetwork })), /inline browser network sink/u);
+  await withReviewedArtifact({ "index.html": inlineNetwork }, async (root, files) => {
+    await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /inline browser network sink/u);
   });
 });
 

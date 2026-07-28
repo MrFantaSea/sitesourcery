@@ -201,9 +201,83 @@ export const FROZEN_BASE_BLOBS = Object.freeze({
 });
 
 /*
- * This is intentionally duplicated from (rather than imported from) the build
- * script. A candidate cannot weaken its artifact boundary by changing one
- * shared allow/deny list.
+ * This is intentionally duplicated from (rather than imported from) the
+ * reviewed Pages builder. The verifier must project only these exact public
+ * source bytes; a legacy file or a newly added source file never becomes
+ * deployable merely because it is present in the candidate tree.
+ */
+export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
+  ".nojekyll",
+  "404.html",
+  "CNAME",
+  "about.html",
+  "about/index.html",
+  "abracadabra/abracadabra-showcase.js",
+  "abracadabra/app/abracadabra-app.css",
+  "abracadabra/app/abracadabra-app.js",
+  "abracadabra/app/abracadabra-compiler.js",
+  "abracadabra/app/abracadabra-control.js",
+  "abracadabra/app/index.html",
+  "abracadabra/how/index.html",
+  "abracadabra/index.html",
+  "abracadabra/platform/abracadabra-platform.js",
+  "abracadabra/site/index.html",
+  "abracadabra/site/viewer.css",
+  "abracadabra/site/viewer.js",
+  "assets/cursor-wand-active.svg",
+  "assets/cursor-wand.svg",
+  "assets/portfolio-sconesourcery-v3-720.webp",
+  "assets/portfolio-sconesourcery-v3.webp",
+  "assets/site-sourcery-arcane-atelier-v3.webp",
+  "assets/site-sourcery-hive-orchestra-v4.webp",
+  "assets/site-sourcery-main-street-v2.webp",
+  "assets/site-sourcery-storm-atelier-v4.webp",
+  "assets/site-sourcery-two-doors-v3.webp",
+  "assets/work-demo-bright-spark-1440.webp",
+  "assets/work-demo-bright-spark-720.webp",
+  "assets/work-demo-bright-spark.png",
+  "assets/work-demo-trattoria-1440.webp",
+  "assets/work-demo-trattoria-720.webp",
+  "assets/work-demo-trattoria.png",
+  "assets/work-scone-current-1440.webp",
+  "assets/work-scone-current-720.webp",
+  "assets/work-scone-current.png",
+  "automation.html",
+  "contact.html",
+  "contact/index.html",
+  "custom/index.html",
+  "custom/process/index.html",
+  "custom/scope/index.html",
+  "faq.html",
+  "faq/index.html",
+  "hive/hive-planner.js",
+  "hive/index.html",
+  "how-it-works.html",
+  "index.html",
+  "legal/index.html",
+  "legal/privacy/index.html",
+  "legal/website-terms/index.html",
+  "og.png",
+  "pricing.html",
+  "privacy.html",
+  "robots.txt",
+  "sitemap.xml",
+  "solutions/index.html",
+  "start/index.html",
+  "terms.html",
+  "the-difference.html",
+  "the-meter.html",
+  "the-moat.html",
+  "the-responder.html",
+  "vnext.css",
+  "vnext.js",
+  "work/index.html",
+  "work/work.css",
+]);
+
+/*
+ * Retained as a second, broad leakage boundary. It is not the publication
+ * projection: REVIEWED_PUBLIC_ARTIFACT_PATHS is the sole positive ledger.
  */
 export const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   ".git",
@@ -530,14 +604,44 @@ export function sourceManifestFromGit(root, revision = "HEAD") {
 }
 
 function artifactProjectionEntries(sourceManifest) {
-  const excluded = new Set(EXCLUDED_ARTIFACT_TOP_LEVEL);
-  return sourceManifest.entries
-    .filter((entry) => {
-      const top = entry.path.split("/")[0];
-      const basename = entry.path.slice(entry.path.lastIndexOf("/") + 1);
-      return !excluded.has(top) && !basename.endsWith(".md");
-    })
-    .map(({ path: file, sha256: fileSha256, size }) => ({ path: file, sha256: fileSha256, size }));
+  exactObject(sourceManifest, ["count", "entries", "sha256"], "source manifest");
+  if (!Array.isArray(sourceManifest.entries)) fail("source manifest entries must be an array");
+  if (
+    !Number.isSafeInteger(sourceManifest.count)
+    || sourceManifest.count !== sourceManifest.entries.length
+  ) fail("source manifest count must exactly describe its entries");
+  digest(sourceManifest.sha256, "source manifest SHA-256");
+
+  const byPath = new Map();
+  let previous = null;
+  for (const [index, entry] of sourceManifest.entries.entries()) {
+    exactObject(entry, ["mode", "path", "sha256", "size"], `source manifest entry ${index}`);
+    if (!["100644", "100755"].includes(entry.mode)) {
+      fail(`source manifest entry ${index} has a forbidden mode`);
+    }
+    safeRepositoryPath(entry.path, `source manifest entry ${index} path`);
+    digest(entry.sha256, `source manifest entry ${index} SHA-256`);
+    if (!Number.isSafeInteger(entry.size) || entry.size < 0) {
+      fail(`source manifest entry ${index} has an invalid size`);
+    }
+    if (previous !== null && lexicalCompare(previous, entry.path) >= 0) {
+      fail("source manifest paths must be bytewise sorted and unique");
+    }
+    previous = entry.path;
+    byPath.set(entry.path, entry);
+  }
+  if (sourceManifest.sha256 !== sha256(stableStringify(sourceManifest.entries))) {
+    fail("source manifest SHA-256 does not match its entries");
+  }
+
+  const missing = REVIEWED_PUBLIC_ARTIFACT_PATHS.filter((file) => !byPath.has(file));
+  if (missing.length > 0) {
+    fail(`source manifest is missing reviewed public artifact path${missing.length === 1 ? "" : "s"} ${missing.join(", ")}`);
+  }
+  return REVIEWED_PUBLIC_ARTIFACT_PATHS.map((file) => {
+    const { sha256: fileSha256, size } = byPath.get(file);
+    return { path: file, sha256: fileSha256, size };
+  });
 }
 
 async function walkArtifact(directory, base = directory, entries = []) {
