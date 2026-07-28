@@ -659,6 +659,11 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
   assert.match(vnextStyleSource, /\.reveal-ready \.reveal \{/u);
   assert.match(vnextStyleSource, /\.menu-ready \.site-header:has\(\.menu-button\) \.site-nav \{/u);
   assert.doesNotMatch(vnextStyleSource, /(?:^|\n)\.js \.reveal \{/u);
+  assert.doesNotMatch(
+    vnextStyleSource,
+    /\.reveal-ready \.reveal(?:\[data-revealed="true"\])? \{[^}]*\btransform\s*:/su,
+    "decorative reveal motion must not move interactive hit geometry while a customer taps",
+  );
   assert.doesNotMatch(vnextStyleSource, /\.js \.site-header:has\(\.menu-button\)/u);
 });
 

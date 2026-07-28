@@ -2925,13 +2925,11 @@ h3 {
 
 .reveal-ready .reveal {
   opacity: 0;
-  transform: translateY(1.25rem);
-  transition: opacity 520ms ease, transform 520ms ease;
+  transition: opacity 520ms ease;
 }
 
 .reveal-ready .reveal[data-revealed="true"] {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .js .hero .reveal,
