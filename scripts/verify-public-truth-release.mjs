@@ -5,6 +5,7 @@ import {
   readFile,
   readdir,
   realpath,
+  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,10 +23,62 @@ export const PUBLIC_PROJECTION_DIGEST = "17f141f964fe604d87e4021ce6b209f04562b5c
 export const MAX_AUTHORITY_LIFETIME_MS = 60 * 60 * 1000;
 export const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 export const MIN_PREDEPLOY_AUTHORITY_REMAINING_MS = 5 * 60 * 1000;
+export const POSTDEPLOY_EVIDENCE_SCHEMA = "sitesourcery.postdeploy-production-proof/v1";
+export const POSTDEPLOY_EVIDENCE_FILE = "public-truth-production-proof.json";
+export const POSTDEPLOY_EVIDENCE_RETENTION_DAYS = 90;
+export const POSTDEPLOY_PROPAGATION_WINDOW_MS = 10 * 60 * 1000;
+export const POSTDEPLOY_POLL_INTERVAL_MS = 15 * 1000;
+export const POSTDEPLOY_REQUEST_TIMEOUT_MS = 15 * 1000;
+export const POSTDEPLOY_REQUEST_CONCURRENCY = 8;
+export const POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS = 2;
+export const PRODUCTION_ORIGIN = "https://sitesourcery.com";
 export const AUTHORITY_STATEMENT = "Authorize one exact inquiry-open, checkout-disabled public-truth reconciliation; deny automated checkout, payment-provider, containment, customer-data, and general deployment authority.";
 export const OG_PNG_SHA256 = "1e1bca44c9b62a54ee79ec670913970b54ff8405adb8520a9d95ee7b887983bc";
 export const OG_SOURCE_SHA256 = "61c324f7c5b18ac2eed19d65b3510b8730654e8718c490966c79ee3195751868";
 export const CARD_V9_PDF_SHA256 = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d73caf99029c5b3605fc";
+
+/*
+ * The live-route proof deliberately duplicates the reviewed route contract.
+ * It must not inherit a candidate-side route-list weakening through a shared
+ * import.
+ */
+export const PRODUCTION_CANONICAL_ROUTE_FILES = Object.freeze({
+  "/": "index.html",
+  "/custom/": "custom/index.html",
+  "/custom/scope/": "custom/scope/index.html",
+  "/custom/process/": "custom/process/index.html",
+  "/abracadabra/": "abracadabra/index.html",
+  "/abracadabra/how/": "abracadabra/how/index.html",
+  "/abracadabra/app/": "abracadabra/app/index.html",
+  "/hive/": "hive/index.html",
+  "/solutions/": "solutions/index.html",
+  "/work/": "work/index.html",
+  "/about/": "about/index.html",
+  "/faq/": "faq/index.html",
+  "/contact/": "contact/index.html",
+  "/start/": "start/index.html",
+  "/legal/": "legal/index.html",
+  "/legal/privacy/": "legal/privacy/index.html",
+  "/legal/website-terms/": "legal/website-terms/index.html",
+});
+
+export const PRODUCTION_LEGACY_REDIRECTS = Object.freeze({
+  "about.html": "/about/",
+  "automation.html": "/hive/",
+  "contact.html": "/contact/",
+  "faq.html": "/faq/",
+  "how-it-works.html": "/custom/process/",
+  "pricing.html": "/custom/scope/",
+  "privacy.html": "/legal/privacy/",
+  "terms.html": "/legal/website-terms/",
+  "thanks.html": "/contact/",
+  "the-difference.html": "/about/#the-difference",
+  "the-meter.html": "/custom/process/#scope",
+  "the-moat.html": "/about/#the-difference",
+  "the-responder.html": "/hive/",
+});
+
+export const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 
 /*
  * This is the complete candidate delta relative to CANDIDATE_BASE_SHA. It is
@@ -183,6 +236,11 @@ const PRIVATE_ARTIFACT_FILE = /(?:^|\/)(?:AGENTS\.md|QUALITY\.md|README(?:\.[^/]
 const PAYMENT_ENDPOINT = /(?:buy\.stripe\.com|checkout\.stripe\.com|js\.stripe\.com|api\.stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|checkout\.com|squareup\.com|square\.link|payment_intent|createCheckoutSession|apple-pay|google-pay)/iu;
 const NETWORK_SINK = /\b(?:fetch\s*\(|XMLHttpRequest\b|sendBeacon\s*\(|WebSocket\s*\(|EventSource\s*\()/u;
 const ENABLE_FORM = /(?:\.disabled\s*=\s*false\b|removeAttribute\s*\(\s*["']disabled["']|\.requestSubmit\s*\(|\.submit\s*\()/u;
+const WEB3FORMS_MARKER = /web3forms/iu;
+const ACCESS_KEY_MARKER = /(?:\bname\s*=\s*(?:"access_key"|'access_key'|access_key)|(?:"access_key"|'access_key'|\baccess_key\b)\s*[:=])/iu;
+const RETIRED_321_IDENTITY = /(?:^|[^\d])(?:\+?1[\s().-]*)?321[\s().-]*788[\s.-]*2555(?:[^\d]|$)/iu;
+const TEXT_PUBLIC_FILE = /(?:^|\.)(?:css|html|js|json|svg|txt|xml)$/iu;
+const POSTDEPLOY_OBSERVATION_MAX_BYTES = 16 * 1024;
 
 export class PublicTruthVerificationError extends Error {
   constructor(message) {
@@ -532,6 +590,18 @@ function decodeHtml(value) {
     .replace(/&gt;/giu, ">");
 }
 
+export function forbiddenPublicMarkers(file, bytes) {
+  safeRepositoryPath(file, "public marker path");
+  if (!Buffer.isBuffer(bytes)) fail(`public marker bytes for ${file} must be a Buffer`);
+  if (!TEXT_PUBLIC_FILE.test(file) && file !== "CNAME") return [];
+  const source = decodeHtml(bytes.toString("utf8"));
+  const markers = [];
+  if (WEB3FORMS_MARKER.test(source)) markers.push("Web3Forms");
+  if (ACCESS_KEY_MARKER.test(source)) markers.push("access_key");
+  if (RETIRED_321_IDENTITY.test(source)) markers.push("retired 321 identity");
+  return markers;
+}
+
 function hasExactHtmlAttribute(attributes, name, expected = null) {
   const expression = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=\u0060<>]+))`, "iu");
   const match = expression.exec(attributes);
@@ -643,6 +713,10 @@ export async function validateArtifactSafety(artifactRoot, sourceManifest) {
       || (entry.path.startsWith(".") && entry.path !== ".nojekyll")
     ) fail(`artifact contains development, governance, or private path ${entry.path}`);
     const bytes = await readFile(path.join(artifactRoot, ...entry.path.split("/")));
+    const forbidden = forbiddenPublicMarkers(entry.path, bytes);
+    if (forbidden.length > 0) {
+      fail(`${entry.path} contains forbidden public marker${forbidden.length === 1 ? "" : "s"} ${forbidden.join(", ")}`);
+    }
     if (entry.path.endsWith(".html")) {
       const html = bytes.toString("utf8");
       assertHeldForms(entry.path, html);
@@ -669,6 +743,685 @@ export async function validateArtifactSafety(artifactRoot, sourceManifest) {
     fail("artifact changed while it was being verified");
   }
   return finalManifest;
+}
+
+export function validateArtifactManifestShape(manifest) {
+  exactObject(manifest, ["count", "entries", "sha256"], "artifact manifest");
+  if (
+    !Number.isSafeInteger(manifest.count)
+    || manifest.count < 1
+    || manifest.count > 1024
+    || !Array.isArray(manifest.entries)
+    || manifest.entries.length !== manifest.count
+  ) fail("artifact manifest count must exactly describe one to 1024 entries");
+  digest(manifest.sha256, "artifact manifest SHA-256");
+  const paths = [];
+  for (const [index, entry] of manifest.entries.entries()) {
+    exactObject(entry, ["path", "sha256", "size"], `artifact manifest entry ${index}`);
+    safeRepositoryPath(entry.path, `artifact manifest entry ${index} path`);
+    digest(entry.sha256, `artifact manifest entry ${index} SHA-256`);
+    if (!Number.isSafeInteger(entry.size) || entry.size < 0 || entry.size > 128 * 1024 * 1024) {
+      fail(`artifact manifest entry ${index} size is outside the allowed bound`);
+    }
+    paths.push(entry.path);
+  }
+  const sorted = [...paths].sort(lexicalCompare);
+  if (stableStringify(paths) !== stableStringify(sorted) || new Set(paths).size !== paths.length) {
+    fail("artifact manifest paths must be bytewise sorted and unique");
+  }
+  exactString(
+    manifest.sha256,
+    sha256(stableStringify(manifest.entries)),
+    "artifact manifest recomputed SHA-256",
+  );
+  return manifest;
+}
+
+export function normalizeLiveOrigin(origin) {
+  if (typeof origin !== "string" || origin.trim() !== origin || origin.length === 0 || origin.length > 2048) {
+    fail("live origin must be one bounded trimmed URL");
+  }
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    fail("live origin must be one absolute URL");
+  }
+  if (
+    parsed.protocol !== "https:"
+    || parsed.username !== ""
+    || parsed.password !== ""
+    || parsed.pathname !== "/"
+    || parsed.search !== ""
+    || parsed.hash !== ""
+    || parsed.port !== ""
+  ) fail("live origin must be one credential-free default-port HTTPS origin with no path, query, or fragment");
+  return parsed.origin;
+}
+
+export function artifactPublicPath(file) {
+  safeRepositoryPath(file, "artifact public path");
+  if (file === "index.html") return "/";
+  if (file.endsWith("/index.html")) return `/${file.slice(0, -"index.html".length)}`;
+  return `/${file}`;
+}
+
+function validatePostdeployDurations({
+  propagationWindowMs,
+  pollIntervalMs,
+  requestTimeoutMs,
+}) {
+  for (const [value, label, maximum] of [
+    [propagationWindowMs, "postdeploy propagation window", 30 * 60 * 1000],
+    [pollIntervalMs, "postdeploy poll interval", 5 * 60 * 1000],
+    [requestTimeoutMs, "postdeploy request timeout", 60 * 1000],
+  ]) {
+    if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+      fail(`${label} must be a positive safe integer no greater than ${maximum}ms`);
+    }
+  }
+  if (pollIntervalMs > propagationWindowMs) {
+    fail("postdeploy poll interval must not exceed the propagation window");
+  }
+}
+
+export function validateProductionRouteManifest(manifest) {
+  validateArtifactManifestShape(manifest);
+  const paths = new Set(manifest.entries.map((entry) => entry.path));
+  for (const [route, file] of Object.entries(PRODUCTION_CANONICAL_ROUTE_FILES)) {
+    if (!paths.has(file)) fail(`production artifact is missing canonical route ${route} at ${file}`);
+    if (artifactPublicPath(file) !== route) {
+      fail(`production canonical route ${route} does not map exactly to ${file}`);
+    }
+  }
+  if (!paths.has("404.html")) fail("production artifact is missing the custom 404 document");
+  for (const file of Object.keys(PRODUCTION_LEGACY_REDIRECTS)) {
+    if (file === SOURCE_ONLY_LEGACY_REDIRECT) {
+      if (paths.has(file)) fail(`${SOURCE_ONLY_LEGACY_REDIRECT} must remain absent from the production artifact`);
+    } else if (!paths.has(file)) {
+      fail(`production artifact is missing legacy redirect ${file}`);
+    }
+  }
+  const publicPaths = manifest.entries.map((entry) => artifactPublicPath(entry.path));
+  if (new Set(publicPaths).size !== publicPaths.length) {
+    fail("two production artifact files resolve to the same public path");
+  }
+  return manifest;
+}
+
+function custom404ProbePath(manifest) {
+  return `/sitesourcery-production-proof-${manifest.sha256.slice(0, 24)}-missing/`;
+}
+
+function productionResourcePlan(manifest, origin) {
+  validateProductionRouteManifest(manifest);
+  const normalizedOrigin = normalizeLiveOrigin(origin);
+  const missing = manifest.entries.find((entry) => entry.path === "404.html");
+  const resources = manifest.entries.map((entry) => {
+    const pathname = artifactPublicPath(entry.path);
+    return Object.freeze({
+      expectedSha256: entry.sha256,
+      expectedSize: entry.size,
+      expectedStatus: 200,
+      file: entry.path,
+      key: `artifact:${entry.path}`,
+      kind: "artifact",
+      pathname,
+      url: new URL(pathname, `${normalizedOrigin}/`).href,
+    });
+  });
+  for (const [key, pathname] of [
+    ["custom-404", custom404ProbePath(manifest)],
+    ["source-only-redirect", `/${SOURCE_ONLY_LEGACY_REDIRECT}`],
+  ]) {
+    resources.push(Object.freeze({
+      expectedSha256: missing.sha256,
+      expectedSize: missing.size,
+      expectedStatus: 404,
+      file: "404.html",
+      key: `absence:${key}`,
+      kind: key,
+      pathname,
+      url: new URL(pathname, `${normalizedOrigin}/`).href,
+    }));
+  }
+  return Object.freeze(resources);
+}
+
+async function readBoundedResponse(response, maximumBytes, controller) {
+  if (!response.body) return { bytes: Buffer.alloc(0), overflow: false };
+  const reader = response.body.getReader();
+  const chunks = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      length += chunk.length;
+      if (length > maximumBytes) {
+        controller.abort();
+        return {
+          bytes: Buffer.concat([...chunks, chunk], Math.min(length, maximumBytes + 1)),
+          overflow: true,
+        };
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return { bytes: Buffer.concat(chunks, length), overflow: false };
+}
+
+function boundedErrorMessage(error) {
+  const message = typeof error?.message === "string" ? error.message : String(error);
+  return message.replace(/\s+/gu, " ").trim().slice(0, 500) || "unknown request failure";
+}
+
+async function requestProductionHead({
+  fetchImpl,
+  requestTimeoutMs,
+  resource,
+}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+  try {
+    const response = await fetchImpl(resource.url, {
+      cache: "no-store",
+      credentials: "omit",
+      headers: Object.freeze({
+        "accept": "*/*",
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+      }),
+      method: "HEAD",
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    if (
+      !response
+      || !Number.isSafeInteger(response.status)
+      || response.status < 100
+      || response.status > 599
+    ) throw new Error(`postdeploy HEAD returned an invalid response for ${resource.pathname}`);
+    const finalUrl = typeof response.url === "string" && response.url !== ""
+      ? response.url
+      : resource.url;
+    const location = typeof response.headers?.get === "function"
+      ? response.headers.get("location")
+      : null;
+    const failures = [];
+    if (response.status !== resource.expectedStatus) {
+      failures.push(`status ${response.status} != ${resource.expectedStatus}`);
+    }
+    if (finalUrl !== resource.url || response.redirected === true || location !== null) {
+      failures.push("redirect observed");
+    }
+    return Object.freeze({
+      error: null,
+      exact: failures.length === 0,
+      failures: Object.freeze(failures),
+      status: response.status,
+    });
+  } catch (error) {
+    return Object.freeze({
+      error: boundedErrorMessage(error),
+      exact: false,
+      failures: Object.freeze(["request failed"]),
+      status: null,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function requestProductionResource({
+  fetchImpl,
+  requestTimeoutMs,
+  resource,
+}) {
+  if (typeof fetchImpl !== "function") fail("postdeploy proof requires a fetch implementation");
+  const head = await requestProductionHead({
+    fetchImpl,
+    requestTimeoutMs,
+    resource,
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+  try {
+    const response = await fetchImpl(resource.url, {
+      cache: "no-store",
+      credentials: "omit",
+      headers: Object.freeze({
+        "accept": "*/*",
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+      }),
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    if (
+      !response
+      || !Number.isSafeInteger(response.status)
+      || response.status < 100
+      || response.status > 599
+      || typeof response.arrayBuffer !== "function"
+    ) throw new Error(`postdeploy GET returned an invalid response for ${resource.pathname}`);
+    const { bytes, overflow } = await readBoundedResponse(
+      response,
+      resource.expectedSize,
+      controller,
+    );
+    const finalUrl = typeof response.url === "string" && response.url !== ""
+      ? response.url
+      : resource.url;
+    const location = typeof response.headers?.get === "function"
+      ? response.headers.get("location")
+      : null;
+    const markers = forbiddenPublicMarkers(resource.file, bytes);
+    const actualSha256 = overflow ? null : sha256(bytes);
+    const exact = (
+      head.exact
+      && !overflow
+      && response.status === resource.expectedStatus
+      && finalUrl === resource.url
+      && response.redirected !== true
+      && location === null
+      && bytes.length === resource.expectedSize
+      && actualSha256 === resource.expectedSha256
+      && markers.length === 0
+    );
+    const failures = head.failures.map((failure) => `HEAD ${failure}`);
+    if (overflow) failures.push("body exceeds expected size");
+    if (response.status !== resource.expectedStatus) {
+      failures.push(`status ${response.status} != ${resource.expectedStatus}`);
+    }
+    if (finalUrl !== resource.url || response.redirected === true || location !== null) {
+      failures.push("redirect observed");
+    }
+    if (!overflow && bytes.length !== resource.expectedSize) {
+      failures.push(`size ${bytes.length} != ${resource.expectedSize}`);
+    }
+    if (!overflow && actualSha256 !== resource.expectedSha256) failures.push("SHA-256 mismatch");
+    if (markers.length > 0) failures.push(`forbidden markers: ${markers.join(", ")}`);
+    return {
+      body: bytes,
+      evidence: Object.freeze({
+        actualSha256,
+        actualSize: overflow ? resource.expectedSize + 1 : bytes.length,
+        error: null,
+        exact,
+        expectedSha256: resource.expectedSha256,
+        expectedSize: resource.expectedSize,
+        expectedStatus: resource.expectedStatus,
+        failures: Object.freeze(failures),
+        file: resource.file,
+        forbiddenMarkers: Object.freeze(markers),
+        headError: head.error,
+        headFailures: head.failures,
+        headStatus: head.status,
+        key: resource.key,
+        kind: resource.kind,
+        pathname: resource.pathname,
+        status: response.status,
+        url: resource.url,
+      }),
+    };
+  } catch (error) {
+    return {
+      body: null,
+      evidence: Object.freeze({
+        actualSha256: null,
+        actualSize: null,
+        error: boundedErrorMessage(error),
+        exact: false,
+        expectedSha256: resource.expectedSha256,
+        expectedSize: resource.expectedSize,
+        expectedStatus: resource.expectedStatus,
+        failures: Object.freeze([
+          ...head.failures.map((failure) => `HEAD ${failure}`),
+          "GET failed",
+        ]),
+        file: resource.file,
+        forbiddenMarkers: Object.freeze([]),
+        headError: head.error,
+        headFailures: head.failures,
+        headStatus: head.status,
+        key: resource.key,
+        kind: resource.kind,
+        pathname: resource.pathname,
+        status: null,
+        url: resource.url,
+      }),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function mapWithConcurrency(values, concurrency, callback) {
+  if (
+    !Array.isArray(values)
+    || !Number.isSafeInteger(concurrency)
+    || concurrency < 1
+    || typeof callback !== "function"
+  ) fail("postdeploy request scheduler received an invalid plan");
+  const results = new Array(values.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (cursor < values.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await callback(values[index], index);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+export async function inspectLiveProductionSnapshot({
+  manifest,
+  origin,
+  resourceKeys,
+  fetchImpl = globalThis.fetch,
+  requestTimeoutMs = POSTDEPLOY_REQUEST_TIMEOUT_MS,
+} = {}) {
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > 60 * 1000) {
+    fail("postdeploy request timeout is outside the allowed bound");
+  }
+  const plan = productionResourcePlan(manifest, origin);
+  const allowed = new Set(plan.map((resource) => resource.key));
+  const selected = resourceKeys === undefined
+    ? plan
+    : (() => {
+        if (
+          !Array.isArray(resourceKeys)
+          || resourceKeys.length === 0
+          || new Set(resourceKeys).size !== resourceKeys.length
+          || resourceKeys.some((key) => !allowed.has(key))
+        ) fail("postdeploy resource keys must be one nonempty unique subset of the production plan");
+        const requested = new Set(resourceKeys);
+        return plan.filter((resource) => requested.has(resource.key));
+      })();
+  const results = await mapWithConcurrency(
+    selected,
+    POSTDEPLOY_REQUEST_CONCURRENCY,
+    (resource) => requestProductionResource({
+      fetchImpl,
+      requestTimeoutMs,
+      resource,
+    }),
+  );
+  const resources = [];
+  const bodies = new Map();
+  for (const [index, result] of results.entries()) {
+    const resource = selected[index];
+    resources.push(result.evidence);
+    if (result.body) bodies.set(resource.key, result.body);
+  }
+  const mismatchKeys = resources.filter((resource) => !resource.exact).map((resource) => resource.key);
+  const forbidden = resources.flatMap((resource) => (
+    resource.forbiddenMarkers.map((marker) => `${resource.pathname}: ${marker}`)
+  ));
+  return Object.freeze({
+    bodies,
+    checkedCount: resources.length,
+    exact: mismatchKeys.length === 0,
+    exactCount: resources.length - mismatchKeys.length,
+    forbidden: Object.freeze(forbidden),
+    full: selected.length === plan.length,
+    mismatchKeys: Object.freeze(mismatchKeys),
+    resources: Object.freeze(resources),
+    totalResourceCount: plan.length,
+  });
+}
+
+function postdeployFailure(message, details) {
+  const error = new PublicTruthVerificationError(message);
+  error.postdeployEvidence = details;
+  throw error;
+}
+
+function defaultSleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function pollLiveProduction({
+  manifest,
+  origin,
+  fetchImpl = globalThis.fetch,
+  now = Date.now,
+  sleep = defaultSleep,
+  propagationWindowMs = POSTDEPLOY_PROPAGATION_WINDOW_MS,
+  pollIntervalMs = POSTDEPLOY_POLL_INTERVAL_MS,
+  requestTimeoutMs = POSTDEPLOY_REQUEST_TIMEOUT_MS,
+} = {}) {
+  validatePostdeployDurations({
+    propagationWindowMs,
+    pollIntervalMs,
+    requestTimeoutMs,
+  });
+  validateProductionRouteManifest(manifest);
+  const normalizedOrigin = normalizeLiveOrigin(origin);
+  if (typeof now !== "function" || typeof sleep !== "function") {
+    fail("postdeploy proof requires clock and sleep functions");
+  }
+  const startedAtMs = now();
+  if (!Number.isSafeInteger(startedAtMs) || startedAtMs < 0) {
+    fail("postdeploy clock must return a nonnegative safe integer");
+  }
+  const maximumAttempts = Math.ceil(propagationWindowMs / pollIntervalMs)
+    + POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS + 2;
+  const attempts = [];
+  let consecutiveExactFullSnapshots = 0;
+  let pendingKeys;
+  let finalSnapshot = null;
+
+  for (let sequence = 1; sequence <= maximumAttempts; sequence += 1) {
+    const snapshot = await inspectLiveProductionSnapshot({
+      manifest,
+      origin: normalizedOrigin,
+      resourceKeys: pendingKeys,
+      fetchImpl,
+      requestTimeoutMs,
+    });
+    const observedAtMs = now();
+    if (!Number.isSafeInteger(observedAtMs) || observedAtMs < startedAtMs) {
+      fail("postdeploy clock moved backwards or returned an invalid time");
+    }
+    const elapsedMs = observedAtMs - startedAtMs;
+    attempts.push(Object.freeze({
+      checkedCount: snapshot.checkedCount,
+      elapsedMs,
+      exactCount: snapshot.exactCount,
+      forbidden: snapshot.forbidden,
+      full: snapshot.full,
+      mismatchKeys: snapshot.mismatchKeys,
+      sequence,
+    }));
+    if (snapshot.exact && snapshot.full) {
+      consecutiveExactFullSnapshots += 1;
+      finalSnapshot = snapshot;
+      pendingKeys = undefined;
+      if (
+        consecutiveExactFullSnapshots >= POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS
+        && elapsedMs <= propagationWindowMs
+      ) {
+        return Object.freeze({
+          attempts: Object.freeze(attempts),
+          completedAtMs: observedAtMs,
+          consecutiveExactFullSnapshots,
+          finalSnapshot,
+          origin: normalizedOrigin,
+          propagationWindowMs,
+          startedAtMs,
+        });
+      }
+    } else if (snapshot.exact) {
+      consecutiveExactFullSnapshots = 0;
+      pendingKeys = undefined;
+    } else {
+      consecutiveExactFullSnapshots = 0;
+      pendingKeys = [...snapshot.mismatchKeys];
+    }
+    if (elapsedMs >= propagationWindowMs || sequence === maximumAttempts) {
+      const mismatches = snapshot.mismatchKeys.join(", ") || "no two consecutive full exact snapshots";
+      const forbidden = snapshot.forbidden.length > 0
+        ? `; forbidden markers: ${snapshot.forbidden.join("; ")}`
+        : "";
+      postdeployFailure(
+        `postdeploy propagation timed out after ${elapsedMs}ms; unresolved: ${mismatches}${forbidden}`,
+        Object.freeze({
+          attempts: Object.freeze(attempts),
+          completedAtMs: observedAtMs,
+          origin: normalizedOrigin,
+          resources: snapshot.resources,
+          result: "fail",
+          startedAtMs,
+        }),
+      );
+    }
+    await sleep(Math.min(pollIntervalMs, propagationWindowMs - elapsedMs));
+  }
+  fail("postdeploy propagation loop exhausted its deterministic bound");
+}
+
+function htmlAttributeValue(attributes, name) {
+  const expression = new RegExp(
+    `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=\u0060<>]+))`,
+    "iu",
+  );
+  const match = expression.exec(attributes);
+  return match ? (match[1] ?? match[2] ?? match[3] ?? "") : null;
+}
+
+function htmlTags(source, name) {
+  const expression = new RegExp(`<${name}\\b([^>]*)>`, "giu");
+  return [...source.matchAll(expression)].map((match) => match[1]);
+}
+
+function htmlTagsWithAttribute(source, name, attribute, expected) {
+  return htmlTags(source, name).filter((attributes) => (
+    (htmlAttributeValue(attributes, attribute) ?? "").toLowerCase() === expected
+  ));
+}
+
+async function exactArtifactText(artifactRoot, manifest, file) {
+  const entry = manifest.entries.find((candidate) => candidate.path === file);
+  if (!entry) fail(`production route contract is missing ${file}`);
+  const bytes = await readFile(path.join(artifactRoot, ...file.split("/")));
+  if (bytes.length !== entry.size || sha256(bytes) !== entry.sha256) {
+    fail(`production route contract bytes differ from the manifest at ${file}`);
+  }
+  return bytes.toString("utf8");
+}
+
+function assertCanonicalProductionHtml(route, file, source) {
+  const canonical = htmlTags(source, "link").filter((attributes) => (
+    (htmlAttributeValue(attributes, "rel") ?? "").toLowerCase().split(/\s+/u).includes("canonical")
+  ));
+  const expected = new URL(route, `${PRODUCTION_ORIGIN}/`).href;
+  if (canonical.length !== 1 || htmlAttributeValue(canonical[0], "href") !== expected) {
+    fail(`live canonical route ${route} must carry exactly ${expected}`);
+  }
+  if (htmlTagsWithAttribute(source, "meta", "http-equiv", "refresh").length > 0) {
+    fail(`live canonical route ${route} must not contain a meta refresh`);
+  }
+  const noindex = htmlTagsWithAttribute(source, "meta", "name", "robots").some((attributes) => (
+    (htmlAttributeValue(attributes, "content") ?? "").toLowerCase().split(/[\s,]+/u).includes("noindex")
+  ));
+  if (noindex) fail(`live canonical route ${route} must remain indexable`);
+  if (!file.endsWith("index.html")) fail(`live canonical route ${route} has a non-index artifact file`);
+}
+
+function assertLegacyProductionRedirect(file, target, source) {
+  const robots = htmlTagsWithAttribute(source, "meta", "name", "robots");
+  if (
+    robots.length !== 1
+    || !(htmlAttributeValue(robots[0], "content") ?? "").toLowerCase().split(/[\s,]+/u).includes("noindex")
+  ) fail(`live legacy redirect ${file} must carry one robots noindex directive`);
+  const refresh = htmlTagsWithAttribute(source, "meta", "http-equiv", "refresh");
+  const expectedRefresh = `0;url=${target}`;
+  if (
+    refresh.length !== 1
+    || (htmlAttributeValue(refresh[0], "content") ?? "").replace(/\s+/gu, "") !== expectedRefresh
+  ) fail(`live legacy redirect ${file} refresh must be ${expectedRefresh}`);
+  const canonical = htmlTags(source, "link").filter((attributes) => (
+    (htmlAttributeValue(attributes, "rel") ?? "").toLowerCase().split(/\s+/u).includes("canonical")
+  ));
+  const expectedCanonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
+  if (canonical.length !== 1 || htmlAttributeValue(canonical[0], "href") !== expectedCanonical) {
+    fail(`live legacy redirect ${file} canonical must be ${expectedCanonical}`);
+  }
+  if (!htmlTags(source, "a").some((attributes) => htmlAttributeValue(attributes, "href") === target)) {
+    fail(`live legacy redirect ${file} must include a fallback link to ${target}`);
+  }
+  if (/<form\b|<(?:script|iframe)\b/iu.test(source)) {
+    fail(`live legacy redirect ${file} must not contain forms, scripts, or frames`);
+  }
+}
+
+export async function verifyProductionRouteContract({
+  artifactRoot,
+  manifest,
+  finalSnapshot,
+} = {}) {
+  validateProductionRouteManifest(manifest);
+  if (
+    typeof artifactRoot !== "string"
+    || artifactRoot.length === 0
+    || !finalSnapshot
+    || finalSnapshot.full !== true
+    || finalSnapshot.exact !== true
+  ) fail("production route contract requires one exact full live snapshot and artifact root");
+  const byKey = new Map(finalSnapshot.resources.map((resource) => [resource.key, resource]));
+  for (const entry of manifest.entries) {
+    if (byKey.get(`artifact:${entry.path}`)?.exact !== true) {
+      fail(`production route contract lacks an exact live result for ${entry.path}`);
+    }
+  }
+  if (byKey.get("absence:custom-404")?.exact !== true) {
+    fail("production custom 404 route did not return the exact 404 document and status");
+  }
+  if (byKey.get("absence:source-only-redirect")?.exact !== true) {
+    fail(`${SOURCE_ONLY_LEGACY_REDIRECT} did not resolve through the exact custom 404 contract`);
+  }
+  for (const [route, file] of Object.entries(PRODUCTION_CANONICAL_ROUTE_FILES)) {
+    assertCanonicalProductionHtml(
+      route,
+      file,
+      await exactArtifactText(artifactRoot, manifest, file),
+    );
+  }
+  const notFound = await exactArtifactText(artifactRoot, manifest, "404.html");
+  const notFoundRobots = htmlTagsWithAttribute(notFound, "meta", "name", "robots");
+  const notFoundNoindex = notFoundRobots.some((attributes) => (
+    (htmlAttributeValue(attributes, "content") ?? "").toLowerCase().split(/[\s,]+/u).includes("noindex")
+  ));
+  if (!notFoundNoindex || htmlTags(notFound, "h1").length !== 1) {
+    fail("production custom 404 document must carry noindex and exactly one h1");
+  }
+  for (const [file, target] of Object.entries(PRODUCTION_LEGACY_REDIRECTS)) {
+    if (file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
+    assertLegacyProductionRedirect(
+      file,
+      target,
+      await exactArtifactText(artifactRoot, manifest, file),
+    );
+  }
+  return Object.freeze({
+    canonicalRoutes: Object.freeze(Object.keys(PRODUCTION_CANONICAL_ROUTE_FILES)),
+    custom404Path: custom404ProbePath(manifest),
+    legacyRedirects: Object.freeze(
+      Object.keys(PRODUCTION_LEGACY_REDIRECTS).filter((file) => file !== SOURCE_ONLY_LEGACY_REDIRECT),
+    ),
+    sourceOnlyRedirectAbsence: SOURCE_ONLY_LEGACY_REDIRECT,
+  });
 }
 
 function htmlToText(html) {
@@ -806,6 +1559,7 @@ export function validatePublicTruthTextSet({
     "--mode candidate",
     "--mode control",
     "--mode predeploy",
+    "--mode postdeploy",
     "GITHUB_EVENT_NAME",
     "GITHUB_RUN_ATTEMPT",
     "GITHUB_WORKFLOW_SHA",
@@ -817,8 +1571,10 @@ export function validatePublicTruthTextSet({
   }
   const validateJob = workflowJobBody(workflowText, "validate");
   const deployJob = workflowJobBody(workflowText, "deploy");
+  const postdeployJob = workflowJobBody(workflowText, "postdeploy");
   if (!validateJob) errors.push("workflow must contain exactly one anchored validate job");
   if (!deployJob) errors.push("workflow must contain exactly one anchored deploy job");
+  if (!postdeployJob) errors.push("workflow must contain exactly one anchored postdeploy job");
   const environmentHeaders = typeof deployJob === "string"
     ? [...deployJob.matchAll(/^ {4}environment:\s*$/gmu)].length
     : 0;
@@ -878,6 +1634,12 @@ export function validatePublicTruthTextSet({
     deployJob,
     /^ {10}CONTROL_SHA: \$\{\{ inputs\.control_sha \}\}\s*$/mu,
     "control SHA handoff to artifact metadata validation",
+    errors,
+  );
+  requireWorkflowPattern(
+    deployJob,
+    /^ {4}outputs:\s*$\n^ {6}page_url: \$\{\{ steps\.deployment\.outputs\.page_url \}\}\s*$/mu,
+    "deployment page URL job output",
     errors,
   );
   requireWorkflowPattern(
@@ -948,6 +1710,84 @@ export function validatePublicTruthTextSet({
     "explicit deploy-pages artifact name",
     errors,
   );
+  requireWorkflowPattern(
+    deployJob,
+    /^ {4}timeout-minutes: 8\s*$/mu,
+    "bounded mutation-capable deploy timeout",
+    errors,
+  );
+  for (const [pattern, label] of [
+    [/^ {4}if: \$\{\{ always\(\) && needs\.validate\.result == 'success' \}\}\s*$/mu, "postdeploy job execution after every deploy outcome"],
+    [/^ {4}permissions:\s*$\n^ {6}actions: read\s*$\n^ {6}contents: read\s*$\n^ {6}pages: read\s*$/mu, "read-only postdeploy job permissions"],
+    [/^ {4}timeout-minutes: 40\s*$/mu, "bounded postdeploy timeout"],
+    [/^ {4}needs:\s*$\n^ {6}- validate\s*$\n^ {6}- deploy\s*$/mu, "postdeploy lineage dependencies"],
+  ]) requireWorkflowPattern(postdeployJob, pattern, label, errors);
+  if (
+    typeof postdeployJob === "string"
+    && (
+      /^ {6}(?:id-token|pages): write\s*$/mu.test(postdeployJob)
+      || /actions\/deploy-pages@/u.test(postdeployJob)
+      || /^ {4}environment:\s*$/mu.test(postdeployJob)
+    )
+  ) errors.push("postdeploy job must remain read-only and outside the deployment environment");
+  for (const [pattern, label] of [
+    [/^ {10}ref: \$\{\{ inputs\.control_sha \}\}\s*$/mu, "postdeploy exact control checkout"],
+    [/^ {10}node-version-file: control\/\.nvmrc\s*$/mu, "postdeploy control-pinned Node runtime"],
+    [/^ {8}if: \$\{\{ needs\.deploy\.result == 'success' \}\}\s*$/mu, "successful-deployment reconstruction guard"],
+    [/^ {10}ref: \$\{\{ inputs\.candidate_sha \}\}\s*$/mu, "postdeploy exact candidate checkout"],
+    [/^ {8}run: npm ci --ignore-scripts\s*$/mu, "postdeploy locked dependency installation"],
+    [/^ {8}run: npm run build:pages\s*$/mu, "postdeploy deterministic artifact reconstruction"],
+  ]) requireWorkflowPattern(postdeployJob, pattern, label, errors);
+  requireWorkflowPattern(
+    postdeployJob,
+    /^ {6}- name: Install exact reviewed Chromium for the live proof\s*$\n^ {8}if: \$\{\{ needs\.deploy\.result == 'success' \}\}\s*$\n^ {8}working-directory: control\s*$\n^ {8}run: bash \.\/scripts\/install-reviewed-chromium\.sh "\$RUNNER_TEMP\/postdeploy-reviewed-chromium" "\$GITHUB_ENV"\s*$/mu,
+    "reviewed Chromium installation for the live proof",
+    errors,
+  );
+  const postdeployStep = workflowStepBody(postdeployJob, "postdeploy-proof");
+  for (const [pattern, label] of [
+    [/^ {10}node --experimental-websocket scripts\/verify-public-truth-release\.mjs \\\s*$/mu, "postdeploy Node browser runtime"],
+    [/^ {8}if: \$\{\{ always\(\) \}\}\s*$/mu, "fail-closed postdeploy execution and evidence after every deployment outcome"],
+    [/^ {10}ARTIFACT_ID: \$\{\{ needs\.validate\.outputs\.artifact_id \}\}\s*$/mu, "postdeploy artifact identity handoff"],
+    [/^ {10}DEPLOYMENT_PAGE_URL: \$\{\{ needs\.deploy\.outputs\.page_url \}\}\s*$/mu, "postdeploy page URL identity"],
+    [/^ {10}DEPLOYMENT_STATUS: \$\{\{ needs\.deploy\.result \}\}\s*$/mu, "postdeploy action outcome identity"],
+    [/^ {10}GH_TOKEN: \$\{\{ github\.token \}\}\s*$/mu, "postdeploy read token"],
+    [/^ {10}LIVE_ORIGIN: https:\/\/sitesourcery\.com\s*$/mu, "exact production origin"],
+    [/^ {10}PRODUCTION_PROOF_EVIDENCE: \$\{\{ runner\.temp \}\}\/public-truth-production-proof\.json\s*$/mu, "private evidence path"],
+    [/^ {12}--mode postdeploy \\\s*$/mu, "postdeploy verifier mode"],
+    [/^ {12}--artifact-root "\$\{\{ github\.workspace \}\}\/target\/_site" \\\s*$/mu, "postdeploy reconstructed artifact root"],
+    [/^ {12}--artifact-id "\$ARTIFACT_ID" \\\s*$/mu, "postdeploy artifact ID"],
+    [/^ {12}--origin "\$LIVE_ORIGIN" \\\s*$/mu, "postdeploy live origin"],
+    [/^ {12}--deployment-page-url "\$DEPLOYMENT_PAGE_URL" \\\s*$/mu, "postdeploy deployment page URL"],
+    [/^ {12}--deployment-status "\$DEPLOYMENT_STATUS" \\\s*$/mu, "postdeploy deployment outcome"],
+    [/^ {12}--evidence "\$PRODUCTION_PROOF_EVIDENCE"\s*$/mu, "postdeploy evidence output"],
+  ]) requireWorkflowPattern(postdeployStep, pattern, label, errors);
+  const evidenceStep = workflowStepBody(postdeployJob, "production-proof-evidence");
+  requireWorkflowPattern(
+    evidenceStep,
+    /^ {8}if: \$\{\{ always\(\) \}\}\s*$/mu,
+    "always-retained postdeploy evidence",
+    errors,
+  );
+  requireWorkflowPattern(
+    evidenceStep,
+    /^ {8}uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a(?:\s+#.*)?$/mu,
+    "pinned postdeploy evidence upload",
+    errors,
+  );
+  requireWorkflowPattern(
+    evidenceStep,
+    /^ {8}with:\s*$\n^ {10}name: public-truth-production-proof-\$\{\{ github\.run_id \}\}\s*$\n^ {10}path: \$\{\{ runner\.temp \}\}\/public-truth-production-proof\.json\s*$\n^ {10}retention-days: 90\s*$\n^ {10}if-no-files-found: error\s*$\n^ {10}overwrite: false\s*$\n^ {10}include-hidden-files: false\s*$/mu,
+    "90-day private postdeploy evidence contract",
+    errors,
+  );
+  if (
+    typeof postdeployJob === "string"
+    && !(
+      postdeployJob.indexOf("        id: postdeploy-proof") >= 0
+      && postdeployJob.indexOf("        id: postdeploy-proof") < postdeployJob.indexOf("        id: production-proof-evidence")
+    )
+  ) errors.push("workflow retained evidence must follow the postdeploy proof");
   if (/(?:^|\n)\s+(?:push|pull_request|schedule|repository_dispatch)\s*:/u.test(workflowText)) {
     errors.push("workflow contains a non-manual trigger");
   }
@@ -1531,6 +2371,469 @@ export async function verifyPredeploy({
   });
 }
 
+export function validatePagesDeploymentObservation(observation, controlSha) {
+  digest(controlSha, "postdeploy control SHA", 40);
+  exactObject(observation, ["status"], "Pages deployment observation");
+  exactString(observation.status, "succeed", "Pages deployment status");
+  return Object.freeze({
+    buildVersion: controlSha,
+    status: observation.status,
+  });
+}
+
+export function validatePostdeployIdentity(identity) {
+  exactObject(identity, [
+    "actor",
+    "actorId",
+    "artifactFileCount",
+    "artifactId",
+    "artifactManifestSha256",
+    "candidateSha",
+    "controlSha",
+    "deploymentPageUrl",
+    "deploymentStatus",
+    "origin",
+    "pagesDeploymentBuildVersion",
+    "pagesDeploymentStatus",
+    "pagesDeploymentUrl",
+    "repository",
+    "repositoryId",
+    "runAttempt",
+    "runId",
+    "sourceManifestSha256",
+    "workflowSha",
+  ], "postdeploy identity");
+  digest(identity.candidateSha, "postdeploy candidate SHA", 40);
+  digest(identity.controlSha, "postdeploy control SHA", 40);
+  if (identity.candidateSha === identity.controlSha) {
+    fail("postdeploy candidate and control identities must remain distinct");
+  }
+  digest(identity.artifactManifestSha256, "postdeploy artifact manifest SHA-256");
+  digest(identity.sourceManifestSha256, "postdeploy source manifest SHA-256");
+  if (!Number.isSafeInteger(identity.artifactFileCount) || identity.artifactFileCount < 1) {
+    fail("postdeploy artifact file count must be a positive safe integer");
+  }
+  decimalId(identity.artifactId, "postdeploy artifact ID");
+  exactString(identity.repository, REPOSITORY_FULL_NAME, "postdeploy repository");
+  decimalId(identity.repositoryId, "postdeploy repository ID");
+  decimalId(identity.actorId, "postdeploy actor ID");
+  decimalId(identity.runId, "postdeploy run ID");
+  exactString(identity.runAttempt, "1", "postdeploy run attempt");
+  if (typeof identity.actor !== "string" || identity.actor.length === 0) {
+    fail("postdeploy actor is required");
+  }
+  exactString(identity.workflowSha, identity.controlSha, "postdeploy workflow SHA");
+  exactString(
+    identity.pagesDeploymentBuildVersion,
+    identity.controlSha,
+    "Pages deployment build version",
+  );
+  exactString(
+    identity.pagesDeploymentUrl,
+    `https://api.github.com/repos/${REPOSITORY_FULL_NAME}/pages/deployments/${identity.controlSha}`,
+    "Pages deployment observation URL",
+  );
+  exactString(identity.deploymentStatus, "success", "deploy-pages action outcome");
+  exactString(identity.pagesDeploymentStatus, "succeed", "Pages deployment observation status");
+  const origin = normalizeLiveOrigin(identity.origin);
+  exactString(normalizeLiveOrigin(identity.deploymentPageUrl), origin, "deployed Pages URL");
+  return Object.freeze({ ...identity, origin });
+}
+
+async function observePagesDeployment({
+  controlSha,
+  env,
+  fetchImpl,
+  requestTimeoutMs,
+}) {
+  const token = env.GH_TOKEN;
+  if (
+    typeof token !== "string"
+    || token.length < 20
+    || token.length > 4096
+    || /\s/u.test(token)
+  ) fail("postdeploy Pages observation requires one bounded GitHub token");
+  const url = `https://api.github.com/repos/${REPOSITORY_FULL_NAME}/pages/deployments/${controlSha}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      cache: "no-store",
+      credentials: "omit",
+      headers: Object.freeze({
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${token}`,
+        "user-agent": "sitesourcery-public-truth-postdeploy",
+        "x-github-api-version": "2022-11-28",
+      }),
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    if (
+      !response
+      || response.status !== 200
+      || response.redirected === true
+      || (response.url !== "" && response.url !== url)
+      || response.headers?.get?.("location") !== null
+    ) fail("exact GitHub Pages deployment observation GET did not return a direct 200 response");
+    const { bytes, overflow } = await readBoundedResponse(
+      response,
+      POSTDEPLOY_OBSERVATION_MAX_BYTES,
+      controller,
+    );
+    if (overflow) fail("GitHub Pages deployment observation exceeded its byte bound");
+    return Object.freeze({
+      ...validatePagesDeploymentObservation(
+        parseStrictJson(bytes.toString("utf8")),
+        controlSha,
+      ),
+      url,
+    });
+  } catch (error) {
+    if (error instanceof PublicTruthVerificationError) throw error;
+    fail(`GitHub Pages deployment observation GET failed: ${boundedErrorMessage(error)}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function defaultBrowserAudit(options) {
+  const { auditBrowser } = await import("./browser-audit-vnext.mjs");
+  return auditBrowser(options);
+}
+
+async function writePostdeployEvidence(evidencePath, evidence) {
+  if (
+    typeof evidencePath !== "string"
+    || !path.isAbsolute(evidencePath)
+    || path.basename(evidencePath) !== POSTDEPLOY_EVIDENCE_FILE
+  ) fail(`postdeploy evidence path must be absolute and end in ${POSTDEPLOY_EVIDENCE_FILE}`);
+  const parent = path.dirname(evidencePath);
+  const parentStat = await lstat(parent);
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+    fail("postdeploy evidence parent must be one real directory");
+  }
+  exactString(await realpath(parent), parent, "postdeploy evidence parent canonical path");
+  scanPlainJson(evidence);
+  try {
+    await writeFile(evidencePath, `${stableStringify(evidence)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+  } catch (error) {
+    if (error?.code === "EEXIST") fail("postdeploy evidence file must not already exist");
+    throw error;
+  }
+}
+
+function sealPostdeployEvidence(evidence) {
+  const proofSha256 = sha256(stableStringify(evidence));
+  return Object.freeze({ ...evidence, proofSha256 });
+}
+
+function postdeployContext({
+  artifact,
+  identity,
+  receipt,
+  receiptSha256,
+}) {
+  return Object.freeze({
+    artifactFileCount: artifact.count,
+    artifactManifestSha256: artifact.sha256,
+    identity,
+    receiptSha256,
+    releaseEpochSha256: receipt.authority.epochSha256,
+  });
+}
+
+export async function verifyPostdeploy({
+  root,
+  artifactRoot,
+  artifactId,
+  candidateSha,
+  controlSha,
+  productionPredecessor,
+  authorityReceipt,
+  origin,
+  deploymentPageUrl,
+  deploymentStatus,
+  evidence,
+  env = process.env,
+  now = Date.now,
+  sleep = defaultSleep,
+  fetchImpl = globalThis.fetch,
+  browserAudit = defaultBrowserAudit,
+  propagationWindowMs = POSTDEPLOY_PROPAGATION_WINDOW_MS,
+  pollIntervalMs = POSTDEPLOY_POLL_INTERVAL_MS,
+  requestTimeoutMs = POSTDEPLOY_REQUEST_TIMEOUT_MS,
+} = {}) {
+  const repositoryRoot = await validateRoot(root);
+  digest(candidateSha, "postdeploy candidate SHA", 40);
+  digest(controlSha, "postdeploy control SHA", 40);
+  digest(productionPredecessor, "postdeploy production predecessor", 40);
+  exactString(productionPredecessor, PRODUCTION_PREDECESSOR_SHA, "postdeploy production predecessor");
+  if (deploymentStatus !== "success") {
+    fail(`postdeploy proof requires a successful deploy-pages outcome, received ${JSON.stringify(deploymentStatus)}`);
+  }
+  exactString(git(repositoryRoot, ["rev-parse", "HEAD"]), controlSha, "postdeploy control checkout HEAD");
+  validateCleanTrackedCheckout(repositoryRoot);
+  validateCandidateGraph(repositoryRoot, candidateSha);
+  exactString(gitParent(repositoryRoot, controlSha, "postdeploy control"), candidateSha, "postdeploy control parent");
+  exactArray(
+    gitDiffPaths(repositoryRoot, candidateSha, controlSha),
+    CONTROL_CHANGED_PATHS,
+    "postdeploy control changed paths",
+  );
+  const runtime = validateRuntimeAuthorityEnvironment(env, controlSha);
+  const { control: candidateControl } = await validateCandidateSourceRevision(repositoryRoot, candidateSha);
+  const sourceManifest = sourceManifestFromGit(repositoryRoot, candidateSha);
+  if (typeof artifactRoot !== "string" || artifactRoot.length === 0) {
+    fail("postdeploy artifact root is required");
+  }
+  const resolvedArtifactRoot = path.isAbsolute(artifactRoot)
+    ? path.normalize(artifactRoot)
+    : path.resolve(repositoryRoot, artifactRoot);
+  const artifact = await validateArtifactSafety(resolvedArtifactRoot, sourceManifest);
+  validateProductionRouteManifest(artifact);
+  const receiptRaw = await readExactReceipt(repositoryRoot, authorityReceipt, controlSha);
+  const receiptSha256 = sha256(receiptRaw);
+  const currentTime = now();
+  if (!Number.isSafeInteger(currentTime) || currentTime < 0) {
+    fail("postdeploy clock must return a nonnegative safe integer");
+  }
+  const parsedReceipt = parseStrictJson(receiptRaw.toString("utf8"));
+  const receiptIdentityTime = Date.parse(parsedReceipt?.authority?.notBefore);
+  if (!Number.isSafeInteger(receiptIdentityTime) || receiptIdentityTime < 0) {
+    fail("postdeploy receipt notBefore must identify a valid nonnegative time");
+  }
+  /*
+   * Predeploy already proves that authority is live immediately before the
+   * mutation. Postdeploy is read-only and may outlast that one-shot window, so
+   * it revalidates the receipt's immutable identity at its own notBefore rather
+   * than treating later CDN propagation as new deployment authority.
+   */
+  const receipt = validateReceipt(parsedReceipt, {
+    ...runtime,
+    now: receiptIdentityTime,
+    candidateSha,
+    productionPredecessor,
+    sourceManifestSha256: sourceManifest.sha256,
+    artifactManifestSha256: artifact.sha256,
+  });
+  const enabledControl = parseStrictJson(
+    readGitFile(repositoryRoot, controlSha, "data/release-control.json").toString("utf8"),
+  );
+  validateEnabledControl(enabledControl, receipt, receiptSha256, {
+    ...runtime,
+    now: receiptIdentityTime,
+    candidateSha,
+    productionPredecessor,
+    sourceManifestSha256: sourceManifest.sha256,
+    artifactManifestSha256: artifact.sha256,
+  });
+  validateCandidateControl(candidateControl);
+  const pagesDeployment = await observePagesDeployment({
+    controlSha,
+    env,
+    fetchImpl,
+    requestTimeoutMs,
+  });
+  const identity = validatePostdeployIdentity({
+    actor: runtime.actor,
+    actorId: runtime.actorId,
+    artifactFileCount: artifact.count,
+    artifactId,
+    artifactManifestSha256: artifact.sha256,
+    candidateSha,
+    controlSha,
+    deploymentPageUrl,
+    deploymentStatus,
+    origin,
+    pagesDeploymentBuildVersion: pagesDeployment.buildVersion,
+    pagesDeploymentStatus: pagesDeployment.status,
+    pagesDeploymentUrl: pagesDeployment.url,
+    repository: runtime.repository,
+    repositoryId: runtime.repositoryId,
+    runAttempt: env.GITHUB_RUN_ATTEMPT,
+    runId: env.GITHUB_RUN_ID,
+    sourceManifestSha256: sourceManifest.sha256,
+    workflowSha: env.GITHUB_WORKFLOW_SHA,
+  });
+  const context = postdeployContext({
+    artifact,
+    identity,
+    receipt,
+    receiptSha256,
+  });
+
+  try {
+    const live = await pollLiveProduction({
+      manifest: artifact,
+      origin: identity.origin,
+      fetchImpl,
+      now,
+      sleep,
+      propagationWindowMs,
+      pollIntervalMs,
+      requestTimeoutMs,
+    });
+    const routes = await verifyProductionRouteContract({
+      artifactRoot: resolvedArtifactRoot,
+      manifest: artifact,
+      finalSnapshot: live.finalSnapshot,
+    });
+    if (typeof browserAudit !== "function") fail("postdeploy exact browser audit is unavailable");
+    const browser = await browserAudit({
+      artifactRoot: resolvedArtifactRoot,
+      origin: identity.origin,
+      profile: "vnext",
+      routes: Object.keys(PRODUCTION_CANONICAL_ROUTE_FILES),
+    });
+    if (
+      !browser
+      || !Array.isArray(browser.errors)
+      || !Array.isArray(browser.results)
+    ) fail("postdeploy exact browser audit returned an invalid result");
+    if (browser.errors.length > 0) {
+      postdeployFailure(
+        `postdeploy exact browser audit failed: ${browser.errors.map(boundedErrorMessage).join("; ")}`,
+        Object.freeze({
+          ...context,
+          browserErrorCount: browser.errors.length,
+          result: "fail",
+        }),
+      );
+    }
+    const auditedRoutes = Object.keys(PRODUCTION_CANONICAL_ROUTE_FILES);
+    const missingBrowserRoutes = auditedRoutes.filter((route) => (
+      !browser.results.some((result) => result?.route === route)
+    ));
+    if (browser.results.length < auditedRoutes.length || missingBrowserRoutes.length > 0) {
+      postdeployFailure(
+        `postdeploy exact browser audit omitted required routes: ${missingBrowserRoutes.join(", ") || "result set is too small"}`,
+        Object.freeze({
+          ...context,
+          browserResultCount: browser.results.length,
+          missingBrowserRoutes: Object.freeze(missingBrowserRoutes),
+          result: "fail",
+        }),
+      );
+    }
+    const artifactResources = live.finalSnapshot.resources.filter((resource) => resource.kind === "artifact");
+    const absenceResources = live.finalSnapshot.resources.filter((resource) => resource.kind !== "artifact");
+    const evidenceBody = {
+      authority: {
+        productionPredecessor,
+        receiptSha256,
+        releaseEpochSha256: receipt.authority.epochSha256,
+      },
+      browserAudit: {
+        errorCount: 0,
+        profile: "vnext",
+        resultCount: browser.results.length,
+        resultsSha256: sha256(stableStringify(browser.results)),
+        routeCount: auditedRoutes.length,
+      },
+      candidateArtifact: {
+        candidateSha,
+        fileCount: artifact.count,
+        files: artifactResources,
+        manifestSha256: artifact.sha256,
+        sourceManifestSha256: sourceManifest.sha256,
+      },
+      generatedAt: new Date(live.completedAtMs).toISOString(),
+      github: {
+        actor: identity.actor,
+        actorId: identity.actorId,
+        artifactId: identity.artifactId,
+        controlSha: identity.controlSha,
+        deploymentActionOutcome: identity.deploymentStatus,
+        deploymentPageUrl: identity.deploymentPageUrl,
+        pagesDeploymentBuildVersion: identity.pagesDeploymentBuildVersion,
+        pagesDeploymentStatus: identity.pagesDeploymentStatus,
+        pagesDeploymentUrl: identity.pagesDeploymentUrl,
+        repository: identity.repository,
+        repositoryId: identity.repositoryId,
+        runAttempt: identity.runAttempt,
+        runId: identity.runId,
+        workflowSha: identity.workflowSha,
+      },
+      production: {
+        absenceProofs: absenceResources,
+        attempts: live.attempts,
+        canonicalRoutes: routes.canonicalRoutes,
+        completedAt: new Date(live.completedAtMs).toISOString(),
+        consecutiveExactFullSnapshots: live.consecutiveExactFullSnapshots,
+        custom404Path: routes.custom404Path,
+        legacyRedirects: routes.legacyRedirects,
+        origin: identity.origin,
+        propagationWindowMs: live.propagationWindowMs,
+        sourceOnlyRedirectAbsence: routes.sourceOnlyRedirectAbsence,
+        startedAt: new Date(live.startedAtMs).toISOString(),
+      },
+      result: "pass",
+      schema: POSTDEPLOY_EVIDENCE_SCHEMA,
+    };
+    const sealedEvidence = sealPostdeployEvidence(evidenceBody);
+    await writePostdeployEvidence(evidence, sealedEvidence);
+    return Object.freeze({
+      mode: "postdeploy",
+      authority: "PUBLIC_TRUTH_ONLY",
+      artifactFileCount: artifact.count,
+      artifactId,
+      artifactManifestSha256: artifact.sha256,
+      browserAuditResultCount: browser.results.length,
+      candidateSha,
+      controlSha,
+      evidencePath: evidence,
+      origin: identity.origin,
+      productionResourceCount: live.finalSnapshot.totalResourceCount,
+      proofSha256: sealedEvidence.proofSha256,
+      releaseEpochSha256: receipt.authority.epochSha256,
+      runId: identity.runId,
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && !error.postdeployContext) {
+      error.postdeployContext = context;
+    }
+    throw error;
+  }
+}
+
+function failureEvidence(options, env, error) {
+  const body = {
+    candidateArtifact: {
+      candidateSha: options.candidateSha ?? null,
+      context: error?.postdeployContext ?? null,
+    },
+    error: {
+      message: boundedErrorMessage(error),
+      name: error?.name ?? "Error",
+    },
+    generatedAt: new Date().toISOString(),
+    github: {
+      artifactId: options.artifactId ?? null,
+      controlSha: options.controlSha ?? null,
+      deploymentActionOutcome: options.deploymentStatus ?? null,
+      deploymentPageUrl: options.deploymentPageUrl ?? null,
+      repository: env.GITHUB_REPOSITORY ?? null,
+      repositoryId: env.GITHUB_REPOSITORY_ID ?? null,
+      runAttempt: env.GITHUB_RUN_ATTEMPT ?? null,
+      runId: env.GITHUB_RUN_ID ?? null,
+      workflowSha: env.GITHUB_WORKFLOW_SHA ?? null,
+    },
+    production: {
+      details: error?.postdeployEvidence ?? null,
+      origin: options.origin ?? null,
+    },
+    result: "fail",
+    schema: POSTDEPLOY_EVIDENCE_SCHEMA,
+  };
+  return sealPostdeployEvidence(body);
+}
+
 export function parseCli(argv) {
   if (!Array.isArray(argv)) fail("CLI arguments must be an array");
   const values = new Map();
@@ -1543,7 +2846,9 @@ export function parseCli(argv) {
     values.set(flag, value);
   }
   const mode = values.get("--mode");
-  if (!["candidate", "control", "predeploy"].includes(mode)) fail("--mode must be exactly candidate, control, or predeploy");
+  if (!["candidate", "control", "predeploy", "postdeploy"].includes(mode)) {
+    fail("--mode must be exactly candidate, control, predeploy, or postdeploy");
+  }
   const expected = mode === "candidate"
     ? ["--mode", "--root", "--candidate-sha", "--production-predecessor"]
     : [
@@ -1553,7 +2858,14 @@ export function parseCli(argv) {
         "--production-predecessor",
         "--control-sha",
         "--authority-receipt",
-        ...(mode === "predeploy" ? ["--artifact-root"] : []),
+        ...(["predeploy", "postdeploy"].includes(mode) ? ["--artifact-root"] : []),
+        ...(mode === "postdeploy" ? [
+          "--artifact-id",
+          "--deployment-page-url",
+          "--deployment-status",
+          "--evidence",
+          "--origin",
+        ] : []),
       ];
   const actual = [...values.keys()].sort();
   if (stableStringify(actual) !== stableStringify([...expected].sort())) {
@@ -1568,7 +2880,16 @@ export function parseCli(argv) {
       controlSha: values.get("--control-sha"),
       authorityReceipt: values.get("--authority-receipt"),
     } : {}),
-    ...(mode === "predeploy" ? { artifactRoot: values.get("--artifact-root") } : {}),
+    ...(["predeploy", "postdeploy"].includes(mode)
+      ? { artifactRoot: values.get("--artifact-root") }
+      : {}),
+    ...(mode === "postdeploy" ? {
+      artifactId: values.get("--artifact-id"),
+      deploymentPageUrl: values.get("--deployment-page-url"),
+      deploymentStatus: values.get("--deployment-status"),
+      evidence: values.get("--evidence"),
+      origin: values.get("--origin"),
+    } : {}),
   });
 }
 
@@ -1576,7 +2897,20 @@ export async function runCli(argv = process.argv.slice(2), env = process.env) {
   const options = parseCli(argv);
   if (options.mode === "candidate") return verifyCandidate(options);
   if (options.mode === "control") return verifyControl({ ...options, env });
-  return verifyPredeploy({ ...options, env });
+  if (options.mode === "predeploy") return verifyPredeploy({ ...options, env });
+  try {
+    return await verifyPostdeploy({ ...options, env });
+  } catch (error) {
+    try {
+      await writePostdeployEvidence(options.evidence, failureEvidence(options, env, error));
+    } catch (evidenceError) {
+      throw new PublicTruthVerificationError(
+        `${boundedErrorMessage(error)}; postdeploy failure evidence could not be preserved: `
+        + boundedErrorMessage(evidenceError),
+      );
+    }
+    throw error;
+  }
 }
 
 async function main() {

@@ -16,6 +16,16 @@ import {
 } from "../audit-artifact-from-sitemap.mjs";
 import {
   artifactPath,
+  HOME_FIRST_PAINT_CHECKPOINTS,
+  HOME_FIRST_PAINT_SCENARIOS,
+  HOME_FIRST_PAINT_VIEWPORTS,
+  homeFirstPaintFailures,
+  privateViewerPopupFailures,
+  PROGRESSIVE_DISCLOSURE_COUNTS,
+  PROGRESSIVE_FAILURE_SCENARIOS,
+  PROGRESSIVE_FAILURE_VIEWPORT,
+  progressiveFailureFailures,
+  PROGRESSIVE_REVEAL_ROUTES,
   REVIEWED_CHROMIUM,
   START_BACK_TABLE,
   START_BRANCH_TABLE,
@@ -23,6 +33,7 @@ import {
   START_INITIAL_TABLE,
 } from "../browser-audit-vnext.mjs";
 import { buildContainedArtifact } from "../build-contained-artifact.mjs";
+import { CANONICAL_ROUTES, PRIMARY_NAV } from "../check-routes.mjs";
 import {
   assertExactWorktreeDeletion,
   prepareContainment,
@@ -41,10 +52,20 @@ const WORKFLOWS = Object.freeze([
   ".github/workflows/site-quality.yml",
 ]);
 
-const [packageSource, auditSource, installerSource] = await Promise.all([
+const [
+  packageSource,
+  pinnedNodeSource,
+  auditSource,
+  installerSource,
+  vnextScriptSource,
+  vnextStyleSource,
+] = await Promise.all([
   readFile(path.join(SITE_ROOT, "package.json"), "utf8"),
+  readFile(path.join(SITE_ROOT, ".nvmrc"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/browser-audit-vnext.mjs"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/install-reviewed-chromium.sh"), "utf8"),
+  readFile(path.join(SITE_ROOT, "vnext.js"), "utf8"),
+  readFile(path.join(SITE_ROOT, "vnext.css"), "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -315,8 +336,442 @@ test("browser gate pins one exact reviewed Chromium archive and executable ident
   assert.doesNotMatch(installerSource, /\blatest\b/iu);
 });
 
+test("homepage first-paint gate fails closed before load across exact cold scenarios", () => {
+  assert.deepEqual(HOME_FIRST_PAINT_VIEWPORTS, [
+    { label: "cold-phone-390", width: 390, height: 844, mobile: true },
+    { label: "cold-desktop", width: 1440, height: 1000, mobile: false },
+  ]);
+  assert.deepEqual(HOME_FIRST_PAINT_CHECKPOINTS, [
+    { atMs: 300, label: "early", minimumOpacity: 0.05 },
+    { atMs: 1000, label: "complete", minimumOpacity: 0.98 },
+  ]);
+  assert.deepEqual(HOME_FIRST_PAINT_SCENARIOS, [
+    "baseline",
+    "hero-image-held",
+    "hero-image-blocked",
+    "javascript-disabled",
+    "forced-early-javascript-failure",
+  ]);
+
+  const visibleElement = ({
+    href = null,
+    text,
+    height = 80,
+    width = 300,
+  }) => ({
+    effectiveOpacity: 1,
+    height,
+    href,
+    present: true,
+    structurallyVisible: true,
+    text,
+    viewportVisibleHeight: height,
+    viewportVisibleWidth: width,
+    width,
+  });
+  const validSnapshot = (checkpoint, scenario) => ({
+    elapsedMs: checkpoint.atMs + 20,
+    firstContentfulPaintMs: 250,
+    forcedFailureTriggered: scenario === "forced-early-javascript-failure",
+    h1: visibleElement({ text: "Your source for websites." }),
+    hasJsClass: scenario !== "javascript-disabled",
+    heroHeldRequests: scenario === "hero-image-held" ? 1 : 0,
+    heroImage: {
+      complete: !["hero-image-held"].includes(scenario),
+      naturalWidth: ["hero-image-held", "hero-image-blocked"].includes(scenario)
+        ? 0
+        : 1672,
+    },
+    heroInterceptedRequests: ["hero-image-held", "hero-image-blocked"].includes(scenario)
+      ? 1
+      : 0,
+    path: "/",
+    primaryAction: visibleElement({
+      href: "#websites",
+      text: "Find your website",
+      height: 48,
+      width: 180,
+    }),
+  });
+
+  for (const scenario of HOME_FIRST_PAINT_SCENARIOS) {
+    for (const checkpoint of HOME_FIRST_PAINT_CHECKPOINTS) {
+      assert.deepEqual(
+        homeFirstPaintFailures(validSnapshot(checkpoint, scenario), checkpoint, scenario),
+        [],
+        `${scenario} must accept the exact visible checkpoint`,
+      );
+    }
+  }
+
+  const finalCheckpoint = HOME_FIRST_PAINT_CHECKPOINTS.at(-1);
+  const mutate = (callback) => {
+    const snapshot = structuredClone(validSnapshot(finalCheckpoint, "baseline"));
+    callback(snapshot);
+    return homeFirstPaintFailures(snapshot, finalCheckpoint, "baseline");
+  };
+  assert.ok(mutate((snapshot) => {
+    snapshot.h1.effectiveOpacity = 0;
+  }).some((failure) => failure.includes("h1 effective opacity")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.primaryAction.viewportVisibleHeight = 20;
+  }).some((failure) => failure.includes("primaryAction is not meaningfully visible vertically")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.primaryAction.width = 30;
+    snapshot.primaryAction.viewportVisibleWidth = 30;
+  }).some((failure) => failure.includes("primaryAction width is below 44px")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.elapsedMs = 2000;
+  }).some((failure) => failure.includes("checkpoint elapsed")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.firstContentfulPaintMs = null;
+  }).some((failure) => failure.includes("first contentful paint")));
+
+  const held = validSnapshot(finalCheckpoint, "hero-image-held");
+  held.heroInterceptedRequests = 0;
+  assert.ok(
+    homeFirstPaintFailures(held, finalCheckpoint, "hero-image-held")
+      .includes("hero image interception did not run"),
+  );
+  const disabled = validSnapshot(finalCheckpoint, "javascript-disabled");
+  disabled.hasJsClass = true;
+  assert.ok(
+    homeFirstPaintFailures(disabled, finalCheckpoint, "javascript-disabled")
+      .includes("JavaScript-disabled document acquired the js class"),
+  );
+  const forced = validSnapshot(finalCheckpoint, "forced-early-javascript-failure");
+  forced.forcedFailureTriggered = false;
+  assert.ok(
+    homeFirstPaintFailures(forced, finalCheckpoint, "forced-early-javascript-failure")
+      .includes("forced early JavaScript failure did not trigger"),
+  );
+
+  const coldInfrastructureStart = auditSource.indexOf("async function navigateToDomContent");
+  const coldStart = auditSource.indexOf(
+    "async function auditHomeFirstPaint",
+    coldInfrastructureStart,
+  );
+  const coldEnd = auditSource.indexOf("function progressiveFailureSource", coldStart);
+  const coldSource = auditSource.slice(coldInfrastructureStart, coldEnd);
+  assert.ok(
+    coldInfrastructureStart >= 0
+    && coldStart > coldInfrastructureStart
+    && coldEnd > coldStart,
+  );
+  assert.match(coldSource, /Page\.lifecycleEvent/u);
+  assert.match(coldSource, /event\.loaderId === loaderId/u);
+  assert.match(coldSource, /Fetch\.enable/u);
+  assert.match(coldSource, /Fetch\.failRequest/u);
+  assert.match(coldSource, /heldRequestIds\.add\(event\.requestId\)/u);
+  assert.match(coldSource, /Emulation\.setScriptExecutionDisabled/u);
+  assert.match(coldSource, /Page\.addScriptToEvaluateOnNewDocument/u);
+  assert.match(coldSource, /homeFirstPaintExpression\(checkpoint, \{/u);
+  assert.match(coldSource, /const pageScriptDisabled = scenario === "javascript-disabled"/u);
+  assert.match(
+    coldSource,
+    /await delay\(Math\.max\(0, checkpoint\.atMs - previousCheckpointAtMs\)\)/u,
+  );
+  assert.match(coldSource, /asyncWait: !pageScriptDisabled/u);
+  assert.match(coldSource, /awaitPromise: !pageScriptDisabled/u);
+  assert.match(coldSource, /Network\.clearBrowserCache/u);
+  const coldInvocation = auditSource.indexOf("await auditHomeFirstPaint(cdp, auditOrigin)");
+  const ordinaryRuntimeErrors = auditSource.indexOf("const runtimeErrors = []", coldInvocation);
+  assert.ok(coldInvocation >= 0 && ordinaryRuntimeErrors > coldInvocation);
+});
+
+test("progressive-failure gate keeps every canonical route usable at bounded initializer failures", () => {
+  assert.deepEqual(PROGRESSIVE_FAILURE_VIEWPORT, {
+    label: "phone-390-progressive-failure",
+    width: 390,
+    height: 844,
+    mobile: true,
+  });
+  assert.deepEqual(PROGRESSIVE_FAILURE_SCENARIOS, [
+    {
+      key: "after-root-js",
+      failureStage: "root-js-class",
+      menuReady: false,
+      revealReady: false,
+    },
+    {
+      key: "during-menu-initializer",
+      failureStage: "menu-listener",
+      menuReady: false,
+      revealReady: false,
+    },
+    {
+      key: "during-reveal-initializer",
+      failureStage: "reveal-query",
+      menuReady: true,
+      revealReady: false,
+    },
+  ]);
+  assert.deepEqual(PROGRESSIVE_REVEAL_ROUTES, [
+    "/",
+    "/custom/",
+    "/custom/scope/",
+    "/custom/process/",
+    "/abracadabra/",
+    "/abracadabra/how/",
+    "/hive/",
+    "/solutions/",
+    "/about/",
+    "/start/",
+  ]);
+  assert.deepEqual(PROGRESSIVE_DISCLOSURE_COUNTS, {
+    "/abracadabra/how/": 6,
+    "/faq/": 13,
+    "/solutions/": 9,
+  });
+  assert.equal(CANONICAL_ROUTES.length, 17);
+
+  const validSnapshot = (scenario) => ({
+    belowFold: {
+      initiallyBelowFold: true,
+      present: true,
+      textLength: 400,
+      usable: true,
+    },
+    disclosures: { count: 9, failures: [] },
+    essential: { count: 12, failures: [] },
+    failure: {
+      jsAtFailure: true,
+      scenario: scenario.key,
+      stage: scenario.failureStage,
+    },
+    h1: { count: 1, text: "One exact piece, handled properly.", usable: true },
+    hasJsClass: true,
+    menuReady: scenario.menuReady,
+    nav: {
+      failures: [],
+      hrefs: PRIMARY_NAV.map(({ href }) => href),
+      mode: scenario.menuReady ? "enhanced-disclosure" : "fallback-links",
+      usable: true,
+    },
+    path: "/solutions/",
+    readyState: "complete",
+    revealReady: scenario.revealReady,
+    reveals: { belowFoldCount: 8, count: 14, failures: [] },
+  });
+  for (const scenario of PROGRESSIVE_FAILURE_SCENARIOS) {
+    assert.deepEqual(
+      progressiveFailureFailures(validSnapshot(scenario), scenario.key, "/solutions/"),
+      [],
+      scenario.key,
+    );
+  }
+
+  const scenario = PROGRESSIVE_FAILURE_SCENARIOS[0];
+  const mutate = (callback) => {
+    const snapshot = structuredClone(validSnapshot(scenario));
+    callback(snapshot);
+    return progressiveFailureFailures(snapshot, scenario.key, "/solutions/");
+  };
+  assert.ok(mutate((snapshot) => {
+    snapshot.failure.jsAtFailure = false;
+  }).some((failure) => failure.includes("forced failure marker")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.menuReady = true;
+  }).some((failure) => failure.includes("menu-ready")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.h1.usable = false;
+  }).some((failure) => failure.includes("route H1")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.nav.usable = false;
+  }).some((failure) => failure.includes("primary navigation")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.essential.failures.push({ label: "hidden action" });
+  }).some((failure) => failure.includes("essential links/actions")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.disclosures.count = 8;
+  }).some((failure) => failure.includes("native disclosures")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.reveals.failures.push({ label: "hidden reveal" });
+  }).some((failure) => failure.includes("reveal content")));
+  assert.ok(mutate((snapshot) => {
+    snapshot.belowFold.usable = false;
+  }).some((failure) => failure.includes("below-fold route content")));
+
+  const progressiveStart = auditSource.indexOf("function progressiveFailureSource");
+  const progressiveEnd = auditSource.indexOf("const AUDIT_EXPRESSION", progressiveStart);
+  const progressiveSource = auditSource.slice(progressiveStart, progressiveEnd);
+  assert.ok(progressiveStart >= 0 && progressiveEnd > progressiveStart);
+  assert.match(progressiveSource, /DOMTokenList\.prototype\.add/u);
+  assert.match(progressiveSource, /this\.hasAttribute\("data-menu"\)/u);
+  assert.match(progressiveSource, /selector !== "\.reveal"/u);
+  assert.match(
+    progressiveSource,
+    /jsAtFailure: document\.documentElement\.classList\.contains\("js"\)/u,
+  );
+  assert.match(progressiveSource, /for \(const route of routes\)/u);
+  assert.match(progressiveSource, /for \(const scenario of PROGRESSIVE_FAILURE_SCENARIOS\)/u);
+  assert.match(progressiveSource, /main\.querySelectorAll\(controlSelector\)/u);
+  assert.match(progressiveSource, /main\.querySelectorAll\("details"\)/u);
+  assert.match(progressiveSource, /document\.querySelectorAll\("\.reveal"\)/u);
+  assert.match(
+    progressiveSource,
+    /main\.querySelectorAll\("section, article, h2, h3, p, li"\)/u,
+  );
+  assert.match(
+    progressiveSource,
+    /root\.style\.setProperty\("scroll-behavior", "auto", "important"\)/u,
+  );
+  assert.match(
+    progressiveSource,
+    /root\.style\.removeProperty\("scroll-behavior"\)/u,
+  );
+  assert.match(progressiveSource, /Page\.addScriptToEvaluateOnNewDocument/u);
+  assert.match(progressiveSource, /Page\.removeScriptToEvaluateOnNewDocument/u);
+  const progressiveInvocation = auditSource.indexOf(
+    "await auditProgressiveEnhancementFailures(cdp, auditOrigin, routes)",
+  );
+  const ordinaryRuntimeErrors = auditSource.indexOf(
+    "const runtimeErrors = []",
+    progressiveInvocation,
+  );
+  assert.ok(progressiveInvocation >= 0 && ordinaryRuntimeErrors > progressiveInvocation);
+
+  const menuStart = vnextScriptSource.indexOf("function setupMenu()");
+  const menuEnd = vnextScriptSource.indexOf("function watchHeader()", menuStart);
+  const menuSource = vnextScriptSource.slice(menuStart, menuEnd);
+  assert.ok(menuStart >= 0 && menuEnd > menuStart);
+  assert.ok(
+    vnextScriptSource.indexOf('root.classList.add("js")') >= 0
+    && vnextScriptSource.indexOf('root.classList.add("js")') < menuStart,
+  );
+  assert.ok(
+    menuSource.indexOf('menu.addEventListener("click"')
+    < menuSource.indexOf('root.classList.add("menu-ready")'),
+  );
+  const revealStart = vnextScriptSource.indexOf("function revealSections()");
+  const revealEnd = vnextScriptSource.indexOf("function setupStartChooser()", revealStart);
+  const revealSource = vnextScriptSource.slice(revealStart, revealEnd);
+  assert.ok(revealStart >= 0 && revealEnd > revealStart);
+  assert.equal(revealSource.match(/root\.classList\.add\("reveal-ready"\)/gu)?.length, 2);
+  assert.ok(
+    revealSource.indexOf("observer.observe(item)")
+    < revealSource.lastIndexOf('root.classList.add("reveal-ready")'),
+  );
+  assert.ok(
+    vnextScriptSource.lastIndexOf("\n  setupMenu();")
+    < vnextScriptSource.lastIndexOf("\n  revealSections();"),
+  );
+  assert.match(vnextStyleSource, /\.reveal-ready \.reveal \{/u);
+  assert.match(vnextStyleSource, /\.menu-ready \.site-header:has\(\.menu-button\) \.site-nav \{/u);
+  assert.doesNotMatch(vnextStyleSource, /(?:^|\n)\.js \.reveal \{/u);
+  assert.doesNotMatch(vnextStyleSource, /\.js \.site-header:has\(\.menu-button\)/u);
+});
+
+test("Abracadabra browser gate requires control boot, project isolation, and fail-closed viewing", () => {
+  assert.match(auditSource, /controlReady: controlRoom\?\.getAttribute\("data-control-ready"\)/u);
+  assert.match(auditSource, /result\.sparkReady\.controlReady !== "true"/u);
+  assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "true"/u);
+  assert.match(auditSource, /Runtime\.exceptionThrown/u);
+  assert.match(auditSource, /proof-must-not-cross-projects/u);
+  assert.match(auditSource, /selected project changed/u);
+  assert.match(auditSource, /guardedAction\.secondLifecycle !== "active"/u);
+  assert.match(auditSource, /correct\.sandbox !== "allow-popups"/u);
+  assert.match(auditSource, /compiler\.compileSite\(rawFacts\)/u);
+  assert.match(auditSource, /Input\.dispatchMouseEvent/u);
+  assert.match(auditSource, /Page\.windowOpen/u);
+  assert.match(auditSource, /Target\.targetCreated/u);
+  assert.match(auditSource, /Target\.closeTarget/u);
+  assert.match(auditSource, /PRIVATE_VIEWER_POPUP_TIMEOUT_MS/u);
+  assert.match(auditSource, /--host-resolver-rules=MAP cta\.invalid ~NOTFOUND/u);
+  assert.match(auditSource, /PRIVATE_VIEWER_STALE_GRACE_EXPRESSION/u);
+  assert.match(auditSource, /PRIVATE_VIEWER_PLATFORM_MISSING_EXPRESSION/u);
+  assert.match(auditSource, /missing lifecycle platform exposed stale grace bytes/u);
+});
+
+test("Abracadabra popup proof fails closed and requires target cleanup", () => {
+  const expectedUrl = "https://cta.invalid/abracadabra-popup-proof";
+  const complete = {
+    cleanup: {
+      attemptedTargetIds: ["popup-target"],
+      closeErrors: [],
+      discoveryDisabled: true,
+      domDisabled: true,
+      listenersRemoved: true,
+      remainingTargetIds: [],
+    },
+    click: {
+      backendNodeId: 202,
+      href: expectedUrl,
+      interaction: "Input.dispatchMouseEvent",
+      rel: "noopener noreferrer",
+      target: "_blank",
+    },
+    error: "",
+    frame: {
+      contentDocumentBackendNodeId: 201,
+      frameId: "published-frame",
+      inspection: "DOM.getDocument(pierce)",
+      ownerBackendNodeId: 200,
+      sandbox: "allow-popups",
+      sandboxRestrictsOriginAndScripts: true,
+    },
+    innerAfter: {
+      backendNodeId: 202,
+      documentConnected: true,
+      href: expectedUrl,
+      linkConnected: true,
+      target: "_blank",
+    },
+    outerAfter: {
+      frameConnected: true,
+      sandbox: "allow-popups",
+      siteHidden: false,
+      sourceRetained: true,
+      state: "live",
+    },
+    popup: {
+      createdEvent: true,
+      openerFrameId: "published-frame",
+      targetId: "popup-target",
+      type: "page",
+      url: expectedUrl,
+    },
+    windowOpen: {
+      url: expectedUrl,
+      userGesture: true,
+    },
+  };
+  assert.deepEqual(privateViewerPopupFailures(complete), []);
+
+  const unsafeSandbox = structuredClone(complete);
+  unsafeSandbox.frame.sandbox = "allow-popups allow-same-origin";
+  assert.match(
+    privateViewerPopupFailures(unsafeSandbox).join("\n"),
+    /source frame sandbox/u,
+  );
+
+  const noCreatedTarget = structuredClone(complete);
+  noCreatedTarget.popup.createdEvent = false;
+  assert.match(
+    privateViewerPopupFailures(noCreatedTarget).join("\n"),
+    /Target\.targetCreated proof/u,
+  );
+
+  const untrustedOpen = structuredClone(complete);
+  untrustedOpen.windowOpen.userGesture = false;
+  assert.match(
+    privateViewerPopupFailures(untrustedOpen).join("\n"),
+    /Page\.windowOpen proof/u,
+  );
+
+  const strandedPopup = structuredClone(complete);
+  strandedPopup.cleanup.remainingTargetIds = ["popup-target"];
+  assert.match(
+    privateViewerPopupFailures(strandedPopup).join("\n"),
+    /popup cleanup is incomplete/u,
+  );
+});
+
 test("npm test builds and verifies the exact artifact before the mandatory browser gate", () => {
-  assert.equal(packageJson.scripts["audit:browser"], "node scripts/browser-audit-vnext.mjs");
+  assert.equal(
+    packageJson.scripts["audit:browser"],
+    "node --experimental-websocket scripts/browser-audit-vnext.mjs",
+  );
   const sequence = packageJson.scripts.test.split(" && ");
   assert.deepEqual(sequence.slice(-3), [
     "npm run build:pages",
@@ -330,6 +785,21 @@ test("npm test builds and verifies the exact artifact before the mandatory brows
   );
   assert.match(auditSource, /SITESOURCERY_ARTIFACT_ROOT/u);
   assert.doesNotMatch(auditSource, /origin = "http:\/\/127\.0\.0\.1:4173"/u);
+});
+
+test("test commands are executable by the exact pinned Node runtime", () => {
+  const pinnedNode = pinnedNodeSource.trim();
+  assert.equal(pinnedNode, "20.20.2");
+  assert.equal(packageJson.engines.node, pinnedNode);
+  for (const scriptName of ["test:node", "test:public-truth"]) {
+    const command = packageJson.scripts[scriptName];
+    assert.match(command, /^node --test /u, `${scriptName} must use the built-in test runner`);
+    assert.doesNotMatch(
+      command,
+      /--test-isolation(?:=|\s)/u,
+      `${scriptName} must not use the Node 22-only --test-isolation flag`,
+    );
+  }
 });
 
 test("artifact-only audit server resolves canonical files and rejects path traversal", () => {

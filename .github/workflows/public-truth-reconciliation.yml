@@ -223,6 +223,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     needs: validate
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Check out exact release control after the environment gate
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -430,3 +432,96 @@ jobs:
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
         with:
           artifact_name: github-pages
+
+  postdeploy:
+    if: ${{ always() && needs.validate.result == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+      pages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    needs:
+      - validate
+      - deploy
+    steps:
+      - name: Check out exact release control for read-only production proof
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 3
+          persist-credentials: false
+      - name: Use control-pinned Node.js for proof and failure evidence
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: control/.nvmrc
+      - name: Check out the exact candidate for read-only artifact reconstruction
+        if: ${{ needs.deploy.result == 'success' }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install candidate-locked dependencies for reconstruction
+        if: ${{ needs.deploy.result == 'success' }}
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Reconstruct the exact candidate artifact without deployment authority
+        if: ${{ needs.deploy.result == 'success' }}
+        working-directory: target
+        run: npm run build:pages
+      - name: Install exact reviewed Chromium for the live proof
+        if: ${{ needs.deploy.result == 'success' }}
+        working-directory: control
+        run: bash ./scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/postdeploy-reviewed-chromium" "$GITHUB_ENV"
+      - name: Prove exact production bytes, routes, identity, and browser behavior
+        id: postdeploy-proof
+        if: ${{ always() }}
+        working-directory: control
+        env:
+          ARTIFACT_ID: ${{ needs.validate.outputs.artifact_id }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          DEPLOYMENT_PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          DEPLOYMENT_STATUS: ${{ needs.deploy.result }}
+          GH_TOKEN: ${{ github.token }}
+          LIVE_ORIGIN: https://sitesourcery.com
+          PRODUCTION_PREDECESSOR: ${{ inputs.production_predecessor }}
+          PRODUCTION_PROOF_EVIDENCE: ${{ runner.temp }}/public-truth-production-proof.json
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          node --experimental-websocket scripts/verify-public-truth-release.mjs \
+            --mode postdeploy \
+            --root "$PWD" \
+            --artifact-root "${{ github.workspace }}/target/_site" \
+            --artifact-id "$ARTIFACT_ID" \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --production-predecessor "$PRODUCTION_PREDECESSOR" \
+            --control-sha "$CONTROL_SHA" \
+            --authority-receipt data/public-truth-authority.json \
+            --origin "$LIVE_ORIGIN" \
+            --deployment-page-url "$DEPLOYMENT_PAGE_URL" \
+            --deployment-status "$DEPLOYMENT_STATUS" \
+            --evidence "$PRODUCTION_PROOF_EVIDENCE"
+      - name: Retain private postdeploy production-proof evidence
+        id: production-proof-evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-truth-production-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/public-truth-production-proof.json
+          retention-days: 90
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false

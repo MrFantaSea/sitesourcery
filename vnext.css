@@ -2923,15 +2923,22 @@ h3 {
   transform: none;
 }
 
-.js .reveal {
+.reveal-ready .reveal {
   opacity: 0;
   transform: translateY(1.25rem);
   transition: opacity 520ms ease, transform 520ms ease;
 }
 
-.js .reveal[data-revealed="true"] {
+.reveal-ready .reveal[data-revealed="true"] {
   opacity: 1;
   transform: translateY(0);
+}
+
+.js .hero .reveal,
+.js .hero .reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
 .js .start-chooser.reveal,
@@ -3639,7 +3646,7 @@ h3 {
     margin-left: 0;
   }
 
-  .js .site-header:has(.menu-button) {
+  .menu-ready .site-header:has(.menu-button) {
     background: #08070c;
     backdrop-filter: none;
   }
@@ -3648,12 +3655,12 @@ h3 {
     scroll-margin-top: 15rem;
   }
 
-  .js .site-header:has(.menu-button) .header-inner {
+  .menu-ready .site-header:has(.menu-button) .header-inner {
     min-height: 4.6rem;
     flex-wrap: nowrap;
   }
 
-  .js .site-header:has(.menu-button) .menu-button {
+  .menu-ready .site-header:has(.menu-button) .menu-button {
     position: relative;
     z-index: 3;
     display: inline-flex;
@@ -3706,7 +3713,7 @@ h3 {
     transform: rotate(-45deg) translateY(-1px);
   }
 
-  .js .site-header:has(.menu-button) .site-nav {
+  .menu-ready .site-header:has(.menu-button) .site-nav {
     position: fixed;
     z-index: 2;
     inset: 4.6rem 0 0;
@@ -3732,13 +3739,13 @@ h3 {
     white-space: normal;
   }
 
-  .js .site-header:has(.menu-button) .site-nav[data-open=""],
-  .js .site-header:has(.menu-button) .site-nav[data-open="true"],
-  .js .site-header:has(.menu-button) .menu-button[aria-expanded="true"] + .site-nav {
+  .menu-ready .site-header:has(.menu-button) .site-nav[data-open=""],
+  .menu-ready .site-header:has(.menu-button) .site-nav[data-open="true"],
+  .menu-ready .site-header:has(.menu-button) .menu-button[aria-expanded="true"] + .site-nav {
     display: grid;
   }
 
-  .js .site-header:has(.menu-button) .site-nav a {
+  .menu-ready .site-header:has(.menu-button) .site-nav a {
     display: flex;
     min-height: 4rem;
     align-items: center;
@@ -3752,17 +3759,17 @@ h3 {
     line-height: 1.15;
   }
 
-  .js .site-header:has(.menu-button) .site-nav a::after {
+  .menu-ready .site-header:has(.menu-button) .site-nav a::after {
     display: none;
   }
 
-  .js .site-header:has(.menu-button) .site-nav a:hover,
-  .js .site-header:has(.menu-button) .site-nav a:focus-visible,
-  .js .site-header:has(.menu-button) .site-nav a[aria-current="page"] {
+  .menu-ready .site-header:has(.menu-button) .site-nav a:hover,
+  .menu-ready .site-header:has(.menu-button) .site-nav a:focus-visible,
+  .menu-ready .site-header:has(.menu-button) .site-nav a[aria-current="page"] {
     color: var(--gold-hot);
   }
 
-  .js .site-header:has(.menu-button) .site-nav .nav-start {
+  .menu-ready .site-header:has(.menu-button) .site-nav .nav-start {
     min-height: 3.4rem;
     justify-content: center;
     margin-top: 1rem;

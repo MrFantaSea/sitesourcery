@@ -330,12 +330,13 @@
 
   function renderCurrentVersion(message) {
     var current = versions[currentVersionIndex];
+    var hasCurrentVersion = Boolean(current);
+    openButton.disabled = !hasCurrentVersion;
+    downloadButton.disabled = !hasCurrentVersion;
     if (!current) {
       preview.removeAttribute("srcdoc");
       versionStatus.textContent = "No version has been made.";
       undoButton.disabled = true;
-      openButton.disabled = true;
-      downloadButton.disabled = true;
       return;
     }
     preview.srcdoc = current.result.html;
@@ -344,8 +345,6 @@
       + themeLabel(current.result.theme) + " · "
       + current.result.facts.businessName + ".";
     undoButton.disabled = currentVersionIndex <= 0;
-    openButton.disabled = false;
-    downloadButton.disabled = false;
     renderHistory();
   }
 

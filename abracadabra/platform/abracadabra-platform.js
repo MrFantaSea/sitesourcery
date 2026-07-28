@@ -15,6 +15,28 @@
   var PLAN_ID = "abracadabra-website";
   var STORAGE_MODE = "local_rehearsal_nontransactional";
   var CONCURRENCY_POLICY = "multi_tab_unsupported_not_prevented";
+  var DELETION_POLICY_ID = "abracadabra-terminal-delete/v1";
+  var DELETION_POLICY = freeze({
+    id: DELETION_POLICY_ID,
+    retained: [
+      "minimal project, account, and organization identifiers",
+      "accepted-term identifiers and timestamps",
+      "plan, billing, exit, and deletion timestamps",
+      "customer-domain ownership fact without serving hostname or proof reference",
+      "operator and safety event timeline without free text",
+      "aggregate removal counts"
+    ],
+    removed: [
+      "project name and customer-authored content",
+      "drafts, versions, release bytes, digests, screening, and publication attempts",
+      "access credential",
+      "licensed address label and hostname",
+      "domain-proof requests and references",
+      "support tickets",
+      "safety reasons and appeals",
+      "billing-restoration reference"
+    ]
+  });
   var TERMS = freeze({
     product: "abracadabra-product-2026-07-27",
     privacy: "site-sourcery-privacy-2026-07-27",
@@ -340,6 +362,7 @@
           project.organizationId = account.organizationIds[0];
         }
         if (!Object.prototype.hasOwnProperty.call(project, "terms")) project.terms = null;
+        if (!Object.prototype.hasOwnProperty.call(project, "deletion")) project.deletion = null;
         if (project.plan) {
           project.plan.activationScope = STORAGE_MODE;
           project.plan.providerReference = null;
@@ -373,8 +396,7 @@
               }
             : null;
         }
-        if (!project.serving) return;
-        if (!Object.prototype.hasOwnProperty.call(project.serving, "resumeState")) {
+        if (project.serving && !Object.prototype.hasOwnProperty.call(project.serving, "resumeState")) {
           project.serving.resumeState = project.serving.state === "live" ? "live" : "unpublished";
         }
         if (!Object.prototype.hasOwnProperty.call(project, "exit")) {
@@ -382,6 +404,13 @@
             cancelledAt: project.plan && project.plan.cancelledAt ? project.plan.cancelledAt : null,
             domainDetachedAt: null
           };
+        }
+        if (project.lifecycle === "deleted") {
+          terminalDelete(
+            snapshot,
+            project,
+            (project.billing && project.billing.deletedAt) || project.updatedAt || snapshot.updatedAt
+          );
         }
       });
       return snapshot;
@@ -420,6 +449,16 @@
       return frozenCopy(result);
     }
 
+    function mutateOnlyWhenChanged(operation) {
+      var raw = storage.getItem(STORE_KEY);
+      var snapshot = clone(read());
+      var expectedRevision = snapshot.revision;
+      var before = raw === null ? JSON.stringify(snapshot) : raw;
+      var result = operation(snapshot);
+      if (JSON.stringify(snapshot) !== before) write(snapshot, expectedRevision);
+      return frozenCopy(result);
+    }
+
     function accountById(snapshot, accountId) {
       var account = snapshot.accounts.find(function (item) { return item.id === accountId; });
       if (!account) fail("ACCOUNT_NOT_FOUND", "The account was not found.");
@@ -449,6 +488,13 @@
     function requireOwner(snapshot, projectId, accountId) {
       var project = projectById(snapshot, projectId);
       if (project.accountId !== accountId) fail("PROJECT_NOT_FOUND", "The project was not found.");
+      return project;
+    }
+
+    function assertNotDeleted(project) {
+      if (project.lifecycle === "deleted") {
+        fail("PROJECT_DELETED", "This project was deleted and cannot be changed.");
+      }
       return project;
     }
 
@@ -483,11 +529,24 @@
 
     function passwordMatches(password, saved) {
       if (!saved) return false;
+      var candidate = String(password == null ? "" : password).normalize("NFC");
+      if (candidate.length < 10 || candidate.length > 256) return false;
       var actual;
-      if (saved.algorithm === "sha256-iterated-v2" && Number.isInteger(saved.rounds)) {
-        actual = iteratedDigest(password, saved.salt, saved.rounds);
-      } else if (saved.algorithm === "sha256-salted-v1") {
-        actual = sha256(saved.salt + ":" + String(password == null ? "" : password).normalize("NFC"));
+      if (
+        saved.algorithm === "sha256-iterated-v2"
+        && Number.isInteger(saved.rounds)
+        && saved.rounds >= 2
+        && saved.rounds <= 100000
+        && /^[a-f0-9]{16,256}$/u.test(String(saved.salt || ""))
+        && DIGEST.test(String(saved.digest || ""))
+      ) {
+        actual = iteratedDigest(candidate, saved.salt, saved.rounds);
+      } else if (
+        saved.algorithm === "sha256-salted-v1"
+        && /^[a-f0-9]{16,256}$/u.test(String(saved.salt || ""))
+        && DIGEST.test(String(saved.digest || ""))
+      ) {
+        actual = sha256(saved.salt + ":" + candidate);
       } else {
         return false;
       }
@@ -496,6 +555,75 @@
         mismatch |= (actual.charCodeAt(index) || 0) ^ (String(saved.digest || "").charCodeAt(index) || 0);
       }
       return mismatch === 0;
+    }
+
+    /*
+     * This is a browser-local capability check, not hosted authentication.
+     * The fingerprint is already held by a verified viewer session and is
+     * compared with the current saved credential so an old grant stops
+     * working as soon as that credential changes.
+     */
+    function credentialFingerprint(saved) {
+      if (!saved || typeof saved !== "object") return "";
+      if (
+        saved.algorithm === "sha256-iterated-v2"
+        && Number.isInteger(saved.rounds)
+        && saved.rounds >= 2
+        && saved.rounds <= 100000
+        && /^[a-f0-9]{16,256}$/u.test(String(saved.salt || ""))
+        && DIGEST.test(String(saved.digest || ""))
+      ) {
+        return [
+          saved.algorithm,
+          saved.rounds,
+          saved.salt,
+          saved.digest
+        ].join(":");
+      }
+      if (
+        saved.algorithm === "sha256-salted-v1"
+        && /^[a-f0-9]{16,256}$/u.test(String(saved.salt || ""))
+        && DIGEST.test(String(saved.digest || ""))
+      ) {
+        return [
+          saved.algorithm,
+          0,
+          saved.salt,
+          saved.digest
+        ].join(":");
+      }
+      return "";
+    }
+
+    function constantTimeEqual(left, right) {
+      var actual = String(left || "");
+      var expected = String(right || "");
+      var mismatch = actual.length ^ expected.length;
+      for (var index = 0; index < Math.max(actual.length, expected.length); index += 1) {
+        mismatch |= (actual.charCodeAt(index) || 0) ^ (expected.charCodeAt(index) || 0);
+      }
+      return mismatch === 0;
+    }
+
+    function privateLifecycleAcknowledged(request, project, version, hostname) {
+      var expected = request.expected;
+      var currentFingerprint = credentialFingerprint(project.access && project.access.credential);
+      return project.access
+        && project.access.visibility === "private"
+        && currentFingerprint
+        && hasExactKeys(expected, [
+          "artifactDigest",
+          "hostname",
+          "projectId",
+          "versionId",
+          "visibility"
+        ])
+        && expected.projectId === project.id
+        && expected.versionId === version.id
+        && expected.hostname === hostname
+        && expected.visibility === "private"
+        && expected.artifactDigest === version.artifact.digest
+        && constantTimeEqual(request.grantFingerprint, currentFingerprint);
     }
 
     function screenRelease(artifact, attested) {
@@ -906,7 +1034,8 @@
           exit: {
             cancelledAt: null,
             domainDetachedAt: null
-          }
+          },
+          deletion: null
         };
         snapshot.projects.push(project);
         return project;
@@ -915,13 +1044,13 @@
 
     function listProjects(input) {
       var request = input || {};
-      return mutate(function (snapshot) {
+      return mutateOnlyWhenChanged(function (snapshot) {
         accountById(snapshot, request.accountId);
         var currentTime = now();
         return snapshot.projects.filter(function (item) {
           return item.accountId === request.accountId;
         }).map(function (project) {
-          advanceProjectClock(project, currentTime);
+          advanceProjectClock(snapshot, project, currentTime);
           return project;
         });
       });
@@ -929,9 +1058,9 @@
 
     function getProject(input) {
       var request = input || {};
-      return mutate(function (snapshot) {
+      return mutateOnlyWhenChanged(function (snapshot) {
         var project = requireOwner(snapshot, request.projectId, request.accountId);
-        advanceProjectClock(project, now());
+        advanceProjectClock(snapshot, project, now());
         return project;
       });
     }
@@ -939,7 +1068,7 @@
     function saveDraft(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project cannot accept draft changes.");
         project.draft = {
           rawFacts: clone(request.rawFacts || {}),
@@ -962,7 +1091,7 @@
       }
       var screening = screenRelease({ html: artifact.html, digest: digest }, request.releaseAttestation);
       var result = mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project cannot accept new versions.");
         var createdAt = now();
         var attempt = screeningAttempt("pre_acceptance", null, screening, createdAt);
@@ -1019,7 +1148,7 @@
     function transitionVersion(input, expected, next) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") {
           fail("PROJECT_CLOSED", "This project cannot change release readiness.");
         }
@@ -1060,7 +1189,7 @@
         );
       }
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project is closed.");
         if (project.plan.status === "active") {
           if (project.billing.state !== "current") {
@@ -1107,7 +1236,7 @@
         };
       }
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project is closed.");
         if (!project.address || project.address.mode !== "mode_b") {
           fail("ADDRESS_ALREADY_CONFIGURED", "This address does not require outside domain verification.");
@@ -1167,7 +1296,7 @@
         fail("DOMAIN_PROOF_REQUIRED", "Add the registrar receipt or DNS verification reference.");
       }
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project is closed.");
         if (!project.address || project.address.mode !== "mode_b") {
           fail("DOMAIN_PROOF_NOT_AVAILABLE", "This project does not use a customer-owned domain.");
@@ -1210,7 +1339,7 @@
     function setAddress(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project is closed.");
         var address = normalizeAddress(request.address);
         assertHostnameAvailable(snapshot, address.hostname, project.id);
@@ -1224,7 +1353,7 @@
     function setVisibility(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active") fail("PROJECT_CLOSED", "This project is closed.");
         project.access = normalizeAccess(request.visibility, request.accessPassword);
         project.updatedAt = now();
@@ -1239,8 +1368,7 @@
       if (reason.length < 8) fail("INVALID_SAFETY_REASON", "State the reason for the safety hold.");
       var heldAt = request.at ? iso(request.at) : now();
       return mutate(function (snapshot) {
-        var project = projectById(snapshot, request.projectId);
-        if (project.lifecycle === "deleted") fail("PROJECT_DELETED", "This project is deleted.");
+        var project = assertNotDeleted(projectById(snapshot, request.projectId));
         if (project.safety.state === "clear") {
           project.safety.previousServingState = project.serving.state;
         }
@@ -1274,7 +1402,7 @@
         fail("INVALID_SAFETY_APPEAL", "Explain the issue and why the website should be restored.");
       }
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (!["held", "appeal_pending"].includes(project.safety.state)) {
           fail("SAFETY_APPEAL_NOT_AVAILABLE", "This project does not have an active safety hold.");
         }
@@ -1297,7 +1425,7 @@
       var request = input || {};
       var operator = requireSafetyOperator(request);
       return mutate(function (snapshot) {
-        var project = projectById(snapshot, request.projectId);
+        var project = assertNotDeleted(projectById(snapshot, request.projectId));
         if (!["held", "appeal_pending"].includes(project.safety.state)) {
           fail("SAFETY_RESTORE_NOT_AVAILABLE", "This project does not have an active safety hold.");
         }
@@ -1329,7 +1457,7 @@
     function publish(input) {
       var request = input || {};
       var result = mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         var attempt = {
           id: idFactory("publish"),
           versionId: request.versionId,
@@ -1378,8 +1506,7 @@
     function unpublish(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
-        if (project.lifecycle === "deleted") fail("PROJECT_DELETED", "This project is deleted.");
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         project.serving.state = "unpublished";
         project.serving.resumeState = "unpublished";
         project.serving.updatedAt = now();
@@ -1391,7 +1518,7 @@
     function recordPaymentFailure(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle !== "active" || project.plan.status !== "active") {
           fail("BILLING_NOT_ACTIVE", "This project does not have an active plan.");
         }
@@ -1406,7 +1533,7 @@
       });
     }
 
-    function advanceProjectClock(project, at) {
+    function advanceProjectClock(snapshot, project, at) {
       var atTime = new Date(at).getTime();
       if (
         project.lifecycle !== "deleted"
@@ -1428,7 +1555,7 @@
         && project.billing.retentionEndsAt
         && atTime >= new Date(project.billing.retentionEndsAt).getTime()
       ) {
-        terminalDelete(project, at);
+        terminalDelete(snapshot, project, at);
       }
       return project;
     }
@@ -1436,7 +1563,7 @@
     function advanceBilling(input) {
       var request = input || {};
       var at = request.at ? iso(request.at) : now();
-      return mutate(function (snapshot) {
+      return mutateOnlyWhenChanged(function (snapshot) {
         accountById(snapshot, request.accountId);
         var projects = request.projectId
           ? [requireOwner(snapshot, request.projectId, request.accountId)]
@@ -1444,7 +1571,7 @@
             return project.accountId === request.accountId;
           });
         projects.forEach(function (project) {
-          advanceProjectClock(project, at);
+          advanceProjectClock(snapshot, project, at);
         });
         return projects;
       });
@@ -1459,8 +1586,9 @@
       }
       var result = mutate(function (snapshot) {
         var project = requireOwner(snapshot, request.projectId, request.accountId);
+        assertNotDeleted(project);
         var currentTime = now();
-        advanceProjectClock(project, currentTime);
+        advanceProjectClock(snapshot, project, currentTime);
         if (project.lifecycle === "deleted" || project.billing.state === "deleted") {
           return { expired: true };
         }
@@ -1507,8 +1635,7 @@
     function cancelProject(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
-        if (project.lifecycle === "deleted") fail("PROJECT_DELETED", "This project is deleted.");
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         if (project.lifecycle === "cancelled") return project;
         var cancelledAt = now();
         var proposedRetentionEnd = addDays(cancelledAt, RETENTION_DAYS);
@@ -1550,56 +1677,445 @@
     function detachDomain(input) {
       var request = input || {};
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
-        if (project.lifecycle === "deleted") {
-          fail("PROJECT_DELETED", "This project is deleted.");
-        }
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         return detachCustomerDomain(project, now());
       });
     }
 
-    function terminalDelete(project, at) {
-      if (
-        project.address
-        && project.address.mode === "mode_b"
-        && project.address.ownership === "customer"
-        && project.address.state !== "detached"
-      ) {
-        detachCustomerDomain(project, at);
-      }
-      project.lifecycle = "deleted";
-      project.plan.status = "cancelled";
-      project.billing.state = "deleted";
-      project.billing.deletedAt = at;
-      project.serving = {
-        state: "deleted",
-        currentVersionId: null,
-        previousVersionId: null,
-        publishedAt: null,
-        updatedAt: at,
-        resumeState: "unpublished"
+    function retainedTerms(terms) {
+      if (!terms) return null;
+      return {
+        product: terms.product || null,
+        privacy: terms.privacy || null,
+        website: terms.website || null,
+        acceptedAt: terms.acceptedAt || null
       };
-      project.access = { visibility: "public", credential: null };
-      project.draft = null;
-      project.versions = [];
-      project.updatedAt = at;
+    }
+
+    function retainedPlan(plan) {
+      var source = plan || {};
+      return {
+        id: source.id || PLAN_ID,
+        status: "cancelled",
+        selectedAt: source.selectedAt || null,
+        activatedAt: source.activatedAt || null,
+        cancelledAt: source.cancelledAt || null,
+        activationScope: STORAGE_MODE,
+        providerReference: null,
+        paymentReceipt: null,
+        subscriptionId: null
+      };
+    }
+
+    function retainedBilling(billing, at) {
+      var source = billing || {};
+      return {
+        state: "deleted",
+        authority: STORAGE_MODE,
+        providerReference: null,
+        paymentReceipt: null,
+        subscriptionId: null,
+        firstFailedAt: source.firstFailedAt || null,
+        graceEndsAt: source.graceEndsAt || null,
+        suspendedAt: source.suspendedAt || null,
+        retentionEndsAt: source.retentionEndsAt || null,
+        deletedAt: source.deletedAt || at
+      };
+    }
+
+    function retainedOperatorEvent(event) {
+      var retained = {
+        id: event && event.id ? event.id : null,
+        kind: event && event.kind ? event.kind : "unknown",
+        at: event && event.at ? event.at : null
+      };
+      ["operatorId", "accountId", "previousServingState", "servingState"].forEach(function (field) {
+        if (event && event[field] != null) retained[field] = event[field];
+      });
+      return retained;
+    }
+
+    function retainedAddress(address, at) {
+      var source = address || {};
+      if (source.mode === "mode_b" && source.ownership === "customer") {
+        return {
+          value: {
+            mode: "mode_b",
+            path: source.path || null,
+            ownership: "customer",
+            state: "detached",
+            domain: source.domain || null,
+            hostname: null,
+            detachedAt: source.detachedAt || at,
+            verification: null,
+            verificationRequests: []
+          },
+          disposition: "customer_domain_retained_detached"
+        };
+      }
+      return {
+        value: {
+          mode: "mode_a",
+          path: "licensed",
+          ownership: "licensed",
+          state: "released",
+          label: null,
+          hostname: null,
+          releasedAt: at
+        },
+        disposition: "licensed_address_released"
+      };
+    }
+
+    function hasExactKeys(value, expected) {
+      return Boolean(value)
+        && typeof value === "object"
+        && !Array.isArray(value)
+        && Object.keys(value).sort().join("\n") === expected.slice().sort().join("\n");
+    }
+
+    function hasOnlyEventKeys(event) {
+      var allowed = [
+        "accountId",
+        "at",
+        "id",
+        "kind",
+        "operatorId",
+        "previousServingState",
+        "servingState"
+      ];
+      return Boolean(event)
+        && typeof event === "object"
+        && !Array.isArray(event)
+        && Object.keys(event).every(function (key) { return allowed.includes(key); })
+        && Object.prototype.hasOwnProperty.call(event, "id")
+        && Object.prototype.hasOwnProperty.call(event, "kind")
+        && Object.prototype.hasOwnProperty.call(event, "at");
+    }
+
+    function terminalDeletionIsSealed(snapshot, project) {
+      var removedKeys = [
+        "accessCredential",
+        "billingRestorationReference",
+        "domainProofRecords",
+        "draft",
+        "projectName",
+        "publicationAttempts",
+        "safetyNarratives",
+        "screeningAttempts",
+        "supportTickets",
+        "versions"
+      ];
+      var exactProjectKeys = [
+        "access",
+        "accountId",
+        "address",
+        "billing",
+        "billingRestoration",
+        "createdAt",
+        "deletion",
+        "draft",
+        "exit",
+        "id",
+        "lifecycle",
+        "name",
+        "organizationId",
+        "plan",
+        "publicationAttempts",
+        "safety",
+        "safetyHistory",
+        "screeningAttempts",
+        "serving",
+        "supportTicketIds",
+        "terms",
+        "updatedAt",
+        "versions"
+      ];
+      var addressKeys = project.address && project.address.mode === "mode_b"
+        ? [
+            "detachedAt",
+            "domain",
+            "hostname",
+            "mode",
+            "ownership",
+            "path",
+            "state",
+            "verification",
+            "verificationRequests"
+          ]
+        : ["hostname", "label", "mode", "ownership", "path", "releasedAt", "state"];
+      var exactStructures = (
+        hasExactKeys(project, exactProjectKeys)
+        && hasExactKeys(project.access, ["credential", "visibility"])
+        && hasExactKeys(project.address, addressKeys)
+        && hasExactKeys(project.billing, [
+          "authority",
+          "deletedAt",
+          "firstFailedAt",
+          "graceEndsAt",
+          "paymentReceipt",
+          "providerReference",
+          "retentionEndsAt",
+          "state",
+          "subscriptionId",
+          "suspendedAt"
+        ])
+        && (
+          project.billingRestoration === null
+          || hasExactKeys(project.billingRestoration, [
+            "evidenceScope",
+            "operatorId",
+            "providerEvent",
+            "restoredAt"
+          ])
+        )
+        && hasExactKeys(project.deletion, ["addressDisposition", "at", "policy", "removed"])
+        && hasExactKeys(project.deletion && project.deletion.removed, removedKeys)
+        && hasExactKeys(project.exit, ["cancelledAt", "domainDetachedAt"])
+        && hasExactKeys(project.plan, [
+          "activatedAt",
+          "activationScope",
+          "cancelledAt",
+          "id",
+          "paymentReceipt",
+          "providerReference",
+          "selectedAt",
+          "status",
+          "subscriptionId"
+        ])
+        && hasExactKeys(project.safety, [
+          "appealMessage",
+          "appealedAt",
+          "closedAt",
+          "heldAt",
+          "heldBy",
+          "previousServingState",
+          "reason",
+          "restoredAt",
+          "restoredBy",
+          "state"
+        ])
+        && hasExactKeys(project.serving, [
+          "currentVersionId",
+          "previousVersionId",
+          "publishedAt",
+          "resumeState",
+          "state",
+          "updatedAt"
+        ])
+        && (
+          project.terms === null
+          || hasExactKeys(project.terms, ["acceptedAt", "privacy", "product", "website"])
+        )
+      );
+      var emptyContent = (
+        project.lifecycle === "deleted"
+        && project.name === null
+        && project.draft === null
+        && Array.isArray(project.versions) && project.versions.length === 0
+        && Array.isArray(project.publicationAttempts) && project.publicationAttempts.length === 0
+        && Array.isArray(project.screeningAttempts) && project.screeningAttempts.length === 0
+        && Array.isArray(project.supportTicketIds) && project.supportTicketIds.length === 0
+        && project.access && project.access.visibility === "closed"
+        && project.access.credential === null
+        && project.serving && project.serving.state === "deleted"
+        && project.serving.currentVersionId === null
+        && project.serving.previousVersionId === null
+        && project.safety && project.safety.state === "closed"
+        && project.safety.reason === null
+        && project.safety.appealMessage === null
+        && Array.isArray(project.safetyHistory)
+        && project.safetyHistory.every(hasOnlyEventKeys)
+        && project.billing && project.billing.state === "deleted"
+        && (!project.billingRestoration || !Object.prototype.hasOwnProperty.call(project.billingRestoration, "reference"))
+      );
+      var addressClosed = project.address && project.address.mode === "mode_b"
+        ? (
+            project.address.ownership === "customer"
+            && project.address.state === "detached"
+            && project.address.hostname === null
+            && project.address.verification === null
+            && Array.isArray(project.address.verificationRequests)
+            && project.address.verificationRequests.length === 0
+          )
+        : (
+            project.address
+            && project.address.mode === "mode_a"
+            && project.address.ownership === "licensed"
+            && project.address.state === "released"
+            && project.address.label === null
+            && project.address.hostname === null
+          );
+      var countsAreAggregates = removedKeys.every(function (key) {
+        var value = project.deletion && project.deletion.removed
+          ? project.deletion.removed[key]
+          : null;
+        return typeof value === "boolean" || (Number.isInteger(value) && value >= 0);
+      });
+      var globalTicketsSwept = Array.isArray(snapshot.supportTickets)
+        && !snapshot.supportTickets.some(function (ticket) { return ticket.projectId === project.id; });
+      return exactStructures
+        && emptyContent
+        && addressClosed
+        && countsAreAggregates
+        && globalTicketsSwept
+        && project.deletion.policy === DELETION_POLICY_ID;
+    }
+
+    function terminalDelete(snapshot, project, at) {
+      if (terminalDeletionIsSealed(snapshot, project)) return project;
+
+      var oldAddress = project.address || {};
+      var oldSafety = project.safety || {};
+      var oldHistory = Array.isArray(project.safetyHistory) ? project.safetyHistory : [];
+      var oldTickets = Array.isArray(project.supportTicketIds) ? project.supportTicketIds : [];
+      var priorDeletion = (
+        project.lifecycle === "deleted"
+        && project.deletion
+        && project.deletion.policy === DELETION_POLICY_ID
+      ) ? project.deletion : null;
+      var deletionAt = priorDeletion && priorDeletion.at ? priorDeletion.at : at;
+      var address = retainedAddress(oldAddress, deletionAt);
+      var removedTickets = 0;
+      snapshot.supportTickets = snapshot.supportTickets.filter(function (ticket) {
+        if (ticket.projectId !== project.id) return true;
+        removedTickets += 1;
+        return false;
+      });
+      var safetyNarratives = (oldSafety.reason ? 1 : 0) + (oldSafety.appealMessage ? 1 : 0);
+      oldHistory.forEach(function (event) {
+        if (event.reason) safetyNarratives += 1;
+        if (event.message) safetyNarratives += 1;
+      });
+      var retainedHistory = oldHistory.map(retainedOperatorEvent);
+      if (!retainedHistory.some(function (event) { return event.kind === "closed_by_deletion"; })) {
+        retainedHistory.push({
+          id: idFactory("safety_event"),
+          kind: "closed_by_deletion",
+          at: deletionAt
+        });
+      }
+      var proofRecords = (
+        (Array.isArray(oldAddress.verificationRequests) ? oldAddress.verificationRequests.length : 0)
+        + (oldAddress.verification ? 1 : 0)
+      );
+      var oldRestoration = project.billingRestoration || null;
+      var retainedRestoration = oldRestoration
+        ? {
+            restoredAt: oldRestoration.restoredAt || null,
+            operatorId: oldRestoration.operatorId || null,
+            evidenceScope: STORAGE_MODE,
+            providerEvent: false
+          }
+        : null;
+      var exit = {
+        cancelledAt: project.exit && project.exit.cancelledAt
+          ? project.exit.cancelledAt
+          : (project.plan && project.plan.cancelledAt ? project.plan.cancelledAt : null),
+        domainDetachedAt: address.disposition === "customer_domain_retained_detached"
+          ? (
+              project.exit && project.exit.domainDetachedAt
+                ? project.exit.domainDetachedAt
+                : address.value.detachedAt
+            )
+          : (project.exit && project.exit.domainDetachedAt ? project.exit.domainDetachedAt : null)
+      };
+      var priorRemoved = priorDeletion && priorDeletion.removed ? priorDeletion.removed : {};
+      function priorCount(key) {
+        var value = priorRemoved[key];
+        return Number.isInteger(value) && value >= 0 ? value : 0;
+      }
+      function priorBoolean(key) {
+        return priorRemoved[key] === true;
+      }
+      var deletion = {
+        policy: DELETION_POLICY_ID,
+        at: deletionAt,
+        addressDisposition: address.disposition,
+        removed: {
+          accessCredential: priorBoolean("accessCredential")
+            || Boolean(project.access && project.access.credential),
+          billingRestorationReference: priorBoolean("billingRestorationReference")
+            || Boolean(oldRestoration && oldRestoration.reference),
+          domainProofRecords: priorCount("domainProofRecords") + proofRecords,
+          draft: priorBoolean("draft") || Boolean(project.draft),
+          projectName: priorBoolean("projectName") || Boolean(project.name),
+          publicationAttempts: priorCount("publicationAttempts") + (
+            Array.isArray(project.publicationAttempts) ? project.publicationAttempts.length : 0
+          ),
+          safetyNarratives: priorCount("safetyNarratives") + safetyNarratives,
+          screeningAttempts: priorCount("screeningAttempts") + (
+            Array.isArray(project.screeningAttempts) ? project.screeningAttempts.length : 0
+          ),
+          supportTickets: priorCount("supportTickets")
+            + Math.max(removedTickets, oldTickets.length),
+          versions: priorCount("versions")
+            + (Array.isArray(project.versions) ? project.versions.length : 0)
+        }
+      };
+      var retained = {
+        id: project.id,
+        accountId: project.accountId,
+        organizationId: project.organizationId,
+        name: null,
+        lifecycle: "deleted",
+        createdAt: project.createdAt,
+        updatedAt: deletionAt,
+        terms: retainedTerms(project.terms),
+        address: address.value,
+        access: { visibility: "closed", credential: null },
+        plan: retainedPlan(project.plan),
+        billing: retainedBilling(project.billing, deletionAt),
+        billingRestoration: retainedRestoration,
+        draft: null,
+        versions: [],
+        publicationAttempts: [],
+        screeningAttempts: [],
+        serving: {
+          state: "deleted",
+          currentVersionId: null,
+          previousVersionId: null,
+          publishedAt: null,
+          updatedAt: deletionAt,
+          resumeState: "unpublished"
+        },
+        safety: {
+          state: "closed",
+          reason: null,
+          heldAt: null,
+          heldBy: null,
+          appealMessage: null,
+          appealedAt: null,
+          restoredAt: null,
+          restoredBy: null,
+          previousServingState: null,
+          closedAt: deletionAt
+        },
+        safetyHistory: retainedHistory,
+        supportTicketIds: [],
+        exit: exit,
+        deletion: deletion
+      };
+      Object.keys(project).forEach(function (key) { delete project[key]; });
+      Object.keys(retained).forEach(function (key) { project[key] = retained[key]; });
+      return project;
     }
 
     function deleteProject(input) {
       var request = input || {};
-      return mutate(function (snapshot) {
+      return mutateOnlyWhenChanged(function (snapshot) {
         var project = requireOwner(snapshot, request.projectId, request.accountId);
-        terminalDelete(project, now());
+        terminalDelete(snapshot, project, now());
         return project;
       });
     }
 
     function exportProject(input) {
       var request = input || {};
-      var result = mutate(function (snapshot) {
+      var result = mutateOnlyWhenChanged(function (snapshot) {
         var project = requireOwner(snapshot, request.projectId, request.accountId);
         var exportedAt = now();
-        advanceProjectClock(project, exportedAt);
+        advanceProjectClock(snapshot, project, exportedAt);
         if (project.lifecycle === "deleted" || project.billing.state === "deleted") {
           return { notAvailable: true };
         }
@@ -1668,8 +2184,7 @@
         fail("INVALID_SUPPORT_TICKET", "Add a short subject and enough detail to understand the request.");
       }
       return mutate(function (snapshot) {
-        var project = requireOwner(snapshot, request.projectId, request.accountId);
-        if (project.lifecycle === "deleted") fail("PROJECT_DELETED", "Deleted projects cannot open support tickets.");
+        var project = assertNotDeleted(requireOwner(snapshot, request.projectId, request.accountId));
         var ticket = {
           id: idFactory("ticket"),
           accountId: request.accountId,
@@ -1698,21 +2213,29 @@
     function resolveSite(input) {
       var request = input || {};
       var hostname = cleanHostname(request.hostname);
-      var result = mutate(function (snapshot) {
+      var lifecycleOnly = request.lifecycleOnly === true;
+      var result = mutateOnlyWhenChanged(function (snapshot) {
         var project = snapshot.projects.find(function (item) {
-          return item.address && item.address.hostname === hostname;
+          return item.lifecycle !== "deleted"
+            && item.address
+            && item.address.hostname === hostname;
         });
-        if (!project) return { error: "SITE_NOT_FOUND" };
-        advanceProjectClock(project, now());
+        if (!project) {
+          return { error: lifecycleOnly ? "LIFECYCLE_NOT_ACKNOWLEDGED" : "SITE_NOT_FOUND" };
+        }
+        advanceProjectClock(snapshot, project, now());
         if (
           project.lifecycle !== "active"
           || project.serving.state !== "live"
           || !["current", "grace"].includes(project.billing.state)
         ) {
-          return { error: "SITE_NOT_SERVING" };
+          return {
+            error: lifecycleOnly ? "LIFECYCLE_NOT_ACKNOWLEDGED" : "SITE_NOT_SERVING"
+          };
         }
         if (
-          project.access.visibility === "private"
+          !lifecycleOnly
+          && project.access.visibility === "private"
           && !passwordMatches(request.accessPassword, project.access.credential)
         ) {
           return { error: "ACCESS_DENIED" };
@@ -1726,17 +2249,28 @@
           || !DIGEST.test(version.artifact.digest)
           || sha256(version.artifact.html) !== version.artifact.digest
         ) {
-          return { error: "SITE_NOT_SERVING" };
+          return {
+            error: lifecycleOnly ? "LIFECYCLE_NOT_ACKNOWLEDGED" : "SITE_NOT_SERVING"
+          };
         }
-        return {
-          value: {
-            projectId: project.id,
-            hostname: project.address.hostname,
-            visibility: project.access.visibility,
-            versionId: version.id,
-            artifactDigest: version.artifact.digest,
-            html: version.artifact.html
+        if (lifecycleOnly) {
+          if (!privateLifecycleAcknowledged(request, project, version, hostname)) {
+            return { error: "LIFECYCLE_NOT_ACKNOWLEDGED" };
           }
+          return {
+            value: { acknowledged: true }
+          };
+        }
+        var value = {
+          projectId: project.id,
+          hostname: project.address.hostname,
+          visibility: project.access.visibility,
+          versionId: version.id,
+          artifactDigest: version.artifact.digest,
+          html: version.artifact.html
+        };
+        return {
+          value: value
         };
       });
       if (result.error === "SITE_NOT_FOUND") {
@@ -1744,6 +2278,9 @@
       }
       if (result.error === "ACCESS_DENIED") {
         fail("ACCESS_DENIED", "The passphrase did not open this website.");
+      }
+      if (result.error === "LIFECYCLE_NOT_ACKNOWLEDGED") {
+        fail("ACCESS_DENIED", "The private viewer grant was not acknowledged.");
       }
       if (result.error) {
         fail("SITE_NOT_SERVING", "The website is not currently being served.");
@@ -1791,6 +2328,7 @@
       submitSafetyAppeal: submitSafetyAppeal,
       unpublish: unpublish,
       concurrencyPolicy: CONCURRENCY_POLICY,
+      deletionPolicy: DELETION_POLICY,
       storageMode: STORAGE_MODE
     });
   }
@@ -1801,6 +2339,7 @@
       retentionDays: RETENTION_DAYS
     }),
     PLAN_ID: PLAN_ID,
+    DELETION_POLICY: DELETION_POLICY,
     CREDENTIAL_ROUNDS: CREDENTIAL_ROUNDS,
     TERMS: TERMS,
     STORE_KEY: STORE_KEY,

@@ -23,7 +23,16 @@ import {
   MIN_PREDEPLOY_AUTHORITY_REMAINING_MS,
   OG_PNG_SHA256,
   OG_SOURCE_SHA256,
+  POSTDEPLOY_EVIDENCE_RETENTION_DAYS,
+  POSTDEPLOY_POLL_INTERVAL_MS,
+  POSTDEPLOY_PROPAGATION_WINDOW_MS,
+  POSTDEPLOY_REQUEST_CONCURRENCY,
+  POSTDEPLOY_REQUEST_TIMEOUT_MS,
+  POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS,
   PRODUCTION_PREDECESSOR_SHA,
+  PRODUCTION_CANONICAL_ROUTE_FILES,
+  PRODUCTION_LEGACY_REDIRECTS,
+  PRODUCTION_ORIGIN,
   PUBLIC_PROJECTION_DIGEST,
   PublicTruthVerificationError,
   RECEIPT_PATH,
@@ -31,25 +40,36 @@ import {
   RELEASE_ENVIRONMENT,
   REPOSITORY_FULL_NAME,
   SOURCE_CATALOG_DIGEST,
+  SOURCE_ONLY_LEGACY_REDIRECT,
+  artifactPublicPath,
   artifactManifest,
   computeReleaseEpochSha256,
+  forbiddenPublicMarkers,
   gitDiffPaths,
+  inspectLiveProductionSnapshot,
+  normalizeLiveOrigin,
   parseCli,
   parseStrictJson,
+  pollLiveProduction,
   resolveAuthorityReceiptPath,
   runCli,
   sha256,
   sourceManifestFromGit,
   stableStringify,
   validateArtifactSafety,
+  validateArtifactManifestShape,
   validateCandidateControl,
   validateEnabledControl,
   validatePagesObservation,
+  validatePagesDeploymentObservation,
+  validatePostdeployIdentity,
   validatePredeployState,
+  validateProductionRouteManifest,
   validatePublicTruthTextSet,
   validateReceipt,
   validateReviewedOgAssets,
   validateRuntimeAuthorityEnvironment,
+  verifyProductionRouteContract,
 } from "../verify-public-truth-release.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -238,6 +258,70 @@ function manifestFor(files) {
   };
 }
 
+function artifactManifestFor(files) {
+  const entries = Object.entries(files)
+    .map(([file, bytes]) => {
+      const buffer = Buffer.from(bytes);
+      return { path: file, sha256: sha256(buffer), size: buffer.length };
+    })
+    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+  return {
+    count: entries.length,
+    entries,
+    sha256: sha256(stableStringify(entries)),
+  };
+}
+
+function productionFiles(overrides = {}) {
+  const files = {
+    "404.html": "<!doctype html><meta name=\"robots\" content=\"noindex\"><h1>404</h1>",
+  };
+  for (const [route, file] of Object.entries(PRODUCTION_CANONICAL_ROUTE_FILES)) {
+    const canonical = new URL(route, `${PRODUCTION_ORIGIN}/`).href;
+    files[file] = `<!doctype html><link rel="canonical" href="${canonical}"><h1>${route}</h1>`;
+  }
+  for (const [file, target] of Object.entries(PRODUCTION_LEGACY_REDIRECTS)) {
+    if (file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
+    const canonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
+    files[file] = [
+      "<!doctype html>",
+      '<meta name="robots" content="noindex">',
+      `<meta http-equiv="refresh" content="0;url=${target}">`,
+      `<link rel="canonical" href="${canonical}">`,
+      `<a href="${target}">Continue</a>`,
+    ].join("");
+  }
+  return { ...files, ...overrides };
+}
+
+function liveFixtureFetch(files, mutate = ({ bytes, status }) => ({ bytes, status })) {
+  const requests = [];
+  const byPath = new Map(
+    Object.keys(files).map((file) => [artifactPublicPath(file), file]),
+  );
+  const fetchImpl = async (url, options) => {
+    requests.push({ options, url });
+    assert.ok(options.method === "GET" || options.method === "HEAD");
+    assert.equal(options.redirect, "manual");
+    assert.equal(Object.hasOwn(options, "body"), false);
+    const pathname = new URL(url).pathname;
+    const file = byPath.get(pathname) ?? "404.html";
+    const expectedStatus = byPath.has(pathname) ? 200 : 404;
+    const changed = mutate({
+      bytes: Buffer.from(files[file]),
+      file,
+      method: options.method,
+      pathname,
+      status: expectedStatus,
+    });
+    return new Response(options.method === "HEAD" ? null : changed.bytes, {
+      headers: { "content-type": file.endsWith(".html") ? "text/html" : "application/octet-stream" },
+      status: changed.status,
+    });
+  };
+  return { fetchImpl, requests };
+}
+
 async function withArtifact(files, callback) {
   const scratch = await mkdtemp(path.join(tmpdir(), "public-truth-artifact-test-"));
   try {
@@ -381,6 +465,12 @@ test("candidate changed-path contract is exact, sorted, unique, and complete", (
   ]);
   assert.equal(RELEASE_ENVIRONMENT, "github-pages");
   assert.equal(MIN_PREDEPLOY_AUTHORITY_REMAINING_MS, 5 * 60 * 1000);
+  assert.equal(POSTDEPLOY_EVIDENCE_RETENTION_DAYS >= 90, true);
+  assert.equal(POSTDEPLOY_PROPAGATION_WINDOW_MS, 10 * 60 * 1000);
+  assert.equal(POSTDEPLOY_POLL_INTERVAL_MS, 15 * 1000);
+  assert.equal(POSTDEPLOY_REQUEST_TIMEOUT_MS, 15 * 1000);
+  assert.equal(POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS, 2);
+  assert.equal(PRODUCTION_ORIGIN, "https://sitesourcery.com");
 });
 
 test("artifact exclusion contract covers print, workflow, governance, data, and flyer sources", () => {
@@ -472,6 +562,36 @@ test("predeploy CLI requires the exact control and extracted-artifact flag set",
   ]), /--artifact-root/u);
 });
 
+test("postdeploy CLI requires the exact artifact, origin, deployment, and evidence identities", () => {
+  assert.deepEqual(parseCli([
+    "--mode", "postdeploy",
+    "--root", "/repo",
+    "--artifact-root", "/runner/postdeploy-site",
+    "--artifact-id", "123456",
+    "--candidate-sha", CANDIDATE_SHA,
+    "--production-predecessor", PRODUCTION_PREDECESSOR_SHA,
+    "--control-sha", "89".repeat(20),
+    "--authority-receipt", RECEIPT_PATH,
+    "--origin", PRODUCTION_ORIGIN,
+    "--deployment-page-url", `${PRODUCTION_ORIGIN}/`,
+    "--deployment-status", "success",
+    "--evidence", "/runner/public-truth-production-proof.json",
+  ]), {
+    mode: "postdeploy",
+    root: "/repo",
+    candidateSha: CANDIDATE_SHA,
+    productionPredecessor: PRODUCTION_PREDECESSOR_SHA,
+    controlSha: "89".repeat(20),
+    authorityReceipt: RECEIPT_PATH,
+    artifactRoot: "/runner/postdeploy-site",
+    artifactId: "123456",
+    deploymentPageUrl: `${PRODUCTION_ORIGIN}/`,
+    deploymentStatus: "success",
+    evidence: "/runner/public-truth-production-proof.json",
+    origin: PRODUCTION_ORIGIN,
+  });
+});
+
 test("CLI rejects missing, unknown, duplicate, positional, and candidate/control-mixed flags", () => {
   assert.throws(() => parseCli(["--mode", "candidate"]), /flags must be exactly/u);
   assert.throws(() => parseCli([
@@ -493,7 +613,7 @@ test("CLI rejects missing, unknown, duplicate, positional, and candidate/control
   ]), /flags must be exactly/u);
   assert.throws(() => parseCli(["candidate", "true"]), /positional/u);
   assert.throws(() => parseCli(["--mode", "--root"]), /requires one explicit value/u);
-  assert.throws(() => parseCli(["--mode", "true"]), /candidate, control, or predeploy/u);
+  assert.throws(() => parseCli(["--mode", "true"]), /candidate, control, predeploy, or postdeploy/u);
 });
 
 test("authority receipt path rejects relative and absolute substitution", () => {
@@ -987,6 +1107,27 @@ test("public-truth workflow structurally rejects comments and artifact-chain sub
       /explicit deploy-pages artifact name/u,
     ],
     [
+      CURRENT_WORKFLOW_TEXT.replace(
+        "            --mode postdeploy \\",
+        "            --mode predeploy \\\n            # --mode postdeploy \\",
+      ),
+      /postdeploy verifier mode/u,
+    ],
+    [
+      CURRENT_WORKFLOW_TEXT.replace(
+        "        id: postdeploy-proof\n        if: ${{ always() }}",
+        "        id: postdeploy-proof\n        if: ${{ always() && steps.deployment.outcome == 'success' }}",
+      ),
+      /postdeploy execution and evidence after every deployment outcome/u,
+    ],
+    [
+      CURRENT_WORKFLOW_TEXT.replace(
+        "          retention-days: 90",
+        "          retention-days: 89\n          # retention-days: 90",
+      ),
+      /90-day private postdeploy evidence contract/u,
+    ],
+    [
       `${CURRENT_WORKFLOW_TEXT}\n# actions/upload-pages-artifact@1234567890abcdef1234567890abcdef12345678\n`,
       /must not use the composite upload-pages-artifact/u,
     ],
@@ -1088,6 +1229,339 @@ test("artifact manifest is deterministic for ordinary public files", async () =>
     assert.deepEqual(first, second);
     assert.equal(first.count, 2);
   });
+});
+
+test("postdeploy production proof accepts propagation delay only after two full exact snapshots", async () => {
+  assert.equal(POSTDEPLOY_REQUEST_CONCURRENCY, 8);
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  let phase = 0;
+  let clock = 0;
+  const { fetchImpl, requests } = liveFixtureFetch(files, ({ bytes, file, status }) => (
+    phase === 0 && file === "index.html"
+      ? { bytes: Buffer.from("stale predecessor"), status }
+      : { bytes, status }
+  ));
+  const result = await pollLiveProduction({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    now: () => clock,
+    sleep: async (milliseconds) => {
+      clock += milliseconds;
+      phase += 1;
+    },
+    propagationWindowMs: 100,
+    pollIntervalMs: 10,
+    requestTimeoutMs: 1000,
+  });
+  assert.equal(result.attempts.length, 4);
+  assert.equal(result.attempts[0].full, true);
+  assert.deepEqual(result.attempts[0].mismatchKeys, ["artifact:index.html"]);
+  assert.equal(result.attempts[1].full, false);
+  assert.equal(result.attempts[2].full, true);
+  assert.equal(result.attempts[3].full, true);
+  assert.equal(result.consecutiveExactFullSnapshots, 2);
+  assert.equal(result.finalSnapshot.exact, true);
+  assert.ok(requests.length > manifest.count * 2);
+});
+
+test("postdeploy production proof catches an intermittently stale edge after an exact snapshot", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  let phase = 0;
+  let clock = 0;
+  const { fetchImpl } = liveFixtureFetch(files, ({ bytes, file, status }) => (
+    phase === 1 && file === "index.html"
+      ? { bytes: Buffer.from("intermittent stale edge"), status }
+      : { bytes, status }
+  ));
+  const result = await pollLiveProduction({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    now: () => clock,
+    sleep: async (milliseconds) => {
+      clock += milliseconds;
+      phase += 1;
+    },
+    propagationWindowMs: 100,
+    pollIntervalMs: 10,
+    requestTimeoutMs: 1000,
+  });
+  assert.equal(result.attempts.length, 5);
+  assert.equal(result.attempts[0].exactCount, result.finalSnapshot.totalResourceCount);
+  assert.deepEqual(result.attempts[1].mismatchKeys, ["artifact:index.html"]);
+  assert.equal(result.attempts[2].full, false);
+  assert.equal(result.attempts[3].full, true);
+  assert.equal(result.attempts[4].full, true);
+});
+
+test("postdeploy live snapshot reports mismatched bytes with digest and status evidence", async () => {
+  const files = productionFiles({ "vnext.css": "reviewed bytes" });
+  const manifest = artifactManifestFor(files);
+  const { fetchImpl, requests } = liveFixtureFetch(files, ({ bytes, file, status }) => (
+    file === "vnext.css"
+      ? { bytes: Buffer.from("mutated bytes"), status }
+      : { bytes, status }
+  ));
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  const mismatch = snapshot.resources.find((resource) => resource.key === "artifact:vnext.css");
+  assert.equal(snapshot.exact, false);
+  assert.equal(mismatch.status, 200);
+  assert.equal(mismatch.expectedSha256, sha256("reviewed bytes"));
+  assert.equal(mismatch.actualSha256, sha256("mutated bytes"));
+  assert.ok(mismatch.failures.includes("SHA-256 mismatch"));
+  assert.deepEqual(new Set(requests.map(({ options }) => options.method)), new Set(["GET", "HEAD"]));
+  assert.ok(requests.every(({ options }) => options.body === undefined));
+  assert.equal(validateArtifactManifestShape(manifest), manifest);
+});
+
+test("postdeploy live snapshot fails closed when HEAD and GET disagree", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  const { fetchImpl } = liveFixtureFetch(files, ({ bytes, file, method, status }) => (
+    file === "index.html" && method === "HEAD"
+      ? { bytes, status: 503 }
+      : { bytes, status }
+  ));
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  const mismatch = snapshot.resources.find((resource) => resource.key === "artifact:index.html");
+  assert.equal(mismatch.status, 200);
+  assert.equal(mismatch.headStatus, 503);
+  assert.equal(mismatch.exact, false);
+  assert.ok(mismatch.failures.includes("HEAD status 503 != 200"));
+});
+
+test("postdeploy live snapshot rejects a missing canonical route", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  const { fetchImpl } = liveFixtureFetch(files, ({ bytes, pathname, status }) => (
+    pathname === "/contact/"
+      ? { bytes: Buffer.from(files["404.html"]), status: 404 }
+      : { bytes, status }
+  ));
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  const missing = snapshot.resources.find((resource) => resource.key === "artifact:contact/index.html");
+  assert.equal(missing.status, 404);
+  assert.equal(missing.expectedStatus, 200);
+  assert.equal(missing.exact, false);
+  assert.ok(missing.failures.some((failure) => failure.includes("status 404 != 200")));
+
+  const incomplete = productionFiles();
+  delete incomplete["contact/index.html"];
+  assert.throws(
+    () => validateProductionRouteManifest(artifactManifestFor(incomplete)),
+    /missing canonical route \/contact\//u,
+  );
+});
+
+test("postdeploy route fixture proves canonical pages, custom 404, redirects, and source-only absence", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  const { fetchImpl } = liveFixtureFetch(files);
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: PRODUCTION_ORIGIN,
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  await withArtifact(files, async (artifactRoot) => {
+    const contract = await verifyProductionRouteContract({
+      artifactRoot,
+      manifest,
+      finalSnapshot: snapshot,
+    });
+    assert.deepEqual(contract.canonicalRoutes, Object.keys(PRODUCTION_CANONICAL_ROUTE_FILES));
+    assert.deepEqual(
+      contract.legacyRedirects,
+      Object.keys(PRODUCTION_LEGACY_REDIRECTS).filter((file) => file !== SOURCE_ONLY_LEGACY_REDIRECT),
+    );
+    assert.equal(contract.sourceOnlyRedirectAbsence, SOURCE_ONLY_LEGACY_REDIRECT);
+    assert.match(contract.custom404Path, /^\/sitesourcery-production-proof-/u);
+  });
+});
+
+test("postdeploy proof rejects Web3Forms, access_key, and the retired 321 identity", async () => {
+  const forbidden = [
+    "Web3Forms",
+    'name="access_key"',
+    "tel:+13217882555",
+  ].join(" ");
+  assert.deepEqual(
+    forbiddenPublicMarkers("index.html", Buffer.from(forbidden)),
+    ["Web3Forms", "access_key", "retired 321 identity"],
+  );
+  assert.deepEqual(
+    forbiddenPublicMarkers(
+      "index.html",
+      Buffer.from("A keyboard access key and reference 932178825550 are harmless prose."),
+    ),
+    [],
+  );
+  await withArtifact({ "index.html": forbidden }, async (root) => {
+    await assert.rejects(
+      () => validateArtifactSafety(root, manifestFor({ "index.html": forbidden })),
+      /forbidden public markers/u,
+    );
+  });
+  const files = productionFiles({ "index.html": forbidden });
+  const manifest = artifactManifestFor(files);
+  const { fetchImpl } = liveFixtureFetch(files);
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  assert.deepEqual(snapshot.forbidden, [
+    "/: Web3Forms",
+    "/: access_key",
+    "/: retired 321 identity",
+  ]);
+  let clock = 0;
+  await assert.rejects(
+    () => pollLiveProduction({
+      manifest,
+      origin: "https://production.example",
+      fetchImpl,
+      now: () => clock,
+      sleep: async (milliseconds) => {
+        clock += milliseconds;
+      },
+      propagationWindowMs: 100,
+      pollIntervalMs: 10,
+      requestTimeoutMs: 1000,
+    }),
+    /propagation timed out.*forbidden markers/u,
+  );
+});
+
+test("postdeploy proof permits a forbidden predecessor only while bounded propagation continues", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  let phase = 0;
+  let clock = 0;
+  const stale = Buffer.from('<form action="https://api.web3forms.com/submit"><input name="access_key"></form>');
+  const { fetchImpl } = liveFixtureFetch(files, ({ bytes, file, method, status }) => (
+    phase === 0 && method === "GET" && file === "index.html"
+      ? { bytes: stale, status }
+      : { bytes, status }
+  ));
+  const result = await pollLiveProduction({
+    manifest,
+    origin: "https://production.example",
+    fetchImpl,
+    now: () => clock,
+    sleep: async (milliseconds) => {
+      clock += milliseconds;
+      phase += 1;
+    },
+    propagationWindowMs: 100,
+    pollIntervalMs: 10,
+    requestTimeoutMs: 1000,
+  });
+  assert.deepEqual(result.attempts[0].forbidden, [
+    "/: Web3Forms",
+    "/: access_key",
+  ]);
+  assert.equal(result.finalSnapshot.forbidden.length, 0);
+  assert.equal(result.consecutiveExactFullSnapshots, POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS);
+});
+
+test("postdeploy proof fails closed at the deterministic propagation timeout", async () => {
+  const files = productionFiles();
+  const manifest = artifactManifestFor(files);
+  let clock = 0;
+  const { fetchImpl } = liveFixtureFetch(files, ({ bytes, file, status }) => (
+    file === "index.html"
+      ? { bytes: Buffer.from("permanently stale"), status }
+      : { bytes, status }
+  ));
+  await assert.rejects(
+    () => pollLiveProduction({
+      manifest,
+      origin: "https://production.example",
+      fetchImpl,
+      now: () => clock,
+      sleep: async (milliseconds) => {
+        clock += milliseconds;
+      },
+      propagationWindowMs: 25,
+      pollIntervalMs: 10,
+      requestTimeoutMs: 1000,
+    }),
+    (error) => (
+      error instanceof PublicTruthVerificationError
+      && /propagation timed out/u.test(error.message)
+      && error.postdeployEvidence?.attempts.length === 4
+      && error.postdeployEvidence?.completedAtMs === 25
+    ),
+  );
+});
+
+test("postdeploy identity rejects candidate, control, artifact, and deployment confusion", () => {
+  const controlSha = "89abcdef".repeat(5);
+  const identity = {
+    actor: "Founder-Test",
+    actorId: "987654",
+    artifactFileCount: 66,
+    artifactId: "123456789",
+    artifactManifestSha256: ARTIFACT_MANIFEST_SHA,
+    candidateSha: CANDIDATE_SHA,
+    controlSha,
+    deploymentPageUrl: "https://sitesourcery.com/",
+    deploymentStatus: "success",
+    origin: PRODUCTION_ORIGIN,
+    pagesDeploymentBuildVersion: controlSha,
+    pagesDeploymentStatus: "succeed",
+    pagesDeploymentUrl: `https://api.github.com/repos/${REPOSITORY_FULL_NAME}/pages/deployments/${controlSha}`,
+    repository: REPOSITORY_FULL_NAME,
+    repositoryId: "123456",
+    runAttempt: "1",
+    runId: "24681012",
+    sourceManifestSha256: SOURCE_MANIFEST_SHA,
+    workflowSha: controlSha,
+  };
+  assert.equal(validatePostdeployIdentity(identity).controlSha, controlSha);
+  assert.deepEqual(
+    validatePagesDeploymentObservation({ status: "succeed" }, controlSha),
+    { buildVersion: controlSha, status: "succeed" },
+  );
+  assert.equal(normalizeLiveOrigin("https://sitesourcery.com/"), PRODUCTION_ORIGIN);
+  for (const [field, value, expected] of [
+    ["candidateSha", controlSha, /candidate and control identities must remain distinct/u],
+    ["workflowSha", CANDIDATE_SHA, /workflow SHA/u],
+    ["pagesDeploymentBuildVersion", CANDIDATE_SHA, /Pages deployment build version/u],
+    ["artifactId", CANDIDATE_SHA, /artifact ID/u],
+    ["deploymentPageUrl", "https://attacker.example/", /deployed Pages URL/u],
+    ["pagesDeploymentStatus", "pending", /observation status/u],
+  ]) {
+    assert.throws(
+      () => validatePostdeployIdentity({ ...identity, [field]: value }),
+      expected,
+      field,
+    );
+  }
+  assert.throws(
+    () => validatePagesDeploymentObservation({ status: "pending" }, controlSha),
+    /Pages deployment status/u,
+  );
 });
 
 test("artifact safety accepts exact static projection with open direct-inquiry guides", async () => {
@@ -1252,17 +1726,26 @@ test("artifact manifest rejects symbolic links", async () => {
 test("verifier module has no placeholder authority or OG digest", async () => {
   const source = await readFile(path.join(PROJECT_ROOT, "scripts/verify-public-truth-release.mjs"), "utf8");
   assert.doesNotMatch(source, /__SET_AFTER|TODO_AUTHORITY|PLACEHOLDER_HASH/u);
+  assert.equal((source.match(/method: "GET"/gu) ?? []).length >= 2, true);
+  assert.equal((source.match(/method: "HEAD"/gu) ?? []).length, 1);
+  assert.doesNotMatch(source, /method:\s*"POST"/u);
   assert.match(OG_SOURCE_SHA256, /^[0-9a-f]{64}$/u);
   assert.match(OG_PNG_SHA256, /^[0-9a-f]{64}$/u);
 });
 
 test("CLI denies a bare invocation before touching release state", async () => {
-  await assert.rejects(() => runCli([], {}), /--mode must be exactly candidate, control, or predeploy/u);
+  await assert.rejects(
+    () => runCli([], {}),
+    /--mode must be exactly candidate, control, predeploy, or postdeploy/u,
+  );
 });
 
 test("errors use the dedicated fail-closed verification type", () => {
   assert.throws(
     () => parseCli(["--mode", "anything"]),
-    (error) => error instanceof PublicTruthVerificationError && /candidate, control, or predeploy/u.test(error.message),
+    (error) => (
+      error instanceof PublicTruthVerificationError
+      && /candidate, control, predeploy, or postdeploy/u.test(error.message)
+    ),
   );
 });

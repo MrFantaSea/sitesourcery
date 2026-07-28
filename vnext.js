@@ -106,6 +106,7 @@
       wideViewport.addListener(cleanupWideMenu);
     }
     cleanupWideMenu(wideViewport);
+    root.classList.add("menu-ready");
   }
 
   function watchHeader() {
@@ -136,6 +137,7 @@
       items.forEach(function (item) {
         item.setAttribute("data-revealed", "true");
       });
+      root.classList.add("reveal-ready");
       return;
     }
     var observer = new IntersectionObserver(function (entries) {
@@ -151,6 +153,7 @@
     items.forEach(function (item) {
       observer.observe(item);
     });
+    root.classList.add("reveal-ready");
   }
 
   function setupStartChooser() {

@@ -5,7 +5,7 @@ import { access, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANONICAL_ROUTES } from "./check-routes.mjs";
+import { CANONICAL_ROUTES, PRIMARY_NAV } from "./check-routes.mjs";
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SITE_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
@@ -51,10 +51,390 @@ const HIVE_COMPONENT_VIEWPORTS = Object.freeze([
   Object.freeze({ label: "hive-769", width: 769, height: 1024, mobile: false, componentRoute: "/hive/" }),
   Object.freeze({ label: "hive-landscape", width: 844, height: 390, mobile: false, componentRoute: "/hive/" }),
 ]);
+export const HOME_FIRST_PAINT_VIEWPORTS = Object.freeze([
+  Object.freeze({ label: "cold-phone-390", width: 390, height: 844, mobile: true }),
+  Object.freeze({ label: "cold-desktop", width: 1440, height: 1000, mobile: false }),
+]);
+export const HOME_FIRST_PAINT_CHECKPOINTS = Object.freeze([
+  Object.freeze({ atMs: 300, label: "early", minimumOpacity: 0.05 }),
+  Object.freeze({ atMs: 1000, label: "complete", minimumOpacity: 0.98 }),
+]);
+export const HOME_FIRST_PAINT_SCENARIOS = Object.freeze([
+  "baseline",
+  "hero-image-held",
+  "hero-image-blocked",
+  "javascript-disabled",
+  "forced-early-javascript-failure",
+]);
+const HOME_FIRST_PAINT_TIMING_TOLERANCE_MS = 250;
+const HOME_HERO_IMAGE_PATTERN = "*site-sourcery-storm-atelier-v4.webp*";
+const HOME_FORCED_FAILURE_SENTINEL = "SITESOURCERY_FORCED_EARLY_JAVASCRIPT_FAILURE";
+export const PROGRESSIVE_FAILURE_VIEWPORT = Object.freeze({
+  label: "phone-390-progressive-failure",
+  width: 390,
+  height: 844,
+  mobile: true,
+});
+export const PROGRESSIVE_FAILURE_SCENARIOS = Object.freeze([
+  Object.freeze({
+    key: "after-root-js",
+    failureStage: "root-js-class",
+    menuReady: false,
+    revealReady: false,
+  }),
+  Object.freeze({
+    key: "during-menu-initializer",
+    failureStage: "menu-listener",
+    menuReady: false,
+    revealReady: false,
+  }),
+  Object.freeze({
+    key: "during-reveal-initializer",
+    failureStage: "reveal-query",
+    menuReady: true,
+    revealReady: false,
+  }),
+]);
+export const PROGRESSIVE_REVEAL_ROUTES = Object.freeze([
+  "/",
+  "/custom/",
+  "/custom/scope/",
+  "/custom/process/",
+  "/abracadabra/",
+  "/abracadabra/how/",
+  "/hive/",
+  "/solutions/",
+  "/about/",
+  "/start/",
+]);
+export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
+  "/abracadabra/how/": 6,
+  "/faq/": 13,
+  "/solutions/": 9,
+});
+const PROGRESSIVE_FAILURE_SENTINEL = "SITESOURCERY_PROGRESSIVE_FAILURE_AUDIT";
 const ROUTE_TRANSFER_BUDGET_BYTES = 1024 * 1024;
+const PRIVATE_VIEWER_POPUP_URL = "https://cta.invalid/abracadabra-popup-proof";
+const PRIVATE_VIEWER_POPUP_TIMEOUT_MS = 5000;
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export function homeFirstPaintFailures(snapshot, checkpoint, scenario) {
+  const failures = [];
+  if (!snapshot || typeof snapshot !== "object") return ["missing snapshot"];
+  if (!checkpoint || typeof checkpoint !== "object") return ["missing checkpoint"];
+  if (!HOME_FIRST_PAINT_SCENARIOS.includes(scenario)) {
+    failures.push(`unknown scenario ${JSON.stringify(scenario)}`);
+  }
+  if (snapshot.path !== "/") failures.push(`wrong path ${JSON.stringify(snapshot.path)}`);
+  if (
+    !Number.isFinite(snapshot.elapsedMs)
+    || snapshot.elapsedMs > checkpoint.atMs + HOME_FIRST_PAINT_TIMING_TOLERANCE_MS
+  ) {
+    failures.push(
+      `checkpoint elapsed ${JSON.stringify(snapshot.elapsedMs)}ms exceeds `
+      + `${checkpoint.atMs + HOME_FIRST_PAINT_TIMING_TOLERANCE_MS}ms`,
+    );
+  }
+  for (const [name, expected] of Object.entries({
+    h1: Object.freeze({
+      href: null,
+      minimumHeight: 24,
+      minimumWidth: 44,
+      text: "Your source for websites.",
+    }),
+    primaryAction: Object.freeze({
+      href: "#websites",
+      minimumHeight: 44,
+      minimumWidth: 44,
+      text: "Find your website",
+    }),
+  })) {
+    const element = snapshot[name];
+    if (!element?.present) {
+      failures.push(`${name} is missing`);
+      continue;
+    }
+    if (element.text !== expected.text) {
+      failures.push(`${name} text is ${JSON.stringify(element.text)}`);
+    }
+    if (expected.href !== null && element.href !== expected.href) {
+      failures.push(`${name} href is ${JSON.stringify(element.href)}`);
+    }
+    if (!element.structurallyVisible) failures.push(`${name} is structurally hidden`);
+    if (
+      !Number.isFinite(element.effectiveOpacity)
+      || element.effectiveOpacity < checkpoint.minimumOpacity
+    ) {
+      failures.push(
+        `${name} effective opacity ${JSON.stringify(element.effectiveOpacity)} is below `
+        + `${checkpoint.minimumOpacity}`,
+      );
+    }
+    if (
+      !Number.isFinite(element.width)
+      || element.width < expected.minimumWidth
+    ) {
+      failures.push(`${name} width is below ${expected.minimumWidth}px`);
+    }
+    if (
+      !Number.isFinite(element.height)
+      || element.height < expected.minimumHeight
+    ) {
+      failures.push(`${name} height is below ${expected.minimumHeight}px`);
+    }
+    if (
+      !Number.isFinite(element.viewportVisibleWidth)
+      || element.viewportVisibleWidth < expected.minimumWidth
+    ) {
+      failures.push(`${name} is not meaningfully visible horizontally`);
+    }
+    if (
+      !Number.isFinite(element.viewportVisibleHeight)
+      || element.viewportVisibleHeight < expected.minimumHeight
+    ) {
+      failures.push(`${name} is not meaningfully visible vertically`);
+    }
+  }
+  if (
+    checkpoint.atMs === HOME_FIRST_PAINT_CHECKPOINTS.at(-1).atMs
+    && (
+      !Number.isFinite(snapshot.firstContentfulPaintMs)
+      || snapshot.firstContentfulPaintMs
+        > checkpoint.atMs + HOME_FIRST_PAINT_TIMING_TOLERANCE_MS
+    )
+  ) {
+    failures.push(
+      `first contentful paint ${JSON.stringify(snapshot.firstContentfulPaintMs)}ms exceeds `
+      + `${checkpoint.atMs + HOME_FIRST_PAINT_TIMING_TOLERANCE_MS}ms`,
+    );
+  }
+  if (
+    ["hero-image-held", "hero-image-blocked"].includes(scenario)
+    && snapshot.heroInterceptedRequests < 1
+  ) {
+    failures.push("hero image interception did not run");
+  }
+  if (
+    ["hero-image-held", "hero-image-blocked"].includes(scenario)
+    && snapshot.heroImage?.naturalWidth !== 0
+  ) {
+    failures.push("hero image unexpectedly rendered during its failure checkpoint");
+  }
+  if (scenario === "hero-image-held" && snapshot.heroHeldRequests < 1) {
+    failures.push("hero image was not held through the checkpoint");
+  }
+  if (scenario === "javascript-disabled" && snapshot.hasJsClass) {
+    failures.push("JavaScript-disabled document acquired the js class");
+  }
+  if (
+    scenario === "forced-early-javascript-failure"
+    && !snapshot.forcedFailureTriggered
+  ) {
+    failures.push("forced early JavaScript failure did not trigger");
+  }
+  return failures;
+}
+
+export function progressiveFailureFailures(snapshot, scenarioKey, route) {
+  const failures = [];
+  const scenario = PROGRESSIVE_FAILURE_SCENARIOS.find(({ key }) => key === scenarioKey);
+  if (!scenario) return [`unknown progressive-failure scenario ${JSON.stringify(scenarioKey)}`];
+  if (!CANONICAL_ROUTES.includes(route)) {
+    failures.push(`unknown canonical route ${JSON.stringify(route)}`);
+  }
+  if (!snapshot || typeof snapshot !== "object") return [...failures, "missing snapshot"];
+  if (snapshot.path !== route) failures.push(`wrong path ${JSON.stringify(snapshot.path)}`);
+  if (snapshot.readyState !== "complete") {
+    failures.push(`document state is ${JSON.stringify(snapshot.readyState)}`);
+  }
+  if (
+    snapshot.failure?.scenario !== scenario.key
+    || snapshot.failure?.stage !== scenario.failureStage
+    || snapshot.failure?.jsAtFailure !== true
+  ) {
+    failures.push(`forced failure marker is ${JSON.stringify(snapshot.failure ?? null)}`);
+  }
+  if (!snapshot.hasJsClass) failures.push("root lost the js class before the audit");
+  if (snapshot.menuReady !== scenario.menuReady) {
+    failures.push(
+      `menu-ready is ${JSON.stringify(snapshot.menuReady)}; expected ${scenario.menuReady}`,
+    );
+  }
+  if (snapshot.revealReady !== scenario.revealReady) {
+    failures.push(
+      `reveal-ready is ${JSON.stringify(snapshot.revealReady)}; expected ${scenario.revealReady}`,
+    );
+  }
+  if (
+    snapshot.h1?.count !== 1
+    || !snapshot.h1?.usable
+    || typeof snapshot.h1?.text !== "string"
+    || snapshot.h1.text.length < 4
+  ) {
+    failures.push(`route H1 is not usable ${JSON.stringify(snapshot.h1 ?? null)}`);
+  }
+  const expectedNavHrefs = PRIMARY_NAV.map(({ href }) => href);
+  if (
+    !snapshot.nav?.usable
+    || JSON.stringify(snapshot.nav.hrefs) !== JSON.stringify(expectedNavHrefs)
+    || snapshot.nav.mode !== (scenario.menuReady ? "enhanced-disclosure" : "fallback-links")
+    || snapshot.nav.failures?.length
+  ) {
+    failures.push(`primary navigation is not usable ${JSON.stringify(snapshot.nav ?? null)}`);
+  }
+  if (
+    !Number.isInteger(snapshot.essential?.count)
+    || snapshot.essential.count < 1
+    || snapshot.essential.failures?.length
+  ) {
+    failures.push(
+      `essential links/actions are not reachable ${JSON.stringify(snapshot.essential ?? null)}`,
+    );
+  }
+  const expectedDisclosureCount = PROGRESSIVE_DISCLOSURE_COUNTS[route] ?? 0;
+  if (
+    snapshot.disclosures?.count !== expectedDisclosureCount
+    || snapshot.disclosures?.failures?.length
+  ) {
+    failures.push(
+      `native disclosures are not usable ${JSON.stringify(snapshot.disclosures ?? null)}`,
+    );
+  }
+  if (
+    !Number.isInteger(snapshot.reveals?.count)
+    || snapshot.reveals.failures?.length
+    || (
+      PROGRESSIVE_REVEAL_ROUTES.includes(route)
+      && snapshot.reveals.belowFoldCount < 1
+    )
+  ) {
+    failures.push(
+      `reveal content is not reachable ${JSON.stringify(snapshot.reveals ?? null)}`,
+    );
+  }
+  if (
+    !snapshot.belowFold?.present
+    || !snapshot.belowFold?.initiallyBelowFold
+    || !snapshot.belowFold?.usable
+    || snapshot.belowFold.textLength < 40
+  ) {
+    failures.push(
+      `below-fold route content is not reachable ${JSON.stringify(snapshot.belowFold ?? null)}`,
+    );
+  }
+  return failures;
+}
+
+export function privateViewerPopupFailures(
+  proof,
+  expectedUrl = PRIVATE_VIEWER_POPUP_URL,
+) {
+  const failures = [];
+  let parsedExpected;
+  try {
+    parsedExpected = new URL(expectedUrl);
+  } catch {
+    return [`unsafe popup fixture URL ${JSON.stringify(expectedUrl)}`];
+  }
+  if (
+    parsedExpected.protocol !== "https:"
+    || parsedExpected.hostname !== "cta.invalid"
+  ) {
+    failures.push(`unsafe popup fixture URL ${JSON.stringify(expectedUrl)}`);
+  }
+  if (!proof || typeof proof !== "object") return [...failures, "missing popup proof"];
+  if (proof.error) failures.push(`popup exercise error ${JSON.stringify(proof.error)}`);
+
+  const sandboxTokens = String(proof.frame?.sandbox ?? "")
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (
+    sandboxTokens.length !== 1
+    || sandboxTokens[0] !== "allow-popups"
+  ) {
+    failures.push(`source frame sandbox is ${JSON.stringify(proof.frame?.sandbox ?? null)}`);
+  }
+  if (
+    proof.frame?.inspection !== "DOM.getDocument(pierce)"
+    || !proof.frame?.ownerBackendNodeId
+    || !proof.frame?.contentDocumentBackendNodeId
+  ) {
+    failures.push("published-site DOM attachment was not identified");
+  }
+  if (proof.frame?.sandboxRestrictsOriginAndScripts !== true) {
+    failures.push("published-site sandbox did not retain opaque-origin and no-script restrictions");
+  }
+  if (
+    proof.click?.href !== expectedUrl
+    || proof.click?.target !== "_blank"
+    || !String(proof.click?.rel ?? "").split(/\s+/u).includes("noopener")
+    || proof.click?.interaction !== "Input.dispatchMouseEvent"
+  ) {
+    failures.push(`generated CTA click is ${JSON.stringify(proof.click ?? null)}`);
+  }
+  if (
+    proof.windowOpen?.url !== expectedUrl
+    || proof.windowOpen?.userGesture !== true
+  ) {
+    failures.push(`Page.windowOpen proof is ${JSON.stringify(proof.windowOpen ?? null)}`);
+  }
+  if (
+    proof.popup?.createdEvent !== true
+    || proof.popup?.type !== "page"
+    || !proof.popup?.targetId
+  ) {
+    failures.push(`Target.targetCreated proof is ${JSON.stringify(proof.popup ?? null)}`);
+  }
+  if (
+    proof.popup?.openerFrameId
+    && proof.popup.openerFrameId !== proof.frame?.frameId
+  ) {
+    failures.push(
+      `popup opener frame ${JSON.stringify(proof.popup.openerFrameId)} did not match `
+      + `${JSON.stringify(proof.frame?.frameId ?? null)}`,
+    );
+  }
+  if (
+    !proof.outerAfter?.frameConnected
+    || !proof.outerAfter?.sourceRetained
+    || proof.outerAfter?.sandbox !== "allow-popups"
+    || proof.outerAfter?.state !== "live"
+    || proof.outerAfter?.siteHidden
+  ) {
+    failures.push(`opener page did not remain intact ${JSON.stringify(proof.outerAfter ?? null)}`);
+  }
+  if (
+    !proof.innerAfter?.documentConnected
+    || !proof.innerAfter?.linkConnected
+    || proof.innerAfter?.href !== expectedUrl
+    || proof.innerAfter?.target !== "_blank"
+    || proof.innerAfter?.backendNodeId !== proof.click?.backendNodeId
+  ) {
+    failures.push(`opener iframe did not remain intact ${JSON.stringify(proof.innerAfter ?? null)}`);
+  }
+
+  const attemptedTargets = Array.isArray(proof.cleanup?.attemptedTargetIds)
+    ? proof.cleanup.attemptedTargetIds
+    : [];
+  const remainingTargets = Array.isArray(proof.cleanup?.remainingTargetIds)
+    ? proof.cleanup.remainingTargetIds
+    : [];
+  if (
+    !proof.cleanup?.listenersRemoved
+    || !proof.cleanup?.discoveryDisabled
+    || !proof.cleanup?.domDisabled
+    || !Array.isArray(proof.cleanup?.remainingTargetIds)
+    || (proof.cleanup?.closeErrors?.length ?? 0) > 0
+    || remainingTargets.length
+    || (proof.popup?.targetId && !attemptedTargets.includes(proof.popup.targetId))
+  ) {
+    failures.push(`popup cleanup is incomplete ${JSON.stringify(proof.cleanup ?? null)}`);
+  }
+  return failures;
 }
 
 async function chromiumPath() {
@@ -250,6 +630,786 @@ async function navigate(cdp, url) {
     }),
   ]);
   await delay(250);
+}
+
+async function navigateToDomContent(cdp, url) {
+  let loaderId = "";
+  let resolveReady;
+  const earlyEvents = [];
+  const ready = new Promise((resolve) => {
+    resolveReady = resolve;
+  });
+  const off = cdp.on("Page.lifecycleEvent", (event) => {
+    if (event.name !== "DOMContentLoaded") return;
+    if (!loaderId) {
+      earlyEvents.push(event);
+      return;
+    }
+    if (event.loaderId === loaderId) resolveReady(event);
+  });
+  try {
+    const navigation = await cdp.send("Page.navigate", { url });
+    if (navigation.errorText) {
+      throw new Error(`failed to navigate ${url}: ${navigation.errorText}`);
+    }
+    loaderId = navigation.loaderId ?? "";
+    if (!loaderId) throw new Error(`navigation did not produce a loader id for ${url}`);
+    const alreadyReady = earlyEvents.find((event) => event.loaderId === loaderId);
+    if (alreadyReady) resolveReady(alreadyReady);
+    await Promise.race([
+      ready,
+      delay(4000).then(() => {
+        throw new Error(`timed out before DOMContentLoaded for ${url}`);
+      }),
+    ]);
+    return loaderId;
+  } finally {
+    off();
+  }
+}
+
+const HOME_FORCED_FAILURE_SOURCE = `(() => {
+  const nativeAdd = DOMTokenList.prototype.add;
+  DOMTokenList.prototype.add = function (...tokens) {
+    const targetsRoot = Boolean(
+      document.documentElement
+      && this === document.documentElement.classList
+      && tokens.includes("js")
+    );
+    const result = nativeAdd.apply(this, tokens);
+    if (!targetsRoot) return result;
+    DOMTokenList.prototype.add = nativeAdd;
+    globalThis.__siteSourceryForcedEarlyFailure = true;
+    throw new Error("${HOME_FORCED_FAILURE_SENTINEL}");
+  };
+})()`;
+
+function homeFirstPaintExpression(checkpoint, { asyncWait = true } = {}) {
+  const waitForCheckpoint = asyncWait
+    ? `const targetMs = ${JSON.stringify(checkpoint.atMs)};
+      const remaining = targetMs - performance.now();
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });`
+    : "";
+  return `(${asyncWait ? "async " : ""}() => {
+    ${waitForCheckpoint}
+    const describe = (element) => {
+      if (!element) return { present: false };
+      let effectiveOpacity = 1;
+      let structurallyVisible = true;
+      for (
+        let current = element;
+        current && current.nodeType === Node.ELEMENT_NODE;
+        current = current.parentElement
+      ) {
+        const style = getComputedStyle(current);
+        const opacity = Number.parseFloat(style.opacity);
+        effectiveOpacity *= Number.isFinite(opacity) ? opacity : 0;
+        if (
+          current.hidden
+          || current.inert
+          || current.getAttribute("aria-hidden") === "true"
+          || style.display === "none"
+          || style.visibility === "hidden"
+          || style.contentVisibility === "hidden"
+        ) {
+          structurallyVisible = false;
+        }
+      }
+      const rect = element.getBoundingClientRect();
+      const viewportVisibleWidth = Math.max(
+        0,
+        Math.min(rect.right, innerWidth) - Math.max(rect.left, 0)
+      );
+      const viewportVisibleHeight = Math.max(
+        0,
+        Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0)
+      );
+      return {
+        effectiveOpacity,
+        height: rect.height,
+        href: element.getAttribute("href"),
+        present: true,
+        structurallyVisible: structurallyVisible
+          && element.checkVisibility({
+            checkOpacity: true,
+            checkVisibilityCSS: true,
+            contentVisibilityAuto: true
+          })
+          && rect.width > 0
+          && rect.height > 0,
+        text: (element.textContent || "").replace(/\\s+/gu, " ").trim(),
+        viewportVisibleHeight,
+        viewportVisibleWidth,
+        width: rect.width
+      };
+    };
+    const paintEntries = Object.fromEntries(
+      performance.getEntriesByType("paint").map((entry) => [entry.name, entry.startTime])
+    );
+    const heroImage = document.querySelector(".home-hero .hero-image");
+    return {
+      elapsedMs: performance.now(),
+      firstContentfulPaintMs: paintEntries["first-contentful-paint"] ?? null,
+      firstPaintMs: paintEntries["first-paint"] ?? null,
+      forcedFailureTriggered: globalThis.__siteSourceryForcedEarlyFailure === true,
+      h1: describe(document.querySelector(".home-hero h1")),
+      hasJsClass: document.documentElement.classList.contains("js"),
+      heroImage: heroImage
+        ? {
+          complete: heroImage.complete,
+          naturalHeight: heroImage.naturalHeight,
+          naturalWidth: heroImage.naturalWidth
+        }
+        : null,
+      path: location.pathname,
+      primaryAction: describe(
+        document.querySelector('.home-hero .hero-actions .button-primary[href="#websites"]')
+      ),
+      readyState: document.readyState
+    };
+  })()`;
+}
+
+async function auditHomeFirstPaint(cdp, auditOrigin) {
+  const errors = [];
+  const results = [];
+  let coldNavigationSequence = 0;
+  await cdp.send("Page.setLifecycleEventsEnabled", { enabled: true });
+  await cdp.send("Network.enable");
+  try {
+    for (const viewport of HOME_FIRST_PAINT_VIEWPORTS) {
+      for (const scenario of HOME_FIRST_PAINT_SCENARIOS) {
+        const auditLabel = `${viewport.label} / cold-home / ${scenario}`;
+        const heldRequestIds = new Set();
+        const fetchOperations = [];
+        const fetchFailures = [];
+        const runtimeMessages = [];
+        let fetchEnabled = false;
+        let forcedScriptIdentifier = "";
+        let heroInterceptedRequests = 0;
+        let resolveHeroIntercepted;
+        const heroIntercepted = new Promise((resolve) => {
+          resolveHeroIntercepted = resolve;
+        });
+        const offException = cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
+          runtimeMessages.push(
+            exceptionDetails?.exception?.description
+            ?? exceptionDetails?.text
+            ?? "browser exception",
+          );
+        });
+        const offConsole = cdp.on("Runtime.consoleAPICalled", ({ type, args }) => {
+          if (type !== "error" && type !== "assert") return;
+          runtimeMessages.push(
+            args?.map((entry) => entry.value ?? entry.description ?? "").join(" ")
+            || type,
+          );
+        });
+        let offFetch = () => {};
+        try {
+          await cdp.send("Emulation.setDeviceMetricsOverride", {
+            width: viewport.width,
+            height: viewport.height,
+            deviceScaleFactor: 1,
+            mobile: viewport.mobile,
+          });
+          await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+          await cdp.send("Network.clearBrowserCache");
+          await cdp.send("Emulation.setScriptExecutionDisabled", {
+            value: scenario === "javascript-disabled",
+          });
+          if (scenario === "forced-early-javascript-failure") {
+            const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+              source: HOME_FORCED_FAILURE_SOURCE,
+            });
+            forcedScriptIdentifier = installed.identifier ?? "";
+            if (!forcedScriptIdentifier) {
+              throw new Error("forced-failure script did not receive an identifier");
+            }
+          }
+          if (["hero-image-held", "hero-image-blocked"].includes(scenario)) {
+            await cdp.send("Fetch.enable", {
+              patterns: [{
+                requestStage: "Request",
+                resourceType: "Image",
+                urlPattern: HOME_HERO_IMAGE_PATTERN,
+              }],
+            });
+            fetchEnabled = true;
+            offFetch = cdp.on("Fetch.requestPaused", (event) => {
+              heroInterceptedRequests += 1;
+              resolveHeroIntercepted();
+              if (scenario === "hero-image-held") {
+                heldRequestIds.add(event.requestId);
+                return;
+              }
+              const failed = cdp.send("Fetch.failRequest", {
+                errorReason: "Aborted",
+                requestId: event.requestId,
+              }).catch((error) => {
+                fetchFailures.push(error.message);
+              });
+              fetchOperations.push(failed);
+            });
+          }
+
+          const target = new URL("/", `${auditOrigin}/`);
+          coldNavigationSequence += 1;
+          target.searchParams.set(
+            "browser-audit-cold",
+            `${coldNavigationSequence}-${scenario}-${viewport.label}`,
+          );
+          await navigateToDomContent(cdp, target.href);
+          if (fetchEnabled) {
+            await Promise.race([
+              heroIntercepted,
+              delay(1000).then(() => {
+                throw new Error("hero image request was not intercepted");
+              }),
+            ]);
+            await Promise.all(fetchOperations);
+          }
+
+          const checkpoints = [];
+          let previousCheckpointAtMs = 0;
+          for (const checkpoint of HOME_FIRST_PAINT_CHECKPOINTS) {
+            const pageScriptDisabled = scenario === "javascript-disabled";
+            if (pageScriptDisabled) {
+              await delay(Math.max(0, checkpoint.atMs - previousCheckpointAtMs));
+            }
+            previousCheckpointAtMs = checkpoint.atMs;
+            const evaluated = await cdp.send("Runtime.evaluate", {
+              expression: homeFirstPaintExpression(checkpoint, {
+                asyncWait: !pageScriptDisabled,
+              }),
+              awaitPromise: !pageScriptDisabled,
+              returnByValue: true,
+            });
+            const snapshot = evaluated.result?.value;
+            if (evaluated.exceptionDetails || !snapshot) {
+              errors.push(
+                `${auditLabel} @ ${checkpoint.atMs}ms: checkpoint evaluation failed `
+                + `${JSON.stringify(evaluated.exceptionDetails ?? null)}`,
+              );
+              continue;
+            }
+            snapshot.heroHeldRequests = heldRequestIds.size;
+            snapshot.heroInterceptedRequests = heroInterceptedRequests;
+            const failures = homeFirstPaintFailures(snapshot, checkpoint, scenario);
+            for (const failure of failures) {
+              errors.push(`${auditLabel} @ ${checkpoint.atMs}ms: ${failure}`);
+            }
+            checkpoints.push({
+              atMs: checkpoint.atMs,
+              effectiveOpacity: {
+                h1: snapshot.h1?.effectiveOpacity ?? null,
+                primaryAction: snapshot.primaryAction?.effectiveOpacity ?? null,
+              },
+              elapsedMs: snapshot.elapsedMs,
+              firstContentfulPaintMs: snapshot.firstContentfulPaintMs,
+            });
+          }
+          const unexpectedRuntimeMessages = runtimeMessages.filter((message) =>
+            !(
+              scenario === "forced-early-javascript-failure"
+              && message.includes(HOME_FORCED_FAILURE_SENTINEL)
+            )
+          );
+          for (const message of unexpectedRuntimeMessages) {
+            errors.push(`${auditLabel}: browser error ${message}`);
+          }
+          for (const message of fetchFailures) {
+            errors.push(`${auditLabel}: Fetch command failed ${message}`);
+          }
+          results.push({
+            checkpoints,
+            mode: "cold-first-paint",
+            scenario,
+            viewport: viewport.label,
+          });
+        } catch (error) {
+          errors.push(`${auditLabel}: ${error.message}`);
+        } finally {
+          offFetch();
+          offException();
+          offConsole();
+          for (const requestId of heldRequestIds) {
+            fetchOperations.push(
+              cdp.send("Fetch.continueRequest", { requestId }).catch((error) => {
+                errors.push(`${auditLabel}: Fetch cleanup failed ${error.message}`);
+              }),
+            );
+          }
+          await Promise.all(fetchOperations);
+          if (fetchEnabled) {
+            try {
+              await cdp.send("Fetch.disable");
+            } catch (error) {
+              errors.push(`${auditLabel}: Fetch cleanup failed ${error.message}`);
+            }
+          }
+          if (forcedScriptIdentifier) {
+            try {
+              await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {
+                identifier: forcedScriptIdentifier,
+              });
+            } catch (error) {
+              errors.push(`${auditLabel}: forced-failure cleanup failed ${error.message}`);
+            }
+          }
+          try {
+            await cdp.send("Emulation.setScriptExecutionDisabled", { value: false });
+            await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+            await navigate(cdp, "about:blank");
+          } catch (error) {
+            errors.push(`${auditLabel}: page-state cleanup failed ${error.message}`);
+          }
+        }
+      }
+    }
+  } finally {
+    await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+    await cdp.send("Network.disable");
+  }
+  return { errors, results };
+}
+
+function progressiveFailureSource(scenario) {
+  const key = JSON.stringify(scenario.key);
+  const stage = JSON.stringify(scenario.failureStage);
+  return `(() => {
+    const scenario = ${key};
+    const stage = ${stage};
+    const fail = () => {
+      globalThis.__siteSourceryProgressiveFailure = {
+        jsAtFailure: document.documentElement.classList.contains("js"),
+        scenario,
+        stage
+      };
+      throw new Error("${PROGRESSIVE_FAILURE_SENTINEL}:" + scenario + ":" + stage);
+    };
+    if (scenario === "after-root-js") {
+      const nativeAdd = DOMTokenList.prototype.add;
+      DOMTokenList.prototype.add = function (...tokens) {
+        const targetsRoot = Boolean(
+          document.documentElement
+          && this === document.documentElement.classList
+          && tokens.includes("js")
+        );
+        const result = nativeAdd.apply(this, tokens);
+        if (!targetsRoot) return result;
+        DOMTokenList.prototype.add = nativeAdd;
+        fail();
+      };
+      return;
+    }
+    if (scenario === "during-menu-initializer") {
+      const nativeAddEventListener = EventTarget.prototype.addEventListener;
+      EventTarget.prototype.addEventListener = function (type, listener, options) {
+        const result = nativeAddEventListener.call(this, type, listener, options);
+        if (
+          type !== "click"
+          || !(this instanceof Element)
+          || !this.hasAttribute("data-menu")
+        ) return result;
+        EventTarget.prototype.addEventListener = nativeAddEventListener;
+        fail();
+      };
+      return;
+    }
+    if (scenario === "during-reveal-initializer") {
+      const nativeQuerySelectorAll = Document.prototype.querySelectorAll;
+      Document.prototype.querySelectorAll = function (selector) {
+        const result = nativeQuerySelectorAll.call(this, selector);
+        if (this !== document || selector !== ".reveal") return result;
+        Document.prototype.querySelectorAll = nativeQuerySelectorAll;
+        fail();
+      };
+      return;
+    }
+    throw new Error("Unknown progressive-failure scenario " + scenario);
+  })()`;
+}
+
+const PROGRESSIVE_FAILURE_AUDIT_EXPRESSION = `(async () => {
+  const root = document.documentElement;
+  const main = document.querySelector("main");
+  const originalScrollBehavior = root.style.getPropertyValue("scroll-behavior");
+  const originalScrollBehaviorPriority = root.style.getPropertyPriority("scroll-behavior");
+  root.style.setProperty("scroll-behavior", "auto", "important");
+  const settle = () => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  const semanticHidden = (element) => Boolean(
+    element?.closest('[hidden], [inert], [aria-hidden="true"]')
+  );
+  const identity = (element) => {
+    if (!element) return { label: "missing", tag: "" };
+    return {
+      label: (
+        element.getAttribute("aria-label")
+        || element.textContent
+        || element.id
+        || element.tagName
+      ).replace(/\\s+/gu, " ").trim().slice(0, 100),
+      tag: element.tagName.toLowerCase()
+    };
+  };
+  const describe = (element) => {
+    if (!element) return { ...identity(element), structurallyVisible: false, usable: false };
+    let effectiveOpacity = 1;
+    let structurallyVisible = true;
+    for (
+      let current = element;
+      current && current.nodeType === Node.ELEMENT_NODE;
+      current = current.parentElement
+    ) {
+      const style = getComputedStyle(current);
+      const opacity = Number.parseFloat(style.opacity);
+      effectiveOpacity *= Number.isFinite(opacity) ? opacity : 0;
+      if (
+        current.hidden
+        || current.inert
+        || current.getAttribute("aria-hidden") === "true"
+        || style.display === "none"
+        || style.visibility === "hidden"
+        || style.contentVisibility === "hidden"
+      ) {
+        structurallyVisible = false;
+      }
+    }
+    const rect = element.getBoundingClientRect();
+    const viewportWidth = Math.max(
+      0,
+      Math.min(rect.right, innerWidth) - Math.max(rect.left, 0)
+    );
+    const viewportHeight = Math.max(
+      0,
+      Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0)
+    );
+    let visibilityApi = true;
+    if (typeof element.checkVisibility === "function") {
+      try {
+        visibilityApi = element.checkVisibility({
+          checkOpacity: true,
+          checkVisibilityCSS: true,
+          contentVisibilityAuto: true
+        });
+      } catch {
+        visibilityApi = false;
+      }
+    }
+    return {
+      ...identity(element),
+      effectiveOpacity,
+      height: rect.height,
+      structurallyVisible,
+      usable: structurallyVisible
+        && visibilityApi
+        && effectiveOpacity > 0.01
+        && rect.width > 0
+        && rect.height > 0
+        && viewportWidth > 0
+        && viewportHeight > 0,
+      viewportHeight,
+      viewportWidth,
+      width: rect.width
+    };
+  };
+  const reach = (element, { focus = false } = {}) => {
+    if (!element) return { ...identity(element), focused: false, usable: false };
+    element.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" });
+    if (focus) element.focus({ preventScroll: true });
+    return {
+      ...describe(element),
+      focused: !focus || document.activeElement === element
+    };
+  };
+
+  window.scrollTo(0, 0);
+  const h1Elements = Array.from(document.querySelectorAll("h1"));
+  const h1Element = h1Elements[0] || null;
+  const h1State = reach(h1Element);
+  const h1 = {
+    count: h1Elements.length,
+    text: (h1Element?.textContent || "").replace(/\\s+/gu, " ").trim(),
+    usable: h1State.usable
+  };
+
+  window.scrollTo(0, 0);
+  const menuReady = root.classList.contains("menu-ready");
+  const menuButton = document.querySelector("[data-menu-button]");
+  const menu = document.querySelector("[data-menu]");
+  const navLinks = menu ? Array.from(menu.querySelectorAll("a[href]")) : [];
+  const navFailures = [];
+  const navMode = menuReady ? "enhanced-disclosure" : "fallback-links";
+  if (!menuButton || !menu) {
+    navFailures.push("missing menu button or primary navigation");
+  } else if (menuReady) {
+    menuButton.click();
+    await settle();
+    if (
+      menuButton.getAttribute("aria-expanded") !== "true"
+      || !menu.hasAttribute("data-open")
+      || !describe(menu).usable
+    ) {
+      navFailures.push("enhanced disclosure did not open");
+    }
+    for (const link of navLinks) {
+      const state = reach(link, { focus: true });
+      if (!state.usable || !state.focused) navFailures.push(identity(link));
+    }
+    menuButton.click();
+    await settle();
+    if (
+      menuButton.getAttribute("aria-expanded") !== "false"
+      || menu.hasAttribute("data-open")
+    ) {
+      navFailures.push("enhanced disclosure did not close");
+    }
+  } else {
+    if (describe(menuButton).structurallyVisible) {
+      navFailures.push("uninitialized menu button remained visible");
+    }
+    if (!describe(menu).usable) navFailures.push("fallback navigation is hidden");
+    for (const link of navLinks) {
+      const state = reach(link, { focus: true });
+      if (!state.usable || !state.focused) navFailures.push(identity(link));
+    }
+  }
+  const nav = {
+    failures: navFailures.slice(0, 20),
+    hrefs: navLinks.map((link) => link.getAttribute("href") || ""),
+    mode: navMode,
+    usable: navFailures.length === 0
+  };
+
+  const disclosureFailures = [];
+  const disclosures = main
+    ? Array.from(main.querySelectorAll("details")).filter((details) => !semanticHidden(details))
+    : [];
+  for (const [index, details] of disclosures.entries()) {
+    const summary = details.querySelector(":scope > summary");
+    details.open = false;
+    const summaryState = reach(summary, { focus: true });
+    summary?.click();
+    const body = Array.from(details.children).find((child) => child !== summary) || null;
+    const bodyState = reach(body);
+    if (
+      !summary
+      || !summaryState.usable
+      || !summaryState.focused
+      || !details.open
+      || !bodyState.usable
+      || (body?.innerText || "").trim().length < 20
+    ) {
+      disclosureFailures.push({
+        body: bodyState,
+        index,
+        open: details.open,
+        summary: summaryState
+      });
+    }
+  }
+
+  const controlSelector = [
+    "a[href]",
+    "button",
+    "summary",
+    "input:not([type='hidden'])",
+    "select",
+    "textarea"
+  ].join(", ");
+  const essentialControls = main
+    ? Array.from(main.querySelectorAll(controlSelector)).filter((control) =>
+      !semanticHidden(control)
+      && !control.matches(":disabled")
+      && control.getAttribute("aria-disabled") !== "true"
+      && describe(control).structurallyVisible
+    )
+    : [];
+  const essentialFailures = [];
+  for (const control of essentialControls) {
+    const state = reach(control, { focus: true });
+    if (!state.usable || !state.focused) essentialFailures.push(state);
+  }
+
+  window.scrollTo(0, 0);
+  const revealFailures = [];
+  let belowFoldRevealCount = 0;
+  const revealElements = Array.from(document.querySelectorAll(".reveal"))
+    .filter((element) => !semanticHidden(element));
+  const revealEntries = revealElements.map((element) => ({
+    element,
+    initialTop: element.getBoundingClientRect().top
+  }));
+  for (const { element, initialTop } of revealEntries) {
+    if (initialTop >= innerHeight) belowFoldRevealCount += 1;
+    const state = reach(element);
+    if (!state.usable) {
+      revealFailures.push({ ...state, initialTop: Math.round(initialTop) });
+    }
+  }
+
+  window.scrollTo(0, 0);
+  const belowFoldCandidates = main
+    ? Array.from(main.querySelectorAll("section, article, h2, h3, p, li"))
+      .filter((element) =>
+        !semanticHidden(element)
+        && element.getClientRects().length > 0
+        && (element.innerText || "").trim().length >= 40
+      )
+      .map((element) => ({
+        element,
+        top: element.getBoundingClientRect().top
+      }))
+    : [];
+  const belowFoldCandidate = belowFoldCandidates
+    .filter(({ top }) => top >= innerHeight)
+    .at(-1);
+  const belowFoldState = belowFoldCandidate
+    ? reach(belowFoldCandidate.element)
+    : { usable: false };
+  const belowFold = {
+    ...identity(belowFoldCandidate?.element || null),
+    initiallyBelowFold: Boolean(belowFoldCandidate),
+    present: Boolean(belowFoldCandidate?.element),
+    textLength: (belowFoldCandidate?.element?.innerText || "").trim().length,
+    top: belowFoldCandidate ? Math.round(belowFoldCandidate.top) : null,
+    usable: belowFoldState.usable === true
+  };
+
+  window.scrollTo(0, 0);
+  await settle();
+  const snapshot = {
+    belowFold,
+    disclosures: {
+      count: disclosures.length,
+      failures: disclosureFailures.slice(0, 20)
+    },
+    essential: {
+      count: essentialControls.length,
+      failures: essentialFailures.slice(0, 20)
+    },
+    failure: globalThis.__siteSourceryProgressiveFailure || null,
+    h1,
+    hasJsClass: root.classList.contains("js"),
+    menuReady,
+    nav,
+    path: location.pathname,
+    readyState: document.readyState,
+    revealReady: root.classList.contains("reveal-ready"),
+    reveals: {
+      belowFoldCount: belowFoldRevealCount,
+      count: revealElements.length,
+      failures: revealFailures.slice(0, 20)
+    }
+  };
+  if (originalScrollBehavior) {
+    root.style.setProperty(
+      "scroll-behavior",
+      originalScrollBehavior,
+      originalScrollBehaviorPriority
+    );
+  } else {
+    root.style.removeProperty("scroll-behavior");
+  }
+  return snapshot;
+})()`;
+
+async function auditProgressiveEnhancementFailures(cdp, auditOrigin, routes) {
+  const errors = [];
+  const results = [];
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: PROGRESSIVE_FAILURE_VIEWPORT.width,
+    height: PROGRESSIVE_FAILURE_VIEWPORT.height,
+    deviceScaleFactor: 1,
+    mobile: PROGRESSIVE_FAILURE_VIEWPORT.mobile,
+  });
+  for (const route of routes) {
+    for (const scenario of PROGRESSIVE_FAILURE_SCENARIOS) {
+      const auditLabel = `${PROGRESSIVE_FAILURE_VIEWPORT.label} ${route} / ${scenario.key}`;
+      const runtimeMessages = [];
+      let scriptIdentifier = "";
+      const offException = cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
+        runtimeMessages.push(
+          exceptionDetails?.exception?.description
+          ?? exceptionDetails?.text
+          ?? "browser exception",
+        );
+      });
+      const offConsole = cdp.on("Runtime.consoleAPICalled", ({ type, args }) => {
+        if (type !== "error" && type !== "assert") return;
+        runtimeMessages.push(
+          args?.map((entry) => entry.value ?? entry.description ?? "").join(" ")
+          || type,
+        );
+      });
+      try {
+        const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+          source: progressiveFailureSource(scenario),
+        });
+        scriptIdentifier = installed.identifier ?? "";
+        if (!scriptIdentifier) throw new Error("failure script did not receive an identifier");
+        await navigate(cdp, new URL(route, `${auditOrigin}/`).href);
+        const evaluated = await cdp.send("Runtime.evaluate", {
+          expression: PROGRESSIVE_FAILURE_AUDIT_EXPRESSION,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const snapshot = evaluated.result?.value;
+        if (evaluated.exceptionDetails || !snapshot) {
+          errors.push(
+            `${auditLabel}: failure audit returned no value `
+            + `${JSON.stringify(evaluated.exceptionDetails ?? null)}`,
+          );
+          continue;
+        }
+        for (const failure of progressiveFailureFailures(snapshot, scenario.key, route)) {
+          errors.push(`${auditLabel}: ${failure}`);
+        }
+        if (!runtimeMessages.some((message) => message.includes(PROGRESSIVE_FAILURE_SENTINEL))) {
+          errors.push(`${auditLabel}: forced exception was not observed by the browser`);
+        }
+        for (const message of runtimeMessages.filter((entry) =>
+          !entry.includes(PROGRESSIVE_FAILURE_SENTINEL)
+        )) {
+          errors.push(`${auditLabel}: browser error ${message}`);
+        }
+        results.push({
+          mode: "progressive-failure",
+          route,
+          scenario: scenario.key,
+          viewport: PROGRESSIVE_FAILURE_VIEWPORT.label,
+        });
+      } catch (error) {
+        errors.push(`${auditLabel}: ${error.message}`);
+      } finally {
+        offException();
+        offConsole();
+        if (scriptIdentifier) {
+          try {
+            await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {
+              identifier: scriptIdentifier,
+            });
+          } catch (error) {
+            errors.push(`${auditLabel}: failure-script cleanup failed ${error.message}`);
+          }
+        }
+        try {
+          await navigate(cdp, "about:blank");
+        } catch (error) {
+          errors.push(`${auditLabel}: page-state cleanup failed ${error.message}`);
+        }
+      }
+    }
+  }
+  return { errors, results };
 }
 
 const AUDIT_EXPRESSION = `(() => {
@@ -501,10 +1661,13 @@ const AUDIT_EXPRESSION = `(() => {
   }
   const spark = document.querySelector("#spark-maker");
   if (spark) {
+    const controlRoom = document.querySelector("#control-room");
     result.sparkReady = {
       inert: spark.hasAttribute("inert"),
       disabled: spark.getAttribute("aria-disabled"),
-      compiler: typeof window.AbracadabraCompiler
+      compiler: typeof window.AbracadabraCompiler,
+      controlReady: controlRoom?.getAttribute("data-control-ready") || "",
+      documentControlReady: root.getAttribute("data-abracadabra-control-ready") || ""
     };
   }
   const startChooser = document.querySelector("[data-start-chooser]");
@@ -866,6 +2029,18 @@ const CONTROLLER_DRAFT_EXERCISE_EXPRESSION = `(async () => {
   const secondButton = buttons.find((button) => button.textContent.includes("Second rapid-switch"));
   if (!firstButton || !secondButton) throw new Error("Rapid-switch projects were not created");
   firstButton.click();
+  click("[data-toggle-settings]");
+  set("manageAddressMode", "mode_b");
+  set("manageAddressLabel", "unsaved-first-label");
+  set("manageDomainPath", "byod");
+  set("manageOwnedDomain", "unsaved-first.example");
+  set("manageDomainProofMethod", "dns_challenge");
+  set("manageDomainProofReference", "proof-must-not-cross-projects");
+  set("manageVisibility", "private");
+  set("manageAccessPassword", "private-must-not-cross-projects");
+  set("supportSubject", "support subject must not cross");
+  set("supportMessage", "support message must not cross selected project boundaries");
+  set("safetyAppeal", "appeal must not cross selected project boundaries");
   window.dispatchEvent(new CustomEvent("abracadabra:draftchange", {
     detail: { raw: { businessName: "First sentinel", summary: "belongs-to-first-" + width } }
   }));
@@ -876,6 +2051,21 @@ const CONTROLLER_DRAFT_EXERCISE_EXPRESSION = `(async () => {
   let stored = JSON.parse(window.localStorage.getItem(key));
   let first = stored.projects.find((project) => project.id === firstButton.dataset.projectId);
   let second = stored.projects.find((project) => project.id === secondButton.dataset.projectId);
+  const transientSecond = {
+    activeProjectId: document.querySelector('[data-project-id][aria-current="true"]')?.dataset.projectId || "",
+    addressLabel: document.querySelector('[name="manageAddressLabel"]')?.value || "",
+    addressMode: document.querySelector('[name="manageAddressMode"]')?.value || "",
+    domainPath: document.querySelector('[name="manageDomainPath"]')?.value || "",
+    domainProofMethod: document.querySelector('[name="manageDomainProofMethod"]')?.value || "",
+    domainProofReference: document.querySelector('[name="manageDomainProofReference"]')?.value || "",
+    ownedDomain: document.querySelector('[name="manageOwnedDomain"]')?.value || "",
+    passphrase: document.querySelector('[name="manageAccessPassword"]')?.value || "",
+    safetyAppeal: document.querySelector('[name="safetyAppeal"]')?.value || "",
+    settingsHidden: document.querySelector("[data-project-settings]")?.hidden === true,
+    supportMessage: document.querySelector('[name="supportMessage"]')?.value || "",
+    supportSubject: document.querySelector('[name="supportSubject"]')?.value || "",
+    visibility: document.querySelector('[name="manageVisibility"]')?.value || ""
+  };
   const afterSwitch = {
     activeSecond: document.querySelector('[data-project-id][aria-current="true"]')?.dataset.projectId
       === secondButton.dataset.projectId,
@@ -883,6 +2073,41 @@ const CONTROLLER_DRAFT_EXERCISE_EXPRESSION = `(async () => {
     secondSummary: second?.draft?.rawFacts?.summary || null
   };
 
+  click("[data-toggle-settings]");
+  set("manageAddressLabel", "unsaved-second-label");
+  set("supportSubject", "second project unsaved subject");
+  set("supportMessage", "second project unsaved message must not cross");
+  set("safetyAppeal", "second project unsaved appeal");
+  firstButton.click();
+  const transientFirst = {
+    activeProjectId: document.querySelector('[data-project-id][aria-current="true"]')?.dataset.projectId || "",
+    addressLabel: document.querySelector('[name="manageAddressLabel"]')?.value || "",
+    addressMode: document.querySelector('[name="manageAddressMode"]')?.value || "",
+    domainProofReference: document.querySelector('[name="manageDomainProofReference"]')?.value || "",
+    ownedDomain: document.querySelector('[name="manageOwnedDomain"]')?.value || "",
+    passphrase: document.querySelector('[name="manageAccessPassword"]')?.value || "",
+    safetyAppeal: document.querySelector('[name="safetyAppeal"]')?.value || "",
+    settingsHidden: document.querySelector("[data-project-settings]")?.hidden === true,
+    supportMessage: document.querySelector('[name="supportMessage"]')?.value || "",
+    supportSubject: document.querySelector('[name="supportSubject"]')?.value || "",
+    visibility: document.querySelector('[name="manageVisibility"]')?.value || ""
+  };
+  secondButton.click();
+  const originalConfirm = window.confirm;
+  window.confirm = () => {
+    firstButton.click();
+    return true;
+  };
+  click("[data-delete-project]");
+  window.confirm = originalConfirm;
+  stored = JSON.parse(window.localStorage.getItem(key));
+  const guardedAction = {
+    activeProjectId: document.querySelector('[data-project-id][aria-current="true"]')?.dataset.projectId || "",
+    firstLifecycle: stored.projects.find((project) => project.id === firstButton.dataset.projectId)?.lifecycle || "",
+    secondLifecycle: stored.projects.find((project) => project.id === secondButton.dataset.projectId)?.lifecycle || "",
+    status: document.querySelector("#platform-status")?.textContent || ""
+  };
+  secondButton.click();
   window.dispatchEvent(new CustomEvent("abracadabra:draftchange", {
     detail: { raw: { businessName: "Second sentinel", summary: "belongs-to-second-" + width } }
   }));
@@ -892,10 +2117,13 @@ const CONTROLLER_DRAFT_EXERCISE_EXPRESSION = `(async () => {
   second = stored.projects.find((project) => project.id === secondButton.dataset.projectId);
   return {
     afterSwitch,
+    guardedAction,
     sameProject: {
       firstSummary: first?.draft?.rawFacts?.summary || null,
       secondSummary: second?.draft?.rawFacts?.summary || null
-    }
+    },
+    transientFirst,
+    transientSecond
   };
 })()`;
 
@@ -983,6 +2211,623 @@ const GUEST_FIRST_EXERCISE_EXPRESSION = `(async () => {
     }
   };
 })()`;
+
+const PRIVATE_VIEWER_FIXTURE_EXPRESSION = `(() => {
+  const module = window.SiteSourceryAbracadabraPlatform;
+  const compiler = window.AbracadabraCompiler;
+  if (
+    !module
+    || typeof module.createPlatform !== "function"
+    || !compiler
+    || typeof compiler.compileSite !== "function"
+  ) {
+    return { error: "platform or compiler module unavailable" };
+  }
+  window.localStorage.removeItem(module.STORE_KEY);
+  window.sessionStorage.removeItem("sitesourcery.abracadabra.viewer-session.v1");
+  const platform = module.createPlatform({ storage: window.localStorage });
+  const account = platform.createAccount({
+    name: "Private Viewer Audit Owner",
+    organizationName: "Private Viewer Audit Studio",
+    email: "private-viewer-audit@example.com",
+    password: "correct horse battery staple"
+  });
+  const passphrase = "private opening phrase";
+  const project = platform.createProject({
+    accountId: account.id,
+    name: "Private Viewer Audit Studio",
+    address: { mode: "mode_a", label: "private-viewer-audit" },
+    visibility: "private",
+    accessPassword: passphrase,
+    acceptedTerms: true
+  });
+  const rawFacts = {
+    about: "A compiled customer-site fixture for one bounded browser interaction.",
+    businessName: "Private Viewer Audit Studio",
+    email: "",
+    hours: "",
+    location: "",
+    offerings: ["One exact popup proof"],
+    phone: "",
+    primaryAction: "none",
+    summary: "Exact compiler-produced private publication bytes.",
+    theme: "clear",
+    website: "${PRIVATE_VIEWER_POPUP_URL}"
+  };
+  const compiled = compiler.compileSite(rawFacts);
+  const parsed = new DOMParser().parseFromString(compiled.html, "text/html");
+  const cta = Array.from(parsed.querySelectorAll("a[href]"))
+    .find((link) => link.href === "${PRIVATE_VIEWER_POPUP_URL}");
+  const version = platform.saveVersion({
+    accountId: account.id,
+    projectId: project.id,
+    rawFacts,
+    artifact: {
+      html: compiled.html,
+      digest: module.sha256(compiled.html)
+    },
+    releaseAttestation: true
+  });
+  platform.markVersionReady({
+    accountId: account.id,
+    projectId: project.id,
+    versionId: version.id
+  });
+  platform.acceptVersion({
+    accountId: account.id,
+    projectId: project.id,
+    versionId: version.id
+  });
+  platform.activatePlan({
+    accountId: account.id,
+    projectId: project.id,
+    localRehearsalAcknowledged: true
+  });
+  platform.publish({
+    accountId: account.id,
+    projectId: project.id,
+    versionId: version.id
+  });
+  return {
+    algorithm: project.access.credential.algorithm,
+    artifactDigestMatches: compiled.artifactDigest === module.sha256(compiled.html),
+    compilerSchema: compiled.schema,
+    ctaHref: cta?.href || "",
+    ctaRel: cta?.getAttribute("rel") || "",
+    ctaTarget: cta?.target || "",
+    projectId: project.id,
+    rounds: project.access.credential.rounds,
+    versionId: version.id
+  };
+})()`;
+
+const PRIVATE_VIEWER_GATE_EXPRESSION = `(() => {
+  const frame = document.querySelector("#published-site");
+  const form = document.querySelector("#access-form");
+  const site = document.querySelector("#site-stage");
+  return {
+    accessFormVisible: Boolean(form && !form.hidden),
+    frameHasSource: Boolean(frame && frame.hasAttribute("srcdoc")),
+    siteHidden: Boolean(site && site.hidden),
+    state: document.body.dataset.viewerState || ""
+  };
+})()`;
+
+const PRIVATE_VIEWER_WRONG_PHRASE_EXPRESSION = `(async () => {
+  const input = document.querySelector("#site-passphrase");
+  const button = document.querySelector("[data-open-access]");
+  const error = document.querySelector("#access-error");
+  const frame = document.querySelector("#published-site");
+  if (!input || !button || !error || !frame) return { missing: true };
+  input.value = "incorrect opening phrase";
+  button.click();
+  const deadline = Date.now() + 30000;
+  while (button.disabled && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return {
+    completed: !button.disabled,
+    error: error.hidden ? "" : error.textContent.trim(),
+    frameHasSource: frame.hasAttribute("srcdoc"),
+    state: document.body.dataset.viewerState || ""
+  };
+})()`;
+
+const PRIVATE_VIEWER_CORRECT_PHRASE_EXPRESSION = `(async () => {
+  const input = document.querySelector("#site-passphrase");
+  const button = document.querySelector("[data-open-access]");
+  const error = document.querySelector("#access-error");
+  const frame = document.querySelector("#published-site");
+  const site = document.querySelector("#site-stage");
+  if (!input || !button || !error || !frame || !site) return { missing: true };
+  input.value = "private opening phrase";
+  button.click();
+  const deadline = Date.now() + 30000;
+  while (button.disabled && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const srcdoc = frame.getAttribute("srcdoc") || "";
+  return {
+    completed: !button.disabled,
+    ctaPresent:
+      srcdoc.includes('href="${PRIVATE_VIEWER_POPUP_URL}"')
+      && srcdoc.includes('target="_blank"')
+      && srcdoc.includes('rel="noopener noreferrer"'),
+    errorHidden: error.hidden,
+    proofPresent:
+      srcdoc.includes("<title>Private Viewer Audit Studio</title>")
+      && srcdoc.includes("Exact compiler-produced private publication bytes."),
+    sandbox: frame.getAttribute("sandbox"),
+    siteVisible: !site.hidden,
+    state: document.body.dataset.viewerState || ""
+  };
+})()`;
+
+const PRIVATE_VIEWER_SESSION_EXPRESSION = `(async () => {
+  const frame = document.querySelector("#published-site");
+  const form = document.querySelector("#access-form");
+  const site = document.querySelector("#site-stage");
+  if (!frame || !form || !site) return { missing: true };
+  const deadline = Date.now() + 10000;
+  while (
+    (document.body.dataset.viewerState !== "live" || site.hidden)
+    && Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const srcdoc = frame.getAttribute("srcdoc") || "";
+  return {
+    accessFormHidden: form.hidden,
+    proofPresent:
+      srcdoc.includes("<title>Private Viewer Audit Studio</title>")
+      && srcdoc.includes('href="${PRIVATE_VIEWER_POPUP_URL}"'),
+    siteVisible: !site.hidden,
+    state: document.body.dataset.viewerState || ""
+  };
+})()`;
+
+const PRIVATE_VIEWER_STALE_GRACE_EXPRESSION = `(() => {
+  const module = window.SiteSourceryAbracadabraPlatform;
+  if (!module || !module.STORE_KEY) return { missing: true };
+  const snapshot = JSON.parse(window.localStorage.getItem(module.STORE_KEY));
+  const projectId = new URLSearchParams(location.search).get("project");
+  const project = snapshot.projects.find((entry) => entry.id === projectId);
+  if (!project) return { missing: true };
+  project.billing.state = "grace";
+  project.billing.firstFailedAt = "1999-12-18T00:00:00.000Z";
+  project.billing.graceEndsAt = "2000-01-01T00:00:00.000Z";
+  project.serving.state = "live";
+  snapshot.revision += 1;
+  snapshot.updatedAt = new Date().toISOString();
+  window.localStorage.setItem(module.STORE_KEY, JSON.stringify(snapshot));
+  return {
+    billingState: project.billing.state,
+    graceEndsAt: project.billing.graceEndsAt,
+    servingState: project.serving.state
+  };
+})()`;
+
+const PRIVATE_VIEWER_PLATFORM_MISSING_EXPRESSION = `(async () => {
+  const frame = document.querySelector("#published-site");
+  const site = document.querySelector("#site-stage");
+  const status = document.querySelector("#status-stage");
+  const title = document.querySelector("#status-title");
+  const deadline = Date.now() + 10000;
+  while (
+    document.body.dataset.viewerState === "loading"
+    && Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return {
+    frameHasSource: Boolean(frame && frame.hasAttribute("srcdoc")),
+    lifecyclePlatformType: typeof window.SiteSourceryAbracadabraPlatform,
+    siteHidden: Boolean(site && site.hidden),
+    state: document.body.dataset.viewerState || "",
+    statusVisible: Boolean(status && !status.hidden),
+    title: title?.textContent.trim() || ""
+  };
+})()`;
+
+const PRIVATE_VIEWER_CLEANUP_EXPRESSION = `(() => {
+  const module = window.SiteSourceryAbracadabraPlatform;
+  window.localStorage.removeItem(
+    module && module.STORE_KEY
+      ? module.STORE_KEY
+      : "sitesourcery.abracadabra.platform.v1"
+  );
+  window.sessionStorage.removeItem("sitesourcery.abracadabra.viewer-session.v1");
+  return true;
+})()`;
+
+async function exercisePrivateViewerPopup(cdp) {
+  const sendBounded = (checkpoint, method, params = {}, timeoutMs = 3000) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`${checkpoint} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      cdp.send(method, params).then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    });
+  const proof = {
+    cleanup: {
+      attemptedTargetIds: [],
+      closeErrors: [],
+      discoveryDisabled: false,
+      domDisabled: false,
+      listenersRemoved: false,
+      remainingTargetIds: null,
+    },
+    click: null,
+    error: "",
+    frame: null,
+    innerAfter: null,
+    outerAfter: null,
+    popup: null,
+    windowOpen: null,
+  };
+  const baselineTargetIds = new Set();
+  const createdTargets = new Map();
+  const changedTargets = new Map();
+  const destroyedTargetIds = new Set();
+  const windowOpenEvents = [];
+  let acceptPopupEvents = false;
+  let discoveryEnabled = false;
+  let domEnabled = false;
+  let offTargetCreated = () => {};
+  let offTargetChanged = () => {};
+  let offTargetDestroyed = () => {};
+  let offWindowOpen = () => {};
+  const nodeAttributes = (node) => {
+    const attributes = {};
+    for (let index = 0; index < (node?.attributes?.length ?? 0); index += 2) {
+      attributes[node.attributes[index]] = node.attributes[index + 1] ?? "";
+    }
+    return attributes;
+  };
+  const collectDomNodes = (node, collection = []) => {
+    if (!node) return collection;
+    collection.push(node);
+    for (const child of node.children ?? []) collectDomNodes(child, collection);
+    for (const shadow of node.shadowRoots ?? []) collectDomNodes(shadow, collection);
+    if (node.contentDocument) collectDomNodes(node.contentDocument, collection);
+    return collection;
+  };
+  const inspectPublishedCta = async (checkpoint) => {
+    const deep = await sendBounded(checkpoint, "DOM.getDocument", {
+      depth: -1,
+      pierce: true,
+    });
+    const owners = collectDomNodes(deep.root).filter((node) => {
+      const attributes = nodeAttributes(node);
+      return node.nodeName === "IFRAME" && attributes.id === "published-site";
+    });
+    if (owners.length !== 1) {
+      throw new Error(`published-site owner count was ${owners.length}`);
+    }
+    const owner = owners[0];
+    let contentDocument = owner.contentDocument;
+    if (!contentDocument) {
+      const described = await sendBounded(
+        `${checkpoint} owner content`,
+        "DOM.describeNode",
+        {
+          backendNodeId: owner.backendNodeId,
+          depth: -1,
+          pierce: true,
+        },
+      );
+      contentDocument = described.node.contentDocument;
+    }
+    if (!contentDocument) throw new Error("published-site contentDocument was not attached");
+    const anchors = collectDomNodes(contentDocument).filter((node) => {
+      const attributes = nodeAttributes(node);
+      return node.nodeName === "A"
+        && attributes.href === PRIVATE_VIEWER_POPUP_URL
+        && attributes.target === "_blank"
+        && attributes.rel === "noopener noreferrer";
+    });
+    if (anchors.length !== 1) {
+      throw new Error(`exact compiled external CTA count was ${anchors.length}`);
+    }
+    return {
+      anchor: anchors[0],
+      anchorAttributes: nodeAttributes(anchors[0]),
+      contentDocument,
+      documentConnected: collectDomNodes(contentDocument)
+        .some((node) => node.nodeName === "BODY"),
+      owner,
+      ownerAttributes: nodeAttributes(owner),
+    };
+  };
+
+  try {
+    await sendBounded("enable popup DOM inspection", "DOM.enable");
+    domEnabled = true;
+    let attachment = await inspectPublishedCta("inspect compiled CTA attachment");
+    const ownerEvaluation = await sendBounded("measure popup frame owner", "Runtime.evaluate", {
+      expression: `(() => {
+        const frame = document.querySelector("#published-site");
+        if (!frame) return { missing: true };
+        frame.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const rect = frame.getBoundingClientRect();
+        return {
+          rect: {
+            height: rect.height,
+            left: rect.left,
+            top: rect.top,
+            width: rect.width
+          },
+          sandbox: frame.getAttribute("sandbox") || "",
+          sourceRetained: (frame.getAttribute("srcdoc") || "")
+            .includes('href="${PRIVATE_VIEWER_POPUP_URL}"'),
+          viewport: {
+            height: window.innerHeight,
+            width: window.innerWidth
+          }
+        };
+      })()`,
+      returnByValue: true,
+    });
+    const owner = ownerEvaluation.result?.value;
+    if (ownerEvaluation.exceptionDetails || !owner || owner.missing) {
+      throw new Error(
+        `published-site frame owner was not measurable `
+        + `${JSON.stringify(ownerEvaluation.exceptionDetails ?? owner ?? null)}`,
+      );
+    }
+    await sendBounded(
+      "scroll compiled CTA into view",
+      "DOM.scrollIntoViewIfNeeded",
+      { backendNodeId: attachment.anchor.backendNodeId },
+    );
+    await delay(50);
+    attachment = await inspectPublishedCta("reinspect compiled CTA attachment");
+    const box = await sendBounded("measure compiled CTA box", "DOM.getBoxModel", {
+      backendNodeId: attachment.anchor.backendNodeId,
+    });
+    const quad = box.model?.content;
+    if (!Array.isArray(quad) || quad.length !== 8) {
+      throw new Error(`compiled external CTA had no content quad ${JSON.stringify(quad ?? null)}`);
+    }
+    proof.frame = {
+      contentDocumentBackendNodeId: attachment.contentDocument.backendNodeId,
+      frameId: attachment.contentDocument.frameId || attachment.owner.frameId || "",
+      inspection: "DOM.getDocument(pierce)",
+      ownerBackendNodeId: attachment.owner.backendNodeId,
+      sandbox: owner.sandbox,
+      sandboxRestrictsOriginAndScripts:
+        owner.sandbox === "allow-popups"
+        && !owner.sandbox.includes("allow-same-origin")
+        && !owner.sandbox.includes("allow-scripts"),
+    };
+
+    const x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4;
+    const y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4;
+    if (
+      !Number.isFinite(x)
+      || !Number.isFinite(y)
+      || x < 0
+      || y < 0
+      || x > owner.viewport.width
+      || y > owner.viewport.height
+    ) {
+      throw new Error(`compiled external CTA was not hit-testable at ${JSON.stringify({ x, y })}`);
+    }
+
+    const currentTarget = await sendBounded(
+      "identify popup opener target",
+      "Target.getTargetInfo",
+    );
+    if (currentTarget.targetInfo?.targetId) {
+      baselineTargetIds.add(currentTarget.targetInfo.targetId);
+    }
+    const baseline = await sendBounded("record popup target baseline", "Target.getTargets");
+    for (const target of baseline.targetInfos ?? []) baselineTargetIds.add(target.targetId);
+    offTargetCreated = cdp.on("Target.targetCreated", ({ targetInfo }) => {
+      if (!targetInfo?.targetId) return;
+      if (!acceptPopupEvents) {
+        baselineTargetIds.add(targetInfo.targetId);
+        return;
+      }
+      createdTargets.set(targetInfo.targetId, targetInfo);
+    });
+    offTargetChanged = cdp.on("Target.targetInfoChanged", ({ targetInfo }) => {
+      if (targetInfo?.targetId && createdTargets.has(targetInfo.targetId)) {
+        changedTargets.set(targetInfo.targetId, targetInfo);
+      }
+    });
+    offTargetDestroyed = cdp.on("Target.targetDestroyed", ({ targetId }) => {
+      if (targetId) destroyedTargetIds.add(targetId);
+    });
+    offWindowOpen = cdp.on("Page.windowOpen", (event) => {
+      windowOpenEvents.push(event);
+    });
+    await sendBounded(
+      "enable popup target discovery",
+      "Target.setDiscoverTargets",
+      { discover: true },
+    );
+    discoveryEnabled = true;
+    await delay(25);
+
+    await sendBounded("move to compiled CTA", "Input.dispatchMouseEvent", {
+      button: "none",
+      buttons: 0,
+      type: "mouseMoved",
+      x,
+      y,
+    });
+    acceptPopupEvents = true;
+    await sendBounded("press compiled CTA", "Input.dispatchMouseEvent", {
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+      type: "mousePressed",
+      x,
+      y,
+    });
+    await sendBounded("release compiled CTA", "Input.dispatchMouseEvent", {
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+      type: "mouseReleased",
+      x,
+      y,
+    });
+    proof.click = {
+      backendNodeId: attachment.anchor.backendNodeId,
+      coordinates: { x, y },
+      href: attachment.anchorAttributes.href,
+      interaction: "Input.dispatchMouseEvent",
+      rel: attachment.anchorAttributes.rel,
+      target: attachment.anchorAttributes.target,
+    };
+
+    const deadline = Date.now() + PRIVATE_VIEWER_POPUP_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const popupTarget = Array.from(createdTargets.values()).find((target) =>
+        target.type === "page"
+        && !baselineTargetIds.has(target.targetId)
+      ) ?? null;
+      const windowOpen = windowOpenEvents.find(({ url }) => url === PRIVATE_VIEWER_POPUP_URL);
+      if (popupTarget && windowOpen) break;
+      await delay(25);
+    }
+    proof.windowOpen = windowOpenEvents.find(({ url }) => url === PRIVATE_VIEWER_POPUP_URL)
+      ?? windowOpenEvents[0]
+      ?? null;
+    const createdPopup = Array.from(createdTargets.values()).find((target) =>
+      target.type === "page"
+      && !baselineTargetIds.has(target.targetId)
+    ) ?? null;
+    const latestPopup = createdPopup?.targetId
+      ? changedTargets.get(createdPopup.targetId) ?? createdPopup
+      : null;
+    proof.popup = latestPopup
+      ? {
+          createdEvent: Boolean(createdPopup),
+          openerFrameId: latestPopup.openerFrameId ?? createdPopup?.openerFrameId ?? "",
+          targetId: latestPopup.targetId,
+          type: latestPopup.type,
+          url: latestPopup.url,
+        }
+      : null;
+
+    const outerAfterEvaluation = await sendBounded(
+      "verify popup opener page",
+      "Runtime.evaluate",
+      {
+      expression: `(() => {
+        const frame = document.querySelector("#published-site");
+        const site = document.querySelector("#site-stage");
+        return {
+          frameConnected: Boolean(frame?.isConnected),
+          sandbox: frame?.getAttribute("sandbox") || "",
+          siteHidden: Boolean(site?.hidden),
+          sourceRetained: Boolean(
+            frame
+            && (frame.getAttribute("srcdoc") || "")
+              .includes('href="${PRIVATE_VIEWER_POPUP_URL}"')
+          ),
+          state: document.body.dataset.viewerState || ""
+        };
+      })()`,
+      returnByValue: true,
+      },
+    );
+    proof.outerAfter = outerAfterEvaluation.result?.value ?? null;
+    const innerAfter = await inspectPublishedCta("verify popup opener DOM attachment");
+    proof.innerAfter = {
+      backendNodeId: innerAfter.anchor.backendNodeId,
+      documentConnected: innerAfter.documentConnected,
+      href: innerAfter.anchorAttributes.href,
+      linkConnected: Boolean(innerAfter.anchor.backendNodeId),
+      target: innerAfter.anchorAttributes.target,
+    };
+  } catch (error) {
+    proof.error = error.message;
+  } finally {
+    try {
+      const cleanupTargets = new Set(
+        Array.from(createdTargets.values())
+          .filter((target) =>
+            target.type === "page"
+            && !baselineTargetIds.has(target.targetId)
+          )
+          .map(({ targetId }) => targetId),
+      );
+      proof.cleanup.attemptedTargetIds = Array.from(cleanupTargets);
+      for (const targetId of cleanupTargets) {
+        try {
+          await sendBounded(
+            "close popup target",
+            "Target.closeTarget",
+            { targetId },
+            2000,
+          );
+        } catch (error) {
+          if (!destroyedTargetIds.has(targetId)) {
+            proof.cleanup.closeErrors.push(`${targetId}: ${error.message}`);
+          }
+        }
+      }
+      const cleanupDeadline = Date.now() + 2000;
+      let remainingTargetIds = [];
+      do {
+        const after = await sendBounded(
+          "verify popup target cleanup",
+          "Target.getTargets",
+          {},
+          2000,
+        );
+        remainingTargetIds = (after.targetInfos ?? [])
+          .filter(({ targetId }) => cleanupTargets.has(targetId))
+          .map(({ targetId }) => targetId);
+        if (!remainingTargetIds.length) break;
+        await delay(25);
+      } while (Date.now() < cleanupDeadline);
+      proof.cleanup.remainingTargetIds = remainingTargetIds;
+    } catch (error) {
+      proof.cleanup.closeErrors.push(error.message);
+    }
+    if (discoveryEnabled) {
+      try {
+        await sendBounded(
+          "disable popup target discovery",
+          "Target.setDiscoverTargets",
+          { discover: false },
+          2000,
+        );
+        proof.cleanup.discoveryDisabled = true;
+      } catch (error) {
+        proof.cleanup.closeErrors.push(`discovery cleanup: ${error.message}`);
+      }
+    }
+    offTargetCreated();
+    offTargetChanged();
+    offTargetDestroyed();
+    offWindowOpen();
+    proof.cleanup.listenersRemoved = true;
+    if (domEnabled) {
+      try {
+        await sendBounded("disable popup DOM inspection", "DOM.disable", {}, 2000);
+        proof.cleanup.domDisabled = true;
+      } catch (error) {
+        proof.cleanup.closeErrors.push(`DOM cleanup: ${error.message}`);
+      }
+    }
+  }
+  return proof;
+}
 
 const ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION = `(async () => {
   const workroom = document.querySelector("#workroom");
@@ -1862,6 +3707,7 @@ export async function auditBrowser({
     "--disable-gpu",
     "--disable-background-networking",
     "--disable-default-apps",
+    "--host-resolver-rules=MAP cta.invalid ~NOTFOUND",
     "--no-first-run",
     `--remote-debugging-address=127.0.0.1`,
     `--remote-debugging-port=${port}`,
@@ -1883,6 +3729,12 @@ export async function auditBrowser({
     await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
 
+    const coldFirstPaint = profile === "vnext" && routes.includes("/")
+      ? await auditHomeFirstPaint(cdp, auditOrigin)
+      : { errors: [], results: [] };
+    const progressiveFailures = profile === "vnext"
+      ? await auditProgressiveEnhancementFailures(cdp, auditOrigin, routes)
+      : { errors: [], results: [] };
     const runtimeErrors = [];
     cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
       runtimeErrors.push(exceptionDetails?.text ?? "browser exception");
@@ -1892,8 +3744,8 @@ export async function auditBrowser({
       runtimeErrors.push(args?.map((entry) => entry.value ?? entry.description ?? "").join(" ") || type);
     });
 
-    const errors = [];
-    const results = [];
+    const errors = [...coldFirstPaint.errors, ...progressiveFailures.errors];
+    const results = [...coldFirstPaint.results, ...progressiveFailures.results];
     const viewportPlans = profile === "vnext"
       ? [...VIEWPORTS, ...HIVE_COMPONENT_VIEWPORTS]
       : VIEWPORTS;
@@ -2200,6 +4052,8 @@ export async function auditBrowser({
             result.sparkReady.inert
             || result.sparkReady.disabled !== "false"
             || result.sparkReady.compiler !== "object"
+            || result.sparkReady.controlReady !== "true"
+            || result.sparkReady.documentControlReady !== "true"
           ) {
             errors.push(`${viewport.label} ${route}: Abracadabra Spark did not fully boot`);
           }
@@ -2250,6 +4104,35 @@ export async function auditBrowser({
             || controllerFlow.afterSwitch.secondSummary !== null
             || controllerFlow.sameProject.firstSummary !== firstSentinel
             || controllerFlow.sameProject.secondSummary !== secondSentinel
+            || controllerFlow.transientSecond.activeProjectId === ""
+            || controllerFlow.transientSecond.addressMode !== "mode_a"
+            || controllerFlow.transientSecond.addressLabel !== `rapid-second-${viewport.width}`
+            || controllerFlow.transientSecond.domainPath !== "purchase"
+            || controllerFlow.transientSecond.domainProofMethod !== "registrar_receipt"
+            || controllerFlow.transientSecond.domainProofReference !== ""
+            || controllerFlow.transientSecond.ownedDomain !== ""
+            || controllerFlow.transientSecond.passphrase !== ""
+            || controllerFlow.transientSecond.safetyAppeal !== ""
+            || !controllerFlow.transientSecond.settingsHidden
+            || controllerFlow.transientSecond.supportMessage !== ""
+            || controllerFlow.transientSecond.supportSubject !== ""
+            || controllerFlow.transientSecond.visibility !== "public"
+            || controllerFlow.transientFirst.activeProjectId === ""
+            || controllerFlow.transientFirst.addressMode !== "mode_a"
+            || controllerFlow.transientFirst.addressLabel !== `rapid-first-${viewport.width}`
+            || controllerFlow.transientFirst.domainProofReference !== ""
+            || controllerFlow.transientFirst.ownedDomain !== ""
+            || controllerFlow.transientFirst.passphrase !== ""
+            || controllerFlow.transientFirst.safetyAppeal !== ""
+            || !controllerFlow.transientFirst.settingsHidden
+            || controllerFlow.transientFirst.supportMessage !== ""
+            || controllerFlow.transientFirst.supportSubject !== ""
+            || controllerFlow.transientFirst.visibility !== "public"
+            || controllerFlow.guardedAction.activeProjectId
+              !== controllerFlow.transientFirst.activeProjectId
+            || controllerFlow.guardedAction.firstLifecycle !== "active"
+            || controllerFlow.guardedAction.secondLifecycle !== "active"
+            || !controllerFlow.guardedAction.status.includes("selected project changed")
           ) {
             errors.push(
               `${viewport.label} ${route}: cross-project draft isolation failed `
@@ -2522,6 +4405,234 @@ export async function auditBrowser({
         results.push({ overflow, route, viewport: viewport.label });
       }
     }
+    if (profile === "vnext" && routes.includes("/abracadabra/app/")) {
+      const auditLabel = "private-viewer";
+      const beforeErrors = runtimeErrors.length;
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      });
+      try {
+        await navigate(cdp, new URL("/abracadabra/app/", `${auditOrigin}/`).href);
+        const fixtureEvaluation = await cdp.send("Runtime.evaluate", {
+          expression: PRIVATE_VIEWER_FIXTURE_EXPRESSION,
+          returnByValue: true,
+        });
+        const fixture = fixtureEvaluation.result?.value;
+        if (
+          fixtureEvaluation.exceptionDetails
+          || !fixture
+          || fixture.error
+          || fixture.algorithm !== "sha256-iterated-v2"
+          || fixture.artifactDigestMatches !== true
+          || fixture.compilerSchema !== "abracadabra.spark/v1"
+          || fixture.ctaHref !== PRIVATE_VIEWER_POPUP_URL
+          || fixture.ctaTarget !== "_blank"
+          || fixture.ctaRel !== "noopener noreferrer"
+          || fixture.rounds !== 12000
+          || !fixture.projectId
+          || !fixture.versionId
+        ) {
+          errors.push(
+            `${auditLabel}: private platform fixture failed `
+            + `${JSON.stringify(fixture ?? fixtureEvaluation.exceptionDetails ?? null)}`,
+          );
+        } else {
+          const viewerUrl = new URL(
+            `/abracadabra/site/?project=${encodeURIComponent(fixture.projectId)}`,
+            `${auditOrigin}/`,
+          ).href;
+          await navigate(cdp, viewerUrl);
+          const gateEvaluation = await cdp.send("Runtime.evaluate", {
+            expression: PRIVATE_VIEWER_GATE_EXPRESSION,
+            returnByValue: true,
+          });
+          const gate = gateEvaluation.result?.value;
+          if (
+            gateEvaluation.exceptionDetails
+            || !gate
+            || gate.state !== "access"
+            || !gate.accessFormVisible
+            || gate.frameHasSource
+            || !gate.siteHidden
+          ) {
+            errors.push(
+              `${auditLabel}: private publication did not begin sealed `
+              + `${JSON.stringify(gate ?? gateEvaluation.exceptionDetails ?? null)}`,
+            );
+          }
+
+          const wrongEvaluation = await cdp.send("Runtime.evaluate", {
+            expression: PRIVATE_VIEWER_WRONG_PHRASE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const wrong = wrongEvaluation.result?.value;
+          if (
+            wrongEvaluation.exceptionDetails
+            || !wrong
+            || wrong.missing
+            || !wrong.completed
+            || wrong.state !== "access"
+            || wrong.frameHasSource
+            || wrong.error !== "That passphrase did not open this website."
+          ) {
+            errors.push(
+              `${auditLabel}: wrong passphrase did not remain sealed `
+              + `${JSON.stringify(wrong ?? wrongEvaluation.exceptionDetails ?? null)}`,
+            );
+          }
+
+          const correctEvaluation = await cdp.send("Runtime.evaluate", {
+            expression: PRIVATE_VIEWER_CORRECT_PHRASE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const correct = correctEvaluation.result?.value;
+          if (
+            correctEvaluation.exceptionDetails
+            || !correct
+            || correct.missing
+            || !correct.completed
+            || correct.state !== "live"
+            || !correct.ctaPresent
+            || !correct.errorHidden
+            || !correct.proofPresent
+            || correct.sandbox !== "allow-popups"
+            || !correct.siteVisible
+          ) {
+              errors.push(
+                `${auditLabel}: correct passphrase did not reveal exact inert bytes `
+                + `${JSON.stringify(correct ?? correctEvaluation.exceptionDetails ?? null)}`,
+              );
+            } else {
+              const popupProof = await exercisePrivateViewerPopup(cdp);
+              for (const failure of privateViewerPopupFailures(popupProof)) {
+                errors.push(`${auditLabel}: external CTA popup ${failure}`);
+              }
+              results.push({
+                mode: "private-viewer-popup",
+                route: "/abracadabra/site/",
+                viewport: auditLabel,
+              });
+
+              await navigate(cdp, viewerUrl);
+            const sessionEvaluation = await cdp.send("Runtime.evaluate", {
+              expression: PRIVATE_VIEWER_SESSION_EXPRESSION,
+              awaitPromise: true,
+              returnByValue: true,
+            });
+            const session = sessionEvaluation.result?.value;
+            if (
+              sessionEvaluation.exceptionDetails
+              || !session
+              || session.missing
+              || session.state !== "live"
+              || !session.accessFormHidden
+              || !session.proofPresent
+              || !session.siteVisible
+            ) {
+              errors.push(
+                `${auditLabel}: verified session did not reopen the same publication `
+                + `${JSON.stringify(session ?? sessionEvaluation.exceptionDetails ?? null)}`,
+              );
+            }
+
+            const staleEvaluation = await cdp.send("Runtime.evaluate", {
+              expression: PRIVATE_VIEWER_STALE_GRACE_EXPRESSION,
+              returnByValue: true,
+            });
+            const stale = staleEvaluation.result?.value;
+            if (
+              staleEvaluation.exceptionDetails
+              || !stale
+              || stale.missing
+              || stale.billingState !== "grace"
+              || stale.servingState !== "live"
+              || stale.graceEndsAt !== "2000-01-01T00:00:00.000Z"
+            ) {
+              errors.push(
+                `${auditLabel}: stale grace fixture could not be armed `
+                + `${JSON.stringify(stale ?? staleEvaluation.exceptionDetails ?? null)}`,
+              );
+            } else {
+              let platformRequests = 0;
+              const fulfillments = [];
+              await cdp.send("Fetch.enable", {
+                patterns: [{
+                  requestStage: "Request",
+                  resourceType: "Script",
+                  urlPattern: "*abracadabra/platform/abracadabra-platform.js*",
+                }],
+              });
+              const offPlatformFetch = cdp.on("Fetch.requestPaused", (event) => {
+                platformRequests += 1;
+                fulfillments.push(cdp.send("Fetch.fulfillRequest", {
+                  requestId: event.requestId,
+                  responseCode: 200,
+                  responseHeaders: [{
+                    name: "Content-Type",
+                    value: "application/javascript; charset=utf-8",
+                  }],
+                  body: Buffer.from(
+                    '"use strict"; globalThis.SiteSourceryAbracadabraPlatform = undefined;',
+                    "utf8",
+                  ).toString("base64"),
+                }));
+              });
+              try {
+                await navigate(cdp, viewerUrl);
+                await Promise.all(fulfillments);
+                const missingEvaluation = await cdp.send("Runtime.evaluate", {
+                  expression: PRIVATE_VIEWER_PLATFORM_MISSING_EXPRESSION,
+                  awaitPromise: true,
+                  returnByValue: true,
+                });
+                const missing = missingEvaluation.result?.value;
+                if (
+                  missingEvaluation.exceptionDetails
+                  || !missing
+                  || platformRequests !== 1
+                  || missing.lifecyclePlatformType !== "undefined"
+                  || missing.state !== "missing"
+                  || missing.frameHasSource
+                  || !missing.siteHidden
+                  || !missing.statusVisible
+                  || missing.title !== "This published website could not be opened."
+                ) {
+                  errors.push(
+                    `${auditLabel}: missing lifecycle platform exposed stale grace bytes `
+                    + `${JSON.stringify({
+                      missing: missing ?? missingEvaluation.exceptionDetails ?? null,
+                      platformRequests,
+                    })}`,
+                  );
+                }
+              } finally {
+                offPlatformFetch();
+                await cdp.send("Fetch.disable");
+              }
+            }
+          }
+        }
+      } finally {
+        const cleanup = await cdp.send("Runtime.evaluate", {
+          expression: PRIVATE_VIEWER_CLEANUP_EXPRESSION,
+          returnByValue: true,
+        });
+        if (cleanup.exceptionDetails || cleanup.result?.value !== true) {
+          errors.push(
+            `${auditLabel}: local fixture cleanup failed `
+            + `${JSON.stringify(cleanup.exceptionDetails ?? null)}`,
+          );
+        }
+      }
+      for (const message of runtimeErrors.slice(beforeErrors)) {
+        errors.push(`${auditLabel}: browser error ${message}`);
+      }
+    }
     if (profile === "vnext") {
       await cdp.send("Emulation.setScriptExecutionDisabled", { value: true });
       try {
@@ -2738,6 +4849,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         `Browser audit passed: ${routes.length} canonical routes at `
         + `${VIEWPORTS.length} primary viewports plus ${HIVE_COMPONENT_VIEWPORTS.length} `
         + `Hive breakpoint views, one no-script phone pass, and one reduced-motion phone pass; `
+        + `${routes.includes("/") ? "ten bounded homepage cold-load checks; " : ""}`
+        + `${routes.length * PROGRESSIVE_FAILURE_SCENARIOS.length} bounded progressive-failure checks; `
         + `no console exceptions, broken images, `
         + `document overflow, or product boot failures; exact ${REVIEWED_CHROMIUM.version} `
         + `${requestedOrigin

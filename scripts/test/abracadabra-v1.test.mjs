@@ -380,7 +380,7 @@ test("the exact recognizable maker selection controls publication and rollback",
     "selectPlatformVersion",
     "abracadabra:versionselected",
     "versionIdentity",
-    "publishVersion(state.selectedVersionId)",
+    "publishVersion(versionId, context)",
     "Roll back to Version ",
   ]) {
     assert.ok(appSource.includes(marker) || controlSource.includes(marker) || pageHtml.includes(marker), marker);
@@ -389,6 +389,11 @@ test("the exact recognizable maker selection controls publication and rollback",
     controlSource,
     /var target = accepted\.find\(function \(version\) \{\s*return version\.id === versionId;/u,
     "publish must resolve only the explicitly selected accepted version",
+  );
+  assert.match(
+    controlSource,
+    /var versionId = state\.selectedVersionId;\s*publishVersion\(versionId, context\);/u,
+    "publish must capture the recognizable maker selection with its project context",
   );
   assert.doesNotMatch(
     controlSource,

@@ -8,6 +8,15 @@
   var LIVE_SERVING_VALUES = new Set(["live", "frozen"]);
   var EXPORT_STATES = new Set(["live", "grace", "suspended", "retained", "cancelled"]);
 
+  if (typeof module === "object" && module.exports) {
+    module.exports = Object.freeze({
+      credentialFingerprint: credentialFingerprint,
+      normalizeCredential: normalizeCredential,
+      verifyCredential: verifyCredential
+    });
+    return;
+  }
+
   var elements = {
     accessError: document.getElementById("access-error"),
     accessForm: document.getElementById("access-form"),
@@ -34,6 +43,7 @@
     accessPassword: "",
     exportRecord: null,
     normalized: null,
+    openSequence: 0,
     platform: null,
     projectId: "",
     snapshot: null
@@ -42,8 +52,9 @@
   /*
    * Read-only boundary for the durable platform snapshot. The viewer consumes
    * the v1 array schema and normalizes the few fields needed to decide what may
-   * be shown. Published bytes still go through resolveSite() whenever the
-   * platform module is present.
+   * be shown. Published bytes still go through resolveSite(). The direct
+   * resolver is reserved for an exact private-session grant after the platform
+   * has returned matching current lifecycle and publication metadata.
    */
   var PlatformAdapter = Object.freeze({
     readSnapshot: function (storage) {
@@ -181,10 +192,25 @@
     var algorithm = lower(credential.algorithm || "sha256-salted-v1");
     var salt = lower(credential.saltHex || credential.salt);
     var digest = lower(credential.digestHex || credential.digest || credential.hash);
+    var rounds = credential.rounds;
     if (!validSha256(digest)) return null;
     if (algorithm === "sha256-salted-v1" && !/^[a-f0-9]{16,256}$/u.test(salt)) return null;
-    if (!["sha256-salted-v1", "sha256"].includes(algorithm)) return null;
-    return Object.freeze({ algorithm: algorithm, digest: digest, salt: salt });
+    if (
+      algorithm === "sha256-iterated-v2"
+      && (
+        !/^[a-f0-9]{16,256}$/u.test(salt)
+        || !Number.isInteger(rounds)
+        || rounds < 2
+        || rounds > 100000
+      )
+    ) return null;
+    if (!["sha256-iterated-v2", "sha256-salted-v1", "sha256"].includes(algorithm)) return null;
+    return Object.freeze({
+      algorithm: algorithm,
+      digest: digest,
+      rounds: algorithm === "sha256-iterated-v2" ? rounds : 0,
+      salt: salt
+    });
   }
 
   function deriveViewerState(lifecycle, billingState, servingState) {
@@ -239,7 +265,7 @@
   function setExportAvailable(available) {
     elements.exportButtons.forEach(function (button) {
       button.hidden = !available;
-      button.disabled = false;
+      button.disabled = !available;
     });
   }
 
@@ -369,11 +395,16 @@
   }
 
   async function sha256Hex(value) {
-    if (!window.crypto || !window.crypto.subtle || typeof TextEncoder !== "function") {
+    var cryptoApi = typeof window !== "undefined" && window.crypto
+      ? window.crypto
+      : typeof globalThis !== "undefined"
+        ? globalThis.crypto
+        : null;
+    if (!cryptoApi || !cryptoApi.subtle || typeof TextEncoder !== "function") {
       throw new Error("Secure local hashing is not supported by this browser.");
     }
     var bytes = new TextEncoder().encode(String(value));
-    var digest = await window.crypto.subtle.digest("SHA-256", bytes);
+    var digest = await cryptoApi.subtle.digest("SHA-256", bytes);
     return Array.from(new Uint8Array(digest), function (byte) {
       return byte.toString(16).padStart(2, "0");
     }).join("");
@@ -393,18 +424,30 @@
   async function verifyCredential(passphrase, credential) {
     if (!credential) return false;
     var normalizedPassphrase = String(passphrase || "").normalize("NFC");
-    var material = credential.algorithm === "sha256-salted-v1"
+    var material = ["sha256-salted-v1", "sha256-iterated-v2"].includes(credential.algorithm)
       ? credential.salt + ":" + normalizedPassphrase
       : credential.salt
         ? credential.salt + ":" + normalizedPassphrase
         : normalizedPassphrase;
     var actual = await sha256Hex(material);
+    if (credential.algorithm === "sha256-iterated-v2") {
+      for (var round = 1; round < credential.rounds; round += 1) {
+        actual = await sha256Hex(
+          credential.salt + ":" + actual + ":" + round.toString(16)
+        );
+      }
+    }
     return constantTimeEqual(actual, credential.digest);
   }
 
   function credentialFingerprint(credential) {
     if (!credential) return "";
-    return credential.algorithm + ":" + credential.salt + ":" + credential.digest;
+    return [
+      credential.algorithm,
+      credential.rounds || 0,
+      credential.salt,
+      credential.digest
+    ].join(":");
   }
 
   function readViewerSession() {
@@ -418,13 +461,16 @@
     }
   }
 
-  function hasViewerGrant(normalized) {
+  function viewerGrantFingerprint(normalized) {
     var projects = readViewerSession();
     var saved = projects[normalized.id];
-    return Boolean(
-      saved
-      && saved.credentialFingerprint === credentialFingerprint(normalized.accessCredential)
-    );
+    var savedFingerprint = saved && String(saved.credentialFingerprint || "");
+    var currentFingerprint = credentialFingerprint(normalized.accessCredential);
+    return savedFingerprint
+      && currentFingerprint
+      && constantTimeEqual(savedFingerprint, currentFingerprint)
+      ? savedFingerprint
+      : "";
   }
 
   function rememberViewerGrant(normalized) {
@@ -443,41 +489,80 @@
     }
   }
 
-  function createPlatform() {
-    var module = window.SiteSourceryAbracadabraPlatform;
-    if (!module || typeof module.createPlatform !== "function") return null;
+  function lifecycleStorage() {
     try {
-      return module.createPlatform({ storage: window.localStorage });
+      return window.localStorage || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function createPlatform(storage) {
+    var module = window.SiteSourceryAbracadabraPlatform;
+    if (!storage || !module || typeof module.createPlatform !== "function") return null;
+    try {
+      var platform = module.createPlatform({ storage: storage });
+      return platform && typeof platform.resolveSite === "function" ? platform : null;
     } catch (_error) {
       return null;
     }
   }
 
   async function resolvePublishedSite(normalized, accessPassword) {
-    if (
-      runtime.platform
-      && normalized.hostname
-      && (normalized.visibility === "public" || accessPassword)
-    ) {
-      var resolved = await Promise.resolve(runtime.platform.resolveSite({
-        accessPassword: accessPassword || undefined,
-        hostname: normalized.hostname
-      }));
+    if (!runtime.platform || !normalized || !normalized.hostname) {
+      throw new Error("The lifecycle platform is not available.");
+    }
+    var grantFingerprint = normalized.visibility === "private"
+      && !accessPassword
+      && runtime.accessGranted;
+    grantFingerprint = grantFingerprint ? viewerGrantFingerprint(normalized) : "";
+    var lifecycleOnly = Boolean(grantFingerprint);
+    var request = {
+      accessPassword: accessPassword || undefined,
+      hostname: normalized.hostname,
+      lifecycleOnly: lifecycleOnly
+    };
+    if (lifecycleOnly) {
+      request.expected = {
+        artifactDigest: normalized.digest,
+        hostname: normalized.hostname,
+        projectId: normalized.id,
+        versionId: String(normalized.currentVersion && normalized.currentVersion.id || ""),
+        visibility: normalized.visibility
+      };
+      request.grantFingerprint = grantFingerprint;
+    }
+    var resolved = await Promise.resolve(runtime.platform.resolveSite(request));
+    if (lifecycleOnly) {
       if (
         !resolved
-        || String(resolved.projectId || "") !== normalized.id
-        || typeof resolved.html !== "string"
-        || !validSha256(resolved.artifactDigest)
+        || resolved.acknowledged !== true
+        || Object.keys(resolved).length !== 1
+        || !constantTimeEqual(viewerGrantFingerprint(normalized), grantFingerprint)
       ) {
-        throw new Error("Platform returned an invalid published-site result.");
+        throw new Error("Platform did not acknowledge the current private viewer grant.");
       }
-      var resolvedDigest = await sha256Hex(resolved.html);
-      if (!constantTimeEqual(resolvedDigest, lower(resolved.artifactDigest))) {
-        throw new Error("Published-site result did not match its digest.");
-      }
-      return resolved;
+      return PlatformAdapter.directResolution(normalized);
     }
-    return PlatformAdapter.directResolution(normalized);
+    if (
+      !resolved
+      || String(resolved.projectId || "") !== normalized.id
+      || String(resolved.versionId || "") !== String(normalized.currentVersion && normalized.currentVersion.id || "")
+      || cleanHostname(resolved.hostname) !== normalized.hostname
+      || !validSha256(resolved.artifactDigest)
+      || lower(resolved.artifactDigest) !== normalized.digest
+      || lower(resolved.visibility) !== normalized.visibility
+    ) {
+      throw new Error("Platform returned an invalid published-site result.");
+    }
+    if (typeof resolved.html !== "string") {
+      throw new Error("Platform returned an invalid published-site result.");
+    }
+    var resolvedDigest = await sha256Hex(resolved.html);
+    if (!constantTimeEqual(resolvedDigest, lower(resolved.artifactDigest))) {
+      throw new Error("Published-site result did not match its digest.");
+    }
+    return resolved;
   }
 
   function inertPublishedHtml(source) {
@@ -567,17 +652,37 @@
     }, 1000);
   }
 
-  async function prepareStatus(normalized) {
+  function showResolutionFailure() {
+    showStatus({
+      actions: true,
+      chip: "Closed",
+      copy: "The saved publication record did not pass the local serving checks. No website bytes were exposed.",
+      details: true,
+      exportAllowed: false,
+      state: "missing",
+      title: "This published website could not be opened."
+    });
+  }
+
+  async function prepareStatus(normalized, openSequence) {
     var mayExport = EXPORT_STATES.has(normalized.state);
-    runtime.exportRecord = mayExport ? await verifiedExportRecord(normalized) : null;
+    var exportRecord = mayExport ? await verifiedExportRecord(normalized) : null;
+    if (openSequence !== runtime.openSequence) return;
+    runtime.exportRecord = exportRecord;
     showStatus(statusFor(normalized, Boolean(runtime.exportRecord)));
   }
 
-  async function openCurrentProject() {
+  async function openCurrentProject(refreshOnRevisionChange) {
+    var mayRefresh = refreshOnRevisionChange !== false;
+    runtime.openSequence += 1;
+    var openSequence = runtime.openSequence;
     runtime.projectId = projectIdFromLocation();
     runtime.accessGranted = false;
     runtime.accessPassword = "";
     runtime.exportRecord = null;
+    runtime.normalized = null;
+    runtime.platform = null;
+    runtime.snapshot = null;
     elements.publishedSite.removeAttribute("srcdoc");
     elements.passphrase.value = "";
     elements.passphrase.removeAttribute("aria-invalid");
@@ -596,7 +701,8 @@
       return;
     }
 
-    var read = PlatformAdapter.readSnapshot(window.localStorage);
+    var storage = lifecycleStorage();
+    var read = PlatformAdapter.readSnapshot(storage);
     runtime.snapshot = read.snapshot;
     if (read.kind !== "ready") {
       setProjectIdentity(null);
@@ -628,7 +734,7 @@
     }
 
     runtime.normalized = PlatformAdapter.normalizeProject(project);
-    runtime.platform = createPlatform();
+    runtime.platform = createPlatform(storage);
     setProjectIdentity(runtime.normalized.state === "deleted" ? null : runtime.normalized);
 
     if (
@@ -647,7 +753,7 @@
         });
         return;
       }
-      if (hasViewerGrant(runtime.normalized)) {
+      if (viewerGrantFingerprint(runtime.normalized)) {
         runtime.accessGranted = true;
       } else {
         showAccessGate(runtime.normalized);
@@ -658,26 +764,31 @@
     if (["live", "grace"].includes(runtime.normalized.state)) {
       try {
         var resolved = await resolvePublishedSite(runtime.normalized, runtime.accessPassword);
+        if (openSequence !== runtime.openSequence) return;
         showPublishedSite(runtime.normalized, resolved);
       } catch (_error) {
-        showStatus({
-          actions: true,
-          chip: "Closed",
-          copy: "The saved publication record did not pass the local serving checks. No website bytes were exposed.",
-          details: true,
-          exportAllowed: false,
-          state: "missing",
-          title: "This published website could not be opened."
-        });
+        if (openSequence !== runtime.openSequence) return;
+        var refreshed = PlatformAdapter.readSnapshot(storage);
+        if (
+          mayRefresh
+          && refreshed.kind === "ready"
+          && runtime.snapshot
+          && refreshed.snapshot.revision !== runtime.snapshot.revision
+        ) {
+          openCurrentProject(false);
+          return;
+        }
+        showResolutionFailure();
       }
       return;
     }
 
-    await prepareStatus(runtime.normalized);
+    await prepareStatus(runtime.normalized, openSequence);
   }
 
   async function handleAccessSubmit() {
     var normalized = runtime.normalized;
+    var openSequence = runtime.openSequence;
     if (!normalized || !normalized.accessCredential) {
       showAccessError("This project does not contain a valid access record.");
       return;
@@ -687,26 +798,32 @@
     elements.passphrase.removeAttribute("aria-invalid");
     elements.accessError.hidden = true;
     try {
-      var verified = await verifyCredential(elements.passphrase.value, normalized.accessCredential);
+      var submittedPassword = elements.passphrase.value;
+      var verified = await verifyCredential(submittedPassword, normalized.accessCredential);
+      if (openSequence !== runtime.openSequence) return;
       if (!verified) {
         showAccessError("That passphrase did not open this website.");
         return;
       }
       runtime.accessGranted = true;
-      runtime.accessPassword = elements.passphrase.value;
+      runtime.accessPassword = submittedPassword;
       rememberViewerGrant(normalized);
       elements.passphrase.value = "";
       if (["live", "grace"].includes(normalized.state)) {
         var resolved = await resolvePublishedSite(normalized, runtime.accessPassword);
+        if (openSequence !== runtime.openSequence) return;
         showPublishedSite(normalized, resolved);
       } else {
-        await prepareStatus(normalized);
+        await prepareStatus(normalized, openSequence);
       }
     } catch (_error) {
+      if (openSequence !== runtime.openSequence) return;
       showAccessError("The passphrase could not be checked. Reload this page and try again.");
     } finally {
-      runtime.accessPassword = "";
-      submit.disabled = false;
+      if (openSequence === runtime.openSequence) {
+        runtime.accessPassword = "";
+        submit.disabled = !normalized || !normalized.accessCredential;
+      }
     }
   }
 
@@ -721,7 +838,7 @@
   });
 
   window.addEventListener("storage", function (event) {
-    if (event.key === STORE_KEY) openCurrentProject();
+    if (event.key === STORE_KEY || event.key === null) openCurrentProject();
   });
 
   openCurrentProject();

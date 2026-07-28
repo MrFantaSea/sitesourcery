@@ -69,6 +69,81 @@
     return control ? control.value : "";
   }
 
+  function resetProjectScopedTransients() {
+    one("[data-project-settings]").hidden = true;
+    [
+      "manageAddressLabel",
+      "manageOwnedDomain",
+      "manageDomainProofReference",
+      "manageAccessPassword",
+      "supportSubject",
+      "supportMessage",
+      "safetyAppeal"
+    ].forEach(function (name) {
+      var control = one('[name="' + name + '"]');
+      if (control) control.value = "";
+    });
+    ["manageAddressMode", "manageDomainPath", "manageDomainProofMethod", "manageVisibility"]
+      .forEach(function (name) {
+        var control = one('[name="' + name + '"]');
+        if (control) control.selectedIndex = 0;
+      });
+    renderManagementChoices();
+  }
+
+  function hydrateProjectScopedFields(project) {
+    if (!project) return;
+    one('[name="manageAddressMode"]').value = project.address.mode;
+    one('[name="manageAddressLabel"]').value = project.address.label || "";
+    one('[name="manageDomainPath"]').value = project.address.path === "licensed"
+      ? "purchase"
+      : project.address.path;
+    one('[name="manageOwnedDomain"]').value = project.address.domain || "";
+    one('[name="manageVisibility"]').value = project.access.visibility;
+    one('[name="manageAccessPassword"]').value = "";
+    one('[name="manageDomainProofReference"]').value = "";
+    one('[name="supportSubject"]').value = "";
+    one('[name="supportMessage"]').value = "";
+    one('[name="safetyAppeal"]').value = "";
+    renderManagementChoices();
+  }
+
+  function setProjectContext(project) {
+    var currentId = state.project ? state.project.id : "";
+    var nextId = project ? project.id : "";
+    var changed = currentId !== nextId;
+    if (changed) {
+      resetProjectScopedTransients();
+      state.selectedVersionId = null;
+    }
+    state.project = project || null;
+    if (changed && project) hydrateProjectScopedFields(project);
+    return changed;
+  }
+
+  function captureProjectContext() {
+    if (!state.account || !state.project) return null;
+    return Object.freeze({
+      accountId: state.account.id,
+      projectId: state.project.id
+    });
+  }
+
+  function requireProjectContext(context) {
+    if (
+      !context
+      || !state.account
+      || !state.project
+      || state.account.id !== context.accountId
+      || state.project.id !== context.projectId
+    ) {
+      throw new Error(
+        "The selected project changed before this action finished. Review the newly selected project and try again."
+      );
+    }
+    return context;
+  }
+
   function announce(message, kind) {
     status.hidden = false;
     status.textContent = message;
@@ -113,8 +188,7 @@
 
   function showAuth(mode) {
     state.account = null;
-    state.project = null;
-    state.selectedVersionId = null;
+    setProjectContext(null);
     dashboard.hidden = true;
     auth.hidden = false;
     workroom.hidden = false;
@@ -128,8 +202,7 @@
 
   function signInto(account) {
     state.account = account;
-    state.project = null;
-    state.selectedVersionId = null;
+    setProjectContext(null);
     setSession();
     auth.hidden = true;
     dashboard.hidden = false;
@@ -304,7 +377,18 @@
       : [];
     var latest = requests[requests.length - 1] || null;
     var verification = project.address.verification;
-    one("[data-domain-review-title]").textContent = project.address.domain;
+    one("[data-domain-review-title]").textContent = project.address.domain || "Customer-owned domain";
+    if (project.lifecycle === "deleted") {
+      one("[data-domain-review-state]").textContent = "Detached · ownership retained";
+      one("[data-domain-review-receipt]").textContent = "Removed at project deletion";
+      one("[data-domain-review-proof]").textContent = "Proof reference removed";
+      one("[data-domain-review-time]").textContent = project.address.detachedAt
+        ? new Date(project.address.detachedAt).toLocaleString()
+        : "Detached";
+      one("[data-domain-review-copy]").textContent = "The customer-owned domain name remains as an ownership fact. "
+        + "Its serving hostname and saved proof references were removed from this device.";
+      return;
+    }
     one("[data-domain-review-state]").textContent = verification
       ? "Reviewed and configured"
       : latest
@@ -338,7 +422,7 @@
       accountId: state.account.id,
       projectId: state.project.id
     });
-    state.project = project;
+    setProjectContext(project);
     var deleted = project.lifecycle === "deleted";
     var active = project.lifecycle === "active";
     var accepted = acceptedVersions(project);
@@ -371,16 +455,11 @@
     renderDomainReview(project);
 
     var settingsPanel = one("[data-project-settings]");
-    if (settingsPanel.hidden) {
-      one('[name="manageAddressMode"]').value = project.address.mode;
-      one('[name="manageAddressLabel"]').value = project.address.label || "";
-      one('[name="manageDomainPath"]').value = project.address.path === "licensed"
-        ? "purchase"
-        : project.address.path;
-      one('[name="manageOwnedDomain"]').value = project.address.domain || "";
-      one('[name="manageVisibility"]').value = project.access.visibility;
-      one('[name="manageAccessPassword"]').value = "";
-      renderManagementChoices();
+    one("[data-toggle-settings]").hidden = deleted;
+    if (deleted) {
+      resetProjectScopedTransients();
+    } else if (settingsPanel.hidden) {
+      hydrateProjectScopedFields(project);
     }
 
     var openSite = one("[data-open-site]");
@@ -465,7 +544,9 @@
     }
 
     var safetyCopy = one("[data-safety-copy]");
-    if (project.safety.state === "held") {
+    if (deleted) {
+      safetyCopy.textContent = "Safety review closed with the project. Its hold and appeal text were removed; only the text-free event timeline remains.";
+    } else if (project.safety.state === "held") {
       safetyCopy.textContent = "Serving is paused for review. Reason: " + project.safety.reason;
     } else if (project.safety.state === "appeal_pending") {
       safetyCopy.textContent = "The appeal is attached to this hold for human review. Serving remains paused until the review is completed.";
@@ -475,8 +556,9 @@
     } else {
       safetyCopy.textContent = "No safety hold is active. Holds preserve the project and release while serving is paused for human review.";
     }
-    one("[data-safety-appeal-field]").hidden = project.safety.state !== "held";
-    one("[data-submit-safety-appeal]").hidden = project.safety.state !== "held";
+    one("[data-safety-appeal-field]").hidden = deleted || project.safety.state !== "held";
+    one("[data-submit-safety-appeal]").hidden = deleted || project.safety.state !== "held";
+    one("[data-create-ticket]").hidden = deleted;
 
     renderReleaseList(project);
     renderTickets(project);
@@ -484,7 +566,7 @@
     one("[data-active-project]").hidden = false;
     one("[data-project-empty]").hidden = true;
     one("[data-project-creator]").hidden = true;
-    workroom.hidden = false;
+    workroom.hidden = deleted;
   }
 
   function openProject(projectId) {
@@ -496,9 +578,9 @@
       announce("The saved project could not be loaded into the maker. No project state was changed.", "error");
       return;
     }
-    state.project = project;
+    setProjectContext(project);
     renderProject();
-    announce(project.name + " opened.", "success");
+    announce((project.lifecycle === "deleted" ? "Deleted project" : project.name) + " opened.", "success");
     focusAndScroll(one("[data-active-project]"));
   }
 
@@ -545,7 +627,7 @@
         acceptedTerms: Boolean(one('[name="projectTermsAccepted"]').checked)
       });
       one('[name="projectTermsAccepted"]').checked = false;
-      state.project = project;
+      setProjectContext(project);
       if (state.pendingGuestCandidate) {
         var adopted = acceptMadeVersion(state.pendingGuestCandidate);
         if (adopted) {
@@ -566,7 +648,7 @@
       }
       if (!maker.loadProject(project)) {
         platform.deleteProject({ accountId: state.account.id, projectId: project.id });
-        state.project = null;
+        setProjectContext(null);
         renderProjectList();
         throw new Error("The maker could not open the new project. The empty project was removed.");
       }
@@ -610,10 +692,12 @@
 
   function acceptMadeVersion(detail) {
     if (!state.account || !state.project || state.project.lifecycle !== "active") return false;
+    var context = captureProjectContext();
     try {
+      requireProjectContext(context);
       var version = platform.saveVersion({
-        accountId: state.account.id,
-        projectId: state.project.id,
+        accountId: context.accountId,
+        projectId: context.projectId,
         rawFacts: detail.raw,
         releaseAttestation: detail.reviewAttested === true,
         artifact: {
@@ -622,19 +706,22 @@
         }
       });
       if (version.candidateState === "draft") {
+        requireProjectContext(context);
         version = platform.markVersionReady({
-          accountId: state.account.id,
-          projectId: state.project.id,
+          accountId: context.accountId,
+          projectId: context.projectId,
           versionId: version.id
         });
       }
       if (version.candidateState === "ready") {
+        requireProjectContext(context);
         version = platform.acceptVersion({
-          accountId: state.account.id,
-          projectId: state.project.id,
+          accountId: context.accountId,
+          projectId: context.projectId,
           versionId: version.id
         });
       }
+      requireProjectContext(context);
       maker.markCurrentPlatformVersion(version.id);
       renderProject();
       announce("Reviewed version saved and accepted. It is ready for the release controls.", "success");
@@ -646,24 +733,26 @@
     }
   }
 
-  function publishVersion(versionId) {
-    if (!state.project) return;
-    var project = platform.getProject({
-      accountId: state.account.id,
-      projectId: state.project.id
-    });
-    var accepted = acceptedVersions(project);
-    var target = accepted.find(function (version) {
-      return version.id === versionId;
-    });
-    if (!target) {
-      announce("Choose the exact accepted website version before publishing.", "error");
-      return;
-    }
+  function publishVersion(versionId, context) {
+    if (!context) return;
     try {
+      requireProjectContext(context);
+      var project = platform.getProject({
+        accountId: context.accountId,
+        projectId: context.projectId
+      });
+      var accepted = acceptedVersions(project);
+      var target = accepted.find(function (version) {
+        return version.id === versionId;
+      });
+      if (!target) {
+        announce("Choose the exact accepted website version before publishing.", "error");
+        return;
+      }
+      requireProjectContext(context);
       platform.publish({
-        accountId: state.account.id,
-        projectId: state.project.id,
+        accountId: context.accountId,
+        projectId: context.projectId,
         versionId: target.id
       });
       renderProject();
@@ -797,8 +886,10 @@
   one('[name="manageAddressMode"]').addEventListener("change", renderManagementChoices);
   one('[name="manageVisibility"]').addEventListener("change", renderManagementChoices);
   one("[data-save-settings]").addEventListener("click", function () {
-    if (!state.project) return;
+    var context = captureProjectContext();
+    if (!context) return;
     try {
+      requireProjectContext(context);
       var mode = value("manageAddressMode");
       var address = mode === "mode_a"
         ? { mode: "mode_a", label: value("manageAddressLabel") }
@@ -818,9 +909,10 @@
           )
         );
       if (addressChanged) {
+        requireProjectContext(context);
         platform.setAddress({
-          accountId: state.account.id,
-          projectId: state.project.id,
+          accountId: context.accountId,
+          projectId: context.projectId,
           address: address
         });
       }
@@ -831,9 +923,10 @@
         if (visibility === "private" && !passphrase) {
           throw new Error("Enter a new site passphrase when switching this project to private.");
         }
+        requireProjectContext(context);
         platform.setVisibility({
-          accountId: state.account.id,
-          projectId: state.project.id,
+          accountId: context.accountId,
+          projectId: context.projectId,
           visibility: visibility,
           accessPassword: passphrase
         });
@@ -852,10 +945,13 @@
   });
 
   one("[data-activate-plan]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     try {
+      requireProjectContext(context);
       platform.activatePlan({
-        accountId: state.account.id,
-        projectId: state.project.id,
+        accountId: context.accountId,
+        projectId: context.projectId,
         localRehearsalAcknowledged: true
       });
       renderProject();
@@ -869,6 +965,7 @@
   });
 
   one("[data-request-domain-review]").addEventListener("click", function () {
+    var context = captureProjectContext();
     if (!state.project || !state.project.address || state.project.address.mode !== "mode_b") {
       announce("Save the customer-owned domain choice before preparing its proof handoff.", "error");
       return;
@@ -883,9 +980,10 @@
       return;
     }
     try {
+      requireProjectContext(context);
       var receipt = platform.requestAddressVerification({
-        accountId: state.account.id,
-        projectId: state.project.id,
+        accountId: context.accountId,
+        projectId: context.projectId,
         method: value("manageDomainProofMethod"),
         reference: value("manageDomainProofReference")
       });
@@ -902,11 +1000,16 @@
   });
 
   one("[data-publish]").addEventListener("click", function () {
-    publishVersion(state.selectedVersionId);
+    var context = captureProjectContext();
+    var versionId = state.selectedVersionId;
+    publishVersion(versionId, context);
   });
   one("[data-unpublish]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     try {
-      platform.unpublish({ accountId: state.account.id, projectId: state.project.id });
+      requireProjectContext(context);
+      platform.unpublish({ accountId: context.accountId, projectId: context.projectId });
       renderProject();
       announce("Publication paused. The accepted release remains available.", "success");
     } catch (error) {
@@ -915,8 +1018,11 @@
   });
 
   one("[data-payment-failure]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     try {
-      platform.recordPaymentFailure({ accountId: state.account.id, projectId: state.project.id });
+      requireProjectContext(context);
+      platform.recordPaymentFailure({ accountId: context.accountId, projectId: context.projectId });
       renderProject();
       announce("Missed payment recorded. The website remains live for 14 grace days.", "success");
     } catch (error) {
@@ -925,11 +1031,15 @@
   });
 
   one("[data-advance-suspension]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
+    var graceEndsAt = state.project.billing.graceEndsAt;
     try {
+      requireProjectContext(context);
       platform.advanceBilling({
-        accountId: state.account.id,
-        projectId: state.project.id,
-        at: state.project.billing.graceEndsAt
+        accountId: context.accountId,
+        projectId: context.projectId,
+        at: graceEndsAt
       });
       renderProject();
       announce("Day 15 reached. Serving is suspended and 90-day retention has begun.", "success");
@@ -939,12 +1049,16 @@
   });
 
   one("[data-advance-deletion]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
+    var retentionEndsAt = state.project.billing.retentionEndsAt;
     if (!window.confirm("Complete the retention clock and delete this project’s saved content?")) return;
     try {
+      requireProjectContext(context);
       platform.advanceBilling({
-        accountId: state.account.id,
-        projectId: state.project.id,
-        at: state.project.billing.retentionEndsAt
+        accountId: context.accountId,
+        projectId: context.projectId,
+        at: retentionEndsAt
       });
       renderProject();
       announce("Retention ended. Project content reached terminal deletion.", "success");
@@ -954,11 +1068,15 @@
   });
 
   one("[data-submit-safety-appeal]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
+    var message = value("safetyAppeal");
     try {
+      requireProjectContext(context);
       platform.submitSafetyAppeal({
-        accountId: state.account.id,
-        projectId: state.project.id,
-        message: value("safetyAppeal")
+        accountId: context.accountId,
+        projectId: context.projectId,
+        message: message
       });
       renderProject();
       announce("Appeal attached to the hold for review.", "success");
@@ -968,12 +1086,17 @@
   });
 
   one("[data-create-ticket]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
+    var subject = value("supportSubject");
+    var message = value("supportMessage");
     try {
+      requireProjectContext(context);
       platform.createSupportTicket({
-        accountId: state.account.id,
-        projectId: state.project.id,
-        subject: value("supportSubject"),
-        message: value("supportMessage")
+        accountId: context.accountId,
+        projectId: context.projectId,
+        subject: subject,
+        message: message
       });
       one('[name="supportSubject"]').value = "";
       one('[name="supportMessage"]').value = "";
@@ -991,12 +1114,16 @@
   });
 
   one("[data-export-project]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     try {
+      requireProjectContext(context);
       var exported = platform.exportProject({
-        accountId: state.account.id,
-        projectId: state.project.id
+        accountId: context.accountId,
+        projectId: context.projectId
       });
-      downloadJson(exported, "abracadabra-" + state.project.id + "-export.json");
+      requireProjectContext(context);
+      downloadJson(exported, "abracadabra-" + context.projectId + "-export.json");
       announce("Project export prepared.", "success");
     } catch (error) {
       announce(explain(error, "The project could not be exported."), "error");
@@ -1004,11 +1131,14 @@
   });
 
   one("[data-detach-domain]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     if (!window.confirm("Detach this customer-owned domain from this Abracadabra project? The customer keeps the domain.")) return;
     try {
+      requireProjectContext(context);
       platform.detachDomain({
-        accountId: state.account.id,
-        projectId: state.project.id
+        accountId: context.accountId,
+        projectId: context.projectId
       });
       renderProject();
       announce("Customer-owned domain detached. Ownership remains with the customer.", "success");
@@ -1018,9 +1148,12 @@
   });
 
   one("[data-cancel-project]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
     if (!window.confirm("Cancel this project and begin its retained exit period?")) return;
     try {
-      platform.cancelProject({ accountId: state.account.id, projectId: state.project.id });
+      requireProjectContext(context);
+      platform.cancelProject({ accountId: context.accountId, projectId: context.projectId });
       renderProject();
       announce("Project cancelled. Export remains available during retention.", "success");
     } catch (error) {
@@ -1029,11 +1162,24 @@
   });
 
   one("[data-delete-project]").addEventListener("click", function () {
-    if (!window.confirm("Delete this project’s draft and website versions now? This cannot be undone.")) return;
+    var context = captureProjectContext();
+    if (!context) return;
+    if (!window.confirm(
+      "Delete this project’s content, releases, access credential, proof references, safety narratives, and support notes now? "
+      + "This does not delete the browser-local account and cannot be undone."
+    )) return;
     try {
-      platform.deleteProject({ accountId: state.account.id, projectId: state.project.id });
+      requireProjectContext(context);
+      if (!maker.loadProject({ draft: null, versions: [], serving: { currentVersionId: null } })) {
+        announce("Project deletion was cancelled because the maker still has unsaved edits.", "error");
+        return;
+      }
+      platform.deleteProject({ accountId: context.accountId, projectId: context.projectId });
       renderProject();
-      announce("Project content deleted. A customer-owned domain remains the customer’s.", "success");
+      announce(
+        "Project content deleted from this browser. The local account remains; a customer-owned domain remains the customer’s.",
+        "success"
+      );
     } catch (error) {
       announce(explain(error, "The project could not be deleted."), "error");
     }
@@ -1066,8 +1212,9 @@
     one('[name="accountName"]').focus({ preventScroll: true });
   });
 
-  one("[data-open-account]").disabled = false;
-  one("[data-open-account]").addEventListener("click", function () {
+  var openAccountButton = one("[data-open-account]");
+  openAccountButton.disabled = !platform;
+  openAccountButton.addEventListener("click", function () {
     revealControlRoom("sign-in");
     announce("Sign in to return to projects saved in this browser.");
     one('[name="signInEmail"]').focus({ preventScroll: true });
@@ -1076,4 +1223,6 @@
   renderProjectChoices();
   readSession();
   showAuth("create");
+  controlRoom.setAttribute("data-control-ready", "true");
+  document.documentElement.setAttribute("data-abracadabra-control-ready", "true");
 }());

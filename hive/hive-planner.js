@@ -204,19 +204,20 @@
       validControls.push(control);
     });
 
-    if (
-      !output
-      || validControls.length === 0
-      || actionFields.length !== 3
-      || Object.keys(fields).some(function (key) { return !fields[key]; })
-    ) return false;
+    var plannerReady = Boolean(
+      output
+      && validControls.length > 0
+      && actionFields.length === 3
+      && !Object.keys(fields).some(function (key) { return !fields[key]; })
+    );
+    if (!plannerReady) return false;
 
     validControls.forEach(function (control) {
-      control.disabled = false;
+      control.disabled = !plannerReady;
       control.removeAttribute("aria-disabled");
     });
-    fields.pause.disabled = false;
-    fields.download.disabled = false;
+    fields.pause.disabled = !plannerReady;
+    fields.download.disabled = !plannerReady;
 
     function renderPause(cellId) {
       var paused = pausedCells[cellId] === true;
