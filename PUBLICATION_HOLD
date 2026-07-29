@@ -1,0 +1,14 @@
+PUBLICATION_HOLD
+
+This foundation is not approved for public serving.
+
+Do not:
+- remove this file;
+- install or enable the held systemd units;
+- load the held Caddy candidate;
+- open router ports;
+- change DNS;
+- request public certificates;
+- start a listener on a public interface.
+
+Release requires a separate owner-approved checklist and operational proof.

@@ -1,6 +1,7 @@
 {
   "name": "site-sourcery",
   "version": "0.0.0",
+  "description": "Site Sourcery customer site and held self-hosted product runtime.",
   "private": true,
   "engines": {
     "node": "24.18.0"
@@ -19,10 +20,12 @@
     "check:abracadabra": "node scripts/check-abracadabra-v1.mjs",
     "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/customer-copy.test.mjs scripts/test/legal-copy.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hive-planner.test.mjs scripts/test/local-deliverable-downloads.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs scripts/test/domain-orchestration.test.mjs",
     "test:domain": "node server/domain/assert-runtime.mjs && node --test scripts/test/domain-orchestration.test.mjs",
+    "test:selfhost": "node --test --test-concurrency=1 test/*.test.mjs",
+    "check:selfhost": "node --check src/*.mjs bin/*.mjs && npm run test:selfhost",
     "test:public-truth": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
-    "test": "npm run runtime:check && npm run check && npm run test:node && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser"
+    "test": "npm run runtime:check && npm run check && npm run test:node && npm run check:selfhost && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"
@@ -31,5 +34,6 @@
     "origin": "https://sitesourcery.com",
     "allowedFormActions": [],
     "expectedForms": 0
-  }
+  },
+  "license": "UNLICENSED"
 }
