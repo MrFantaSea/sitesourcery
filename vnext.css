@@ -3460,6 +3460,15 @@ h3 {
   color: var(--ink);
 }
 
+.local-state-note > summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 780;
+}
+
 .path-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
