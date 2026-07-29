@@ -1,10 +1,11 @@
 # Site Sourcery data plane
 
-Executable SQLite/D1 launch data plane plus a PostgreSQL/Supabase portability
-schema for the hosted Abracadabra control plane.
+Executable PostgreSQL production data plane plus a SQLite/D1 portability
+emulator for the hosted Abracadabra control plane.
 
-This package is intentionally isolated from the website repository. It performs
-no deployment, Stripe, DNS, email, or hosting-provider calls.
+This is an isolated server module within the canonical Site Sourcery
+repository. It performs no deployment, Stripe, registrar, DNS, email, or
+hosting-provider calls by itself.
 
 ## Launch posture
 
@@ -13,8 +14,9 @@ no deployment, Stripe, DNS, email, or hosting-provider calls.
   adapter or legal-document selection.
 - No catalog price, Stripe customer, Stripe price, product, subscription, or
   provider object identifier is seeded.
-- SQLite tenant boundaries use composite tenant foreign keys and repository
-  predicates; PostgreSQL tenant data uses forced row-level security.
+- PostgreSQL is the production authority and uses transaction-local principals
+  plus forced row-level security. SQLite tenant boundaries use composite tenant
+  foreign keys and repository predicates in portability tests only.
 - Customer-authored content is immutable after version creation and can only be
   removed through the terminal-purge boundary.
 - Serving only becomes live after an immutable release and provider receipt
@@ -29,22 +31,23 @@ no deployment, Stripe, DNS, email, or hosting-provider calls.
 
 ## Layout
 
-- `d1/migrations/` — launch-primary portable SQLite/D1 migrations.
-- `d1/src/repository.mjs` — tenant-scoped transactional repository boundaries.
-- `d1/tests/` — clean-room SQLite schema and behavioral tests.
-- `supabase/migrations/` — ordered PostgreSQL portability migrations.
+- `supabase/migrations/` — ordered production PostgreSQL migrations.
 - `supabase/migrations/202607280007_hosted_api_edges.sql` — additive
   same-origin API edges for opaque sessions, exact offer/address quote
   bindings, immutable cancellation evidence, and one-time export downloads.
-- `tests/postgres-bootstrap.sql` — minimal Supabase `auth.users` stand-in for disposable
-  PostgreSQL validation only.
+- `supabase/migrations/202607280009_authenticated_rls_execution.sql` —
+  executable forced-RLS helper contract for real authenticated transactions.
+- `tests/postgres-bootstrap.sql` — disposable PostgreSQL role/bootstrap
+  compatibility harness.
 - `tests/postgres-invariants.sql` — PostgreSQL schema and launch assertions.
 - `scripts/test-postgres.sh` — applies all migrations and runs the SQL tests
   against `DATABASE_URL`.
+- `d1/migrations/`, `d1/src/`, and `d1/tests/` — SQLite/D1 portability and
+  emulator lane; never production authority.
 
 ## Validate
 
-Primary clean-room validation:
+SQLite portability/emulator validation:
 
 ```sh
 npm test
@@ -53,23 +56,23 @@ npm test
 This executes every SQLite migration, 12 SQL invariants, repository behavior,
 and a structural parity check over the 17-table PostgreSQL domain migration.
 
-Optional validation against an empty disposable PostgreSQL database:
+Required production-contract validation against an empty disposable PostgreSQL
+database:
 
 ```sh
 DATABASE_URL=postgresql://... ./scripts/test-postgres.sh
 ```
 
-Do not run `tests/postgres-bootstrap.sql` against Supabase. The harness only applies it
-when `auth.users` is absent.
+Do not run `tests/postgres-bootstrap.sql` against an existing production
+database. It is a clean-room role compatibility harness.
 
 ## Hosted identity boundary
 
-`auth.users` remains the identity authority. The hosted API migration never
-creates or shadows it. Supabase Auth, or a reviewed self-host identity bridge,
-must create the `auth.users` row before the API writes
-`ss.hosted_account_profiles` and credential/session material. Direct browser
-access to password verifiers, session digests, and recovery digests is denied;
-only the server-side service role may use those tables.
+Site Sourcery's first-party identity bridge owns principals in `auth.users` and
+the password/session/recovery machinery in `ss`. No Supabase Auth or Clerk
+service is required. Direct browser access to password verifiers, session
+digests, recovery digests, and rate-limit state is denied; only the server-side
+service role may use those tables.
 
 PostgreSQL is the production system of record. The D1/SQLite lane is retained
 for portability and emulator tests only.

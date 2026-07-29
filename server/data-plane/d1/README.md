@@ -1,24 +1,23 @@
-# SQLite/D1 launch data plane
+# SQLite/D1 portability emulator
 
-This is the launch-primary Site Sourcery/Abracadabra SQLite contract. It can run
-on Cloudflare D1, but Cloudflare remains a deployment candidate rather than a
-schema dependency. The PostgreSQL schema in `../supabase/` is an executable
-portability and future-scale reference.
+This is the non-production SQLite portability contract for
+Site Sourcery/Abracadabra. It can run in a local D1 emulator, but Cloudflare is
+not required or selected. The PostgreSQL schema in `../supabase/` is the
+production system of record.
 
 No migration or test in this directory calls Cloudflare, Stripe, DNS, email, or
 any hosting provider.
 
 ## Apply
 
-For a configured development D1 database:
+For a configured local development D1 database:
 
 ```sh
 wrangler d1 migrations apply DATABASE_NAME --local
 ```
 
-Do not apply remotely until the database binding, Worker repository, legal
-document rows, approved catalog, Stripe webhook verifier, and release authority
-are reviewed together.
+Do not point the hosted production API at this lane. Production mutations and
+customer truth belong only in the canonical PostgreSQL `ss` schema.
 
 ## Enforced launch posture
 
