@@ -5,6 +5,20 @@ set local row_security = off;
 insert into auth.users (id, email) values
   ('00000000-0000-4000-8000-000000000100', 'owner@example.test');
 
+do $$
+begin
+  begin
+    insert into auth.users (id, email) values (
+      '00000000-0000-4000-8000-000000000120',
+      'OWNER@example.test'
+    );
+    raise exception 'canonical email uniqueness was bypassed';
+  exception
+    when unique_violation then null;
+  end;
+end
+$$;
+
 insert into ss.hosted_account_profiles (
   user_id,
   display_name
@@ -599,6 +613,30 @@ begin
       and relation.relforcerowsecurity
   ) <> 5 then
     raise exception 'hosted API tenant tables must enable and force RLS';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_class relation
+    join pg_namespace namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'auth'
+      and relation.relname = 'users'
+      and relation.relrowsecurity
+      and relation.relforcerowsecurity
+  ) then
+    raise exception 'first-party auth users must enable and force RLS';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_class relation
+    join pg_namespace namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'ss'
+      and relation.relname = 'hosted_auth_rate_limits'
+      and relation.relrowsecurity
+      and relation.relforcerowsecurity
+  ) then
+    raise exception 'hosted authentication rate limits must enable and force RLS';
   end if;
 end
 $$;

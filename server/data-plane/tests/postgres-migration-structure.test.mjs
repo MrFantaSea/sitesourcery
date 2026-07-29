@@ -81,3 +81,25 @@ test("hosted API migration is additive to the canonical ss schema", async () => 
     /tenure_id in \('rent', 'owned_managed'\)[\s\S]*array\['licensed', 'customer_owned'\]/iu
   );
 });
+
+test("first-party identity is explicit and does not require Supabase Auth", async () => {
+  const all = await migrations();
+  const identity = all.find(
+    ({ name }) => name === "202607280000_first_party_identity.sql"
+  );
+  const machinery = all.find(
+    ({ name }) =>
+      name === "202607280008_first_party_runtime_machinery.sql"
+  );
+  assert.ok(identity);
+  assert.ok(machinery);
+  assert.match(identity.sql, /create table if not exists auth\.users/iu);
+  assert.match(identity.sql, /auth_users_email_canonical/iu);
+  assert.match(identity.sql, /force row level security/iu);
+  assert.match(machinery.sql, /create table ss\.hosted_auth_rate_limits/iu);
+  assert.match(machinery.sql, /reauthenticated_at timestamptz/iu);
+  assert.doesNotMatch(
+    `${identity.sql}\n${machinery.sql}`,
+    /supabase auth|clerk/iu
+  );
+});
