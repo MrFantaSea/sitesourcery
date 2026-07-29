@@ -703,6 +703,7 @@
     elements.publishedSite.srcdoc = inertPublishedHtml(resolved.html);
     elements.statusStage.hidden = true;
     elements.siteStage.hidden = false;
+    elements.siteStage.focus({ preventScroll: true });
     runtime.exportRecord = {
       digest: lower(resolved.artifactDigest),
       html: resolved.html,

@@ -3333,6 +3333,21 @@ h3 {
   align-items: center;
 }
 
+.abracadabra-noscript {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(242, 206, 131, 0.28);
+  border-left: 4px solid var(--gold);
+  border-radius: 0.75rem;
+  color: var(--muted);
+  background: rgba(242, 206, 131, 0.08);
+  line-height: 1.6;
+}
+
+.abracadabra-noscript strong {
+  color: var(--ink);
+}
+
 .maker-proof {
   display: flex;
   min-width: 0;

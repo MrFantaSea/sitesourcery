@@ -40,6 +40,8 @@ function deliveryHarness(initialFailure = "") {
     clicked: 0,
     createUrlAttempts: 0,
     links: [],
+    openAttempts: 0,
+    openedWindows: [],
     removed: 0,
     revoked: [],
     timers: [],
@@ -100,6 +102,14 @@ function deliveryHarness(initialFailure = "") {
         return link;
       },
     },
+    open(url, target) {
+      trace.openAttempts += 1;
+      if (failure === "open") throw new Error("open failed");
+      if (failure === "popup") return null;
+      const openedWindow = { opener: environment, target, url };
+      trace.openedWindows.push(openedWindow);
+      return openedWindow;
+    },
     setTimeout(callback, delay) {
       trace.timers.push(delay);
       callback();
@@ -138,24 +148,6 @@ const providers = [
     },
     name: "Abracadabra maker download",
     success: "Download started for version 1. Check your Downloads folder.",
-  },
-  {
-    failure: makerOpenFailure,
-    invoke(environment, button, status) {
-      return makerModule.deliverLocalFile(environment, {
-        button,
-        failureMessage: makerOpenFailure,
-        parts: ["<!doctype html><title>Maker</title>"],
-        rel: "noopener noreferrer",
-        revokeDelay: 60_000,
-        status,
-        successMessage: "Working page opened in a new tab.",
-        target: "_blank",
-        type: "text/html;charset=utf-8",
-      });
-    },
-    name: "Abracadabra maker open",
-    success: "Working page opened in a new tab.",
   },
   {
     failure: viewerFailure,
@@ -238,24 +230,70 @@ for (const provider of providers) {
   }
 }
 
-test("maker open keeps its new-tab safety attributes until the link is clicked", () => {
+test("maker preview reports success only after the browser returns an opened window", () => {
   const harness = deliveryHarness();
+  const button = { disabled: false };
   const status = { textContent: "" };
 
   assert.equal(
-    providers[1].invoke(harness.environment, { disabled: false }, status),
+    makerModule.openLocalPreview(harness.environment, {
+      button,
+      failureMessage: makerOpenFailure,
+      parts: ["<!doctype html><title>Maker</title>"],
+      revokeDelay: 60_000,
+      status,
+      successMessage: "Working page opened in a new tab.",
+      type: "text/html;charset=utf-8",
+    }),
     true
   );
-  assert.equal(harness.trace.links[0].target, "_blank");
-  assert.equal(harness.trace.links[0].rel, "noopener noreferrer");
+  assert.equal(button.disabled, false);
+  assert.equal(status.textContent, "Working page opened in a new tab.");
+  assert.equal(harness.trace.openAttempts, 1);
+  assert.equal(harness.trace.openedWindows[0].target, "_blank");
+  assert.equal(harness.trace.openedWindows[0].url, "blob:local-1");
+  assert.equal(harness.trace.openedWindows[0].opener, null);
+  assert.equal(harness.trace.links.length, 0);
   assert.deepEqual(harness.trace.timers, [60_000]);
+  assert.deepEqual(harness.trace.revoked, ["blob:local-1"]);
 });
+
+for (const failure of ["blob", "url", "open", "popup"]) {
+  test(`maker preview fails truthfully at ${failure} and remains retryable`, () => {
+    const harness = deliveryHarness(failure);
+    const button = { disabled: false };
+    const status = { textContent: "" };
+    const invoke = () => makerModule.openLocalPreview(harness.environment, {
+      button,
+      failureMessage: makerOpenFailure,
+      parts: ["<!doctype html><title>Maker</title>"],
+      revokeDelay: 60_000,
+      status,
+      successMessage: "Working page opened in a new tab.",
+      type: "text/html;charset=utf-8",
+    });
+
+    assert.doesNotThrow(() => assert.equal(invoke(), false));
+    assert.equal(button.disabled, false);
+    assert.equal(status.textContent, makerOpenFailure);
+    assert.notEqual(status.textContent, "Working page opened in a new tab.");
+    assert.deepEqual(
+      harness.trace.revoked,
+      failure === "open" || failure === "popup" ? ["blob:local-1"] : []
+    );
+
+    harness.failAt("");
+    assert.equal(invoke(), true);
+    assert.equal(status.textContent, "Working page opened in a new tab.");
+    assert.equal(harness.trace.openedWindows.length, 1);
+  });
+}
 
 test("Hive download contains the selected deterministic JSON blueprint", () => {
   const harness = deliveryHarness();
 
   assert.equal(
-    providers[3].invoke(
+    providers[2].invoke(
       harness.environment,
       { disabled: false },
       { textContent: "" }
@@ -279,7 +317,7 @@ test("the three customer-facing handlers use the guarded delivery path", () => {
   );
   assert.match(
     makerSource,
-    /function openCurrentPreview\(\)[\s\S]*?deliverLocalFile\(window,[\s\S]*?function loadFictionalSample\(\)/u
+    /function openCurrentPreview\(\)[\s\S]*?openLocalPreview\(window,[\s\S]*?function loadFictionalSample\(\)/u
   );
   assert.match(
     viewerSource,

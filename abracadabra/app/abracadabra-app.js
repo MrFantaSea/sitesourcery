@@ -103,9 +103,82 @@
     return delivered;
   }
 
+  function openLocalPreview(environment, options) {
+    var objectUrl = "";
+    var openedWindow = null;
+    var revokeScheduled = false;
+    var opened = false;
+    var button = options && options.button;
+    var status = options && options.status;
+
+    if (button) button.disabled = true;
+    try {
+      if (
+        !environment
+        || typeof environment.Blob !== "function"
+        || !environment.URL
+        || typeof environment.URL.createObjectURL !== "function"
+        || typeof environment.URL.revokeObjectURL !== "function"
+        || typeof environment.open !== "function"
+        || !options
+        || !Array.isArray(options.parts)
+      ) {
+        throw new Error("Local preview opening is not supported.");
+      }
+
+      var file = new environment.Blob(options.parts, { type: options.type });
+      objectUrl = environment.URL.createObjectURL(file);
+      if (typeof objectUrl !== "string" || objectUrl.length === 0) {
+        throw new Error("The browser did not create a local preview address.");
+      }
+
+      openedWindow = environment.open(objectUrl, "_blank");
+      if (!openedWindow) {
+        throw new Error("The browser blocked the preview window.");
+      }
+      try {
+        openedWindow.opener = null;
+      } catch (_error) {
+        // The generated page is inert; opener cleanup cannot change the truthful open result.
+      }
+      opened = true;
+
+      if (typeof environment.setTimeout === "function") {
+        revokeScheduled = true;
+        try {
+          environment.setTimeout(function () {
+            safeRevokeObjectUrl(environment, objectUrl);
+          }, options.revokeDelay || 60000);
+        } catch (_error) {
+          revokeScheduled = false;
+          safeRevokeObjectUrl(environment, objectUrl);
+          objectUrl = "";
+        }
+      } else {
+        safeRevokeObjectUrl(environment, objectUrl);
+        objectUrl = "";
+      }
+    } catch (_error) {
+      opened = false;
+    } finally {
+      if (objectUrl && !revokeScheduled) {
+        safeRevokeObjectUrl(environment, objectUrl);
+      }
+      if (button) button.disabled = false;
+    }
+
+    if (status) {
+      status.textContent = opened
+        ? options.successMessage
+        : options.failureMessage;
+    }
+    return opened;
+  }
+
   if (typeof module === "object" && module.exports) {
     module.exports = Object.freeze({
-      deliverLocalFile: deliverLocalFile
+      deliverLocalFile: deliverLocalFile,
+      openLocalPreview: openLocalPreview
     });
     return;
   }
@@ -572,15 +645,13 @@
       versionStatus.textContent = "Make a version before opening it. Then try again.";
       return;
     }
-    deliverLocalFile(window, {
+    openLocalPreview(window, {
       button: openButton,
       failureMessage: "The working page could not open. Nothing was changed. Select Open again to retry.",
       parts: [current.result.html],
-      rel: "noopener noreferrer",
       revokeDelay: 60000,
       status: versionStatus,
       successMessage: "Working page opened in a new tab.",
-      target: "_blank",
       type: "text/html;charset=utf-8"
     });
   }

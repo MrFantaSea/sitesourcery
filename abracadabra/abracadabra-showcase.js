@@ -26,7 +26,10 @@
     var shell = frame.closest("[data-showcase-shell]");
     var status = shell ? shell.querySelector("[data-showcase-status]") : null;
     var look = frame.getAttribute("data-look") || "warm";
+    if (shell) shell.setAttribute("data-showcase-state", "loading");
+    if (status) status.textContent = "Opening the generated example…";
     if (!maker) {
+      if (shell) shell.setAttribute("data-showcase-state", "failed");
       if (status) status.textContent = "The generated example did not open. Reload this page to try again.";
       return;
     }
@@ -39,6 +42,7 @@
             if (shell) {
               shell.setAttribute("data-ready", "true");
               shell.setAttribute("data-rendered", "true");
+              shell.setAttribute("data-showcase-state", "ready");
             }
             if (status) status.textContent = look.charAt(0).toUpperCase() + look.slice(1) + " generated example ready.";
           });
@@ -46,6 +50,7 @@
       });
       frame.srcdoc = result.html;
     } catch (error) {
+      if (shell) shell.setAttribute("data-showcase-state", "failed");
       if (status) status.textContent = "The generated example did not open. Reload this page to try again.";
     }
   }

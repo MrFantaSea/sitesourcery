@@ -11,16 +11,67 @@ const compilerPath = path.join(projectRoot, "abracadabra/app/abracadabra-compile
 const appPath = path.join(projectRoot, "abracadabra/app/abracadabra-app.js");
 const controlPath = path.join(projectRoot, "abracadabra/app/abracadabra-control.js");
 const htmlPath = path.join(projectRoot, "abracadabra/app/index.html");
+const landingPath = path.join(projectRoot, "abracadabra/index.html");
+const howPath = path.join(projectRoot, "abracadabra/how/index.html");
+const showcasePath = path.join(projectRoot, "abracadabra/abracadabra-showcase.js");
 const hostedControlFragmentPath = path.join(
   projectRoot,
   "scripts/hosted-truth/fragments/abracadabra-app-control.html",
 );
-const [compilerSource, appSource, controlSource, pageHtml, hostedControlMarkup] = await Promise.all([
+const hostedHeroFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
+);
+const hostedHowFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-how-main.html",
+);
+const hostedLandingFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-landing-main.html",
+);
+const hostedReadyFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-app-ready.js",
+);
+const hostedDomPath = path.join(
+  projectRoot,
+  "abracadabra/app/abracadabra-hosted-control-dom.js",
+);
+const hostedCorePath = path.join(
+  projectRoot,
+  "abracadabra/app/abracadabra-hosted-control.js",
+);
+const [
+  compilerSource,
+  appSource,
+  controlSource,
+  pageHtml,
+  landingHtml,
+  howHtml,
+  showcaseSource,
+  hostedControlMarkup,
+  hostedHeroMarkup,
+  hostedHowMarkup,
+  hostedLandingMarkup,
+  hostedReadySource,
+  hostedDomSource,
+  hostedCoreSource,
+] = await Promise.all([
   readFile(compilerPath, "utf8"),
   readFile(appPath, "utf8"),
   readFile(controlPath, "utf8"),
   readFile(htmlPath, "utf8"),
+  readFile(landingPath, "utf8"),
+  readFile(howPath, "utf8"),
+  readFile(showcasePath, "utf8"),
   readFile(hostedControlFragmentPath, "utf8"),
+  readFile(hostedHeroFragmentPath, "utf8"),
+  readFile(hostedHowFragmentPath, "utf8"),
+  readFile(hostedLandingFragmentPath, "utf8"),
+  readFile(hostedReadyFragmentPath, "utf8"),
+  readFile(hostedDomPath, "utf8"),
+  readFile(hostedCorePath, "utf8"),
 ]);
 
 function loadCompiler() {
@@ -331,6 +382,60 @@ test("held maker stays account-free while hosted adoption code can carry a revie
   );
 });
 
+test("held and hosted landing pages keep a truthful generated-example fallback without JavaScript", () => {
+  const fallbackCopy =
+    "Static fictional preview shown. JavaScript opens the generated example.";
+  const noScriptCopy =
+    "The static fictional previews below are placeholders. Turn JavaScript on to open the generated examples or use the page maker.";
+  for (const source of [landingHtml, hostedLandingMarkup]) {
+    assert.equal(source.split(fallbackCopy).length - 1, 4);
+    assert.equal(source.split(noScriptCopy).length - 1, 1);
+    assert.match(source, /<noscript>[\s\S]*class="site-shell abracadabra-noscript"/u);
+    assert.match(source, /href="\/abracadabra\/how\/">Read the four-step guide/u);
+    assert.doesNotMatch(source, />Opening (?:the example|Clear|Warm|Arcane)…</u);
+  }
+  assert.match(showcaseSource, /data-showcase-state", "loading"/u);
+  assert.equal(showcaseSource.split('data-showcase-state", "failed"').length - 1, 2);
+  assert.match(showcaseSource, /data-showcase-state", "ready"/u);
+  assert.equal(
+    showcaseSource.split(
+      "The generated example did not open. Reload this page to try again.",
+    ).length - 1,
+    2,
+  );
+});
+
+test("guest data-loss truth stays visible in both artifacts and hosted controls boot from complete markup", () => {
+  assert.match(pageHtml, /<strong>Your page is not saved\.<\/strong>/u);
+  assert.match(
+    hostedHeroMarkup,
+    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account, you start over/u,
+  );
+  assert.match(
+    hostedReadySource,
+    /Guest work stays only in this tab until you save it to your account\./u,
+  );
+  assert.match(hostedReadySource, /bootStatus\.hidden = false/u);
+  assert.match(hostedControlMarkup, /data-billing-copy role="status" aria-live="polite"/u);
+  assert.match(hostedDomSource, /one\("\[data-billing-copy\]"\)\.textContent/u);
+  assert.doesNotMatch(hostedDomSource, /one\("\[data-billing-copy\]"\)\?\.textContent/u);
+  assert.match(hostedDomSource, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/u);
+  assert.match(hostedDomSource, /firstField\.focus\(\{ preventScroll: true \}\)/u);
+});
+
+test("Abracadabra speaks as one operator instead of an invented team", () => {
+  assert.match(howHtml, /tell Zack which device and browser you used/u);
+  assert.match(hostedHowMarkup, /tell Zack which device and browser you used/u);
+  for (const source of [
+    hostedControlMarkup,
+    hostedDomSource,
+    hostedCoreSource,
+    hostedHowMarkup,
+  ]) {
+    assert.doesNotMatch(source, /\b(?:we|us|our)\b|we[’'](?:ll|re)/iu);
+  }
+});
+
 test("UI implements memory-only history, undo, sandbox preview, and local download without egress or storage", () => {
   for (const marker of [
     "var versions = []",
@@ -446,7 +551,7 @@ test("the local test adapter stays isolated and captures delayed drafts to their
 test("customer-domain proof creates a local owner handoff without claiming reviewer or provider effects", () => {
   for (const marker of [
     "Send proof for review",
-    "We’ll verify ownership before connecting this domain.",
+    "Ownership must be verified before this domain is connected.",
     "data-domain-review-status",
     "data-domain-review-receipt",
     "requestAddressVerification",
@@ -524,7 +629,7 @@ test("hosted domain purchase reveals only the next of four steps and blocks dupl
     "You are the owner.",
     "Finish one step to open the next.",
     "Payment is authorized first.",
-    "We check the name, price, and owner again before submitting the registration.",
+    "The name, price, and owner are checked again before the registration is submitted.",
     "paymentButton.disabled = !consentReady || !state.project || orderReady",
   ]) {
     assert.ok(hostedDom.includes(marker), marker);

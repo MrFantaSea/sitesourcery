@@ -13,7 +13,7 @@
   function ControlError(input) {
     var source = input || {};
     this.name = "AbracadabraHostedControlError";
-    this.message = source.message || "We couldn’t complete that request.";
+    this.message = source.message || "That request could not be completed.";
     this.code = source.code || "CONTROL_FAILED";
     this.retryable = source.retryable === true;
     this.requestId = source.requestId || null;
@@ -389,7 +389,7 @@
       ) {
         throw new ControlError({
           code: "EXPORT_RESPONSE_INVALID",
-          message: "We couldn’t verify the project export status."
+          message: "The project export status could not be verified."
         });
       }
       if (status === "ready") {
@@ -429,7 +429,7 @@
           return result;
         })
         .catch(function (error) {
-          var presented = safeError(error, "We couldn’t complete that request.");
+          var presented = safeError(error, "That request could not be completed.");
           if (operations[name] && operations[name].token === token) {
             operations[name] = {
               status: "error",
@@ -895,7 +895,7 @@
           ) {
             throw new ControlError({
               code: "QUOTE_RESPONSE_INVALID",
-              message: "We couldn’t verify that price. Please try again."
+              message: "That price could not be verified. Please try again."
             });
           }
           state.commerceQuote = quote;
@@ -1001,7 +1001,7 @@
         ) {
           throw new ControlError({
             code: "CANCELLATION_PREVIEW_INVALID",
-            message: "We couldn’t verify the cancellation dates."
+            message: "The cancellation dates could not be verified."
           });
         }
         state.cancellationPreview = preview;
@@ -1480,7 +1480,7 @@
           if (!structurallyValid) {
             throw new ControlError({
               code: "DOMAIN_PRICE_CHECK_INVALID",
-              message: "We couldn’t verify the final domain price and availability."
+              message: "The final domain price and availability could not be verified."
             });
           }
           state.domainPriceCheck = priceCheck;
@@ -1565,7 +1565,7 @@
         if (!domain || idOf(domain) !== selected) {
           throw new ControlError({
             code: "DOMAIN_RESPONSE_INVALID",
-            message: "We couldn’t load that domain."
+            message: "That domain could not be loaded."
           });
         }
         state.selectedDomain = domain;

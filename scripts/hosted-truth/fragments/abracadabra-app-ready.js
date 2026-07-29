@@ -1,3 +1,3 @@
 
-  bootStatus.textContent = "Abracadabra ready. Make a preview, then use your account to continue.";
-  bootStatus.hidden = true;
+  bootStatus.textContent = "Abracadabra ready. Guest work stays only in this tab until you save it to your account.";
+  bootStatus.hidden = false;

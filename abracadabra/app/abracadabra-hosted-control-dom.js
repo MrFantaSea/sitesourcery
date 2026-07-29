@@ -20,7 +20,7 @@
     return Object.freeze({
       emailSent: false,
       message:
-        "We could not confirm that a recovery email was sent. "
+        "The app could not confirm that a recovery email was sent. "
         + "Use the Contact page below for account recovery.",
       supportRequired: true
     });
@@ -57,7 +57,7 @@
   ) {
     if (status) {
       status.hidden = false;
-      status.textContent = "We couldn’t open saved projects. Your preview is still here.";
+      status.textContent = "Saved projects could not be opened. Your preview is still here.";
       status.classList.add("is-error");
     }
     return;
@@ -90,6 +90,18 @@
 
   function all(selector, root) {
     return Array.prototype.slice.call((root || document).querySelectorAll(selector));
+  }
+
+  function reducedMotionRequested() {
+    return typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function scrollToElement(element) {
+    element.scrollIntoView({
+      behavior: reducedMotionRequested() ? "auto" : "smooth",
+      block: "start"
+    });
   }
 
   function text(value) {
@@ -193,7 +205,7 @@
         return result;
       })
       .catch(function (error) {
-        announce(explain(error, "We couldn’t complete that request."), "error");
+        announce(explain(error, "That request could not be completed."), "error");
         throw error;
       })
       .finally(function () {
@@ -209,7 +221,7 @@
     if (queued.projectId !== idOf(lastState.project)) return;
     draftSaving = true;
     control.saveDraft(queued.raw).catch(function (error) {
-      announce(explain(error, "We couldn’t save this draft. Your work is still in the maker."), "error");
+      announce(explain(error, "This draft could not be saved. Your work is still in the maker."), "error");
     }).finally(function () {
       draftSaving = false;
       if (queuedDraft) flushDraft();
@@ -230,9 +242,18 @@
   }
 
   function revealControlRoom(mode) {
+    var selectedMode = mode || "create";
     controlRoom.hidden = false;
-    setAuthMode(mode || "create");
-    controlRoom.scrollIntoView({ block: "start" });
+    setAuthMode(selectedMode);
+    scrollToElement(controlRoom);
+    var firstField = one(
+      selectedMode === "sign-in"
+        ? '[name="signInEmail"]'
+        : selectedMode === "recover"
+          ? '[name="recoveryEmail"]'
+          : '[name="accountName"]'
+    );
+    if (firstField) firstField.focus({ preventScroll: true });
   }
 
   function renderChoices() {
@@ -270,7 +291,7 @@
           return control.selectProject(idOf(project)).then(function (selected) {
             if (selected && !maker.loadProject(selected)) {
               announce(
-                "Your project opened, but we kept your unsaved maker changes.",
+                "Your project opened, and your unsaved maker changes were kept.",
                 "error"
               );
             }
@@ -313,7 +334,7 @@
       button.disabled = state.selectedVersionId === versionId;
       button.addEventListener("click", function () {
         if (!maker.selectPlatformVersion(versionId)) {
-          announce("We couldn’t open that saved version.", "error");
+          announce("That saved version could not be opened.", "error");
           return;
         }
         control.selectVersion(versionId);
@@ -408,10 +429,10 @@
     one("[data-domain-review-receipt]").textContent = text(
       address.verificationRequestId || "Not sent yet"
     );
-    one("[data-domain-review-proof]").textContent = "We’ll check the proof before connecting the domain.";
+    one("[data-domain-review-proof]").textContent = "Ownership proof must be checked before the domain is connected.";
     one("[data-domain-review-time]").textContent = text(address.updatedAt || "Not verified");
     one("[data-domain-review-copy]").textContent =
-      "Send your proof here. We’ll let you know when the domain is connected.";
+      "Send your proof here. This screen will show when the domain is connected.";
   }
 
   function renderRetry(state) {
@@ -497,7 +518,7 @@
           || exportIdOf(lastState.exportJob) !== exportId
         ) return;
         control.getExport().catch(function (error) {
-          announce(explain(error, "We couldn’t refresh the export yet."), "error");
+          announce(explain(error, "The export status is not ready yet."), "error");
         });
       }, 2500);
     }
@@ -564,7 +585,7 @@
     }
     var expiry = quote.expiresAt ? " · expires " + new Date(quote.expiresAt).toLocaleString() : "";
     return hostname + (price ? " · " + price : "") + expiry
-      + ". We’ll check again right before registration.";
+      + ". The name, price, and owner are checked again right before registration.";
   }
 
   function domainResultHostname(result) {
@@ -982,7 +1003,7 @@
     });
     registerStage.append(
       node("h5", {}, "4. Pay and register"),
-      node("p", {}, "Payment is authorized first. We check the name, price, and owner again before submitting the registration.")
+      node("p", {}, "Payment is authorized first. The name, price, and owner are checked again before the registration is submitted.")
     );
     var registerBackButton = node(
       "button",
@@ -1188,7 +1209,7 @@
         return control.requestDomainRegistration({
           irreversibleRegistrationAccepted: irreversible.checked
         });
-      }, "We’re registering your domain. Check progress here.")
+      }, "Domain registration is in progress. Check progress here.")
         .then(function () { window.setTimeout(function () { pollButton.click(); }, 1500); })
         .catch(function () {});
     });
@@ -1483,7 +1504,7 @@
         || !Number.isFinite(Date.parse(quote.expiresAt))
         || Date.parse(quote.expiresAt) <= Date.now()
       ) {
-        throw new Error("We couldn’t verify that price.");
+        throw new Error("That price could not be verified.");
       }
       quoteLines.replaceChildren();
       lines.forEach(function (line) {
@@ -1561,7 +1582,7 @@
             || result.checkout && result.checkout.url
             || result.quote && result.quote.checkout && result.quote.checkout.url
           );
-          if (!destination) throw new Error("We couldn’t open payment.");
+          if (!destination) throw new Error("The secure payment page could not be opened.");
           var parsed = new URL(destination, window.location.origin);
           var trustedHost = parsed.origin === window.location.origin
             || parsed.hostname === "checkout.stripe.com";
@@ -1582,7 +1603,7 @@
       run(portalButton, "billingPortal", function () {
         return control.billingPortal().then(function (result) {
           var destination = result && (result.url || result.portalUrl);
-          if (!destination) throw new Error("We couldn’t open billing.");
+          if (!destination) throw new Error("The billing page could not be opened.");
           var parsed = new URL(destination, window.location.origin);
           var trustedHost = parsed.origin === window.location.origin
             || parsed.hostname === "billing.stripe.com";
@@ -1782,14 +1803,14 @@
         method: value("manageDomainProofMethod"),
         reference: value("manageDomainProofReference")
       });
-    }, "We received your domain proof. We’ll check it before connecting the domain.").catch(function () {});
+    }, "Domain proof received. It remains pending review before the domain can be connected.").catch(function () {});
   });
 
   one("[data-publish]").addEventListener("click", function (event) {
     var button = event.currentTarget;
     run(button, "requestRelease", function () {
       return control.requestRelease();
-    }, "We got your publish request. This page will show when the site is live.")
+    }, "Publish request received. This page will show when the site is live.")
       .catch(function () {});
   });
   one("[data-unpublish]").addEventListener("click", function (event) {
@@ -1925,7 +1946,7 @@
       maker.markCurrentPlatformVersion(idOf(version));
       announce("Version saved to your account.", "success");
     }).catch(function (error) {
-      announce(explain(error, "We couldn’t save that version."), "error");
+      announce(explain(error, "That version could not be saved."), "error");
     });
   });
 
@@ -1955,7 +1976,7 @@
     "Save projects to your account, manage billing and domains, and choose exactly what goes live.";
   all(".platform-proof-note").forEach(function (note) {
     note.textContent =
-      "Send your proof here. We’ll check it before connecting the domain.";
+      "Send your proof here. It must be reviewed before the domain can be connected.";
   });
 
   renderChoices();
@@ -1968,6 +1989,6 @@
     if (control.getState().account) announce("Account ready.", "success");
     else announce("Guest preview is ready. Sign in only when you want to save.");
   }).catch(function (error) {
-    announce(explain(error, "We couldn’t open your account. Your guest preview still works."), "error");
+    announce(explain(error, "Your account could not be opened. Your guest preview still works."), "error");
   });
 }());

@@ -842,12 +842,13 @@ test("Abracadabra browser gate enforces held versus hosted control boundaries", 
   assert.match(auditSource, /result\.sparkReady\.controlRoomPresent/u);
   assert.match(auditSource, /abracadabraControlMode === "local-rehearsal"/u);
   assert.match(auditSource, /controlReady: controlRoom\?\.getAttribute\("data-control-ready"\)/u);
-  assert.match(auditSource, /result\.sparkReady\.controlReady !== "true"/u);
-  assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "true"/u);
+  assert.match(auditSource, /result\.sparkReady\.controlReady !== "hosted"/u);
+  assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "hosted"/u);
+  assert.match(auditSource, /guestFlow\.providerHold\.buttonEnabled/u);
+  assert.match(auditSource, /guestFlow\.providerHold\.previewStillVisible/u);
+  assert.match(auditSource, /held-provider retry path failed/u);
   assert.match(auditSource, /Runtime\.exceptionThrown/u);
-  assert.match(auditSource, /proof-must-not-cross-projects/u);
-  assert.match(auditSource, /selected project changed/u);
-  assert.match(auditSource, /guardedAction\.secondLifecycle !== "active"/u);
+  assert.match(auditSource, /hosted artifact audit intentionally runs without an API service/u);
   assert.match(auditSource, /correct\.sandbox !== "allow-popups"/u);
   assert.match(auditSource, /compiler\.compileSite\(rawFacts\)/u);
   assert.match(auditSource, /Input\.dispatchMouseEvent/u);

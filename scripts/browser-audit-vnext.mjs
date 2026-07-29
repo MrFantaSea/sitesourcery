@@ -2016,6 +2016,9 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
     : document.querySelector("#planner noscript .boundary-note");
   const sparkFallback = document.querySelector(".spark-noscript");
   const sparkMaker = document.querySelector("#spark-maker");
+  const showcaseFallback = document.querySelector(".abracadabra-noscript");
+  const showcaseFrames = Array.from(document.querySelectorAll("[data-abracadabra-showcase]"));
+  const showcaseStatuses = Array.from(document.querySelectorAll("[data-showcase-status]"));
   return {
     brokenImages: Array.from(document.images)
       .filter((image) => !image.complete || image.naturalWidth === 0)
@@ -2075,6 +2078,19 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
         sparkMaker
         && (sparkMaker.inert || sparkMaker.getAttribute("aria-disabled") === "true")
       )
+    } : null,
+    showcase: showcaseFrames.length ? {
+      fallbackVisible: visible(showcaseFallback),
+      frames: showcaseFrames.length,
+      framesWithGeneratedSource: showcaseFrames.filter((frame) =>
+        frame.hasAttribute("srcdoc") || frame.hasAttribute("src")
+      ).length,
+      guideHref:
+        document.querySelector('a[href="/abracadabra/how/"]')?.getAttribute("href") || "",
+      truthfulStaticStatuses: showcaseStatuses.filter((status) =>
+        status.textContent.trim()
+          === "Static fictional preview shown. JavaScript opens the generated example."
+      ).length
     } : null,
     viewportWidth: root.clientWidth
   };
@@ -2424,6 +2440,13 @@ const GUEST_FIRST_EXERCISE_EXPRESSION = `(async () => {
     if (!control) throw new Error("Missing guest-first action " + selector);
     control.click();
   };
+  const waitUntil = async (predicate, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate() && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return predicate();
+  };
   const initial = {
     accountHidden: controlRoom.hidden,
     domOrderAligned: workroom.nextElementSibling === controlRoom,
@@ -2466,20 +2489,18 @@ const GUEST_FIRST_EXERCISE_EXPRESSION = `(async () => {
   set(page, "accountEmail", "guest-first-" + width + "@example.com");
   set(page, "accountPassword", "correct horse battery staple");
   click(page, "[data-create-account]");
-  set(page, "projectName", "Carried guest preview");
-  set(page, "addressLabel", "guest-first-" + width);
-  set(page, "projectTermsAccepted", true);
-  click(page, "[data-create-project]");
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  const activeProject = document.querySelector("[data-active-project]");
+  const createButton = page.querySelector("[data-create-account]");
+  await waitUntil(() => !createButton.disabled, 1000);
   return {
     initial,
     preview,
     saveChoice,
-    adopted: {
-      activeProjectFocused: document.activeElement === activeProject,
-      activeProjectVisible: visible(activeProject),
-      releaseCount: document.querySelectorAll("[data-release-list] li").length,
+    providerHold: {
+      authVisible: visible(document.querySelector("#platform-auth")),
+      buttonEnabled: !createButton.disabled,
+      dashboardHidden: document.querySelector("#platform-dashboard")?.hidden === true,
+      previewStillVisible: visible(maker.querySelector("#spark-preview")),
+      versionCount: maker.querySelectorAll("#spark-version-list li").length,
       status: document.querySelector("#platform-status")?.textContent || ""
     }
   };
@@ -2577,10 +2598,19 @@ const PRIVATE_VIEWER_FIXTURE_EXPRESSION = `(() => {
 const PRIVATE_VIEWER_GATE_EXPRESSION = `(() => {
   const frame = document.querySelector("#published-site");
   const form = document.querySelector("#access-form");
+  const passphrase = document.querySelector("#site-passphrase");
+  const returnAction = document.querySelector('#status-actions a[href="/abracadabra/app/"]');
   const site = document.querySelector("#site-stage");
   return {
     accessFormVisible: Boolean(form && !form.hidden),
     frameHasSource: Boolean(frame && frame.hasAttribute("srcdoc")),
+    passphraseFocused: document.activeElement === passphrase,
+    returnActionVisible: Boolean(
+      returnAction
+      && returnAction.getClientRects().length
+      && getComputedStyle(returnAction).visibility !== "hidden"
+    ),
+    returnHref: returnAction?.getAttribute("href") || "",
     siteHidden: Boolean(site && site.hidden),
     state: document.body.dataset.viewerState || ""
   };
@@ -2631,6 +2661,7 @@ const PRIVATE_VIEWER_CORRECT_PHRASE_EXPRESSION = `(async () => {
       srcdoc.includes("<title>Private Viewer Audit Studio</title>")
       && srcdoc.includes("Exact compiler-produced private publication bytes."),
     sandbox: frame.getAttribute("sandbox"),
+    siteFocused: document.activeElement === site,
     siteVisible: !site.hidden,
     state: document.body.dataset.viewerState || ""
   };
@@ -3262,6 +3293,13 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
     const control = maker.querySelector(selector);
     control.click();
   };
+  const stepState = () => ({
+    focused: document.activeElement?.getAttribute("data-step") || "",
+    visible: Array.from(maker.querySelectorAll("[data-step]"))
+      .filter((step) => !step.hidden)
+      .map((step) => step.getAttribute("data-step"))
+  });
+  const progressive = { initial: stepState() };
   set("businessName", "Browser Audit Atelier");
   set("summary", "Builds carefully bounded digital places from supplied facts.");
   set("about", "A deterministic browser exercise for the working Spark path.");
@@ -3270,10 +3308,12 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
   set("email", "audit@example.com");
   set("primaryAction", "email");
   click('[data-next="vibe"]');
+  progressive.vibe = stepState();
   const arcane = maker.querySelector('input[name="theme"][value="arcane"]');
   arcane.checked = true;
   arcane.dispatchEvent(new Event("input", { bubbles: true }));
   click('[data-next="truth"]');
+  progressive.truth = stepState();
   const confirmation = maker.querySelector("#truth-confirmed");
   confirmation.checked = true;
   confirmation.dispatchEvent(new Event("input", { bubbles: true }));
@@ -3292,6 +3332,7 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
   click("#make-preview");
   await new Promise((resolve) => setTimeout(resolve, 50));
   const first = {
+    focused: document.activeElement?.getAttribute("data-step") || "",
     previewVisible: !maker.querySelector('[data-step="preview"]').hidden,
     srcdocLength: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "").length,
     primaryAction: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "")
@@ -3299,7 +3340,20 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
     versions: maker.querySelectorAll("#spark-version-list li").length,
     downloadEnabled: !maker.querySelector("#download-version").disabled
   };
+  const originalOpen = window.open;
+  let blockedOpen;
+  try {
+    window.open = () => null;
+    click("#open-version");
+    blockedOpen = {
+      buttonEnabled: !maker.querySelector("#open-version").disabled,
+      status: maker.querySelector("#spark-version-status").textContent
+    };
+  } finally {
+    window.open = originalOpen;
+  }
   click("[data-edit-facts]");
+  progressive.factsAfterEdit = stepState();
   set("summary", "Builds memorable digital places from explicit reviewed facts.");
   click('[data-next="vibe"]');
   click('[data-next="truth"]');
@@ -3329,7 +3383,7 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
     versions: maker.querySelectorAll("#spark-version-list li").length,
     selected: maker.querySelectorAll('#spark-version-list button[aria-current="true"]').length
   };
-  return { first, second, afterUndo, branch, staleTruth };
+  return { first, second, afterUndo, blockedOpen, branch, progressive, staleTruth };
 })()`;
 
 const HIVE_EXERCISE_EXPRESSION = `(() => {
@@ -4777,8 +4831,8 @@ export async function auditBrowser({
               && (
                 !result.sparkReady.controlRoomPresent
                 || !result.sparkReady.hostedControlScriptPresent
-                || result.sparkReady.controlReady !== "true"
-                || result.sparkReady.documentControlReady !== "true"
+                || result.sparkReady.controlReady !== "hosted"
+                || result.sparkReady.documentControlReady !== "hosted"
               )
             )
             || (!heldSource && !hostedArtifact)
@@ -4810,67 +4864,22 @@ export async function auditBrowser({
               || !guestFlow.saveChoice.domOrderAligned
               || guestFlow.saveChoice.focusName !== "accountName"
               || !guestFlow.saveChoice.renderedOrderAligned
-              || !guestFlow.adopted.activeProjectFocused
-              || !guestFlow.adopted.activeProjectVisible
-              || guestFlow.adopted.releaseCount !== 1
-              || !guestFlow.adopted.status.includes("reviewed guest preview was carried into it")
+              || !guestFlow.providerHold.authVisible
+              || !guestFlow.providerHold.buttonEnabled
+              || !guestFlow.providerHold.dashboardHidden
+              || !guestFlow.providerHold.previewStillVisible
+              || guestFlow.providerHold.versionCount !== 1
+              || !guestFlow.providerHold.status.includes("could not complete this request")
             ) {
               errors.push(
-                `${viewport.label} ${route}: guest-first preview and project adoption failed `
+                `${viewport.label} ${route}: guest preview or held-provider retry path failed `
                 + `${JSON.stringify(guestFlow ?? guestExercise.exceptionDetails ?? null)}`,
               );
             }
-            const controllerExercise = await cdp.send("Runtime.evaluate", {
-              expression: CONTROLLER_DRAFT_EXERCISE_EXPRESSION,
-              awaitPromise: true,
-              returnByValue: true,
-            });
-            const controllerFlow = controllerExercise.result?.value;
-            const firstSentinel = `belongs-to-first-${viewport.width}`;
-            const secondSentinel = `belongs-to-second-${viewport.width}`;
-            if (
-              controllerExercise.exceptionDetails
-              || !controllerFlow
-              || !controllerFlow.afterSwitch.activeSecond
-              || controllerFlow.afterSwitch.firstSummary !== firstSentinel
-              || controllerFlow.afterSwitch.secondSummary !== null
-              || controllerFlow.sameProject.firstSummary !== firstSentinel
-              || controllerFlow.sameProject.secondSummary !== secondSentinel
-              || controllerFlow.transientSecond.activeProjectId === ""
-              || controllerFlow.transientSecond.addressMode !== "mode_a"
-              || controllerFlow.transientSecond.addressLabel !== `rapid-second-${viewport.width}`
-              || controllerFlow.transientSecond.domainPath !== "purchase"
-              || controllerFlow.transientSecond.domainProofMethod !== "registrar_receipt"
-              || controllerFlow.transientSecond.domainProofReference !== ""
-              || controllerFlow.transientSecond.ownedDomain !== ""
-              || controllerFlow.transientSecond.passphrase !== ""
-              || controllerFlow.transientSecond.safetyAppeal !== ""
-              || !controllerFlow.transientSecond.settingsHidden
-              || controllerFlow.transientSecond.supportMessage !== ""
-              || controllerFlow.transientSecond.supportSubject !== ""
-              || controllerFlow.transientSecond.visibility !== "public"
-              || controllerFlow.transientFirst.activeProjectId === ""
-              || controllerFlow.transientFirst.addressMode !== "mode_a"
-              || controllerFlow.transientFirst.addressLabel !== `rapid-first-${viewport.width}`
-              || controllerFlow.transientFirst.domainProofReference !== ""
-              || controllerFlow.transientFirst.ownedDomain !== ""
-              || controllerFlow.transientFirst.passphrase !== ""
-              || controllerFlow.transientFirst.safetyAppeal !== ""
-              || !controllerFlow.transientFirst.settingsHidden
-              || controllerFlow.transientFirst.supportMessage !== ""
-              || controllerFlow.transientFirst.supportSubject !== ""
-              || controllerFlow.transientFirst.visibility !== "public"
-              || controllerFlow.guardedAction.activeProjectId
-                !== controllerFlow.transientFirst.activeProjectId
-              || controllerFlow.guardedAction.firstLifecycle !== "active"
-              || controllerFlow.guardedAction.secondLifecycle !== "active"
-              || !controllerFlow.guardedAction.status.includes("selected project changed")
-            ) {
-              errors.push(
-                `${viewport.label} ${route}: cross-project draft isolation failed `
-                + `${JSON.stringify(controllerFlow ?? controllerExercise.exceptionDetails ?? null)}`,
-              );
-            }
+            // The hosted artifact audit intentionally runs without an API service:
+            // verify the safe provider hold above, then reload before testing the
+            // independent in-browser maker so its version history starts clean.
+            await navigate(cdp, new URL(route, `${auditOrigin}/`).href);
           }
           const exercise = await cdp.send("Runtime.evaluate", {
             expression: SPARK_EXERCISE_EXPRESSION,
@@ -4890,6 +4899,18 @@ export async function auditBrowser({
             || !flow.first.primaryAction
             || flow.first.versions !== 1
             || !flow.first.downloadEnabled
+            || flow.first.focused !== "preview"
+            || !flow.blockedOpen
+            || !flow.blockedOpen.buttonEnabled
+            || flow.blockedOpen.status
+              !== "The working page could not open. Nothing was changed. Select Open again to retry."
+            || flow.progressive.initial.visible.join(",") !== "facts"
+            || flow.progressive.vibe.focused !== "vibe"
+            || flow.progressive.vibe.visible.join(",") !== "vibe"
+            || flow.progressive.truth.focused !== "truth"
+            || flow.progressive.truth.visible.join(",") !== "truth"
+            || flow.progressive.factsAfterEdit.focused !== "facts"
+            || flow.progressive.factsAfterEdit.visible.join(",") !== "facts"
             || flow.second.versions !== 2
             || !flow.second.undoEnabled
             || !/^Undone\. Version 1/u.test(flow.afterUndo.status)
@@ -5193,6 +5214,9 @@ export async function auditBrowser({
             || gate.state !== "access"
             || !gate.accessFormVisible
             || gate.frameHasSource
+            || !gate.passphraseFocused
+            || !gate.returnActionVisible
+            || gate.returnHref !== "/abracadabra/app/"
             || !gate.siteHidden
           ) {
             errors.push(
@@ -5238,6 +5262,7 @@ export async function auditBrowser({
             || !correct.errorHidden
             || !correct.proofPresent
             || correct.sandbox !== "allow-popups"
+            || !correct.siteFocused
             || !correct.siteVisible
           ) {
               errors.push(
@@ -5500,6 +5525,22 @@ export async function auditBrowser({
             errors.push(
               `${NO_SCRIPT_VIEWPORT.label} ${route}: Abracadabra did not fail closed visibly `
               + `${JSON.stringify(result.spark)}`,
+            );
+          }
+          if (
+            route === "/abracadabra/"
+            && (
+              !result.showcase
+              || !result.showcase.fallbackVisible
+              || result.showcase.frames !== 4
+              || result.showcase.framesWithGeneratedSource !== 0
+              || result.showcase.guideHref !== "/abracadabra/how/"
+              || result.showcase.truthfulStaticStatuses !== 4
+            )
+          ) {
+            errors.push(
+              `${NO_SCRIPT_VIEWPORT.label} ${route}: showcase fallback was not truthful and complete `
+              + `${JSON.stringify(result.showcase)}`,
             );
           }
           results.push({

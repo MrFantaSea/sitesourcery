@@ -46,9 +46,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-landing-main",
     file: "abracadabra/index.html",
     kind: "html",
-    sourceSha256: "18b5b1d41bae538ca0bada52f943e5575b0f2f686f6bce4525a59a5e5ded072c",
+    sourceSha256: "f98ae225dd43c382f4f19496b96ffda8115a3c54491730c1360e54dbe0252b42",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-main.html",
-    hostedSha256: "7b820a50f781093ac4c9a41b024057a3ff5233b73dd4d4aa39444f24173ab0bf",
+    hostedSha256: "44ffee2ad6f2ae0510f7d7e76e0c92fe058def9d4a6788a26c54dbde2403d5dd",
   }),
   Object.freeze({
     id: "abracadabra-how-head",
@@ -64,7 +64,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "b1f66bc661d9ddae3dc7915899e79797cb22dc8381a2185ac377a3dfad64fbd1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-main.html",
-    hostedSha256: "4412bf5933c7552f2d3873cd992f97236c5e59b990be92111161a4fef98beb7b",
+    hostedSha256: "dec5065e69b0860a3442da9fc44530411ebd91f74baac19af1c4b7fa9b773232",
   }),
   Object.freeze({
     id: "abracadabra-app-head",
@@ -88,7 +88,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "js",
     sourceSha256: "47c10df061e74b036d4af59e79f433b74c4fea0c20f82ea82e24476bf13e0699",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-ready.js",
-    hostedSha256: "f7cc7906a32e3fa787cd0810c85762b7293955438fa190f762c964b6e90fae6f",
+    hostedSha256: "2f044c26265c001f3f0da4ba8f3dbeba45b7c40207fd776938aa43dfcad965ae",
   }),
   Object.freeze({
     id: "abracadabra-app-hero",
@@ -96,7 +96,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "272c8fe7f7616816381ab798f8e85b84336dda6ff0108e388eab710758765f8b",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "afa7d25d5bce2c04c27031ec7bebe6633214b7e033992d603c9688d736f8b24c",
+    hostedSha256: "8c7237582965dfb381e2a4aa00dc19777b495437a9dc7e04d934eec3bb23881c",
   }),
   Object.freeze({
     id: "abracadabra-app-control",
@@ -104,7 +104,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "b98809417c0240085bf70f2a1127f0b622c1514651737e7e4ffac4b39e4da17e",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-control.html",
-    hostedSha256: "884d7706b523adee744a8fa2fabcc0d6048cf18ea6bccfd23d0fcd8641f9e37e",
+    hostedSha256: "2c945b56bdeb9bf789c23ca65447a77dde27684fea15e5c647b6d622ab2cea83",
   }),
   Object.freeze({
     id: "abracadabra-app-noscript",
@@ -220,9 +220,9 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control.js":
     "cf4b36de5e08b6f5da34dee014693e014a673f89d7bffc5a4a37a15cc7b36c21",
   "abracadabra/app/abracadabra-hosted-control-dom.js":
-    "7af06c53f6290221066dcef192d38d9c29adf8f1bdd3e36812da0ffd6c540d1e",
+    "6c6aafed651479c31e35e51295638cc5be08cdcf998021e92185696a5641d80b",
   "abracadabra/app/abracadabra-hosted-control.js":
-    "3c98a729b3270833bdf371bd6c8f84ec8afb70753f1ef00e42ca6eab038a26d3",
+    "798020cab97509add85c4c269695809626b3acd28b4d7c5c68b64dd81b1cbe83",
 });
 
 export const hostedCodeTransforms = Object.freeze([
@@ -342,6 +342,8 @@ export const hostedTruthRequirements = Object.freeze({
   "abracadabra/index.html": Object.freeze([
     "Released Spark one-page website builder",
     "One clear path from account to publication.",
+    "Static fictional preview shown. JavaScript opens the generated example.",
+    "Read the four-step guide",
     "<h3>Verified address</h3>",
     "<h3>Reviewed version</h3>",
     "Publish only the accepted version to the verified address.",
@@ -357,9 +359,10 @@ export const hostedTruthRequirements = Object.freeze({
     "Only the released Spark one-page builder",
     "Project Name → Address → Access",
     "Your Site Sourcery account",
+    "Your guest preview is not saved yet.",
   ]),
   "abracadabra/app/abracadabra-app.js": Object.freeze([
-    "Abracadabra ready. Make a preview, then use your account to continue.",
+    "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   ]),
   "faq/index.html": Object.freeze([
     "finish Project Name → Address → Access",
@@ -399,7 +402,7 @@ export const hostedOnlyPhrases = Object.freeze([
   "Released Spark one-page website builder",
   "From business details to the published Spark page.",
   "Build, save, and publish with Abracadabra",
-  "Abracadabra ready. Make a preview, then use your account to continue.",
+  "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   "SS-HOSTED-PRIVACY-2026-07-28-V1",
   "SS-HOSTED-WEBSITE-TERMS-2026-07-28-V1",
 ]);
