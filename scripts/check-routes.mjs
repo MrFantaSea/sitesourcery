@@ -31,12 +31,14 @@ export const FUNCTIONAL_APP_ROUTES = Object.freeze([
 ]);
 
 export const PRIMARY_NAV = Object.freeze([
-  Object.freeze({ label: "Websites", href: "/#websites" }),
-  Object.freeze({ label: "Working systems", href: "/hive/" }),
+  Object.freeze({ label: "Websites", href: "/custom/" }),
+  Object.freeze({ label: "Calls & follow-up", href: "/hive/" }),
   Object.freeze({ label: "Services", href: "/solutions/" }),
-  Object.freeze({ label: "Work", href: "/work/" }),
+  Object.freeze({ label: "Examples", href: "/work/" }),
   Object.freeze({ label: "About", href: "/about/" }),
-  Object.freeze({ label: "Start", href: "/start/" }),
+  Object.freeze({ label: "FAQ", href: "/faq/" }),
+  Object.freeze({ label: "Contact", href: "/contact/" }),
+  Object.freeze({ label: "Call Zack: (856) 244-1220", href: "tel:+18562441220" }),
 ]);
 
 export const LEGACY_REDIRECTS = Object.freeze({

@@ -19,14 +19,9 @@
     Array.prototype.forEach.call(nav.querySelectorAll("a[href]"), function (link) {
       var href = link.getAttribute("href");
       if (!href || href === "/") return;
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return;
       var route = normalizePath(href);
-      var websitesSection = link.getAttribute("data-nav-section") === "websites";
-      var selected = current === route
-        || (route !== "/" && current.startsWith(route))
-        || (
-          websitesSection
-          && (current.startsWith("/custom/") || current.startsWith("/abracadabra/"))
-        );
+      var selected = current === route;
       if (selected) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
@@ -38,7 +33,7 @@
     if (!button || !menu) return;
 
     var firstLink = menu.querySelector("a[href]");
-    var pageRegions = Array.prototype.slice.call(doc.querySelectorAll("main, .site-footer"));
+    var pageRegions = Array.prototype.slice.call(doc.querySelectorAll("main, .site-footer, .site-brand"));
     var wideViewport = window.matchMedia("(min-width: 56.001rem)");
 
     function setPageInert(inert) {

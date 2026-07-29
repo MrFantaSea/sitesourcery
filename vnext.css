@@ -280,6 +280,10 @@ a {
   background: rgba(242, 206, 131, 0.12);
 }
 
+.nav-call {
+  display: none;
+}
+
 .menu-button {
   display: none;
 }
