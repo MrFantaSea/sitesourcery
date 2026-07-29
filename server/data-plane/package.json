@@ -1,0 +1,15 @@
+{
+  "name": "sitesourcery-data-plane",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:d1",
+    "test:d1": "./scripts/test-d1.sh",
+    "test:d1:node": "node --test d1/tests/data-plane.test.mjs",
+    "test:postgres": "./scripts/test-postgres.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
+
