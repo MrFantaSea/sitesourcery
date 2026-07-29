@@ -215,6 +215,7 @@ function genericAuthFailure(status = 401) {
 
 export function createPostgresIdentityBridge({
   pool,
+  authority = null,
   pepper,
   pepperVersion = "v1",
   previousPeppers = {},
@@ -226,7 +227,16 @@ export function createPostgresIdentityBridge({
   rateLimit = DEFAULT_RATE_LIMIT
 } = {}) {
   invariant(
-    pool && typeof pool.query === "function" && typeof pool.connect === "function",
+    pool &&
+      typeof pool.query === "function" &&
+      typeof pool.connect === "function" &&
+      (
+        authority === null ||
+        (
+          typeof authority?.service === "function" &&
+          authority.pool === pool
+        )
+      ),
     "IDENTITY_CONFIGURATION_ERROR",
     "A PostgreSQL pool is required for identity.",
     { status: 500 }
@@ -250,6 +260,12 @@ export function createPostgresIdentityBridge({
     ...DEFAULT_RATE_LIMIT,
     ...rateLimit
   };
+  const query = (text, values) =>
+    authority
+      ? authority.service({}, (client) => client.query(text, values))
+      : pool.query(text, values);
+  const transact = (work) =>
+    authority ? authority.service({}, work) : transaction(pool, work);
 
   async function pepperFor(version) {
     if (version === pepperVersion) return pepper;
@@ -266,7 +282,7 @@ export function createPostgresIdentityBridge({
   async function checkRate(scope, email, throttleKey) {
     const now = iso(clock());
     const selected = subjectDigest(scope, email, throttleKey);
-    const result = await pool.query(
+    const result = await query(
       `select blocked_until
          from ss.hosted_auth_rate_limits
         where scope = $1 and subject_digest = $2`,
@@ -282,7 +298,7 @@ export function createPostgresIdentityBridge({
   }
 
   async function recordFailure(scope, selected, now) {
-    await transaction(pool, async (client) => {
+    await transact(async (client) => {
       const existing = await client.query(
         `select window_started_at, attempt_count
            from ss.hosted_auth_rate_limits
@@ -319,7 +335,7 @@ export function createPostgresIdentityBridge({
   }
 
   async function clearRate(scope, selected) {
-    await pool.query(
+    await query(
       `delete from ss.hosted_auth_rate_limits
         where scope = $1 and subject_digest = $2`,
       [scope, selected]
@@ -375,7 +391,7 @@ export function createPostgresIdentityBridge({
         randomBytes
       });
       try {
-        const result = await transaction(pool, async (client) => {
+        const result = await transact(async (client) => {
           const userId = randomUUID();
           const organizationId = randomUUID();
           const created = await client.query(
@@ -451,7 +467,7 @@ export function createPostgresIdentityBridge({
       const email = normalizeEmail(rawEmail);
       password(rawPassword);
       const gate = await checkRate("sign_in", email, throttleKey);
-      const found = await pool.query(
+      const found = await query(
         `select
            users.id,
            users.email,
@@ -482,7 +498,7 @@ export function createPostgresIdentityBridge({
         await recordFailure("sign_in", gate.subjectDigest, gate.now);
         throw genericAuthFailure();
       }
-      const session = await transaction(pool, (client) =>
+      const session = await transact((client) =>
         issueSession(client, row.id, gate.now)
       );
       await clearRate("sign_in", gate.subjectDigest);
@@ -491,7 +507,7 @@ export function createPostgresIdentityBridge({
 
     async authenticate(rawToken) {
       if (typeof rawToken !== "string" || rawToken.length < 32) return null;
-      const result = await pool.query(
+      const result = await query(
         `select
            session.id as session_id,
            session.token_digest,
@@ -532,7 +548,7 @@ export function createPostgresIdentityBridge({
       invariant(actor?.sessionDigest, "AUTHENTICATION_REQUIRED", "Sign in to continue.", {
         status: 401
       });
-      await pool.query(
+      await query(
         `update ss.hosted_sessions
             set revoked_at = coalesce(revoked_at, clock_timestamp())
           where user_id = $1 and token_digest = $2`,
@@ -551,7 +567,7 @@ export function createPostgresIdentityBridge({
         actor.userId,
         throttleKey
       );
-      const found = await pool.query(
+      const found = await query(
         `select password_phc
            from ss.hosted_password_credentials
           where user_id = $1`,
@@ -572,7 +588,7 @@ export function createPostgresIdentityBridge({
         );
         throw genericAuthFailure();
       }
-      const updated = await pool.query(
+      const updated = await query(
         `update ss.hosted_sessions
             set reauthenticated_at = $3
           where user_id = $1
@@ -604,7 +620,7 @@ export function createPostgresIdentityBridge({
     async issueRecoveryForOperator(rawEmail) {
       const email = normalizeEmail(rawEmail);
       const now = iso(clock());
-      const result = await pool.query(
+      const result = await query(
         `select users.id
            from auth.users users
            join ss.hosted_account_profiles profile
@@ -618,7 +634,7 @@ export function createPostgresIdentityBridge({
       if (!result.rows[0]) return { accepted: true, manualDelivery: null };
       const rawToken = randomBytes(32).toString("base64url");
       const tokenDigest = sha256(rawToken);
-      await pool.query(
+      await query(
         `insert into ss.hosted_recovery_tokens (
            user_id, token_digest, created_at, expires_at
          ) values ($1, $2, $3, $4)`,
@@ -642,7 +658,7 @@ export function createPostgresIdentityBridge({
         randomBytes
       });
       const now = iso(clock());
-      return transaction(pool, async (client) => {
+      return transact(async (client) => {
         const token = await client.query(
           `select user_id
              from ss.hosted_recovery_tokens
@@ -688,7 +704,7 @@ export function createPostgresIdentityBridge({
       invariant(actor?.userId, "AUTHENTICATION_REQUIRED", "Sign in to continue.", {
         status: 401
       });
-      const found = await pool.query(
+      const found = await query(
         `select password_phc
            from ss.hosted_password_credentials
           where user_id = $1`,
@@ -708,7 +724,7 @@ export function createPostgresIdentityBridge({
         randomBytes
       });
       const now = iso(clock());
-      await transaction(pool, async (client) => {
+      await transact(async (client) => {
         await client.query(
           `update ss.hosted_password_credentials
               set password_phc = $2,
@@ -729,7 +745,7 @@ export function createPostgresIdentityBridge({
     },
 
     async cleanup() {
-      const sessions = await pool.query(
+      const sessions = await query(
         `delete from ss.hosted_sessions
           where expires_at <= clock_timestamp()
              or (
@@ -737,7 +753,7 @@ export function createPostgresIdentityBridge({
                and revoked_at < clock_timestamp() - interval '30 days'
              )`
       );
-      const recovery = await pool.query(
+      const recovery = await query(
         `delete from ss.hosted_recovery_tokens
           where expires_at <= clock_timestamp()
              or used_at is not null`

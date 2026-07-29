@@ -89,3 +89,40 @@ test("identity bridge refuses missing PostgreSQL and weak pepper configuration",
     (error) => error?.code === "IDENTITY_CONFIGURATION_ERROR"
   );
 });
+
+test("production identity queries run through the canonical service-role authority", async () => {
+  const directCalls = [];
+  const serviceCalls = [];
+  const pool = {
+    async query() {
+      directCalls.push("query");
+      throw new Error("direct pool query bypassed canonical authority");
+    },
+    async connect() {
+      directCalls.push("connect");
+      throw new Error("direct pool transaction bypassed canonical authority");
+    }
+  };
+  const authority = {
+    pool,
+    async service(options, work) {
+      serviceCalls.push(options);
+      return work({
+        async query() {
+          return { rowCount: 2, rows: [] };
+        }
+      });
+    }
+  };
+  const identity = createPostgresIdentityBridge({
+    pool,
+    authority,
+    pepper: PEPPER
+  });
+  assert.deepEqual(await identity.cleanup(), {
+    sessions: 2,
+    recoveryTokens: 2
+  });
+  assert.deepEqual(directCalls, []);
+  assert.deepEqual(serviceCalls, [{}, {}]);
+});
