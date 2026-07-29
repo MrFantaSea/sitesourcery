@@ -195,12 +195,12 @@
           {
             key: "website-new",
             label: "A new website",
-            note: "There is no existing website to replace: no URLs need preserving, no content needs migrating, and no provider cutover needs managing. Brochure copy or brand facts can still be entered manually."
+            note: "Nothing is being replaced. No old links or content need to move, and no host or domain switch is needed. You can still enter facts from a brochure or brand guide."
           },
           {
             key: "website-replace",
             label: "Replace an existing site",
-            note: "Something already exists and the change may involve migration or cutover."
+            note: "A site already exists, so links, content, tools, hosting, or the domain may need a safe move."
           }
         ]
       },
@@ -210,27 +210,27 @@
           {
             key: "custom",
             label: "Make it for me",
-            note: "I want professional judgment, art direction, delivery, or a human revision loop."
+            note: "I want professional planning, design, delivery, and human review."
           },
           {
             key: "website-self-service",
-            label: "Let me make one bounded page",
-            note: "I will enter the facts or reusable source material manually; no existing URLs need preserving, no content needs migrating, and no provider cutover needs managing."
+            label: "Let me make one page",
+            note: "I will type in the facts myself. No old links or content need to move, and no host or domain switch is needed."
           }
         ]
       },
       "website-self-service": {
-        question: "Does the exact self-service boundary fit?",
+        question: "Does this one-page option fit?",
         options: [
           {
             key: "abracadabra",
-            label: "Yes · no live-site replacement risk",
-            note: "One page and manual entry fit; no existing URLs need preserving, no content needs migrating, no provider cutover needs managing, and no integrations or human revision are required."
+            label: "Yes · nothing old needs replacing",
+            note: "One page is enough. I can type the facts myself and do not need old links, content, outside tools, or human revisions."
           },
           {
             key: "self-service-uncertain",
             label: "I am not completely sure",
-            note: "Keep the decision with a person instead of risking lost content or URLs."
+            note: "I want a person to check before I risk losing content or links."
           }
         ]
       },
@@ -239,8 +239,8 @@
         options: [
           {
             key: "replace-redirects",
-            label: "Existing URLs or search history",
-            note: "I need an inventory, redirect map, or search-safe replacement."
+            label: "Old links or search traffic",
+            note: "Old page addresses need to keep working or point to the right new page."
           },
           {
             key: "replace-migration",
@@ -249,13 +249,13 @@
           },
           {
             key: "replace-cutover",
-            label: "Providers, integrations, or cutover",
-            note: "The existing host, domain, forms, tools, or release timing matter."
+            label: "Hosting, tools, or the switch",
+            note: "The current host, domain, forms, tools, or launch timing matter."
           },
           {
             key: "replace-uncertain",
             label: "I do not know what must survive",
-            note: "I want a human to inspect the replacement risk before choosing a product."
+            note: "I want a person to check the old site before I choose."
           }
         ]
       },
@@ -270,12 +270,12 @@
           {
             key: "hive-booking",
             label: "Booking",
-            note: "Service, timing, location, or confirmation needs a bounded handoff."
+            note: "Service, timing, location, or confirmation keeps getting lost."
           },
           {
             key: "hive-review-request",
             label: "Review requests",
-            note: "Eligible customers need one neutral, permission-aware request."
+            note: "The right customers need one fair request at the right time."
           },
           {
             key: "hive-after-hours",
@@ -290,7 +290,7 @@
           {
             key: "hive-getting-paid",
             label: "Getting paid",
-            note: "An exact invoice needs a factual reminder and dispute path."
+            note: "An unpaid invoice needs a clear reminder and a way to raise a problem."
           },
           {
             key: "commission",
@@ -310,7 +310,7 @@
           {
             key: "foundations",
             label: "Website foundations",
-            note: "Structure, accessibility, speed, metadata, or release quality."
+            note: "Structure, basic accessibility, speed, page information, or launch quality."
           },
           {
             key: "care",
@@ -325,17 +325,17 @@
           {
             key: "email",
             label: "Business email",
-            note: "Addresses, routing, authentication, recovery, or migration."
+            note: "Addresses, delivery checks, routing, recovery, or moving mail."
           },
           {
             key: "commerce",
             label: "Commerce",
-            note: "Catalog, buying, fulfillment, receipt, refund, or processor path."
+            note: "Products, buying, delivery, receipts, refunds, or a payment service."
           },
           {
             key: "interfaces",
             label: "Interfaces",
-            note: "Focused controls for a phone, tablet, counter, kiosk, or display."
+            note: "Focused controls for a phone, tablet, counter, kiosk, or screen."
           },
           {
             key: "studio",
@@ -354,139 +354,139 @@
     var recommendations = {
       custom: {
         title: "Custom — made for you",
-        copy: "Choose Custom when the work needs professional judgment, distinctive art direction, migration, integrations, or a human revision loop.",
-        action: "Explore Custom",
+        copy: "Choose Custom when you want the site planned, designed, built, and reviewed with you, or when an old site must be replaced safely.",
+        action: "See Custom websites",
         href: "/custom/"
       },
       abracadabra: {
         title: "Abracadabra — make it yourself",
-        copy: "Make and download real HTML for one page from facts you enter in this device-local rehearsal. It neither hosts nor publicly publishes; it does not preserve existing URLs, migrate content, manage provider cutover, change DNS, add integrations, or include human revisions.",
-        action: "Open the local Abracadabra path",
+        copy: "Make and download one real web page from facts you type into this browser. It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions.",
+        action: "Try Abracadabra",
         href: "/abracadabra/"
       },
       "self-service-uncertain": {
         title: "Ask a human before choosing",
-        copy: "If the one-page, manual-entry boundary is not certain, keep the decision with the studio. Nothing needs to be forced into Abracadabra.",
+        copy: "If you are not sure one page and manual entry are enough, ask the studio to check first.",
         action: "Contact the studio",
         href: "/contact/"
       },
       "replace-redirects": {
-        title: "Custom — preserve the route",
-        copy: "Existing URLs, redirects, and search history make this replacement work. Custom inventories what must survive and plans the cutover.",
-        action: "Explore Custom",
+        title: "Custom — protect old links",
+        copy: "Old page addresses and search traffic need a careful list and redirect plan before the new site replaces the old one.",
+        action: "See Custom websites",
         href: "/custom/"
       },
       "replace-migration": {
-        title: "Custom — migrate the content",
-        copy: "Existing pages, words, or media need human inventory, judgment, and migration. Abracadabra does not promise that work.",
-        action: "Explore Custom",
+        title: "Custom — move the content",
+        copy: "Existing pages, words, or images need a person to review what stays, what changes, and where it belongs.",
+        action: "See Custom websites",
         href: "/custom/"
       },
       "replace-cutover": {
-        title: "Custom — plan the cutover",
-        copy: "Provider changes, integrations, forms, domains, and release timing require an explicit migration and cutover plan.",
-        action: "Explore Custom",
+        title: "Custom — plan the switch",
+        copy: "Hosting, forms, outside tools, domains, and launch timing need a written moving plan.",
+        action: "See Custom websites",
         href: "/custom/"
       },
       "replace-uncertain": {
         title: "Start with a human review",
-        copy: "An uncertain replacement stays out of self-service until the existing URLs, content, providers, integrations, and cutover risks are understood.",
+        copy: "Ask the studio to inspect the old links, content, hosting, tools, and domain before choosing how to replace the site.",
         action: "Contact the studio",
         href: "/contact/"
       },
       "hive-missed-call": {
         title: "Hive · Missed-call responder",
-        copy: "Inspect the exact trigger, allowed acknowledgement, consent boundary, human handoff, and cell-level pause for an unanswered call.",
+        copy: "See a plan for recording a missed call, sending an allowed reply, handing it to a person, and stopping the system.",
         action: "Inspect missed-call responder",
         href: "/hive/#missed-call"
       },
       "hive-booking": {
         title: "Hive · Booking guide",
-        copy: "Inspect a booking handoff that keeps availability provisional and never claims confirmation without the exact provider receipt.",
+        copy: "See a booking plan that treats times as open until the booking service confirms them.",
         action: "Inspect booking guide",
         href: "/hive/#booking"
       },
       "hive-review-request": {
         title: "Hive · Review request",
-        copy: "Inspect a neutral review request with eligibility, permission, suppression, and dispute boundaries visible.",
+        copy: "See a fair review-request plan with clear timing, permission, stop rules, and a path for problems.",
         action: "Inspect review request",
         href: "/hive/#review-request"
       },
       "hive-after-hours": {
         title: "Hive · After-hours information",
-        copy: "Inspect a bounded information path that answers only from approved facts and routes uncertainty or urgency to a person.",
+        copy: "See an after-hours plan that uses approved facts and sends unclear or urgent questions to a person.",
         action: "Inspect after-hours information",
         href: "/hive/#after-hours"
       },
       "hive-follow-up": {
         title: "Hive · Follow-up",
-        copy: "Inspect a permission-aware follow-up that preserves the original purpose, owner, due time, and human decision path.",
+        copy: "See a follow-up plan that keeps the reason, owner, due time, permission, and human decision clear.",
         action: "Inspect follow-up",
         href: "/hive/#follow-up"
       },
       "hive-getting-paid": {
         title: "Hive · Getting-paid reminder",
-        copy: "Inspect a factual invoice reminder that fails closed on disputes, credits, identity, or balance uncertainty.",
+        copy: "See an invoice reminder plan that stops when the balance, identity, credit, or dispute is unclear.",
         action: "Inspect getting-paid reminder",
         href: "/hive/#getting-paid"
       },
       commission: {
-        title: "Commission a working system",
-        copy: "A commission is the better fit when the channels, rules, providers, interface, or handoff need to match the way your business actually works.",
+        title: "Ask about a working system",
+        copy: "A separate project may fit when the messages, rules, outside services, controls, or handoff must match your business.",
         action: "Discuss the system",
         href: "/contact/"
       },
       assessment: {
         title: "Website assessment",
-        copy: "Choose the assessment for written, severity-ranked findings with screenshot evidence before remediation is scoped.",
+        copy: "Choose the assessment for written findings, screenshots, and a clear order of importance before deciding on fixes.",
         action: "Explore the assessment",
         href: "/solutions/#assessment"
       },
       foundations: {
         title: "Website foundations",
-        copy: "Choose foundations for structure, accessibility, performance, metadata, measurement, or release readiness.",
+        copy: "Ask about foundations for site structure, basic accessibility, speed, page information, measurement, or launch quality.",
         action: "Explore foundations",
         href: "/solutions/#foundations"
       },
       care: {
         title: "Care",
-        copy: "Choose Care for a named maintenance, change, monitoring, recovery, handoff, and exit arrangement.",
+        copy: "Ask about Care for a written maintenance, change, monitoring, recovery, handoff, and exit agreement.",
         action: "Explore Care",
         href: "/solutions/#care"
       },
       domains: {
         title: "Domains",
-        copy: "Buy with you named as registrant, connect an address you own, manage renewal, plan a transfer, or license monthly use of a Site Sourcery-owned address.",
-        action: "Explore Domains",
+        copy: "Ask whether help is available for registration, connection, renewal, or transfer. Ownership, price, and provider terms must be confirmed first.",
+        action: "See possible domain help",
         href: "/solutions/#domains"
       },
       email: {
         title: "Business email",
-        copy: "Choose business email for address roles, domain authentication, routing, recovery, migration, and exit documentation.",
+        copy: "Ask about business email for role addresses, delivery checks, routing, recovery, moving mail, and exit notes.",
         action: "Explore business email",
         href: "/solutions/#email"
       },
       commerce: {
         title: "Commerce",
-        copy: "Choose Commerce for the catalog, buying, fulfillment, receipt, refund, and client-owned processor path.",
-        action: "Explore Commerce",
+        copy: "Ask whether help is available for product pages and a path to a client-owned payment service.",
+        action: "See possible commerce help",
         href: "/solutions/#commerce"
       },
       interfaces: {
         title: "Interfaces",
-        copy: "Choose Interfaces for operator-centered controls, permission-aware states, visible failure, and a manual fallback.",
+        copy: "Ask about a focused screen with clear permissions, visible errors, and a manual backup.",
         action: "Explore Interfaces",
         href: "/solutions/#interfaces"
       },
       studio: {
         title: "Studio",
-        copy: "Choose Studio for a focused art-direction, illustration, motion, editorial, campaign, or physical-to-digital piece.",
+        copy: "Ask about one focused design, illustration, motion, story, campaign, or printed-and-digital piece.",
         action: "Explore Studio",
         href: "/solutions/#studio"
       },
       network: {
         title: "Connections",
-        copy: "Choose Connections for local listings, directories, referrals, shared resources, or community discovery with removal explicit.",
+        copy: "Ask about local listings, directories, referrals, shared resources, or community discovery.",
         action: "Explore Connections",
         href: "/solutions/#network"
       }

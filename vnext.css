@@ -780,6 +780,50 @@ h3 {
   line-height: 1.65;
 }
 
+.scope-disclosure {
+  margin-top: 1rem;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: rgba(8, 7, 12, 0.28);
+}
+
+.scope-disclosure > summary {
+  position: relative;
+  padding: 1rem 2.25rem 1rem 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 820;
+  line-height: 1.35;
+  cursor: pointer;
+  list-style: none;
+}
+
+.scope-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.scope-disclosure > summary::after {
+  position: absolute;
+  top: 0.95rem;
+  right: 0;
+  color: var(--gold);
+  content: "+";
+}
+
+.scope-disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.scope-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.scope-disclosure > :not(summary) {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
 .scope-tier-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

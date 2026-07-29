@@ -58,10 +58,10 @@ export const START_DECISION_COPY = Object.freeze([
   "replace-migration",
   "replace-cutover",
   "replace-uncertain",
-  "no URLs need preserving, no content needs migrating, and no provider cutover needs managing",
-  "facts or reusable source material manually",
-  "Make and download real HTML for one page from facts you enter in this device-local rehearsal",
-  "neither hosts nor publicly publishes; it does not preserve existing URLs, migrate content, manage provider cutover, change DNS, add integrations, or include human revisions",
+  "No old links or content need to move, and no host or domain switch is needed",
+  "I will type in the facts myself",
+  "Make and download one real web page from facts you type into this browser",
+  "It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions",
   "detailTrail",
   "showPreviousDetail",
   "focusAndReveal",
@@ -164,8 +164,13 @@ export const FAQ_ANCHORS = Object.freeze([
   "getting-started",
 ]);
 export const HOME_HIVE_COPY = Object.freeze([
-  "Six inspectable blueprints · custom systems by commission",
-  "The public planner shows the plan; a commissioned engagement builds and activates the real system.",
+  "Six plans you can inspect",
+  "The planner does not turn anything on. A separate project is required to build a working system.",
+]);
+export const HOME_ABRACADABRA_COPY = Object.freeze([
+  "Works in this browser",
+  "Makes and downloads a real web page.",
+  "It does not put the site online or take payment.",
 ]);
 export const ABRACADABRA_STATE_BADGE = Object.freeze([
   "Local working rehearsal",
@@ -222,12 +227,11 @@ export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
 });
 export const PUBLIC_TRUTH_COPY = Object.freeze({
   "/faq/": Object.freeze([
-    "current Abracadabra route is a device-local working rehearsal",
-    "it does not host or publicly publish",
-    "hosted account and public provider publication belong only to a separately released service",
-    "The private local rehearsal can be used now on this device.",
-    "does not represent a hosted public service as live",
-    "creates no outside publication",
+    "Abracadabra works only in this browser",
+    "it makes a real page you can download",
+    "it does not put the page online or take payment",
+    "Abracadabra currently works only in this browser.",
+    "It does not create an online account, publish a site, take payment, send email, or change a domain.",
   ]),
   "/legal/": Object.freeze([
     "filed alternate name SITESOURCERY",
@@ -467,9 +471,9 @@ function checkHomeDoors(source, errors) {
       report(errors, file, `missing Hive planning-versus-commission copy ${JSON.stringify(phrase)}`);
     }
   }
-  for (const phrase of ABRACADABRA_STATE_BADGE) {
+  for (const phrase of HOME_ABRACADABRA_COPY) {
     if (!lowerSource.includes(phrase.toLocaleLowerCase("en-US"))) {
-      report(errors, file, `missing compact Abracadabra state badge copy ${JSON.stringify(phrase)}`);
+      report(errors, file, `missing plain-language Abracadabra state copy ${JSON.stringify(phrase)}`);
     }
   }
   for (const phrase of RETIRED_HOME_HIVE_COPY) {

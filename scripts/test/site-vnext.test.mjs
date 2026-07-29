@@ -30,6 +30,7 @@ import {
   CUSTOM_TIERS,
   FAQ_ANCHORS,
   HIVE_CELLS,
+  HOME_ABRACADABRA_COPY,
   HOME_HIVE_COPY,
   HOME_DOORS,
   PRIVACY_SECTION_IDS,
@@ -139,7 +140,7 @@ function routeFeature(route) {
       ...HOME_DOORS
         .map((door) => `<a data-home-door="${door}" href="/${door}/">${door}</a>`),
       ...HOME_HIVE_COPY.map((phrase) => `<p>${phrase}</p>`),
-      ...ABRACADABRA_STATE_BADGE.map((phrase) => `<p>${phrase}</p>`),
+      ...HOME_ABRACADABRA_COPY.map((phrase) => `<p>${phrase}</p>`),
       "</section>",
     ].join("");
   }
@@ -464,6 +465,7 @@ test("canonical route ledger is exact and stable", () => {
     "handoff",
   ]);
   assert.equal(HOME_HIVE_COPY.length, 2);
+  assert.equal(HOME_ABRACADABRA_COPY.length, 3);
   assert.equal(PRIVACY_SECTION_IDS.length, 16);
   assert.equal(TERMS_SECTION_IDS.length, 17);
   assert.equal(FAQ_ANCHORS.length, 13);
@@ -738,14 +740,14 @@ test("vNext locks fail-closed Start replacement and migration routing", async (t
   await t.test("Abracadabra local boundary", () => expectSiteFailure(
     (root) => modify(root, "vnext.js", (source) =>
       source.replace(
-        "neither hosts nor publicly publishes; it does not preserve existing URLs, migrate content",
+        "It does not put the page online, replace an old site, move content",
         "puts the replacement online",
       )),
     /missing fail-closed Start decision marker/u,
   ));
   await t.test("net-new path permits manually entered source material", () => expectSiteFailure(
     (root) => modify(root, "vnext.js", (source) =>
-      source.replace("facts or reusable source material manually", "no prior material is allowed")),
+      source.replace("I will type in the facts myself", "no prior material is allowed")),
     /missing fail-closed Start decision marker/u,
   ));
   await t.test("chooser is exempt from decorative reveal motion", () => expectSiteFailure(
@@ -758,12 +760,12 @@ test("vNext locks fail-closed Start replacement and migration routing", async (t
 test("vNext locks exact filed identity and local-versus-hosted public truth", async (t) => {
   await t.test("FAQ current scope leads", () => expectSiteFailure(
     (root) => modify(root, "faq/index.html", (source) =>
-      source.replace("The private local rehearsal can be used now on this device.", "Yes.")),
+      source.replace("Abracadabra currently works only in this browser.", "Yes.")),
     /missing filed-name or local-versus-hosted truth/u,
   ));
   await t.test("first FAQ path answer stands alone", () => expectSiteFailure(
     (root) => modify(root, "faq/index.html", (source) =>
-      source.replace("current Abracadabra route is a device-local working rehearsal", "Abracadabra is self-service")),
+      source.replace("Abracadabra works only in this browser", "Abracadabra is self-service")),
     /missing filed-name or local-versus-hosted truth/u,
   ));
   await t.test("terms retain local safety boundary", () => expectSiteFailure(
@@ -822,7 +824,7 @@ test("About retains a verifiable no-invention trust package", async (t) => {
   for (const proof of ABOUT_PROOFS) {
     assert.ok(source.includes(`data-about-proof="${proof}"`), `${proof} proof route must remain visible`);
   }
-  assert.match(source, /Nothing is presented as an independent client case study without a real engagement and recorded permission\./u);
+  assert.match(source, /Client work is shown only after a real engagement and recorded permission\./u);
   assert.doesNotMatch(source, /data-founder-name|data-founder-portrait/u);
 
   await t.test("missing trust fact fails closed", () => expectSiteFailure(
@@ -948,7 +950,7 @@ test("vNext locks Hive planning truth and long-page deep links", async (t) => {
   await t.test("Hive planning truth", () => expectSiteFailure(
     (root) => modify(root, "index.html", (source) =>
       source.replace(
-        "The public planner shows the plan; a commissioned engagement builds and activates the real system.",
+        "The planner does not turn anything on. A separate project is required to build a working system.",
         "Ready-made and commissioned systems",
       )),
     /(?:missing Hive planning-versus-commission copy|contains retired Hive product model)/u,
