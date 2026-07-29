@@ -799,8 +799,40 @@
       return cloneRaw(collectRawFacts());
     },
     loadProject: loadProjectState,
-    markCurrentPlatformVersion: function (versionId) {
-      if (currentVersionIndex >= 0) versions[currentVersionIndex].platformVersionId = String(versionId || "");
+    /*
+     * Bind platform acceptance to the exact local version it started from.
+     *
+     * Acceptance is asynchronous, so the customer can make another version
+     * while one is in flight. Stamping whichever version happens to be current
+     * when the promise settles would give the newer version the older one's id
+     * -- both would look durable and the unload guard would disarm while the
+     * newer version had never been saved.
+     *
+     * artifactDigest is the maker's own dedupe identity, is deterministic, and
+     * is carried in the versionmade detail, so callers can hold it across the
+     * wait. Returns false when that exact version is no longer here; never
+     * falls back to the current selection and never touches another version.
+     */
+    markPlatformVersion: function (localArtifactDigest, platformVersionId) {
+      var digest = String(localArtifactDigest == null ? "" : localArtifactDigest);
+      if (!digest) return false;
+      var target = versions.findIndex(function (version) {
+        return version.result && version.result.artifactDigest === digest;
+      });
+      if (target < 0) return false;
+
+      // A non-durable id means the acceptance did not land. Refuse it outright
+      // rather than writing a value the guard would then have to disbelieve.
+      var next = String(platformVersionId == null ? "" : platformVersionId);
+      if (!isDurableVersionId(next)) return false;
+
+      // An already-bound version keeps its first id. Re-reporting the same id
+      // is an idempotent success; a different one is a conflict, not an update.
+      var existing = versions[target].platformVersionId;
+      if (isDurableVersionId(existing)) return existing === next;
+
+      versions[target].platformVersionId = next;
+      return true;
     },
     selectPlatformVersion: function (versionId) {
       var target = versions.findIndex(function (version) {

@@ -218,9 +218,9 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-control.js":
-    "cf4b36de5e08b6f5da34dee014693e014a673f89d7bffc5a4a37a15cc7b36c21",
+    "7f2e19f1fb37a29b6e9b85060508e114b80794003facae54d4c90af2b30c6a5e",
   "abracadabra/app/abracadabra-hosted-control-dom.js":
-    "153017832ccbabb797c0bd4cc3b5df09854737963920394b6b9d8cc5a89eee5a",
+    "646ec9e7cdb7cae052f3f80a0fa60eda6bcd036a3b792dbc8117045011cbb864",
   "abracadabra/app/abracadabra-hosted-control.js":
     "d4ac6b782cc21a72fd96c434042d7793efd1a867481c99228297f7820c5c9d59",
 });
@@ -230,7 +230,7 @@ export const hostedCodeTransforms = Object.freeze([
     id: "abracadabra-progressive-project-setup",
     file: "abracadabra/app/abracadabra-control.js",
     startMarker: "(function (root, factory) {",
-    sourceSha256: "cf4b36de5e08b6f5da34dee014693e014a673f89d7bffc5a4a37a15cc7b36c21",
+    sourceSha256: "7f2e19f1fb37a29b6e9b85060508e114b80794003facae54d4c90af2b30c6a5e",
     outputSha256: "7d8f13df36924030825b6402d4e9f34e2838e62217048a57bdf97f31400cb882",
   }),
 ]);

@@ -729,7 +729,24 @@
         });
       }
       requireProjectContext(context);
-      maker.markCurrentPlatformVersion(version.id);
+      /*
+       * Mark the exact version this acceptance began from. Even here the
+       * platform calls above sit between the make and the mark, so binding to
+       * the current selection could stamp a version the customer made in the
+       * meantime.
+       */
+      var originDigest = detail && detail.result && detail.result.artifactDigest
+        ? String(detail.result.artifactDigest)
+        : "";
+      var savedId = version && version.id != null ? String(version.id) : "";
+      if (!originDigest || savedId.trim() === "") {
+        announce("That version could not be saved.", "error");
+        return false;
+      }
+      if (!maker.markPlatformVersion(originDigest, savedId)) {
+        announce("That preview is no longer open, so it was not marked saved.", "error");
+        return false;
+      }
       renderProject();
       announce("Reviewed version saved and accepted. It is ready for the release controls.", "success");
       focusAndScroll(one("[data-active-project]"));

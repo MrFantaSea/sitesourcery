@@ -26,8 +26,57 @@
     });
   }
 
+  /*
+   * The local identity an acceptance began from. Held across the await so a
+   * version made while the request was in flight cannot receive this id.
+   */
+  function originArtifactDigest(detail) {
+    return detail && detail.result && detail.result.artifactDigest
+      ? String(detail.result.artifactDigest)
+      : "";
+  }
+
+  /*
+   * Only the accepted version entity's own id, and only as a non-empty string.
+   *
+   * Deliberately not the generic idOf(): that falls through to projectId,
+   * quoteId, orderId, contactId and friends, so a wrong-shaped acceptance such
+   * as { projectId: "project_2" } would be stamped onto a version and reported
+   * as saved. acceptMadeVersion resolves entityFrom(payload, "version"), whose
+   * own identifier is `id`, so nothing else is accepted here.
+   */
+  function acceptedPlatformVersionId(acceptedVersion) {
+    if (!acceptedVersion || typeof acceptedVersion !== "object") return "";
+    if (!Object.prototype.hasOwnProperty.call(acceptedVersion, "id")) return "";
+    var id = acceptedVersion.id;
+    if (typeof id !== "string") return "";
+    return id.trim() === "" ? "" : id;
+  }
+
+  /*
+   * The single place an accepted platform id is validated and bound to a local
+   * version. Every adoption path goes through here, so there is one definition
+   * of what "saved" means and no route that can bind by current selection.
+   *
+   *   "unaccepted"  the acceptance carried no usable id, or there was no
+   *                 originating identity to bind it to
+   *   "unavailable" the maker is not present to bind against
+   *   "stale"       the originating version is gone, or is already bound to a
+   *                 different id -- the maker refused it
+   *   "bound"       the exact originating version now carries this id
+   */
+  function bindAcceptedPlatformVersion(makerApi, originDigest, acceptedVersion) {
+    var digest = originDigest == null ? "" : String(originDigest);
+    var savedId = acceptedPlatformVersionId(acceptedVersion);
+    if (!digest || !savedId) return "unaccepted";
+    if (!makerApi || typeof makerApi.markPlatformVersion !== "function") return "unavailable";
+    return makerApi.markPlatformVersion(digest, savedId) ? "bound" : "stale";
+  }
+
   if (typeof module === "object" && module && module.exports) {
     module.exports = Object.freeze({
+      bindAcceptedPlatformVersion: bindAcceptedPlatformVersion,
+      originArtifactDigest: originArtifactDigest,
       recoveryRequestOutcome: recoveryRequestOutcome
     });
     return;
@@ -185,6 +234,22 @@
     var message = error && error.message ? error.message : fallback;
     var requestId = error && error.requestId ? " Request " + error.requestId + "." : "";
     return message + requestId;
+  }
+
+  /*
+   * Thin announcing wrapper around the shared binding helper. All validation
+   * and the marker call itself live in bindAcceptedPlatformVersion.
+   */
+  function adoptPlatformVersion(originDigest, version) {
+    var outcome = bindAcceptedPlatformVersion(maker, originDigest, version);
+    if (outcome === "bound") return true;
+    announce(
+      outcome === "stale"
+        ? "That preview is no longer open, so it was not marked saved."
+        : "That version could not be saved.",
+      "error"
+    );
+    return false;
   }
 
   function operationPending(name) {
@@ -1775,15 +1840,35 @@
       }).then(async function (project) {
         one("[data-project-creator]").hidden = true;
         if (project && idOf(project)) await control.selectProject(idOf(project));
-        if (pendingGuestCandidate) {
-          var candidate = pendingGuestCandidate;
-          await control.acceptMadeVersion(candidate);
-          maker.markCurrentPlatformVersion(control.getState().selectedVersionId);
-          pendingGuestCandidate = null;
+        if (!pendingGuestCandidate) {
+          announce("Project saved to your account.", "success");
+          return project;
+        }
+        var candidate = pendingGuestCandidate;
+        // The adopted preview's own identity, not whatever is current now.
+        var candidateDigest = originArtifactDigest(candidate);
+        var accepted = await control.acceptMadeVersion(candidate);
+        pendingGuestCandidate = null;
+        // Only the exact accepted result may supply the id. Falling back to
+        // the current selection could stamp an unrelated version.
+        var outcome = bindAcceptedPlatformVersion(maker, candidateDigest, accepted);
+        if (outcome === "bound") {
+          announce("Project saved to your account. Your preview is saved to it.", "success");
+        } else {
+          /*
+           * The project really was created, so claiming outright failure would
+           * be wrong -- but the preview is still local and still unsaved, and
+           * the unload guard is still holding it. Say both.
+           */
+          announce(
+            "Project saved to your account, but the preview could not be linked to it. "
+              + "The preview is still open here and is not saved.",
+            "error"
+          );
         }
         return project;
       });
-    }, "Project saved to your account.").catch(function () {});
+    }).catch(function () {});
   });
 
   one("[data-toggle-settings]").addEventListener("click", function () {
@@ -1966,8 +2051,10 @@
       );
       return;
     }
+    // Held across the wait so a version made meanwhile cannot take this id.
+    var originDigest = originArtifactDigest(event.detail);
     control.acceptMadeVersion(event.detail).then(function (version) {
-      maker.markCurrentPlatformVersion(idOf(version));
+      if (!adoptPlatformVersion(originDigest, version)) return;
       announce("Version saved to your account.", "success");
     }).catch(function (error) {
       announce(explain(error, "That version could not be saved."), "error");
