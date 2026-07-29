@@ -293,6 +293,41 @@
       && draftFingerprint(collectRawFacts()) !== cleanDraftFingerprint;
   }
 
+  /*
+   * A version counts as durable only when the platform gave it a real id.
+   * Anything else -- null, "", or whitespace -- means the acceptance did not
+   * land, so the version still exists nowhere but this tab.
+   */
+  function isDurableVersionId(value) {
+    return typeof value === "string" && value.trim() !== "";
+  }
+
+  /*
+   * A made version is destroyed by unload only while it exists nowhere but this
+   * tab. Once the platform has accepted it, platformVersionId is set and the
+   * version survives a refresh, so warning about it would be a false alarm for
+   * a signed-in customer whose work is already durable.
+   */
+  function hasUnsavedMadeVersion() {
+    return versions.some(function (version) {
+      return !isDurableVersionId(version.platformVersionId);
+    });
+  }
+
+  /*
+   * Unload is the only action that destroys in-memory versions, and making one
+   * marks the draft clean -- so the draft-level predicate alone goes quiet at
+   * exactly the point the customer has the most to lose.
+   *
+   * Draft-replacement prompts deliberately keep using
+   * hasMeaningfulUnsavedChanges instead: loading a sample, clearing the draft,
+   * undoing, and opening a project are in-tab actions that made versions
+   * survive, so they must keep warning only about unsaved draft edits.
+   */
+  function hasWorkDestroyedByUnload() {
+    return hasUnsavedMadeVersion() || hasMeaningfulUnsavedChanges();
+  }
+
   function confirmDraftReplacement(message) {
     return !hasMeaningfulUnsavedChanges() || window.confirm(message);
   }
@@ -742,7 +777,7 @@
   sampleButton.addEventListener("click", loadFictionalSample);
   clearDraftButton.addEventListener("click", clearDraft);
   window.addEventListener("beforeunload", function (event) {
-    if (!hasMeaningfulUnsavedChanges()) return;
+    if (!hasWorkDestroyedByUnload()) return;
     event.preventDefault();
     event.returnValue = "";
   });
