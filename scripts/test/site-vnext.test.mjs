@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import REVIEWED_COMMERCIAL_PROJECTION from "../../data/public-catalog.json" with { type: "json" };
 import { publicFileAllowlist } from "../build-pages.mjs";
 import {
   CANONICAL_ROUTES,
@@ -49,12 +50,13 @@ import {
   TERMS_SECTION_IDS,
   validateSiteVnext,
 } from "../check-site-vnext.mjs";
-import {
-  BUILD_ADDONS,
-  BUILD_TIERS,
-  CREATIVITY_LEVELS,
-  SCALE_RULE,
-} from "../../../commercial/catalog.mjs";
+
+const BUILD_TIERS = REVIEWED_COMMERCIAL_PROJECTION.buildTiers;
+const CREATIVITY_LEVELS = REVIEWED_COMMERCIAL_PROJECTION.creativityLevels;
+const SCALE_RULE = REVIEWED_COMMERCIAL_PROJECTION.scaleRule;
+const BUILD_ADDONS = Object.fromEntries(
+  REVIEWED_COMMERCIAL_PROJECTION.buildAddons.map((addon) => [addon.id, addon]),
+);
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SITE_ROOT = path.resolve(TEST_DIRECTORY, "../..");
@@ -1086,7 +1088,7 @@ test("About retains a verifiable no-invention trust package", async (t) => {
   ));
 });
 
-test("Custom keeps the complete quote-only catalog surface and exact internal footprint limits", async (t) => {
+test("Custom keeps the complete quote-only catalog surface and exact reviewed footprint limits", async (t) => {
   const source = await readFile(path.join(SITE_ROOT, "custom/scope/index.html"), "utf8");
   const processSource = await readFile(path.join(SITE_ROOT, "custom/process/index.html"), "utf8");
   const expectedIds = BUILD_TIERS.map((tier) => tier.id).concat(SCALE_RULE.id);
@@ -1103,7 +1105,7 @@ test("Custom keeps the complete quote-only catalog surface and exact internal fo
       `data-forms="${limits.includedForms}"`,
       `data-revisions="${limits.revisions}"`,
     ].join(" ");
-    assert.ok(source.includes(marker), `${tier.id} public limits must match the private catalog`);
+    assert.ok(source.includes(marker), `${tier.id} public limits must match the reviewed projection`);
     assert.equal(source.includes(String(tier.priceCents)), false, `${tier.id} price cents must remain private`);
   }
   const scaleMarker = [
@@ -1118,7 +1120,7 @@ test("Custom keeps the complete quote-only catalog surface and exact internal fo
     `data-scale-unit-words="${SCALE_RULE.allowancePerUnit.contentWords}"`,
     `data-scale-unit-media="${SCALE_RULE.allowancePerUnit.suppliedMedia}"`,
   ].join(" ");
-  assert.ok(source.includes(scaleMarker), "public Scale formula must exactly match the private non-price rule");
+  assert.ok(source.includes(scaleMarker), "public Scale formula must exactly match the reviewed non-price rule");
   assert.equal(source.includes(String(SCALE_RULE.unitPriceCents)), false, "Scale unit price cents must remain private");
   assert.deepEqual(
     [...CUSTOM_CREATIVITY],
