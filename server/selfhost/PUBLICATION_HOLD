@@ -1,0 +1,7 @@
+PUBLICATION_HOLD
+
+This static tenant-serving runtime is not approved for public serving.
+
+Do not remove this file, start a public listener, install the held service
+units, change DNS, or request public certificates without the separate
+owner-approved release checklist and operational proof.

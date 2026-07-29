@@ -168,12 +168,12 @@ runtime is exactly Node 24.18.0:
 
 ```sh
 nvm use
-npm test
-npm run check
+npm run test:selfhost
+npm run check:selfhost
 ```
 
 The test suite creates temporary private filesystem trees only. It never invokes
-`bin/server.mjs`.
+`server/selfhost/bin/server.mjs`.
 
 Node 20 is EOL and is not an accepted production runtime. Dell already has
 Node 24.18.0 under NVM; an approved production installation must place a
