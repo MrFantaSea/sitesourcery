@@ -62,12 +62,85 @@ test("every browser write carries a stable idempotency key and current CSRF toke
   assert.equal(calls[1].options.method, "POST");
 });
 
+test("concurrent first writes share one CSRF bootstrap", async () => {
+  const calls = [];
+  let sequence = 0;
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_concurrent" });
+      }
+      return response(202, { accepted: true });
+    },
+    idempotencyFactory: () => `concurrent-key-${sequence += 1}`
+  });
+
+  await Promise.all([
+    client.requestExport("project_1"),
+    client.requestExport("project_2")
+  ]);
+
+  assert.equal(
+    calls.filter(({ url }) => url === "/api/v1/csrf").length,
+    1
+  );
+  const writes = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.equal(writes.length, 2);
+  assert.ok(
+    writes.every(
+      ({ options }) => options.headers["X-CSRF-Token"] === "csrf_concurrent"
+    )
+  );
+});
+
+test("a rejected stale CSRF token is cleared before the customer's next retry", async () => {
+  const calls = [];
+  let bootstrap = 0;
+  let write = 0;
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        bootstrap += 1;
+        return response(200, { csrfToken: `csrf_retry_${bootstrap}` });
+      }
+      write += 1;
+      if (write === 1) {
+        return response(403, {
+          error: {
+            code: "CSRF_TOKEN_REQUIRED",
+            message: "Refresh this page before trying that action again."
+          }
+        });
+      }
+      return response(202, { accepted: true });
+    },
+    idempotencyFactory: () => `retry-key-${write + 1}`
+  });
+
+  await assert.rejects(
+    () => client.requestExport("project_1"),
+    (error) => error.code === "CSRF_TOKEN_REQUIRED"
+  );
+  await client.requestExport("project_1");
+
+  assert.equal(bootstrap, 2);
+  assert.equal(
+    calls.at(-1).options.headers["X-CSRF-Token"],
+    "csrf_retry_2"
+  );
+});
+
 test("commerce uses only an offer ID, an exact server quote, and its disclosure digest", async () => {
   const calls = [];
   const client = createClient({
     fetch: async (url, options) => {
       calls.push({ url, options });
-      return response(201, calls.length === 1
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_commerce" });
+      }
+      return response(201, url.endsWith("/commerce-quotes")
         ? {
             quoteId: "quote_1",
             offerId: "business.own",
@@ -82,21 +155,21 @@ test("commerce uses only an offer ID, an exact server quote, and its disclosure 
   });
 
   await client.createCommerceQuote("project_1", { offerId: "business.own" });
-  assert.equal(calls[0].url, "/api/v1/projects/project_1/commerce-quotes");
-  assert.deepEqual(JSON.parse(calls[0].options.body), { offerId: "business.own" });
-  assert.equal(calls[0].options.headers["Idempotency-Key"], "checkout-idempotency-key");
-
   await client.createCommerceCheckout("project_1", "quote_1", {
     acceptedDisclosureDigest: "d".repeat(64),
   });
+  const commerceCalls = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.equal(commerceCalls[0].url, "/api/v1/projects/project_1/commerce-quotes");
+  assert.deepEqual(JSON.parse(commerceCalls[0].options.body), { offerId: "business.own" });
+  assert.equal(commerceCalls[0].options.headers["Idempotency-Key"], "checkout-idempotency-key");
   assert.equal(
-    calls[1].url,
+    commerceCalls[1].url,
     "/api/v1/projects/project_1/commerce-quotes/quote_1/checkout",
   );
-  assert.deepEqual(JSON.parse(calls[1].options.body), {
+  assert.deepEqual(JSON.parse(commerceCalls[1].options.body), {
     acceptedDisclosureDigest: "d".repeat(64),
   });
-  for (const call of calls) {
+  for (const call of commerceCalls) {
     const body = JSON.parse(call.options.body);
     for (const forbidden of ["amount", "amountMinor", "currency", "price", "priceId", "stripePriceId"]) {
       assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
@@ -110,6 +183,9 @@ test("cancellation requires a server preview and submits only its accepted discl
   const client = createClient({
     fetch: async (url, options) => {
       calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_cancellation" });
+      }
       if (options.method === "GET") {
         return response(200, {
           preview: {
@@ -138,10 +214,12 @@ test("cancellation requires a server preview and submits only its accepted discl
     previewId: "cancel_preview_1",
     acceptedDisclosureDigest: digest,
   });
-  assert.equal(calls[1].url, "/api/v1/projects/project_1/subscription/cancel");
-  assert.equal(calls[1].options.method, "POST");
-  assert.equal(calls[1].options.headers["Idempotency-Key"], "cancel-idempotency-key");
-  assert.deepEqual(JSON.parse(calls[1].options.body), {
+  const cancellation = calls.find(
+    ({ url }) => url.endsWith("/subscription/cancel")
+  );
+  assert.equal(cancellation.options.method, "POST");
+  assert.equal(cancellation.options.headers["Idempotency-Key"], "cancel-idempotency-key");
+  assert.deepEqual(JSON.parse(cancellation.options.body), {
     previewId: "cancel_preview_1",
     acceptedDisclosureDigest: digest,
   });
@@ -153,6 +231,9 @@ test("project exports expose status, retry, and one-time same-origin archive dow
   const client = createClient({
     fetch: async (url, options) => {
       calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_export" });
+      }
       if (url.includes("/download?token=")) {
         return {
           ok: true,
@@ -196,17 +277,18 @@ test("project exports expose status, retry, and one-time same-origin archive dow
   );
 
   assert.deepEqual(calls.map(({ url }) => url), [
+    "/api/v1/csrf",
     "/api/v1/projects/project_1/exports",
     "/api/v1/projects/project_1/exports/export_1",
     "/api/v1/projects/project_1/exports/export_1/retry",
     "/api/v1/projects/project_1/exports/export_1/download?token=one%20time%2Ftoken",
   ]);
-  assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[1].options.method, "GET");
-  assert.equal(calls[2].options.method, "POST");
-  assert.equal(calls[3].options.method, "GET");
-  assert.equal(calls[3].options.credentials, "include");
-  assert.equal(calls[3].options.redirect, "error");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[2].options.method, "GET");
+  assert.equal(calls[3].options.method, "POST");
+  assert.equal(calls[4].options.method, "GET");
+  assert.equal(calls[4].options.credentials, "include");
+  assert.equal(calls[4].options.redirect, "error");
   assert.equal(downloaded.filename, "sitesourcery-project-1.zip");
   assert.equal(downloaded.blob.size, archive.size);
 });
@@ -252,6 +334,9 @@ test("draft writes carry optimistic-concurrency revision", async () => {
   let call;
   const client = createClient({
     fetch: async (url, options) => {
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_draft" });
+      }
       call = { url, options };
       return response(200, { revision: 8 });
     },
@@ -271,12 +356,17 @@ test("draft writes carry optimistic-concurrency revision", async () => {
 
 test("server error envelopes retain safe request identifiers for support", async () => {
   const client = createClient({
-    fetch: async () => response(409, {
-      error: {
-        code: "REVISION_CONFLICT",
-        message: "This project changed in another tab."
+    fetch: async (url) => {
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_conflict" });
       }
-    }, "req_conflict"),
+      return response(409, {
+        error: {
+          code: "REVISION_CONFLICT",
+          message: "This project changed in another tab."
+        }
+      }, "req_conflict");
+    },
     idempotencyFactory: () => "conflict-key"
   });
 
@@ -290,6 +380,35 @@ test("server error envelopes retain safe request identifiers for support", async
       return true;
     }
   );
+});
+
+test("catalog discovery and release rollback use the customer API boundary", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_rollback" });
+      }
+      return response(
+        options.method === "GET" ? 200 : 202,
+        options.method === "GET"
+          ? { catalogVersion: "catalog_1", offers: [] }
+          : { accepted: true }
+      );
+    },
+    idempotencyFactory: () => "rollback-key"
+  });
+
+  await client.getOfferCatalog();
+  await client.rollbackRelease("project_1", "version_7");
+  assert.equal(calls[0].url, "/api/v1/offers");
+  assert.equal(
+    calls.at(-1).url,
+    "/api/v1/projects/project_1/versions/version_7/rollback"
+  );
+  assert.equal(calls.at(-1).options.headers["Idempotency-Key"], "rollback-key");
+  assert.equal(calls.at(-1).options.headers["X-CSRF-Token"], "csrf_rollback");
 });
 
 test("network failures do not leak the underlying browser exception", async () => {

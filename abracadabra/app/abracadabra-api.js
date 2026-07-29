@@ -152,12 +152,32 @@
     var baseUrl = configuredBaseUrl.replace(/\/+$/u, "");
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
     var csrfToken = null;
+    var csrfBootstrap = null;
+
+    async function ensureCsrf() {
+      if (csrfToken) return;
+      if (!csrfBootstrap) csrfBootstrap = request("GET", "/csrf");
+      try {
+        await csrfBootstrap;
+      } finally {
+        csrfBootstrap = null;
+      }
+      if (!csrfToken) {
+        throw new APIError({
+          code: "CSRF_UNAVAILABLE",
+          message: "Refresh this page before saving changes."
+        });
+      }
+    }
 
     async function request(method, path, optionsForRequest) {
       var requestOptions = optionsForRequest || {};
       var upperMethod = String(method || "GET").toUpperCase();
       var headers = Object.assign({ Accept: "application/json" }, requestOptions.headers || {});
       var body;
+      if (WRITE_METHODS.has(upperMethod) && !csrfToken) {
+        await ensureCsrf();
+      }
       if (Object.prototype.hasOwnProperty.call(requestOptions, "body")) {
         headers["Content-Type"] = "application/json";
         body = JSON.stringify(requestOptions.body);
@@ -222,6 +242,7 @@
         var serverMessage = errorBody && typeof errorBody.message === "string"
           ? errorBody.message.replace(/[\u0000-\u001f\u007f]/gu, " ").trim().slice(0, 500)
           : "";
+        if (errorBody && errorBody.code === "CSRF_TOKEN_REQUIRED") csrfToken = null;
         throw new APIError({
           status: response.status,
           code: errorBody && errorBody.code,
@@ -505,6 +526,12 @@
       );
     }
 
+    function getOfferCatalog(requestOptions) {
+      return request("GET", "/offers", {
+        signal: requestOptions && requestOptions.signal
+      });
+    }
+
     function createCommerceQuote(projectId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
@@ -600,6 +627,15 @@
           body: { versionId: requiredText(versionId, "Version ID", 200) },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
+      );
+    }
+
+    function rollbackRelease(projectId, versionId, requestOptions) {
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/versions/" + segment(versionId, "Version ID") + "/rollback",
+        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
       );
     }
 
@@ -902,6 +938,7 @@
       acceptVersion: acceptVersion,
       selectAddress: selectAddress,
       requestDomainVerification: requestDomainVerification,
+      getOfferCatalog: getOfferCatalog,
       createCommerceQuote: createCommerceQuote,
       getCommerceQuote: getCommerceQuote,
       createCommerceCheckout: createCommerceCheckout,
@@ -910,6 +947,7 @@
       cancellationPreview: cancellationPreview,
       cancelSubscription: cancelSubscription,
       requestRelease: requestRelease,
+      rollbackRelease: rollbackRelease,
       unpublish: unpublish,
       setVisibility: setVisibility,
       createSupportTicket: createSupportTicket,
