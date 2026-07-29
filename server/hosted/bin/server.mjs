@@ -14,6 +14,7 @@ import {
   cancellationWorkerOptionsFromEnvironment,
   createCancellationWorker
 } from "../cancellation-worker.mjs";
+import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -172,6 +173,8 @@ async function start() {
   await authority.assertReady();
   const stripeComposition =
     createConfiguredStripeProvider();
+  const domainRuntime =
+    createHeldDomainRuntime();
 
   const identityPepper = secret(
     "SITESOURCERY_IDENTITY_PEPPER"
@@ -232,6 +235,7 @@ async function start() {
     recoveryMailPort,
     contactVault,
     paymentProvider: stripeComposition.adapter,
+    domainRuntime,
     licensedBaseDomain
   });
 

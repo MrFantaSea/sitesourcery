@@ -82,6 +82,15 @@ API. This integration does not import or depend on it. A future local SQLite
 adapter requires separate durability, migration, concurrency, backup, and
 restore evidence.
 
+The hosted PostgreSQL implementation lives in
+`server/hosted/domain-postgres-runtime.mjs` and migration
+`202607280014_safe_domain_authorization.sql`. It corrects the original schema's
+unsafe capture-before-registrar ordering: a separate, purpose-bound Stripe
+manual authorization precedes registration; capture follows only exact
+registrar operation, final-price, domain, and customer-registrant readback.
+DNS changes use the same durable dispatch/readback pattern. No Cloudflare
+registrar or DNS dependency is introduced.
+
 ## Verification
 
 From the repository root, using exact Node 24.18.0:

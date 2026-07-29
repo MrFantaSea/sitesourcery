@@ -2,6 +2,15 @@
 
 No item below authorizes a provider mutation.
 
+## Checkout relay
+
+The customer-facing order may contain only Site Sourcery's same-origin payment
+path. Redirect only when the persisted attempt is still open and unexpired and
+fresh Stripe readback says `pending` for the exact Checkout Session, amount,
+currency, manual-capture mode, and purpose digest. `expired`,
+`manual_review`, `authorized`, `captured`, `voided`, and `refunded` never
+redirect. Do not recover a missing or rejected provider URL from browser input.
+
 ## `payment_authorization_failed_or_ambiguous`
 
 Do not create a second authorization. Query the payment provider by the exact

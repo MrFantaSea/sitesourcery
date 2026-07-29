@@ -470,6 +470,14 @@ test("the hosted server injects one configured adapter for Checkout and raw webh
     source,
     /paymentProvider:\s*stripeComposition\.adapter/u
   );
+  assert.match(
+    source,
+    /const domainRuntime\s*=\s*createHeldDomainRuntime\(\)/u
+  );
+  assert.match(
+    source,
+    /paymentProvider:\s*stripeComposition\.adapter,\s*domainRuntime/u
+  );
   assert.equal(
     source.match(
       /createConfiguredStripeProvider\(\)/gu

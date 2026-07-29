@@ -19,6 +19,10 @@ import {
 } from "./configure-abracadabra-hosted-staging.mjs";
 import { publicFileAllowlist } from "./build-pages.mjs";
 import {
+  routeSourcesFromFileMap,
+  validateCustomerSectionLedger,
+} from "./customer-section-ledger.mjs";
+import {
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
   heldTruthRequirements,
@@ -592,6 +596,15 @@ export async function verifyHostedArtifact({
     }
   }
   assertNoPhrases(artifactTextSources, heldOnlyPhrases, "held-only");
+  const sectionLedgerFailures = validateCustomerSectionLedger(
+    routeSourcesFromFileMap(artifactTextSources),
+    { variant: "hosted" },
+  );
+  if (sectionLedgerFailures.length > 0) {
+    throw new Error(
+      `hosted customer section ledger failed:\n- ${sectionLedgerFailures.join("\n- ")}`,
+    );
+  }
 
   const truthFiles = Object.keys(hostedTruthRequirements);
   const sources = new Map(
