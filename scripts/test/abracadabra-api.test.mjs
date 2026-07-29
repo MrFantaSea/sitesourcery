@@ -62,20 +62,153 @@ test("every browser write carries a stable idempotency key and current CSRF toke
   assert.equal(calls[1].options.method, "POST");
 });
 
-test("checkout accepts an approved price identifier, never a browser-supplied amount", async () => {
+test("commerce uses only an offer ID, an exact server quote, and its disclosure digest", async () => {
   const calls = [];
   const client = createClient({
     fetch: async (url, options) => {
       calls.push({ url, options });
-      return response(201, { id: "checkout_1", url: "https://checkout.stripe.test/session" });
+      return response(201, calls.length === 1
+        ? {
+            quoteId: "quote_1",
+            offerId: "business.own",
+            disclosureDigest: "d".repeat(64),
+          }
+        : {
+            quoteId: "quote_1",
+            checkout: { url: "https://checkout.stripe.com/c/pay/test" },
+          });
     },
     idempotencyFactory: () => "checkout-idempotency-key"
   });
 
-  await client.checkout("project_1", "price_approved_1");
-  assert.equal(calls[0].url, "/api/v1/projects/project_1/checkout-intents");
-  assert.deepEqual(JSON.parse(calls[0].options.body), { priceId: "price_approved_1" });
+  await client.createCommerceQuote("project_1", { offerId: "business.own" });
+  assert.equal(calls[0].url, "/api/v1/projects/project_1/commerce-quotes");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { offerId: "business.own" });
   assert.equal(calls[0].options.headers["Idempotency-Key"], "checkout-idempotency-key");
+
+  await client.createCommerceCheckout("project_1", "quote_1", {
+    acceptedDisclosureDigest: "d".repeat(64),
+  });
+  assert.equal(
+    calls[1].url,
+    "/api/v1/projects/project_1/commerce-quotes/quote_1/checkout",
+  );
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    acceptedDisclosureDigest: "d".repeat(64),
+  });
+  for (const call of calls) {
+    const body = JSON.parse(call.options.body);
+    for (const forbidden of ["amount", "amountMinor", "currency", "price", "priceId", "stripePriceId"]) {
+      assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
+    }
+  }
+});
+
+test("cancellation requires a server preview and submits only its accepted disclosure", async () => {
+  const calls = [];
+  const digest = "c".repeat(64);
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (options.method === "GET") {
+        return response(200, {
+          preview: {
+            previewId: "cancel_preview_1",
+            projectId: "project_1",
+            effectiveAt: "2026-08-01T00:00:00.000Z",
+            retentionEndsAt: "2026-10-30T00:00:00.000Z",
+            disclosureDigest: digest,
+          },
+        });
+      }
+      return response(202, { accepted: true });
+    },
+    idempotencyFactory: () => "cancel-idempotency-key",
+  });
+
+  await client.cancellationPreview("project_1");
+  assert.equal(
+    calls[0].url,
+    "/api/v1/projects/project_1/subscription/cancellation-preview",
+  );
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.body, undefined);
+
+  await client.cancelSubscription("project_1", {
+    previewId: "cancel_preview_1",
+    acceptedDisclosureDigest: digest,
+  });
+  assert.equal(calls[1].url, "/api/v1/projects/project_1/subscription/cancel");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.headers["Idempotency-Key"], "cancel-idempotency-key");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    previewId: "cancel_preview_1",
+    acceptedDisclosureDigest: digest,
+  });
+});
+
+test("project exports expose status, retry, and one-time same-origin archive download routes", async () => {
+  const calls = [];
+  const archive = new Blob(["PK\u0003\u0004export"], { type: "application/zip" });
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url.includes("/download?token=")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get(name) {
+              const key = name.toLowerCase();
+              if (key === "content-type") return "application/zip";
+              if (key === "content-length") return String(archive.size);
+              if (key === "content-disposition") {
+                return 'attachment; filename="sitesourcery-project-1.zip"';
+              }
+              return null;
+            },
+          },
+          async blob() {
+            return archive;
+          },
+        };
+      }
+      return response(200, {
+        export: {
+          exportId: "export_1",
+          projectId: "project_1",
+          status: "queued",
+          createdAt: "2026-07-28T12:00:00.000Z",
+          updatedAt: "2026-07-28T12:00:00.000Z",
+        },
+      });
+    },
+    idempotencyFactory: () => "export-idempotency-key",
+  });
+
+  await client.requestExport("project_1");
+  await client.getExport("project_1", "export_1");
+  await client.retryExport("project_1", "export_1");
+  const downloaded = await client.downloadExport(
+    "project_1",
+    "export_1",
+    "one time/token",
+  );
+
+  assert.deepEqual(calls.map(({ url }) => url), [
+    "/api/v1/projects/project_1/exports",
+    "/api/v1/projects/project_1/exports/export_1",
+    "/api/v1/projects/project_1/exports/export_1/retry",
+    "/api/v1/projects/project_1/exports/export_1/download?token=one%20time%2Ftoken",
+  ]);
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[1].options.method, "GET");
+  assert.equal(calls[2].options.method, "POST");
+  assert.equal(calls[3].options.method, "GET");
+  assert.equal(calls[3].options.credentials, "include");
+  assert.equal(calls[3].options.redirect, "error");
+  assert.equal(downloaded.filename, "sitesourcery-project-1.zip");
+  assert.equal(downloaded.blob.size, archive.size);
 });
 
 test("owner input cannot claim payment, subscription, domain, or publication authority", async () => {
@@ -91,7 +224,9 @@ test("owner input cannot claim payment, subscription, domain, or publication aut
     { paymentReceipt: { outcome: "active" } },
     { subscriptionState: "active" },
     { verified: true },
-    { published: true }
+    { published: true },
+    { priceId: "price_forged" },
+    { totals: { dueNow: 0 } }
   ]) {
     assert.throws(
       () => client.createProject({
@@ -103,6 +238,14 @@ test("owner input cannot claim payment, subscription, domain, or publication aut
       (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED"
     );
   }
+
+  assert.throws(
+    () => client.createCommerceQuote("project_1", {
+      offerId: "business.own",
+      nested: { stripePriceRefs: { oneTime: "price_forged" } },
+    }),
+    (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
+  );
 });
 
 test("draft writes carry optimistic-concurrency revision", async () => {

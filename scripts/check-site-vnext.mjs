@@ -179,50 +179,40 @@ export const ABRACADABRA_STATE_BADGE = Object.freeze([
 ]);
 export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
   "/abracadabra/": Object.freeze([
-    "Preview first · no account required",
-    "See your website before you sign up.",
-    "Create an account only when you want to save that direction",
-    "no hosting, outside publication, charge, email, or DNS change",
-    "Guest preview",
-    "No account before you see it",
-    "four-stage maker",
-    "before the account gate",
-    "reviewed preview can carry into the first local project",
-    "remain local to this device",
-    "non-transactional rehearsal",
-    "Multi-tab writing is unsupported and not prevented",
-    "Try a preview without an account",
-    "generated example",
+    "One-page website builder",
+    "Build your website. See it before you pay.",
+    "No account to start",
+    "Your details stay yours",
+    "Your domain stays yours",
+    "Finish one step and the next one opens",
+    "Keep the site your way.",
+    "Rent",
+    "Own",
+    "Own + managed",
+    "exact price and what is included appear before payment",
+    "Build my page",
   ]),
   "/abracadabra/how/": Object.freeze([
-    "happen before an account is required",
-    "account and project begin only when you save",
-    "publish, manage, export, and exit",
-    "reviewed preview can carry into the first project",
-    "remain local to this device",
-    "non-transactional rehearsal",
-    "Multi-tab writing is unsupported and not prevented",
-  ]),
-  "/contact/": Object.freeze([
-    "make and manage my website",
-    "account and project",
-    "publish, manage, export, or exit",
-    ...ABRACADABRA_STATE_BADGE,
-    "Open Abracadabra",
+    "From business details to a live page.",
+    "Build first.",
+    "Your account opens one next step at a time.",
+    "You see the price and terms before payment.",
+    "Pick Rent, Own, or Own + managed.",
+    "A domain purchase is also reviewed before it is submitted.",
+    "Open only the answer you need.",
   ]),
   "/abracadabra/app/": Object.freeze([
-    "See your website before you sign up.",
-    "No account is required.",
-    "the details and previews stay only in this open tab",
-    "Keep the direction when it feels right.",
-    "carry the reviewed version into a project",
+    "Build first. Choose a plan when you want to keep it.",
+    "Your work stays under your control",
+    "Finish one short step to open the next.",
+    "Use a Site Sourcery address",
+    "Use your own domain",
+    "The price is shown before payment.",
+    "See the exact price, renewal terms, and what is included.",
     "Project versions",
-    "Abracadabra Website",
-    "Separate proof step:",
-    "Rehearse plan activation",
-    "No person receives this note from the private build.",
-    "non-transactional local rehearsal",
-    "Multi-tab writing is unsupported and not prevented",
+    "Export or leave",
+    "No account is required to build and test the first version.",
+    "Save and continue",
   ]),
 });
 export const PUBLIC_TRUTH_COPY = Object.freeze({
@@ -316,7 +306,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "QUALITY.md",
   "scripts",
 ]);
-const PUBLIC_ALLOWLIST_COUNT = 66;
+const PUBLIC_ALLOWLIST_COUNT = 67;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 const EXPECTED_ARTIFACT_ROUTE_ERROR =
   "thanks.html: missing legacy redirect to /contact/";
@@ -372,6 +362,12 @@ const RETIRED_ABRACADABRA_PRODUCT_COPY = Object.freeze([
   "I want to make a private page",
   "complete browser-based Spark maker",
   "Open Spark",
+  "non-transactional",
+  "authoritative hosted persistence",
+  "Local candidate boundary",
+  "Rehearse plan activation",
+  "Simulate missed payment",
+  "Multi-tab writing is unsupported",
 ]);
 const RETIRED_HOME_HIVE_COPY = Object.freeze([
   "Ready-made and commissioned systems",
@@ -848,32 +844,31 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const firstAction = landing.source.indexOf('href="/abracadabra/app/#workroom"');
     const hero = firstAction >= 0 ? landing.source.slice(0, firstAction) : "";
     for (const phrase of [
-      "Preview first · no account required",
-      "See your website before you sign up.",
-      "Create an account only when you want to save that direction",
-      "no hosting, outside publication, charge, email, or DNS change",
+      "One-page website builder",
+      "Build your website. See it before you pay.",
+      "When it feels right, choose how you want to keep it.",
     ]) {
       if (!hero.includes(phrase)) {
-        report(errors, landing.file, `missing above-fold local-rehearsal truth ${JSON.stringify(phrase)}`);
+        report(errors, landing.file, `missing above-fold Abracadabra product truth ${JSON.stringify(phrase)}`);
       }
     }
     const firstContentSection = landing.source.indexOf('<section class="section abracadabra-looks">');
     const heroAndProof = firstContentSection >= 0
       ? landing.source.slice(0, firstContentSection)
       : "";
-    if (!heroAndProof.includes("Honest boundary")) {
-      report(errors, landing.file, 'missing above-fold candidate-boundary truth "Honest boundary"');
+    if (!heroAndProof.includes("No account to start") || !heroAndProof.includes("Your domain stays yours")) {
+      report(errors, landing.file, "missing above-fold account or domain ownership truth");
     }
     if (landing.source.toLocaleLowerCase("en-US").includes("live example")) {
       report(errors, landing.file, "contains retired live-example wording for a generated srcdoc demonstration");
     }
-    const pathCardCopy = "Bring the business details, choose one of three released looks, make revisions directly, and keep the reviewed result.";
+    const pathCardCopy = "Build it yourself, approve the result, then choose a plan.";
     if (landing.source.split(pathCardCopy).length - 1 !== 1) {
       report(errors, landing.file, "Abracadabra path-card proof paragraph must appear exactly once");
     }
   }
 
-  for (const route of ["/abracadabra/", "/abracadabra/how/", "/contact/"]) {
+  for (const route of ["/abracadabra/", "/abracadabra/how/"]) {
     const entry = routeSources.get(route);
     if (!entry) continue;
     const journeys = markedElements(entry.file, entry.source, "data-abracadabra-journey", errors);

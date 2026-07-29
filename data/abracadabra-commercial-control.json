@@ -5,9 +5,11 @@
   "currency": "USD",
   "checkout": {
     "enabled": false,
-    "reason": "Abracadabra tenure prices and Stripe Price IDs are not owner-approved.",
+    "reason": "The sellable Abracadabra product set, product-by-tenure prices, and Stripe Price IDs are not owner-approved.",
     "requiresBeforeEnable": [
-      "owner_approved_tenure_prices",
+      "owner_approved_product_release_set",
+      "implemented_contract_for_every_released_product",
+      "owner_approved_offer_prices",
       "owner_approved_customer_terms",
       "stripe_test_price_ids",
       "verified_stripe_test_webhook",
@@ -107,6 +109,13 @@
       "business",
       "presence",
       "spark"
+    ],
+    "implementedVariants": [
+      "spark"
+    ],
+    "heldUnimplementedVariants": [
+      "business",
+      "presence"
     ],
     "tenureIsASeparateAxis": true,
     "tenureModesAreAbracadabraVariants": false,
@@ -216,9 +225,9 @@
     "customerDomainChoiceChangesDeliverableOwnership": false
   },
   "unresolvedOwnerDecisions": [
-    "rent_price_and_interval",
-    "own_one_time_price_and_payment_timing",
-    "owned_managed_one_time_and_recurring_prices",
+    "business_and_presence_product_specs_or_held_release",
+    "approved_product_release_set",
+    "product_by_tenure_offer_prices_and_intervals",
     "refund_policy",
     "tax_treatment",
     "domain_registration_markup_or_management_fee",

@@ -94,17 +94,62 @@ test("control mode is server-configured, invalid or absent configuration holds, 
   assert.equal(modeModule.resolve(documentFixture("query-string-hosted")).held, true);
 
   const configured = modeModule.resolve(documentFixture("hosted", {
-    revision: "catalog_7",
+    schema: "sitesourcery.abracadabra-public-catalog.v1",
+    catalogVersion: "catalog_7",
+    termsVersion: "terms_7",
     domainTermsVersion: "domain-terms-2026-07",
-    variants: {
-      rent: { label: "Rent", priceId: "price_rent" },
-      own: { label: "", priceId: "price_own" },
-      "INVALID SPACE": { label: "Bad", priceId: "price_bad" },
+    products: {
+      spark: {
+        label: "Spark",
+        summary: "One-page business site.",
+        implementationContract: "abracadabra.spark/v1",
+      },
+      business: {
+        label: "Business",
+        summary: "Held because no compiler exists.",
+        implementationContract: "abracadabra.business/v1",
+      },
+    },
+    tenures: {
+      rent: { label: "Rent", summary: "Monthly service." },
+      own: { label: "Own", summary: "Customer owns the finished site." },
+    },
+    offers: {
+      "spark.rent": {
+        productId: "spark",
+        tenureId: "rent",
+        eligibleAddressModes: ["licensed", "customer_owned"],
+      },
+      "spark.own": {
+        productId: "spark",
+        tenureId: "own",
+        eligibleAddressModes: ["customer_owned"],
+      },
+      "business.rent": {
+        productId: "business",
+        tenureId: "rent",
+        eligibleAddressModes: ["licensed"],
+      },
     },
   }));
-  assert.equal(configured.catalog.revision, "catalog_7");
+  assert.equal(configured.catalog.catalogVersion, "catalog_7");
+  assert.equal(configured.catalog.termsVersion, "terms_7");
   assert.equal(configured.catalog.domainTermsVersion, "domain-terms-2026-07");
-  assert.deepEqual(Object.keys(configured.catalog.variants), ["rent"]);
+  assert.deepEqual(Object.keys(configured.catalog.products), ["spark"]);
+  assert.equal(
+    configured.catalog.products.spark.implementationContract,
+    "abracadabra.spark/v1",
+  );
+  assert.deepEqual(Object.keys(configured.catalog.tenures), ["rent", "own"]);
+  assert.deepEqual(
+    Object.keys(configured.catalog.offers),
+    ["spark.rent", "spark.own"],
+  );
+  assert.equal(Object.hasOwn(configured.catalog.offers["spark.rent"], "priceId"), false);
+  assert.deepEqual(
+    configured.catalog.offers["spark.own"].eligibleAddressModes,
+    ["customer_owned"],
+  );
 });
 
 test("private staging injection selects hosted mode in strict script order without changing the held public artifact", async () => {
@@ -112,25 +157,54 @@ test("private staging injection selects hosted mode in strict script order witho
     new URL("../../abracadabra/app/index.html", import.meta.url),
     "utf8",
   );
-  assert.doesNotMatch(publicHtml, /sitesourcery-abracadabra-control-mode/u);
-  for (const asset of hostedStagingAssets) assert.doesNotMatch(publicHtml, new RegExp(asset, "u"));
+  assert.match(
+    publicHtml,
+    /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
+  );
+  assert.match(publicHtml, /abracadabra-control-mode\.js/u);
+  for (const asset of hostedStagingAssets) {
+    if (asset.endsWith("abracadabra-control-mode.js")) continue;
+    assert.doesNotMatch(publicHtml, new RegExp(asset, "u"));
+  }
 
   const hosted = configureHostedAbracadabraHtml(publicHtml, {
     catalog: {
-      revision: "catalog_staging_1",
+      schema: "sitesourcery.abracadabra-public-catalog.v1",
+      catalogVersion: "catalog_staging_1",
+      termsVersion: "terms-staging-1",
       domainTermsVersion: "domain-terms-staging-1",
-      variants: {
-        rent: { label: "Rent", priceId: "price_test_rent" },
-      },
+      products: [
+        {
+          productId: "spark",
+          name: "Spark",
+          description: "One-page business site.",
+          implementationContract: "abracadabra.spark/v1",
+        },
+      ],
+      tenures: [
+        { tenureId: "rent", name: "Rent", billingShape: { recurring: true } },
+      ],
+      offers: [
+        {
+          offerId: "spark.rent",
+          productId: "spark",
+          tenureId: "rent",
+          eligibleAddressModes: ["licensed", "customer_owned"],
+        },
+      ],
     },
   });
   assert.match(
     hosted,
     /<meta name="sitesourcery-abracadabra-control-mode" content="hosted">/u,
   );
+  assert.doesNotMatch(
+    hosted,
+    /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
+  );
   const ordered = [
-    "/abracadabra/app/abracadabra-api.js",
     "/abracadabra/app/abracadabra-control-mode.js",
+    "/abracadabra/app/abracadabra-api.js",
     'id="abracadabra-hosted-catalog"',
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
@@ -147,12 +221,23 @@ test("private staging injection selects hosted mode in strict script order witho
   const catalogJson = hosted.match(
     /<script id="abracadabra-hosted-catalog" type="application\/json">([^<]+)<\/script>/u,
   )[1];
-  assert.equal(Object.hasOwn(JSON.parse(catalogJson).variants.rent, "amountMinor"), false);
-  assert.equal(Object.hasOwn(JSON.parse(catalogJson).variants.rent, "currency"), false);
+  const browserCatalog = JSON.parse(catalogJson);
+  assert.equal(browserCatalog.catalogVersion, "catalog_staging_1");
+  assert.equal(
+    browserCatalog.products.spark.implementationContract,
+    "abracadabra.spark/v1",
+  );
+  assert.deepEqual(browserCatalog.offers["spark.rent"], {
+    productId: "spark",
+    tenureId: "rent",
+    eligibleAddressModes: ["customer_owned", "licensed"],
+  });
+  assert.equal(Object.hasOwn(browserCatalog.offers["spark.rent"], "priceId"), false);
+  assert.equal(Object.hasOwn(browserCatalog.offers["spark.rent"], "amountMinor"), false);
   assert.deepEqual(hostedStagingAssets, [...hostedStagingAssets].sort());
 });
 
-test("staging catalog configuration rejects browser amount and currency authority", async () => {
+test("staging catalog configuration rejects every private price authority field", async () => {
   const publicHtml = await readFile(
     new URL("../../abracadabra/app/index.html", import.meta.url),
     "utf8",
@@ -160,17 +245,22 @@ test("staging catalog configuration rejects browser amount and currency authorit
   assert.throws(
     () => configureHostedAbracadabraHtml(publicHtml, {
       catalog: {
-        variants: {
-          rent: {
-            label: "Rent",
-            priceId: "price_test_rent",
-            amountMinor: 2500,
-            currency: "USD",
-          },
-        },
+        products: [{
+          productId: "spark",
+          name: "Spark",
+          implementationContract: "abracadabra.spark/v1",
+        }],
+        tenures: [{ tenureId: "rent", name: "Rent" }],
+        offers: [{
+          offerId: "spark.rent",
+          productId: "spark",
+          tenureId: "rent",
+          eligibleAddressModes: ["licensed"],
+          stripePriceRefs: { recurring: "price_private" },
+        }],
       },
     }),
-    /never browser price authority/u,
+    /private server price authority/u,
   );
 });
 
@@ -180,15 +270,29 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
     "utf8",
   );
   for (const copy of [
-    "You own the domain. Search, pay, register, and manage it here.",
+    "Buy a domain without leaving Site Sourcery.",
+    "Finish one step to open the next.",
+    "You are the owner.",
     "Payment is not available until prices are set.",
+    "Choose the website, then choose how to keep it.",
+    "A domain is priced separately.",
+    "Nothing is charged on this screen.",
+    "Accept quote and continue to secure payment",
     "We’ll check again right before registration.",
+    "Payment is authorized first.",
     "Register this domain",
     "We got your publish request. This page will show when the site is live.",
     "Save projects to your account, manage billing and domains, and choose exactly what goes live.",
   ]) {
     assert.ok(source.includes(copy), copy);
   }
+  assert.match(
+    source,
+    /href: "\/legal\/website-terms\/#customer-domains"/u,
+  );
+  assert.doesNotMatch(source, /website-terms\/#domains/u);
+  assert.match(source, /moneyCopy\(totals\.oneTime\)/u);
+  assert.doesNotMatch(source, /totals\.dueNow/u);
   for (const jargon of [
     "Hosted staging boundary",
     "server-verified",
@@ -202,6 +306,14 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
   ]) {
     assert.doesNotMatch(source, new RegExp(jargon, "iu"), jargon);
   }
+  const quoteAt = source.indexOf("control.quoteOffer(offerId)");
+  const acceptanceAt = source.indexOf("acceptance.checked !== true");
+  const checkoutAt = source.indexOf("control.checkoutQuotedOffer(reviewedOfferId)");
+  assert.ok(quoteAt >= 0, "server quote call");
+  assert.ok(acceptanceAt > quoteAt, "explicit quote acceptance follows disclosure");
+  assert.ok(checkoutAt > acceptanceAt, "checkout follows explicit acceptance");
+  assert.doesNotMatch(source, /control\.checkout\s*\(/u);
+  assert.doesNotMatch(source, /priceId|stripePrice/u);
 });
 
 test("async actions expose pending and safe retry state while reusing the original idempotency key", async () => {
@@ -344,50 +456,206 @@ test("hosted mode never falls back to local authority after its first mutation",
   assert.equal(control.getState().hostedMutationStarted, true);
 });
 
-test("checkout is held with unresolved catalog prices and maps a selected variant only to its approved price ID", async () => {
+test("checkout is held without an offer, then requires an exact server quote and matching disclosure acceptance", async () => {
+  let quoteCall = null;
   let checkoutCall = null;
   const unresolved = await selectedControl({
-    checkout: async () => {
+    createCommerceQuote: async () => {
+      assert.fail("held quoting must not reach the API");
+    },
+    createCommerceCheckout: async () => {
       assert.fail("held checkout must not reach the API");
     },
   });
   assert.equal(unresolved.getState().checkoutEnabled, false);
   await assert.rejects(
-    () => unresolved.checkout("rent"),
+    () => unresolved.quoteOffer("spark.rent"),
     (error) => error instanceof ControlError && error.code === "CHECKOUT_HELD",
   );
+  await assert.rejects(
+    () => unresolved.checkoutQuotedOffer(),
+    (error) => error instanceof ControlError && error.code === "QUOTE_REVIEW_REQUIRED",
+  );
 
-  const resolved = await selectedControl({
-    checkout: async (projectId, priceId, options) => {
-      checkoutCall = { projectId, priceId, options };
-      return { url: "https://payments.example.test/session" };
+  const ownOnLicensedAddress = await selectedControl({
+    getProject: async () => ({
+      project: {
+        id: "project_1",
+        draft: { revision: 1 },
+        address: {
+          kind: "licensed",
+          label: "example",
+          revision: "address_rev_licensed",
+        },
+        versions: [],
+      },
+    }),
+    createCommerceQuote: async () => {
+      assert.fail("an Own quote on a licensed address must not reach the API");
+    },
+    createCommerceCheckout: async () => {
+      assert.fail("an Own checkout on a licensed address must not reach the API");
     },
   }, {
     catalog: {
-      revision: "catalog_1",
-      variants: {
-        rent: { label: "Rent", priceId: "price_rent_approved" },
-        own: { label: "Own it", priceId: "price_own_approved" },
+      catalogVersion: "catalog_1",
+      products: {
+        spark: {
+          label: "Spark",
+          implementationContract: "abracadabra.spark/v1",
+        },
+      },
+      tenures: {
+        own: { label: "Own" },
+      },
+      offers: {
+        "spark.own": {
+          productId: "spark",
+          tenureId: "own",
+          eligibleAddressModes: ["customer_owned"],
+        },
+      },
+    },
+  });
+  await assert.rejects(
+    () => ownOnLicensedAddress.quoteOffer("spark.own"),
+    (error) => error instanceof ControlError && error.code === "OFFER_ADDRESS_INELIGIBLE",
+  );
+
+  const resolved = await selectedControl({
+    createCommerceQuote: async (projectId, input, options) => {
+      quoteCall = { projectId, input, options };
+      return {
+        quote: {
+          quoteId: "commerce_quote_1",
+          projectId,
+          offerId: input.offerId,
+          disclosureDigest: "d".repeat(64),
+          addressBinding: {
+            mode: "customer_owned",
+            revision: "address_rev_1",
+          },
+          lineItems: [{
+            label: "Spark — Own",
+            oneTime: { amountMinor: 10000, currency: "USD" },
+            terms: {},
+          }],
+          totals: {
+            oneTime: { amountMinor: 10000, currency: "USD" },
+            recurring: [],
+          },
+          expiresAt: "2099-08-01T00:00:00.000Z",
+        },
+      };
+    },
+    createCommerceCheckout: async (projectId, quoteId, input, options) => {
+      checkoutCall = { projectId, quoteId, input, options };
+      return {
+        quoteId,
+        checkout: { url: "https://checkout.stripe.com/c/pay/test" },
+      };
+    },
+    getProject: async () => ({
+      project: {
+        id: "project_1",
+        draft: { revision: 1 },
+        address: {
+          kind: "custom",
+          hostname: "example.com",
+          state: "verified",
+          revision: "address_rev_1",
+        },
+        versions: [],
+      },
+    }),
+  }, {
+    catalog: {
+      catalogVersion: "catalog_1",
+      products: {
+        spark: {
+          label: "Spark",
+          implementationContract: "abracadabra.spark/v1",
+        },
+      },
+      tenures: {
+        own: { label: "Own" },
+      },
+      offers: {
+        "spark.own": {
+          productId: "spark",
+          tenureId: "own",
+          eligibleAddressModes: ["customer_owned"],
+        },
       },
     },
     idempotencyFactory: () => "idem_checkout",
   });
   assert.equal(resolved.getState().checkoutEnabled, true);
-  await resolved.checkout("own");
+  await assert.rejects(
+    () => resolved.checkoutQuotedOffer(),
+    (error) => error instanceof ControlError && error.code === "QUOTE_REVIEW_REQUIRED",
+  );
+  await resolved.quoteOffer("spark.own");
+  assert.deepEqual(quoteCall, {
+    projectId: "project_1",
+    input: { offerId: "spark.own", domainQuoteId: null },
+    options: { idempotencyKey: "idem_checkout" },
+  });
+  assert.equal(Object.hasOwn(quoteCall.input, "amount"), false);
+  assert.equal(Object.hasOwn(quoteCall.input, "currency"), false);
+  assert.equal(Object.hasOwn(quoteCall.input, "priceId"), false);
+  assert.equal(resolved.getState().commerceQuote.quoteId, "commerce_quote_1");
+
+  await resolved.checkoutQuotedOffer();
   assert.deepEqual(checkoutCall, {
     projectId: "project_1",
-    priceId: "price_own_approved",
+    quoteId: "commerce_quote_1",
+    input: { acceptedDisclosureDigest: "d".repeat(64) },
     options: { idempotencyKey: "idem_checkout" },
   });
   assert.equal(Object.hasOwn(checkoutCall, "amount"), false);
   assert.equal(Object.hasOwn(checkoutCall, "currency"), false);
+  assert.equal(Object.hasOwn(checkoutCall, "priceId"), false);
+});
+
+test("publication stays disabled without both paid entitlement and a verified address", async () => {
+  const unpaid = await selectedControl({
+    requestRelease: async () => {
+      assert.fail("unpaid publication must not reach the API");
+    },
+  });
+  await assert.rejects(
+    () => unpaid.requestRelease("version_1"),
+    (error) => error instanceof ControlError && error.code === "PAID_ENTITLEMENT_REQUIRED",
+  );
+
+  const unverified = await selectedControl({
+    getProject: async () => ({
+      project: {
+        id: "project_1",
+        draft: { revision: 1 },
+        address: { kind: "custom", state: "pending" },
+        versions: [],
+      },
+    }),
+    subscription: async () => ({ subscription: { status: "current" } }),
+    requestRelease: async () => {
+      assert.fail("unverified publication must not reach the API");
+    },
+  });
+  await assert.rejects(
+    () => unverified.requestRelease("version_1"),
+    (error) => error instanceof ControlError && error.code === "VERIFIED_ADDRESS_REQUIRED",
+  );
 });
 
 test("reviewed versions, addresses, verification, release, billing, support, export, and deletion delegate asynchronously", async () => {
   const calls = [];
+  const cancellationDigest = "c".repeat(64);
   const project = {
     id: "project_1",
     draft: { revision: 1 },
+    address: { kind: "licensed", state: "configured" },
     versions: [],
   };
   const methods = {
@@ -415,6 +683,18 @@ test("reviewed versions, addresses, verification, release, billing, support, exp
       calls.push(["billingPortal", ...args]);
       return { url: "https://billing.example.test/" };
     },
+    cancellationPreview: async (...args) => {
+      calls.push(["cancellationPreview", ...args]);
+      return {
+        preview: {
+          previewId: "cancel_preview_1",
+          projectId: "project_1",
+          effectiveAt: "2026-08-01T00:00:00.000Z",
+          retentionEndsAt: "2026-10-30T00:00:00.000Z",
+          disclosureDigest: cancellationDigest,
+        },
+      };
+    },
     cancelSubscription: async (...args) => {
       calls.push(["cancelSubscription", ...args]);
       return { accepted: true };
@@ -437,7 +717,15 @@ test("reviewed versions, addresses, verification, release, billing, support, exp
     },
     requestExport: async (...args) => {
       calls.push(["requestExport", ...args]);
-      return { accepted: true };
+      return {
+        export: {
+          exportId: "export_1",
+          projectId: "project_1",
+          status: "queued",
+          createdAt: "2026-07-28T12:00:00.000Z",
+          updatedAt: "2026-07-28T12:00:00.000Z",
+        },
+      };
     },
     deleteProject: async (...args) => {
       calls.push(["deleteProject", ...args]);
@@ -467,6 +755,7 @@ test("reviewed versions, addresses, verification, release, billing, support, exp
     reference: "proof_1",
   });
   await control.billingPortal();
+  await control.previewCancellation();
   await control.cancelSubscription();
   await control.requestRelease("version_1");
   await control.unpublish();
@@ -483,6 +772,7 @@ test("reviewed versions, addresses, verification, release, billing, support, exp
     "selectAddress",
     "requestDomainVerification",
     "billingPortal",
+    "cancellationPreview",
     "cancelSubscription",
     "requestRelease",
     "unpublish",
@@ -493,7 +783,115 @@ test("reviewed versions, addresses, verification, release, billing, support, exp
   ]) {
     assert.ok(names.includes(expected), expected);
   }
+  const cancelCall = calls.find(([name]) => name === "cancelSubscription");
+  assert.deepEqual(cancelCall.slice(1, 3), [
+    "project_1",
+    {
+      previewId: "cancel_preview_1",
+      acceptedDisclosureDigest: cancellationDigest,
+    },
+  ]);
   assert.equal(control.getState().project, null);
+});
+
+test("cancellation cannot mutate a subscription before the exact server dates are reviewed", async () => {
+  const control = await selectedControl({
+    cancelSubscription: async () => {
+      assert.fail("cancellation without a reviewed preview must not reach the API");
+    },
+  });
+
+  await assert.rejects(
+    () => control.cancelSubscription(),
+    (error) => error instanceof ControlError
+      && error.code === "CANCELLATION_PREVIEW_REQUIRED",
+  );
+});
+
+test("hosted export progresses to a one-time download and can regenerate after use", async () => {
+  const calls = [];
+  let statusRead = 0;
+  const timestamps = {
+    createdAt: "2026-07-28T12:00:00.000Z",
+    updatedAt: "2026-07-28T12:00:01.000Z",
+  };
+  const control = await selectedControl({
+    requestExport: async (...args) => {
+      calls.push(["requestExport", ...args]);
+      return {
+        export: {
+          exportId: "export_1",
+          projectId: "project_1",
+          status: "queued",
+          ...timestamps,
+        },
+      };
+    },
+    getExport: async (...args) => {
+      calls.push(["getExport", ...args]);
+      statusRead += 1;
+      return {
+        export: statusRead === 1
+          ? {
+              exportId: "export_1",
+              projectId: "project_1",
+              status: "working",
+              ...timestamps,
+            }
+          : {
+              exportId: "export_1",
+              projectId: "project_1",
+              status: "ready",
+              ...timestamps,
+              filename: "sitesourcery-project-1.zip",
+              download: {
+                token: "download_token_1",
+                expiresAt: "2099-07-28T12:05:00.000Z",
+              },
+            },
+      };
+    },
+    downloadExport: async (...args) => {
+      calls.push(["downloadExport", ...args]);
+      return { blob: { size: 128 }, filename: "sitesourcery-project-1.zip" };
+    },
+    retryExport: async (...args) => {
+      calls.push(["retryExport", ...args]);
+      return {
+        export: {
+          exportId: "export_2",
+          projectId: "project_1",
+          status: "queued",
+          ...timestamps,
+        },
+      };
+    },
+  }, {
+    idempotencyFactory: (() => {
+      let value = 0;
+      return () => `export_idem_${++value}`;
+    })(),
+  });
+
+  await assert.rejects(
+    () => control.downloadExport(),
+    (error) => error.code === "EXPORT_DOWNLOAD_UNAVAILABLE",
+  );
+  await control.requestExport();
+  assert.equal(control.getState().exportJob.status, "queued");
+  await control.getExport();
+  assert.equal(control.getState().exportJob.status, "working");
+  await control.getExport();
+  assert.equal(control.getState().exportJob.status, "ready");
+  const download = await control.downloadExport();
+  assert.equal(download.filename, "sitesourcery-project-1.zip");
+  assert.equal(control.getState().exportJob.status, "expired");
+  await control.retryExport();
+  assert.equal(control.getState().exportJob.exportId, "export_2");
+  assert.deepEqual(
+    calls.find(([name]) => name === "downloadExport").slice(1),
+    ["project_1", "export_1", "download_token_1"],
+  );
 });
 
 test("domain storefront preserves quote, registrant, payment, fresh-price, registration, DNS, renewal, and transfer authority boundaries", async () => {
@@ -511,6 +909,15 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
           hostname: input.hostname,
           amountMinor: 1900,
           currency: "USD",
+          years: input.years,
+          registrar: "Spaceship",
+          termsVersion: "domain-terms-2026-07",
+          terms: {
+            registrar: "Spaceship",
+            renewal: "Renewal is quoted before charge.",
+            cancellation: "A completed registration cannot be canceled.",
+            ownership: "The customer is the registrant.",
+          },
         },
       };
     },
@@ -534,7 +941,18 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
     }),
     refreshDomainPrice: async (orderId, options) => {
       calls.push(["refreshDomainPrice", orderId, options]);
-      return { priceCheck: { id: "price_check_1", status: "unchanged" } };
+      return {
+        priceCheck: {
+          priceCheckId: "price_check_1",
+          orderId,
+          status: "ready_to_confirm",
+          hostname: "cedar.example",
+          available: true,
+          finalPrice: { amountMinor: 1900, currency: "USD" },
+          checkedAt: "2026-07-28T12:00:00.000Z",
+          expiresAt: "2099-07-28T12:05:00.000Z",
+        },
+      };
     },
     requestDomainRegistration: async (orderId, input, options) => {
       calls.push(["requestDomainRegistration", orderId, input, options]);
@@ -584,6 +1002,28 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
     postalCode: "08102",
     countryCode: "US",
   });
+  await control.restartDomainPurchase("owner");
+  assert.equal(control.getState().domainQuote.id, "quote_1");
+  assert.equal(control.getState().registrantContact, null);
+  await control.saveRegistrantContact({
+    name: "Customer Owner",
+    email: "owner@example.com",
+    phone: "+1 856 555 0100",
+    addressLine1: "1 Main Street",
+    city: "Camden",
+    region: "NJ",
+    postalCode: "08102",
+    countryCode: "US",
+  });
+  await control.acceptDomainConsent({
+    termsVersion: "domain-terms-2026-07",
+    registrationAgreementAccepted: true,
+    registrantCertificationAccepted: true,
+    autoRenewRequested: true,
+  });
+  await control.restartDomainPurchase("review");
+  assert.equal(control.getState().domainConsent, null);
+  assert.equal(control.getState().registrantContact.id, "contact_1");
   await control.acceptDomainConsent({
     termsVersion: "domain-terms-2026-07",
     registrationAgreementAccepted: true,
@@ -592,10 +1032,19 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
   });
   await control.createDomainOrder();
   await assert.rejects(
+    () => control.restartDomainPurchase("search"),
+    (error) => error.code === "DOMAIN_ORDER_LOCKED",
+  );
+  await assert.rejects(
     () => control.requestDomainRegistration({ irreversibleRegistrationAccepted: true }),
     (error) => error.code === "FRESH_DOMAIN_PRICE_REQUIRED",
   );
+  await control.listDomainOrders();
   await control.refreshDomainPrice();
+  assert.deepEqual(control.getState().domainPriceCheck.finalPrice, {
+    amountMinor: 1900,
+    currency: "USD",
+  });
   await assert.rejects(
     () => control.requestDomainRegistration({ irreversibleRegistrationAccepted: false }),
     (error) => error.code === "IRREVERSIBLE_REGISTRATION_CONSENT_REQUIRED",
@@ -637,6 +1086,83 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
   ]) {
     assert.ok(calls.some(([name]) => name === expected), expected);
   }
+});
+
+test("a changed final domain price voids the reviewed purchase path and cannot register", async () => {
+  const control = await selectedControl({
+    createDomainQuote: async (input) => ({
+      quote: {
+        id: "quote_changed",
+        hostname: input.hostname,
+        amountMinor: 1900,
+        currency: "USD",
+        years: 1,
+        registrar: "Spaceship",
+        termsVersion: "domain-terms-2026-07",
+        terms: {
+          registrar: "Spaceship",
+          renewal: "Renewal is quoted before charge.",
+          cancellation: "A completed registration cannot be canceled.",
+          ownership: "The customer is the registrant.",
+        },
+      },
+    }),
+    saveRegistrantContact: async () => ({
+      registrantContact: { id: "contact_changed", name: "Customer Owner" },
+    }),
+    acceptDomainConsent: async () => ({ consent: { id: "consent_changed" } }),
+    createDomainOrder: async () => ({
+      domainOrder: { id: "order_changed", status: "payment_pending" },
+    }),
+    listDomainOrders: async () => ({
+      domainOrders: [{ id: "order_changed", status: "paid" }],
+    }),
+    refreshDomainPrice: async (orderId) => ({
+      priceCheck: {
+        priceCheckId: "price_check_changed",
+        orderId,
+        status: "changed",
+        hostname: "cedar.example",
+        available: true,
+        finalPrice: { amountMinor: 2400, currency: "USD" },
+        checkedAt: "2026-07-28T12:00:00.000Z",
+        expiresAt: "2099-07-28T12:05:00.000Z",
+      },
+    }),
+    requestDomainRegistration: async () => {
+      assert.fail("a changed price must not reach registration");
+    },
+  });
+
+  await control.createDomainQuote({ hostname: "cedar.example", years: 1 });
+  await control.saveRegistrantContact({
+    name: "Customer Owner",
+    email: "owner@example.com",
+    phone: "+1 856 555 0100",
+    addressLine1: "1 Main Street",
+    city: "Camden",
+    region: "NJ",
+    postalCode: "08102",
+    countryCode: "US",
+  });
+  await control.acceptDomainConsent({
+    termsVersion: "domain-terms-2026-07",
+    registrationAgreementAccepted: true,
+    registrantCertificationAccepted: true,
+  });
+  await control.createDomainOrder();
+  await control.listDomainOrders();
+  await control.refreshDomainPrice();
+
+  const state = control.getState();
+  assert.equal(state.domainPriceCheck.status, "changed");
+  assert.equal(state.domainQuote, null);
+  assert.equal(state.domainConsent, null);
+  assert.equal(state.domainOrder, null);
+  await assert.rejects(
+    () => control.requestDomainRegistration({ irreversibleRegistrationAccepted: true }),
+    (error) => error.code === "FRESH_DOMAIN_PRICE_REQUIRED",
+  );
 });
 
 test("browser API rejects nested domain authority claims before network access", () => {

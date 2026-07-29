@@ -216,63 +216,46 @@ function routeFeature(route) {
   }
   if (route === "/abracadabra/") {
     return [
-      '<section data-abracadabra-journey="account-to-exit">',
-      "<h2>Preview first · no account required</h2>",
-      "See your website before you sign up.",
-      "Create an account only when you want to save that direction.",
-      "This candidate still creates no hosting, outside publication, charge, email, or DNS change.",
-      "<strong>Guest preview</strong>",
-      "<span>No account before you see it</span>",
-      "<strong>Honest boundary</strong>",
-      "The four-stage maker stages happen before the account gate.",
-      "Those product effects remain local to this device in a non-transactional rehearsal.",
-      "Multi-tab writing is unsupported and not prevented.",
-      "Try a preview without an account. Opening the Warm generated example…",
+      '<section data-abracadabra-journey="account-to-exit" data-abracadabra-state-model="session-vs-saved">',
+      "<h2>One-page website builder</h2>",
+      "Build your website. See it before you pay.",
+      "When it feels right, choose how you want to keep it.",
+      "No account to start. Your details stay yours. Your domain stays yours.",
+      "Finish one step and the next one opens.",
+      "Keep the site your way. Rent. Own. Own + managed.",
+      "The exact price and what is included appear before payment.",
+      "Build my page.",
+      "Build it yourself, approve the result, then choose a plan.",
       '<a href="/abracadabra/app/#workroom">Open</a>',
       "</section>",
-      '<aside data-abracadabra-state-model="session-vs-saved">',
-      "The reviewed preview can carry into the first local project.",
-      "</aside>",
-      "<p>Bring the business details, choose one of three released looks, make revisions directly, and keep the reviewed result.</p>",
       '<section class="section abracadabra-looks"></section>',
     ].join("");
   }
   if (route === "/abracadabra/how/") {
     return [
-      '<section data-abracadabra-journey="account-to-exit">',
-      "Business, Look, Review, and Preview happen before an account is required.",
-      "The account and project begin only when you save. Accept, publish, manage, export, and exit. Those product effects remain local to this device in a non-transactional rehearsal.",
-      "Multi-tab writing is unsupported and not prevented.",
-      "</section>",
-      '<aside data-abracadabra-state-model="session-vs-saved">',
-      "The reviewed preview can carry into the first project.",
-      "</aside>",
-    ].join("");
-  }
-  if (route === "/contact/") {
-    return [
-      '<section data-abracadabra-journey="account-to-exit">',
-      "<h2>I want to make and manage my website</h2>",
-      "<p>Use the account and project to publish, manage, export, or exit.</p>",
-      ...ABRACADABRA_STATE_BADGE.map((phrase) => `<p>${phrase}</p>`),
-      "<a>Open Abracadabra</a>",
+      '<section data-abracadabra-journey="account-to-exit" data-abracadabra-state-model="session-vs-saved">',
+      "From business details to a live page. Build first.",
+      "Your account opens one next step at a time.",
+      "You see the price and terms before payment.",
+      "Pick Rent, Own, or Own + managed.",
+      "A domain purchase is also reviewed before it is submitted.",
+      "Open only the answer you need.",
       "</section>",
     ].join("");
   }
   if (route === "/abracadabra/app/") {
     return [
       '<section id="workroom"></section>',
-      "<p>See your website before you sign up.</p>",
-      "<p>No account is required.</p>",
-      "<p>The details and previews stay only in this open tab.</p>",
-      "<p>Keep the direction when it feels right.</p>",
-      "<p>Carry the reviewed version into a project.</p>",
+      "<p>Build first. Choose a plan when you want to keep it.</p>",
+      "<p>Your work stays under your control.</p>",
+      "<p>Finish one short step to open the next.</p>",
+      "<p>Use a Site Sourcery address. Use your own domain.</p>",
+      "<p>The price is shown before payment.</p>",
+      "<p>See the exact price, renewal terms, and what is included.</p>",
       "<h2>Project versions</h2>",
-      "<p>Abracadabra Website</p>",
-      "<p>Separate proof step:</p>",
-      "<button>Rehearse plan activation</button>",
-      "<p>No person receives this note from the private build.</p>",
-      "<p>This browser store is a non-transactional local rehearsal. Multi-tab writing is unsupported and not prevented.</p>",
+      "<p>Export or leave.</p>",
+      "<p>No account is required to build and test the first version.</p>",
+      "<button>Save and continue</button>",
       '<label>Project title <input type="text" name="project-title"></label>',
     ].join("");
   }
@@ -413,7 +396,7 @@ async function expectSiteFailure(mutate, expression) {
 
 test("canonical route ledger is exact and stable", () => {
   assert.deepEqual(CANONICAL_ROUTES, EXPECTED_ROUTES);
-  assert.equal(publicFileAllowlist.length, 66);
+  assert.equal(publicFileAllowlist.length, 67);
   assert.deepEqual(publicFileAllowlist, [...publicFileAllowlist].sort());
   assert.equal(publicFileAllowlist.includes("thanks.html"), false);
   assert.equal(publicFileAllowlist.includes("data/release-control.json"), false);
@@ -472,7 +455,6 @@ test("canonical route ledger is exact and stable", () => {
   assert.deepEqual(Object.keys(ABRACADABRA_PRODUCT_COPY), [
     "/abracadabra/",
     "/abracadabra/how/",
-    "/contact/",
     "/abracadabra/app/",
   ]);
 });
@@ -504,7 +486,7 @@ test("valid fixture satisfies provider-free vNext and artifact boundary", async 
     assert.equal(result.counts.homeDoors, 3);
     assert.equal(result.counts.hiveCells, 6);
     assert.equal(result.counts.solutionAnchors, 9);
-    assert.equal(result.counts.artifactFiles, 66);
+    assert.equal(result.counts.artifactFiles, 67);
   });
 });
 
@@ -513,7 +495,7 @@ test("an unreviewed root file cannot enter the allowlisted public ledger", async
     await put(root, "rogue.js", 'fetch("https://provider.invalid"); // unavailable $999');
     const result = await validateSiteVnext(root);
     assert.equal(result.ok, true, result.errors.join("\n"));
-    assert.equal(result.counts.artifactFiles, 66);
+    assert.equal(result.counts.artifactFiles, 67);
   });
 });
 
@@ -564,7 +546,7 @@ test("source-only thanks redirect is validated but excluded from public content 
     assert.equal(routes.ok, true, routes.errors.join("\n"));
     const site = await validateSiteVnext(root);
     assert.equal(site.ok, true, site.errors.join("\n"));
-    assert.equal(site.counts.artifactFiles, 66);
+    assert.equal(site.counts.artifactFiles, 67);
   });
 });
 
@@ -975,8 +957,8 @@ test("vNext locks Hive planning truth and long-page deep links", async (t) => {
 test("vNext keeps every Abracadabra route on the account-to-exit product model", async (t) => {
   await t.test("landing copy", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/index.html", (source) =>
-      source.replace("four-stage maker", "page builder")),
-    /missing Abracadabra product-coherence copy "four-stage maker"/u,
+      source.replace("Keep the site your way.", "Keep it.")),
+    /missing Abracadabra product-coherence copy "Keep the site your way."/u,
   ));
   await t.test("saved-state marker", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/how/index.html", (source) =>
@@ -985,25 +967,25 @@ test("vNext keeps every Abracadabra route on the account-to-exit product model",
   ));
   await t.test("landing truth precedes the first app action", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/index.html", (source) =>
-      source.replace("Preview first · no account required", "Abracadabra")),
-    /missing above-fold local-rehearsal truth/u,
+      source.replace("One-page website builder", "Website builder")),
+    /missing above-fold Abracadabra product truth/u,
   ));
   await t.test("landing hero keeps compact local-state boundary", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/index.html", (source) =>
       source.replace(
-        "Create an account only when you want to save that direction",
-        "Create an account before previewing",
+        "When it feels right, choose how you want to keep it.",
+        "Choose before you build.",
       )),
-    /(?:missing Abracadabra product-coherence copy|missing above-fold local-rehearsal truth)/u,
+    /missing above-fold Abracadabra product truth/u,
   ));
   await t.test("generated example is not called live", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/index.html", (source) =>
       replaceRequired(
         source,
-        "Opening the Warm generated example…",
-        "Opening the Warm live example…",
+        "Build my page.",
+        "Live example.",
       )),
-    /(?:contains retired live-example wording|missing Abracadabra product-coherence copy "generated example")/u,
+    /contains retired live-example wording/u,
   ));
   await t.test("runtime showcase status is not called live", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/abracadabra-showcase.js", (source) =>
@@ -1016,15 +998,15 @@ test("vNext keeps every Abracadabra route on the account-to-exit product model",
   ));
   await t.test("path-card proof paragraph appears once", () => expectSiteFailure(
     (root) => modify(root, "abracadabra/index.html", (source) => {
-      const paragraph = "Bring the business details, choose one of three released looks, make revisions directly, and keep the reviewed result.";
+      const paragraph = "Build it yourself, approve the result, then choose a plan.";
       return source.replace("</main>", `<p>${paragraph}</p></main>`);
     }),
     /path-card proof paragraph must appear exactly once/u,
   ));
-  await t.test("contact route", () => expectSiteFailure(
-    (root) => modify(root, "contact/index.html", (source) =>
-      source.replace("Open Abracadabra", "Open Spark")),
-    /(?:missing Abracadabra product-coherence copy "Open Abracadabra"|contains retired Abracadabra product model "Open Spark")/u,
+  await t.test("app route", () => expectSiteFailure(
+    (root) => modify(root, "abracadabra/app/index.html", (source) =>
+      source.replace("Finish one short step to open the next.", "Fill every field.")),
+    /missing Abracadabra product-coherence copy "Finish one short step to open the next."/u,
   ));
 });
 

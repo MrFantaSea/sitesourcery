@@ -21,7 +21,10 @@
     "entitlement",
     "externalCheckoutRef",
     "externalSubscriptionRef",
+    "lineItems",
     "paymentReceipt",
+    "price",
+    "priceId",
     "providerReference",
     "providerReceipt",
     "published",
@@ -30,8 +33,11 @@
     "registrationState",
     "renewed",
     "signatureVerified",
+    "stripePriceId",
+    "stripePriceRefs",
     "subscriptionId",
     "subscriptionState",
+    "totals",
     "verified"
   ]);
   var FORBIDDEN_AUTHORITY_FIELDS_NORMALIZED = new Set(
@@ -228,6 +234,101 @@
       return payload;
     }
 
+    async function requestBinary(path, requestOptions) {
+      var response;
+      try {
+        response = await fetchImpl(baseUrl + path, {
+          method: "GET",
+          headers: { Accept: "application/zip, application/octet-stream" },
+          credentials: "include",
+          redirect: "error",
+          signal: requestOptions && requestOptions.signal
+        });
+      } catch (_error) {
+        throw new APIError({
+          code: "NETWORK_ERROR",
+          message: "Site Sourcery could not reach its secure service. Check the connection and try again.",
+          retryable: true
+        });
+      }
+      var requestId = response.headers && response.headers.get
+        ? response.headers.get("x-request-id")
+        : null;
+      var contentType = response.headers && response.headers.get
+        ? String(response.headers.get("content-type") || "").toLowerCase()
+        : "";
+      if (!response.ok) {
+        var payload = null;
+        if (contentType.includes("application/json")) {
+          try {
+            payload = await response.json();
+          } catch (_error) {
+            payload = null;
+          }
+        }
+        var errorBody = payload && isObject(payload.error) ? payload.error : payload;
+        throw new APIError({
+          status: response.status,
+          code: errorBody && errorBody.code,
+          message: errorBody && typeof errorBody.message === "string"
+            ? errorBody.message.slice(0, 500)
+            : "The project export could not be downloaded.",
+          requestId: (errorBody && errorBody.requestId) || requestId,
+          retryable: response.status === 409 || response.status === 429 || response.status >= 500
+        });
+      }
+      if (
+        !contentType.includes("application/zip")
+        && !contentType.includes("application/octet-stream")
+      ) {
+        throw new APIError({
+          status: response.status,
+          code: "INVALID_EXPORT_RESPONSE",
+          message: "The project export response was not a downloadable archive.",
+          requestId: requestId,
+          retryable: true
+        });
+      }
+      var statedLength = Number(
+        response.headers && response.headers.get
+          ? response.headers.get("content-length")
+          : NaN
+      );
+      if (Number.isFinite(statedLength) && (statedLength < 1 || statedLength > 50 * 1024 * 1024)) {
+        throw new APIError({
+          code: "INVALID_EXPORT_SIZE",
+          message: "The project export size was outside the safe download limit.",
+          requestId: requestId
+        });
+      }
+      var blob;
+      try {
+        blob = await response.blob();
+      } catch (_error) {
+        throw new APIError({
+          code: "INVALID_EXPORT_RESPONSE",
+          message: "The project export archive could not be read.",
+          requestId: requestId,
+          retryable: true
+        });
+      }
+      if (!blob || !Number.isSafeInteger(blob.size) || blob.size < 1 || blob.size > 50 * 1024 * 1024) {
+        throw new APIError({
+          code: "INVALID_EXPORT_SIZE",
+          message: "The project export size was outside the safe download limit.",
+          requestId: requestId
+        });
+      }
+      var disposition = response.headers && response.headers.get
+        ? String(response.headers.get("content-disposition") || "")
+        : "";
+      var filenameMatch = disposition.match(/filename="?([^";]+)"?/iu);
+      var filename = String(filenameMatch && filenameMatch[1] || "sitesourcery-project-export.zip")
+        .replace(/[^a-z0-9._-]+/giu, "-")
+        .slice(0, 160);
+      return Object.freeze({ blob: blob, filename: filename });
+    }
+
     function register(input, requestOptions) {
       var source = isObject(input) ? input : {};
       return request("POST", "/auth/register", {
@@ -404,12 +505,48 @@
       );
     }
 
-    function checkout(projectId, priceId, requestOptions) {
+    function createCommerceQuote(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      var body = {
+        offerId: requiredText(source.offerId, "Offer ID", 100)
+      };
+      var domainQuoteId = optionalText(source.domainQuoteId, 200);
+      if (domainQuoteId) body.domainQuoteId = domainQuoteId;
       return request(
         "POST",
-        "/projects/" + segment(projectId, "Project ID") + "/checkout-intents",
+        "/projects/" + segment(projectId, "Project ID") + "/commerce-quotes",
         {
-          body: { priceId: requiredText(priceId, "Price ID", 200) },
+          body: body,
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function getCommerceQuote(projectId, quoteId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/commerce-quotes/" + segment(quoteId, "Commerce quote ID"),
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function createCommerceCheckout(projectId, quoteId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/commerce-quotes/" + segment(quoteId, "Commerce quote ID") + "/checkout",
+        {
+          body: {
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted quote digest",
+              100
+            )
+          },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
       );
@@ -427,11 +564,31 @@
       return request("GET", "/projects/" + segment(projectId, "Project ID") + "/subscription");
     }
 
-    function cancelSubscription(projectId, requestOptions) {
+    function cancellationPreview(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID") + "/subscription/cancellation-preview",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function cancelSubscription(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
       return request(
         "POST",
         "/projects/" + segment(projectId, "Project ID") + "/subscription/cancel",
-        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
+        {
+          body: {
+            previewId: requiredText(source.previewId, "Cancellation preview ID", 200),
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted cancellation digest",
+              100
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
       );
     }
 
@@ -484,6 +641,33 @@
       return request("POST", "/projects/" + segment(projectId, "Project ID") + "/exports", {
         idempotencyKey: requestOptions && requestOptions.idempotencyKey
       });
+    }
+
+    function getExport(projectId, exportId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/exports/" + segment(exportId, "Export ID"),
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function retryExport(projectId, exportId, requestOptions) {
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/exports/" + segment(exportId, "Export ID") + "/retry",
+        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
+      );
+    }
+
+    function downloadExport(projectId, exportId, token, requestOptions) {
+      return requestBinary(
+        "/projects/" + segment(projectId, "Project ID")
+          + "/exports/" + segment(exportId, "Export ID")
+          + "/download?token=" + encodeURIComponent(requiredText(token, "Export download token", 512)),
+        requestOptions
+      );
     }
 
     function deleteProject(projectId, requestOptions) {
@@ -718,15 +902,21 @@
       acceptVersion: acceptVersion,
       selectAddress: selectAddress,
       requestDomainVerification: requestDomainVerification,
-      checkout: checkout,
+      createCommerceQuote: createCommerceQuote,
+      getCommerceQuote: getCommerceQuote,
+      createCommerceCheckout: createCommerceCheckout,
       billingPortal: billingPortal,
       subscription: subscription,
+      cancellationPreview: cancellationPreview,
       cancelSubscription: cancelSubscription,
       requestRelease: requestRelease,
       unpublish: unpublish,
       setVisibility: setVisibility,
       createSupportTicket: createSupportTicket,
       requestExport: requestExport,
+      getExport: getExport,
+      retryExport: retryExport,
+      downloadExport: downloadExport,
       deleteProject: deleteProject,
       searchDomains: searchDomains,
       createDomainQuote: createDomainQuote,

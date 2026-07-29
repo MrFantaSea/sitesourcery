@@ -6,7 +6,7 @@
   var modeModule = window.SiteSourceryAbracadabraControlMode;
   var controlConfiguration = modeModule
     ? modeModule.resolve(document)
-    : { localRehearsal: true };
+    : { held: true, localRehearsal: false };
   var status = document.getElementById("platform-status");
   var auth = document.getElementById("platform-auth");
   var dashboard = document.getElementById("platform-dashboard");
@@ -503,22 +503,22 @@
     } else {
       selectedTitle.textContent = "No accepted version selected";
       selectedSummary.textContent = "Make and review a version below, or choose one from the release history.";
-      publishButton.textContent = "Publish selected version";
+      publishButton.textContent = "Publish this version";
     }
     var unpublish = one("[data-unpublish]");
     unpublish.hidden = !active || project.serving.state !== "live";
 
     var releaseCopy = one("[data-release-copy]");
     if (!latest) {
-      releaseCopy.textContent = "Make a reviewed preview in the workroom below. It will be saved here as an accepted release.";
+      releaseCopy.textContent = "Make and review a version in the builder below.";
     } else if (!selected) {
-      releaseCopy.textContent = "Choose the exact accepted version in the maker or release history before publishing.";
+      releaseCopy.textContent = "Choose a reviewed version before publishing.";
     } else if (!canPublish) {
       releaseCopy.textContent = versionIdentity(project, selected)
-        + " is selected. Complete the visible plan and address requirements to publish it.";
+        + " is selected. Finish the plan and address steps to publish it.";
     } else {
       releaseCopy.textContent = versionIdentity(project, selected)
-        + " is selected. Publishing preserves the different current release for rollback.";
+        + " is selected. The current live version stays in your history.";
     }
 
     var failure = one("[data-payment-failure]");
@@ -549,6 +549,8 @@
     }
 
     var safetyCopy = one("[data-safety-copy]");
+    one("[data-safety-panel]").hidden = deleted
+      || !["held", "appeal_pending"].includes(project.safety.state);
     if (deleted) {
       safetyCopy.textContent = "Safety review closed with the project. Its hold and appeal text were removed; only the text-free event timeline remains.";
     } else if (project.safety.state === "held") {
@@ -890,7 +892,7 @@
   });
   one('[name="manageAddressMode"]').addEventListener("change", renderManagementChoices);
   one('[name="manageVisibility"]').addEventListener("change", renderManagementChoices);
-  one("[data-save-settings]").addEventListener("click", function () {
+  one("[data-save-address]").addEventListener("click", function () {
     var context = captureProjectContext();
     if (!context) return;
     try {
@@ -921,6 +923,22 @@
           address: address
         });
       }
+      renderProject();
+      announce(
+        addressChanged
+          ? "Address saved. Complete any connection step before publishing again."
+          : "The address is already saved.",
+        "success"
+      );
+    } catch (error) {
+      announce(explain(error, "The address could not be saved."), "error");
+    }
+  });
+  one("[data-save-access]").addEventListener("click", function () {
+    var context = captureProjectContext();
+    if (!context) return;
+    try {
+      requireProjectContext(context);
       var visibility = value("manageVisibility");
       var passphrase = value("manageAccessPassword");
       var visibilityChanged = visibility !== state.project.access.visibility;
@@ -938,14 +956,9 @@
       }
       one("[data-project-settings]").hidden = true;
       renderProject();
-      announce(
-        addressChanged
-          ? "Address and access saved. Complete any address connection, then publish the accepted release again."
-          : "Access settings saved.",
-        "success"
-      );
+      announce("Access setting saved.", "success");
     } catch (error) {
-      announce(explain(error, "Address and access could not be saved."), "error");
+      announce(explain(error, "The access setting could not be saved."), "error");
     }
   });
 
@@ -1155,7 +1168,19 @@
   one("[data-cancel-project]").addEventListener("click", function () {
     var context = captureProjectContext();
     if (!context) return;
-    if (!window.confirm("Cancel this project and begin its retained exit period?")) return;
+    var effectiveAt = new Date();
+    var retentionEndsAt = new Date(
+      effectiveAt.getTime() + platformModule.BILLING.retentionDays * 24 * 60 * 60 * 1000
+    );
+    if (!window.confirm(
+      "Review cancellation\n\n"
+      + "Local serving ends: " + effectiveAt.toLocaleString() + "\n"
+      + "Local export and retained project access end: " + retentionEndsAt.toLocaleString()
+      + "\n\nNo change has been made yet. Confirm cancellation?"
+    )) {
+      announce("Cancellation was not submitted.", "success");
+      return;
+    }
     try {
       requireProjectContext(context);
       platform.cancelProject({ accountId: context.accountId, projectId: context.projectId });
@@ -1231,3 +1256,207 @@
   controlRoom.setAttribute("data-control-ready", "true");
   document.documentElement.setAttribute("data-abracadabra-control-ready", "true");
 }());
+
+(function (root, factory) {
+  "use strict";
+
+  var api = factory();
+  if (typeof module === "object" && module && module.exports) {
+    module.exports = api;
+  } else {
+    root.SiteSourceryAbracadabraProgressive = api;
+    api.install(root.document, root);
+  }
+}(typeof globalThis === "object" ? globalThis : this, function () {
+  "use strict";
+
+  var STEP_COPY = Object.freeze({
+    1: "Step 1 of 3 · Name the project.",
+    2: "Step 2 of 3 · Choose the address.",
+    3: "Step 3 of 3 · Choose who can open it."
+  });
+
+  function text(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function validAddressLabel(value) {
+    return /^(?=.{1,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(
+      text(value).toLowerCase()
+    );
+  }
+
+  function validDomain(value) {
+    var domain = text(value).toLowerCase();
+    if (domain.length > 253 || !domain.includes(".") || domain.endsWith(".")) return false;
+    return domain.split(".").every(function (label) {
+      return /^(?=.{1,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label);
+    });
+  }
+
+  function projectStepError(step, values) {
+    if (step === 1 && !text(values.projectName)) {
+      return "Give the project a name to continue.";
+    }
+    if (step === 2 && values.addressMode === "mode_a" && !validAddressLabel(values.addressLabel)) {
+      return "Use letters, numbers, or single hyphens for the Site Sourcery address.";
+    }
+    if (step === 2 && values.addressMode === "mode_b" && !validDomain(values.ownedDomain)) {
+      return "Enter a full domain, such as example.com.";
+    }
+    if (step === 3 && values.visibility === "private" && text(values.accessPassword).length < 10) {
+      return "Use at least 10 characters for the site passphrase.";
+    }
+    if (step === 3 && values.termsAccepted !== true) {
+      return "Accept the website terms and privacy notice to create the project.";
+    }
+    return "";
+  }
+
+  function domainUnlockedStep(state) {
+    var source = state || {};
+    if (source.domainOrder) return 4;
+    if (source.domainConsent) return 4;
+    if (source.registrantContact) return 3;
+    if (source.domainQuote) return 2;
+    return 1;
+  }
+
+  function install(documentObject, windowObject) {
+    if (!documentObject || typeof documentObject.querySelector !== "function") return false;
+    var creator = documentObject.querySelector("[data-project-creator]");
+    if (!creator) return false;
+
+    var currentStep = 1;
+    var status = creator.querySelector("[data-project-step-status]");
+    var createButton = creator.querySelector("[data-create-project]");
+
+    function one(selector) {
+      return creator.querySelector(selector);
+    }
+
+    function all(selector) {
+      return Array.prototype.slice.call(creator.querySelectorAll(selector));
+    }
+
+    function selected(name) {
+      var field = one('[name="' + name + '"]:checked');
+      return field ? field.value : "";
+    }
+
+    function value(name) {
+      var field = one('[name="' + name + '"]');
+      return field ? field.value : "";
+    }
+
+    function values() {
+      var terms = one('[name="projectTermsAccepted"]');
+      return {
+        projectName: value("projectName"),
+        addressMode: selected("addressMode"),
+        addressLabel: value("addressLabel"),
+        ownedDomain: value("ownedDomain"),
+        visibility: selected("visibility"),
+        accessPassword: value("accessPassword"),
+        termsAccepted: Boolean(terms && terms.checked)
+      };
+    }
+
+    function setInteractive(element, active) {
+      element.hidden = !active;
+      if (active) element.removeAttribute("inert");
+      else element.setAttribute("inert", "");
+    }
+
+    function refreshButtons() {
+      all("[data-project-step-next]").forEach(function (button) {
+        var fromStep = Number(button.closest("[data-project-create-step]").dataset.projectCreateStep);
+        button.disabled = Boolean(projectStepError(fromStep, values()));
+      });
+      if (createButton) createButton.disabled = Boolean(projectStepError(3, values()));
+    }
+
+    function showError(message) {
+      status.textContent = message;
+      status.classList.add("is-error");
+    }
+
+    function showStep(step, options) {
+      var target = Math.max(1, Math.min(3, Number(step) || 1));
+      currentStep = target;
+      all("[data-project-create-step]").forEach(function (section) {
+        setInteractive(section, Number(section.dataset.projectCreateStep) === target);
+      });
+      all("[data-project-progress]").forEach(function (item) {
+        var itemStep = Number(item.dataset.projectProgress);
+        if (itemStep === target) item.setAttribute("aria-current", "step");
+        else item.removeAttribute("aria-current");
+        item.classList.toggle("is-complete", itemStep < target);
+      });
+      status.textContent = STEP_COPY[target];
+      status.classList.remove("is-error");
+      creator.dataset.currentProjectStep = String(target);
+      refreshButtons();
+
+      if (!options || options.updateHash !== false) {
+        var hash = "#project-step-" + target;
+        if (windowObject && windowObject.history && windowObject.location.hash !== hash) {
+          windowObject.history.replaceState(null, "", hash);
+        }
+      }
+      if (!options || options.focus !== false) {
+        var firstField = one('[data-project-create-step="' + target + '"] input:not([type="radio"]):not([type="checkbox"]), '
+          + '[data-project-create-step="' + target + '"] input[type="radio"]');
+        if (firstField) firstField.focus({ preventScroll: true });
+      }
+    }
+
+    all("[data-project-step-next]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var error = projectStepError(currentStep, values());
+        if (error) {
+          showError(error);
+          return;
+        }
+        showStep(Number(button.dataset.projectStepNext));
+      });
+    });
+
+    all("[data-project-step-back]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        showStep(Number(button.dataset.projectStepBack));
+      });
+    });
+
+    creator.addEventListener("input", function () {
+      refreshButtons();
+      if (currentStep > 1 && projectStepError(1, values())) showStep(1);
+      else if (currentStep > 2 && projectStepError(2, values())) showStep(2);
+    });
+    creator.addEventListener("change", refreshButtons);
+
+    var Observer = windowObject && windowObject.MutationObserver;
+    if (typeof Observer === "function") {
+      new Observer(function (records) {
+        records.forEach(function (record) {
+          if (record.attributeName === "hidden" && !creator.hidden) {
+            showStep(1, { focus: false, updateHash: false });
+          }
+        });
+      }).observe(creator, { attributes: true, attributeFilter: ["hidden"] });
+    }
+
+    showStep(1, { focus: false, updateHash: false });
+    documentObject.documentElement.setAttribute("data-abracadabra-progressive-ready", "true");
+    return true;
+  }
+
+  return Object.freeze({
+    STEP_COPY: STEP_COPY,
+    validAddressLabel: validAddressLabel,
+    validDomain: validDomain,
+    projectStepError: projectStepError,
+    domainUnlockedStep: domainUnlockedStep,
+    install: install
+  });
+}));

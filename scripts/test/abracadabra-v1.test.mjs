@@ -300,10 +300,10 @@ test("guest preview precedes account access and carries its reviewed version int
     /<section class="spark-workroom" id="workroom"[^>]*\shidden>/u,
   );
   for (const marker of [
-    "No account is required.",
+    "No account is required to build and test the first version.",
     "data-save-direction",
     "data-open-account",
-    "Save this direction and choose an address",
+    "Save and continue",
   ]) {
     assert.ok(pageHtml.includes(marker), marker);
   }
@@ -375,8 +375,8 @@ test("UI implements memory-only history, undo, sandbox preview, and local downlo
 test("the exact recognizable maker selection controls publication and rollback", () => {
   for (const marker of [
     "Selected for release",
-    "Publish selected version",
-    "Choose the exact accepted release to preview, download, or publish.",
+    "Publish this version",
+    "Return to any version you approved.",
     "selectPlatformVersion",
     "abracadabra:versionselected",
     "versionIdentity",
@@ -406,14 +406,11 @@ test("the exact recognizable maker selection controls publication and rollback",
   assert.doesNotMatch(controlSource, /support ticket could not be opened/iu);
 });
 
-test("the local product disclaims multi-tab enforcement and captures delayed drafts to their origin project", () => {
-  for (const marker of [
-    "non-transactional local rehearsal",
-    "Multi-tab writing is unsupported and not prevented",
-    "not durable or authoritative hosted persistence",
-  ]) {
-    assert.match(pageHtml, new RegExp(marker, "u"), marker);
-  }
+test("the local test adapter stays isolated and captures delayed drafts to their origin project", () => {
+  assert.doesNotMatch(
+    pageHtml,
+    /non-transactional|authoritative hosted persistence|Multi-tab writing is unsupported/iu,
+  );
   assert.match(controlSource, /var accountId = state\.account\.id;\s*var projectId = state\.project\.id;/u);
   assert.match(controlSource, /state\.draftTimers\[projectId\] = window\.setTimeout/u);
   assert.match(
@@ -432,7 +429,8 @@ test("the local product disclaims multi-tab enforcement and captures delayed dra
 
 test("customer-domain proof creates a local owner handoff without claiming reviewer or provider effects", () => {
   for (const marker of [
-    "Save domain-review handoff",
+    "Send proof for review",
+    "We’ll verify ownership before connecting this domain.",
     "data-domain-review-status",
     "data-domain-review-receipt",
     "requestAddressVerification",
@@ -441,10 +439,7 @@ test("customer-domain proof creates a local owner handoff without claiming revie
   ]) {
     assert.ok(pageHtml.includes(marker) || controlSource.includes(marker), marker);
   }
-  assert.match(
-    pageHtml,
-    /no reviewer is contacted and no provider record changes/iu,
-  );
+  assert.doesNotMatch(pageHtml, /no reviewer is contacted and no provider record changes/iu);
   assert.doesNotMatch(
     pageHtml,
     /review is rehearsed locally/iu,
@@ -452,6 +447,74 @@ test("customer-domain proof creates a local owner handoff without claiming revie
   assert.match(
     controlSource,
     /platform\.requestAddressVerification\(\{[\s\S]*method:[\s\S]*reference:/u,
+  );
+});
+
+test("project setup unlocks three small accessible steps and keeps internal lifecycle controls out of the customer flow", () => {
+  assert.deepEqual(
+    [...pageHtml.matchAll(/data-project-create-step="(\d)"/gu)].map((match) => match[1]),
+    ["1", "2", "3"],
+  );
+  for (const step of ["2", "3"]) {
+    assert.match(
+      pageHtml,
+      new RegExp(`data-project-create-step="${step}"[^>]*\\shidden\\sinert>`, "u"),
+    );
+  }
+  for (const marker of [
+    "Finish one short step to open the next.",
+    "data-project-step-next=\"2\"",
+    "data-project-step-next=\"3\"",
+    "data-project-step-back=\"1\"",
+    "data-project-step-back=\"2\"",
+    "data-project-step-status",
+    "data-internal-control hidden inert",
+  ]) {
+    assert.ok(pageHtml.includes(marker), marker);
+  }
+  for (const marker of [
+    "projectStepError",
+    "validAddressLabel",
+    "validDomain",
+    "data-abracadabra-progressive-ready",
+    "aria-current\", \"step",
+  ]) {
+    assert.ok(controlSource.includes(marker), marker);
+  }
+  assert.doesNotMatch(
+    pageHtml,
+    /Rehearse plan activation|Simulate missed payment|non-transactional local rehearsal/iu,
+  );
+  assert.match(
+    pageHtml,
+    /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
+  );
+  assert.match(pageHtml, /abracadabra-control-mode\.js/u);
+  assert.match(controlSource, /\{ held: true, localRehearsal: false \}/u);
+  assert.doesNotMatch(controlSource, /\{ localRehearsal: true \}/u);
+});
+
+test("hosted domain purchase reveals only the next of four steps and blocks duplicate payment starts", async () => {
+  const hostedDom = await readFile(
+    new URL("../../abracadabra/app/abracadabra-hosted-control-dom.js", import.meta.url),
+    "utf8",
+  );
+  for (const step of ["1", "2", "3", "4"]) {
+    assert.match(hostedDom, new RegExp(`"data-domain-stage": "${step}"`, "u"));
+  }
+  for (const marker of [
+    "Buy a domain without leaving Site Sourcery.",
+    "You are the owner.",
+    "Finish one step to open the next.",
+    "Payment is authorized first.",
+    "We check the name, price, and owner again before submitting the registration.",
+    "paymentButton.disabled = !consentReady || !state.project || orderReady",
+  ]) {
+    assert.ok(hostedDom.includes(marker), marker);
+  }
+  assert.match(
+    hostedDom,
+    /stage\.hidden = !active;[\s\S]*stage\.setAttribute\("inert", ""\)/u,
   );
 });
 

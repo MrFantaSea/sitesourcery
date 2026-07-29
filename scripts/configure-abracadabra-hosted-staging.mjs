@@ -1,40 +1,125 @@
 const APP_SCRIPT = '<script src="/abracadabra/app/abracadabra-app.js" defer></script>';
+const HOLD_META =
+  '<meta name="sitesourcery-abracadabra-control-mode" content="hold">';
 const HOSTED_META =
   '<meta name="sitesourcery-abracadabra-control-mode" content="hosted">';
+const IMPLEMENTED_PRODUCT_CONTRACT = "abracadabra.spark/v1";
 
 function text(value) {
   return String(value == null ? "" : value).trim();
 }
 
-function safeCatalog(input) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const variants = {};
-  for (const [id, candidate] of Object.entries(source.variants || {})) {
+function safeId(value) {
+  const candidate = text(value);
+  return /^[a-z0-9][a-z0-9_.-]{0,99}$/u.test(candidate) ? candidate : "";
+}
+
+function safeAxis(input, idField, nameField, descriptionField) {
+  const output = {};
+  const entries = Array.isArray(input)
+    ? input.map((candidate) => [candidate && candidate[idField], candidate])
+    : Object.entries(input || {});
+  for (const [rawId, candidate] of entries) {
+    const id = safeId(rawId);
     if (
-      !/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(id)
+      !id
       || !candidate
       || typeof candidate !== "object"
       || Array.isArray(candidate)
     ) continue;
-    const label = text(candidate.label);
-    const priceId = text(candidate.priceId);
-    if (!label || !priceId) continue;
-    if (
-      Object.hasOwn(candidate, "amount")
-      || Object.hasOwn(candidate, "amountMinor")
-      || Object.hasOwn(candidate, "currency")
-    ) {
-      throw new Error("hosted staging catalog accepts provider price IDs, never browser price authority");
-    }
-    variants[id] = {
+    const label = text(candidate[nameField] || candidate.label || candidate.name);
+    if (!label) continue;
+    output[id] = {
       label: label.slice(0, 100),
-      priceId: priceId.slice(0, 200),
+      summary: text(candidate[descriptionField] || candidate.summary || candidate.description).slice(0, 240),
+    };
+  }
+  return output;
+}
+
+function safeProducts(input) {
+  const output = {};
+  const entries = Array.isArray(input)
+    ? input.map((candidate) => [candidate && candidate.productId, candidate])
+    : Object.entries(input || {});
+  for (const [rawId, candidate] of entries) {
+    const id = safeId(rawId);
+    if (
+      id !== "spark"
+      || !candidate
+      || typeof candidate !== "object"
+      || Array.isArray(candidate)
+      || text(candidate.implementationContract) !== IMPLEMENTED_PRODUCT_CONTRACT
+    ) continue;
+    const label = text(candidate.name || candidate.label);
+    if (!label) continue;
+    output[id] = {
+      label: label.slice(0, 100),
+      summary: text(candidate.description || candidate.summary).slice(0, 240),
+      implementationContract: IMPLEMENTED_PRODUCT_CONTRACT,
+    };
+  }
+  return output;
+}
+
+function safeAddressModes(input) {
+  if (!Array.isArray(input)) return [];
+  return [...new Set(input.map(text))]
+    .filter((mode) => mode === "licensed" || mode === "customer_owned")
+    .sort();
+}
+
+const PRIVATE_PRICE_FIELDS = /^(?:amount|amountMinor|price|priceId|stripePriceId|stripePriceRefs|lineItems|totals)$/iu;
+
+function rejectPrivatePriceAuthority(candidate, path = "catalog") {
+  if (!candidate || typeof candidate !== "object") return;
+  for (const [key, value] of Object.entries(candidate)) {
+    if (PRIVATE_PRICE_FIELDS.test(key)) {
+      throw new Error(`${path}.${key} is private server price authority`);
+    }
+    rejectPrivatePriceAuthority(value, `${path}.${key}`);
+  }
+}
+
+function safeCatalog(input) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  rejectPrivatePriceAuthority(source);
+  const products = safeProducts(source.products);
+  const tenures = safeAxis(source.tenures, "tenureId", "name", "summary");
+  const offers = {};
+  const offerEntries = Array.isArray(source.offers)
+    ? source.offers.map((candidate) => [candidate && candidate.offerId, candidate])
+    : Object.entries(source.offers || {});
+  for (const [rawId, candidate] of offerEntries) {
+    const id = safeId(rawId);
+    if (
+      !id
+      || !candidate
+      || typeof candidate !== "object"
+      || Array.isArray(candidate)
+    ) continue;
+    const productId = safeId(candidate.productId);
+    const tenureId = safeId(candidate.tenureId);
+    const eligibleAddressModes = safeAddressModes(candidate.eligibleAddressModes);
+    if (
+      !products[productId]
+      || !tenures[tenureId]
+      || eligibleAddressModes.length === 0
+    ) continue;
+    offers[id] = {
+      productId,
+      tenureId,
+      eligibleAddressModes,
     };
   }
   return {
-    revision: text(source.revision) || null,
+    schema: text(source.schema) || null,
+    catalogVersion: text(source.catalogVersion || source.revision) || null,
+    termsVersion: text(source.termsVersion) || null,
     domainTermsVersion: text(source.domainTermsVersion) || null,
-    variants,
+    products,
+    tenures,
+    offers,
   };
 }
 
@@ -50,24 +135,25 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
   if (!source.includes(APP_SCRIPT)) {
     throw new Error("Abracadabra app script marker is missing");
   }
-  if (!source.includes('<meta name="theme-color" content="#100b19">')) {
-    throw new Error("Abracadabra head configuration marker is missing");
+  if (!source.includes(HOLD_META)) {
+    throw new Error("Abracadabra held-mode marker is missing");
   }
   if ((source.match(new RegExp(APP_SCRIPT.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "gu")) || []).length !== 1) {
     throw new Error("Abracadabra app script marker must be unique");
   }
   if (
-    source.includes("sitesourcery-abracadabra-control-mode")
-    || source.includes("abracadabra-hosted-control.js")
+    source.includes("abracadabra-hosted-control.js")
     || source.includes("abracadabra-hosted-control-dom.js")
   ) {
     throw new Error("Abracadabra source is already configured for a hosted control");
+  }
+  if ((source.match(new RegExp(HOLD_META, "gu")) || []).length !== 1) {
+    throw new Error("Abracadabra held-mode marker must be unique");
   }
 
   const catalog = safeCatalog(options.catalog);
   const hostedScripts = [
     '<script src="/abracadabra/app/abracadabra-api.js" defer></script>',
-    '<script src="/abracadabra/app/abracadabra-control-mode.js" defer></script>',
     `<script id="abracadabra-hosted-catalog" type="application/json">${scriptJson(catalog)}</script>`,
     '<script src="/abracadabra/app/abracadabra-hosted-control.js" defer></script>',
     APP_SCRIPT,
@@ -75,10 +161,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
   ].join("\n  ");
 
   return source
-    .replace(
-      '<meta name="theme-color" content="#100b19">',
-      '<meta name="theme-color" content="#100b19">\n  ' + HOSTED_META,
-    )
+    .replace(HOLD_META, HOSTED_META)
     .replace(APP_SCRIPT, hostedScripts);
 }
 

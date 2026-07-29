@@ -25,6 +25,7 @@ export const publicFileAllowlist = Object.freeze([
   "abracadabra/app/abracadabra-app.css",
   "abracadabra/app/abracadabra-app.js",
   "abracadabra/app/abracadabra-compiler.js",
+  "abracadabra/app/abracadabra-control-mode.js",
   "abracadabra/app/abracadabra-control.js",
   "abracadabra/app/index.html",
   "abracadabra/how/index.html",

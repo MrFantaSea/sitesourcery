@@ -13,10 +13,71 @@
   var HOLD = "hold";
   var LOCAL = "local-rehearsal";
   var HOSTED = "hosted";
+  var IMPLEMENTED_PRODUCT_CONTRACT = "abracadabra.spark/v1";
   var MODES = new Set([HOLD, LOCAL, HOSTED]);
 
   function text(value) {
     return String(value == null ? "" : value).trim();
+  }
+
+  function safeId(value) {
+    var candidate = text(value);
+    return /^[a-z0-9][a-z0-9_.-]{0,99}$/u.test(candidate) ? candidate : "";
+  }
+
+  function parseAxis(input) {
+    var output = {};
+    if (!input || typeof input !== "object" || Array.isArray(input)) return output;
+    Object.keys(input).forEach(function (key) {
+      var id = safeId(key);
+      var candidate = input[key];
+      if (!id || !candidate || typeof candidate !== "object" || Array.isArray(candidate)) return;
+      var label = text(candidate.label);
+      if (!label) return;
+      output[id] = Object.freeze({
+        id: id,
+        label: label.slice(0, 100),
+        summary: text(candidate.summary).slice(0, 240)
+      });
+    });
+    return output;
+  }
+
+  function parseProducts(input) {
+    var output = {};
+    if (!input || typeof input !== "object" || Array.isArray(input)) return output;
+    Object.keys(input).forEach(function (key) {
+      var id = safeId(key);
+      var candidate = input[key];
+      if (
+        id !== "spark"
+        || !candidate
+        || typeof candidate !== "object"
+        || Array.isArray(candidate)
+        || text(candidate.implementationContract) !== IMPLEMENTED_PRODUCT_CONTRACT
+      ) return;
+      var label = text(candidate.label);
+      if (!label) return;
+      output[id] = Object.freeze({
+        id: id,
+        label: label.slice(0, 100),
+        summary: text(candidate.summary).slice(0, 240),
+        implementationContract: IMPLEMENTED_PRODUCT_CONTRACT
+      });
+    });
+    return output;
+  }
+
+  function emptyCatalog() {
+    return Object.freeze({
+      schema: null,
+      catalogVersion: null,
+      termsVersion: null,
+      domainTermsVersion: null,
+      products: Object.freeze({}),
+      tenures: Object.freeze({}),
+      offers: Object.freeze({})
+    });
   }
 
   function configuredMode(documentObject) {
@@ -32,49 +93,55 @@
 
   function parseCatalog(documentObject) {
     if (!documentObject || typeof documentObject.getElementById !== "function") {
-      return Object.freeze({
-        revision: null,
-        domainTermsVersion: null,
-        variants: Object.freeze({})
-      });
+      return emptyCatalog();
     }
     var element = documentObject.getElementById("abracadabra-hosted-catalog");
     if (!element) {
-      return Object.freeze({
-        revision: null,
-        domainTermsVersion: null,
-        variants: Object.freeze({})
-      });
+      return emptyCatalog();
     }
     try {
       var raw = JSON.parse(String(element.textContent || "{}"));
-      var variants = raw && raw.variants && typeof raw.variants === "object"
-        ? raw.variants
+      var safeProducts = parseProducts(raw && raw.products);
+      var safeTenures = parseAxis(raw && raw.tenures);
+      var safeOffers = {};
+      var offers = raw && raw.offers && typeof raw.offers === "object"
+        ? raw.offers
         : {};
-      var safeVariants = {};
-      Object.keys(variants).forEach(function (key) {
-        var candidate = variants[key];
-        if (!candidate || typeof candidate !== "object") return;
-        var priceId = text(candidate.priceId);
-        var label = text(candidate.label);
-        if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(key) || !label || !priceId) return;
-        safeVariants[key] = Object.freeze({
-          id: key,
-          label: label.slice(0, 100),
-          priceId: priceId.slice(0, 200)
+      Object.keys(offers).forEach(function (key) {
+        var id = safeId(key);
+        var candidate = offers[key];
+        if (!id || !candidate || typeof candidate !== "object" || Array.isArray(candidate)) return;
+        var productId = safeId(candidate.productId);
+        var tenureId = safeId(candidate.tenureId);
+        var eligibleAddressModes = Array.isArray(candidate.eligibleAddressModes)
+          ? candidate.eligibleAddressModes.map(text).filter(function (mode, index, rows) {
+              return (mode === "licensed" || mode === "customer_owned")
+                && rows.indexOf(mode) === index;
+            }).sort()
+          : [];
+        if (
+          !safeProducts[productId]
+          || !safeTenures[tenureId]
+          || eligibleAddressModes.length === 0
+        ) return;
+        safeOffers[id] = Object.freeze({
+          id: id,
+          productId: productId,
+          tenureId: tenureId,
+          eligibleAddressModes: Object.freeze(eligibleAddressModes)
         });
       });
       return Object.freeze({
-        revision: text(raw.revision) || null,
+        schema: text(raw.schema) || null,
+        catalogVersion: text(raw.catalogVersion || raw.revision) || null,
+        termsVersion: text(raw.termsVersion) || null,
         domainTermsVersion: text(raw.domainTermsVersion) || null,
-        variants: Object.freeze(safeVariants)
+        products: Object.freeze(safeProducts),
+        tenures: Object.freeze(safeTenures),
+        offers: Object.freeze(safeOffers)
       });
     } catch (_error) {
-      return Object.freeze({
-        revision: null,
-        domainTermsVersion: null,
-        variants: Object.freeze({})
-      });
+      return emptyCatalog();
     }
   }
 

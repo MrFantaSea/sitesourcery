@@ -14,7 +14,9 @@ test("Abracadabra commerce stays held until exact owner and staging gates pass",
   assert.equal(control.state, "hold");
   assert.equal(control.checkout.enabled, false);
   assert.deepEqual(control.checkout.requiresBeforeEnable, [
-    "owner_approved_tenure_prices",
+    "owner_approved_product_release_set",
+    "implemented_contract_for_every_released_product",
+    "owner_approved_offer_prices",
     "owner_approved_customer_terms",
     "stripe_test_price_ids",
     "verified_stripe_test_webhook",
@@ -193,6 +195,15 @@ test("Abracadabra variant, tenure, and managed-domain axes never collapse into o
     "presence",
     "spark",
   ]);
+  assert.deepEqual(axes.implementedVariants, ["spark"]);
+  assert.deepEqual(axes.heldUnimplementedVariants, [
+    "business",
+    "presence",
+  ]);
+  assert.deepEqual(
+    [...axes.implementedVariants, ...axes.heldUnimplementedVariants].sort(),
+    [...axes.abracadabraVariants].sort(),
+  );
   assert.equal(axes.tenureIsASeparateAxis, true);
   assert.equal(axes.tenureModesAreAbracadabraVariants, false);
   assert.equal(

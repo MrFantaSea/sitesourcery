@@ -57,6 +57,64 @@
     ) || "");
   }
 
+  function commerceQuoteIdOf(value) {
+    return String(value && (value.quoteId || value.id) || "");
+  }
+
+  function cancellationPreviewIdOf(value) {
+    return String(value && (value.previewId || value.id) || "");
+  }
+
+  function domainPriceCheckIdOf(value) {
+    return String(value && (value.priceCheckId || value.id) || "");
+  }
+
+  function exportIdOf(value) {
+    return String(value && (value.exportId || value.id) || "");
+  }
+
+  function addressBindingOf(project) {
+    var address = project && project.address || {};
+    var mode = address.kind === "licensed"
+      ? "licensed"
+      : (
+          address.kind === "custom" || address.mode === "mode_b"
+            ? "customer_owned"
+            : ""
+        );
+    var revision = address.revision != null
+      ? address.revision
+      : address.version != null
+        ? address.version
+        : address.updatedAt;
+    return Object.freeze({
+      mode: mode,
+      revision: revision == null ? "" : String(revision)
+    });
+  }
+
+  function validMoney(value) {
+    return Boolean(
+      value
+      && Number.isSafeInteger(Number(value.amountMinor))
+      && Number(value.amountMinor) >= 0
+      && /^[A-Z]{3}$/u.test(String(value.currency || "").toUpperCase())
+    );
+  }
+
+  function readyDomainPriceCheck(value, now) {
+    return Boolean(
+      value
+      && domainPriceCheckIdOf(value)
+      && value.status === "ready_to_confirm"
+      && value.available === true
+      && validMoney(value.finalPrice)
+      && Number.isFinite(Date.parse(value.checkedAt))
+      && Number.isFinite(Date.parse(value.expiresAt))
+      && Date.parse(value.expiresAt) > Number(now)
+    );
+  }
+
   function revisionOf(project) {
     if (!project) return null;
     if (project.draft && project.draft.revision != null) return project.draft.revision;
@@ -108,21 +166,59 @@
       });
     }
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
-    var configuredCatalog = config.catalog && isObject(config.catalog.variants)
+    var configuredCatalog = config.catalog && isObject(config.catalog)
       ? config.catalog
-      : { revision: null, variants: {} };
-    var catalogVariants = {};
-    Object.keys(configuredCatalog.variants).forEach(function (key) {
-      var variant = configuredCatalog.variants[key];
-      if (!variant || !variant.priceId) return;
-      catalogVariants[key] = Object.freeze({
-        label: String(variant.label || key),
-        priceId: String(variant.priceId)
+      : { catalogVersion: null, products: {}, tenures: {}, offers: {} };
+    var catalogProducts = {};
+    var catalogTenures = {};
+    var catalogOffers = {};
+    Object.keys(configuredCatalog.products || {}).forEach(function (key) {
+      var product = configuredCatalog.products[key];
+      if (
+        key !== "spark"
+        || !product
+        || !product.label
+        || product.implementationContract !== "abracadabra.spark/v1"
+      ) return;
+      catalogProducts[key] = Object.freeze({
+        label: String(product.label),
+        summary: String(product.summary || ""),
+        implementationContract: "abracadabra.spark/v1"
+      });
+    });
+    Object.keys(configuredCatalog.tenures || {}).forEach(function (key) {
+      var tenure = configuredCatalog.tenures[key];
+      if (!tenure || !tenure.label) return;
+      catalogTenures[key] = Object.freeze({
+        label: String(tenure.label),
+        summary: String(tenure.summary || "")
+      });
+    });
+    Object.keys(configuredCatalog.offers || {}).forEach(function (key) {
+      var offer = configuredCatalog.offers[key];
+      var eligibleAddressModes = offer && Array.isArray(offer.eligibleAddressModes)
+        ? offer.eligibleAddressModes.filter(function (mode, index, rows) {
+            return (mode === "licensed" || mode === "customer_owned")
+              && rows.indexOf(mode) === index;
+          })
+        : [];
+      if (
+        !offer
+        || !catalogProducts[offer.productId]
+        || !catalogTenures[offer.tenureId]
+        || eligibleAddressModes.length === 0
+      ) return;
+      catalogOffers[key] = Object.freeze({
+        productId: String(offer.productId),
+        tenureId: String(offer.tenureId),
+        eligibleAddressModes: Object.freeze(eligibleAddressModes.slice().sort())
       });
     });
     var catalog = Object.freeze({
-      revision: configuredCatalog.revision || null,
-      variants: Object.freeze(catalogVariants)
+      catalogVersion: configuredCatalog.catalogVersion || configuredCatalog.revision || null,
+      products: Object.freeze(catalogProducts),
+      tenures: Object.freeze(catalogTenures),
+      offers: Object.freeze(catalogOffers)
     });
     var listeners = new Set();
     var operations = Object.create(null);
@@ -130,9 +226,11 @@
     var operationSequence = 0;
     var selectionEpoch = 0;
     var sessionEpoch = 0;
+    var commerceEpoch = 0;
     var domainSearchEpoch = 0;
     var domainSelectionEpoch = 0;
     var domainOrderEpoch = 0;
+    var domainPurchaseEpoch = 0;
     var state = {
       phase: "idle",
       account: null,
@@ -142,6 +240,9 @@
       project: null,
       selectedVersionId: null,
       subscription: null,
+      cancellationPreview: null,
+      exportJob: null,
+      commerceQuote: null,
       domainSearchResults: [],
       domainQuote: null,
       registrantContact: null,
@@ -165,6 +266,9 @@
         project: clone(state.project),
         selectedVersionId: state.selectedVersionId,
         subscription: clone(state.subscription),
+        cancellationPreview: clone(state.cancellationPreview),
+        exportJob: clone(state.exportJob),
+        commerceQuote: clone(state.commerceQuote),
         domainSearchResults: clone(state.domainSearchResults),
         domainQuote: clone(state.domainQuote),
         registrantContact: clone(state.registrantContact),
@@ -176,14 +280,19 @@
         dnsRecords: clone(state.dnsRecords),
         hostedMutationStarted: state.hostedMutationStarted,
         localFallbackAllowed: !state.hostedMutationStarted,
-        catalogRevision: catalog.revision || null,
-        catalogVariants: Object.freeze(Object.keys(catalog.variants || {}).map(function (key) {
-          var variant = catalog.variants[key];
-          return Object.freeze({ id: key, label: String(variant.label || key) });
+        catalogRevision: catalog.catalogVersion || null,
+        catalogOffers: Object.freeze(Object.keys(catalog.offers || {}).map(function (key) {
+          var offer = catalog.offers[key];
+          return Object.freeze({
+            id: key,
+            productId: offer.productId,
+            tenureId: offer.tenureId,
+            eligibleAddressModes: Object.freeze(offer.eligibleAddressModes.slice())
+          });
         })),
-        checkoutEnabled: Object.keys(catalog.variants || {}).some(function (key) {
-          return Boolean(catalog.variants[key] && catalog.variants[key].priceId);
-        }),
+        checkoutEnabled: Object.keys(catalog.offers || {}).length > 0
+          && typeof api.createCommerceQuote === "function"
+          && typeof api.createCommerceCheckout === "function",
         operations: operationSnapshot(operations)
       });
     }
@@ -215,11 +324,42 @@
     }
 
     function resetDomainPurchase() {
+      domainPurchaseEpoch += 1;
       domainOrderEpoch += 1;
       state.domainQuote = null;
       state.domainConsent = null;
       state.domainOrder = null;
       state.domainPriceCheck = null;
+    }
+
+    function restartDomainPurchase(stage) {
+      var target = String(stage || "");
+      if (!["search", "owner", "review"].includes(target)) {
+        return Promise.reject(new ControlError({
+          code: "DOMAIN_STAGE_INVALID",
+          message: "Choose a valid domain step."
+        }));
+      }
+      if (idOf(state.domainOrder)) {
+        return Promise.reject(new ControlError({
+          code: "DOMAIN_ORDER_LOCKED",
+          message: "Payment has started. Finish or resume this order before changing its details."
+        }));
+      }
+      domainPurchaseEpoch += 1;
+      domainOrderEpoch += 1;
+      state.domainConsent = null;
+      state.domainOrder = null;
+      state.domainPriceCheck = null;
+      if (target === "owner" || target === "search") {
+        state.registrantContact = null;
+      }
+      if (target === "search") {
+        domainSearchEpoch += 1;
+        state.domainQuote = null;
+      }
+      emit();
+      return Promise.resolve(snapshot());
     }
 
     function resetDomains() {
@@ -231,6 +371,43 @@
       state.domains = [];
       state.selectedDomain = null;
       state.dnsRecords = [];
+      state.commerceQuote = null;
+    }
+
+    function validatedExport(payload, projectId, expectedExportId) {
+      var job = entityFrom(payload, "export");
+      var exportId = exportIdOf(job);
+      var status = String(job && job.status || "");
+      if (
+        !job
+        || !exportId
+        || String(job.projectId || "") !== projectId
+        || (expectedExportId && exportId !== expectedExportId)
+        || !["queued", "working", "ready", "failed", "expired"].includes(status)
+        || !Number.isFinite(Date.parse(job.createdAt))
+        || !Number.isFinite(Date.parse(job.updatedAt))
+      ) {
+        throw new ControlError({
+          code: "EXPORT_RESPONSE_INVALID",
+          message: "We couldn’t verify the project export status."
+        });
+      }
+      if (status === "ready") {
+        var download = job.download;
+        if (
+          !job.filename
+          || !download
+          || !download.token
+          || !Number.isFinite(Date.parse(download.expiresAt))
+          || Date.parse(download.expiresAt) <= Date.now()
+        ) {
+          throw new ControlError({
+            code: "EXPORT_RESPONSE_INVALID",
+            message: "The project export is not ready for a secure download."
+          });
+        }
+      }
+      return job;
     }
 
     function task(name, action, settings) {
@@ -337,6 +514,8 @@
         state.projects = [];
         state.project = null;
         state.subscription = null;
+        state.cancellationPreview = null;
+        state.exportJob = null;
         resetDomains();
         return null;
       }
@@ -368,6 +547,8 @@
             state.projects = [];
             state.project = null;
             state.subscription = null;
+            state.cancellationPreview = null;
+            state.exportJob = null;
             resetDomains();
             return null;
           }
@@ -426,6 +607,8 @@
           state.project = null;
           state.selectedVersionId = null;
           state.subscription = null;
+          state.cancellationPreview = null;
+          state.exportJob = null;
           resetDomains();
           return null;
         }, { write: true, retry: retryCall });
@@ -463,6 +646,8 @@
       state.project = null;
       state.selectedVersionId = null;
       state.subscription = null;
+      state.cancellationPreview = null;
+      state.exportJob = null;
       resetDomains();
       selectionEpoch += 1;
       return task("projects", function () {
@@ -476,6 +661,9 @@
       state.project = { id: selected };
       state.selectedVersionId = null;
       state.subscription = null;
+      state.cancellationPreview = null;
+      state.exportJob = null;
+      state.commerceQuote = null;
       resetDomainPurchase();
       return task("project", async function () {
         var projectPayload = await api.getProject(selected);
@@ -511,6 +699,9 @@
           await refreshProjectsFor(organizationId, expectedSessionEpoch);
           if (project && idOf(project)) {
             state.project = project;
+            state.cancellationPreview = null;
+            state.exportJob = null;
+            state.commerceQuote = null;
             selectionEpoch += 1;
           }
           return project;
@@ -632,6 +823,8 @@
     }
 
     function selectAddress(input) {
+      commerceEpoch += 1;
+      state.commerceQuote = null;
       return mutateProject("selectAddress", function (projectId, requestOptions) {
         return api.selectAddress(projectId, {
           kind: input && input.kind,
@@ -652,19 +845,111 @@
       });
     }
 
-    function checkout(variantId) {
+    function quoteOffer(offerId, domainQuoteId) {
       var projectId = assertProject();
-      var variant = catalog.variants && catalog.variants[String(variantId || "")];
-      if (!variant || !variant.priceId) {
+      var catalogId = String(offerId || "");
+      var projectAddressBinding = addressBindingOf(state.project);
+      var selectedOffer = catalog.offers[catalogId];
+      if (
+        !selectedOffer
+        || typeof api.createCommerceQuote !== "function"
+      ) {
         return Promise.reject(new ControlError({
           code: "CHECKOUT_HELD",
-          message: "Secure payment stays disabled until this service option has an approved catalog price."
+          message: "Online payment stays closed until this exact website choice is approved."
+        }));
+      }
+      if (
+        !projectAddressBinding.revision
+        || !selectedOffer.eligibleAddressModes.includes(projectAddressBinding.mode)
+      ) {
+        return Promise.reject(new ControlError({
+          code: "OFFER_ADDRESS_INELIGIBLE",
+          message: "That ownership choice does not work with this project address."
         }));
       }
       var key = idempotencyFactory();
+      var expectedSelectionEpoch = selectionEpoch;
+      var expectedCommerceEpoch = commerceEpoch;
       var retryCall = function () {
-        return task("checkout", function () {
-          return api.checkout(projectId, variant.priceId, { idempotencyKey: key });
+        return task("commerceQuote", async function () {
+          var payload = await api.createCommerceQuote(projectId, {
+            offerId: catalogId,
+            domainQuoteId: domainQuoteId || null
+          }, { idempotencyKey: key });
+          if (
+            expectedSelectionEpoch !== selectionEpoch
+            || expectedCommerceEpoch !== commerceEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
+          ) return null;
+          var quote = entityFrom(payload, "quote");
+          var quoteAddressBinding = quote && quote.addressBinding || {};
+          if (
+            !quote
+            || !commerceQuoteIdOf(quote)
+            || !quote.disclosureDigest
+            || String(quote.offerId || "") !== catalogId
+            || String(quoteAddressBinding.mode || "") !== projectAddressBinding.mode
+            || String(quoteAddressBinding.revision || "") !== projectAddressBinding.revision
+          ) {
+            throw new ControlError({
+              code: "QUOTE_RESPONSE_INVALID",
+              message: "We couldn’t verify that price. Please try again."
+            });
+          }
+          state.commerceQuote = quote;
+          return quote;
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function checkoutQuotedOffer(expectedOfferId) {
+      var projectId = assertProject();
+      var quote = state.commerceQuote;
+      var quoteId = commerceQuoteIdOf(quote);
+      var acceptedDisclosureDigest = String(quote && quote.disclosureDigest || "");
+      var currentAddressBinding = addressBindingOf(state.project);
+      var quotedAddressBinding = quote && quote.addressBinding || {};
+      var currentOffer = catalog.offers[String(quote && quote.offerId || "")];
+      if (
+        !quoteId
+        || !acceptedDisclosureDigest
+        || (
+          expectedOfferId
+          && String(quote && quote.offerId || "") !== String(expectedOfferId)
+        )
+        || !currentOffer
+        || !currentOffer.eligibleAddressModes.includes(currentAddressBinding.mode)
+        || String(quotedAddressBinding.mode || "") !== currentAddressBinding.mode
+        || String(quotedAddressBinding.revision || "") !== currentAddressBinding.revision
+        || typeof api.createCommerceCheckout !== "function"
+      ) {
+        return Promise.reject(new ControlError({
+          code: "QUOTE_REVIEW_REQUIRED",
+          message: "Review a current exact price before continuing to payment."
+        }));
+      }
+      var key = idempotencyFactory();
+      var expectedSelectionEpoch = selectionEpoch;
+      var retryCall = function () {
+        return task("commerceCheckout", async function () {
+          var payload = await api.createCommerceCheckout(
+            projectId,
+            quoteId,
+            { acceptedDisclosureDigest: acceptedDisclosureDigest },
+            { idempotencyKey: key }
+          );
+          if (
+            expectedSelectionEpoch === selectionEpoch
+            && state.project
+            && idOf(state.project) === projectId
+          ) {
+            var updated = entityFrom(payload, "quote");
+            if (updated && commerceQuoteIdOf(updated) === quoteId) state.commerceQuote = updated;
+          }
+          return payload;
         }, { write: true, retry: retryCall });
       };
       return retryCall();
@@ -690,13 +975,59 @@
       });
     }
 
+    function previewCancellation() {
+      var projectId = assertProject();
+      if (typeof api.cancellationPreview !== "function") {
+        return Promise.reject(new ControlError({
+          code: "CANCELLATION_PREVIEW_UNAVAILABLE",
+          message: "Cancellation is closed until the exact end and retention dates can be shown."
+        }));
+      }
+      var expectedSelectionEpoch = selectionEpoch;
+      return task("cancellationPreview", async function () {
+        var payload = await api.cancellationPreview(projectId);
+        if (
+          expectedSelectionEpoch !== selectionEpoch
+          || !state.project
+          || idOf(state.project) !== projectId
+        ) return null;
+        var preview = entityFrom(payload, "preview");
+        if (
+          !preview
+          || !cancellationPreviewIdOf(preview)
+          || !preview.disclosureDigest
+          || !Number.isFinite(Date.parse(preview.effectiveAt))
+          || !Number.isFinite(Date.parse(preview.retentionEndsAt))
+        ) {
+          throw new ControlError({
+            code: "CANCELLATION_PREVIEW_INVALID",
+            message: "We couldn’t verify the cancellation dates."
+          });
+        }
+        state.cancellationPreview = preview;
+        return preview;
+      });
+    }
+
     function cancelSubscription() {
       var projectId = assertProject();
+      var preview = state.cancellationPreview;
+      var previewId = cancellationPreviewIdOf(preview);
+      var acceptedDisclosureDigest = String(preview && preview.disclosureDigest || "");
+      if (!previewId || !acceptedDisclosureDigest) {
+        return Promise.reject(new ControlError({
+          code: "CANCELLATION_PREVIEW_REQUIRED",
+          message: "Review the exact cancellation dates before confirming."
+        }));
+      }
       var expectedSelectionEpoch = selectionEpoch;
       var key = idempotencyFactory();
       var retryCall = function () {
         return task("cancelSubscription", async function () {
-          var payload = await api.cancelSubscription(projectId, { idempotencyKey: key });
+          var payload = await api.cancelSubscription(projectId, {
+            previewId: previewId,
+            acceptedDisclosureDigest: acceptedDisclosureDigest
+          }, { idempotencyKey: key });
           var subscriptionPayload = await api.subscription(projectId);
           if (
             expectedSelectionEpoch === selectionEpoch
@@ -704,6 +1035,7 @@
             && idOf(state.project) === projectId
           ) {
             state.subscription = entityFrom(subscriptionPayload, "subscription");
+            state.cancellationPreview = null;
             await refreshProject(projectId, expectedSelectionEpoch);
           }
           return payload;
@@ -718,6 +1050,25 @@
         return Promise.reject(new ControlError({
           code: "VERSION_REQUIRED",
           message: "Choose the exact accepted version before requesting publication."
+        }));
+      }
+      var subscriptionStatus = String(
+        state.subscription && (state.subscription.status || state.subscription.state) || ""
+      ).toLowerCase();
+      if (!["active", "current", "paid"].includes(subscriptionStatus)) {
+        return Promise.reject(new ControlError({
+          code: "PAID_ENTITLEMENT_REQUIRED",
+          message: "Review and complete payment before publishing."
+        }));
+      }
+      var address = state.project && state.project.address || {};
+      var addressStatus = String(
+        address.verificationStatus || address.state || address.status || ""
+      ).toLowerCase();
+      if (!["active", "configured", "connected", "ready", "verified"].includes(addressStatus)) {
+        return Promise.reject(new ControlError({
+          code: "VERIFIED_ADDRESS_REQUIRED",
+          message: "Finish and verify the address before publishing."
         }));
       }
       return mutateProject("requestRelease", function (projectId, requestOptions) {
@@ -750,9 +1101,110 @@
     }
 
     function requestExport() {
-      return mutateProject("requestExport", function (projectId, requestOptions) {
-        return api.requestExport(projectId, requestOptions);
+      var projectId = assertProject();
+      var expectedSelectionEpoch = selectionEpoch;
+      var key = idempotencyFactory();
+      var retryCall = function () {
+        return task("requestExport", async function () {
+          var payload = await api.requestExport(projectId, { idempotencyKey: key });
+          if (
+            expectedSelectionEpoch !== selectionEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
+          ) return null;
+          state.exportJob = validatedExport(payload, projectId);
+          return state.exportJob;
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function getExport() {
+      var projectId = assertProject();
+      var exportId = exportIdOf(state.exportJob);
+      if (!exportId || typeof api.getExport !== "function") {
+        return Promise.reject(new ControlError({
+          code: "EXPORT_REQUIRED",
+          message: "Prepare a project export first."
+        }));
+      }
+      var expectedSelectionEpoch = selectionEpoch;
+      return task("getExport", async function () {
+        var payload = await api.getExport(projectId, exportId);
+        if (
+          expectedSelectionEpoch !== selectionEpoch
+          || !state.project
+          || idOf(state.project) !== projectId
+        ) return null;
+        state.exportJob = validatedExport(payload, projectId, exportId);
+        return state.exportJob;
       });
+    }
+
+    function retryExport() {
+      var projectId = assertProject();
+      var exportId = exportIdOf(state.exportJob);
+      if (
+        !exportId
+        || !state.exportJob
+        || !["failed", "expired"].includes(String(state.exportJob.status || ""))
+        || typeof api.retryExport !== "function"
+      ) {
+        return Promise.reject(new ControlError({
+          code: "EXPORT_RETRY_UNAVAILABLE",
+          message: "This export cannot be retried yet."
+        }));
+      }
+      var expectedSelectionEpoch = selectionEpoch;
+      var key = idempotencyFactory();
+      var retryCall = function () {
+        return task("retryExport", async function () {
+          var payload = await api.retryExport(projectId, exportId, { idempotencyKey: key });
+          if (
+            expectedSelectionEpoch !== selectionEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
+          ) return null;
+          state.exportJob = validatedExport(payload, projectId);
+          return state.exportJob;
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function downloadExport() {
+      var projectId = assertProject();
+      var job = state.exportJob;
+      var exportId = exportIdOf(job);
+      var token = String(job && job.download && job.download.token || "");
+      if (
+        !exportId
+        || !token
+        || String(job.status || "") !== "ready"
+        || !Number.isFinite(Date.parse(job.download.expiresAt))
+        || Date.parse(job.download.expiresAt) <= Date.now()
+        || typeof api.downloadExport !== "function"
+      ) {
+        return Promise.reject(new ControlError({
+          code: "EXPORT_DOWNLOAD_UNAVAILABLE",
+          message: "Refresh or prepare the export before downloading it."
+        }));
+      }
+      var expectedSelectionEpoch = selectionEpoch;
+      return task("downloadExport", async function () {
+        var download = await api.downloadExport(projectId, exportId, token);
+        if (
+          expectedSelectionEpoch !== selectionEpoch
+          || !state.project
+          || idOf(state.project) !== projectId
+        ) return null;
+        state.exportJob = Object.assign({}, job, {
+          status: "expired",
+          updatedAt: new Date().toISOString(),
+          download: null
+        });
+        return download;
+      }, { write: true });
     }
 
     function deleteProject() {
@@ -773,6 +1225,9 @@
             state.project = null;
             state.selectedVersionId = null;
             state.subscription = null;
+            state.cancellationPreview = null;
+            state.exportJob = null;
+            state.commerceQuote = null;
             resetDomainPurchase();
             selectionEpoch += 1;
           }
@@ -800,6 +1255,7 @@
     function createDomainQuote(input) {
       var key = idempotencyFactory();
       var expectedEpoch = domainSearchEpoch;
+      var expectedPurchaseEpoch = domainPurchaseEpoch;
       var retryCall = function () {
         return task("domainQuote", async function () {
           var payload = await api.createDomainQuote({
@@ -807,7 +1263,10 @@
             years: input && input.years,
             purpose: input && input.purpose
           }, { idempotencyKey: key });
-          if (expectedEpoch !== domainSearchEpoch) return null;
+          if (
+            expectedEpoch !== domainSearchEpoch
+            || expectedPurchaseEpoch !== domainPurchaseEpoch
+          ) return null;
           resetDomainPurchase();
           state.domainQuote = entityFrom(payload, "quote");
           return state.domainQuote;
@@ -820,6 +1279,7 @@
       var organizationId = assertOrganization();
       var key = idempotencyFactory();
       var expectedSessionEpoch = sessionEpoch;
+      var expectedPurchaseEpoch = domainPurchaseEpoch;
       var retryCall = function () {
         return task("registrantContact", async function () {
           var payload = await api.saveRegistrantContact(organizationId, {
@@ -834,7 +1294,10 @@
             postalCode: input && input.postalCode,
             countryCode: input && input.countryCode
           }, { idempotencyKey: key });
-          if (expectedSessionEpoch !== sessionEpoch) return null;
+          if (
+            expectedSessionEpoch !== sessionEpoch
+            || expectedPurchaseEpoch !== domainPurchaseEpoch
+          ) return null;
           state.registrantContact = entityFrom(payload, "registrantContact");
           return state.registrantContact;
         }, { write: true, retry: retryCall });
@@ -845,6 +1308,9 @@
     function acceptDomainConsent(input) {
       var quoteId = idOf(state.domainQuote);
       var contactId = idOf(state.registrantContact);
+      var quoteTermsVersion = String(
+        state.domainQuote && state.domainQuote.termsVersion || ""
+      );
       if (!quoteId || !contactId) {
         return Promise.reject(new ControlError({
           code: "DOMAIN_CONSENT_PREREQUISITES_REQUIRED",
@@ -861,18 +1327,31 @@
           message: "The customer must accept the registration agreement and certify the registrant details."
         }));
       }
+      if (
+        !quoteTermsVersion
+        || String(input.termsVersion || "") !== quoteTermsVersion
+      ) {
+        return Promise.reject(new ControlError({
+          code: "DOMAIN_TERMS_MISMATCH",
+          message: "Request a new domain price and review its current agreement before continuing."
+        }));
+      }
       var key = idempotencyFactory();
       var expectedEpoch = domainSearchEpoch;
+      var expectedPurchaseEpoch = domainPurchaseEpoch;
       var retryCall = function () {
         return task("domainConsent", async function () {
           var payload = await api.acceptDomainConsent(quoteId, {
             registrantContactId: contactId,
-            termsVersion: input.termsVersion,
+            termsVersion: quoteTermsVersion,
             registrationAgreementAccepted: true,
             registrantCertificationAccepted: true,
             autoRenewRequested: input.autoRenewRequested === true
           }, { idempotencyKey: key });
-          if (expectedEpoch !== domainSearchEpoch) return null;
+          if (
+            expectedEpoch !== domainSearchEpoch
+            || expectedPurchaseEpoch !== domainPurchaseEpoch
+          ) return null;
           state.domainConsent = entityFrom(payload, "consent");
           return state.domainConsent;
         }, { write: true, retry: retryCall });
@@ -892,6 +1371,7 @@
       }
       var key = idempotencyFactory();
       var expectedSelectionEpoch = selectionEpoch;
+      var expectedPurchaseEpoch = domainPurchaseEpoch;
       var retryCall = function () {
         return task("domainOrder", async function () {
           var payload = await api.createDomainOrder(projectId, {
@@ -900,6 +1380,7 @@
           }, { idempotencyKey: key });
           if (
             expectedSelectionEpoch !== selectionEpoch
+            || expectedPurchaseEpoch !== domainPurchaseEpoch
             || !state.project
             || idOf(state.project) !== projectId
           ) return null;
@@ -961,6 +1442,15 @@
           message: "Pay for the domain before checking its final price."
         }));
       }
+      var orderStatus = String(
+        state.domainOrder && (state.domainOrder.status || state.domainOrder.state) || ""
+      ).toLowerCase();
+      if (!["paid", "payment_authorized", "authorized", "ready_for_registration"].includes(orderStatus)) {
+        return Promise.reject(new ControlError({
+          code: "DOMAIN_PAYMENT_REQUIRED",
+          message: "Finish domain payment before checking the final price."
+        }));
+      }
       var key = idempotencyFactory();
       var expectedSelectionEpoch = selectionEpoch;
       var expectedOrderEpoch = domainOrderEpoch;
@@ -972,7 +1462,35 @@
             || expectedOrderEpoch !== domainOrderEpoch
             || idOf(state.domainOrder) !== orderId
           ) return null;
-          state.domainPriceCheck = entityFrom(payload, "priceCheck");
+          var priceCheck = entityFrom(payload, "priceCheck");
+          var priceStatus = String(priceCheck && priceCheck.status || "");
+          var structurallyValid = Boolean(
+            priceCheck
+            && domainPriceCheckIdOf(priceCheck)
+            && String(priceCheck.orderId || "") === orderId
+            && ["ready_to_confirm", "changed", "unavailable"].includes(priceStatus)
+            && Number.isFinite(Date.parse(priceCheck.checkedAt))
+            && Number.isFinite(Date.parse(priceCheck.expiresAt))
+            && (
+              priceStatus === "unavailable"
+                ? priceCheck.available === false && priceCheck.finalPrice == null
+                : priceCheck.available === true && validMoney(priceCheck.finalPrice)
+            )
+          );
+          if (!structurallyValid) {
+            throw new ControlError({
+              code: "DOMAIN_PRICE_CHECK_INVALID",
+              message: "We couldn’t verify the final domain price and availability."
+            });
+          }
+          state.domainPriceCheck = priceCheck;
+          if (priceStatus !== "ready_to_confirm") {
+            state.domainQuote = null;
+            state.domainConsent = null;
+            state.domainOrder = null;
+            domainPurchaseEpoch += 1;
+            domainOrderEpoch += 1;
+          }
           return state.domainPriceCheck;
         }, { write: true, retry: retryCall });
       };
@@ -981,8 +1499,17 @@
 
     function requestDomainRegistration(input) {
       var orderId = idOf(state.domainOrder);
-      var priceCheckId = idOf(state.domainPriceCheck);
-      if (!orderId || !priceCheckId) {
+      var priceCheckId = domainPriceCheckIdOf(state.domainPriceCheck);
+      var orderStatus = String(
+        state.domainOrder && (state.domainOrder.status || state.domainOrder.state) || ""
+      ).toLowerCase();
+      if (
+        !orderId
+        || !priceCheckId
+        || !["paid", "payment_authorized", "authorized", "ready_for_registration"].includes(orderStatus)
+        || String(state.domainPriceCheck.orderId || "") !== orderId
+        || !readyDomainPriceCheck(state.domainPriceCheck, Date.now())
+      ) {
         return Promise.reject(new ControlError({
           code: "FRESH_DOMAIN_PRICE_REQUIRED",
           message: "Check the domain’s price and availability again before registering it."
@@ -1128,17 +1655,23 @@
       selectVersion: selectVersion,
       selectAddress: selectAddress,
       requestDomainVerification: requestDomainVerification,
-      checkout: checkout,
+      quoteOffer: quoteOffer,
+      checkoutQuotedOffer: checkoutQuotedOffer,
       billingPortal: billingPortal,
       refreshSubscription: refreshSubscription,
+      previewCancellation: previewCancellation,
       cancelSubscription: cancelSubscription,
       requestRelease: requestRelease,
       unpublish: unpublish,
       setVisibility: setVisibility,
       createSupportTicket: createSupportTicket,
       requestExport: requestExport,
+      getExport: getExport,
+      retryExport: retryExport,
+      downloadExport: downloadExport,
       deleteProject: deleteProject,
       searchDomains: searchDomains,
+      restartDomainPurchase: restartDomainPurchase,
       createDomainQuote: createDomainQuote,
       saveRegistrantContact: saveRegistrantContact,
       acceptDomainConsent: acceptDomainConsent,
