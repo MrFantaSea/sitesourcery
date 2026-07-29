@@ -36,5 +36,8 @@
     "allowedFormActions": [],
     "expectedForms": 0
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "pg": "8.16.3"
+  }
 }
