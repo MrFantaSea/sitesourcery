@@ -1,0 +1,60 @@
+{
+  "schema": "sitesourcery.abracadabra-public-catalog.v1",
+  "catalogVersion": "SS-ABRACADABRA-HOSTED-HOLD-2026-07-28.1",
+  "state": "hold",
+  "termsVersion": "SS-HOSTED-WEBSITE-TERMS-2026-07-28-V1",
+  "domainTermsVersion": "SS-HOSTED-WEBSITE-TERMS-2026-07-28-V1#customer-domains",
+  "products": [
+    {
+      "productId": "spark",
+      "name": "Spark",
+      "description": "One reviewed one-page business website from facts the customer supplies.",
+      "implementationContract": "abracadabra.spark/v1"
+    }
+  ],
+  "tenures": [
+    {
+      "tenureId": "rent",
+      "name": "Rent",
+      "summary": "Recurring license and eligible platform hosting."
+    },
+    {
+      "tenureId": "own",
+      "name": "Own",
+      "summary": "One-time purchase of the finished Spark deliverable without platform hosting."
+    },
+    {
+      "tenureId": "owned_managed",
+      "name": "Owned + managed",
+      "summary": "One-time deliverable ownership plus recurring eligible hosting and management."
+    }
+  ],
+  "offers": [
+    {
+      "offerId": "spark.rent",
+      "productId": "spark",
+      "tenureId": "rent",
+      "eligibleAddressModes": [
+        "licensed",
+        "customer_owned"
+      ]
+    },
+    {
+      "offerId": "spark.own",
+      "productId": "spark",
+      "tenureId": "own",
+      "eligibleAddressModes": [
+        "customer_owned"
+      ]
+    },
+    {
+      "offerId": "spark.owned_managed",
+      "productId": "spark",
+      "tenureId": "owned_managed",
+      "eligibleAddressModes": [
+        "licensed",
+        "customer_owned"
+      ]
+    }
+  ]
+}

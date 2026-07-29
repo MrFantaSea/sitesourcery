@@ -679,8 +679,10 @@
   maker.inert = false;
   maker.removeAttribute("inert");
   maker.setAttribute("aria-disabled", "false");
+  /* sitesourcery:truth-slot:abracadabra-app-ready:start */
   bootStatus.textContent = "Abracadabra ready. Your local draft stays in this tab.";
   bootStatus.hidden = true;
+  /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
   setStep("facts", { focus: false });
   window.SiteSourceryAbracadabraMaker = Object.freeze({

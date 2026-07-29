@@ -509,7 +509,7 @@ test("artifact exclusion contract covers print, workflow, governance, data, and 
   }
 });
 
-test("verifier publication ledger independently matches the reviewed 66-file builder ledger", () => {
+test("verifier publication ledger independently matches the reviewed 66-file held builder ledger", () => {
   assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 66);
   assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
   assert.deepEqual(
@@ -1788,6 +1788,17 @@ test("artifact safety rejects payment endpoints and browser network sinks", asyn
   const enable = 'button.removeAttribute("disabled")';
   await withReviewedArtifact({ "sourcery.js": enable }, async (root, files) => {
     await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /enable or submit/u);
+  });
+  const changedReviewedControl = `${
+    REVIEWED_ARTIFACT_FILES["abracadabra/app/abracadabra-app.js"]
+  }\nbutton.disabled = false;\n`;
+  await withReviewedArtifact({
+    "abracadabra/app/abracadabra-app.js": changedReviewedControl,
+  }, async (root, files) => {
+    await assert.rejects(
+      () => validateArtifactSafety(root, manifestFor(files)),
+      /enable or submit/u,
+    );
   });
   const inlineNetwork = "<script>navigator.sendBeacon('/collect')</script>";
   await withReviewedArtifact({ "index.html": inlineNetwork }, async (root, files) => {

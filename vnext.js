@@ -358,12 +358,14 @@
         action: "See Custom websites",
         href: "/custom/"
       },
+      /* sitesourcery:truth-slot:start-recommendation-abracadabra:start */
       abracadabra: {
         title: "Abracadabra — make it yourself",
         copy: "Make and download one real web page from facts you type into this browser. It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions.",
         action: "Try Abracadabra",
         href: "/abracadabra/"
       },
+      /* sitesourcery:truth-slot:start-recommendation-abracadabra:end */
       "self-service-uncertain": {
         title: "Ask a human before choosing",
         copy: "If you are not sure one page and manual entry are enough, ask the studio to check first.",

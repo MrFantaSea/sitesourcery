@@ -179,40 +179,39 @@ export const ABRACADABRA_STATE_BADGE = Object.freeze([
 ]);
 export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
   "/abracadabra/": Object.freeze([
-    "One-page website builder",
-    "Build your website. See it before you pay.",
-    "No account to start",
-    "Your details stay yours",
-    "Your domain stays yours",
-    "Finish one step and the next one opens",
-    "Keep the site your way.",
-    "Rent",
-    "Own",
-    "Own + managed",
-    "exact price and what is included appear before payment",
-    "Build my page",
+    "One-page website maker",
+    "Make a working page in this browser.",
+    "This build does not create an online account, take payment, register or connect a domain, or publish.",
+    "No account",
+    "No payment",
+    "No domain changes",
+    "No publishing",
+    "Finish one step, then open the next.",
+    "Business",
+    "Look",
+    "Review",
+    "Test &amp; download",
+    "Build and download",
   ]),
   "/abracadabra/how/": Object.freeze([
-    "From business details to a live page.",
-    "Build first.",
-    "Your account opens one next step at a time.",
-    "You see the price and terms before payment.",
-    "Pick Rent, Own, or Own + managed.",
-    "A domain purchase is also reviewed before it is submitted.",
-    "Open only the answer you need.",
+    "From business details to a downloadable page.",
+    "Use four short steps",
+    "No account, payment, domain, or publishing step is part of this build.",
+    "What leaves the browser",
+    "Only the file you choose to download.",
+    "Test &amp; download",
+    "Build the first version now.",
   ]),
   "/abracadabra/app/": Object.freeze([
-    "Build first. Choose a plan when you want to keep it.",
-    "Your work stays under your control",
-    "Finish one short step to open the next.",
-    "Use a Site Sourcery address",
-    "Use your own domain",
-    "The price is shown before payment.",
-    "See the exact price, renewal terms, and what is included.",
-    "Project versions",
-    "Export or leave",
+    "Build, test, and download one page.",
+    "This build does not create an online account, take payment, register or connect a domain, or publish.",
+    "No online account",
     "No account is required to build and test the first version.",
-    "Save and continue",
+    "Your page is not saved.",
+    "If you refresh this page or close the tab, you will start over.",
+    "Project versions",
+    "Download the version you approved.",
+    "Download this HTML",
   ]),
 });
 export const PUBLIC_TRUTH_COPY = Object.freeze({
@@ -307,7 +306,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "QUALITY.md",
   "scripts",
 ]);
-const PUBLIC_ALLOWLIST_COUNT = 67;
+const PUBLIC_ALLOWLIST_COUNT = 66;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 const EXPECTED_ARTIFACT_ROUTE_ERROR =
   "thanks.html: missing legacy redirect to /contact/";
@@ -845,9 +844,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const firstAction = landing.source.indexOf('href="/abracadabra/app/#workroom"');
     const hero = firstAction >= 0 ? landing.source.slice(0, firstAction) : "";
     for (const phrase of [
-      "One-page website builder",
-      "Build your website. See it before you pay.",
-      "When it feels right, choose how you want to keep it.",
+      "One-page website maker",
+      "Make a working page in this browser.",
+      "This build does not create an online account, take payment, register or connect a domain, or publish.",
     ]) {
       if (!hero.includes(phrase)) {
         report(errors, landing.file, `missing above-fold Abracadabra product truth ${JSON.stringify(phrase)}`);
@@ -857,13 +856,15 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const heroAndProof = firstContentSection >= 0
       ? landing.source.slice(0, firstContentSection)
       : "";
-    if (!heroAndProof.includes("No account to start") || !heroAndProof.includes("Your domain stays yours")) {
-      report(errors, landing.file, "missing above-fold account or domain ownership truth");
+    for (const phrase of ["No account", "No payment", "No domain changes", "No publishing"]) {
+      if (!heroAndProof.includes(phrase)) {
+        report(errors, landing.file, `missing above-fold local-only proof ${JSON.stringify(phrase)}`);
+      }
     }
     if (landing.source.toLocaleLowerCase("en-US").includes("live example")) {
       report(errors, landing.file, "contains retired live-example wording for a generated srcdoc demonstration");
     }
-    const pathCardCopy = "Build it yourself, approve the result, then choose a plan.";
+    const pathCardCopy = "Build it, review it, test it, and download the HTML.";
     if (landing.source.split(pathCardCopy).length - 1 !== 1) {
       report(errors, landing.file, "Abracadabra path-card proof paragraph must appear exactly once");
     }
@@ -875,9 +876,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const journeys = markedElements(entry.file, entry.source, "data-abracadabra-journey", errors);
     checkExactValues(
       entry.file,
-      "Abracadabra account-to-exit journey markers",
+      "Abracadabra local-download journey markers",
       journeys.map(({ value }) => value),
-      ["account-to-exit"],
+      ["local-download"],
       errors,
     );
   }
@@ -887,9 +888,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const stateModels = markedElements(entry.file, entry.source, "data-abracadabra-state-model", errors);
     checkExactValues(
       entry.file,
-      "Abracadabra session-versus-saved state markers",
+      "Abracadabra session-only state markers",
       stateModels.map(({ value }) => value),
-      ["session-vs-saved"],
+      ["session-only"],
       errors,
     );
   }

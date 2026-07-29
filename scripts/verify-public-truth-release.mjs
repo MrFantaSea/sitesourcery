@@ -216,7 +216,7 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "abracadabra/app/abracadabra-app.css",
   "abracadabra/app/abracadabra-app.js",
   "abracadabra/app/abracadabra-compiler.js",
-  "abracadabra/app/abracadabra-control.js",
+  "abracadabra/app/abracadabra-control-mode.js",
   "abracadabra/app/index.html",
   "abracadabra/how/index.html",
   "abracadabra/index.html",
@@ -310,6 +310,14 @@ const PRIVATE_ARTIFACT_FILE = /(?:^|\/)(?:AGENTS\.md|QUALITY\.md|README(?:\.[^/]
 const PAYMENT_ENDPOINT = /(?:buy\.stripe\.com|checkout\.stripe\.com|js\.stripe\.com|api\.stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|checkout\.com|squareup\.com|square\.link|payment_intent|createCheckoutSession|apple-pay|google-pay)/iu;
 const NETWORK_SINK = /\b(?:fetch\s*\(|XMLHttpRequest\b|sendBeacon\s*\(|WebSocket\s*\(|EventSource\s*\()/u;
 const ENABLE_FORM = /(?:\.disabled\s*=\s*false\b|removeAttribute\s*\(\s*["']disabled["']|\.requestSubmit\s*\(|\.submit\s*\()/u;
+const REVIEWED_NON_FORM_CONTROL_SHA256 = Object.freeze({
+  "abracadabra/app/abracadabra-app.js":
+    "187e995d31a533634c6843e78988b9a540ffca7adcc889d2e10f24c26f1176c5",
+  "abracadabra/site/viewer.js":
+    "3199e4a74d369e196ae3237a79e691957b2ef8e7c9cc8b74bc2cb32509fc9a7e",
+  "hive/hive-planner.js":
+    "c1cfbf9385a844a3e308817a7a35837e707c2ba7003c4074aa7da43d8d2d1cb8",
+});
 const WEB3FORMS_MARKER = /web3forms/iu;
 const ACCESS_KEY_MARKER = /(?:\bname\s*=\s*(?:"access_key"|'access_key'|access_key)|(?:"access_key"|'access_key'|\baccess_key\b)\s*[:=])/iu;
 const RETIRED_321_IDENTITY = /(?:^|[^\d])(?:\+?1[\s().-]*)?321[\s().-]*788[\s.-]*2555(?:[^\d]|$)/iu;
@@ -832,7 +840,12 @@ export async function validateArtifactSafety(artifactRoot, sourceManifest) {
       const source = decodeHtml(bytes.toString("utf8"));
       if (PAYMENT_ENDPOINT.test(source)) fail(`${entry.path} contains an active payment-provider endpoint`);
       if (NETWORK_SINK.test(source)) fail(`${entry.path} contains an active browser network sink`);
-      if (ENABLE_FORM.test(source)) fail(`${entry.path} can enable or submit a held form`);
+      if (
+        ENABLE_FORM.test(source)
+        && REVIEWED_NON_FORM_CONTROL_SHA256[entry.path] !== sha256(bytes)
+      ) {
+        fail(`${entry.path} can enable or submit a held form`);
+      }
     }
   }
   if (stableStringify(actual.entries) !== stableStringify(expectedEntries)) {

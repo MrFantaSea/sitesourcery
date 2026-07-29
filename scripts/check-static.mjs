@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { buildPagesArtifact, excludedTopLevel } from "./build-pages.mjs";
 
 const root = process.cwd();
-const ignoredDirectories = new Set([".git", "_site", "node_modules"]);
+const ignoredDirectories = new Set([".git", "_hosted", "_site", "node_modules"]);
 const errors = [];
 const counts = { references: 0, fragments: 0, scripts: 0, jsonLd: 0, forms: 0 };
 const canonicalCustomerMailbox = "sitesourcery@proton.me";

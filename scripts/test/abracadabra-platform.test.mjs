@@ -2671,6 +2671,10 @@ test("a spoofed current deletion policy cannot preserve reattached bytes or tick
 
 test("maker and notices describe project deletion without claiming account or hosted deletion", () => {
   const appMarkup = readFileSync(new URL("../../abracadabra/app/index.html", import.meta.url), "utf8");
+  const hostedControlMarkup = readFileSync(
+    new URL("../../scripts/hosted-truth/fragments/abracadabra-app-control.html", import.meta.url),
+    "utf8",
+  );
   const privacy = readFileSync(new URL("../../legal/privacy/index.html", import.meta.url), "utf8");
   const terms = readFileSync(
     new URL("../../legal/website-terms/index.html", import.meta.url),
@@ -2680,7 +2684,12 @@ test("maker and notices describe project deletion without claiming account or ho
   assert.match(controlSource, /maker\.loadProject\(\{ draft: null, versions: \[\], serving:/u);
   assert.match(controlSource, /\[data-create-ticket\]"\)\.hidden = deleted/u);
   assert.match(controlSource, /Proof reference removed/u);
-  assert.match(appMarkup, /does not delete the separate browser-local account/u);
+  assert.doesNotMatch(appMarkup, /delete (?:the )?(?:website )?project|browser-local account/iu);
+  assert.match(
+    appMarkup,
+    /This build does not create an online account, take payment, register or connect a domain, or publish\./u,
+  );
+  assert.match(hostedControlMarkup, /does not delete the separate Site Sourcery account/u);
   assert.match(privacy, /acts only on this browser’s local project store/u);
   assert.match(privacy, /does not delete the separate local account/u);
   assert.match(terms, /does not delete the separate browser-local account/u);

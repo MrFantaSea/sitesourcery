@@ -1,0 +1,411 @@
+    <section class="platform-control" id="control-room" aria-labelledby="control-room-title" hidden>
+      <div class="site-shell">
+        <header class="spark-section-head platform-heading">
+          <p class="spark-kicker">Your Site Sourcery account</p>
+          <h2 id="control-room-title">Keep the version you chose.</h2>
+          <p>Save the reviewed page, choose a plan and address, then decide when it goes live.</p>
+        </header>
+
+        <div class="platform-boundary" role="note">
+          <strong>Your work stays under your control</strong>
+          <span>Your account shows what is saved, what is paid for, which address is connected, and which version is live.</span>
+        </div>
+
+        <div class="platform-status" id="platform-status" role="status" aria-live="polite">Opening the control room…</div>
+
+        <div class="platform-auth" id="platform-auth" hidden>
+          <div class="platform-tabs" role="tablist" aria-label="Account access">
+            <button id="auth-create-tab" type="button" role="tab" aria-selected="true" aria-controls="auth-create" data-auth-mode="create">Create account</button>
+            <button id="auth-sign-in-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-sign-in" data-auth-mode="sign-in">Sign in</button>
+            <button id="auth-recover-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-recover" data-auth-mode="recover">Recover access</button>
+          </div>
+
+          <fieldset class="platform-panel platform-auth-panel" id="auth-create" role="tabpanel" tabindex="0" aria-labelledby="auth-create-tab" data-auth-panel="create">
+            <legend>Create your account</legend>
+            <p>Use the email you want tied to the website.</p>
+            <div class="platform-fields">
+              <label class="spark-field">
+                <span>Your name</span>
+                <input name="accountName" type="text" maxlength="100" autocomplete="name">
+              </label>
+              <label class="spark-field">
+                <span>Business or organization</span>
+                <input name="organizationName" type="text" maxlength="120" autocomplete="organization">
+              </label>
+              <label class="spark-field">
+                <span>Email</span>
+                <input name="accountEmail" type="email" maxlength="254" autocomplete="email">
+              </label>
+              <label class="spark-field platform-field-wide">
+                <span>Password</span>
+                <input name="accountPassword" type="password" minlength="10" maxlength="256" autocomplete="new-password">
+                <small>Use at least 10 characters.</small>
+              </label>
+            </div>
+            <div class="platform-actions">
+              <button class="spark-button spark-button-primary" type="button" data-create-account>Create account</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="platform-panel platform-auth-panel" id="auth-sign-in" role="tabpanel" tabindex="0" aria-labelledby="auth-sign-in-tab" data-auth-panel="sign-in" hidden>
+            <legend>Sign in</legend>
+            <p>Return to your saved website projects.</p>
+            <div class="platform-fields">
+              <label class="spark-field">
+                <span>Email</span>
+                <input name="signInEmail" type="email" maxlength="254" autocomplete="email">
+              </label>
+              <label class="spark-field">
+                <span>Password</span>
+                <input name="signInPassword" type="password" maxlength="256" autocomplete="current-password">
+              </label>
+            </div>
+            <div class="platform-actions">
+              <button class="spark-button spark-button-primary" type="button" data-sign-in>Sign in</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="platform-panel platform-auth-panel" id="auth-recover" role="tabpanel" tabindex="0" aria-labelledby="auth-recover-tab" data-auth-panel="recover" hidden>
+            <legend>Recover account access</legend>
+            <p>Enter the account email. The next message will say whether an email was sent or you need to contact Site Sourcery.</p>
+            <div class="platform-fields">
+              <label class="spark-field">
+                <span>Account email</span>
+                <input name="recoveryEmail" type="email" maxlength="254" autocomplete="email">
+              </label>
+              <div class="platform-inline-action">
+                <button class="spark-button" type="button" data-request-recovery>Send recovery message</button>
+              </div>
+            </div>
+            <p data-recovery-support hidden>
+              <a href="/contact/#direct-contact">Contact Site Sourcery for account recovery</a>
+            </p>
+            <div class="platform-recovery-message" data-recovery-message hidden>
+              <p><strong>Recovery link ready</strong><span data-recovery-token></span></p>
+              <label class="spark-field">
+                <span>New password</span>
+                <input name="recoveryPassword" type="password" minlength="10" maxlength="256" autocomplete="new-password">
+              </label>
+              <button class="spark-button spark-button-primary" type="button" data-reset-password>Reset password</button>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="platform-dashboard" id="platform-dashboard" hidden>
+          <header class="platform-account-bar">
+            <div>
+              <span>Signed in</span>
+              <strong data-account-name>Account</strong>
+              <small><span data-organization-name></span> · <span data-account-email></span></small>
+            </div>
+            <button class="spark-button" type="button" data-sign-out>Sign out</button>
+          </header>
+
+          <div class="platform-dashboard-grid">
+            <aside class="platform-projects" aria-labelledby="project-list-title">
+              <div class="platform-sidebar-head">
+                <div>
+                  <span>Projects</span>
+                  <strong id="project-list-title">Your websites</strong>
+                </div>
+                <button class="spark-button" type="button" data-new-project>New</button>
+              </div>
+              <ol data-project-list></ol>
+            </aside>
+
+            <div class="platform-main">
+              <section class="platform-empty platform-panel" data-project-empty>
+                <p class="spark-kicker">Start a project</p>
+                <h3>Choose the address before you build.</h3>
+                <p>Use a monthly Site Sourcery address, buy a customer-owned domain through Site Sourcery, or connect one you already own.</p>
+                <button class="spark-button spark-button-primary" type="button" data-new-project>Create a website project</button>
+              </section>
+
+              <fieldset class="platform-panel platform-project-creator" data-project-creator hidden>
+                <legend>New website project</legend>
+                <p>Finish one short step to open the next.</p>
+                <ol class="platform-setup-progress">
+                  <li data-project-progress="1" aria-current="step"><span>1</span>Name</li>
+                  <li data-project-progress="2"><span>2</span>Address</li>
+                  <li data-project-progress="3"><span>3</span>Access</li>
+                </ol>
+                <p class="platform-step-status" data-project-step-status role="status" aria-live="polite">Step 1 of 3 · Name the project.</p>
+
+                <div class="platform-setup-step" data-project-create-step="1">
+                  <label class="spark-field platform-field-wide">
+                    <span>Project name</span>
+                    <input name="projectName" type="text" maxlength="120" autocomplete="off" placeholder="My business website">
+                  </label>
+                  <div class="platform-actions">
+                    <button class="spark-button" type="button" data-cancel-project-create>Cancel</button>
+                    <button class="spark-button spark-button-primary" type="button" data-project-step-next="2">Choose an address</button>
+                  </div>
+                </div>
+
+                <div class="platform-setup-step" data-project-create-step="2" hidden inert>
+                  <div class="platform-choice-grid">
+                    <label class="platform-choice">
+                      <input type="radio" name="addressMode" value="mode_a" checked>
+                      <strong>Use a Site Sourcery address</strong>
+                      <span>Use <b>your-name.sitesourcery.me</b> while the hosting plan is active.</span>
+                    </label>
+                    <label class="platform-choice">
+                      <input type="radio" name="addressMode" value="mode_b">
+                      <strong>Use your own domain</strong>
+                      <span>Buy it here or connect one you already own.</span>
+                    </label>
+                  </div>
+
+                  <div data-address-mode-a>
+                    <label class="spark-field">
+                      <span>Site address</span>
+                      <span class="platform-address-input"><input name="addressLabel" type="text" maxlength="63" autocomplete="off" placeholder="your-name"><b>.sitesourcery.me</b></span>
+                    </label>
+                  </div>
+
+                  <div class="platform-owned-domain" data-address-mode-b hidden>
+                    <div class="platform-choice-grid">
+                      <label class="platform-choice">
+                        <input type="radio" name="domainPath" value="purchase" checked>
+                        <strong>Buy it here</strong>
+                        <span>You are the owner. The price is shown before payment.</span>
+                      </label>
+                      <label class="platform-choice">
+                        <input type="radio" name="domainPath" value="byod">
+                        <strong>Connect one I own</strong>
+                        <span>Keep it at your current registrar.</span>
+                      </label>
+                    </div>
+                    <label class="spark-field">
+                      <span>Domain name</span>
+                      <input name="ownedDomain" type="text" maxlength="253" autocomplete="off" placeholder="example.com">
+                    </label>
+                    <p class="platform-proof-note">We’ll verify ownership before connecting a domain you already own.</p>
+                  </div>
+
+                  <div class="platform-actions">
+                    <button class="spark-button" type="button" data-project-step-back="1">Back</button>
+                    <button class="spark-button spark-button-primary" type="button" data-project-step-next="3">Choose access</button>
+                  </div>
+                </div>
+
+                <div class="platform-setup-step" data-project-create-step="3" hidden inert>
+                  <div class="platform-choice-grid">
+                    <label class="platform-choice">
+                      <input type="radio" name="visibility" value="public" checked>
+                      <strong>Public</strong>
+                      <span>Anyone with the finished address can open it.</span>
+                    </label>
+                    <label class="platform-choice">
+                      <input type="radio" name="visibility" value="private">
+                      <strong>Private</strong>
+                      <span>Visitors need the passphrase you set.</span>
+                    </label>
+                  </div>
+
+                  <label class="spark-field" data-access-password hidden>
+                    <span>Site passphrase</span>
+                    <input name="accessPassword" type="password" minlength="10" maxlength="256" autocomplete="new-password">
+                    <small>Use at least 10 characters.</small>
+                  </label>
+
+                  <label class="spark-confirmation platform-terms-confirmation">
+                    <input name="projectTermsAccepted" type="checkbox">
+                    <span>I accept the <a href="/legal/website-terms/" target="_blank" rel="noopener noreferrer">website terms</a> and have read the <a href="/legal/privacy/" target="_blank" rel="noopener noreferrer">privacy notice</a>.</span>
+                  </label>
+
+                  <div class="platform-actions">
+                    <button class="spark-button" type="button" data-project-step-back="2">Back</button>
+                    <button class="spark-button spark-button-primary" type="button" data-create-project>Create project</button>
+                  </div>
+                </div>
+              </fieldset>
+
+              <section class="platform-project" data-active-project tabindex="-1" hidden>
+                <header class="platform-project-head">
+                  <div>
+                    <p class="spark-kicker">Active project</p>
+                    <h3 data-project-name>Website project</h3>
+                    <p data-project-address></p>
+                  </div>
+                  <a class="spark-button" data-open-site href="#" target="_blank" rel="noopener noreferrer" hidden>Open published site</a>
+                </header>
+
+                <dl class="platform-state-grid">
+                  <div><dt>Plan</dt><dd data-plan-state>Selected</dd></div>
+                  <div><dt>Address</dt><dd data-address-state>Ready</dd></div>
+                  <div><dt>Visibility</dt><dd data-visibility-state>Public</dd></div>
+                  <div><dt>Website</dt><dd data-serving-state>Draft</dd></div>
+                </dl>
+
+                <div class="platform-command-grid">
+                  <section class="platform-panel">
+                    <p class="spark-kicker">Your next step</p>
+                    <h4>Choose the exact version to publish.</h4>
+                    <p data-release-copy>Make and review a version in the builder below.</p>
+                    <div class="platform-selected-release" data-selected-release aria-live="polite">
+                      <span>Selected for release</span>
+                      <strong data-selected-release-title>No accepted version selected</strong>
+                      <small data-selected-release-summary>Make and review a version below, or choose one from the release history.</small>
+                    </div>
+                    <dl class="platform-plan-definition">
+                      <div><dt>Website</dt><dd>One reviewed one-page site with version history.</dd></div>
+                      <div><dt>Keep it</dt><dd>Rent, Own, or Owned + managed.</dd></div>
+                      <div><dt>Address</dt><dd>Use a Site Sourcery address or a domain you own.</dd></div>
+                      <div><dt>Before payment</dt><dd>See the exact price, renewal terms, and what is included.</dd></div>
+                    </dl>
+                    <div class="platform-actions platform-actions-left">
+                      <span data-hosted-offer-anchor hidden></span>
+                      <button class="spark-button spark-button-primary" type="button" data-publish disabled>Publish this version</button>
+                      <button class="spark-button" type="button" data-unpublish hidden>Pause publication</button>
+                    </div>
+                    <ol class="platform-release-list" data-release-list></ol>
+                  </section>
+
+                  <section class="platform-panel" data-safety-panel hidden>
+                    <p class="spark-kicker">Site review</p>
+                    <h4>This site is paused for review.</h4>
+                    <p data-safety-copy>Use the form below if you think the pause is a mistake.</p>
+                    <label class="spark-field" data-safety-appeal-field hidden>
+                      <span>Appeal message</span>
+                      <textarea name="safetyAppeal" rows="4" maxlength="4000" placeholder="Explain the issue and why this website should be restored."></textarea>
+                    </label>
+                    <div class="platform-actions platform-actions-left">
+                      <button class="spark-button" type="button" data-submit-safety-appeal hidden>Submit appeal</button>
+                    </div>
+                  </section>
+
+                  <section class="platform-panel platform-collapsible-panel">
+                    <details>
+                      <summary><span>Address and access</span><strong>Change the address or privacy setting</strong></summary>
+                      <div class="platform-details-body">
+                    <p>Changing the address of a live site pauses it until you review and publish again.</p>
+                    <div class="platform-domain-status" data-domain-review-status hidden>
+                      <span data-domain-review-state>Proof required</span>
+                      <strong data-domain-review-title>Customer-owned domain</strong>
+                      <dl>
+                        <div><dt>Handoff receipt</dt><dd data-domain-review-receipt>None saved</dd></div>
+                        <div><dt>Proof</dt><dd data-domain-review-proof>Not supplied</dd></div>
+                        <div><dt>Saved</dt><dd data-domain-review-time>Not saved</dd></div>
+                      </dl>
+                      <p data-domain-review-copy>Prepare the proof handoff below before a separate domain reviewer can configure this address.</p>
+                    </div>
+                    <div class="platform-actions platform-actions-left">
+                      <button class="spark-button" type="button" data-toggle-settings>Manage address and access</button>
+                    </div>
+                    <div class="platform-settings" data-project-settings hidden>
+                      <label class="spark-field">
+                        <span>Address mode</span>
+                        <select name="manageAddressMode">
+                          <option value="mode_a">Site Sourcery address</option>
+                          <option value="mode_b">Customer-owned domain</option>
+                        </select>
+                      </label>
+                      <label class="spark-field" data-manage-mode-a>
+                        <span>Site address</span>
+                        <span class="platform-address-input"><input name="manageAddressLabel" type="text" maxlength="63" autocomplete="off"><b>.sitesourcery.me</b></span>
+                      </label>
+                      <div class="platform-owned-domain" data-manage-mode-b hidden>
+                        <label class="spark-field">
+                          <span>Customer-domain path</span>
+                          <select name="manageDomainPath">
+                            <option value="purchase">Buy through Site Sourcery</option>
+                            <option value="byod">Connect a domain already owned</option>
+                          </select>
+                        </label>
+                        <label class="spark-field">
+                          <span>Domain name</span>
+                          <input name="manageOwnedDomain" type="text" maxlength="253" autocomplete="off">
+                        </label>
+                        <p class="platform-proof-note">We’ll verify ownership before connecting this domain.</p>
+                        <label class="spark-field">
+                          <span>Proof type</span>
+                          <select name="manageDomainProofMethod">
+                            <option value="registrar_receipt">Registrar receipt</option>
+                            <option value="dns_challenge">DNS challenge</option>
+                          </select>
+                        </label>
+                        <label class="spark-field">
+                          <span>Receipt or challenge reference</span>
+                          <input name="manageDomainProofReference" type="text" maxlength="200" autocomplete="off" placeholder="Receipt ID or DNS challenge reference">
+                        </label>
+                        <div class="platform-actions platform-actions-left platform-proof-actions">
+                          <button class="spark-button" type="button" data-request-domain-review>Send proof for review</button>
+                        </div>
+                      </div>
+                      <div class="platform-actions platform-actions-left">
+                        <button class="spark-button spark-button-primary" type="button" data-save-address>Save address</button>
+                      </div>
+                      <h5>Who can see the site?</h5>
+                      <p>Save this separately so an address error cannot change the access setting.</p>
+                      <label class="spark-field">
+                        <span>Visibility</span>
+                        <select name="manageVisibility">
+                          <option value="public">Public</option>
+                          <option value="private">Access-controlled private</option>
+                        </select>
+                      </label>
+                      <label class="spark-field" data-manage-passphrase hidden>
+                        <span>New site passphrase</span>
+                        <input name="manageAccessPassword" type="password" minlength="10" maxlength="256" autocomplete="new-password">
+                        <small>Enter a new passphrase to switch to private or replace the saved passphrase. Leave it blank to keep the current private passphrase.</small>
+                      </label>
+                      <div class="platform-actions platform-actions-left">
+                        <button class="spark-button spark-button-primary" type="button" data-save-access>Save access setting</button>
+                      </div>
+                    </div>
+                      </div>
+                    </details>
+                  </section>
+
+                  <section class="platform-panel platform-collapsible-panel">
+                    <details>
+                      <summary><span>Help</span><strong>Ask Site Sourcery for support</strong></summary>
+                      <div class="platform-details-body">
+                    <p>Describe the problem and include what you expected to happen.</p>
+                    <label class="spark-field">
+                      <span>Subject</span>
+                      <input name="supportSubject" type="text" maxlength="120" autocomplete="off">
+                    </label>
+                    <label class="spark-field">
+                      <span>What do you need help with?</span>
+                      <textarea name="supportMessage" rows="4" maxlength="4000"></textarea>
+                    </label>
+                    <div class="platform-actions platform-actions-left">
+                      <button class="spark-button" type="button" data-create-ticket>Send support request</button>
+                    </div>
+                    <ol class="platform-ticket-list" data-ticket-list></ol>
+                      </div>
+                    </details>
+                  </section>
+
+                  <section class="platform-panel platform-danger-panel platform-collapsible-panel">
+                    <details>
+                      <summary><span>Export or leave</span><strong>Download, cancel, or delete</strong></summary>
+                      <div class="platform-details-body">
+                    <p>Download your project before leaving. Your customer-owned domain remains yours.</p>
+                    <p>Cancel stops later renewals. Delete removes the website project and cannot be undone. It does not delete the separate Site Sourcery account.</p>
+                    <div class="platform-actions platform-actions-left">
+                      <button class="spark-button" type="button" data-export-project>Prepare project export</button>
+                      <button class="spark-button" type="button" data-detach-domain hidden>Detach customer domain</button>
+                      <button class="spark-button" type="button" data-cancel-project>Cancel plan</button>
+                      <button class="spark-button platform-danger-button" type="button" data-delete-project>Delete website project</button>
+                    </div>
+                    <div class="platform-export-state" data-export-state-box>
+                      <p data-export-state role="status" aria-live="polite">No export prepared.</p>
+                      <div class="platform-actions platform-actions-left">
+                        <button class="spark-button" type="button" data-refresh-export hidden>Refresh export status</button>
+                        <button class="spark-button spark-button-primary" type="button" data-download-export hidden>Download export</button>
+                        <button class="spark-button" type="button" data-retry-export hidden>Prepare a new export</button>
+                      </div>
+                    </div>
+                      </div>
+                    </details>
+                  </section>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>

@@ -1,5 +1,6 @@
 node_modules/
 _site/
+_hosted/
 .env
 .env.*
 !.env.example

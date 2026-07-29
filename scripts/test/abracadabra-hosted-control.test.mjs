@@ -14,6 +14,9 @@ const {
   ControlError,
   createHostedControl,
 } = require("../../abracadabra/app/abracadabra-hosted-control.js");
+const {
+  recoveryRequestOutcome,
+} = require("../../abracadabra/app/abracadabra-hosted-control-dom.js");
 
 function response(status, payload, requestId = "req_hosted") {
   return {
@@ -209,7 +212,6 @@ test("private staging injection selects hosted mode in strict script order witho
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
     "/abracadabra/app/abracadabra-hosted-control-dom.js",
-    "/abracadabra/app/abracadabra-control.js",
   ];
   let cursor = -1;
   for (const marker of ordered) {
@@ -217,6 +219,11 @@ test("private staging injection selects hosted mode in strict script order witho
     assert.ok(next > cursor, marker);
     cursor = next;
   }
+  assert.doesNotMatch(
+    hosted,
+    /\/abracadabra\/app\/abracadabra-control\.js/u,
+    "the reviewed hosted fragment, not the generic configurator, adds the progressive control",
+  );
   assert.match(hosted, /"domainTermsVersion":"domain-terms-staging-1"/u);
   const catalogJson = hosted.match(
     /<script id="abracadabra-hosted-catalog" type="application\/json">([^<]+)<\/script>/u,
@@ -356,6 +363,43 @@ test("async actions expose pending and safe retry state while reusing the origin
   assert.equal(control.getState().operations.requestRecovery.status, "success");
   assert.equal(control.getState().operations.requestRecovery.attempt, 2);
   assert.deepEqual(requestKeys, ["idem_recovery_stable", "idem_recovery_stable"]);
+});
+
+test("recovery copy claims email only from exact delivery evidence", () => {
+  assert.deepEqual(
+    recoveryRequestOutcome({ delivery: "email", emailSent: true }),
+    {
+      emailSent: true,
+      message: "If that account exists, a recovery email was sent.",
+      supportRequired: false,
+    },
+  );
+  for (const held of [
+    { delivery: "manual_operator", emailSent: false },
+    { delivery: "held", emailSent: false },
+  ]) {
+    assert.deepEqual(
+      recoveryRequestOutcome(held),
+      {
+        emailSent: false,
+        message: "No recovery email was sent. Use the Contact page below for account recovery.",
+        supportRequired: true,
+      },
+    );
+  }
+  for (const unproven of [
+    undefined,
+    {},
+    { accepted: true },
+    { delivery: "email" },
+    { delivery: "manual_operator", emailSent: true },
+  ]) {
+    const outcome = recoveryRequestOutcome(unproven);
+    assert.equal(outcome.emailSent, false);
+    assert.equal(outcome.supportRequired, true);
+    assert.match(outcome.message, /^We could not confirm/u);
+    assert.doesNotMatch(outcome.message, /instructions have been sent/iu);
+  }
 });
 
 test("same-origin session boot propagates CSRF, idempotency, cookie credentials, and draft revision", async () => {

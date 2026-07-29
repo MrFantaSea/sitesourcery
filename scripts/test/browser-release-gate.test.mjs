@@ -671,7 +671,16 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
   assert.doesNotMatch(vnextStyleSource, /\.js \.site-header:has\(\.menu-button\)/u);
 });
 
-test("Abracadabra browser gate requires control boot, project isolation, and fail-closed viewing", () => {
+test("Abracadabra browser gate enforces held versus hosted control boundaries", () => {
+  assert.match(auditSource, /configuredControlMode/u);
+  assert.match(auditSource, /controlModeMeta/u);
+  assert.match(auditSource, /hostedControlScriptPresent/u);
+  assert.match(auditSource, /accountControlCount/u);
+  assert.match(auditSource, /publishControlCount/u);
+  assert.match(auditSource, /const heldSource = result\.sparkReady\.configuredControlMode === "hold"/u);
+  assert.match(auditSource, /const hostedArtifact = result\.sparkReady\.configuredControlMode === "hosted"/u);
+  assert.match(auditSource, /result\.sparkReady\.controlRoomPresent/u);
+  assert.match(auditSource, /abracadabraControlMode === "local-rehearsal"/u);
   assert.match(auditSource, /controlReady: controlRoom\?\.getAttribute\("data-control-ready"\)/u);
   assert.match(auditSource, /result\.sparkReady\.controlReady !== "true"/u);
   assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "true"/u);

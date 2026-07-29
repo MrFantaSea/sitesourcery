@@ -69,7 +69,7 @@ const ALLOWED_EXTERNAL_REFERENCES = new Set([
   "work/index.html\u0000href\u0000https://sconesourcery.com/",
 ]);
 
-const IGNORED_TOP_LEVEL = new Set([".git", "_site", "node_modules"]);
+const IGNORED_TOP_LEVEL = new Set([".git", "_hosted", "_site", "node_modules"]);
 const NONDEPLOYED_HTML_TOP_LEVEL = new Set([".github", "data", "print-collateral", "scripts"]);
 const HTML_ENTITY = Object.freeze({
   amp: "&",
@@ -577,7 +577,7 @@ export async function validateRouteContract(root = process.cwd()) {
   const actualDeployableHtml = [...paths]
     .filter((file) => file.endsWith(".html"))
     .filter((file) => !NONDEPLOYED_HTML_TOP_LEVEL.has(file.split("/")[0]))
-    .filter((file) => !file.startsWith("_site/"));
+    .filter((file) => !file.startsWith("_hosted/") && !file.startsWith("_site/"));
   for (const file of actualDeployableHtml) {
     if (!expectedHtml.has(file)) report(errors, file, "unexpected HTML route outside the vNext ledger");
   }

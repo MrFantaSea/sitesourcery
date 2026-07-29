@@ -11,11 +11,16 @@ const compilerPath = path.join(projectRoot, "abracadabra/app/abracadabra-compile
 const appPath = path.join(projectRoot, "abracadabra/app/abracadabra-app.js");
 const controlPath = path.join(projectRoot, "abracadabra/app/abracadabra-control.js");
 const htmlPath = path.join(projectRoot, "abracadabra/app/index.html");
-const [compilerSource, appSource, controlSource, pageHtml] = await Promise.all([
+const hostedControlFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-app-control.html",
+);
+const [compilerSource, appSource, controlSource, pageHtml, hostedControlMarkup] = await Promise.all([
   readFile(compilerPath, "utf8"),
   readFile(appPath, "utf8"),
   readFile(controlPath, "utf8"),
   readFile(htmlPath, "utf8"),
+  readFile(hostedControlFragmentPath, "utf8"),
 ]);
 
 function loadCompiler() {
@@ -279,34 +284,35 @@ test("application page has zero forms and fails closed before its local compiler
   assert.doesNotMatch(pageHtml, /<iframe\b[^>]*sandbox="[^"]+"/u);
 });
 
-test("guest preview precedes account access and carries its reviewed version into the first project", () => {
-  assert.match(
+test("held maker stays account-free while hosted adoption code can carry a reviewed version", () => {
+  assert.doesNotMatch(
     pageHtml,
-    /<section class="platform-control" id="control-room"[^>]*\shidden>/u,
-    "the account control room must remain hidden until the visitor elects to save or sign in",
+    /class="platform-control"|data-open-account|data-save-direction|Save and continue/u,
+    "the held maker must not expose hosted account or save controls",
   );
   assert.match(
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\stabindex="-1"[^>]*>/u,
     "the guest maker must be available without an account gate",
   );
-  assert.match(
-    pageHtml,
-    /<section class="platform-project"[^>]*\bdata-active-project\b[^>]*\stabindex="-1"[^>]*>/u,
-    "the revealed project region must accept programmatic focus after adoption",
-  );
   assert.doesNotMatch(
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\shidden>/u,
   );
   for (const marker of [
+    "This build does not create an online account, take payment, register or connect a domain, or publish.",
+    "Your page is not saved.",
+    "If you refresh this page or close the tab, you will start over.",
     "No account is required to build and test the first version.",
-    "data-save-direction",
-    "data-open-account",
-    "Save and continue",
+    "Download the version you approved.",
   ]) {
     assert.ok(pageHtml.includes(marker), marker);
   }
+  assert.match(pageHtml, /abracadabra-control-mode\.js/u);
+  assert.doesNotMatch(
+    pageHtml,
+    /abracadabra-control\.js|abracadabra-platform\.js/u,
+  );
   for (const marker of [
     "pendingGuestCandidate",
     "if (!state.account || !state.project)",
@@ -372,7 +378,7 @@ test("UI implements memory-only history, undo, sandbox preview, and local downlo
   }
 });
 
-test("the exact recognizable maker selection controls publication and rollback", () => {
+test("the hosted control keeps recognizable version selection for publication and rollback", () => {
   for (const marker of [
     "Selected for release",
     "Publish this version",
@@ -383,7 +389,13 @@ test("the exact recognizable maker selection controls publication and rollback",
     "publishVersion(versionId, context)",
     "Roll back to Version ",
   ]) {
-    assert.ok(appSource.includes(marker) || controlSource.includes(marker) || pageHtml.includes(marker), marker);
+    assert.ok(
+      appSource.includes(marker)
+        || controlSource.includes(marker)
+        || hostedControlMarkup.includes(marker)
+        || pageHtml.includes(marker),
+      marker,
+    );
   }
   assert.match(
     controlSource,
@@ -400,7 +412,11 @@ test("the exact recognizable maker selection controls publication and rollback",
     /accepted\[accepted\.length - 1\][\s\S]{0,100}\.id/u,
     "the primary publication path must not silently fall back to the latest version",
   );
-  assert.match(pageHtml, /role="tablist"[\s\S]*id="auth-create-tab"[\s\S]*role="tabpanel"/u);
+  assert.match(
+    hostedControlMarkup,
+    /role="tablist"[\s\S]*id="auth-create-tab"[\s\S]*role="tabpanel"/u,
+  );
+  assert.doesNotMatch(pageHtml, /role="tablist"|id="auth-create-tab"/u);
   assert.match(controlSource, /\["ArrowLeft", "ArrowRight", "Home", "End"\]/u);
   assert.doesNotMatch(pageHtml, /payment connection remains the last held rail/iu);
   assert.doesNotMatch(controlSource, /support ticket could not be opened/iu);
@@ -437,13 +453,14 @@ test("customer-domain proof creates a local owner handoff without claiming revie
     "Domain-review handoff ",
     "No reviewer was contacted and the address remains pending.",
   ]) {
-    assert.ok(pageHtml.includes(marker) || controlSource.includes(marker), marker);
+    assert.ok(hostedControlMarkup.includes(marker) || controlSource.includes(marker), marker);
   }
-  assert.doesNotMatch(pageHtml, /no reviewer is contacted and no provider record changes/iu);
+  assert.doesNotMatch(hostedControlMarkup, /no reviewer is contacted and no provider record changes/iu);
   assert.doesNotMatch(
-    pageHtml,
+    hostedControlMarkup,
     /review is rehearsed locally/iu,
   );
+  assert.doesNotMatch(pageHtml, /data-domain-review-status|Send proof for review/u);
   assert.match(
     controlSource,
     /platform\.requestAddressVerification\(\{[\s\S]*method:[\s\S]*reference:/u,
@@ -452,12 +469,12 @@ test("customer-domain proof creates a local owner handoff without claiming revie
 
 test("project setup unlocks three small accessible steps and keeps internal lifecycle controls out of the customer flow", () => {
   assert.deepEqual(
-    [...pageHtml.matchAll(/data-project-create-step="(\d)"/gu)].map((match) => match[1]),
+    [...hostedControlMarkup.matchAll(/data-project-create-step="(\d)"/gu)].map((match) => match[1]),
     ["1", "2", "3"],
   );
   for (const step of ["2", "3"]) {
     assert.match(
-      pageHtml,
+      hostedControlMarkup,
       new RegExp(`data-project-create-step="${step}"[^>]*\\shidden\\sinert>`, "u"),
     );
   }
@@ -468,9 +485,8 @@ test("project setup unlocks three small accessible steps and keeps internal life
     "data-project-step-back=\"1\"",
     "data-project-step-back=\"2\"",
     "data-project-step-status",
-    "data-internal-control hidden inert",
   ]) {
-    assert.ok(pageHtml.includes(marker), marker);
+    assert.ok(hostedControlMarkup.includes(marker), marker);
   }
   for (const marker of [
     "projectStepError",
@@ -482,9 +498,10 @@ test("project setup unlocks three small accessible steps and keeps internal life
     assert.ok(controlSource.includes(marker), marker);
   }
   assert.doesNotMatch(
-    pageHtml,
-    /Rehearse plan activation|Simulate missed payment|non-transactional local rehearsal/iu,
+    hostedControlMarkup,
+    /Internal lifecycle test|Test plan state|Test missed payment|Test suspension|Test deletion|data-internal-control/iu,
   );
+  assert.doesNotMatch(pageHtml, /data-project-create-step|data-internal-control/u);
   assert.match(
     pageHtml,
     /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,

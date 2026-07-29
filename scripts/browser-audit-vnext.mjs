@@ -1725,10 +1725,29 @@ const AUDIT_EXPRESSION = `(() => {
   const spark = document.querySelector("#spark-maker");
   if (spark) {
     const controlRoom = document.querySelector("#control-room");
+    const controlMode = window.SiteSourceryAbracadabraControlMode;
+    const configuredControlMode = controlMode
+      && typeof controlMode.configuredMode === "function"
+      ? controlMode.configuredMode(document)
+      : "";
     result.sparkReady = {
       inert: spark.hasAttribute("inert"),
       disabled: spark.getAttribute("aria-disabled"),
       compiler: typeof window.AbracadabraCompiler,
+      controlModeApi: typeof controlMode,
+      configuredControlMode,
+      controlModeMeta:
+        document.querySelector('meta[name="sitesourcery-abracadabra-control-mode"]')
+          ?.getAttribute("content") || "",
+      controlRoomPresent: Boolean(controlRoom),
+      hostedControlScriptPresent: Array.from(document.scripts).some((script) =>
+        new URL(script.src, location.href).pathname
+          === "/abracadabra/app/abracadabra-control.js"
+      ),
+      accountControlCount: document.querySelectorAll(
+        "[data-create-account], [data-sign-in], [data-recover-account]"
+      ).length,
+      publishControlCount: document.querySelectorAll("[data-publish], [data-unpublish]").length,
       controlReady: controlRoom?.getAttribute("data-control-ready") || "",
       documentControlReady: root.getAttribute("data-abracadabra-control-ready") || ""
     };
@@ -3963,6 +3982,16 @@ export async function auditBrowser({
   const binary = await chromiumPath();
   const absoluteArtifactRoot = path.resolve(artifactRoot);
   await access(absoluteArtifactRoot);
+  let abracadabraControlMode = "";
+  if (routes.includes("/abracadabra/app/")) {
+    const appSource = await readFile(
+      path.join(absoluteArtifactRoot, "abracadabra", "app", "index.html"),
+      "utf8",
+    );
+    abracadabraControlMode = appSource.match(
+      /<meta\s+name="sitesourcery-abracadabra-control-mode"\s+content="([^"]+)"/u,
+    )?.[1] ?? "";
+  }
   const artifactServer = origin ? null : await startArtifactServer(absoluteArtifactRoot);
   const auditOrigin = origin ?? artifactServer.origin;
   const port = 19000 + (process.pid % 10000);
@@ -4039,7 +4068,10 @@ export async function auditBrowser({
         });
         const result = evaluated.result?.value;
         if (!result) {
-          errors.push(`${viewport.label} ${route}: browser audit returned no value`);
+          errors.push(
+            `${viewport.label} ${route}: browser audit returned no value `
+            + `${JSON.stringify(evaluated.exceptionDetails ?? null)}`,
+          );
           continue;
         }
         const overflow = result.documentWidth - result.viewportWidth;
@@ -4354,96 +4386,124 @@ export async function auditBrowser({
           }
         }
         if (profile === "vnext" && result.sparkReady) {
+          const heldSource = result.sparkReady.configuredControlMode === "hold";
+          const hostedArtifact = result.sparkReady.configuredControlMode === "hosted";
           if (
             result.sparkReady.inert
             || result.sparkReady.disabled !== "false"
             || result.sparkReady.compiler !== "object"
-            || result.sparkReady.controlReady !== "true"
-            || result.sparkReady.documentControlReady !== "true"
-          ) {
-            errors.push(`${viewport.label} ${route}: Abracadabra Spark did not fully boot`);
-          }
-          const guestExercise = await cdp.send("Runtime.evaluate", {
-            expression: GUEST_FIRST_EXERCISE_EXPRESSION,
-            awaitPromise: true,
-            returnByValue: true,
-          });
-          const guestFlow = guestExercise.result?.value;
-          if (
-            guestExercise.exceptionDetails
-            || !guestFlow
-            || !guestFlow.initial.accountHidden
-            || !guestFlow.initial.domOrderAligned
-            || !guestFlow.initial.makerVisible
-            || !guestFlow.initial.returningEnabled
-            || !guestFlow.preview.accountHidden
-            || guestFlow.preview.versionCount !== 1
-            || guestFlow.preview.srcdocLength < 1000
-            || !guestFlow.saveChoice.accountVisible
-            || !guestFlow.saveChoice.createPanelVisible
-            || !guestFlow.saveChoice.domOrderAligned
-            || guestFlow.saveChoice.focusName !== "accountName"
-            || !guestFlow.saveChoice.renderedOrderAligned
-            || !guestFlow.adopted.activeProjectFocused
-            || !guestFlow.adopted.activeProjectVisible
-            || guestFlow.adopted.releaseCount !== 1
-            || !guestFlow.adopted.status.includes("reviewed guest preview was carried into it")
+            || result.sparkReady.controlModeApi !== "object"
+            || (
+              heldSource
+              && (
+                result.sparkReady.controlModeMeta !== "hold"
+                || result.sparkReady.controlRoomPresent
+                || result.sparkReady.hostedControlScriptPresent
+                || result.sparkReady.accountControlCount !== 0
+                || result.sparkReady.publishControlCount !== 0
+                || result.sparkReady.controlReady !== ""
+                || result.sparkReady.documentControlReady !== ""
+              )
+            )
+            || (
+              hostedArtifact
+              && (
+                !result.sparkReady.controlRoomPresent
+                || !result.sparkReady.hostedControlScriptPresent
+                || result.sparkReady.controlReady !== "true"
+                || result.sparkReady.documentControlReady !== "true"
+              )
+            )
+            || (!heldSource && !hostedArtifact)
           ) {
             errors.push(
-              `${viewport.label} ${route}: guest-first preview and project adoption failed `
-              + `${JSON.stringify(guestFlow ?? guestExercise.exceptionDetails ?? null)}`,
+              `${viewport.label} ${route}: Abracadabra Spark boot or control-mode boundary failed `
+              + `${JSON.stringify(result.sparkReady)}`,
             );
           }
-          const controllerExercise = await cdp.send("Runtime.evaluate", {
-            expression: CONTROLLER_DRAFT_EXERCISE_EXPRESSION,
-            awaitPromise: true,
-            returnByValue: true,
-          });
-          const controllerFlow = controllerExercise.result?.value;
-          const firstSentinel = `belongs-to-first-${viewport.width}`;
-          const secondSentinel = `belongs-to-second-${viewport.width}`;
-          if (
-            controllerExercise.exceptionDetails
-            || !controllerFlow
-            || !controllerFlow.afterSwitch.activeSecond
-            || controllerFlow.afterSwitch.firstSummary !== firstSentinel
-            || controllerFlow.afterSwitch.secondSummary !== null
-            || controllerFlow.sameProject.firstSummary !== firstSentinel
-            || controllerFlow.sameProject.secondSummary !== secondSentinel
-            || controllerFlow.transientSecond.activeProjectId === ""
-            || controllerFlow.transientSecond.addressMode !== "mode_a"
-            || controllerFlow.transientSecond.addressLabel !== `rapid-second-${viewport.width}`
-            || controllerFlow.transientSecond.domainPath !== "purchase"
-            || controllerFlow.transientSecond.domainProofMethod !== "registrar_receipt"
-            || controllerFlow.transientSecond.domainProofReference !== ""
-            || controllerFlow.transientSecond.ownedDomain !== ""
-            || controllerFlow.transientSecond.passphrase !== ""
-            || controllerFlow.transientSecond.safetyAppeal !== ""
-            || !controllerFlow.transientSecond.settingsHidden
-            || controllerFlow.transientSecond.supportMessage !== ""
-            || controllerFlow.transientSecond.supportSubject !== ""
-            || controllerFlow.transientSecond.visibility !== "public"
-            || controllerFlow.transientFirst.activeProjectId === ""
-            || controllerFlow.transientFirst.addressMode !== "mode_a"
-            || controllerFlow.transientFirst.addressLabel !== `rapid-first-${viewport.width}`
-            || controllerFlow.transientFirst.domainProofReference !== ""
-            || controllerFlow.transientFirst.ownedDomain !== ""
-            || controllerFlow.transientFirst.passphrase !== ""
-            || controllerFlow.transientFirst.safetyAppeal !== ""
-            || !controllerFlow.transientFirst.settingsHidden
-            || controllerFlow.transientFirst.supportMessage !== ""
-            || controllerFlow.transientFirst.supportSubject !== ""
-            || controllerFlow.transientFirst.visibility !== "public"
-            || controllerFlow.guardedAction.activeProjectId
-              !== controllerFlow.transientFirst.activeProjectId
-            || controllerFlow.guardedAction.firstLifecycle !== "active"
-            || controllerFlow.guardedAction.secondLifecycle !== "active"
-            || !controllerFlow.guardedAction.status.includes("selected project changed")
-          ) {
-            errors.push(
-              `${viewport.label} ${route}: cross-project draft isolation failed `
-              + `${JSON.stringify(controllerFlow ?? controllerExercise.exceptionDetails ?? null)}`,
-            );
+          if (hostedArtifact) {
+            const guestExercise = await cdp.send("Runtime.evaluate", {
+              expression: GUEST_FIRST_EXERCISE_EXPRESSION,
+              awaitPromise: true,
+              returnByValue: true,
+            });
+            const guestFlow = guestExercise.result?.value;
+            if (
+              guestExercise.exceptionDetails
+              || !guestFlow
+              || !guestFlow.initial.accountHidden
+              || !guestFlow.initial.domOrderAligned
+              || !guestFlow.initial.makerVisible
+              || !guestFlow.initial.returningEnabled
+              || !guestFlow.preview.accountHidden
+              || guestFlow.preview.versionCount !== 1
+              || guestFlow.preview.srcdocLength < 1000
+              || !guestFlow.saveChoice.accountVisible
+              || !guestFlow.saveChoice.createPanelVisible
+              || !guestFlow.saveChoice.domOrderAligned
+              || guestFlow.saveChoice.focusName !== "accountName"
+              || !guestFlow.saveChoice.renderedOrderAligned
+              || !guestFlow.adopted.activeProjectFocused
+              || !guestFlow.adopted.activeProjectVisible
+              || guestFlow.adopted.releaseCount !== 1
+              || !guestFlow.adopted.status.includes("reviewed guest preview was carried into it")
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: guest-first preview and project adoption failed `
+                + `${JSON.stringify(guestFlow ?? guestExercise.exceptionDetails ?? null)}`,
+              );
+            }
+            const controllerExercise = await cdp.send("Runtime.evaluate", {
+              expression: CONTROLLER_DRAFT_EXERCISE_EXPRESSION,
+              awaitPromise: true,
+              returnByValue: true,
+            });
+            const controllerFlow = controllerExercise.result?.value;
+            const firstSentinel = `belongs-to-first-${viewport.width}`;
+            const secondSentinel = `belongs-to-second-${viewport.width}`;
+            if (
+              controllerExercise.exceptionDetails
+              || !controllerFlow
+              || !controllerFlow.afterSwitch.activeSecond
+              || controllerFlow.afterSwitch.firstSummary !== firstSentinel
+              || controllerFlow.afterSwitch.secondSummary !== null
+              || controllerFlow.sameProject.firstSummary !== firstSentinel
+              || controllerFlow.sameProject.secondSummary !== secondSentinel
+              || controllerFlow.transientSecond.activeProjectId === ""
+              || controllerFlow.transientSecond.addressMode !== "mode_a"
+              || controllerFlow.transientSecond.addressLabel !== `rapid-second-${viewport.width}`
+              || controllerFlow.transientSecond.domainPath !== "purchase"
+              || controllerFlow.transientSecond.domainProofMethod !== "registrar_receipt"
+              || controllerFlow.transientSecond.domainProofReference !== ""
+              || controllerFlow.transientSecond.ownedDomain !== ""
+              || controllerFlow.transientSecond.passphrase !== ""
+              || controllerFlow.transientSecond.safetyAppeal !== ""
+              || !controllerFlow.transientSecond.settingsHidden
+              || controllerFlow.transientSecond.supportMessage !== ""
+              || controllerFlow.transientSecond.supportSubject !== ""
+              || controllerFlow.transientSecond.visibility !== "public"
+              || controllerFlow.transientFirst.activeProjectId === ""
+              || controllerFlow.transientFirst.addressMode !== "mode_a"
+              || controllerFlow.transientFirst.addressLabel !== `rapid-first-${viewport.width}`
+              || controllerFlow.transientFirst.domainProofReference !== ""
+              || controllerFlow.transientFirst.ownedDomain !== ""
+              || controllerFlow.transientFirst.passphrase !== ""
+              || controllerFlow.transientFirst.safetyAppeal !== ""
+              || !controllerFlow.transientFirst.settingsHidden
+              || controllerFlow.transientFirst.supportMessage !== ""
+              || controllerFlow.transientFirst.supportSubject !== ""
+              || controllerFlow.transientFirst.visibility !== "public"
+              || controllerFlow.guardedAction.activeProjectId
+                !== controllerFlow.transientFirst.activeProjectId
+              || controllerFlow.guardedAction.firstLifecycle !== "active"
+              || controllerFlow.guardedAction.secondLifecycle !== "active"
+              || !controllerFlow.guardedAction.status.includes("selected project changed")
+            ) {
+              errors.push(
+                `${viewport.label} ${route}: cross-project draft isolation failed `
+                + `${JSON.stringify(controllerFlow ?? controllerExercise.exceptionDetails ?? null)}`,
+              );
+            }
           }
           const exercise = await cdp.send("Runtime.evaluate", {
             expression: SPARK_EXERCISE_EXPRESSION,
@@ -4711,7 +4771,11 @@ export async function auditBrowser({
         results.push({ overflow, route, viewport: viewport.label });
       }
     }
-    if (profile === "vnext" && routes.includes("/abracadabra/app/")) {
+    if (
+      profile === "vnext"
+      && routes.includes("/abracadabra/app/")
+      && abracadabraControlMode === "local-rehearsal"
+    ) {
       const auditLabel = "private-viewer";
       const beforeErrors = runtimeErrors.length;
       await cdp.send("Emulation.setDeviceMetricsOverride", {
@@ -5101,26 +5165,34 @@ export async function auditBrowser({
             );
           }
           if (route === "/abracadabra/app/") {
-            const transitionAudit = await cdp.send("Runtime.evaluate", {
-              expression: ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION,
-              awaitPromise: true,
+            const controlModeAudit = await cdp.send("Runtime.evaluate", {
+              expression:
+                `document.querySelector('meta[name="sitesourcery-abracadabra-control-mode"]')`
+                + `?.getAttribute("content") || ""`,
               returnByValue: true,
             });
-            const transition = transitionAudit.result?.value;
-            if (
-              transitionAudit.exceptionDetails
-              || !transition
-              || !transition.accountVisible
-              || !transition.domOrderAligned
-              || !transition.renderedOrderAligned
-              || transition.focusName !== "signInEmail"
-              || transition.behaviors.length === 0
-              || transition.behaviors.some((behavior) => behavior !== "auto")
-            ) {
-              errors.push(
-                `${REDUCED_MOTION_VIEWPORT.label} ${route}: guest transition order, focus, or motion failed `
-                + `${JSON.stringify(transition ?? transitionAudit.exceptionDetails ?? null)}`,
-              );
+            if (controlModeAudit.result?.value === "hosted") {
+              const transitionAudit = await cdp.send("Runtime.evaluate", {
+                expression: ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION,
+                awaitPromise: true,
+                returnByValue: true,
+              });
+              const transition = transitionAudit.result?.value;
+              if (
+                transitionAudit.exceptionDetails
+                || !transition
+                || !transition.accountVisible
+                || !transition.domOrderAligned
+                || !transition.renderedOrderAligned
+                || transition.focusName !== "signInEmail"
+                || transition.behaviors.length === 0
+                || transition.behaviors.some((behavior) => behavior !== "auto")
+              ) {
+                errors.push(
+                  `${REDUCED_MOTION_VIEWPORT.label} ${route}: guest transition order, focus, or motion failed `
+                  + `${JSON.stringify(transition ?? transitionAudit.exceptionDetails ?? null)}`,
+                );
+              }
             }
           }
           for (const message of runtimeErrors.slice(beforeErrors)) {

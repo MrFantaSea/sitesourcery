@@ -1,6 +1,38 @@
 (function () {
   "use strict";
 
+  function recoveryRequestOutcome(result) {
+    var source = result && typeof result === "object" ? result : {};
+    if (source.delivery === "email" && source.emailSent === true) {
+      return Object.freeze({
+        emailSent: true,
+        message: "If that account exists, a recovery email was sent.",
+        supportRequired: false
+      });
+    }
+    if (source.emailSent === false) {
+      return Object.freeze({
+        emailSent: false,
+        message: "No recovery email was sent. Use the Contact page below for account recovery.",
+        supportRequired: true
+      });
+    }
+    return Object.freeze({
+      emailSent: false,
+      message:
+        "We could not confirm that a recovery email was sent. "
+        + "Use the Contact page below for account recovery.",
+      supportRequired: true
+    });
+  }
+
+  if (typeof module === "object" && module && module.exports) {
+    module.exports = Object.freeze({
+      recoveryRequestOutcome: recoveryRequestOutcome
+    });
+    return;
+  }
+
   var modeModule = window.SiteSourceryAbracadabraControlMode;
   var apiModule = window.SiteSourceryAbracadabraAPI;
   var controlModule = window.SiteSourceryAbracadabraHostedControl;
@@ -1234,13 +1266,8 @@
   }
 
   function installHostedBillingControls() {
-    var localActivation = one("[data-activate-plan]");
-    localActivation.hidden = true;
-    one("[data-payment-failure]").hidden = true;
-    one("[data-advance-suspension]").hidden = true;
-    one("[data-advance-deletion]").hidden = true;
-
-    var actions = localActivation.parentElement;
+    var offerAnchor = one("[data-hosted-offer-anchor]");
+    var actions = offerAnchor.parentElement;
     var catalog = configuration.catalog || {};
     var offers = catalog.offers || {};
     var products = catalog.products || {};
@@ -1626,7 +1653,11 @@
     var button = event.currentTarget;
     run(button, "requestRecovery", function () {
       return control.requestRecovery({ email: value("recoveryEmail") });
-    }, "If that account exists, recovery instructions have been sent.").catch(function () {});
+    }).then(function (result) {
+      var outcome = recoveryRequestOutcome(result);
+      one("[data-recovery-support]").hidden = !outcome.supportRequired;
+      announce(outcome.message, outcome.emailSent ? "success" : "");
+    }).catch(function () {});
   });
   try {
     hostedRecoveryToken = new URLSearchParams(window.location.hash.slice(1)).get("recovery");
