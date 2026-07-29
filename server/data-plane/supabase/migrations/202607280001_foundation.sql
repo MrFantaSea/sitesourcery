@@ -89,8 +89,7 @@ create table ss.organizations (
     check (state in ('active', 'suspended', 'deleting', 'deleted')),
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
-  deleted_at timestamptz,
-  unique (id, id)
+  deleted_at timestamptz
 );
 
 create trigger organizations_updated_at
