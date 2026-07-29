@@ -1,9 +1,8 @@
-# PUBLICATION_HOLD — review only. Do not load, adapt, install, or reload.
-# Requires owner approval, DNS proof, router/ISP proof, ACME staging proof,
-# exact Caddy-version validation, and removal of /etc/sitesourcery/PUBLICATION_HOLD.
-
+# PUBLICATION_HOLD — review only. Do not load, install, or reload.
+# Requires the held runbook, exact artifact proof, owner approval, DNS proof,
+# ACME staging proof, Caddy validation, and the dedicated service gate.
 {
-	admin unix//run/caddy/sitesourcery-admin.sock
+	admin unix//run/sitesourcery-caddy/admin.sock
 	persist_config off
 	email {$SITESOURCERY_ACME_EMAIL}
 
@@ -23,13 +22,55 @@
 	}
 }
 
+# The control host owns the hosted customer application and its same-origin API.
+# It is deliberately more specific than the on-demand tenant catch-all.
+{$SITESOURCERY_CONTROL_HOST} {
+	encode zstd gzip
+
+	@sitesourcery_internal path /_sitesourcery /_sitesourcery/*
+	handle @sitesourcery_internal {
+		respond 404
+	}
+
+	@hosted_api path /api /api/*
+	handle @hosted_api {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:8788 {
+			health_uri /api/v1/health
+			health_interval 15s
+			health_timeout 3s
+		}
+	}
+
+	handle {
+		root * {$SITESOURCERY_HOSTED_PUBLIC_ROOT}
+		try_files {path} {path}/index.html =404
+		header {
+			Referrer-Policy "strict-origin-when-cross-origin"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "SAMEORIGIN"
+			Permissions-Policy "camera=(), geolocation=(), microphone=()"
+			Strict-Transport-Security "max-age=31536000"
+		}
+		file_server
+	}
+}
+
+# Every other HTTPS host is a customer-site request. Caddy may obtain a
+# certificate only after the loopback ask endpoint approves that exact active
+# custom hostname. Platform-subdomain TLS needs its separately reviewed
+# certificate strategy and is not implied by this catch-all.
 https:// {
 	tls {
 		on_demand
 	}
 
-	@sitesourcery_internal path /_sitesourcery/*
-	respond @sitesourcery_internal 404
+	@sitesourcery_internal path /_sitesourcery /_sitesourcery/*
+	handle @sitesourcery_internal {
+		respond 404
+	}
 
-	reverse_proxy 127.0.0.1:8080
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
 }

@@ -1,0 +1,1197 @@
+import assert from "node:assert/strict";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  stat,
+  writeFile
+} from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import {
+  ALERT_APPROVAL_SCHEMA,
+  OPERATIONS_REPORT_SCHEMA,
+  alertApprovalDigest,
+  createHeldAlertAdapter,
+  createReviewedOutboundAlertAdapter
+} from "../alert-adapter.mjs";
+import {
+  BACKUP_SUCCEEDED_SCHEMA,
+  OFF_MACHINE_DESTINATION_SCHEMA,
+  QUIESCE_SCHEMA,
+  applyBackupRetention,
+  loadVerifiedBackupAttempt,
+  planBackupRetention,
+  runBackupAttempt
+} from "../backup-runtime.mjs";
+import {
+  createProductionBackupPorts,
+  createSafeCommandRunner
+} from "../backup-ports.mjs";
+import {
+  retentionFromEnvironment
+} from "../apply-backup-retention.mjs";
+import {
+  backupFromEnvironment
+} from "../run-backup.mjs";
+import {
+  writeImmutableEvidence
+} from "../immutable-evidence.mjs";
+import {
+  runHeldOperationsMonitor
+} from "../monitor-runtime.mjs";
+import {
+  verifyCleanRoomRestore
+} from "../restore-runtime.mjs";
+
+const NOW = new Date(
+  "2026-07-29T12:05:00.000Z"
+);
+const HELDS = Object.freeze({
+  stripeMode: "held",
+  recoveryMailMode: "held",
+  publication: "held",
+  domainRuntime: "held",
+  dns: "held"
+});
+const DESTINATION_MARKER = Object.freeze({
+  schema: OFF_MACHINE_DESTINATION_SCHEMA,
+  storageClass: "off_machine",
+  failureDomainId: "backup-vault-02",
+  immutableAttempts: true
+});
+const DATABASE_MANIFEST = Object.freeze({
+  schema:
+    "sitesourcery.postgresql-invariants/v1",
+  runtimeContractV13: true,
+  runtimeContractV14: true,
+  runtimeContractV15: true,
+  shadowSchemaAbsent: true,
+  domainHeld: true,
+  serviceRoleBypassRls: true,
+  authenticatedRoleNoBypassRls: true,
+  serviceRoleSchemaUsage: true,
+  tableCount: "71",
+  rowCounts: {
+    organizations: "2",
+    projects: "3",
+    auditEvents: "11",
+    exportRequests: "1",
+    outbox: "4"
+  }
+});
+const APP_MANIFEST = Object.freeze({
+  schema:
+    "sitesourcery.app-state-inventory/v1",
+  treeSha256: "a".repeat(64),
+  entries: [
+    {
+      root: "tenant_runtime",
+      path: ".",
+      type: "directory",
+      mode: "0700"
+    },
+    {
+      root: "tenant_runtime",
+      path: "control/current.json",
+      type: "file",
+      mode: "0600",
+      bytes: 18,
+      sha256: "b".repeat(64)
+    }
+  ]
+});
+
+function quiesce({
+  fenceDigest = "c".repeat(64),
+  snapshotId = "snapshot-001"
+} = {}) {
+  return {
+    schema: QUIESCE_SCHEMA,
+    runtimeUnit:
+      "sitesourcery-hosted.service",
+    runtimeState: "inactive",
+    writerFence: "engaged",
+    databaseWriterCount: 0,
+    filesystemSnapshotStable: true,
+    sourceFailureDomainId: "primary-01",
+    snapshotId,
+    fenceDigest,
+    observedAt:
+      "2026-07-29T12:00:00.000Z",
+    expiresAt:
+      "2026-07-29T12:20:00.000Z"
+  };
+}
+
+async function setup(t) {
+  const root = await mkdtemp(
+    path.join(
+      os.tmpdir(),
+      "sitesourcery-ops-test-"
+    )
+  );
+  const destinationRoot = path.join(
+    root,
+    "off-machine"
+  );
+  const stagingRoot = path.join(root, "staging");
+  const evidenceRoot = path.join(root, "evidence");
+  await Promise.all([
+    mkdir(destinationRoot),
+    mkdir(stagingRoot),
+    mkdir(evidenceRoot)
+  ]);
+  t.after(async () => {
+    await chmod(root, 0o700).catch(() => {});
+    await import("node:fs/promises").then(
+      ({ rm }) =>
+        rm(root, {
+          recursive: true,
+          force: true
+        })
+    );
+  });
+  return {
+    root,
+    destinationRoot,
+    stagingRoot,
+    evidenceRoot
+  };
+}
+
+function fakeBackupPorts({
+  afterFenceDigest = "c".repeat(64),
+  failDatabase = null,
+  calls = []
+} = {}) {
+  return {
+    async assertQuiesced({ phase }) {
+      calls.push(["quiesce", phase]);
+      return quiesce({
+        fenceDigest:
+          phase === "after"
+            ? afterFenceDigest
+            : "c".repeat(64)
+      });
+    },
+    async inspectAppState({ phase }) {
+      calls.push(["inventory", phase]);
+      return APP_MANIFEST;
+    },
+    async createDatabaseDump({ outputPath }) {
+      calls.push(["database", outputPath]);
+      if (failDatabase) {
+        throw new Error(failDatabase);
+      }
+      await writeFile(
+        outputPath,
+        "POSTGRESQL-CUSTOM-DUMP"
+      );
+      return {
+        kind: "postgresql",
+        path: outputPath,
+        manifest: DATABASE_MANIFEST
+      };
+    },
+    async createAppArchive({ outputPath }) {
+      calls.push(["app", outputPath]);
+      await writeFile(
+        outputPath,
+        "APP-STATE-TAR"
+      );
+      return {
+        kind: "app_state",
+        path: outputPath,
+        manifest: APP_MANIFEST
+      };
+    },
+    async encrypt({
+      inputPath,
+      outputPath,
+      ageRecipient
+    }) {
+      calls.push([
+        "encrypt",
+        path.basename(inputPath),
+        ageRecipient
+      ]);
+      const plaintext = await readFile(inputPath);
+      await writeFile(
+        outputPath,
+        Buffer.concat([
+          Buffer.from("age-encrypted:"),
+          plaintext
+        ])
+      );
+    }
+  };
+}
+
+async function successfulBackup(t) {
+  const paths = await setup(t);
+  const result = await runBackupAttempt({
+    ...paths,
+    destinationMarker: DESTINATION_MARKER,
+    sourceFailureDomainId: "primary-01",
+    ageRecipient:
+      "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    heldState: HELDS,
+    ports: fakeBackupPorts(),
+    now: () => new Date(NOW),
+    attemptIdFactory: () => "attempt-001"
+  });
+  return { ...paths, result };
+}
+
+test("backup writes only age ciphertext and immutable checksummed evidence to another failure domain", async (t) => {
+  const { result } = await successfulBackup(t);
+  const verified = await loadVerifiedBackupAttempt(
+    result.attemptRoot
+  );
+  assert.equal(
+    verified.manifest.schema,
+    BACKUP_SUCCEEDED_SCHEMA
+  );
+  assert.equal(
+    verified.manifest
+      .destinationFailureDomainId,
+    "backup-vault-02"
+  );
+  assert.equal(
+    verified.manifest.consistency
+      .verifiedBeforeAndAfter,
+    true
+  );
+  assert.equal(
+    verified.manifest.artifacts.length,
+    2
+  );
+  for (const artifact of verified.manifest
+    .artifacts) {
+    const artifactPath = path.join(
+      result.attemptRoot,
+      artifact.file
+    );
+    const bytes = await readFile(artifactPath);
+    assert.match(
+      bytes.toString("utf8"),
+      /^age-encrypted:/u
+    );
+    assert.equal(
+      (await stat(artifactPath)).mode & 0o777,
+      0o400
+    );
+  }
+  assert.deepEqual(
+    (await readdir(result.attemptRoot))
+      .filter((name) =>
+        /\.(?:dump|tar|partial)$/u.test(name)
+      ),
+    []
+  );
+  await assert.rejects(
+    writeImmutableEvidence(
+      path.join(
+        result.attemptRoot,
+        "attempt.succeeded.json"
+      ),
+      { replaced: true }
+    ),
+    /EEXIST/u
+  );
+});
+
+test("backup fails closed on local destinations, stale holds, and a changing writer fence", async (t) => {
+  const paths = await setup(t);
+  const base = {
+    ...paths,
+    sourceFailureDomainId: "primary-01",
+    ageRecipient:
+      "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    heldState: HELDS,
+    now: () => new Date(NOW),
+    attemptIdFactory: () => "attempt-002"
+  };
+  await assert.rejects(
+    runBackupAttempt({
+      ...base,
+      destinationMarker: {
+        ...DESTINATION_MARKER,
+        failureDomainId: "primary-01"
+      },
+      ports: fakeBackupPorts()
+    }),
+    (error) =>
+      error.code ===
+      "BACKUP_DESTINATION_NOT_OFF_MACHINE"
+  );
+  await assert.rejects(
+    runBackupAttempt({
+      ...base,
+      destinationMarker: DESTINATION_MARKER,
+      heldState: {
+        ...HELDS,
+        stripeMode: "approved_live"
+      },
+      ports: fakeBackupPorts()
+    }),
+    (error) =>
+      error.code === "BACKUP_HOLD_REQUIRED"
+  );
+  await assert.rejects(
+    runBackupAttempt({
+      ...base,
+      destinationMarker: DESTINATION_MARKER,
+      attemptIdFactory: () => "attempt-003",
+      ports: fakeBackupPorts({
+        afterFenceDigest: "d".repeat(64)
+      })
+    }),
+    (error) =>
+      error.code === "BACKUP_NOT_QUIESCED"
+  );
+});
+
+test("failed backup records only a safe code and removes local plaintext", async (t) => {
+  const paths = await setup(t);
+  await assert.rejects(
+    runBackupAttempt({
+      ...paths,
+      destinationMarker: DESTINATION_MARKER,
+      sourceFailureDomainId: "primary-01",
+      ageRecipient:
+        "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+      heldState: HELDS,
+      ports: fakeBackupPorts({
+        failDatabase:
+          "postgresql://secret-user:secret-password@db/private"
+      }),
+      now: () => new Date(NOW),
+      attemptIdFactory: () => "attempt-004"
+    })
+  );
+  const attempts = await readdir(
+    path.join(paths.destinationRoot, "attempts")
+  );
+  assert.equal(attempts.length, 1);
+  const failed = await readFile(
+    path.join(
+      paths.destinationRoot,
+      "attempts",
+      attempts[0],
+      "attempt.failed.json"
+    ),
+    "utf8"
+  );
+  assert.match(
+    failed,
+    /"code":"BACKUP_ATTEMPT_FAILED"/u
+  );
+  assert.doesNotMatch(
+    failed,
+    /secret-user|secret-password|postgresql:/u
+  );
+  assert.deepEqual(
+    await readdir(paths.stagingRoot),
+    []
+  );
+  assert.deepEqual(
+    await applyBackupRetention({
+      destinationRoot: paths.destinationRoot,
+      destinationMarker: DESTINATION_MARKER,
+      sourceFailureDomainId: "primary-01",
+      now: NOW,
+      maxAgeMs:
+        30 * 24 * 60 * 60 * 1000,
+      minimumSuccessful: 2,
+      apply: false
+    }),
+    {
+      keep: [],
+      remove: [],
+      applied: false
+    }
+  );
+  const failedPath = path.join(
+    paths.destinationRoot,
+    "attempts",
+    attempts[0],
+    "attempt.failed.json"
+  );
+  await chmod(failedPath, 0o600);
+  await writeFile(failedPath, `${failed} `);
+  await assert.rejects(
+    applyBackupRetention({
+      destinationRoot: paths.destinationRoot,
+      destinationMarker: DESTINATION_MARKER,
+      sourceFailureDomainId: "primary-01",
+      now: NOW,
+      maxAgeMs:
+        30 * 24 * 60 * 60 * 1000,
+      minimumSuccessful: 2,
+      apply: false
+    }),
+    (error) =>
+      error.code ===
+      "BACKUP_RETENTION_UNVERIFIED"
+  );
+});
+
+test("tampered ciphertext is rejected before restore or retention decisions", async (t) => {
+  const { result, stagingRoot, evidenceRoot } =
+    await successfulBackup(t);
+  await chmod(
+    path.join(
+      result.attemptRoot,
+      "postgresql.age"
+    ),
+    0o600
+  );
+  await writeFile(
+    path.join(
+      result.attemptRoot,
+      "postgresql.age"
+    ),
+    "tampered"
+  );
+  await assert.rejects(
+    loadVerifiedBackupAttempt(result.attemptRoot),
+    (error) =>
+      error.code ===
+      "BACKUP_ARTIFACT_TAMPERED"
+  );
+  let decryptCalls = 0;
+  await assert.rejects(
+    verifyCleanRoomRestore({
+      attemptRoot: result.attemptRoot,
+      stagingRoot,
+      evidenceRoot,
+      heldState: HELDS,
+      restoreTarget: {},
+      ports: {
+        async decrypt() {
+          decryptCalls += 1;
+        },
+        async restoreFreshDatabase() {},
+        async restoreFreshAppState() {}
+      }
+    }),
+    (error) =>
+      error.code ===
+      "BACKUP_ARTIFACT_TAMPERED"
+  );
+  assert.equal(decryptCalls, 0);
+});
+
+test("tampered start evidence is rejected before a successful attempt is trusted", async (t) => {
+  const { result } = await successfulBackup(t);
+  const startedPath = path.join(
+    result.attemptRoot,
+    "attempt.started.json"
+  );
+  const started = await readFile(
+    startedPath,
+    "utf8"
+  );
+  await chmod(startedPath, 0o600);
+  await writeFile(startedPath, `${started} `);
+  await assert.rejects(
+    loadVerifiedBackupAttempt(result.attemptRoot),
+    (error) =>
+      error.code ===
+      "BACKUP_MANIFEST_TAMPERED"
+  );
+});
+
+test("retention keeps a verified floor and never accepts unverified deletion candidates", () => {
+  const records = Array.from(
+    { length: 6 },
+    (_, index) => ({
+      verified: true,
+      attemptId: `attempt-${index}`,
+      completedAt: new Date(
+        NOW.valueOf() - index * 10 * 24 * 60 * 60 * 1000
+      ).toISOString()
+    })
+  );
+  assert.deepEqual(
+    planBackupRetention(records, {
+      now: NOW,
+      maxAgeMs: 25 * 24 * 60 * 60 * 1000,
+      minimumSuccessful: 3
+    }),
+    {
+      keep: [
+        "attempt-0",
+        "attempt-1",
+        "attempt-2"
+      ],
+      remove: [
+        "attempt-3",
+        "attempt-4",
+        "attempt-5"
+      ],
+      applied: false
+    }
+  );
+  assert.throws(
+    () =>
+      planBackupRetention(
+        [
+          {
+            verified: false,
+            attemptId: "attempt-unsafe",
+            completedAt: NOW.toISOString()
+          }
+        ],
+        {
+          now: NOW,
+          maxAgeMs:
+            30 * 24 * 60 * 60 * 1000
+        }
+      ),
+    (error) =>
+      error.code ===
+      "BACKUP_RETENTION_UNVERIFIED"
+  );
+});
+
+test("retention deletes only re-verified successful attempts after an explicit apply switch", async (t) => {
+  const paths = await setup(t);
+  for (const index of [0, 1, 2, 3]) {
+    await runBackupAttempt({
+      ...paths,
+      destinationMarker: DESTINATION_MARKER,
+      sourceFailureDomainId: "primary-01",
+      ageRecipient:
+        "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+      heldState: HELDS,
+      ports: fakeBackupPorts(),
+      now: () => new Date(NOW),
+      attemptIdFactory: () =>
+        `retention-attempt-${index}`
+    });
+  }
+  const result = await applyBackupRetention({
+    destinationRoot: paths.destinationRoot,
+    destinationMarker: DESTINATION_MARKER,
+    sourceFailureDomainId: "primary-01",
+    now: new Date(
+      "2026-09-10T12:05:00.000Z"
+    ),
+    maxAgeMs: 25 * 24 * 60 * 60 * 1000,
+    minimumSuccessful: 2,
+    apply: true
+  });
+  assert.equal(result.applied, true);
+  assert.equal(result.remove.length, 2);
+  assert.equal(
+    (
+      await readdir(
+        path.join(
+          paths.destinationRoot,
+          "attempts"
+        )
+      )
+    ).length,
+    2
+  );
+});
+
+test("retention CLI rejects a relative destination before reading or deleting anything", async () => {
+  await assert.rejects(
+    retentionFromEnvironment({
+      SITESOURCERY_BACKUP_DESTINATION_ROOT:
+        "relative/backup-vault",
+      SITESOURCERY_SOURCE_FAILURE_DOMAIN:
+        "primary-01",
+      SITESOURCERY_BACKUP_RETENTION_MAX_AGE_MS:
+        String(30 * 24 * 60 * 60 * 1000),
+      SITESOURCERY_BACKUP_RETENTION_MINIMUM_SUCCESSFUL:
+        "3",
+      SITESOURCERY_BACKUP_RETENTION_APPLY:
+        "false"
+    }),
+    /must be absolute/u
+  );
+});
+
+test("backup CLI rejects overlapping source, staging, and destination roots before capture", async (t) => {
+  const paths = await setup(t);
+  const dataRoot = path.join(
+    paths.root,
+    "data"
+  );
+  const exportRoot = path.join(
+    paths.stagingRoot,
+    "private-exports"
+  );
+  const releaseRoot = path.join(
+    paths.root,
+    "release"
+  );
+  const configurationRoot = path.join(
+    paths.root,
+    "configuration"
+  );
+  await Promise.all([
+    mkdir(path.join(dataRoot, "tenant-runtime"), {
+      recursive: true
+    }),
+    mkdir(exportRoot),
+    mkdir(releaseRoot),
+    mkdir(configurationRoot)
+  ]);
+  await assert.rejects(
+    backupFromEnvironment({
+      SITESOURCERY_BACKUP_DESTINATION_ROOT:
+        paths.destinationRoot,
+      SITESOURCERY_BACKUP_STAGING_ROOT:
+        paths.stagingRoot,
+      SITESOURCERY_BACKUP_AGE_RECIPIENT_FILE:
+        path.join(paths.root, "recipient.txt"),
+      SITESOURCERY_SOURCE_FAILURE_DOMAIN:
+        "primary-01",
+      SITESOURCERY_BACKUP_QUIESCE_PATH:
+        "/run/sitesourcery/BACKUP_QUIESCE",
+      SITESOURCERY_DATA_ROOT: dataRoot,
+      SITESOURCERY_EXPORT_ROOT: exportRoot,
+      SITESOURCERY_RELEASE_ROOT: releaseRoot,
+      SITESOURCERY_CONFIGURATION_ROOT:
+        configurationRoot
+    }),
+    /mutually disjoint/u
+  );
+});
+
+test("clean-room restore verifies plaintext, fresh targets, v13 through v15, row counts, app bytes, and holds", async (t) => {
+  const {
+    result,
+    stagingRoot,
+    evidenceRoot
+  } = await successfulBackup(t);
+  const restored = await verifyCleanRoomRestore({
+    attemptRoot: result.attemptRoot,
+    stagingRoot,
+    evidenceRoot,
+    heldState: HELDS,
+    restoreTarget: {
+      databaseName:
+        "sitesourcery_restore_attempt_001"
+    },
+    ports: {
+      async decrypt({
+        inputPath,
+        outputPath
+      }) {
+        const encrypted =
+          await readFile(inputPath);
+        await writeFile(
+          outputPath,
+          encrypted.subarray(
+            Buffer.byteLength(
+              "age-encrypted:"
+            )
+          )
+        );
+      },
+      async restoreFreshDatabase({
+        expected
+      }) {
+        return {
+          freshDatabase: true,
+          databaseName:
+            "sitesourcery_restore_attempt_001",
+          ...expected
+        };
+      },
+      async restoreFreshAppState({
+        expected
+      }) {
+        return {
+          freshRoot: true,
+          treeSha256: expected.treeSha256
+        };
+      }
+    },
+    now: () => new Date(NOW),
+    restoreIdFactory: () => "restore-001"
+  });
+  assert.equal(restored.report.cleanRoom, true);
+  assert.equal(
+    restored.report.database.runtimeContractV13,
+    true
+  );
+  assert.equal(
+    restored.report.database.runtimeContractV14,
+    true
+  );
+  assert.equal(
+    restored.report.database.runtimeContractV15,
+    true
+  );
+  assert.equal(
+    restored.report.database.domainHeld,
+    true
+  );
+  assert.deepEqual(
+    restored.report.database.rowCounts,
+    DATABASE_MANIFEST.rowCounts
+  );
+  assert.equal(
+    restored.report.appState.treeSha256,
+    APP_MANIFEST.treeSha256
+  );
+  assert.match(
+    await readFile(
+      path.join(
+        restored.restoreRoot,
+        "restore.verified.json"
+      ),
+      "utf8"
+    ),
+    /"schema":"sitesourcery\.clean-room-restore\/v1"/u
+  );
+});
+
+test("clean-room restore fails if the target is not fresh or an invariant drifts", async (t) => {
+  const {
+    result,
+    stagingRoot,
+    evidenceRoot
+  } = await successfulBackup(t);
+  await assert.rejects(
+    verifyCleanRoomRestore({
+      attemptRoot: result.attemptRoot,
+      stagingRoot,
+      evidenceRoot,
+      heldState: HELDS,
+      restoreTarget: {},
+      ports: {
+        async decrypt({
+          inputPath,
+          outputPath
+        }) {
+          const encrypted =
+            await readFile(inputPath);
+          await writeFile(
+            outputPath,
+            encrypted.subarray(
+              Buffer.byteLength(
+                "age-encrypted:"
+              )
+            )
+          );
+        },
+        async restoreFreshDatabase({
+          expected
+        }) {
+          return {
+            freshDatabase: false,
+            ...expected
+          };
+        },
+        async restoreFreshAppState() {
+          throw new Error("must not run");
+        }
+      },
+      now: () => new Date(NOW),
+      restoreIdFactory: () => "restore-002"
+    }),
+    (error) =>
+      error.code ===
+      "RESTORE_DATABASE_INVARIANT_FAILED"
+  );
+});
+
+test("safe command boundary rejects secrets in argv and production backup keeps the database URL out of every argument", async () => {
+  const runner = createSafeCommandRunner();
+  assert.throws(
+    () =>
+      runner.run(
+        "example",
+        ["--url=secret-value"],
+        {
+          secretValues: ["secret-value"]
+        }
+      ),
+    (error) =>
+      error.code === "BACKUP_SECRET_IN_ARGV"
+  );
+
+  const calls = [];
+  const databaseUrl =
+    "postgresql://secret-user:secret-password@db.internal/sitesourcery";
+  const ports = createProductionBackupPorts({
+    sourceRoots: [
+      {
+        label: "state",
+        path: "/var/lib/sitesourcery"
+      }
+    ],
+    quiescePath:
+      "/run/sitesourcery/BACKUP_QUIESCE",
+    sourceFailureDomainId: "primary-01",
+    databaseUrl,
+    ageRecipientFile:
+      "/etc/sitesourcery/backup.age-recipients",
+    environment: {
+      PATH: "/usr/bin",
+      PGPASSWORD: "another-secret"
+    },
+    commandRunner: {
+      async run(command, args, options) {
+        calls.push({
+          command,
+          args,
+          options
+        });
+        if (
+          options.label ===
+          "PostgreSQL invariant probe"
+        ) {
+          return {
+            code: 0,
+            stdout: JSON.stringify(
+              DATABASE_MANIFEST
+            )
+          };
+        }
+        return { code: 0, stdout: "" };
+      }
+    }
+  });
+  await ports.createDatabaseDump({
+    outputPath: "/secure/staging/postgresql.dump"
+  });
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(
+      call.args.some(
+        (argument) =>
+          argument.includes(databaseUrl) ||
+          argument.includes("secret-password") ||
+          argument.includes("another-secret")
+      ),
+      false
+    );
+  }
+  assert.equal(
+    calls[0].options.env.PGDATABASE,
+    databaseUrl
+  );
+});
+
+function healthyProbes() {
+  return {
+    async runtime() {
+      return {
+        ok: true,
+        publicationHeld: true
+      };
+    },
+    async database() {
+      return {
+        ready: true,
+        runtimeContractV13: true,
+        runtimeContractV14: true,
+        runtimeContractV15: true,
+        shadowSchemaAbsent: true,
+        domainHeld: true
+      };
+    },
+    async backup() {
+      return {
+        verified: true,
+        completedAt:
+          "2026-07-29T11:00:00.000Z"
+      };
+    },
+    async disk() {
+      return {
+        freeBytes: 80 * 1024 ** 3,
+        totalBytes: 100 * 1024 ** 3
+      };
+    },
+    async certificate() {
+      return {
+        valid: true,
+        notAfter:
+          "2026-10-29T12:05:00.000Z"
+      };
+    },
+    async backlog() {
+      return {
+        cancellationReady: 0,
+        cancellationAmbiguous: 0,
+        oldestCancellationReadyAt: null,
+        exportQueued: 0,
+        exportBuilding: 0,
+        exportLeaseExpired: 0,
+        exportManualReview: 0,
+        oldestExportQueuedAt: null,
+        oldestExportLeaseExpiredAt: null
+      };
+    }
+  };
+}
+
+test("held monitor covers every required signal and performs no outbound alert effect", async () => {
+  const result = await runHeldOperationsMonitor({
+    probes: healthyProbes(),
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.equal(result.report.ok, true);
+  assert.deepEqual(
+    result.report.checks.map(
+      (check) => check.name
+    ),
+    [
+      "backlog",
+      "backup",
+      "certificate",
+      "database",
+      "disk",
+      "runtime"
+    ]
+  );
+  assert.deepEqual(result.report.alerts, []);
+  assert.deepEqual(result.delivery, {
+    attempted: false,
+    delivered: false,
+    mode: "none"
+  });
+});
+
+test("monitor emits bounded operator alerts for DB, backup age, disk, certificate, cancellation, and export drift while delivery stays held", async () => {
+  const probes = healthyProbes();
+  probes.database = async () => ({
+    ready: false,
+    runtimeContractV13: true,
+    runtimeContractV14: false,
+    runtimeContractV15: false,
+    shadowSchemaAbsent: true,
+    domainHeld: false
+  });
+  probes.backup = async () => ({
+    verified: true,
+    completedAt:
+      "2026-07-20T00:00:00.000Z"
+  });
+  probes.disk = async () => ({
+    freeBytes: 100,
+    totalBytes: 1000
+  });
+  probes.certificate = async () => ({
+    valid: true,
+    notAfter:
+      "2026-08-01T00:00:00.000Z"
+  });
+  probes.backlog = async () => ({
+    cancellationReady: 11,
+    cancellationAmbiguous: 1,
+    oldestCancellationReadyAt:
+      "2026-07-29T11:00:00.000Z",
+    exportQueued: 11,
+    exportBuilding: 1,
+    exportLeaseExpired: 1,
+    exportManualReview: 1,
+    oldestExportQueuedAt:
+      "2026-07-29T10:00:00.000Z",
+    oldestExportLeaseExpiredAt:
+      "2026-07-29T11:00:00.000Z"
+  });
+  const result = await runHeldOperationsMonitor({
+    probes,
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.equal(result.report.ok, false);
+  assert.deepEqual(
+    result.report.alerts.map(
+      (item) => item.code
+    ),
+    [
+      "BACKUP_STALE_OR_INVALID",
+      "CANCELLATION_BACKLOG_HIGH",
+      "CANCELLATION_RECONCILIATION_REQUIRED",
+      "CERTIFICATE_EXPIRING_OR_INVALID",
+      "DATABASE_READINESS_OR_HOLD_DRIFT",
+      "DISK_CAPACITY_LOW",
+      "EXPORT_LEASE_BACKLOG_HIGH",
+      "EXPORT_QUEUE_BACKLOG_HIGH",
+      "EXPORT_RECONCILIATION_REQUIRED"
+    ]
+  );
+  assert.equal(result.delivery.mode, "held");
+  assert.equal(result.delivery.delivered, false);
+});
+
+test("reviewed outbound adapter requires exact expiring approval and only invokes an injected interface", async () => {
+  const approval = {
+    schema: ALERT_APPROVAL_SCHEMA,
+    adapterId: "owner-alert-port",
+    state: "approved",
+    reportSchema: OPERATIONS_REPORT_SCHEMA,
+    destinationRef: "owner-primary",
+    approvedAt:
+      "2026-07-29T00:00:00.000Z",
+    expiresAt:
+      "2026-07-30T00:00:00.000Z"
+  };
+  approval.digest =
+    alertApprovalDigest(approval);
+  const deliveries = [];
+  const adapter =
+    createReviewedOutboundAlertAdapter({
+      approval,
+      async deliver(envelope) {
+        deliveries.push(envelope);
+      },
+      now: () => new Date(NOW)
+    });
+  const probes = healthyProbes();
+  probes.runtime = async () => {
+    throw new Error("loopback unavailable");
+  };
+  const result = await runHeldOperationsMonitor({
+    probes,
+    alertAdapter: adapter,
+    now: () => new Date(NOW)
+  });
+  assert.equal(result.delivery.delivered, true);
+  assert.equal(deliveries.length, 1);
+  assert.equal(
+    deliveries[0].approvalDigest,
+    approval.digest
+  );
+  assert.equal(
+    deliveries[0].report.alerts[0].code,
+    "RUNTIME_PROBE_UNAVAILABLE"
+  );
+  assert.throws(
+    () =>
+      createReviewedOutboundAlertAdapter({
+        approval: {
+          ...approval,
+          digest: "0".repeat(64)
+        },
+        deliver() {}
+      }),
+    /approval is invalid/u
+  );
+});
+
+test("held env and systemd candidates preserve every provider hold and activate nothing", async () => {
+  const opsRoot = new URL("../", import.meta.url);
+  const names = [
+    "sitesourcery-hosted.service.held",
+    "sitesourcery-backup.service.held",
+    "sitesourcery-backup.timer.held",
+    "sitesourcery-monitor.service.held",
+    "sitesourcery-monitor.timer.held",
+    "sitesourcery-restore-verify.service.held",
+    "sitesourcery-caddy.service.held"
+  ];
+  const files = await Promise.all(
+    names.map((name) =>
+      readFile(new URL(name, opsRoot), "utf8")
+    )
+  );
+  for (const [index, contents] of files.entries()) {
+    assert.match(
+      contents,
+      /^# PUBLICATION_HOLD/u,
+      names[index]
+    );
+  }
+  assert.match(
+    files[0],
+    /ConditionPathExists=!\/run\/sitesourcery\/BACKUP_QUIESCE/u
+  );
+  assert.match(
+    files[1],
+    /ConditionPathExists=\/run\/sitesourcery\/BACKUP_QUIESCE/u
+  );
+  assert.match(
+    files[1],
+    /ops\/run-backup\.mjs/u
+  );
+  assert.doesNotMatch(
+    files[1],
+    /systemctl (?:start|stop|restart|enable)/u
+  );
+  assert.match(
+    files[3],
+    /ops\/monitor-held\.mjs/u
+  );
+  assert.match(
+    files[5],
+    /ops\/verify-restore\.mjs/u
+  );
+  assert.match(
+    files[5],
+    /RestrictAddressFamilies=AF_UNIX$/mu
+  );
+  assert.match(
+    files[6],
+    /^ExecStart=\/opt\/sitesourcery\/caddy-2\.11\.4\/caddy run .*Caddyfile\.candidate\.held --adapter caddyfile$/mu
+  );
+  assert.doesNotMatch(
+    files[6],
+    /\/etc\/caddy\/Caddyfile/u
+  );
+
+  const [hosted, backup, monitor, restore] =
+    await Promise.all([
+      readFile(
+        new URL("hosted.env.example", opsRoot),
+        "utf8"
+      ),
+      readFile(
+        new URL("backup.env.example", opsRoot),
+        "utf8"
+      ),
+      readFile(
+        new URL("monitor.env.example", opsRoot),
+        "utf8"
+      ),
+      readFile(
+        new URL("restore.env.example", opsRoot),
+        "utf8"
+      )
+    ]);
+  for (const environment of [
+    hosted,
+    backup,
+    monitor,
+    restore
+  ]) {
+    assert.match(
+      environment,
+      /^SITESOURCERY_STRIPE_MODE=held$/mu
+    );
+    assert.doesNotMatch(
+      environment,
+      /SITESOURCERY_PAYMENT_MODE/u
+    );
+    assert.doesNotMatch(
+      environment,
+      /sk_(?:live|test)_|whsec_|https?:\/\//u
+    );
+  }
+  assert.match(
+    monitor,
+    /^SITESOURCERY_ALERT_MODE=held$/mu
+  );
+  assert.doesNotMatch(
+    monitor,
+    /WEBHOOK|TOKEN|DESTINATION_URL/u
+  );
+});

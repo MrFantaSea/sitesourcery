@@ -1,0 +1,8 @@
+{
+  "schema": "sitesourcery.backup-quiesce/v1",
+  "runtimeUnit": "sitesourcery-hosted.service",
+  "sourceFailureDomainId": "replace-with-primary-failure-domain",
+  "writerFence": "engaged",
+  "snapshotId": "replace-with-unique-snapshot-id",
+  "expiresAt": "2000-01-01T00:00:00.000Z"
+}

@@ -1,0 +1,43 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Create one encrypted off-machine Site Sourcery backup
+After=local-fs.target network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/sitesourcery/BACKUP_APPROVED
+ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
+ConditionPathExists=/run/sitesourcery/BACKUP_QUIESCE
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/sitesourcery/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/backup.env
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/run-backup.mjs
+UMask=0077
+TimeoutStartSec=2h
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery
+ReadWritePaths=/var/lib/sitesourcery/backup-staging /mnt/sitesourcery-backups

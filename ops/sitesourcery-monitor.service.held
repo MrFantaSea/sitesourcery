@@ -1,0 +1,39 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Check held Site Sourcery runtime and recovery signals
+After=sitesourcery-hosted.service
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
+
+[Service]
+Type=oneshot
+User=sitesourcery-monitor
+Group=sitesourcery-monitor
+WorkingDirectory=/opt/sitesourcery/current
+EnvironmentFile=/etc/sitesourcery/monitor.env
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/monitor-held.mjs
+UMask=0077
+TimeoutStartSec=30s
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery /mnt/sitesourcery-backups /var/lib/caddy

@@ -1,0 +1,6 @@
+{
+  "schema": "sitesourcery.off-machine-destination/v1",
+  "storageClass": "off_machine",
+  "failureDomainId": "replace-with-off-machine-failure-domain",
+  "immutableAttempts": true
+}

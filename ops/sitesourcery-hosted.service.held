@@ -1,0 +1,55 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Site Sourcery hosted API and tenant runtime
+After=local-fs.target network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
+
+[Service]
+Type=simple
+User=sitesourcery
+Group=sitesourcery
+WorkingDirectory=/opt/sitesourcery/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/hosted.env
+ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/assert-runtime.mjs
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/bin/server.mjs
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery
+ReadWritePaths=/var/lib/sitesourcery
+StateDirectory=sitesourcery
+RuntimeDirectory=sitesourcery
+RuntimeDirectoryMode=0750
+LimitNOFILE=8192
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

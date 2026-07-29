@@ -1,0 +1,16 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Run the Site Sourcery runtime probe every minute
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1m
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=sitesourcery-probe.service
+
+[Install]
+WantedBy=timers.target

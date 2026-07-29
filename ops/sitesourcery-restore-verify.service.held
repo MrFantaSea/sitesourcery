@@ -1,0 +1,40 @@
+# PUBLICATION_HOLD — clean-room template only. Never install on production.
+
+[Unit]
+Description=Verify one Site Sourcery backup in an isolated clean room
+ConditionPathExists=/etc/sitesourcery-restore/RESTORE_DRILL_APPROVED
+ConditionPathExists=/etc/sitesourcery-restore/PUBLICATION_HOLD
+
+[Service]
+Type=oneshot
+User=sitesourcery-restore
+Group=sitesourcery-restore
+WorkingDirectory=/opt/sitesourcery/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery-restore/restore.env
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/verify-restore.mjs
+UMask=0077
+TimeoutStartSec=2h
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery-restore /mnt/sitesourcery-backups
+ReadWritePaths=/var/lib/sitesourcery-restore

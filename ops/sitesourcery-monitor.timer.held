@@ -1,0 +1,17 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Offer the held Site Sourcery operations monitor every minute
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1m
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=sitesourcery-monitor.service
+
+[Install]
+WantedBy=timers.target

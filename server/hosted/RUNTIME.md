@@ -147,7 +147,7 @@ may be started automatically.
 | Work | Production behavior | Recovery truth |
 | --- | --- | --- |
 | Subscription cancellation | A bounded, non-overlapping worker calls `processPaymentOutbox()` only in `approved_live` mode. It uses the existing `FOR UPDATE SKIP LOCKED` lease. | Confirmed effects settle once. Known no-effect failures become eligible after the service-owned five-minute delay. Ambiguous effects are held at PostgreSQL `infinity` and require separately reviewed operator reconciliation; the worker cannot retry them. |
-| Project export | No background worker is started. | `processQueuedExports()` can claim a queued row by moving it to `building`, but it has no crash-recoverable lease. A crashed `building` row is a real release-candidate blocker until a lease/recovery contract exists. |
+| Project export | A bounded, non-overlapping worker starts only when `SITESOURCERY_EXPORT_WORKER_MODE=enabled`. Every claim carries the v15 attempt number, expiring lease, worker identity, and monotonic fence token. | A worker may reclaim only an expired lease. Immutable object keys include the attempt and fence; stale workers cannot overwrite or finalize a newer claim. Ambiguous object facts become bounded failed/manual-retry evidence rather than an automatic replay. |
 | Publication/release | No background worker is started. | Publication is synchronous through the private in-process port. A local finalization failure is recovered only by replaying the exact idempotent customer command; the audit outbox row is not treated as deployment authority. |
 
 Cancellation worker polling is bounded by these optional settings:
@@ -161,3 +161,10 @@ Cycles run serially, cycle failures use capped exponential backoff, and shutdown
 aborts the wait then awaits any active leased cycle before closing PostgreSQL.
 The worker does not define provider retry policy; durable row eligibility and
 effect certainty remain owned by the service transaction.
+
+The export worker is independently held unless
+`SITESOURCERY_EXPORT_WORKER_MODE=enabled`. Its batch, interval, and capped
+backoff settings are bounded by `export-worker.mjs`. Shutdown aborts work before
+an object write when possible, then awaits any active fenced cycle before
+closing PostgreSQL; once object bytes exist, the exact attempt/fence key is
+reconciled instead of blindly repeated.

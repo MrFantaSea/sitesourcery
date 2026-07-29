@@ -32,10 +32,16 @@
     "check:selfhost": "npm run runtime:selfhost && node --check server/selfhost/src/*.mjs server/selfhost/bin/*.mjs && node --test --test-concurrency=1 server/selfhost/test/*.test.mjs",
     "test:hosted-service": "npm run runtime:hosted-service && node --test --test-concurrency=1 server/hosted/test/*.test.mjs",
     "check:hosted-service": "npm run runtime:hosted-service && node --check server/hosted/*.mjs server/hosted/bin/*.mjs && npm run test:hosted-service",
+    "test:ops": "node --test ops/test/*.test.mjs",
+    "check:ops": "node --check ops/*.mjs && node --test --test-concurrency=1 ops/test/*.test.mjs",
+    "ops:backup": "node ops/run-backup.mjs",
+    "ops:backup-retention": "node ops/apply-backup-retention.mjs",
+    "ops:restore-verify": "node ops/verify-restore.mjs",
+    "ops:monitor-held": "node ops/monitor-held.mjs",
     "test:public-truth": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
-    "test": "npm run runtime:check && npm run check && npm run test:node && npm run check:selfhost && npm run check:hosted-service && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser && npm run audit:hosted-domain-browser"
+    "test": "npm run runtime:check && npm run check && npm run test:node && npm run check:selfhost && npm run check:hosted-service && npm run check:ops && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser && npm run audit:hosted-domain-browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"
