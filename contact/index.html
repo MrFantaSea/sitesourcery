@@ -32,12 +32,101 @@
     </div>
   </header>
   <main id="main" tabindex="-1">
-    <section class="hero"><div class="site-shell hero-grid"><div class="hero-copy"><p class="eyebrow">Project inquiries are open</p><h1>Call or email Zack.</h1><p class="lede">Business owners can start with what is going wrong and what they want instead. You do not need to know the service name or prepare a formal brief. If the work is a fit, you see the full scope and price in writing before paying.</p><div class="hero-actions"><a class="button button-primary" href="tel:+18562441220">Call (856) 244-1220</a></div></div><aside class="quote-panel"><p class="card-kicker">You reach Zack directly</p><h2>No sales desk or automated queue.</h2><p>Zack reads every inquiry himself.</p><p class="card-kicker">What happens next</p><ol class="next-steps"><li>You explain the problem and the result you want.</li><li>Zack checks whether Site Sourcery is a fit.</li><li>If it is, you receive a written scope, price, responsibilities, and payment schedule.</li><li>Work starts only after you accept the written scope and make the payment it requires.</li></ol></aside></div></section>
-    <section class="section section-dark" id="direct-contact" data-intake-state="open"><div class="site-shell contact-panel">
-      <div><p class="eyebrow">Call Zack</p><h2><a href="tel:+18562441220">(856) 244-1220</a></h2><p>If the call is not answered, leave your name, business, callback number, and the main problem. Do not send passwords, full payment-card details, health information, or sensitive customer records.</p></div>
-      <div data-business-email="public-intake"><p class="eyebrow">Email Zack</p><h2><a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a></h2><p>This is Site Sourcery’s current public email address. Include the business name, main problem, desired result, important date, and links to public materials. If the email link does not open an app, copy the address above.</p></div>
-    </div></section>
-    <section class="section"><div class="site-shell contact-panel"><div><p class="eyebrow">What to send</p><h2>A short first note is enough.</h2><ul><li>Business name and public website, if any</li><li>What is not working</li><li>The result you want</li><li>Any important date</li></ul></div><div><p class="card-kicker">Not sure where to start?</p><p>Answer three plain questions. The page suggests one next step and does not place an order.</p><a class="button button-primary" href="/start/">Answer three questions</a></div></div></section>
+    <section class="hero" id="contact-overview" aria-labelledby="contact-title" data-customer-section="contact-overview">
+      <div class="site-shell hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Project inquiries are open</p>
+          <h1 id="contact-title" data-customer-job="reach-zack">Call or email Zack.</h1>
+          <p class="lede">Business owners can start with what is going wrong and what they want instead. You do not need to know the service name or prepare a formal brief. If the work is a fit, you see the full scope and price in writing before paying.</p>
+          <div class="hero-actions"><a class="button button-primary" href="#direct-contact" data-primary-action="choose-contact-method">Choose phone or email</a></div>
+        </div>
+        <aside class="quote-panel" aria-label="What happens after you get in touch">
+          <p class="card-kicker">You reach Zack directly</p>
+          <h2>No sales desk or automated queue.</h2>
+          <p>Zack reads every inquiry himself.</p>
+          <p class="card-kicker">What happens next</p>
+          <ol class="next-steps">
+            <li>You explain the problem and the result you want.</li>
+            <li>Zack checks whether Site Sourcery is a fit.</li>
+            <li>If it is, you receive a written scope, price, responsibilities, and payment schedule.</li>
+            <li>Work starts only after you accept the written scope and make the payment it requires.</li>
+          </ol>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="direct-contact" aria-labelledby="direct-contact-title" data-customer-section="contact-methods" data-intake-state="open">
+      <div class="site-shell">
+        <div class="section-head">
+          <div><p class="eyebrow">Phone or email</p><h2 id="direct-contact-title" data-customer-job="choose-contact-method">Choose the contact method that works for you.</h2></div>
+          <p>Both routes go to Zack. If a link does not open on your device, select and copy the number or email address.</p>
+        </div>
+        <div class="contact-panel">
+          <details class="scope-disclosure intake-context">
+            <summary>Your selected job</summary>
+            <div data-intake-context>
+              <p class="card-kicker">Jobs you can ask about</p>
+              <ul class="intake-topic-list">
+                <li id="about-custom-website" tabindex="-1" data-intake-topic-target="custom-website">A made-for-you website</li>
+                <li id="about-website-assessment" tabindex="-1" data-intake-topic-target="website-assessment">A website assessment</li>
+                <li id="about-website-foundations" tabindex="-1" data-intake-topic-target="website-foundations">The website basics</li>
+                <li id="about-website-care" tabindex="-1" data-intake-topic-target="website-care">Ongoing website upkeep</li>
+                <li id="about-customer-domain" tabindex="-1" data-intake-topic-target="customer-domain">A web address or domain</li>
+                <li id="about-business-email" tabindex="-1" data-intake-topic-target="business-email">Business email</li>
+                <li id="about-online-selling" tabindex="-1" data-intake-topic-target="online-selling">Selling online</li>
+                <li id="about-staff-tool" tabindex="-1" data-intake-topic-target="staff-tool">A staff tool</li>
+                <li id="about-design-piece" tabindex="-1" data-intake-topic-target="design-piece">Design or artwork</li>
+                <li id="about-local-listings" tabindex="-1" data-intake-topic-target="local-listings">Local listings</li>
+                <li id="about-focused-service" tabindex="-1" data-intake-topic-target="focused-service">A focused website job</li>
+              </ul>
+              <p>Your topic is highlighted when you arrive from a service page. Call or email Zack below and start with the problem and the result you want.</p>
+            </div>
+          </details>
+          <div data-contact-method="phone" data-native-fallback="copy-phone">
+            <p class="contact-method-label">Call Zack</p>
+            <p class="contact-method-value"><a href="tel:+18562441220">(856) 244-1220</a></p>
+            <p>If the call is not answered, leave your name, business, callback number, and the main problem. Do not send passwords, full payment-card details, health information, or sensitive customer records.</p>
+          </div>
+          <div data-contact-method="email" data-native-fallback="copy-email" data-business-email="public-intake">
+            <p class="contact-method-label">Email Zack</p>
+            <p class="contact-method-value"><a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a></p>
+            <p>This is Site Sourcery’s current public email address. Include the business name, main problem, desired result, important date, and links to public materials. If the email link does not open an app, copy the address above.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="inquiry-types" aria-labelledby="inquiry-types-title" data-customer-section="inquiry-types">
+      <div class="site-shell">
+        <div class="section-head">
+          <div><p class="eyebrow">What you can ask about</p><h2 id="inquiry-types-title" data-customer-job="choose-inquiry-type">Start with the closest kind of help.</h2></div>
+          <p>These are the same three starting paths used across the site. Opening one explains the fit; it does not place an order.</p>
+        </div>
+        <details class="scope-disclosure contact-intake-disclosure">
+          <summary>Compare the three starting paths</summary>
+          <div class="card-grid contact-intake-grid">
+            <article class="card"><p class="card-kicker">A website</p><h3>Make a new site or replace one.</h3><p>See custom website planning, scope, design, build, testing, and handoff.</p><p><a href="/custom/" data-intake-category="website">See websites</a></p></article>
+            <article class="card"><p class="card-kicker">Calls and follow-up</p><h3>Plan a handoff that keeps slipping.</h3><p>Use Hive for missed calls, bookings, reviews, after-hours questions, follow-up, or unpaid invoices.</p><p><a href="/hive/" data-intake-category="system">See calls and follow-up</a></p></article>
+            <article class="card"><p class="card-kicker">Other website help</p><h3>Fix or support one part.</h3><p>Ask about an assessment, upkeep, a web address, business email, selling online, staff tools, design, or listings.</p><p><a href="/solutions/" data-intake-category="service">See website services</a></p></article>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="first-note" aria-labelledby="first-note-title" data-customer-section="first-note">
+      <div class="site-shell contact-panel">
+        <div>
+          <p class="eyebrow">What to send</p>
+          <h2 id="first-note-title" data-customer-job="prepare-first-note">A short first note is enough.</h2>
+          <ul><li>Business name and public website, if any</li><li>What is not working</li><li>The result you want</li><li>Any important date</li></ul>
+        </div>
+        <div>
+          <p class="card-kicker">Not sure where to start?</p>
+          <p>Use a few plain choices. The page suggests one next step and does not place an order.</p>
+          <a class="button button-primary" href="/start/" data-primary-action="contact-start-chooser">Find the right next step</a>
+        </div>
+      </div>
+    </section>
   </main>
   <footer class="site-footer">
     <div class="site-shell footer-grid">

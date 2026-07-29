@@ -314,11 +314,11 @@ const NETWORK_SINK = /\b(?:fetch\s*\(|XMLHttpRequest\b|sendBeacon\s*\(|WebSocket
 const ENABLE_FORM = /(?:\.disabled\s*=\s*false\b|removeAttribute\s*\(\s*["']disabled["']|\.requestSubmit\s*\(|\.submit\s*\()/u;
 const REVIEWED_NON_FORM_CONTROL_SHA256 = Object.freeze({
   "abracadabra/app/abracadabra-app.js":
-    "187e995d31a533634c6843e78988b9a540ffca7adcc889d2e10f24c26f1176c5",
+    "cfb3f3282a8f965ec84b2cd92b3192820fa6b34a1058dd20a097580749f80e29",
   "abracadabra/site/viewer.js":
-    "3199e4a74d369e196ae3237a79e691957b2ef8e7c9cc8b74bc2cb32509fc9a7e",
+    "b459639c9209e88f907fc0570565ef7945b545d3d2ca594c4b5a783d57f5d634",
   "hive/hive-planner.js":
-    "c1cfbf9385a844a3e308817a7a35837e707c2ba7003c4074aa7da43d8d2d1cb8",
+    "8ab5bc996ed70e9dee0ed22c0f97c1b9839486af062cd6723fb384bcc59b049c",
 });
 const WEB3FORMS_MARKER = /web3forms/iu;
 const ACCESS_KEY_MARKER = /(?:\bname\s*=\s*(?:"access_key"|'access_key'|access_key)|(?:"access_key"|'access_key'|\baccess_key\b)\s*[:=])/iu;

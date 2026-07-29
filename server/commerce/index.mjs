@@ -7,3 +7,4 @@ export * from "./service.mjs";
 export * from "./adapters/fake.mjs";
 export * from "./adapters/held.mjs";
 export * from "./adapters/memory-repository.mjs";
+export * from "./adapters/stripe.mjs";

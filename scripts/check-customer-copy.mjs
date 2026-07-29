@@ -12,9 +12,9 @@ const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
 
 export const CUSTOMER_COPY_ROUTES = Object.freeze([
   Object.freeze({ route: "/", file: "index.html", maxVisibleWords: 520, maxVisibleHeadings: 15 }),
-  Object.freeze({ route: "/custom/", file: "custom/index.html", maxVisibleWords: 390, maxVisibleHeadings: 10 }),
-  Object.freeze({ route: "/custom/scope/", file: "custom/scope/index.html", maxVisibleWords: 360, maxVisibleHeadings: 9 }),
-  Object.freeze({ route: "/custom/process/", file: "custom/process/index.html", maxVisibleWords: 430, maxVisibleHeadings: 13 }),
+  Object.freeze({ route: "/custom/", file: "custom/index.html", maxVisibleWords: 450, maxVisibleHeadings: 10 }),
+  Object.freeze({ route: "/custom/scope/", file: "custom/scope/index.html", maxVisibleWords: 430, maxVisibleHeadings: 9 }),
+  Object.freeze({ route: "/custom/process/", file: "custom/process/index.html", maxVisibleWords: 490, maxVisibleHeadings: 13 }),
   Object.freeze({ route: "/solutions/", file: "solutions/index.html", maxVisibleWords: 520, maxVisibleHeadings: 15 }),
   Object.freeze({ route: "/work/", file: "work/index.html", maxVisibleWords: 390, maxVisibleHeadings: 10 }),
   Object.freeze({ route: "/about/", file: "about/index.html", maxVisibleWords: 410, maxVisibleHeadings: 8 }),

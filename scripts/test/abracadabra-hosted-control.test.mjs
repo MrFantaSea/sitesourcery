@@ -285,14 +285,15 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
     "A domain is priced separately.",
     "Nothing is charged on this screen.",
     "Accept quote and continue to secure payment",
-    "We’ll check again right before registration.",
+    "The name, price, and owner are checked again right before registration.",
     "Payment is authorized first.",
     "Register this domain",
-    "We got your publish request. This page will show when the site is live.",
+    "Publish request received. This page will show when the site is live.",
     "Save projects to your account, manage billing and domains, and choose exactly what goes live.",
   ]) {
     assert.ok(source.includes(copy), copy);
   }
+  assert.doesNotMatch(source, /\b(?:we|us|our)\b|we[’'](?:ll|re)/iu);
   assert.match(
     source,
     /href: "\/legal\/website-terms\/#customer-domains"/u,
@@ -397,7 +398,7 @@ test("recovery copy claims email only from exact delivery evidence", () => {
     const outcome = recoveryRequestOutcome(unproven);
     assert.equal(outcome.emailSent, false);
     assert.equal(outcome.supportRequired, true);
-    assert.match(outcome.message, /^We could not confirm/u);
+    assert.match(outcome.message, /^The app could not confirm/u);
     assert.doesNotMatch(outcome.message, /instructions have been sent/iu);
   }
 });

@@ -20,7 +20,8 @@ function createContext() {
   const calls = {
     register: [],
     recovery: [],
-    rollback: []
+    rollback: [],
+    webhook: []
   };
   const service = {
     async authenticate(token) {
@@ -47,6 +48,14 @@ function createContext() {
     async rollbackRelease(actor, projectId, versionId, input) {
       calls.rollback.push({ actor, projectId, versionId, input });
       return { release: { projectId, versionId, state: "active" } };
+    },
+    async ingestStripeWebhook(input) {
+      calls.webhook.push(input);
+      return {
+        received: true,
+        eventId: "evt_contract_1",
+        status: "processed"
+      };
     },
     async downloadExport(actor, projectId, exportId, token) {
       assert.equal(actor, ACTOR);
@@ -233,4 +242,44 @@ test("recovery response states manual delivery without exposing a token", async 
       commandId: "recovery-command-1"
     }
   ]);
+});
+
+test("Stripe webhook route preserves exact raw bytes and relies on signature instead of browser CSRF", async () => {
+  const context = createContext();
+  const raw =
+    '{ "id": "evt_contract_1", "exact": "\\u2603" }\n';
+  const response = await context.api.fetch(
+    new Request(
+      `${ORIGIN}/api/v1/webhooks/stripe`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Stripe-Signature":
+            "t=1785268800,v1=signature-proof"
+        },
+        body: raw
+      }
+    )
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    received: true,
+    eventId: "evt_contract_1",
+    status: "processed"
+  });
+  assert.equal(context.calls.webhook.length, 1);
+  assert.ok(
+    Buffer.isBuffer(
+      context.calls.webhook[0].rawBody
+    )
+  );
+  assert.equal(
+    context.calls.webhook[0].rawBody.toString("utf8"),
+    raw
+  );
+  assert.equal(
+    context.calls.webhook[0].signature,
+    "t=1785268800,v1=signature-proof"
+  );
 });

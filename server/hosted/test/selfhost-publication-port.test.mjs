@@ -185,6 +185,57 @@ test("paid, verified, accepted, screened, safe, exact proof gates fail closed", 
   }
 });
 
+test("completed ownership is publication-eligible but refunded, disputed, or revoked ownership is not", async () => {
+  const owned = proof();
+  delete owned.subscription;
+  owned.entitlement = {
+    kind: "ownership",
+    organizationId: "organization-one",
+    projectId: "project-one",
+    status: "completed",
+    completedAt: NOW
+  };
+  const ownedContext = await harness();
+  const released = await ownedContext.port.request(owned);
+  assert.equal(released.status, "released");
+  assert.equal(released.published, true);
+
+  const invalidEntitlements = [
+    { status: "refunded", completedAt: NOW },
+    { status: "disputed", completedAt: NOW },
+    { status: "revoked", completedAt: NOW },
+    { status: "completed", completedAt: "not-a-date" },
+    {
+      status: "completed",
+      completedAt: NOW,
+      organizationId: "organization-two"
+    },
+    {
+      status: "completed",
+      completedAt: NOW,
+      projectId: "project-two"
+    }
+  ];
+  for (const invalid of invalidEntitlements) {
+    const context = await harness();
+    const input = proof();
+    delete input.subscription;
+    input.entitlement = {
+      kind: "ownership",
+      organizationId: "organization-one",
+      projectId: "project-one",
+      ...invalid
+    };
+    await assert.rejects(
+      context.port.request(input),
+      (error) => error?.code === "PAID_ENTITLEMENT_REQUIRED"
+    );
+    const state = context.runtime.control.snapshot();
+    assert.deepEqual(state.hostnames, {});
+    assert.deepEqual(state.releases, {});
+  }
+});
+
 test("private port publishes exact server bytes and exact replay is state-idempotent", async () => {
   const context = await harness();
   const input = proof();

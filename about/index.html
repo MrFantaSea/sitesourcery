@@ -32,14 +32,14 @@
     </div>
   </header>
   <main id="main" tabindex="-1">
-    <section class="about-hero">
+    <section class="about-hero" id="about-studio" aria-labelledby="about-studio-title" data-customer-section="studio-owner">
       <div class="site-shell about-hero-grid">
         <div class="about-hero-copy reveal">
           <p class="eyebrow">New Jersey · One-person studio</p>
-          <h1>Work with the person doing the work.</h1>
+          <h1 id="about-studio-title" data-customer-job="know-who-is-responsible">Work with the person doing the work.</h1>
           <p class="lede">Site Sourcery is a one-person New Jersey studio for local and independent businesses. Zack stays with a project from the first conversation through the written quote, design, build, testing, and handoff. Projects are inquiry-only and priced in writing.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="/contact/#direct-contact">Talk with Zack</a>
+            <a class="button button-primary" href="/contact/#direct-contact" data-primary-action="about-contact">Talk with Zack</a>
           </div>
         </div>
         <figure class="about-portrait-alternative reveal">
@@ -48,10 +48,10 @@
         </figure>
       </div>
       <div class="site-shell about-fact-rail reveal" role="group" aria-label="Public-record and studio-stated facts">
-        <div data-about-trust="base"><span>Studio-stated base</span><strong>New Jersey</strong></div>
-        <div data-about-trust="established"><span>NJ public record</span><strong>Formed July 9, 2026</strong></div>
-        <div data-about-trust="operator"><span>Studio-stated model</span><strong>One member · one operator</strong></div>
-        <div data-about-trust="seller"><span>NJ public entity record</span><strong>Desiderata Labs LLC</strong></div>
+        <div data-about-trust="base" data-evidence-id="studio-base" data-evidence-kind="studio-stated"><span>Studio-stated base</span><strong>New Jersey</strong></div>
+        <div data-about-trust="established" data-evidence-id="entity-formed" data-evidence-kind="public-record"><span>NJ public record</span><strong>Formed July 9, 2026</strong></div>
+        <div data-about-trust="operator" data-evidence-id="studio-operator" data-evidence-kind="studio-stated"><span>Studio-stated model</span><strong>One member · one operator</strong></div>
+        <div data-about-trust="seller" data-evidence-id="legal-seller" data-evidence-kind="public-record"><span>NJ public entity record</span><strong>Desiderata Labs LLC</strong></div>
       </div>
       <details class="site-shell about-fact-note scope-disclosure reveal">
         <summary>Business identity and public-record details</summary>
@@ -59,25 +59,25 @@
       </details>
     </section>
 
-    <section class="section section-dark" id="the-difference">
+    <section class="section section-dark" id="the-difference" aria-labelledby="one-person-title" data-customer-section="one-person-model">
       <div class="site-shell about-note-grid">
         <div class="reveal">
           <p class="eyebrow">Why stay small</p>
-          <h2>One person stays responsible.</h2>
+          <h2 id="one-person-title" data-customer-job="understand-one-person-model">Why work with one person?</h2>
         </div>
-        <blockquote class="about-note reveal">
+        <blockquote class="about-note reveal" data-personal-quote="zack">
           <p>I would rather understand fewer projects well than pass more projects between people. Each decision should fit the business and survive the real build.</p>
           <footer>Zack, Site Sourcery operator</footer>
         </blockquote>
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="accountable-process" aria-labelledby="accountable-process-title" data-customer-section="accountable-process">
       <div class="site-shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">How the work stays clear</p>
-            <h2>You know who is responsible.</h2>
+            <h2 id="accountable-process-title" data-customer-job="follow-the-work">How will the work stay clear?</h2>
           </div>
           <p>Your call and email go to the person responsible for the quote and delivery. If a specialist, outside service, or customer-owned account is needed, the written scope says who controls it.</p>
         </div>
@@ -91,34 +91,34 @@
       </div>
     </section>
 
-    <section class="section section-dark">
+    <section class="section section-dark" id="inspectable-proof" aria-labelledby="inspectable-proof-title" data-customer-section="inspectable-proof">
       <div class="site-shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">Proof before trust</p>
-            <h2>Inspect the proof yourself.</h2>
+            <h2 id="inspectable-proof-title" data-customer-job="inspect-before-deciding">What can you inspect before deciding?</h2>
           </div>
           <p>Examples are labeled as a founder-owned venture, fictional studies, or working tools. Client work is shown only after a real engagement and recorded permission.</p>
         </div>
         <div class="about-proof-grid reveal">
-          <a href="/work/" data-about-proof="work"><span>Web work</span><strong>See the founder-owned venture and labeled design studies.</strong><i>Open Work</i></a>
-          <a href="/custom/scope/" data-about-proof="scope"><span>Website scope</span><strong>Compare exact size, design, tool, and moving-work limits.</strong><i>Open Scope</i></a>
-          <a href="/abracadabra/app/" data-about-proof="abracadabra"><span>Working tool</span><strong>Make and revise a page from facts you enter.</strong><i>Open Abracadabra</i></a>
-          <a href="/hive/" data-about-proof="hive"><span>Calls and follow-up</span><strong>Choose one common problem and build its five-step plan.</strong><i>Open Hive</i></a>
+          <a href="/work/" data-about-proof="work" data-evidence-id="labeled-work" data-evidence-kind="labeled-example-index"><span>Labeled examples</span><strong>See the founder-owned venture and fictional design studies.</strong><i>Open Work</i></a>
+          <a href="/custom/scope/" data-about-proof="scope" data-evidence-id="published-scope" data-evidence-kind="published-scope"><span>Published website scope</span><strong>Compare exact size, design, tool, and moving-work limits.</strong><i>Open Scope</i></a>
+          <a href="/abracadabra/app/" data-about-proof="abracadabra" data-evidence-id="working-maker" data-evidence-kind="working-browser-tool"><span>Working browser tool</span><strong>Make and revise a page from facts you enter.</strong><i>Open Abracadabra</i></a>
+          <a href="/hive/" data-about-proof="hive" data-evidence-id="working-planner" data-evidence-kind="working-planner"><span>Working planner</span><strong>Choose one common problem and build its five-step plan.</strong><i>Open Hive</i></a>
         </div>
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="about-contact" aria-labelledby="about-contact-title" data-customer-section="direct-inquiry">
       <div class="site-shell about-contact-panel reveal">
         <div>
           <p class="eyebrow">Direct route</p>
-          <h2>Talk to the person who would do the work.</h2>
+          <h2 id="about-contact-title" data-customer-job="explain-the-problem">Want to explain the problem directly?</h2>
         </div>
         <div>
           <p>Share the situation you have. A short conversation can establish fit and what must be checked before a quote exists.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="/contact/#direct-contact">See contact details</a>
+            <a class="button button-primary" href="/contact/#direct-contact" data-primary-action="about-closing-contact">See phone and email</a>
           </div>
         </div>
       </div>

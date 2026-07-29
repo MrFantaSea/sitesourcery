@@ -214,3 +214,47 @@ test("terminal deletion seals its ordered billing history as an array", async ()
     /jsonb_typeof\(billing_timestamps\)\s*=\s*'object'/iu
   );
 });
+
+test("hosted payment control plane reconciles effects and models ownership without fake subscriptions", async () => {
+  const all = await migrations();
+  const payments = all.find(
+    ({ name }) =>
+      name ===
+      "202607280013_hosted_payment_control_plane.sql"
+  );
+  assert.ok(payments);
+  for (const table of [
+    "site_ownership_entitlements",
+    "site_ownership_entitlement_events",
+    "billing_portal_sessions"
+  ]) {
+    assert.match(
+      payments.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.match(
+    payments.sql,
+    /provider_effect_certainty[\s\S]*'not_submitted'[\s\S]*'ambiguous'[\s\S]*'confirmed'/iu
+  );
+  assert.match(
+    payments.sql,
+    /subscription\.status in \('active', 'grace'\)[\s\S]*entitlement\.state = 'completed'/iu
+  );
+  assert.match(
+    payments.sql,
+    /create or replace function ss\.request_release/iu
+  );
+  assert.match(
+    payments.sql,
+    /create or replace function ss\.acknowledge_private_lifecycle/iu
+  );
+  assert.match(
+    payments.sql,
+    /create function ss\.hosted_runtime_contract_v13\(\)/iu
+  );
+  assert.doesNotMatch(
+    payments.sql,
+    /stripe_subscription_id[^;]*site_ownership_entitlements/iu
+  );
+});

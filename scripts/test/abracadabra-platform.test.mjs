@@ -61,6 +61,20 @@ test("the passphrase gate keeps the return action visible while exports stay loc
   assert.doesNotMatch(accessGate, /elements\.statusActions\.hidden = true/u);
 });
 
+test("revealing exact published bytes moves focus into the newly visible site stage", () => {
+  assert.match(
+    viewerHtmlSource,
+    /<section class="site-stage" id="site-stage"[^>]*tabindex="-1"[^>]*hidden>/u,
+  );
+  const reveal = viewerSource.match(
+    /function showPublishedSite\(normalized, resolved\) \{[\s\S]*?\n  \}/u,
+  )?.[0] ?? "";
+  assert.match(
+    reveal,
+    /elements\.statusStage\.hidden = true;\s*elements\.siteStage\.hidden = false;\s*elements\.siteStage\.focus\(\{ preventScroll: true \}\);/u,
+  );
+});
+
 function viewerCredentialHooks() {
   const context = vm.createContext({
     TextEncoder,

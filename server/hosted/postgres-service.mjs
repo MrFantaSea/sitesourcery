@@ -22,6 +22,11 @@ import {
   safeRawFacts,
   validatePassword
 } from "./security.mjs";
+import {
+  providerEffectCertainty,
+  providerErrorCode,
+  validateHostedPaymentProvider
+} from "./payment-provider-port.mjs";
 import { createStoredZip } from "./zip.mjs";
 import { createHeldDomainRuntime } from "./domain-postgres-runtime.mjs";
 
@@ -33,6 +38,8 @@ const PRODUCT_TERM_KINDS = Object.freeze(["product", "privacy", "website"]);
 const EXPORT_TTL_DAYS = 90;
 const DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 const RECOVERY_DELIVERY_TTL_MS = 30 * 60 * 1000;
+const CHECKOUT_HOST = "checkout.stripe.com";
+const BILLING_PORTAL_HOST = "billing.stripe.com";
 
 function uuid(value, field) {
   const selected = String(value ?? "");
@@ -164,6 +171,32 @@ function publicAddress(row) {
 
 function publicSubscription(row) {
   if (!row?.subscription_id) {
+    if (row?.ownership_entitlement_id) {
+      return {
+        id: row.ownership_entitlement_id,
+        projectId: row.id,
+        status:
+          row.ownership_entitlement_state ===
+          "completed"
+            ? "paid"
+            : row.ownership_entitlement_state,
+        offerId: row.ownership_offer_key,
+        productId: "spark",
+        tenureId: row.ownership_tenure_id,
+        revision: 1,
+        currentPeriodEndsAt: null,
+        cancelAt: null,
+        retentionEndsAt:
+          row.retention_ends_at
+            ? iso(row.retention_ends_at)
+            : null,
+        provider: "stripe",
+        kind: "ownership",
+        completedAt: iso(
+          row.ownership_completed_at
+        )
+      };
+    }
     return {
       id: null,
       projectId: row.id,
@@ -297,6 +330,93 @@ function held(capability) {
   );
 }
 
+function providerIdentifier(value, prefix, field) {
+  const selected = String(value ?? "");
+  invariant(
+    selected.startsWith(`${prefix}_`) &&
+      /^[A-Za-z0-9_]{4,255}$/u.test(selected),
+    "PAYMENT_PROVIDER_RESPONSE_INVALID",
+    `${field} is invalid.`,
+    { status: 502 }
+  );
+  return selected;
+}
+
+function providerUrl(value, hostname, field) {
+  let selected;
+  try {
+    selected = new URL(String(value ?? ""));
+  } catch {
+    invariant(
+      false,
+      "PAYMENT_PROVIDER_RESPONSE_INVALID",
+      `${field} is invalid.`,
+      { status: 502 }
+    );
+  }
+  invariant(
+    selected.protocol === "https:" &&
+      selected.hostname === hostname &&
+      !selected.username &&
+      !selected.password &&
+      !selected.hash,
+    "PAYMENT_PROVIDER_RESPONSE_INVALID",
+    `${field} is outside the approved payment-provider host.`,
+    { status: 502 }
+  );
+  return selected.toString();
+}
+
+function checkoutProviderResult(value, issuedAt) {
+  const checkoutId = providerIdentifier(
+    value?.checkoutId,
+    "cs",
+    "Checkout Session ID"
+  );
+  const url = providerUrl(
+    value?.url,
+    CHECKOUT_HOST,
+    "Checkout URL"
+  );
+  invariant(
+    Number.isFinite(Date.parse(value?.expiresAt)) &&
+      Date.parse(value.expiresAt) > Date.parse(issuedAt),
+    "PAYMENT_PROVIDER_RESPONSE_INVALID",
+    "Checkout expiry is invalid.",
+    { status: 502 }
+  );
+  return {
+    checkoutId,
+    url,
+    expiresAt: new Date(value.expiresAt).toISOString()
+  };
+}
+
+function billingPortalProviderResult(value) {
+  return {
+    portalSessionId: providerIdentifier(
+      value?.portalSessionId,
+      "bps",
+      "Billing Portal Session ID"
+    ),
+    url: providerUrl(
+      value?.url,
+      BILLING_PORTAL_HOST,
+      "Billing Portal URL"
+    )
+  };
+}
+
+function stripeTimestamp(value, field) {
+  invariant(
+    Number.isSafeInteger(value) && value > 0,
+    "STRIPE_WEBHOOK_EVENT_INVALID",
+    `${field} is invalid.`,
+    { status: 400 }
+  );
+  return new Date(value * 1000).toISOString();
+}
+
 function translatePostgres(error) {
   if (error instanceof HostedError) return error;
   if (error?.code === "23505") {
@@ -324,6 +444,7 @@ export function createCanonicalPostgresService({
   publicationPort,
   exportStore,
   recoveryMailPort,
+  paymentProvider: suppliedPaymentProvider = null,
   contactVault = null,
   domainRuntime = null,
   clock = { now: () => new Date().toISOString() },
@@ -391,6 +512,9 @@ export function createCanonicalPostgresService({
     "RUNTIME_CONFIGURATION_ERROR",
     "Recovery mail delivery port is required.",
     { status: 500 }
+  );
+  const paymentProvider = validateHostedPaymentProvider(
+    suppliedPaymentProvider
   );
   normalizeHostname(`probe.${licensedBaseDomain}`);
   const domains =
@@ -662,7 +786,12 @@ export function createCanonicalPostgresService({
          subscription.cancelled_at,
          subscription.retention_ends_at as subscription_retention_ends_at,
          plan.plan_key as subscription_offer_key,
-         policy.tenure_id as subscription_tenure_id
+         policy.tenure_id as subscription_tenure_id,
+         ownership.id as ownership_entitlement_id,
+         ownership.state as ownership_entitlement_state,
+         ownership.completed_at as ownership_completed_at,
+         ownership_quote.offer_key as ownership_offer_key,
+         ownership_quote.tenure_id as ownership_tenure_id
        from ss.projects project
        join ss.organization_memberships membership
          on membership.organization_id = project.organization_id
@@ -697,6 +826,22 @@ export function createCanonicalPostgresService({
        left join ss.catalog_offer_policies policy
          on policy.plan_id = plan.id
         and policy.catalog_version = plan.catalog_version
+       left join ss.site_ownership_entitlements ownership
+         on ownership.organization_id =
+              project.organization_id
+        and ownership.project_id = project.id
+        and ownership.state = 'completed'
+       left join ss.checkout_quote_bindings
+         ownership_binding
+         on ownership_binding.organization_id =
+              ownership.organization_id
+        and ownership_binding.checkout_intent_id =
+              ownership.checkout_intent_id
+       left join ss.commerce_quotes ownership_quote
+         on ownership_quote.organization_id =
+              ownership_binding.organization_id
+        and ownership_quote.id =
+              ownership_binding.quote_id
       where project.id = $1`,
       [projectId, actor.userId]
     );
@@ -857,7 +1002,8 @@ export function createCanonicalPostgresService({
       `select
          quote.*,
          binding.checkout_intent_id,
-         checkout.expires_at as checkout_expires_at
+         checkout.expires_at as checkout_expires_at,
+         checkout.provider_checkout_url as checkout_url
        from ss.commerce_quotes quote
        join ss.organization_memberships membership
          on membership.organization_id = quote.organization_id
@@ -892,7 +1038,6 @@ export function createCanonicalPostgresService({
       billingShape: selected.tenure.billingShape,
       terms: selected.tenure.terms
     };
-    row.checkout_url = null;
     if (
       row.state === "quoted" &&
       Date.parse(row.expires_at) <= Date.parse(now(clock))
@@ -985,6 +1130,2892 @@ export function createCanonicalPostgresService({
       policy,
       lines: result.rows
     };
+  }
+
+  function paymentDigest(value, field) {
+    const selected = requiredText(value, field, 64);
+    invariant(
+      /^[a-f0-9]{64}$/u.test(selected),
+      "INVALID_INPUT",
+      `${field} is invalid.`,
+      { status: 400 }
+    );
+    return selected;
+  }
+
+  function checkoutResponse(row) {
+    const checkout = {
+      checkoutId: row.id,
+      providerCheckoutId: row.stripe_checkout_session_id,
+      state: row.state,
+      url: row.provider_checkout_url,
+      expiresAt: iso(row.expires_at)
+    };
+    return {
+      checkout,
+      checkoutId: checkout.checkoutId,
+      checkoutUrl: checkout.url,
+      url: checkout.url,
+      expiresAt: checkout.expiresAt
+    };
+  }
+
+  function billingPortalResponse(row) {
+    return {
+      portalSessionId: row.stripe_portal_session_id,
+      portalUrl: row.provider_portal_url,
+      url: row.provider_portal_url
+    };
+  }
+
+  function providerUnavailable(error, capability, resourceId) {
+    const certainty = providerEffectCertainty(error);
+    return new HostedError(
+      certainty === "ambiguous"
+        ? `${capability}_RECONCILIATION_REQUIRED`
+        : `${capability}_UNAVAILABLE`,
+      certainty === "ambiguous"
+        ? "The payment provider may have accepted this action. Site Sourcery will reconcile the same idempotent request before another attempt."
+        : "The payment provider did not accept this action.",
+      {
+        status: 503,
+        details: {
+          resourceId,
+          certainty,
+          providerErrorCode: providerErrorCode(error)
+        }
+      }
+    );
+  }
+
+  async function checkoutStageRows(
+    client,
+    actor,
+    organizationId,
+    projectId,
+    checkoutId
+  ) {
+    const checkoutResult = await client.query(
+      `select
+         checkout.*,
+         binding.quote_id,
+         binding.accepted_disclosure_digest,
+         quote.offer_key,
+         quote.catalog_version,
+         quote.disclosure_digest,
+         quote.state as quote_state,
+         quote.expires_at as quote_expires_at,
+         customer.stripe_customer_id
+       from ss.checkout_intents checkout
+       join ss.checkout_quote_bindings binding
+         on binding.organization_id = checkout.organization_id
+        and binding.checkout_intent_id = checkout.id
+       join ss.commerce_quotes quote
+         on quote.organization_id = binding.organization_id
+        and quote.id = binding.quote_id
+       left join ss.stripe_customers customer
+         on customer.organization_id = checkout.organization_id
+      where checkout.organization_id = $1
+        and checkout.project_id = $2
+        and checkout.id = $3
+        and checkout.created_by_user_id = $4
+      for update of checkout, quote`,
+      [organizationId, projectId, checkoutId, actor.userId]
+    );
+    invariant(
+      checkoutResult.rowCount === 1,
+      "CHECKOUT_RECONCILIATION_REQUIRED",
+      "The staged Checkout Session could not be reconciled.",
+      { status: 503 }
+    );
+    const row = checkoutResult.rows[0];
+    const lines = await client.query(
+      `select
+         quote_line.id,
+         quote_line.position,
+         quote_line.source_kind,
+         quote_line.billing_cadence,
+         quote_line.currency,
+         quote_line.amount_minor,
+         quote_line.stripe_price_ref
+       from ss.checkout_intent_price_lines checkout_line
+       join ss.commerce_quote_price_lines quote_line
+         on quote_line.organization_id =
+              checkout_line.organization_id
+        and quote_line.id =
+              checkout_line.quote_price_line_id
+      where checkout_line.organization_id = $1
+        and checkout_line.project_id = $2
+        and checkout_line.checkout_intent_id = $3
+      order by quote_line.position`,
+      [organizationId, projectId, checkoutId]
+    );
+    invariant(
+      lines.rowCount > 0,
+      "CHECKOUT_RECONCILIATION_REQUIRED",
+      "The staged Checkout Session has no authoritative price lines.",
+      { status: 503 }
+    );
+    invariant(
+      lines.rows.every(
+        (line) => line.source_kind === "abracadabra_product"
+      ),
+      "DOMAIN_CHECKOUT_HELD",
+      "Domain payment uses the separate authorize, register, and capture workflow.",
+      { status: 503 }
+    );
+    const amounts = {};
+    const refs = {};
+    for (const line of lines.rows) {
+      const money = {
+        amountMinor: Number(line.amount_minor),
+        currency: line.currency
+      };
+      if (line.billing_cadence === "one_time") {
+        invariant(
+          !amounts.oneTime,
+          "CHECKOUT_AUTHORITY_INVALID",
+          "Checkout has more than one one-time website price.",
+          { status: 503 }
+        );
+        amounts.oneTime = money;
+        refs.oneTime = line.stripe_price_ref;
+      } else {
+        invariant(
+          !amounts.recurring,
+          "CHECKOUT_AUTHORITY_INVALID",
+          "Checkout has more than one recurring website price.",
+          { status: 503 }
+        );
+        amounts.recurring = {
+          ...money,
+          interval: line.billing_cadence
+        };
+        refs.recurring = line.stripe_price_ref;
+      }
+    }
+    const purpose = {
+      tenantId: organizationId,
+      customerId: actor.userId,
+      projectId,
+      quoteId: row.quote_id,
+      quoteVersion: 1,
+      catalogVersion: row.catalog_version,
+      offerId: row.offer_key,
+      disclosureDigest: row.disclosure_digest,
+      lines: [
+        {
+          lineItemId: `website:${row.offer_key}`,
+          receiptGroupId: `website:${row.offer_key}`,
+          amounts,
+          authority: {
+            type: "stripe_price_refs",
+            refs
+          }
+        }
+      ]
+    };
+    const purposeDigest = digest(purpose);
+    invariant(
+      row.purpose_digest === purposeDigest,
+      "CHECKOUT_RECONCILIATION_REQUIRED",
+      "The staged Checkout purpose no longer matches its immutable quote.",
+      { status: 503 }
+    );
+    return {
+      row,
+      purpose,
+      purposeDigest,
+      providerRequest: {
+        idempotencyKey: row.provider_idempotency_key,
+        purposeDigest,
+        purpose,
+        ...(row.stripe_customer_id
+          ? {
+              stripeCustomerId: row.stripe_customer_id
+            }
+          : {})
+      }
+    };
+  }
+
+  async function stageCheckout(
+    actor,
+    projectId,
+    input
+  ) {
+    const scope = await projectScope(actor, projectId);
+    const quoteId = uuid(input.quoteId, "Quote ID");
+    const acceptedDisclosureDigest = paymentDigest(
+      input.acceptedDisclosureDigest,
+      "Accepted quote digest"
+    );
+    const key = commandId(input.commandId);
+    const routeKey = "commerce.checkout";
+    const requestDigest = digest({
+      routeKey,
+      purpose: {
+        projectId: scope.projectId,
+        quoteId,
+        acceptedDisclosureDigest
+      }
+    });
+    return authority.service(
+      {
+        userId: actor.userId,
+        organizationId: scope.organizationId
+      },
+      async (client) => {
+        await membership(
+          client,
+          actor,
+          scope.organizationId,
+          BILLING_ROLES
+        );
+        const existing = await client.query(
+          `select *
+             from ss.idempotency_keys
+            where principal_id = $1
+              and route_key = $2
+              and idempotency_key = $3
+            for update`,
+          [actor.userId, routeKey, key]
+        );
+        if (existing.rows[0]) {
+          const command = existing.rows[0];
+          invariant(
+            command.request_digest === requestDigest,
+            "IDEMPOTENCY_CONFLICT",
+            "That idempotency key was already used for another action.",
+            { status: 409 }
+          );
+          if (command.state === "completed") {
+            return {
+              completed: true,
+              response: command.response_body
+            };
+          }
+          invariant(
+            command.state === "running" &&
+              command.resource_type ===
+                "checkout_intent" &&
+              command.resource_id,
+            "CHECKOUT_REQUIRES_NEW_COMMAND",
+            "That Checkout attempt reached a final failure. Request a fresh quote and use a new idempotency key.",
+            { status: 409 }
+          );
+          const staged = await checkoutStageRows(
+            client,
+            actor,
+            scope.organizationId,
+            scope.projectId,
+            command.resource_id
+          );
+          if (
+            staged.row.state === "open" ||
+            staged.row.state === "completed"
+          ) {
+            const response = checkoutResponse(staged.row);
+            await client.query(
+              `update ss.idempotency_keys
+                  set state = 'completed',
+                      response_status = 201,
+                      response_body = $2::jsonb
+                where id = $1`,
+              [command.id, JSON.stringify(response)]
+            );
+            return { completed: true, response };
+          }
+          invariant(
+            staged.row.state === "provider_pending",
+            "CHECKOUT_REQUIRES_NEW_COMMAND",
+            "That Checkout attempt is not recoverable with this command.",
+            { status: 409 }
+          );
+          return {
+            completed: false,
+            commandRowId: command.id,
+            scope,
+            ...staged
+          };
+        }
+
+        const quoted = await client.query(
+          `select
+             quote.*,
+             policy.price_id as primary_catalog_price_id
+           from ss.commerce_quotes quote
+           join ss.catalog_offer_policies policy
+             on policy.id = quote.offer_policy_id
+          where quote.organization_id = $1
+            and quote.project_id = $2
+            and quote.id = $3
+          for update of quote`,
+          [scope.organizationId, scope.projectId, quoteId]
+        );
+        const quote = quoted.rows[0];
+        invariant(
+          quote,
+          "NOT_FOUND",
+          "The requested item was not found.",
+          { status: 404 }
+        );
+        const acceptedAt = now(clock);
+        invariant(
+          quote.state === "quoted" &&
+            Date.parse(quote.expires_at) >
+              Date.parse(acceptedAt),
+          "QUOTE_NOT_CHECKOUTABLE",
+          "That quote is unavailable or expired. Request a new quote.",
+          { status: 409 }
+        );
+        invariant(
+          quote.disclosure_digest ===
+            acceptedDisclosureDigest,
+          "QUOTE_ACCEPTANCE_MISMATCH",
+          "The accepted quote does not match the server disclosure.",
+          { status: 409 }
+        );
+        const address = await client.query(
+          `select address.id
+             from ss.project_address_projection projection
+             join ss.project_addresses address
+               on address.organization_id = projection.organization_id
+              and address.id = projection.current_address_id
+            where projection.organization_id = $1
+              and projection.project_id = $2
+              and address.id = $3
+              and address.revision = $4
+              and (
+                case when address.kind = 'licensed'
+                  then 'licensed'
+                  else 'customer_owned'
+                end
+              ) = $5`,
+          [
+            scope.organizationId,
+            scope.projectId,
+            quote.address_id,
+            Number(quote.address_revision),
+            quote.address_mode
+          ]
+        );
+        invariant(
+          address.rowCount === 1,
+          "QUOTE_STALE",
+          "The project address changed. Request a new quote.",
+          { status: 409 }
+        );
+        if (quote.subscription_id) {
+          const subscription = await client.query(
+            `select id
+               from ss.stripe_subscriptions
+              where organization_id = $1
+                and project_id = $2
+                and id = $3
+                and revision = $4`,
+            [
+              scope.organizationId,
+              scope.projectId,
+              quote.subscription_id,
+              Number(quote.subscription_revision)
+            ]
+          );
+          invariant(
+            subscription.rowCount === 1,
+            "QUOTE_STALE",
+            "The project billing state changed. Request a new quote.",
+            { status: 409 }
+          );
+        }
+        const priceLines = await client.query(
+          `select *
+             from ss.commerce_quote_price_lines
+            where organization_id = $1
+              and project_id = $2
+              and quote_id = $3
+            order by position`,
+          [scope.organizationId, scope.projectId, quoteId]
+        );
+        invariant(
+          priceLines.rowCount > 0,
+          "CHECKOUT_AUTHORITY_INVALID",
+          "That quote has no authoritative prices.",
+          { status: 503 }
+        );
+        invariant(
+          priceLines.rows.every(
+            (line) =>
+              line.source_kind ===
+              "abracadabra_product"
+          ),
+          "DOMAIN_CHECKOUT_HELD",
+          "Domain payment uses the separate authorize, register, and capture workflow.",
+          { status: 503 }
+        );
+
+        const checkoutId = randomUUID();
+        const providerIdempotencyKey =
+          `hosted:checkout:${scope.organizationId}:${key}`;
+        const amounts = {};
+        const refs = {};
+        for (const line of priceLines.rows) {
+          const money = {
+            amountMinor: Number(line.amount_minor),
+            currency: line.currency
+          };
+          if (line.billing_cadence === "one_time") {
+            invariant(
+              !amounts.oneTime,
+              "CHECKOUT_AUTHORITY_INVALID",
+              "Checkout has more than one one-time website price.",
+              { status: 503 }
+            );
+            amounts.oneTime = money;
+            refs.oneTime = line.stripe_price_ref;
+          } else {
+            invariant(
+              !amounts.recurring,
+              "CHECKOUT_AUTHORITY_INVALID",
+              "Checkout has more than one recurring website price.",
+              { status: 503 }
+            );
+            amounts.recurring = {
+              ...money,
+              interval: line.billing_cadence
+            };
+            refs.recurring = line.stripe_price_ref;
+          }
+        }
+        const purpose = {
+          tenantId: scope.organizationId,
+          customerId: actor.userId,
+          projectId: scope.projectId,
+          quoteId,
+          quoteVersion: 1,
+          catalogVersion: quote.catalog_version,
+          offerId: quote.offer_key,
+          disclosureDigest:
+            quote.disclosure_digest,
+          lines: [
+            {
+              lineItemId: `website:${quote.offer_key}`,
+              receiptGroupId:
+                `website:${quote.offer_key}`,
+              amounts,
+              authority: {
+                type: "stripe_price_refs",
+                refs
+              }
+            }
+          ]
+        };
+        const purposeDigest = digest(purpose);
+        const amountMinor = priceLines.rows.reduce(
+          (total, line) =>
+            total + Number(line.amount_minor),
+          0
+        );
+        const commandRowId = randomUUID();
+        await client.query(
+          `insert into ss.idempotency_keys (
+             id, organization_id, principal_id, route_key,
+             idempotency_key, request_digest, state,
+             resource_type, resource_id, created_at,
+             expires_at
+           ) values (
+             $1, $2, $3, $4, $5, $6, 'running',
+             'checkout_intent', $7, $8,
+             $8::timestamptz + interval '24 hours'
+           )`,
+          [
+            commandRowId,
+            scope.organizationId,
+            actor.userId,
+            routeKey,
+            key,
+            requestDigest,
+            checkoutId,
+            acceptedAt
+          ]
+        );
+        await client.query(
+          `insert into ss.checkout_intents (
+             id, organization_id, project_id,
+             catalog_price_id, currency, amount_minor,
+             state, created_by_user_id, purpose_digest,
+             provider_idempotency_key,
+             provider_effect_certainty, created_at
+           ) values (
+             $1, $2, $3, $4, $5, $6,
+             'provider_pending', $7, $8, $9, null, $10
+           )`,
+          [
+            checkoutId,
+            scope.organizationId,
+            scope.projectId,
+            quote.primary_catalog_price_id,
+            quote.currency,
+            amountMinor,
+            actor.userId,
+            purposeDigest,
+            providerIdempotencyKey,
+            acceptedAt
+          ]
+        );
+        await client.query(
+          `insert into ss.checkout_quote_bindings (
+             organization_id, project_id,
+             checkout_intent_id, quote_id,
+             accepted_disclosure_digest,
+             accepted_by_user_id, accepted_at
+           ) values ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            scope.organizationId,
+            scope.projectId,
+            checkoutId,
+            quoteId,
+            acceptedDisclosureDigest,
+            actor.userId,
+            acceptedAt
+          ]
+        );
+        for (const line of priceLines.rows) {
+          await client.query(
+            `insert into ss.checkout_intent_price_lines (
+               organization_id, project_id,
+               checkout_intent_id, quote_price_line_id
+             ) values ($1, $2, $3, $4)`,
+            [
+              scope.organizationId,
+              scope.projectId,
+              checkoutId,
+              line.id
+            ]
+          );
+        }
+        await client.query(
+          `update ss.commerce_quotes
+              set state = 'checkout_dispatching'
+            where organization_id = $1
+              and project_id = $2
+              and id = $3
+              and state = 'quoted'`,
+          [scope.organizationId, scope.projectId, quoteId]
+        );
+        await audit(client, {
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          actorId: actor.userId,
+          action: "commerce.checkout.dispatching",
+          targetType: "checkout_intent",
+          targetId: checkoutId,
+          requestId: commandRowId,
+          metadata: {
+            quoteId,
+            purposeDigest,
+            providerEffect: false
+          }
+        });
+        const staged = await checkoutStageRows(
+          client,
+          actor,
+          scope.organizationId,
+          scope.projectId,
+          checkoutId
+        );
+        return {
+          completed: false,
+          commandRowId,
+          scope,
+          ...staged
+        };
+      }
+    );
+  }
+
+  async function recordCheckoutFailure(staged, error) {
+    const certainty = providerEffectCertainty(error);
+    const errorCode = providerErrorCode(error);
+    await authority.service(
+      {
+        userId: staged.row.created_by_user_id,
+        organizationId: staged.scope.organizationId
+      },
+      async (client) => {
+        await client.query(
+          `update ss.checkout_intents
+              set state = case
+                    when $4 = 'not_submitted'
+                      then 'failed'
+                    else state
+                  end,
+                  provider_effect_certainty = $4,
+                  provider_error_code = $5
+            where organization_id = $1
+              and project_id = $2
+              and id = $3
+              and state = 'provider_pending'`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id,
+            certainty,
+            errorCode
+          ]
+        );
+        if (certainty === "not_submitted") {
+          await client.query(
+            `update ss.commerce_quotes
+                set state = 'void',
+                    voided_at = $4,
+                    void_reason =
+                      'checkout_provider_not_submitted'
+              where organization_id = $1
+                and project_id = $2
+                and id = $3
+                and state = 'checkout_dispatching'`,
+            [
+              staged.scope.organizationId,
+              staged.scope.projectId,
+              staged.row.quote_id,
+              now(clock)
+            ]
+          );
+          await client.query(
+            `update ss.idempotency_keys
+                set state = 'failed',
+                    response_status = 503,
+                    response_body = $2::jsonb
+              where id = $1
+                and state = 'running'`,
+            [
+              staged.commandRowId,
+              JSON.stringify({
+                error: {
+                  code: "CHECKOUT_UNAVAILABLE",
+                  certainty,
+                  providerErrorCode: errorCode
+                }
+              })
+            ]
+          );
+        }
+      }
+    );
+  }
+
+  async function finalizeCheckout(
+    actor,
+    staged,
+    result
+  ) {
+    const selected = checkoutProviderResult(
+      result,
+      now(clock)
+    );
+    return authority.service(
+      {
+        userId: actor.userId,
+        organizationId: staged.scope.organizationId
+      },
+      async (client) => {
+        const current = await client.query(
+          `select *
+             from ss.checkout_intents
+            where organization_id = $1
+              and project_id = $2
+              and id = $3
+            for update`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id
+          ]
+        );
+        const row = current.rows[0];
+        invariant(
+          row &&
+            row.purpose_digest ===
+              staged.purposeDigest &&
+            row.provider_idempotency_key ===
+              staged.providerRequest.idempotencyKey,
+          "CHECKOUT_RECONCILIATION_REQUIRED",
+          "The Checkout Session no longer matches its staged purpose.",
+          { status: 503 }
+        );
+        if (
+          row.state === "open" ||
+          row.state === "completed"
+        ) {
+          invariant(
+            row.stripe_checkout_session_id ===
+                selected.checkoutId &&
+              row.provider_checkout_url === selected.url &&
+              iso(row.expires_at) ===
+                selected.expiresAt,
+            "CHECKOUT_RECONCILIATION_REQUIRED",
+            "The payment provider returned conflicting Checkout facts.",
+            { status: 503 }
+          );
+        } else {
+          invariant(
+            row.state === "provider_pending",
+            "CHECKOUT_RECONCILIATION_REQUIRED",
+            "The Checkout Session cannot be finalized from its current state.",
+            { status: 503 }
+          );
+          await client.query(
+            `update ss.checkout_intents
+                set stripe_checkout_session_id = $4,
+                    provider_checkout_url = $5,
+                    expires_at = $6,
+                    state = 'open',
+                    provider_effect_certainty = 'confirmed',
+                    provider_error_code = null
+              where organization_id = $1
+                and project_id = $2
+                and id = $3`,
+            [
+              staged.scope.organizationId,
+              staged.scope.projectId,
+              staged.row.id,
+              selected.checkoutId,
+              selected.url,
+              selected.expiresAt
+            ]
+          );
+          await client.query(
+            `update ss.commerce_quotes
+                set state = 'checkout_created'
+              where organization_id = $1
+                and project_id = $2
+                and id = $3
+                and state = 'checkout_dispatching'`,
+            [
+              staged.scope.organizationId,
+              staged.scope.projectId,
+              staged.row.quote_id
+            ]
+          );
+          await audit(client, {
+            organizationId:
+              staged.scope.organizationId,
+            projectId: staged.scope.projectId,
+            actorId: actor.userId,
+            action: "commerce.checkout.created",
+            targetType: "checkout_intent",
+            targetId: staged.row.id,
+            requestId: staged.commandRowId,
+            metadata: {
+              quoteId: staged.row.quote_id,
+              providerCheckoutId:
+                selected.checkoutId,
+              purposeDigest: staged.purposeDigest
+            }
+          });
+        }
+        const finalized = await client.query(
+          `select *
+             from ss.checkout_intents
+            where organization_id = $1
+              and project_id = $2
+              and id = $3`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id
+          ]
+        );
+        const response = checkoutResponse(
+          finalized.rows[0]
+        );
+        await client.query(
+          `update ss.idempotency_keys
+              set state = 'completed',
+                  response_status = 201,
+                  response_body = $2::jsonb
+            where id = $1
+              and state = 'running'`,
+          [
+            staged.commandRowId,
+            JSON.stringify(response)
+          ]
+        );
+        return response;
+      }
+    );
+  }
+
+  async function stageBillingPortal(
+    actor,
+    projectId,
+    input
+  ) {
+    const scope = await projectScope(actor, projectId);
+    const key = commandId(input.commandId);
+    const routeKey = "billing.portal";
+    const requestDigest = digest({
+      routeKey,
+      purpose: { projectId: scope.projectId }
+    });
+    return authority.service(
+      {
+        userId: actor.userId,
+        organizationId: scope.organizationId
+      },
+      async (client) => {
+        await membership(
+          client,
+          actor,
+          scope.organizationId,
+          BILLING_ROLES
+        );
+        const existing = await client.query(
+          `select *
+             from ss.idempotency_keys
+            where principal_id = $1
+              and route_key = $2
+              and idempotency_key = $3
+            for update`,
+          [actor.userId, routeKey, key]
+        );
+        if (existing.rows[0]) {
+          const command = existing.rows[0];
+          invariant(
+            command.request_digest === requestDigest,
+            "IDEMPOTENCY_CONFLICT",
+            "That idempotency key was already used for another action.",
+            { status: 409 }
+          );
+          if (command.state === "completed") {
+            return {
+              completed: true,
+              response: command.response_body
+            };
+          }
+          invariant(
+            command.state === "running" &&
+              command.resource_type ===
+                "billing_portal_session" &&
+              command.resource_id,
+            "BILLING_PORTAL_REQUIRES_NEW_COMMAND",
+            "That billing portal attempt reached a final failure. Use a new idempotency key.",
+            { status: 409 }
+          );
+          const resumed = await client.query(
+            `select
+               portal.*,
+               customer.stripe_customer_id
+             from ss.billing_portal_sessions portal
+             join ss.stripe_customers customer
+               on customer.organization_id =
+                    portal.organization_id
+              and customer.id =
+                    portal.stripe_customer_row_id
+            where portal.organization_id = $1
+              and portal.project_id = $2
+              and portal.id = $3
+              and portal.created_by_user_id = $4
+            for update of portal`,
+            [
+              scope.organizationId,
+              scope.projectId,
+              command.resource_id,
+              actor.userId
+            ]
+          );
+          const row = resumed.rows[0];
+          invariant(
+            row,
+            "BILLING_PORTAL_RECONCILIATION_REQUIRED",
+            "The staged billing portal session could not be reconciled.",
+            { status: 503 }
+          );
+          if (row.state === "open") {
+            const response =
+              billingPortalResponse(row);
+            await client.query(
+              `update ss.idempotency_keys
+                  set state = 'completed',
+                      response_status = 201,
+                      response_body = $2::jsonb
+                where id = $1`,
+              [command.id, JSON.stringify(response)]
+            );
+            return { completed: true, response };
+          }
+          invariant(
+            row.state === "provider_pending",
+            "BILLING_PORTAL_REQUIRES_NEW_COMMAND",
+            "That billing portal attempt is not recoverable with this command.",
+            { status: 409 }
+          );
+          return {
+            completed: false,
+            commandRowId: command.id,
+            scope,
+            row,
+            providerRequest: {
+              stripeCustomerId:
+                row.stripe_customer_id,
+              idempotencyKey:
+                row.provider_idempotency_key
+            }
+          };
+        }
+        const customer = await client.query(
+          `select customer.*
+             from ss.stripe_subscriptions subscription
+             join ss.stripe_customers customer
+               on customer.organization_id =
+                    subscription.organization_id
+              and customer.id =
+                    subscription.stripe_customer_row_id
+            where subscription.organization_id = $1
+              and subscription.project_id = $2
+              and subscription.status <> 'deleted'
+            for share of subscription, customer`,
+          [scope.organizationId, scope.projectId]
+        );
+        invariant(
+          customer.rowCount === 1,
+          "BILLING_ACCOUNT_UNAVAILABLE",
+          "This project does not have a payment-provider billing account.",
+          { status: 409 }
+        );
+        const portalId = randomUUID();
+        const providerIdempotencyKey =
+          `hosted:billing:${scope.organizationId}:${key}`;
+        const purposeDigest = digest({
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          stripeCustomerRowId: customer.rows[0].id
+        });
+        const commandRowId = randomUUID();
+        const createdAt = now(clock);
+        await client.query(
+          `insert into ss.idempotency_keys (
+             id, organization_id, principal_id, route_key,
+             idempotency_key, request_digest, state,
+             resource_type, resource_id, created_at,
+             expires_at
+           ) values (
+             $1, $2, $3, $4, $5, $6, 'running',
+             'billing_portal_session', $7, $8,
+             $8::timestamptz + interval '24 hours'
+           )`,
+          [
+            commandRowId,
+            scope.organizationId,
+            actor.userId,
+            routeKey,
+            key,
+            requestDigest,
+            portalId,
+            createdAt
+          ]
+        );
+        await client.query(
+          `insert into ss.billing_portal_sessions (
+             id, organization_id, project_id,
+             stripe_customer_row_id, created_by_user_id,
+             provider_idempotency_key, purpose_digest,
+             state, created_at
+           ) values (
+             $1, $2, $3, $4, $5, $6, $7,
+             'provider_pending', $8
+           )`,
+          [
+            portalId,
+            scope.organizationId,
+            scope.projectId,
+            customer.rows[0].id,
+            actor.userId,
+            providerIdempotencyKey,
+            purposeDigest,
+            createdAt
+          ]
+        );
+        await audit(client, {
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          actorId: actor.userId,
+          action: "billing.portal.dispatching",
+          targetType: "billing_portal_session",
+          targetId: portalId,
+          requestId: commandRowId,
+          metadata: {
+            purposeDigest,
+            providerEffect: false
+          }
+        });
+        return {
+          completed: false,
+          commandRowId,
+          scope,
+          row: {
+            id: portalId,
+            created_by_user_id: actor.userId,
+            purpose_digest: purposeDigest
+          },
+          providerRequest: {
+            stripeCustomerId:
+              customer.rows[0].stripe_customer_id,
+            idempotencyKey: providerIdempotencyKey
+          }
+        };
+      }
+    );
+  }
+
+  async function recordBillingPortalFailure(
+    staged,
+    error
+  ) {
+    const certainty = providerEffectCertainty(error);
+    const errorCode = providerErrorCode(error);
+    await authority.service(
+      {
+        userId: staged.row.created_by_user_id,
+        organizationId: staged.scope.organizationId
+      },
+      async (client) => {
+        await client.query(
+          `update ss.billing_portal_sessions
+              set state = case
+                    when $4 = 'not_submitted'
+                      then 'failed'
+                    else state
+                  end,
+                  provider_effect_certainty = $4,
+                  provider_error_code = $5
+            where organization_id = $1
+              and project_id = $2
+              and id = $3
+              and state = 'provider_pending'`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id,
+            certainty,
+            errorCode
+          ]
+        );
+        if (certainty === "not_submitted") {
+          await client.query(
+            `update ss.idempotency_keys
+                set state = 'failed',
+                    response_status = 503,
+                    response_body = $2::jsonb
+              where id = $1
+                and state = 'running'`,
+            [
+              staged.commandRowId,
+              JSON.stringify({
+                error: {
+                  code:
+                    "BILLING_PORTAL_UNAVAILABLE",
+                  certainty,
+                  providerErrorCode: errorCode
+                }
+              })
+            ]
+          );
+        }
+      }
+    );
+  }
+
+  async function finalizeBillingPortal(
+    actor,
+    staged,
+    result
+  ) {
+    const selected =
+      billingPortalProviderResult(result);
+    return authority.service(
+      {
+        userId: actor.userId,
+        organizationId: staged.scope.organizationId
+      },
+      async (client) => {
+        const current = await client.query(
+          `select *
+             from ss.billing_portal_sessions
+            where organization_id = $1
+              and project_id = $2
+              and id = $3
+            for update`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id
+          ]
+        );
+        const row = current.rows[0];
+        invariant(
+          row &&
+            row.purpose_digest ===
+              staged.row.purpose_digest &&
+            row.provider_idempotency_key ===
+              staged.providerRequest.idempotencyKey,
+          "BILLING_PORTAL_RECONCILIATION_REQUIRED",
+          "The billing portal session no longer matches its staged purpose.",
+          { status: 503 }
+        );
+        if (row.state === "open") {
+          invariant(
+            row.stripe_portal_session_id ===
+                selected.portalSessionId &&
+              row.provider_portal_url ===
+                selected.url,
+            "BILLING_PORTAL_RECONCILIATION_REQUIRED",
+            "The payment provider returned conflicting billing portal facts.",
+            { status: 503 }
+          );
+        } else {
+          invariant(
+            row.state === "provider_pending",
+            "BILLING_PORTAL_RECONCILIATION_REQUIRED",
+            "The billing portal session cannot be finalized from its current state.",
+            { status: 503 }
+          );
+          await client.query(
+            `update ss.billing_portal_sessions
+                set state = 'open',
+                    stripe_portal_session_id = $4,
+                    provider_portal_url = $5,
+                    provider_effect_certainty =
+                      'confirmed',
+                    provider_error_code = null
+              where organization_id = $1
+                and project_id = $2
+                and id = $3`,
+            [
+              staged.scope.organizationId,
+              staged.scope.projectId,
+              staged.row.id,
+              selected.portalSessionId,
+              selected.url
+            ]
+          );
+          await audit(client, {
+            organizationId:
+              staged.scope.organizationId,
+            projectId: staged.scope.projectId,
+            actorId: actor.userId,
+            action: "billing.portal.created",
+            targetType:
+              "billing_portal_session",
+            targetId: staged.row.id,
+            requestId: staged.commandRowId,
+            metadata: {
+              providerPortalSessionId:
+                selected.portalSessionId
+            }
+          });
+        }
+        const finalized = await client.query(
+          `select *
+             from ss.billing_portal_sessions
+            where organization_id = $1
+              and project_id = $2
+              and id = $3`,
+          [
+            staged.scope.organizationId,
+            staged.scope.projectId,
+            staged.row.id
+          ]
+        );
+        const response = billingPortalResponse(
+          finalized.rows[0]
+        );
+        await client.query(
+          `update ss.idempotency_keys
+              set state = 'completed',
+                  response_status = 201,
+                  response_body = $2::jsonb
+            where id = $1
+              and state = 'running'`,
+          [
+            staged.commandRowId,
+            JSON.stringify(response)
+          ]
+        );
+        return response;
+      }
+    );
+  }
+
+  async function claimCancellationDispatch(workerId) {
+    return authority.service({}, async (client) => {
+      const selected = await client.query(
+        `select
+           outbox.*,
+           acceptance.project_id,
+           acceptance.accepted_disclosure_digest,
+           preview.effective_at,
+           preview.retention_ends_at,
+           subscription.stripe_subscription_id
+         from ss.transactional_outbox outbox
+         join ss.subscription_cancellation_acceptances
+           acceptance
+           on acceptance.organization_id =
+                outbox.organization_id
+          and acceptance.subscription_id =
+                outbox.aggregate_id
+          and acceptance.preview_id =
+                (outbox.payload ->> 'previewId')::uuid
+         join ss.subscription_cancellation_previews preview
+           on preview.organization_id =
+                acceptance.organization_id
+          and preview.id = acceptance.preview_id
+         join ss.stripe_subscriptions subscription
+           on subscription.organization_id =
+                acceptance.organization_id
+          and subscription.id =
+                acceptance.subscription_id
+        where outbox.event_type =
+                'subscription.cancellation_requested'
+          and outbox.published_at is null
+          and outbox.available_at <= $1
+          and (
+            outbox.locked_at is null
+            or outbox.locked_at <
+              $1::timestamptz - interval '5 minutes'
+          )
+        order by outbox.available_at, outbox.id
+        for update of outbox skip locked
+        limit 1`,
+        [now(clock)]
+      );
+      if (selected.rowCount === 0) return null;
+      const row = selected.rows[0];
+      await client.query(
+        `update ss.transactional_outbox
+            set locked_at = $2,
+                locked_by = $3,
+                attempt_count = attempt_count + 1
+          where id = $1`,
+        [row.id, now(clock), workerId]
+      );
+      return {
+        ...row,
+        locked_by: workerId
+      };
+    });
+  }
+
+  async function releaseCancellationDispatch(
+    dispatch,
+    error
+  ) {
+    const certainty = providerEffectCertainty(error);
+    const code = providerErrorCode(error);
+    await authority.service({}, (client) =>
+      client.query(
+        `update ss.transactional_outbox
+            set locked_at = null,
+                locked_by = null,
+                last_error = $3,
+                available_at =
+                  $4::timestamptz + interval '5 minutes'
+          where id = $1
+            and locked_by = $2
+            and published_at is null`,
+        [
+          dispatch.id,
+          dispatch.locked_by,
+          `${certainty}:${code}`,
+          now(clock)
+        ]
+      )
+    );
+    return { certainty, code };
+  }
+
+  async function finishCancellationDispatch(
+    dispatch,
+    providerResult
+  ) {
+    const subscriptionId = providerIdentifier(
+      providerResult?.subscriptionId,
+      "sub",
+      "Stripe Subscription ID"
+    );
+    invariant(
+      subscriptionId ===
+          dispatch.stripe_subscription_id &&
+        providerResult.cancelAtPeriodEnd === true &&
+        Number.isFinite(
+          Date.parse(providerResult.effectiveAt)
+        ) &&
+        iso(providerResult.effectiveAt) ===
+          iso(dispatch.effective_at),
+      "CANCELLATION_PROVIDER_RESPONSE_INVALID",
+      "The payment provider did not schedule the exact accepted cancellation.",
+      { status: 502 }
+    );
+    const occurredAt = now(clock);
+    return authority.service({}, async (client) => {
+      const current = await client.query(
+        `select *
+           from ss.transactional_outbox
+          where id = $1
+          for update`,
+        [dispatch.id]
+      );
+      const row = current.rows[0];
+      if (row?.published_at) {
+        return {
+          status: "scheduled",
+          effectiveAt: iso(dispatch.effective_at)
+        };
+      }
+      invariant(
+        row && row.locked_by === dispatch.locked_by,
+        "CANCELLATION_RECONCILIATION_REQUIRED",
+        "The cancellation dispatch lease changed before it could be committed.",
+        { status: 503 }
+      );
+      const facts = {
+        schema:
+          "sitesourcery.subscription-cancellation/v1",
+        subscriptionId,
+        previewId:
+          dispatch.payload.previewId,
+        cancellationDigest:
+          dispatch.accepted_disclosure_digest,
+        cancelAtPeriodEnd: true,
+        effectiveAt: iso(dispatch.effective_at),
+        retentionEndsAt:
+          iso(dispatch.retention_ends_at)
+      };
+      await client.query(
+        `insert into ss.provider_receipts (
+           id, organization_id, project_id, provider_code,
+           receipt_kind, external_object_ref,
+           facts, facts_digest, occurred_at
+         ) values (
+           $1, $2, $3, 'stripe',
+           'subscription_cancellation_scheduled',
+           $4, $5::jsonb, $6, $7
+         )
+         on conflict (
+           provider_code, receipt_kind,
+           external_object_ref
+         ) do nothing`,
+        [
+          randomUUID(),
+          dispatch.organization_id,
+          dispatch.project_id,
+          `${subscriptionId}:${dispatch.accepted_disclosure_digest}`,
+          JSON.stringify(facts),
+          digest(facts),
+          occurredAt
+        ]
+      );
+      await client.query(
+        `update ss.stripe_subscriptions
+            set cancelled_at = $4,
+                retention_ends_at = $5
+          where organization_id = $1
+            and project_id = $2
+            and id = $3`,
+        [
+          dispatch.organization_id,
+          dispatch.project_id,
+          dispatch.aggregate_id,
+          iso(dispatch.effective_at),
+          iso(dispatch.retention_ends_at)
+        ]
+      );
+      await client.query(
+        `update ss.transactional_outbox
+            set published_at = $3,
+                locked_at = null,
+                locked_by = null,
+                last_error = null
+          where id = $1
+            and locked_by = $2`,
+        [dispatch.id, dispatch.locked_by, occurredAt]
+      );
+      await client.query(
+        `select ss.write_audit_event(
+           $1, $2, 'provider', 'stripe', $3,
+           'stripe_subscription', $4, null, $5::jsonb
+         )`,
+        [
+          dispatch.organization_id,
+          dispatch.project_id,
+          "subscription.cancellation_scheduled",
+          dispatch.aggregate_id,
+          JSON.stringify({
+            previewId:
+              dispatch.payload.previewId,
+            effectiveAt:
+              iso(dispatch.effective_at),
+            cancellationDigest:
+              dispatch.accepted_disclosure_digest
+          })
+        ]
+      );
+      return {
+        status: "scheduled",
+        effectiveAt: iso(dispatch.effective_at)
+      };
+    });
+  }
+
+  async function cancellationStatus(
+    actor,
+    projectId,
+    previewId
+  ) {
+    const scope = await projectScope(actor, projectId);
+    return authority.service(
+      {
+        userId: actor.userId,
+        organizationId: scope.organizationId,
+        readOnly: true
+      },
+      async (client) => {
+        await membership(
+          client,
+          actor,
+          scope.organizationId,
+          BILLING_ROLES
+        );
+        const result = await client.query(
+          `select
+             outbox.published_at,
+             outbox.last_error,
+             preview.effective_at,
+             preview.retention_ends_at
+           from ss.subscription_cancellation_acceptances
+             acceptance
+           join ss.subscription_cancellation_previews preview
+             on preview.organization_id =
+                  acceptance.organization_id
+            and preview.id = acceptance.preview_id
+           join ss.transactional_outbox outbox
+             on outbox.organization_id =
+                  acceptance.organization_id
+            and outbox.aggregate_id =
+                  acceptance.subscription_id
+            and outbox.event_type =
+                  'subscription.cancellation_requested'
+            and outbox.payload ->> 'previewId' =
+                  acceptance.preview_id::text
+          where acceptance.organization_id = $1
+            and acceptance.project_id = $2
+            and acceptance.preview_id = $3`,
+          [
+            scope.organizationId,
+            scope.projectId,
+            previewId
+          ]
+        );
+        const row = result.rows[0];
+        invariant(
+          row,
+          "CANCELLATION_PREVIEW_NOT_FOUND",
+          "The accepted cancellation could not be found.",
+          { status: 404 }
+        );
+        let providerStatus = "held_for_dispatch";
+        if (row.published_at) {
+          providerStatus = "scheduled";
+        } else if (
+          String(row.last_error ?? "").startsWith(
+            "ambiguous:"
+          )
+        ) {
+          providerStatus =
+            "reconciliation_required";
+        } else if (row.last_error) {
+          providerStatus = "retry_queued";
+        }
+        return {
+          providerStatus,
+          effectiveAt: iso(row.effective_at),
+          retentionEndsAt:
+            iso(row.retention_ends_at)
+        };
+      }
+    );
+  }
+
+  function stripeObjectId(value, prefix, field) {
+    return providerIdentifier(value, prefix, field);
+  }
+
+  function stripeEventTime(event) {
+    return stripeTimestamp(
+      event.created,
+      "Stripe event timestamp"
+    );
+  }
+
+  function stripeCurrency(value) {
+    const selected = String(value ?? "").toUpperCase();
+    invariant(
+      /^[A-Z]{3}$/u.test(selected),
+      "STRIPE_WEBHOOK_EVENT_INVALID",
+      "Stripe currency is invalid.",
+      { status: 400 }
+    );
+    return selected;
+  }
+
+  function invoiceSubscriptionId(object) {
+    const value =
+      typeof object?.subscription === "string"
+        ? object.subscription
+        : object?.parent?.subscription_details
+              ?.subscription;
+    return stripeObjectId(
+      value,
+      "sub",
+      "Stripe Subscription ID"
+    );
+  }
+
+  async function writeStripeReceipt(
+    client,
+    {
+      event,
+      eventRowId,
+      organizationId,
+      projectId,
+      objectId,
+      receiptKind,
+      facts,
+      amountMinor = null,
+      currency = null
+    }
+  ) {
+    const providerReceiptId = randomUUID();
+    const occurredAt = stripeEventTime(event);
+    const externalObjectRef = `${objectId}:${event.id}`;
+    await client.query(
+      `insert into ss.provider_receipts (
+         id, organization_id, project_id, provider_code,
+         receipt_kind, external_object_ref,
+         source_event_ref, facts, facts_digest,
+         occurred_at
+       ) values (
+         $1, $2, $3, 'stripe', $4, $5, $6,
+         $7::jsonb, $8, $9
+       )`,
+      [
+        providerReceiptId,
+        organizationId,
+        projectId,
+        receiptKind,
+        externalObjectRef,
+        event.id,
+        JSON.stringify(facts),
+        digest(facts),
+        occurredAt
+      ]
+    );
+    let stripeReceiptId = null;
+    const stripeKinds = new Set([
+      "checkout_completed",
+      "subscription_created",
+      "subscription_updated",
+      "invoice_paid",
+      "invoice_failed",
+      "subscription_cancelled",
+      "refund"
+    ]);
+    if (stripeKinds.has(receiptKind)) {
+      stripeReceiptId = randomUUID();
+      await client.query(
+        `insert into ss.stripe_receipts (
+           id, organization_id, project_id,
+           provider_receipt_id, stripe_event_row_id,
+           stripe_object_id, receipt_kind, currency,
+           amount_minor, occurred_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+         )`,
+        [
+          stripeReceiptId,
+          organizationId,
+          projectId,
+          providerReceiptId,
+          eventRowId,
+          objectId,
+          receiptKind,
+          currency,
+          amountMinor,
+          occurredAt
+        ]
+      );
+    }
+    return {
+      providerReceiptId,
+      stripeReceiptId,
+      occurredAt
+    };
+  }
+
+  async function exactStripeCustomer(
+    client,
+    organizationId,
+    stripeCustomerId,
+    providerReceiptId = null
+  ) {
+    const selected = stripeObjectId(
+      stripeCustomerId,
+      "cus",
+      "Stripe Customer ID"
+    );
+    const existing = await client.query(
+      `select *
+         from ss.stripe_customers
+        where organization_id = $1
+        for update`,
+      [organizationId]
+    );
+    if (existing.rows[0]) {
+      invariant(
+        existing.rows[0].stripe_customer_id ===
+          selected,
+        "STRIPE_TENANT_BINDING_INVALID",
+        "The Stripe Customer does not match this organization.",
+        { status: 409 }
+      );
+      return existing.rows[0];
+    }
+    const id = randomUUID();
+    const inserted = await client.query(
+      `insert into ss.stripe_customers (
+         id, organization_id, stripe_customer_id,
+         created_from_receipt_id
+       ) values ($1, $2, $3, $4)
+       returning *`,
+      [
+        id,
+        organizationId,
+        selected,
+        providerReceiptId
+      ]
+    );
+    return inserted.rows[0];
+  }
+
+  function validateCheckoutMetadata(
+    object,
+    checkout
+  ) {
+    const metadata = object.metadata;
+    invariant(
+      metadata &&
+        metadata.schema ===
+          "sitesourcery_checkout_v1" &&
+        metadata.tenant_id ===
+          checkout.organization_id &&
+        metadata.customer_id ===
+          checkout.created_by_user_id &&
+        metadata.project_id === checkout.project_id &&
+        metadata.quote_id === checkout.quote_id &&
+        metadata.catalog_version ===
+          checkout.catalog_version &&
+        metadata.offer_id === checkout.offer_key &&
+        metadata.disclosure_digest ===
+          checkout.disclosure_digest &&
+        metadata.purpose_digest ===
+          checkout.purpose_digest &&
+        object.client_reference_id ===
+          checkout.quote_id,
+      "STRIPE_TENANT_BINDING_INVALID",
+      "The signed Checkout event does not match its exact server purpose.",
+      { status: 409 }
+    );
+  }
+
+  async function applyCheckoutCompleted(
+    client,
+    eventRowId,
+    event
+  ) {
+    const object = event.data.object;
+    const checkoutSessionId = stripeObjectId(
+      object.id,
+      "cs",
+      "Stripe Checkout Session ID"
+    );
+    const result = await client.query(
+      `select
+         checkout.*,
+         binding.quote_id,
+         quote.offer_key,
+         quote.catalog_version,
+         quote.tenure_id,
+         quote.disclosure_digest,
+         project.billing_policy_id
+       from ss.checkout_intents checkout
+       join ss.checkout_quote_bindings binding
+         on binding.organization_id =
+              checkout.organization_id
+        and binding.checkout_intent_id = checkout.id
+       join ss.commerce_quotes quote
+         on quote.organization_id = binding.organization_id
+        and quote.id = binding.quote_id
+       join ss.projects project
+         on project.organization_id =
+              checkout.organization_id
+        and project.id = checkout.project_id
+      where checkout.stripe_checkout_session_id = $1
+      for update of checkout`,
+      [checkoutSessionId]
+    );
+    invariant(
+      result.rowCount === 1,
+      "STRIPE_CHECKOUT_NOT_FOUND",
+      "The signed Checkout event does not match a staged Checkout Session.",
+      { status: 409 }
+    );
+    const checkout = result.rows[0];
+    validateCheckoutMetadata(object, checkout);
+    invariant(
+      object.payment_status === "paid" &&
+        Number.isSafeInteger(object.amount_total) &&
+        object.amount_total ===
+          Number(checkout.amount_minor) &&
+        stripeCurrency(object.currency) ===
+          checkout.currency,
+      "STRIPE_CHECKOUT_PAYMENT_INVALID",
+      "Checkout completion does not contain exact paid amount evidence.",
+      { status: 409 }
+    );
+    const lines = await client.query(
+      `select quote_line.*
+         from ss.checkout_intent_price_lines checkout_line
+         join ss.commerce_quote_price_lines quote_line
+           on quote_line.organization_id =
+                checkout_line.organization_id
+          and quote_line.id =
+                checkout_line.quote_price_line_id
+        where checkout_line.organization_id = $1
+          and checkout_line.project_id = $2
+          and checkout_line.checkout_intent_id = $3
+        order by quote_line.position`,
+      [
+        checkout.organization_id,
+        checkout.project_id,
+        checkout.id
+      ]
+    );
+    invariant(
+      lines.rowCount > 0 &&
+        lines.rows.every(
+          (line) =>
+            line.source_kind ===
+            "abracadabra_product"
+        ),
+      "STRIPE_CHECKOUT_PAYMENT_INVALID",
+      "Checkout settlement contains unsupported price lines.",
+      { status: 409 }
+    );
+    const receipt = await writeStripeReceipt(client, {
+      event,
+      eventRowId,
+      organizationId: checkout.organization_id,
+      projectId: checkout.project_id,
+      objectId: checkoutSessionId,
+      receiptKind: "checkout_completed",
+      amountMinor: Number(object.amount_total),
+      currency: checkout.currency,
+      facts: {
+        schema:
+          "sitesourcery.stripe-checkout-receipt/v1",
+        checkoutIntentId: checkout.id,
+        checkoutSessionId,
+        quoteId: checkout.quote_id,
+        purposeDigest: checkout.purpose_digest,
+        paymentStatus: object.payment_status,
+        amountMinor: Number(object.amount_total),
+        currency: checkout.currency,
+        stripeCustomerId: object.customer,
+        stripeSubscriptionId:
+          object.subscription ?? null,
+        stripePaymentIntentId:
+          object.payment_intent ?? null,
+        stripeInvoiceId: object.invoice ?? null
+      }
+    });
+    const customer = await exactStripeCustomer(
+      client,
+      checkout.organization_id,
+      object.customer,
+      receipt.providerReceiptId
+    );
+    const recurring = lines.rows.filter(
+      (line) =>
+        line.billing_cadence === "month" ||
+        line.billing_cadence === "year"
+    );
+    invariant(
+      recurring.length <= 1,
+      "STRIPE_CHECKOUT_PAYMENT_INVALID",
+      "Checkout has an unsupported recurring price shape.",
+      { status: 409 }
+    );
+    if (recurring.length === 1) {
+      const subscriptionId = stripeObjectId(
+        object.subscription,
+        "sub",
+        "Stripe Subscription ID"
+      );
+      const existing = await client.query(
+        `select *
+           from ss.stripe_subscriptions
+          where project_id = $1
+          for update`,
+        [checkout.project_id]
+      );
+      if (existing.rows[0]) {
+        invariant(
+          existing.rows[0].organization_id ===
+              checkout.organization_id &&
+            existing.rows[0]
+                .stripe_subscription_id ===
+              subscriptionId,
+          "STRIPE_TENANT_BINDING_INVALID",
+          "The Stripe Subscription conflicts with this project.",
+          { status: 409 }
+        );
+      } else {
+        await client.query(
+          `insert into ss.stripe_subscriptions (
+             id, organization_id, project_id,
+             stripe_customer_row_id,
+             stripe_subscription_id, stripe_price_id,
+             catalog_price_id, billing_policy_id, status,
+             currency, amount_minor
+           ) values (
+             $1, $2, $3, $4, $5, $6, $7, $8,
+             'pending', $9, $10
+           )`,
+          [
+            randomUUID(),
+            checkout.organization_id,
+            checkout.project_id,
+            customer.id,
+            subscriptionId,
+            recurring[0].stripe_price_ref,
+            recurring[0]
+              .catalog_offer_price_line_id
+              ? (
+                  await client.query(
+                    `select catalog_price_id
+                       from ss.catalog_offer_price_lines
+                      where id = $1`,
+                    [
+                      recurring[0]
+                        .catalog_offer_price_line_id
+                    ]
+                  )
+                ).rows[0].catalog_price_id
+              : checkout.catalog_price_id,
+            checkout.billing_policy_id,
+            recurring[0].currency,
+            Number(recurring[0].amount_minor)
+          ]
+        );
+      }
+    }
+    const oneTime = lines.rows.filter(
+      (line) => line.billing_cadence === "one_time"
+    );
+    if (oneTime.length > 0) {
+      invariant(
+        oneTime.length === 1 &&
+          (
+            checkout.tenure_id === "own" ||
+            checkout.tenure_id ===
+              "owned_managed"
+          ),
+        "STRIPE_CHECKOUT_PAYMENT_INVALID",
+        "Checkout has an unsupported ownership price shape.",
+        { status: 409 }
+      );
+      const paymentIntentId = object.payment_intent
+        ? stripeObjectId(
+            object.payment_intent,
+            "pi",
+            "Stripe PaymentIntent ID"
+          )
+        : null;
+      const invoiceId = object.invoice
+        ? stripeObjectId(
+            object.invoice,
+            "in",
+            "Stripe Invoice ID"
+          )
+        : null;
+      invariant(
+        paymentIntentId || invoiceId,
+        "STRIPE_CHECKOUT_PAYMENT_INVALID",
+        "A paid ownership Checkout requires PaymentIntent or Invoice evidence.",
+        { status: 409 }
+      );
+      const price = await client.query(
+        `select catalog_price_id
+           from ss.catalog_offer_price_lines
+          where id = $1`,
+        [
+          oneTime[0]
+            .catalog_offer_price_line_id
+        ]
+      );
+      const entitlementId = randomUUID();
+      await client.query(
+        `insert into ss.site_ownership_entitlements (
+           id, organization_id, project_id,
+           checkout_intent_id, catalog_price_id,
+           provider_receipt_id,
+           stripe_payment_intent_id, stripe_invoice_id,
+           currency, amount_minor, state, completed_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, $8,
+           $9, $10, 'completed', $11
+         )
+         on conflict (checkout_intent_id) do nothing`,
+        [
+          entitlementId,
+          checkout.organization_id,
+          checkout.project_id,
+          checkout.id,
+          price.rows[0].catalog_price_id,
+          receipt.providerReceiptId,
+          paymentIntentId,
+          invoiceId,
+          oneTime[0].currency,
+          Number(oneTime[0].amount_minor),
+          receipt.occurredAt
+        ]
+      );
+      const entitlement = await client.query(
+        `select id
+           from ss.site_ownership_entitlements
+          where checkout_intent_id = $1`,
+        [checkout.id]
+      );
+      await client.query(
+        `insert into ss.site_ownership_entitlement_events (
+           id, organization_id, project_id,
+           entitlement_id, provider_receipt_id,
+           state, occurred_at
+         ) values (
+           $1, $2, $3, $4, $5, 'completed', $6
+         )
+         on conflict (
+           entitlement_id, provider_receipt_id, state
+         ) do nothing`,
+        [
+          randomUUID(),
+          checkout.organization_id,
+          checkout.project_id,
+          entitlement.rows[0].id,
+          receipt.providerReceiptId,
+          receipt.occurredAt
+        ]
+      );
+    }
+    await client.query(
+      `update ss.checkout_intents
+          set state = 'completed'
+        where id = $1
+          and state in ('open', 'completed')`,
+      [checkout.id]
+    );
+    await client.query(
+      `select ss.write_audit_event(
+         $1, $2, 'provider', 'stripe', $3,
+         'checkout_intent', $4, null, $5::jsonb
+       )`,
+      [
+        checkout.organization_id,
+        checkout.project_id,
+        "commerce.checkout.paid",
+        checkout.id,
+        JSON.stringify({
+          checkoutSessionId,
+          quoteId: checkout.quote_id,
+          purposeDigest: checkout.purpose_digest
+        })
+      ]
+    );
+    return {
+      status: "processed",
+      organizationId: checkout.organization_id,
+      projectId: checkout.project_id
+    };
+  }
+
+  function subscriptionState(eventType, object) {
+    if (
+      eventType === "customer.subscription.deleted" ||
+      object.status === "canceled" ||
+      object.status === "incomplete_expired"
+    ) {
+      return "cancelled";
+    }
+    if (object.status === "active") return "active";
+    if (object.status === "past_due") return "grace";
+    if (
+      object.status === "unpaid" ||
+      object.status === "paused"
+    ) {
+      return "suspended";
+    }
+    if (object.status === "incomplete") return "pending";
+    invariant(
+      object.status !== "trialing",
+      "STRIPE_SUBSCRIPTION_INVALID",
+      "The approved offer has no free trial.",
+      { status: 409 }
+    );
+    invariant(
+      false,
+      "STRIPE_SUBSCRIPTION_INVALID",
+      "Stripe Subscription status is unsupported.",
+      { status: 409 }
+    );
+  }
+
+  async function resolveStripeSubscription(
+    client,
+    object
+  ) {
+    const subscriptionId = stripeObjectId(
+      object.id,
+      "sub",
+      "Stripe Subscription ID"
+    );
+    const existing = await client.query(
+      `select
+         subscription.*,
+         customer.stripe_customer_id,
+         extract(
+           epoch from policy.grace_period
+         )::bigint as grace_seconds,
+         extract(
+           epoch from policy.retention_period
+         )::bigint as retention_seconds
+       from ss.stripe_subscriptions subscription
+       join ss.stripe_customers customer
+         on customer.organization_id =
+              subscription.organization_id
+        and customer.id =
+              subscription.stripe_customer_row_id
+       join ss.billing_policies policy
+         on policy.id =
+              subscription.billing_policy_id
+      where subscription.stripe_subscription_id = $1
+      for update of subscription, customer`,
+      [subscriptionId]
+    );
+    if (existing.rows[0]) return existing.rows[0];
+
+    const metadata = object.metadata;
+    invariant(
+      metadata &&
+        metadata.schema ===
+          "sitesourcery_checkout_v1" &&
+        UUID.test(String(metadata.tenant_id ?? "")) &&
+        UUID.test(String(metadata.project_id ?? "")) &&
+        /^[a-f0-9]{64}$/u.test(
+          String(metadata.purpose_digest ?? "")
+        ),
+      "STRIPE_TENANT_BINDING_INVALID",
+      "The Stripe Subscription is missing its exact Checkout binding.",
+      { status: 409 }
+    );
+    const staged = await client.query(
+      `select
+         checkout.organization_id,
+         checkout.project_id,
+         checkout.purpose_digest,
+         checkout.created_by_user_id,
+         quote.offer_key,
+         line.stripe_price_ref,
+         line.currency,
+         line.amount_minor,
+         offer_line.catalog_price_id,
+         project.billing_policy_id,
+         extract(
+           epoch from policy.grace_period
+         )::bigint as grace_seconds,
+         extract(
+           epoch from policy.retention_period
+         )::bigint as retention_seconds
+       from ss.checkout_intents checkout
+       join ss.checkout_quote_bindings binding
+         on binding.organization_id =
+              checkout.organization_id
+        and binding.checkout_intent_id = checkout.id
+       join ss.commerce_quotes quote
+         on quote.organization_id =
+              binding.organization_id
+        and quote.id = binding.quote_id
+       join ss.checkout_intent_price_lines checkout_line
+         on checkout_line.organization_id =
+              checkout.organization_id
+        and checkout_line.checkout_intent_id =
+              checkout.id
+       join ss.commerce_quote_price_lines line
+         on line.organization_id =
+              checkout_line.organization_id
+        and line.id =
+              checkout_line.quote_price_line_id
+        and line.billing_cadence in ('month', 'year')
+       join ss.catalog_offer_price_lines offer_line
+         on offer_line.id =
+              line.catalog_offer_price_line_id
+       join ss.projects project
+         on project.organization_id =
+              checkout.organization_id
+        and project.id = checkout.project_id
+       join ss.billing_policies policy
+         on policy.id = project.billing_policy_id
+      where checkout.organization_id = $1
+        and checkout.project_id = $2
+        and checkout.purpose_digest = $3
+        and checkout.state in ('open', 'completed')
+      for update of checkout`,
+      [
+        metadata.tenant_id,
+        metadata.project_id,
+        metadata.purpose_digest
+      ]
+    );
+    invariant(
+      staged.rowCount === 1 &&
+        metadata.customer_id ===
+          staged.rows[0].created_by_user_id,
+      "STRIPE_TENANT_BINDING_INVALID",
+      "The Stripe Subscription does not match one exact staged Checkout.",
+      { status: 409 }
+    );
+    const row = staged.rows[0];
+    const customer = await exactStripeCustomer(
+      client,
+      row.organization_id,
+      object.customer
+    );
+    const id = randomUUID();
+    const inserted = await client.query(
+      `insert into ss.stripe_subscriptions (
+         id, organization_id, project_id,
+         stripe_customer_row_id, stripe_subscription_id,
+         stripe_price_id, catalog_price_id,
+         billing_policy_id, status, currency,
+         amount_minor
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         'pending', $9, $10
+       )
+       returning *`,
+      [
+        id,
+        row.organization_id,
+        row.project_id,
+        customer.id,
+        subscriptionId,
+        row.stripe_price_ref,
+        row.catalog_price_id,
+        row.billing_policy_id,
+        row.currency,
+        Number(row.amount_minor)
+      ]
+    );
+    return {
+      ...inserted.rows[0],
+      stripe_customer_id: customer.stripe_customer_id,
+      grace_seconds: row.grace_seconds,
+      retention_seconds: row.retention_seconds
+    };
+  }
+
+  async function applySubscriptionEvent(
+    client,
+    eventRowId,
+    event
+  ) {
+    const object = event.data.object;
+    const row = await resolveStripeSubscription(
+      client,
+      object
+    );
+    invariant(
+      object.customer === row.stripe_customer_id,
+      "STRIPE_TENANT_BINDING_INVALID",
+      "The Stripe Subscription Customer does not match its organization.",
+      { status: 409 }
+    );
+    const items = object.items?.data;
+    invariant(
+      Array.isArray(items) && items.length === 1,
+      "STRIPE_SUBSCRIPTION_INVALID",
+      "The Stripe Subscription must contain one exact recurring price.",
+      { status: 409 }
+    );
+    const itemPrice = items[0]?.price;
+    invariant(
+      itemPrice?.id === row.stripe_price_id &&
+        Number(itemPrice.unit_amount) ===
+          Number(row.amount_minor) &&
+        stripeCurrency(itemPrice.currency) ===
+          row.currency,
+      "STRIPE_SUBSCRIPTION_INVALID",
+      "The Stripe Subscription price does not match the approved server price.",
+      { status: 409 }
+    );
+    const state = subscriptionState(
+      event.type,
+      object
+    );
+    const occurredAt = stripeEventTime(event);
+    const periodSeconds =
+      object.current_period_end ??
+      items[0].current_period_end;
+    const currentPeriodEndsAt =
+      Number.isSafeInteger(periodSeconds) &&
+      periodSeconds > 0
+        ? new Date(periodSeconds * 1000).toISOString()
+        : null;
+    invariant(
+      state === "cancelled" ||
+        state === "suspended" ||
+        state === "pending" ||
+        currentPeriodEndsAt,
+      "STRIPE_SUBSCRIPTION_INVALID",
+      "The Stripe Subscription period end is missing.",
+      { status: 409 }
+    );
+    const receiptKind =
+      event.type === "customer.subscription.created"
+        ? "subscription_created"
+        : state === "cancelled"
+          ? "subscription_cancelled"
+          : "subscription_updated";
+    const receipt = await writeStripeReceipt(client, {
+      event,
+      eventRowId,
+      organizationId: row.organization_id,
+      projectId: row.project_id,
+      objectId: object.id,
+      receiptKind,
+      amountMinor: Number(row.amount_minor),
+      currency: row.currency,
+      facts: {
+        schema:
+          "sitesourcery.stripe-subscription-receipt/v1",
+        subscriptionId: object.id,
+        customerId: object.customer,
+        stripeStatus: object.status,
+        localState: state,
+        priceId: row.stripe_price_id,
+        amountMinor: Number(row.amount_minor),
+        currency: row.currency,
+        currentPeriodEndsAt
+      }
+    });
+    const graceEndsAt =
+      state === "grace"
+        ? new Date(
+            Date.parse(occurredAt) +
+              Number(row.grace_seconds) * 1000
+          ).toISOString()
+        : null;
+    const retentionEndsAt =
+      state === "cancelled" ||
+      state === "suspended"
+        ? new Date(
+            Date.parse(occurredAt) +
+              Number(row.retention_seconds) * 1000
+          ).toISOString()
+        : null;
+    await client.query(
+      `update ss.stripe_subscriptions
+          set status = $4,
+              current_period_ends_at =
+                coalesce($5, current_period_ends_at),
+              first_failed_at = case
+                when $4 = 'grace'
+                  then coalesce(first_failed_at, $6)
+                when $4 = 'active' then null
+                else first_failed_at
+              end,
+              grace_ends_at = case
+                when $4 = 'grace' then $7
+                when $4 = 'active' then null
+                else grace_ends_at
+              end,
+              suspended_at = case
+                when $4 = 'suspended'
+                  then coalesce(suspended_at, $6)
+                when $4 = 'active' then null
+                else suspended_at
+              end,
+              cancelled_at = case
+                when $4 = 'cancelled'
+                  then coalesce(cancelled_at, $6)
+                else cancelled_at
+              end,
+              retention_ends_at = case
+                when $4 in ('cancelled', 'suspended')
+                  then coalesce(retention_ends_at, $8)
+                when $4 = 'active' then null
+                else retention_ends_at
+              end
+        where organization_id = $1
+          and project_id = $2
+          and id = $3`,
+      [
+        row.organization_id,
+        row.project_id,
+        row.id,
+        state,
+        currentPeriodEndsAt,
+        occurredAt,
+        graceEndsAt,
+        retentionEndsAt
+      ]
+    );
+    await client.query(
+      `insert into ss.subscription_state_events (
+         id, organization_id, project_id,
+         subscription_id, state, stripe_receipt_id,
+         occurred_at
+       ) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        randomUUID(),
+        row.organization_id,
+        row.project_id,
+        row.id,
+        state,
+        receipt.stripeReceiptId,
+        occurredAt
+      ]
+    );
+    return {
+      status: "processed",
+      organizationId: row.organization_id,
+      projectId: row.project_id
+    };
+  }
+
+  async function applyInvoiceEvent(
+    client,
+    eventRowId,
+    event
+  ) {
+    const object = event.data.object;
+    const subscriptionId =
+      invoiceSubscriptionId(object);
+    const result = await client.query(
+      `select
+         subscription.*,
+         customer.stripe_customer_id,
+         extract(
+           epoch from policy.grace_period
+         )::bigint as grace_seconds
+       from ss.stripe_subscriptions subscription
+       join ss.stripe_customers customer
+         on customer.organization_id =
+              subscription.organization_id
+        and customer.id =
+              subscription.stripe_customer_row_id
+       join ss.billing_policies policy
+         on policy.id =
+              subscription.billing_policy_id
+      where subscription.stripe_subscription_id = $1
+      for update of subscription`,
+      [subscriptionId]
+    );
+    invariant(
+      result.rowCount === 1,
+      "STRIPE_SUBSCRIPTION_NOT_FOUND",
+      "The Stripe Invoice does not match a known subscription.",
+      { status: 409 }
+    );
+    const row = result.rows[0];
+    invariant(
+      object.customer === row.stripe_customer_id,
+      "STRIPE_TENANT_BINDING_INVALID",
+      "The Stripe Invoice Customer does not match its organization.",
+      { status: 409 }
+    );
+    const paid = event.type === "invoice.paid";
+    const amountMinor = paid
+      ? object.amount_paid
+      : object.amount_due;
+    invariant(
+      Number.isSafeInteger(amountMinor) &&
+        amountMinor >= 0 &&
+        stripeCurrency(object.currency) ===
+          row.currency,
+      "STRIPE_INVOICE_INVALID",
+      "The Stripe Invoice amount is invalid.",
+      { status: 409 }
+    );
+    const occurredAt = stripeEventTime(event);
+    const receipt = await writeStripeReceipt(client, {
+      event,
+      eventRowId,
+      organizationId: row.organization_id,
+      projectId: row.project_id,
+      objectId: stripeObjectId(
+        object.id,
+        "in",
+        "Stripe Invoice ID"
+      ),
+      receiptKind: paid
+        ? "invoice_paid"
+        : "invoice_failed",
+      amountMinor,
+      currency: row.currency,
+      facts: {
+        schema:
+          "sitesourcery.stripe-invoice-receipt/v1",
+        invoiceId: object.id,
+        subscriptionId,
+        customerId: object.customer,
+        paid,
+        amountMinor,
+        currency: row.currency
+      }
+    });
+    const state = paid ? "active" : "grace";
+    const graceEndsAt = paid
+      ? null
+      : new Date(
+          Date.parse(occurredAt) +
+            Number(row.grace_seconds) * 1000
+        ).toISOString();
+    const periods = Array.isArray(object.lines?.data)
+      ? object.lines.data
+          .map((line) => line?.period?.end)
+          .filter(
+            (value) =>
+              Number.isSafeInteger(value) && value > 0
+          )
+      : [];
+    const periodEnd =
+      periods.length > 0
+        ? new Date(Math.max(...periods) * 1000)
+            .toISOString()
+        : null;
+    await client.query(
+      `update ss.stripe_subscriptions
+          set status = $4,
+              current_period_ends_at =
+                coalesce($5, current_period_ends_at),
+              first_failed_at = case
+                when $4 = 'grace'
+                  then coalesce(first_failed_at, $6)
+                else null
+              end,
+              grace_ends_at = $7,
+              suspended_at = case
+                when $4 = 'active' then null
+                else suspended_at
+              end,
+              retention_ends_at = case
+                when $4 = 'active' then null
+                else retention_ends_at
+              end
+        where organization_id = $1
+          and project_id = $2
+          and id = $3
+          and status not in ('cancelled', 'deleted')`,
+      [
+        row.organization_id,
+        row.project_id,
+        row.id,
+        state,
+        periodEnd,
+        occurredAt,
+        graceEndsAt
+      ]
+    );
+    const updated = await client.query(
+      `select status
+         from ss.stripe_subscriptions
+        where id = $1`,
+      [row.id]
+    );
+    invariant(
+      updated.rows[0].status === state,
+      "STRIPE_INVOICE_STATE_INVALID",
+      "The Stripe Invoice cannot reactivate a cancelled subscription.",
+      { status: 409 }
+    );
+    await client.query(
+      `insert into ss.subscription_state_events (
+         id, organization_id, project_id,
+         subscription_id, state, stripe_receipt_id,
+         occurred_at
+       ) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        randomUUID(),
+        row.organization_id,
+        row.project_id,
+        row.id,
+        state,
+        receipt.stripeReceiptId,
+        occurredAt
+      ]
+    );
+    return {
+      status: "processed",
+      organizationId: row.organization_id,
+      projectId: row.project_id
+    };
+  }
+
+  async function applyOwnershipReversal(
+    client,
+    eventRowId,
+    event
+  ) {
+    const object = event.data.object;
+    const dispute =
+      event.type === "charge.dispute.created";
+    const paymentIntentId = stripeObjectId(
+      object.payment_intent,
+      "pi",
+      "Stripe PaymentIntent ID"
+    );
+    const result = await client.query(
+      `select *
+         from ss.site_ownership_entitlements
+        where stripe_payment_intent_id = $1
+        for update`,
+      [paymentIntentId]
+    );
+    if (result.rowCount === 0) {
+      return { status: "ignored" };
+    }
+    const entitlement = result.rows[0];
+    const amountMinor = dispute
+      ? Number(entitlement.amount_minor)
+      : event.type === "charge.refunded"
+        ? object.amount_refunded
+        : object.amount;
+    invariant(
+      Number.isSafeInteger(amountMinor) &&
+        amountMinor > 0 &&
+        stripeCurrency(object.currency) ===
+          entitlement.currency,
+      "STRIPE_OWNERSHIP_REVERSAL_INVALID",
+      "The ownership reversal does not match the paid entitlement.",
+      { status: 409 }
+    );
+    const receiptKind = dispute
+      ? "ownership_disputed"
+      : "refund";
+    const objectId = dispute
+      ? stripeObjectId(
+          object.id,
+          "dp",
+          "Stripe Dispute ID"
+        )
+      : event.type === "charge.refunded"
+        ? stripeObjectId(
+            object.id,
+            "ch",
+            "Stripe Charge ID"
+          )
+        : stripeObjectId(
+            object.id,
+            "re",
+            "Stripe Refund ID"
+          );
+    const receipt = await writeStripeReceipt(client, {
+      event,
+      eventRowId,
+      organizationId: entitlement.organization_id,
+      projectId: entitlement.project_id,
+      objectId,
+      receiptKind,
+      amountMinor,
+      currency: entitlement.currency,
+      facts: {
+        schema:
+          "sitesourcery.ownership-reversal/v1",
+        entitlementId: entitlement.id,
+        paymentIntentId,
+        kind: dispute ? "dispute" : "refund",
+        amountMinor,
+        currency: entitlement.currency
+      }
+    });
+    const state = dispute ? "disputed" : "refunded";
+    await client.query(
+      `update ss.site_ownership_entitlements
+          set state = $4,
+              refunded_amount_minor = case
+                when $4 = 'refunded'
+                  then greatest(
+                    refunded_amount_minor,
+                    least(amount_minor, $5)
+                  )
+                else refunded_amount_minor
+              end,
+              refunded_at = case
+                when $4 = 'refunded' then $6
+                else refunded_at
+              end,
+              revoked_at = case
+                when $4 = 'disputed' then $6
+                else revoked_at
+              end
+        where organization_id = $1
+          and project_id = $2
+          and id = $3`,
+      [
+        entitlement.organization_id,
+        entitlement.project_id,
+        entitlement.id,
+        state,
+        amountMinor,
+        receipt.occurredAt
+      ]
+    );
+    await client.query(
+      `insert into ss.site_ownership_entitlement_events (
+         id, organization_id, project_id,
+         entitlement_id, provider_receipt_id,
+         state, occurred_at
+       ) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        randomUUID(),
+        entitlement.organization_id,
+        entitlement.project_id,
+        entitlement.id,
+        receipt.providerReceiptId,
+        state,
+        receipt.occurredAt
+      ]
+    );
+    return {
+      status: "processed",
+      organizationId: entitlement.organization_id,
+      projectId: entitlement.project_id
+    };
+  }
+
+  async function applyStripeEvent(
+    client,
+    eventRowId,
+    event
+  ) {
+    if (event.type === "checkout.session.completed") {
+      return applyCheckoutCompleted(
+        client,
+        eventRowId,
+        event
+      );
+    }
+    if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
+    ) {
+      return applySubscriptionEvent(
+        client,
+        eventRowId,
+        event
+      );
+    }
+    if (
+      event.type === "invoice.paid" ||
+      event.type === "invoice.payment_failed"
+    ) {
+      return applyInvoiceEvent(
+        client,
+        eventRowId,
+        event
+      );
+    }
+    if (
+      event.type === "charge.refunded" ||
+      event.type === "refund.created" ||
+      event.type === "charge.dispute.created"
+    ) {
+      return applyOwnershipReversal(
+        client,
+        eventRowId,
+        event
+      );
+    }
+    return { status: "ignored" };
+  }
+
+  async function persistStripeEvent(event) {
+    const payloadDigest = digest(event);
+    return authority.service({}, async (client) => {
+      const existing = await client.query(
+        `select event.*, processing.state
+           from ss.stripe_events event
+           join ss.stripe_event_processing processing
+             on processing.stripe_event_row_id = event.id
+          where event.stripe_event_id = $1`,
+        [event.id]
+      );
+      if (existing.rows[0]) {
+        invariant(
+          existing.rows[0].payload_digest ===
+              payloadDigest &&
+            existing.rows[0].event_type ===
+              event.type &&
+            existing.rows[0].livemode ===
+              event.livemode,
+          "STRIPE_EVENT_ID_CONFLICT",
+          "A Stripe event ID was reused with different signed content.",
+          { status: 409 }
+        );
+        return {
+          eventRowId: existing.rows[0].id,
+          state: existing.rows[0].state,
+          duplicate: true
+        };
+      }
+      const eventRowId = randomUUID();
+      await client.query(
+        `insert into ss.stripe_events (
+           id, stripe_event_id, event_type, livemode,
+           api_version, payload_digest, payload,
+           signature_verified_at, received_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $8
+         )`,
+        [
+          eventRowId,
+          event.id,
+          event.type,
+          event.livemode,
+          event.api_version ?? null,
+          payloadDigest,
+          JSON.stringify(event),
+          now(clock)
+        ]
+      );
+      await client.query(
+        `insert into ss.stripe_event_processing (
+           stripe_event_row_id, state
+         ) values ($1, 'received')`,
+        [eventRowId]
+      );
+      return {
+        eventRowId,
+        state: "received",
+        duplicate: false
+      };
+    });
+  }
+
+  async function processStripeEvent(
+    persisted,
+    event
+  ) {
+    try {
+      return await authority.service(
+        {},
+        async (client) => {
+          const processing = await client.query(
+            `select *
+               from ss.stripe_event_processing
+              where stripe_event_row_id = $1
+              for update`,
+            [persisted.eventRowId]
+          );
+          const state = processing.rows[0]?.state;
+          invariant(
+            state,
+            "STRIPE_EVENT_STORAGE_INVALID",
+            "Stripe event processing state is missing.",
+            { status: 500 }
+          );
+          if (
+            state === "processed" ||
+            state === "ignored"
+          ) {
+            return {
+              received: true,
+              duplicate: true,
+              eventId: event.id,
+              status: state
+            };
+          }
+          await client.query(
+            `update ss.stripe_event_processing
+                set state = 'processing',
+                    attempt_count = attempt_count + 1,
+                    locked_at = $2,
+                    locked_by = 'hosted-webhook',
+                    failure_code = null
+              where stripe_event_row_id = $1`,
+            [persisted.eventRowId, now(clock)]
+          );
+          const applied = await applyStripeEvent(
+            client,
+            persisted.eventRowId,
+            event
+          );
+          await client.query(
+            `update ss.stripe_event_processing
+                set state = $2,
+                    processed_at = $3,
+                    locked_at = null,
+                    locked_by = null,
+                    failure_code = null
+              where stripe_event_row_id = $1`,
+            [
+              persisted.eventRowId,
+              applied.status === "ignored"
+                ? "ignored"
+                : "processed",
+              now(clock)
+            ]
+          );
+          return {
+            received: true,
+            duplicate: persisted.duplicate,
+            eventId: event.id,
+            status:
+              applied.status === "ignored"
+                ? "ignored"
+                : "processed"
+          };
+        }
+      );
+    } catch (error) {
+      await authority.service({}, (client) =>
+        client.query(
+          `update ss.stripe_event_processing
+              set state = 'failed',
+                  locked_at = null,
+                  locked_by = null,
+                  failure_code = $2
+            where stripe_event_row_id = $1`,
+          [
+            persisted.eventRowId,
+            providerErrorCode(error)
+          ]
+        )
+      );
+      throw translatePostgres(error);
+    }
   }
 
   async function stagePublication(
@@ -1104,6 +4135,9 @@ export function createCanonicalPostgresService({
          screening.artifact_digest as screening_artifact_digest,
          subscription.status as subscription_status,
          subscription.grace_ends_at,
+         ownership.id as ownership_entitlement_id,
+         ownership.state as ownership_state,
+         ownership.completed_at as ownership_completed_at,
          address.kind as address_kind,
          address.state as address_state,
          address.serving_hostname
@@ -1124,9 +4158,13 @@ export function createCanonicalPostgresService({
        join ss.release_screenings screening
          on screening.organization_id = request.organization_id
         and screening.id = request.prepublication_screening_id
-       join ss.stripe_subscriptions subscription
+       left join ss.stripe_subscriptions subscription
          on subscription.organization_id = request.organization_id
         and subscription.project_id = request.project_id
+       left join ss.site_ownership_entitlements ownership
+         on ownership.organization_id = request.organization_id
+        and ownership.project_id = request.project_id
+        and ownership.state = 'completed'
        join ss.project_addresses address
          on address.organization_id = request.organization_id
         and address.id = request.address_id
@@ -1134,7 +4172,11 @@ export function createCanonicalPostgresService({
           and request.project_id = $2
           and request.id = $3
           and request.version_id = $4
-          and request.address_id = $5`,
+          and request.address_id = $5
+          and (
+            subscription.status in ('active', 'grace')
+            or ownership.id is not null
+          )`,
           [
             staged.organizationId,
             staged.projectId,
@@ -1185,12 +4227,30 @@ export function createCanonicalPostgresService({
               passed: row.screening_passed,
               artifactDigest: row.screening_artifact_digest
             },
-            subscription: {
-              organizationId: row.organization_id,
-              projectId: row.project_id,
-              status: row.subscription_status,
-              graceEndsAt: iso(row.grace_ends_at)
-            },
+            entitlement:
+              row.subscription_status === "active" ||
+              row.subscription_status === "grace"
+                ? {
+                    kind: "subscription",
+                    organizationId:
+                      row.organization_id,
+                    projectId: row.project_id,
+                    status:
+                      row.subscription_status,
+                    graceEndsAt:
+                      iso(row.grace_ends_at)
+                  }
+                : {
+                    kind: "ownership",
+                    id:
+                      row.ownership_entitlement_id,
+                    organizationId:
+                      row.organization_id,
+                    projectId: row.project_id,
+                    status: row.ownership_state,
+                    completedAt:
+                      iso(row.ownership_completed_at)
+                  },
             address: {
               id: row.address_id,
               organizationId: row.organization_id,
@@ -2786,12 +5846,270 @@ export function createCanonicalPostgresService({
       );
     },
 
-    async createCheckout() {
-      held("checkout");
+    async createCheckout(actor, projectId, input) {
+      requiredActor(actor);
+      const readiness =
+        await paymentProvider.readiness();
+      invariant(
+        readiness?.ready === true,
+        "CHECKOUT_UNAVAILABLE",
+        "Secure Checkout is held until the exact payment-provider configuration is ready.",
+        {
+          status: 503,
+          details: {
+            provider: readiness?.provider ?? "stripe",
+            mode: readiness?.mode ?? "held",
+            code:
+              readiness?.code ??
+              "PAYMENT_PROVIDER_NOT_READY",
+            providerEffect: false
+          }
+        }
+      );
+      const staged = await stageCheckout(
+        actor,
+        projectId,
+        input
+      );
+      if (staged.completed) return staged.response;
+      let result;
+      try {
+        result = await paymentProvider.createCheckout(
+          staged.providerRequest
+        );
+      } catch (error) {
+        await recordCheckoutFailure(staged, error);
+        throw providerUnavailable(
+          error,
+          "CHECKOUT",
+          staged.row.id
+        );
+      }
+      try {
+        return await finalizeCheckout(
+          actor,
+          staged,
+          result
+        );
+      } catch (error) {
+        const ambiguous = {
+          code:
+            error?.code ??
+            "CHECKOUT_LOCAL_COMMIT_UNKNOWN",
+          certainty: "ambiguous"
+        };
+        await recordCheckoutFailure(
+          staged,
+          ambiguous
+        );
+        throw providerUnavailable(
+          ambiguous,
+          "CHECKOUT",
+          staged.row.id
+        );
+      }
     },
 
-    async createBillingPortal() {
-      held("billing_portal");
+    async createBillingPortal(actor, projectId, input) {
+      requiredActor(actor);
+      const readiness =
+        await paymentProvider.readiness();
+      invariant(
+        readiness?.ready === true,
+        "BILLING_PORTAL_UNAVAILABLE",
+        "Billing management is held until the exact payment-provider configuration is ready.",
+        {
+          status: 503,
+          details: {
+            provider: readiness?.provider ?? "stripe",
+            mode: readiness?.mode ?? "held",
+            code:
+              readiness?.code ??
+              "PAYMENT_PROVIDER_NOT_READY",
+            providerEffect: false
+          }
+        }
+      );
+      const staged = await stageBillingPortal(
+        actor,
+        projectId,
+        input
+      );
+      if (staged.completed) return staged.response;
+      let result;
+      try {
+        result =
+          await paymentProvider.createBillingPortal(
+            staged.providerRequest
+          );
+      } catch (error) {
+        await recordBillingPortalFailure(
+          staged,
+          error
+        );
+        throw providerUnavailable(
+          error,
+          "BILLING_PORTAL",
+          staged.row.id
+        );
+      }
+      try {
+        return await finalizeBillingPortal(
+          actor,
+          staged,
+          result
+        );
+      } catch (error) {
+        const ambiguous = {
+          code:
+            error?.code ??
+            "BILLING_PORTAL_LOCAL_COMMIT_UNKNOWN",
+          certainty: "ambiguous"
+        };
+        await recordBillingPortalFailure(
+          staged,
+          ambiguous
+        );
+        throw providerUnavailable(
+          ambiguous,
+          "BILLING_PORTAL",
+          staged.row.id
+        );
+      }
+    },
+
+    async ingestStripeWebhook({
+      rawBody,
+      signature
+    } = {}) {
+      invariant(
+        Buffer.isBuffer(rawBody),
+        "STRIPE_WEBHOOK_BODY_REQUIRED",
+        "Stripe webhook verification requires the exact raw request bytes.",
+        { status: 400 }
+      );
+      let event;
+      try {
+        event = await paymentProvider.verifyWebhook({
+          rawBody,
+          signature
+        });
+      } catch (error) {
+        if (error instanceof HostedError) throw error;
+        const code = String(error?.code ?? "");
+        const invalid =
+          code.includes("webhook") ||
+          code.includes("signature");
+        throw new HostedError(
+          invalid
+            ? "STRIPE_WEBHOOK_SIGNATURE_INVALID"
+            : "STRIPE_WEBHOOK_UNAVAILABLE",
+          invalid
+            ? "Stripe webhook signature verification failed."
+            : "Stripe webhook verification is unavailable.",
+          {
+            status: invalid ? 400 : 503,
+            details: {
+              providerErrorCode:
+                providerErrorCode(error),
+              providerEffect: false
+            }
+          }
+        );
+      }
+      invariant(
+        event &&
+          typeof event === "object" &&
+          stripeObjectId(
+            event.id,
+            "evt",
+            "Stripe event ID"
+          ) &&
+          typeof event.type === "string" &&
+          event.type.length > 0 &&
+          event.type.length <= 200 &&
+          typeof event.livemode === "boolean" &&
+          Number.isSafeInteger(event.created) &&
+          event.data?.object &&
+          typeof event.data.object === "object",
+        "STRIPE_WEBHOOK_EVENT_INVALID",
+        "The verified Stripe event is invalid.",
+        { status: 400 }
+      );
+      const persisted =
+        await persistStripeEvent(event);
+      return processStripeEvent(persisted, event);
+    },
+
+    async processPaymentOutbox({
+      limit = 10,
+      workerId =
+        `hosted-payment-${process.pid}`
+    } = {}) {
+      invariant(
+        Number.isSafeInteger(limit) &&
+          limit >= 1 &&
+          limit <= 100 &&
+          typeof workerId === "string" &&
+          /^[A-Za-z0-9._:-]{8,200}$/u.test(workerId),
+        "INVALID_INPUT",
+        "Payment outbox worker options are invalid.",
+        { status: 400 }
+      );
+      const readiness =
+        await paymentProvider.readiness();
+      if (readiness?.ready !== true) {
+        return {
+          processed: 0,
+          failed: 0,
+          held: true,
+          provider: readiness?.provider ?? "stripe",
+          mode: readiness?.mode ?? "held"
+        };
+      }
+      let processed = 0;
+      let failed = 0;
+      let ambiguous = 0;
+      for (let index = 0; index < limit; index += 1) {
+        const dispatch =
+          await claimCancellationDispatch(workerId);
+        if (!dispatch) break;
+        let providerResult;
+        try {
+          providerResult =
+            await paymentProvider.scheduleCancellation({
+              stripeSubscriptionId:
+                dispatch.stripe_subscription_id,
+              idempotencyKey:
+                `hosted:cancellation:${dispatch.dedupe_key}`,
+              cancellationDigest:
+                dispatch.accepted_disclosure_digest
+            });
+          await finishCancellationDispatch(
+            dispatch,
+            providerResult
+          );
+          processed += 1;
+        } catch (error) {
+          const released =
+            await releaseCancellationDispatch(
+              dispatch,
+              error
+            );
+          failed += 1;
+          if (released.certainty === "ambiguous") {
+            ambiguous += 1;
+          }
+        }
+      }
+      return {
+        processed,
+        failed,
+        ambiguous,
+        held: false,
+        provider: readiness.provider ?? "stripe",
+        mode: readiness.mode ?? null
+      };
     },
 
     async getSubscription(actor, projectId) {
@@ -2926,7 +6244,7 @@ export function createCanonicalPostgresService({
         "Accepted cancellation digest is invalid.",
         { status: 400 }
       );
-      return projectWrite(actor, projectId, {
+      const accepted = await projectWrite(actor, projectId, {
         routeKey: "subscription.cancel",
         key: input.commandId,
         purpose: { previewId, acceptedDisclosureDigest },
@@ -2980,10 +6298,10 @@ export function createCanonicalPostgresService({
           await client.query(
             `insert into ss.transactional_outbox (
                organization_id, aggregate_type, aggregate_id,
-               event_type, payload, dedupe_key
+               event_type, payload, dedupe_key, available_at
              ) values (
                $1, 'stripe_subscription', $2,
-               'subscription.cancellation_requested', $3::jsonb, $4
+               'subscription.cancellation_requested', $3::jsonb, $4, $5
              )`,
             [
               scope.organizationId,
@@ -2995,7 +6313,8 @@ export function createCanonicalPostgresService({
                 effectiveAt: iso(row.effective_at),
                 retentionEndsAt: iso(row.retention_ends_at)
               }),
-              `subscription.cancel:${previewId}`
+              `subscription.cancel:${previewId}`,
+              now(clock)
             ]
           );
           await audit(client, {
@@ -3028,6 +6347,28 @@ export function createCanonicalPostgresService({
           };
         }
       });
+      await service.processPaymentOutbox({
+        limit: 1,
+        workerId: `request-cancel-${previewId}`
+      });
+      const status = await cancellationStatus(
+        actor,
+        projectId,
+        previewId
+      );
+      return {
+        ...accepted,
+        cancellation: {
+          ...accepted.cancellation,
+          ...status
+        },
+        subscription: (
+          await service.getSubscription(
+            actor,
+            projectId
+          )
+        ).subscription
+      };
     },
 
     async requestRelease(actor, projectId, input) {
@@ -4339,7 +7680,34 @@ export function createCanonicalPostgresService({
               held: null
             };
       const recovery = await recoveryMailPort.readiness();
-      const domainProviders = await domains.readiness();
+      let payments;
+      try {
+        payments = await paymentProvider.readiness();
+      } catch (error) {
+        payments = {
+          ready: false,
+          provider: "stripe",
+          mode: "held",
+          code:
+            error?.code ??
+             "PAYMENT_PROVIDER_NOT_READY"
+        };
+      }
+      let domainProviders;
+      try {
+        domainProviders = await domains.readiness();
+      } catch (error) {
+        domainProviders = {
+          ready: false,
+          provider: "spaceship",
+          mode: "held",
+          registrar: "held",
+          dns: "held",
+          code:
+            error?.code ??
+            "DOMAIN_PROVIDER_NOT_READY"
+        };
+      }
       return {
         ready:
           persistence.ready &&
@@ -4367,13 +7735,20 @@ export function createCanonicalPostgresService({
           ready: true,
           kind: exportStore.kind
         },
+        payments,
         providers: {
-          checkout: "held",
+          checkout:
+            payments.ready === true
+              ? payments.mode ?? "ready"
+              : "held",
           registrar:
-            domainProviders.ready
-              ? "ready"
-              : domainProviders.mode,
-          dns: domainProviders.dns ?? "held",
+            domainProviders.ready === true
+              ? domainProviders.registrar ?? "ready"
+              : "held",
+          dns:
+            domainProviders.ready === true
+              ? domainProviders.dns ?? "ready"
+              : "held",
           domains: domainProviders,
           email:
             recovery.mode === "production" &&

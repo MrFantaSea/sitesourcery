@@ -1,8 +1,10 @@
-# Abracadabra commerce contract (held)
+# Abracadabra commerce contract (held by default)
 
 This module defines the server-owned catalog, quote, and checkout boundary for
-Abracadabra. It is intentionally not wired to an HTTP listener, Stripe, or a
-production catalog. `PUBLICATION_HOLD` remains the release truth.
+Abracadabra. It now includes a production-shaped official Stripe adapter, but
+the default composition is still held and no production catalog, credentials,
+approval, or provider capability is embedded here. `PUBLICATION_HOLD` remains
+the release truth.
 
 ## Commercial model
 
@@ -94,17 +96,52 @@ catalog/terms versions, all public line items, totals, and expiration. Client
 money, totals, line items, currency, Price IDs, and Stripe references are
 recursively rejected.
 
-## Domains remain a separate commercial unit
+## Domains remain a separate commercial and payment unit
 
 `domainQuoteId` is optional. The domain quote port resolves its exact amount and
 terms using trusted tenant/customer/project authority. Registration and renewal
 are distinct line kinds. The domain gets a receipt group separate from the
-website even when both groups enter one checkout. The checkout adapter receives
-the server-resolved domain price data, never a browser-provided amount.
+website. The quote records the server-resolved domain price data, never a
+browser-provided amount.
 
-This module plans and persists receipt-group identity; settlement/webhook code
-must issue customer receipts from those groups. That code is not live or implied
-by this held lane.
+The official Stripe Checkout adapter rejects dynamic domain money. Domain
+procurement must use the existing purpose-bound manual-authorization sequence:
+authorize the exact quote, register, verify registrar ownership/readback, then
+capture. A registrar failure cancels the authorization, and any ambiguous
+provider response stops for reconciliation. Website Checkout and domain
+procurement therefore cannot be collapsed into one charge.
+
+The customer still stays inside Site Sourcery. The server creates a dedicated
+Stripe-hosted domain authorization Checkout and returns it through an
+order-bound same-origin relay. It then reads the expanded Checkout Session and
+PaymentIntent from Stripe; a webhook payload alone cannot establish the amount
+or payment state. Only a current `requires_capture` authorization can fund a
+registrar attempt. Only verified domain and registrant readback can trigger
+capture. Cancellation releases an uncaptured hold, while refunds reconcile the
+remaining captured balance and retain operator evidence.
+
+## Stripe construction
+
+`createStripeProviderAdapter()` defaults to `held`. `contract_test` accepts only
+an injected, no-network test client with Stripe test mode. `approved_live`
+requires all of the following before construction:
+
+- an exact staging or production owner approval bound to provider, livemode,
+  pinned API version, timestamp, approval ID, and explicit capabilities;
+- a matching `sk_test_` or `sk_live_` server secret;
+- the pinned official Stripe SDK and API version;
+- exact HTTPS return origins, tax decision, webhook secret, and owner-approved
+  Price expectations;
+- exact order-bound domain success/cancel templates and the manual-authorization
+  disclosure when domain capabilities are approved.
+
+Readiness retrieves every Price and compares ID, active state, livemode,
+currency, amount, and recurrence. Checkout derives a provider idempotency key
+from the durable command and purpose digest. Provider timeouts and unsafe
+post-effect responses remain ambiguous for operator reconciliation. Domain
+readback expands the PaymentIntent, latest Charge, authorization expiry, balance
+transaction, and refunds before projecting any settlement state. Webhooks accept
+raw bytes only and verify `Stripe-Signature` before returning an event.
 
 ## Compatibility
 
@@ -117,5 +154,6 @@ Run the contract suite with the repository-pinned runtime:
 
 ```sh
 node server/domain/assert-runtime.mjs
-node --test server/commerce/test/offer-contract.test.mjs
+node --test server/commerce/test/offer-contract.test.mjs \
+  server/commerce/test/stripe-provider.test.mjs
 ```

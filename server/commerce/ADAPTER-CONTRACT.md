@@ -1,6 +1,10 @@
 # Commerce adapter contract
 
-No adapter in this directory performs a live payment or domain operation.
+Provider adapters default to held. Contract-test adapters accept only injected
+no-network fakes. An adapter can perform a Stripe effect only when production
+composition supplies an exact environment-bound owner approval, the pinned
+official SDK, matching credentials, and every capability used by that process.
+Merging this code does not turn payments on.
 
 ## Catalog
 
@@ -40,12 +44,49 @@ verified.
 
 - tenant, customer, and project identity;
 - quote/catalog/offer/disclosure identity;
-- website receipt group with server-held Stripe Price references;
-- optional separate domain receipt group with server-resolved price data.
+- authoritative line and receipt-group identity;
+- website receipt groups backed by exact owner-approved Stripe Prices.
 
 The adapter must bind its provider idempotency key to `purposeDigest`, reject
 reuse for a different purpose, preserve receipt-group metadata, and return
 `checkoutId`, an allowlisted Checkout URL, and `expiresAt`.
+
+Dynamic domain money is deliberately rejected by ordinary Checkout. Domain
+procurement uses a separate manual-authorization workflow: authorize the exact
+server quote, submit to the registrar, read the registration back, then capture
+only the verified amount. Registrar failure cancels the authorization; an
+ambiguous provider result enters reconciliation. This prevents a mixed website
+subscription Checkout from charging domain money before registrar proof.
+
+The domain payment port is explicit:
+
+- `createDomainAuthorizationCheckout` creates a separate Stripe-hosted
+  `payment` Checkout with `capture_method=manual`, exact server price data,
+  purpose-bound metadata, and order-bound same-origin return routes;
+- `retrieveDomainAuthorization` expands and verifies the Checkout Session,
+  PaymentIntent, Charge, balance transaction, refunds, authorization expiry,
+  exact money, livemode, and purpose metadata before projecting state;
+- `captureDomainAuthorization` reads the current authorization first and
+  captures no more than the verified registrar amount with a provider
+  idempotency key;
+- `voidDomainAuthorization` reads the exact uncaptured PaymentIntent before
+  releasing the hold;
+- `refundDomainCapture` reads the captured/refunded balance first and binds the
+  refund to operator evidence.
+
+Provider webhooks are wake-up signals, not domain-money authority. The durable
+orchestrator settles authorization, capture, void, and refund state only from
+exact provider readback. Transport failure or an unsafe post-effect response is
+ambiguous and must be reconciled before retry.
+
+`createBillingPortal` uses an exact allowlisted return URL.
+`scheduleCancellation` sets `cancel_at_period_end` and binds the reviewed
+cancellation digest in provider metadata. `verifyWebhook` accepts the exact raw
+request bytes and verifies `Stripe-Signature` before any event is trusted.
+
+The pinned official SDK uses Stripe API version `2026-06-24.dahlia`, disables
+automatic network retries, and never accepts a test key in live mode or a live
+key in test mode.
 
 The service persists `checkout_dispatching` before calling Stripe. An ambiguous
 provider result stays in that state and is never automatically retried. An

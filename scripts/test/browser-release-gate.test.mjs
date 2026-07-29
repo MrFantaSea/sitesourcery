@@ -540,7 +540,7 @@ test("homepage first-paint gate fails closed before load across exact cold scena
     path: "/",
     primaryAction: visibleElement({
       href: "/start/",
-      text: "Find the right starting point",
+      text: "Find the right next step",
       height: 48,
       width: 180,
     }),
@@ -675,6 +675,7 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/custom/process/": 3,
     "/abracadabra/how/": 7,
     "/about/": 1,
+    "/contact/": 2,
     "/faq/": 13,
     "/solutions/": 9,
     "/legal/": 1,
@@ -841,12 +842,13 @@ test("Abracadabra browser gate enforces held versus hosted control boundaries", 
   assert.match(auditSource, /result\.sparkReady\.controlRoomPresent/u);
   assert.match(auditSource, /abracadabraControlMode === "local-rehearsal"/u);
   assert.match(auditSource, /controlReady: controlRoom\?\.getAttribute\("data-control-ready"\)/u);
-  assert.match(auditSource, /result\.sparkReady\.controlReady !== "true"/u);
-  assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "true"/u);
+  assert.match(auditSource, /result\.sparkReady\.controlReady !== "hosted"/u);
+  assert.match(auditSource, /result\.sparkReady\.documentControlReady !== "hosted"/u);
+  assert.match(auditSource, /guestFlow\.providerHold\.buttonEnabled/u);
+  assert.match(auditSource, /guestFlow\.providerHold\.previewStillVisible/u);
+  assert.match(auditSource, /held-provider retry path failed/u);
   assert.match(auditSource, /Runtime\.exceptionThrown/u);
-  assert.match(auditSource, /proof-must-not-cross-projects/u);
-  assert.match(auditSource, /selected project changed/u);
-  assert.match(auditSource, /guardedAction\.secondLifecycle !== "active"/u);
+  assert.match(auditSource, /hosted artifact audit intentionally runs without an API service/u);
   assert.match(auditSource, /correct\.sandbox !== "allow-popups"/u);
   assert.match(auditSource, /compiler\.compileSite\(rawFacts\)/u);
   assert.match(auditSource, /Input\.dispatchMouseEvent/u);

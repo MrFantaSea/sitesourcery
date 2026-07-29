@@ -33,7 +33,10 @@ const READINESS_QUERY = `
     to_regclass('ss.catalog_offer_price_lines') is not null as offer_prices_ready,
     to_regclass('ss.commerce_quote_price_lines') is not null as quote_prices_ready,
     to_regclass('ss.checkout_intent_price_lines') is not null as checkout_prices_ready,
-    to_regprocedure('ss.hosted_runtime_contract_v14()') is not null
+    (
+      to_regprocedure('ss.hosted_runtime_contract_v13()') is not null
+      and to_regprocedure('ss.hosted_runtime_contract_v14()') is not null
+    )
       as runtime_contract_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,

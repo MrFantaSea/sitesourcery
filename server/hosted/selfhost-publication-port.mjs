@@ -11,6 +11,7 @@ import { SPARK_COMPILER_SCHEMA } from "./spark-compiler-port.mjs";
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMPILER_REVISION = /^sha256:[a-f0-9]{64}$/u;
 const PAID_STATES = new Set(["active", "grace"]);
+const OWNERSHIP_STATE = "completed";
 const CUSTOMER_ADDRESS_KINDS = new Set([
   "custom",
   "customer_byod",
@@ -115,7 +116,10 @@ function publicationProof(input, now) {
   const releaseRequest = object(proof.releaseRequest, "Release request");
   const version = object(proof.version, "Version");
   const screening = object(proof.screening, "Pre-publication screening");
-  const subscription = object(proof.subscription, "Paid entitlement");
+  const entitlement = object(
+    proof.entitlement ?? proof.subscription,
+    "Paid entitlement"
+  );
   const address = object(proof.address, "Address");
   const artifact = exactArtifact(proof.artifact);
 
@@ -187,22 +191,53 @@ function publicationProof(input, now) {
     { status: 409 }
   );
 
+  const entitlementKind =
+    entitlement.kind ?? "subscription";
   invariant(
-    PAID_STATES.has(subscription.status),
+    (
+      entitlementKind === "subscription" &&
+      PAID_STATES.has(entitlement.status)
+    ) ||
+      (
+        entitlementKind === "ownership" &&
+        entitlement.status === OWNERSHIP_STATE
+      ),
     "PAID_ENTITLEMENT_REQUIRED",
     "An active paid entitlement is required before publication.",
     { status: 409 }
   );
   invariant(
-    exactId(subscription.projectId, "Subscription project ID") === projectId &&
-      exactId(subscription.organizationId, "Subscription organization ID") ===
-        organizationId,
+    exactId(
+      entitlement.projectId,
+      "Entitlement project ID"
+    ) === projectId &&
+      exactId(
+        entitlement.organizationId,
+        "Entitlement organization ID"
+      ) === organizationId,
     "PAID_ENTITLEMENT_REQUIRED",
     "The paid entitlement is not bound to this project.",
     { status: 409 }
   );
-  if (subscription.status === "grace") {
-    futureDate(subscription.graceEndsAt, now, "The payment grace period");
+  if (
+    entitlementKind === "subscription" &&
+    entitlement.status === "grace"
+  ) {
+    futureDate(
+      entitlement.graceEndsAt,
+      now,
+      "The payment grace period"
+    );
+  }
+  if (entitlementKind === "ownership") {
+    invariant(
+      Number.isFinite(
+        Date.parse(entitlement.completedAt)
+      ),
+      "PAID_ENTITLEMENT_REQUIRED",
+      "The ownership entitlement completion proof is invalid.",
+      { status: 409 }
+    );
   }
 
   const hostname = normalizeHostname(address.hostname);
