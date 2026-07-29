@@ -69,6 +69,42 @@
     return String(value && (value.priceCheckId || value.id) || "");
   }
 
+  function projectIdOf(value) {
+    return String(value && value.projectId || "");
+  }
+
+  function projectBound(value, projectId, label) {
+    if (!value || projectIdOf(value) !== projectId) {
+      throw new ControlError({
+        code: "DOMAIN_PROJECT_RESPONSE_INVALID",
+        message: "The " + label + " did not match the selected project."
+      });
+    }
+    return value;
+  }
+
+  function projectBoundList(values, projectId, label) {
+    if (!Array.isArray(values) || values.some(function (value) {
+      return projectIdOf(value) !== projectId;
+    })) {
+      throw new ControlError({
+        code: "DOMAIN_PROJECT_RESPONSE_INVALID",
+        message: "The " + label + " did not match the selected project."
+      });
+    }
+    return values;
+  }
+
+  function exactDomainPaymentPath(order) {
+    var orderId = idOf(order);
+    var projectId = projectIdOf(order);
+    var destination = String(order && (order.paymentUrl || order.checkoutUrl) || "");
+    if (!orderId || !projectId || !destination) return "";
+    var expected = "/api/v1/domain-orders/" + encodeURIComponent(orderId) + "/payment"
+      + "?projectId=" + encodeURIComponent(projectId);
+    return destination === expected ? destination : "";
+  }
+
   function exportIdOf(value) {
     return String(value && (value.exportId || value.id) || "");
   }
@@ -663,8 +699,7 @@
       state.subscription = null;
       state.cancellationPreview = null;
       state.exportJob = null;
-      state.commerceQuote = null;
-      resetDomainPurchase();
+      resetDomains();
       return task("project", async function () {
         var projectPayload = await api.getProject(selected);
         if (expectedSelectionEpoch !== selectionEpoch) return null;
@@ -698,10 +733,10 @@
           var project = entityFrom(payload, "project");
           await refreshProjectsFor(organizationId, expectedSessionEpoch);
           if (project && idOf(project)) {
+            resetDomains();
             state.project = project;
             state.cancellationPreview = null;
             state.exportJob = null;
-            state.commerceQuote = null;
             selectionEpoch += 1;
           }
           return project;
@@ -1227,8 +1262,7 @@
             state.subscription = null;
             state.cancellationPreview = null;
             state.exportJob = null;
-            state.commerceQuote = null;
-            resetDomainPurchase();
+            resetDomains();
             selectionEpoch += 1;
           }
           return payload;
@@ -1253,22 +1287,32 @@
     }
 
     function createDomainQuote(input) {
+      var projectId = assertProject();
       var key = idempotencyFactory();
       var expectedEpoch = domainSearchEpoch;
       var expectedPurchaseEpoch = domainPurchaseEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       var retryCall = function () {
         return task("domainQuote", async function () {
-          var payload = await api.createDomainQuote({
+          var payload = await api.createDomainQuote(projectId, {
             hostname: input && input.hostname,
             years: input && input.years,
             purpose: input && input.purpose
           }, { idempotencyKey: key });
           if (
-            expectedEpoch !== domainSearchEpoch
+            expectedSelectionEpoch !== selectionEpoch
+            || expectedEpoch !== domainSearchEpoch
             || expectedPurchaseEpoch !== domainPurchaseEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
           ) return null;
+          var quote = projectBound(
+            entityFrom(payload, "quote"),
+            projectId,
+            "domain quote"
+          );
           resetDomainPurchase();
-          state.domainQuote = entityFrom(payload, "quote");
+          state.domainQuote = quote;
           return state.domainQuote;
         }, { write: true, retry: retryCall });
       };
@@ -1277,12 +1321,14 @@
 
     function saveRegistrantContact(input) {
       var organizationId = assertOrganization();
+      var projectId = assertProject();
       var key = idempotencyFactory();
       var expectedSessionEpoch = sessionEpoch;
       var expectedPurchaseEpoch = domainPurchaseEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       var retryCall = function () {
         return task("registrantContact", async function () {
-          var payload = await api.saveRegistrantContact(organizationId, {
+          var payload = await api.saveRegistrantContact(organizationId, projectId, {
             name: input && input.name,
             organization: input && input.organization,
             email: input && input.email,
@@ -1297,8 +1343,15 @@
           if (
             expectedSessionEpoch !== sessionEpoch
             || expectedPurchaseEpoch !== domainPurchaseEpoch
+            || expectedSelectionEpoch !== selectionEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
           ) return null;
-          state.registrantContact = entityFrom(payload, "registrantContact");
+          state.registrantContact = projectBound(
+            entityFrom(payload, "registrantContact"),
+            projectId,
+            "domain owner details"
+          );
           return state.registrantContact;
         }, { write: true, retry: retryCall });
       };
@@ -1306,6 +1359,7 @@
     }
 
     function acceptDomainConsent(input) {
+      var projectId = assertProject();
       var quoteId = idOf(state.domainQuote);
       var contactId = idOf(state.registrantContact);
       var quoteTermsVersion = String(
@@ -1317,6 +1371,12 @@
           message: "Save the current quote and customer registrant details before accepting domain terms."
         }));
       }
+      projectBound(state.domainQuote, projectId, "domain quote");
+      projectBound(
+        state.registrantContact,
+        projectId,
+        "domain owner details"
+      );
       if (
         !input
         || input.registrationAgreementAccepted !== true
@@ -1339,9 +1399,10 @@
       var key = idempotencyFactory();
       var expectedEpoch = domainSearchEpoch;
       var expectedPurchaseEpoch = domainPurchaseEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       var retryCall = function () {
         return task("domainConsent", async function () {
-          var payload = await api.acceptDomainConsent(quoteId, {
+          var payload = await api.acceptDomainConsent(projectId, quoteId, {
             registrantContactId: contactId,
             termsVersion: quoteTermsVersion,
             registrationAgreementAccepted: true,
@@ -1351,8 +1412,15 @@
           if (
             expectedEpoch !== domainSearchEpoch
             || expectedPurchaseEpoch !== domainPurchaseEpoch
+            || expectedSelectionEpoch !== selectionEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
           ) return null;
-          state.domainConsent = entityFrom(payload, "consent");
+          state.domainConsent = projectBound(
+            entityFrom(payload, "consent"),
+            projectId,
+            "domain consent"
+          );
           return state.domainConsent;
         }, { write: true, retry: retryCall });
       };
@@ -1369,6 +1437,8 @@
           message: "A current quote and recorded customer consent are required before payment."
         }));
       }
+      projectBound(state.domainQuote, projectId, "domain quote");
+      projectBound(state.domainConsent, projectId, "domain consent");
       var key = idempotencyFactory();
       var expectedSelectionEpoch = selectionEpoch;
       var expectedPurchaseEpoch = domainPurchaseEpoch;
@@ -1384,7 +1454,18 @@
             || !state.project
             || idOf(state.project) !== projectId
           ) return null;
-          state.domainOrder = entityFrom(payload, "domainOrder");
+          var order = projectBound(
+            entityFrom(payload, "domainOrder"),
+            projectId,
+            "domain order"
+          );
+          if (!exactDomainPaymentPath(order)) {
+            throw new ControlError({
+              code: "DOMAIN_PAYMENT_RELAY_INVALID",
+              message: "The domain payment link could not be verified."
+            });
+          }
+          state.domainOrder = order;
           state.domainPriceCheck = null;
           domainOrderEpoch += 1;
           return state.domainOrder;
@@ -1394,6 +1475,7 @@
     }
 
     function pollDomainOrder(orderId) {
+      var projectId = assertProject();
       var selectedOrderId = String(orderId || idOf(state.domainOrder));
       if (!selectedOrderId) {
         return Promise.reject(new ControlError({
@@ -1404,13 +1486,19 @@
       var expectedSelectionEpoch = selectionEpoch;
       var expectedOrderEpoch = domainOrderEpoch;
       return task("domainOrderPoll", async function () {
-        var payload = await api.getDomainOrder(selectedOrderId);
+        var payload = await api.getDomainOrder(projectId, selectedOrderId);
         if (
           expectedSelectionEpoch !== selectionEpoch
           || expectedOrderEpoch !== domainOrderEpoch
           || idOf(state.domainOrder) !== selectedOrderId
+          || !state.project
+          || idOf(state.project) !== projectId
         ) return null;
-        var order = entityFrom(payload, "domainOrder");
+        var order = projectBound(
+          entityFrom(payload, "domainOrder"),
+          projectId,
+          "domain order status"
+        );
         if (order && idOf(order) === selectedOrderId) state.domainOrder = order;
         return order;
       });
@@ -1426,7 +1514,11 @@
           || !state.project
           || idOf(state.project) !== projectId
         ) return null;
-        var orders = arrayFrom(payload, "domainOrders");
+        var orders = projectBoundList(
+          arrayFrom(payload, "domainOrders"),
+          projectId,
+          "domain order history"
+        );
         state.domainOrder = orders[0] || null;
         state.domainPriceCheck = null;
         domainOrderEpoch += 1;
@@ -1435,6 +1527,7 @@
     }
 
     function refreshDomainPrice() {
+      var projectId = assertProject();
       var orderId = idOf(state.domainOrder);
       if (!orderId) {
         return Promise.reject(new ControlError({
@@ -1456,13 +1549,23 @@
       var expectedOrderEpoch = domainOrderEpoch;
       var retryCall = function () {
         return task("domainPriceCheck", async function () {
-          var payload = await api.refreshDomainPrice(orderId, { idempotencyKey: key });
+          var payload = await api.refreshDomainPrice(
+            projectId,
+            orderId,
+            { idempotencyKey: key }
+          );
           if (
             expectedSelectionEpoch !== selectionEpoch
             || expectedOrderEpoch !== domainOrderEpoch
             || idOf(state.domainOrder) !== orderId
+            || !state.project
+            || idOf(state.project) !== projectId
           ) return null;
-          var priceCheck = entityFrom(payload, "priceCheck");
+          var priceCheck = projectBound(
+            entityFrom(payload, "priceCheck"),
+            projectId,
+            "final domain price"
+          );
           var priceStatus = String(priceCheck && priceCheck.status || "");
           var structurallyValid = Boolean(
             priceCheck
@@ -1498,6 +1601,7 @@
     }
 
     function requestDomainRegistration(input) {
+      var projectId = assertProject();
       var orderId = idOf(state.domainOrder);
       var priceCheckId = domainPriceCheckIdOf(state.domainPriceCheck);
       var orderStatus = String(
@@ -1526,7 +1630,7 @@
       var expectedOrderEpoch = domainOrderEpoch;
       var retryCall = function () {
         return task("domainRegistration", async function () {
-          var payload = await api.requestDomainRegistration(orderId, {
+          var payload = await api.requestDomainRegistration(projectId, orderId, {
             priceCheckId: priceCheckId,
             irreversibleRegistrationAccepted: true
           }, { idempotencyKey: key });
@@ -1534,8 +1638,14 @@
             expectedSelectionEpoch !== selectionEpoch
             || expectedOrderEpoch !== domainOrderEpoch
             || idOf(state.domainOrder) !== orderId
+            || !state.project
+            || idOf(state.project) !== projectId
           ) return null;
-          var order = entityFrom(payload, "domainOrder");
+          var order = projectBound(
+            entityFrom(payload, "domainOrder"),
+            projectId,
+            "domain registration status"
+          );
           if (order && idOf(order) === orderId) state.domainOrder = order;
           return order || payload;
         }, { write: true, retry: retryCall });
@@ -1545,23 +1655,50 @@
 
     function listDomains() {
       var organizationId = assertOrganization();
+      var projectId = assertProject();
       var expectedSessionEpoch = sessionEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       return task("domains", async function () {
-        var payload = await api.listDomains(organizationId);
-        if (expectedSessionEpoch !== sessionEpoch || organizationId !== state.organizationId) return null;
-        state.domains = arrayFrom(payload, "domains");
+        var payload = await api.listDomains(
+          organizationId,
+          projectId
+        );
+        if (
+          expectedSessionEpoch !== sessionEpoch
+          || expectedSelectionEpoch !== selectionEpoch
+          || organizationId !== state.organizationId
+          || !state.project
+          || idOf(state.project) !== projectId
+        ) return null;
+        state.domains = projectBoundList(
+          arrayFrom(payload, "domains"),
+          projectId,
+          "customer domains"
+        );
         return state.domains;
       });
     }
 
     function selectDomain(domainId) {
+      var projectId = assertProject();
       var selected = String(domainId || "");
       var expectedEpoch = ++domainSelectionEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       return task("domain", async function () {
-        var domainPayload = await api.getDomain(selected);
-        var recordsPayload = await api.listDnsRecords(selected);
-        if (expectedEpoch !== domainSelectionEpoch) return null;
-        var domain = entityFrom(domainPayload, "domain");
+        var domainPayload = await api.getDomain(projectId, selected);
+        var recordsPayload =
+          await api.listDnsRecords(projectId, selected);
+        if (
+          expectedEpoch !== domainSelectionEpoch
+          || expectedSelectionEpoch !== selectionEpoch
+          || !state.project
+          || idOf(state.project) !== projectId
+        ) return null;
+        var domain = projectBound(
+          entityFrom(domainPayload, "domain"),
+          projectId,
+          "customer domain"
+        );
         if (!domain || idOf(domain) !== selected) {
           throw new ControlError({
             code: "DOMAIN_RESPONSE_INVALID",
@@ -1569,12 +1706,17 @@
           });
         }
         state.selectedDomain = domain;
-        state.dnsRecords = arrayFrom(recordsPayload, "records");
+        state.dnsRecords = projectBoundList(
+          arrayFrom(recordsPayload, "records"),
+          projectId,
+          "DNS records"
+        );
         return domain;
       });
     }
 
     function mutateDomain(name, invoke) {
+      var projectId = assertProject();
       var domainId = idOf(state.selectedDomain);
       if (!domainId) {
         return Promise.reject(new ControlError({
@@ -1583,16 +1725,38 @@
         }));
       }
       var expectedEpoch = domainSelectionEpoch;
+      var expectedSelectionEpoch = selectionEpoch;
       var key = idempotencyFactory();
       var retryCall = function () {
         return task(name, async function () {
-          var payload = await invoke(domainId, { idempotencyKey: key });
-          if (expectedEpoch === domainSelectionEpoch && idOf(state.selectedDomain) === domainId) {
-            var domainPayload = await api.getDomain(domainId);
-            var recordsPayload = await api.listDnsRecords(domainId);
-            if (expectedEpoch === domainSelectionEpoch) {
-              state.selectedDomain = entityFrom(domainPayload, "domain");
-              state.dnsRecords = arrayFrom(recordsPayload, "records");
+          var payload = await invoke(projectId, domainId, { idempotencyKey: key });
+          if (
+            expectedEpoch === domainSelectionEpoch
+            && expectedSelectionEpoch === selectionEpoch
+            && state.project
+            && idOf(state.project) === projectId
+            && idOf(state.selectedDomain) === domainId
+          ) {
+            var domainPayload =
+              await api.getDomain(projectId, domainId);
+            var recordsPayload =
+              await api.listDnsRecords(projectId, domainId);
+            if (
+              expectedEpoch === domainSelectionEpoch
+              && expectedSelectionEpoch === selectionEpoch
+              && state.project
+              && idOf(state.project) === projectId
+            ) {
+              state.selectedDomain = projectBound(
+                entityFrom(domainPayload, "domain"),
+                projectId,
+                "customer domain"
+              );
+              state.dnsRecords = projectBoundList(
+                arrayFrom(recordsPayload, "records"),
+                projectId,
+                "DNS records"
+              );
             }
           }
           return payload;
@@ -1602,8 +1766,8 @@
     }
 
     function upsertDnsRecord(input) {
-      return mutateDomain("upsertDnsRecord", function (domainId, requestOptions) {
-        return api.upsertDnsRecord(domainId, {
+      return mutateDomain("upsertDnsRecord", function (projectId, domainId, requestOptions) {
+        return api.upsertDnsRecord(projectId, domainId, {
           recordId: input && input.recordId,
           type: input && input.type,
           name: input && input.name,
@@ -1614,26 +1778,26 @@
     }
 
     function deleteDnsRecord(recordId) {
-      return mutateDomain("deleteDnsRecord", function (domainId, requestOptions) {
-        return api.deleteDnsRecord(domainId, recordId, requestOptions);
+      return mutateDomain("deleteDnsRecord", function (projectId, domainId, requestOptions) {
+        return api.deleteDnsRecord(projectId, domainId, recordId, requestOptions);
       });
     }
 
     function setDomainAutoRenew(enabled) {
-      return mutateDomain("setDomainAutoRenew", function (domainId, requestOptions) {
-        return api.setDomainAutoRenew(domainId, enabled === true, requestOptions);
+      return mutateDomain("setDomainAutoRenew", function (projectId, domainId, requestOptions) {
+        return api.setDomainAutoRenew(projectId, domainId, enabled === true, requestOptions);
       });
     }
 
     function requestDomainRenewalQuote(years) {
-      return mutateDomain("domainRenewalQuote", function (domainId, requestOptions) {
-        return api.requestDomainRenewalQuote(domainId, years, requestOptions);
+      return mutateDomain("domainRenewalQuote", function (projectId, domainId, requestOptions) {
+        return api.requestDomainRenewalQuote(projectId, domainId, years, requestOptions);
       });
     }
 
     function requestDomainTransferOut() {
-      return mutateDomain("domainTransferOut", function (domainId, requestOptions) {
-        return api.requestDomainTransferOut(domainId, requestOptions);
+      return mutateDomain("domainTransferOut", function (projectId, domainId, requestOptions) {
+        return api.requestDomainTransferOut(projectId, domainId, requestOptions);
       });
     }
 

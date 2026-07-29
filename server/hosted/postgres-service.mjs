@@ -7460,18 +7460,31 @@ export function createCanonicalPostgresService({
       );
     },
 
-    async getDomainOrder(actor, orderId) {
-      return domains.getDomainOrder(actor, orderId);
+    async getDomainOrder(
+      actor,
+      orderId,
+      projectId = null
+    ) {
+      return domains.getDomainOrder(
+        actor,
+        orderId,
+        projectId
+      );
     },
 
     async listDomainOrders(actor, projectId) {
       return domains.listDomainOrders(actor, projectId);
     },
 
-    async getDomainPaymentRedirect(actor, orderId) {
+    async getDomainPaymentRedirect(
+      actor,
+      orderId,
+      projectId
+    ) {
       return domains.getDomainPaymentRedirect(
         actor,
-        orderId
+        orderId,
+        projectId
       );
     },
 
@@ -7495,9 +7508,17 @@ export function createCanonicalPostgresService({
       );
     },
 
-    async listDomains(actor, organizationId) {
+    async listDomains(
+      actor,
+      organizationId,
+      projectId = null
+    ) {
       requiredActor(actor);
       const orgId = uuid(organizationId, "Organization ID");
+      const selectedProjectId =
+        projectId === null
+          ? null
+          : uuid(projectId, "Project ID");
       return authority.service(
         {
           userId: actor.userId,
@@ -7514,11 +7535,15 @@ export function createCanonicalPostgresService({
                    from ss.domain_dns_change_sets change_set
                   where change_set.registration_id = registration.id
                ) as dns_revision
-             from ss.domain_registrations registration
+            from ss.domain_registrations registration
             where registration.organization_id = $1
+              and (
+                $2::uuid is null
+                or registration.project_id = $2
+              )
             order by registration.registered_at,
                      registration.id`,
-            [orgId]
+            [orgId, selectedProjectId]
           );
           return {
             domains: result.rows.map(publicDomainRegistration)
@@ -7527,14 +7552,24 @@ export function createCanonicalPostgresService({
       );
     },
 
-    async getDomain(actor, domainId) {
+    async getDomain(
+      actor,
+      domainId,
+      projectId = null
+    ) {
       requiredActor(actor);
       const id = uuid(domainId, "Domain ID");
+      const selectedProjectId =
+        projectId === null
+          ? null
+          : uuid(projectId, "Project ID");
       const scope = await authority.service(
         { userId: actor.userId, readOnly: true },
         async (client) => {
           const result = await client.query(
-            `select registration.organization_id
+            `select
+               registration.organization_id,
+               registration.project_id
                from ss.domain_registrations registration
                join ss.organization_memberships membership
                  on membership.organization_id =
@@ -7545,7 +7580,12 @@ export function createCanonicalPostgresService({
             [id, actor.userId]
           );
           invariant(
-            result.rowCount === 1,
+            result.rowCount === 1 &&
+              (
+                selectedProjectId === null ||
+                result.rows[0].project_id ===
+                  selectedProjectId
+              ),
             "NOT_FOUND",
             "The requested item was not found.",
             { status: 404 }
@@ -7584,8 +7624,16 @@ export function createCanonicalPostgresService({
       );
     },
 
-    async listDnsRecords(actor, domainId) {
-      return domains.listDnsRecords(actor, domainId);
+    async listDnsRecords(
+      actor,
+      domainId,
+      projectId = null
+    ) {
+      return domains.listDnsRecords(
+        actor,
+        domainId,
+        projectId
+      );
     },
 
     async upsertDnsRecord(

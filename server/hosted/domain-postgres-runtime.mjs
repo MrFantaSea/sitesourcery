@@ -345,6 +345,14 @@ function publicQuote(row) {
     },
     renewalDisclosure: row.renewal_disclosure,
     termsVersion: row.terms_version,
+    terms: {
+      registrar: "Spaceship",
+      renewal: row.renewal_disclosure,
+      cancellation:
+        "A completed domain registration cannot be canceled after it is submitted.",
+      ownership:
+        "The customer is the registrant and remains the domain owner."
+    },
     issuedAt: new Date(row.quoted_at).toISOString(),
     expiresAt: new Date(row.expires_at).toISOString(),
     quoteDigest: row.quote_digest
@@ -371,8 +379,9 @@ function publicContact(row) {
   };
 }
 
-function paymentPath(orderId) {
-  return `/api/v1/domain-orders/${encodeURIComponent(orderId)}/payment`;
+function paymentPath(orderId, projectId) {
+  return `/api/v1/domain-orders/${encodeURIComponent(orderId)}/payment` +
+    `?projectId=${encodeURIComponent(projectId)}`;
 }
 
 function publicOrder(row) {
@@ -389,7 +398,7 @@ function publicOrder(row) {
             ? "authorized"
             : intentState;
   const redirect = row.stripe_checkout_session_ref
-    ? paymentPath(row.order_id)
+    ? paymentPath(row.order_id, row.project_id)
     : null;
   return {
     id: row.order_id,
@@ -653,13 +662,26 @@ export function createPostgresDomainRuntime({
     return selected.rows[0];
   }
 
-  async function orderScope(actor, orderId) {
+  async function orderScope(
+    actor,
+    orderId,
+    expectedProjectId = null
+  ) {
     const userId = actorId(actor);
     const id = uuid(orderId, "Domain order ID");
     const row = await authority.service(
       { userId, readOnly: true },
       (client) => loadOrder(client, id, userId)
     );
+    if (expectedProjectId !== null) {
+      invariant(
+        uuid(expectedProjectId, "Project ID") ===
+          row.project_id,
+        "NOT_FOUND",
+        "The requested item was not found.",
+        { status: 404 }
+      );
+    }
     return {
       orderId: id,
       organizationId: row.organization_id,
@@ -669,7 +691,11 @@ export function createPostgresDomainRuntime({
     };
   }
 
-  async function domainScope(actor, domainId) {
+  async function domainScope(
+    actor,
+    domainId,
+    expectedProjectId = null
+  ) {
     const userId = actorId(actor);
     const id = uuid(domainId, "Domain ID");
     const row = await authority.service(
@@ -701,6 +727,15 @@ export function createPostgresDomainRuntime({
         return selected.rows[0];
       }
     );
+    if (expectedProjectId !== null) {
+      invariant(
+        uuid(expectedProjectId, "Project ID") ===
+          row.project_id,
+        "NOT_FOUND",
+        "The requested item was not found.",
+        { status: 404 }
+      );
+    }
     return {
       domainId: id,
       organizationId: row.organization_id,
@@ -1174,11 +1209,19 @@ export function createPostgresDomainRuntime({
       );
       const organizationId = selected.organization_id;
       const projectId = selected.project_id;
+      invariant(
+        uuid(input.projectId, "Project ID") ===
+          projectId,
+        "NOT_FOUND",
+        "The requested item was not found.",
+        { status: 404 }
+      );
       const selectedCommandId = commandId(
         input.commandId
       );
       const requestDigest = digest({
         route: "domain.consent",
+        projectId,
         quoteId: selectedQuoteId,
         snapshotId,
         termsVersion: selected.terms_version,
@@ -1215,6 +1258,7 @@ export function createPostgresDomainRuntime({
               consent: {
                 id: row.id,
                 consentId: row.id,
+                projectId,
                 quoteId: row.quote_id,
                 registrantContactId:
                   row.registrant_snapshot_id,
@@ -1315,6 +1359,7 @@ export function createPostgresDomainRuntime({
             consent: {
               id: consentId,
               consentId,
+              projectId,
               quoteId: selectedQuoteId,
               registrantContactId: snapshotId,
               customerRemainsRegistrant: true,
@@ -1630,8 +1675,16 @@ export function createPostgresDomainRuntime({
       );
     },
 
-    async getDomainOrder(actor, orderId) {
-      const scope = await orderScope(actor, orderId);
+    async getDomainOrder(
+      actor,
+      orderId,
+      expectedProjectId = null
+    ) {
+      const scope = await orderScope(
+        actor,
+        orderId,
+        expectedProjectId
+      );
       return { domainOrder: publicOrder(scope.row) };
     },
 
@@ -1673,8 +1726,16 @@ export function createPostgresDomainRuntime({
       return { domainOrders: rows };
     },
 
-    async getDomainPaymentRedirect(actor, orderId) {
-      const scope = await orderScope(actor, orderId);
+    async getDomainPaymentRedirect(
+      actor,
+      orderId,
+      projectId
+    ) {
+      const scope = await orderScope(
+        actor,
+        orderId,
+        projectId
+      );
       invariant(
         scope.row.attempt_state === "checkout_created" &&
         scope.row.stripe_checkout_session_ref &&
@@ -2010,7 +2071,11 @@ export function createPostgresDomainRuntime({
     },
 
     async refreshDomainPrice(actor, orderId, input) {
-      const scope = await orderScope(actor, orderId);
+      const scope = await orderScope(
+        actor,
+        orderId,
+        input.projectId
+      );
       const selectedCommandId = commandId(
         input.commandId
       );
@@ -2279,10 +2344,17 @@ export function createPostgresDomainRuntime({
         priceCheck: {
           id: priceCheckId,
           priceCheckId,
+          projectId: scope.projectId,
           orderId: scope.orderId,
-          status,
+          status:
+            status === "ready"
+              ? "ready_to_confirm"
+              : status,
           ready: status === "ready",
+          available: true,
           price: exactPrice,
+          finalPrice: exactPrice,
+          checkedAt,
           expiresAt,
           ...(status === "changed"
             ? {
@@ -2295,7 +2367,11 @@ export function createPostgresDomainRuntime({
     },
 
     async requestDomainRegistration(actor, orderId, input) {
-      const scope = await orderScope(actor, orderId);
+      const scope = await orderScope(
+        actor,
+        orderId,
+        input.projectId
+      );
       const priceCheckId = uuid(
         input.priceCheckId,
         "Fresh price check ID"
@@ -3204,8 +3280,16 @@ export function createPostgresDomainRuntime({
       };
     },
 
-    async listDnsRecords(actor, domainId) {
-      const scope = await domainScope(actor, domainId);
+    async listDnsRecords(
+      actor,
+      domainId,
+      expectedProjectId = null
+    ) {
+      const scope = await domainScope(
+        actor,
+        domainId,
+        expectedProjectId
+      );
       const records = await authority.service(
         {
           userId: scope.userId,
@@ -3247,6 +3331,7 @@ export function createPostgresDomainRuntime({
         records: records.map((row) => ({
           id: row.id,
           recordId: row.id,
+          projectId: scope.projectId,
           domainId: scope.domainId,
           type: row.record_type,
           name: row.name,
@@ -3268,7 +3353,11 @@ export function createPostgresDomainRuntime({
       recordId,
       input
     ) {
-      const scope = await domainScope(actor, domainId);
+      const scope = await domainScope(
+        actor,
+        domainId,
+        input.projectId
+      );
       const selectedCommandId = commandId(
         input.commandId
       );
@@ -3586,6 +3675,7 @@ export function createPostgresDomainRuntime({
         record: {
           id: desiredRecordId,
           recordId: desiredRecordId,
+          projectId: scope.projectId,
           domainId: scope.domainId,
           ...record,
           state: "applied"
@@ -3599,7 +3689,11 @@ export function createPostgresDomainRuntime({
       recordId,
       input
     ) {
-      const scope = await domainScope(actor, domainId);
+      const scope = await domainScope(
+        actor,
+        domainId,
+        input.projectId
+      );
       const selectedRecordId = uuid(
         recordId,
         "DNS record ID"
@@ -3850,6 +3944,7 @@ export function createPostgresDomainRuntime({
       return {
         deleted: true,
         recordId: selectedRecordId,
+        projectId: scope.projectId,
         domainId: scope.domainId
       };
     },

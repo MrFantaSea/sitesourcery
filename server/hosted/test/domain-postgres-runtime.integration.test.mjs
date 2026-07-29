@@ -332,6 +332,19 @@ test(
     try {
       await migrateEmptyDatabase(pool);
       const seeded = await seedDomainAuthority(pool);
+      const otherProjectId = randomUUID();
+      await pool.query(
+        `insert into ss.projects (
+           id, organization_id, created_by_user_id,
+           billing_policy_id, name
+         )
+         select
+           $1, organization_id, created_by_user_id,
+           billing_policy_id, 'Other Domain Project'
+           from ss.projects
+          where id = $2`,
+        [otherProjectId, seeded.projectId]
+      );
       const providers = fakeProviders();
       const authority = createCanonicalPostgresAuthority({
         pool
@@ -362,8 +375,15 @@ test(
           purpose: "register"
         }
       );
+      assert.equal(quote.projectId, seeded.projectId);
       assert.equal(quote.price.amountMinor, 1200);
       assert.equal(quote.renewalPrice.amountMinor, 1400);
+      assert.deepEqual(Object.keys(quote.terms).sort(), [
+        "cancellation",
+        "ownership",
+        "registrar",
+        "renewal"
+      ]);
 
       const { registrantContact } =
         await runtime.saveRegistrantContact(
@@ -384,11 +404,34 @@ test(
             commandId: "domain-contact-contract-001"
           }
         );
+      assert.equal(
+        registrantContact.projectId,
+        seeded.projectId
+      );
+
+      await assert.rejects(
+        runtime.acceptDomainConsent(
+          seeded.actor,
+          quote.id,
+          {
+            projectId: otherProjectId,
+            registrantContactId: registrantContact.id,
+            termsVersion: quote.termsVersion,
+            registrationAgreementAccepted: true,
+            registrantCertificationAccepted: true,
+            autoRenewRequested: false,
+            commandId:
+              "domain-cross-project-consent-001"
+          }
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
 
       const { consent } = await runtime.acceptDomainConsent(
         seeded.actor,
         quote.id,
         {
+          projectId: seeded.projectId,
           registrantContactId: registrantContact.id,
           termsVersion: quote.termsVersion,
           registrationAgreementAccepted: true,
@@ -397,6 +440,7 @@ test(
           commandId: "domain-consent-contract-001"
         }
       );
+      assert.equal(consent.projectId, seeded.projectId);
 
       const { domainOrder } =
         await runtime.createDomainOrder(
@@ -411,7 +455,8 @@ test(
       assert.equal(domainOrder.state, "awaiting_payment");
       assert.equal(
         domainOrder.paymentUrl,
-        `/api/v1/domain-orders/${domainOrder.id}/payment`
+        `/api/v1/domain-orders/${domainOrder.id}/payment` +
+          `?projectId=${seeded.projectId}`
       );
       assert.equal(
         Object.values(domainOrder).includes(
@@ -421,18 +466,36 @@ test(
         "the public order must not disclose the provider URL"
       );
       assert.equal(providers.calls.includes("capture"), false);
+      await assert.rejects(
+        runtime.getDomainOrder(
+          seeded.actor,
+          domainOrder.id,
+          otherProjectId
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
 
       await assert.rejects(
         runtime.getDomainPaymentRedirect(
           { userId: randomUUID() },
-          domainOrder.id
+          domainOrder.id,
+          seeded.projectId
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
+      await assert.rejects(
+        runtime.getDomainPaymentRedirect(
+          seeded.actor,
+          domainOrder.id,
+          otherProjectId
         ),
         (error) => error?.code === "NOT_FOUND"
       );
       assert.deepEqual(
         await runtime.getDomainPaymentRedirect(
           seeded.actor,
-          domainOrder.id
+          domainOrder.id,
+          seeded.projectId
         ),
         {
           url: "https://checkout.stripe.com/c/pay/domain-contract"
@@ -447,7 +510,8 @@ test(
       await assert.rejects(
         runtime.getDomainPaymentRedirect(
           seeded.actor,
-          domainOrder.id
+          domainOrder.id,
+          seeded.projectId
         ),
         (error) =>
           error?.code ===
@@ -471,7 +535,8 @@ test(
         await assert.rejects(
           runtime.getDomainPaymentRedirect(
             seeded.actor,
-            domainOrder.id
+            domainOrder.id,
+            seeded.projectId
           ),
           (error) =>
             error?.code ===
@@ -484,28 +549,73 @@ test(
         verifiedEventId: "evt_domain_contract_001",
         verifiedAt: NOW
       });
+      await assert.rejects(
+        runtime.refreshDomainPrice(
+          seeded.actor,
+          domainOrder.id,
+          {
+            projectId: otherProjectId,
+            commandId:
+              "domain-cross-project-price-001"
+          }
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
       const { priceCheck } =
         await runtime.refreshDomainPrice(
           seeded.actor,
           domainOrder.id,
           {
+            projectId: seeded.projectId,
             commandId: "domain-price-contract-001"
           }
         );
       assert.equal(priceCheck.ready, true);
+      assert.equal(priceCheck.status, "ready_to_confirm");
+      assert.equal(priceCheck.projectId, seeded.projectId);
+      assert.deepEqual(
+        priceCheck.finalPrice,
+        priceCheck.price
+      );
 
       const active =
         await runtime.requestDomainRegistration(
           seeded.actor,
           domainOrder.id,
           {
+            projectId: seeded.projectId,
             priceCheckId: priceCheck.id,
             irreversibleRegistrationAccepted: true,
             commandId:
               "domain-registration-contract-001"
           }
-        );
+      );
       assert.equal(active.domainOrder.state, "active");
+      await assert.rejects(
+        runtime.listDnsRecords(
+          seeded.actor,
+          active.domainOrder.domainId,
+          otherProjectId
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
+      await assert.rejects(
+        runtime.upsertDnsRecord(
+          seeded.actor,
+          active.domainOrder.domainId,
+          "new",
+          {
+            projectId: otherProjectId,
+            type: "A",
+            name: "@",
+            content: "192.0.2.99",
+            ttl: 3600,
+            commandId:
+              "domain-cross-project-dns-001"
+          }
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
       assert.deepEqual(
         providers.calls.slice(
           providers.calls.indexOf("register"),
@@ -524,6 +634,7 @@ test(
         active.domainOrder.domainId,
         "new",
         {
+          projectId: seeded.projectId,
           type: "A",
           name: "@",
           content: "192.0.2.44",
@@ -532,11 +643,13 @@ test(
         }
       );
       assert.equal(saved.record.state, "applied");
+      assert.equal(saved.record.projectId, seeded.projectId);
       assert.equal(
         (
           await runtime.listDnsRecords(
             seeded.actor,
-            active.domainOrder.domainId
+            active.domainOrder.domainId,
+            seeded.projectId
           )
         ).records.length,
         1
@@ -546,6 +659,7 @@ test(
         active.domainOrder.domainId,
         saved.record.id,
         {
+          projectId: seeded.projectId,
           commandId: "domain-dns-delete-contract-001"
         }
       );
@@ -553,7 +667,8 @@ test(
         (
           await runtime.listDnsRecords(
             seeded.actor,
-            active.domainOrder.domainId
+            active.domainOrder.domainId,
+            seeded.projectId
           )
         ).records,
         []
@@ -595,6 +710,7 @@ test(
           seeded.actor,
           rejectedQuote.id,
           {
+            projectId: seeded.projectId,
             registrantContactId: registrantContact.id,
             termsVersion: rejectedQuote.termsVersion,
             registrationAgreementAccepted: true,

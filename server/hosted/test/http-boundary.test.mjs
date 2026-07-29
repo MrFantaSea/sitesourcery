@@ -33,6 +33,7 @@ function createContext({
   let requestSequence = 0;
   let csrfIssues = 0;
   const calls = {
+    domains: [],
     register: [],
     recovery: [],
     rollback: [],
@@ -78,6 +79,78 @@ function createContext({
         eventId: "evt_contract_1",
         status: "processed"
       };
+    },
+    async acceptDomainConsent(actor, quoteId, input) {
+      calls.domains.push({
+        name: "acceptDomainConsent",
+        actor,
+        quoteId,
+        input
+      });
+      return {
+        consent: {
+          id: "consent_1",
+          projectId: input.projectId
+        }
+      };
+    },
+    async getDomainPaymentRedirect(actor, orderId, projectId) {
+      calls.domains.push({
+        name: "getDomainPaymentRedirect",
+        actor,
+        orderId,
+        projectId
+      });
+      return {
+        url:
+          "https://checkout.stripe.com/c/pay/domain-proof"
+      };
+    },
+    async getDomainOrder(actor, orderId, projectId) {
+      calls.domains.push({
+        name: "getDomainOrder",
+        actor,
+        orderId,
+        projectId
+      });
+      return {
+        domainOrder: {
+          id: orderId,
+          projectId
+        }
+      };
+    },
+    async listDomains(actor, organizationId, projectId) {
+      calls.domains.push({
+        name: "listDomains",
+        actor,
+        organizationId,
+        projectId
+      });
+      return { domains: [] };
+    },
+    async getDomain(actor, domainId, projectId) {
+      calls.domains.push({
+        name: "getDomain",
+        actor,
+        domainId,
+        projectId
+      });
+      return {
+        domain: {
+          id: domainId,
+          projectId
+        }
+      };
+    },
+    async listDnsRecords(actor, domainId, projectId) {
+      calls.domains.push({
+        name: "listDnsRecords",
+        actor,
+        domainId,
+        projectId
+      });
+      return { records: [] };
     },
     async downloadExport(actor, projectId, exportId, token) {
       assert.equal(actor, ACTOR);
@@ -358,4 +431,76 @@ test("Stripe webhook route preserves exact raw bytes and relies on signature ins
     "t=1785268800,v1=signature-proof"
   );
   assert.deepEqual(context.calls.authenticate, []);
+});
+
+test("domain HTTP routes preserve selected-project binding and the same-origin payment relay", async () => {
+  const context = createContext();
+  const readHeaders = {
+    Cookie: `ss_session=${SESSION}`,
+    Origin: ORIGIN
+  };
+  for (const path of [
+    "/api/v1/domain-orders/order_1?projectId=project_1",
+    "/api/v1/organizations/org_1/domains?projectId=project_1",
+    "/api/v1/domains/domain_1?projectId=project_1",
+    "/api/v1/domains/domain_1/dns-records?projectId=project_1"
+  ]) {
+    const response = await context.api.fetch(
+      new Request(`${ORIGIN}${path}`, {
+        headers: readHeaders
+      })
+    );
+    assert.equal(response.status, 200, path);
+  }
+
+  const consent = await context.api.fetch(
+    writeRequest(
+      "/api/v1/domain-quotes/quote_1/consents",
+      {
+        cookie:
+          `ss_csrf=${CSRF}; ss_session=${SESSION}`,
+        idempotencyKey: "domain-consent-command-1",
+        body: {
+          projectId: "project_1",
+          registrantContactId: "contact_1"
+        }
+      }
+    )
+  );
+  assert.equal(consent.status, 201);
+
+  const relay = await context.api.fetch(
+    new Request(
+      `${ORIGIN}/api/v1/domain-orders/order_1/payment?projectId=project_1`,
+      { headers: readHeaders, redirect: "manual" }
+    )
+  );
+  assert.equal(relay.status, 303);
+  assert.equal(
+    relay.headers.get("location"),
+    "https://checkout.stripe.com/c/pay/domain-proof"
+  );
+  assert.equal(relay.headers.get("cache-control"), "no-store");
+
+  assert.deepEqual(
+    context.calls.domains.map((call) => ({
+      name: call.name,
+      projectId:
+        call.projectId ?? call.input?.projectId ?? null
+    })),
+    [
+      { name: "getDomainOrder", projectId: "project_1" },
+      { name: "listDomains", projectId: "project_1" },
+      { name: "getDomain", projectId: "project_1" },
+      { name: "listDnsRecords", projectId: "project_1" },
+      {
+        name: "acceptDomainConsent",
+        projectId: "project_1"
+      },
+      {
+        name: "getDomainPaymentRedirect",
+        projectId: "project_1"
+      }
+    ]
+  );
 });

@@ -244,6 +244,84 @@ test("private staging injection selects hosted mode in strict script order witho
   assert.deepEqual(hostedStagingAssets, [...hostedStagingAssets].sort());
 });
 
+test("hosted domain controls are progressive enhancement and a failed enhancer leaves the maker usable", async () => {
+  const publicHtml = await readFile(
+    new URL("../../abracadabra/app/index.html", import.meta.url),
+    "utf8",
+  );
+  const hosted = configureHostedAbracadabraHtml(publicHtml, {
+    catalog: {
+      products: [{
+        productId: "spark",
+        name: "Spark",
+        implementationContract: "abracadabra.spark/v1",
+      }],
+      tenures: [{ tenureId: "own", name: "Own" }],
+      offers: [{
+        offerId: "spark.own",
+        productId: "spark",
+        tenureId: "own",
+        eligibleAddressModes: ["customer_owned"],
+      }],
+    },
+  });
+  const enhancer =
+    '  <script src="/abracadabra/app/abracadabra-hosted-control-dom.js" defer></script>';
+  assert.match(hosted, new RegExp(enhancer.trim().replaceAll("/", "\\/"), "u"));
+  const failedEnhancement = hosted.replace(enhancer, "");
+
+  assert.match(
+    publicHtml,
+    /sitesourcery-abracadabra-control-mode" content="hold"/u,
+  );
+  assert.doesNotMatch(
+    publicHtml,
+    /abracadabra-hosted-control(?:-dom)?\.js/u,
+  );
+  assert.match(
+    failedEnhancement,
+    /sitesourcery-abracadabra-control-mode" content="hosted"/u,
+  );
+  assert.doesNotMatch(
+    failedEnhancement,
+    /abracadabra-hosted-control-dom\.js/u,
+  );
+  for (const fallback of [
+    'name="businessName"',
+    'data-load-sample',
+    'data-next="vibe"',
+    'data-step="preview"',
+    "/abracadabra/app/abracadabra-app.js",
+  ]) {
+    assert.match(failedEnhancement, new RegExp(fallback, "u"), fallback);
+  }
+  assert.doesNotMatch(
+    failedEnhancement,
+    /data-hosted-domain-storefront/u,
+    "a failed enhancer must not leave a misleading half-built purchase flow",
+  );
+
+  const enhancerSource = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-hosted-control-dom.js",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(
+    enhancerSource,
+    /data-hosted-domain-project-state/u,
+  );
+  assert.match(
+    enhancerSource,
+    /Finish one step to open the next\./u,
+  );
+  assert.match(
+    enhancerSource,
+    /\/api\/v1\/domain-orders\/"[\s\S]+\/payment/u,
+  );
+});
+
 test("staging catalog configuration rejects every private price authority field", async () => {
   const publicHtml = await readFile(
     new URL("../../abracadabra/app/index.html", import.meta.url),
@@ -946,11 +1024,12 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
       calls.push(["searchDomains", query]);
       return { results: [{ hostname: "cedar.example" }] };
     },
-    createDomainQuote: async (input, options) => {
-      calls.push(["createDomainQuote", input, options]);
+    createDomainQuote: async (projectId, input, options) => {
+      calls.push(["createDomainQuote", projectId, input, options]);
       return {
         quote: {
           id: "quote_1",
+          projectId,
           hostname: input.hostname,
           amountMinor: 1900,
           currency: "USD",
@@ -966,29 +1045,43 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
         },
       };
     },
-    saveRegistrantContact: async (organizationId, input, options) => {
-      calls.push(["saveRegistrantContact", organizationId, input, options]);
-      return { registrantContact: { id: "contact_1", name: input.name } };
+    saveRegistrantContact: async (organizationId, projectId, input, options) => {
+      calls.push(["saveRegistrantContact", organizationId, projectId, input, options]);
+      return {
+        registrantContact: {
+          id: "contact_1",
+          projectId,
+          name: input.name,
+        },
+      };
     },
-    acceptDomainConsent: async (quoteId, input, options) => {
-      calls.push(["acceptDomainConsent", quoteId, input, options]);
-      return { consent: { id: "consent_1" } };
+    acceptDomainConsent: async (projectId, quoteId, input, options) => {
+      calls.push(["acceptDomainConsent", projectId, quoteId, input, options]);
+      return { consent: { id: "consent_1", projectId } };
     },
     createDomainOrder: async (projectId, input, options) => {
       calls.push(["createDomainOrder", projectId, input, options]);
-      return { domainOrder: { id: "order_1", status: "payment_pending" } };
+      return {
+        domainOrder: {
+          id: "order_1",
+          projectId,
+          status: "awaiting_payment",
+          paymentUrl: "/api/v1/domain-orders/order_1/payment?projectId=project_1",
+        },
+      };
     },
-    listDomainOrders: async () => ({
-      domainOrders: [{ id: "order_1", status: "paid" }],
+    listDomainOrders: async (projectId) => ({
+      domainOrders: [{ id: "order_1", projectId, status: "authorized" }],
     }),
-    getDomainOrder: async (orderId) => ({
-      domainOrder: { id: orderId, status: "registration_processing" },
+    getDomainOrder: async (projectId, orderId) => ({
+      domainOrder: { id: orderId, projectId, status: "registration_processing" },
     }),
-    refreshDomainPrice: async (orderId, options) => {
-      calls.push(["refreshDomainPrice", orderId, options]);
+    refreshDomainPrice: async (projectId, orderId, options) => {
+      calls.push(["refreshDomainPrice", projectId, orderId, options]);
       return {
         priceCheck: {
           priceCheckId: "price_check_1",
+          projectId,
           orderId,
           status: "ready_to_confirm",
           hostname: "cedar.example",
@@ -999,13 +1092,25 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
         },
       };
     },
-    requestDomainRegistration: async (orderId, input, options) => {
-      calls.push(["requestDomainRegistration", orderId, input, options]);
-      return { domainOrder: { id: orderId, status: "registration_processing" } };
+    requestDomainRegistration: async (projectId, orderId, input, options) => {
+      calls.push(["requestDomainRegistration", projectId, orderId, input, options]);
+      return {
+        domainOrder: {
+          id: orderId,
+          projectId,
+          status: "registration_processing",
+        },
+      };
     },
-    listDomains: async () => ({ domains: [{ id: "domain_1", hostname: "cedar.example" }] }),
-    getDomain: async (domainId) => ({ domain: { id: domainId, hostname: "cedar.example" } }),
-    listDnsRecords: async () => ({ records: [{ id: "record_1", type: "A" }] }),
+    listDomains: async (_organizationId, projectId) => ({
+      domains: [{ id: "domain_1", projectId, hostname: "cedar.example" }],
+    }),
+    getDomain: async (projectId, domainId) => ({
+      domain: { id: domainId, projectId, hostname: "cedar.example" },
+    }),
+    listDnsRecords: async (projectId) => ({
+      records: [{ id: "record_1", projectId, type: "A" }],
+    }),
     upsertDnsRecord: async (...args) => {
       calls.push(["upsertDnsRecord", ...args]);
       return { accepted: true };
@@ -1109,7 +1214,9 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
   await control.requestDomainRenewalQuote(1);
   await control.requestDomainTransferOut();
 
-  const quoteInput = calls.find(([name]) => name === "createDomainQuote")[1];
+  const quoteCall = calls.find(([name]) => name === "createDomainQuote");
+  assert.equal(quoteCall[1], "project_1");
+  const quoteInput = quoteCall[2];
   assert.deepEqual(quoteInput, {
     hostname: "cedar.example",
     years: 1,
@@ -1118,7 +1225,8 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
   assert.equal(Object.hasOwn(quoteInput, "amount"), false);
   assert.equal(Object.hasOwn(quoteInput, "currency"), false);
   const registration = calls.find(([name]) => name === "requestDomainRegistration");
-  assert.deepEqual(registration[2], {
+  assert.equal(registration[1], "project_1");
+  assert.deepEqual(registration[3], {
     priceCheckId: "price_check_1",
     irreversibleRegistrationAccepted: true,
   });
@@ -1133,11 +1241,189 @@ test("domain storefront preserves quote, registrant, payment, fresh-price, regis
   }
 });
 
+test("domain work requires one selected project and a project change resets every domain stage", async () => {
+  let domainCalls = 0;
+  const api = baseApi({
+    searchDomains: async () => ({
+      results: [{ hostname: "reset.example", available: true }],
+    }),
+    createDomainQuote: async (projectId, input) => {
+      domainCalls += 1;
+      return {
+        quote: {
+          id: "quote_reset",
+          projectId,
+          hostname: input.hostname,
+          termsVersion: "domain-terms-2026-07",
+        },
+      };
+    },
+    saveRegistrantContact: async (_organizationId, projectId) => {
+      domainCalls += 1;
+      return {
+        registrantContact: {
+          id: "contact_reset",
+          projectId,
+          name: "Customer Owner",
+        },
+      };
+    },
+    listDomains: async (_organizationId, projectId) => {
+      domainCalls += 1;
+      return {
+        domains: [{
+          id: "domain_reset",
+          projectId,
+          hostname: "reset.example",
+        }],
+      };
+    },
+    getDomain: async (projectId, domainId) => ({
+      domain: { id: domainId, projectId, hostname: "reset.example" },
+    }),
+    listDnsRecords: async (projectId) => ({
+      records: [{
+        id: "record_reset",
+        projectId,
+        type: "A",
+        name: "@",
+        content: "192.0.2.8",
+      }],
+    }),
+  });
+  const control = createHostedControl({
+    api,
+    idempotencyFactory: () => "domain_reset_idem",
+  });
+  await control.boot();
+  assert.throws(
+    () => control.createDomainQuote({
+      hostname: "reset.example",
+      years: 1,
+    }),
+    (error) => error.code === "PROJECT_REQUIRED",
+  );
+  assert.throws(
+    () => control.saveRegistrantContact({ name: "Customer Owner" }),
+    (error) => error.code === "PROJECT_REQUIRED",
+  );
+  assert.throws(
+    () => control.listDomains(),
+    (error) => error.code === "PROJECT_REQUIRED",
+  );
+  assert.equal(domainCalls, 0);
+
+  await control.selectProject("project_1");
+  await control.searchDomains("reset");
+  await control.createDomainQuote({
+    hostname: "reset.example",
+    years: 1,
+  });
+  await control.saveRegistrantContact({
+    name: "Customer Owner",
+    email: "owner@example.com",
+    phone: "+1 856 555 0100",
+    addressLine1: "1 Main Street",
+    city: "Camden",
+    region: "NJ",
+    postalCode: "08102",
+    countryCode: "US",
+  });
+  await control.listDomains();
+  await control.selectDomain("domain_reset");
+  assert.equal(control.getState().domainQuote.projectId, "project_1");
+  assert.equal(control.getState().dnsRecords.length, 1);
+
+  await control.selectProject("project_2");
+  const reset = control.getState();
+  assert.equal(reset.project.id, "project_2");
+  assert.deepEqual(reset.domainSearchResults, []);
+  assert.equal(reset.domainQuote, null);
+  assert.equal(reset.registrantContact, null);
+  assert.equal(reset.domainConsent, null);
+  assert.equal(reset.domainOrder, null);
+  assert.equal(reset.domainPriceCheck, null);
+  assert.deepEqual(reset.domains, []);
+  assert.equal(reset.selectedDomain, null);
+  assert.deepEqual(reset.dnsRecords, []);
+});
+
+test("late and cross-project domain responses cannot cross the current project selection", async () => {
+  const quoteDeferred = deferred();
+  const domainDeferred = deferred();
+  let quoteCalls = 0;
+  const control = await selectedControl({
+    createDomainQuote: async () => {
+      quoteCalls += 1;
+      if (quoteCalls === 1) return quoteDeferred.promise;
+      return {
+        quote: {
+          id: "quote_wrong_project",
+          projectId: "project_1",
+          hostname: "wrong.example",
+        },
+      };
+    },
+    listDomains: async (_organizationId, projectId) => ({
+      domains: [{
+        id: "domain_race",
+        projectId,
+        hostname: "race.example",
+      }],
+    }),
+    getDomain: async () => domainDeferred.promise,
+    listDnsRecords: async () => ({
+      records: [],
+    }),
+  });
+
+  const lateQuote = control.createDomainQuote({
+    hostname: "race.example",
+    years: 1,
+  });
+  await Promise.resolve();
+  await control.selectProject("project_2");
+  quoteDeferred.resolve({
+    quote: {
+      id: "quote_late",
+      projectId: "project_1",
+      hostname: "race.example",
+    },
+  });
+  assert.equal(await lateQuote, null);
+  assert.equal(control.getState().domainQuote, null);
+
+  await assert.rejects(
+    () => control.createDomainQuote({
+      hostname: "wrong.example",
+      years: 1,
+    }),
+    (error) => error.code === "DOMAIN_PROJECT_RESPONSE_INVALID",
+  );
+  assert.equal(control.getState().domainQuote, null);
+
+  await control.listDomains();
+  const lateDomain = control.selectDomain("domain_race");
+  await Promise.resolve();
+  await control.selectProject("project_3");
+  domainDeferred.resolve({
+    domain: {
+      id: "domain_race",
+      projectId: "project_2",
+      hostname: "race.example",
+    },
+  });
+  assert.equal(await lateDomain, null);
+  assert.equal(control.getState().selectedDomain, null);
+  assert.deepEqual(control.getState().dnsRecords, []);
+});
+
 test("a changed final domain price voids the reviewed purchase path and cannot register", async () => {
   const control = await selectedControl({
-    createDomainQuote: async (input) => ({
+    createDomainQuote: async (projectId, input) => ({
       quote: {
         id: "quote_changed",
+        projectId,
         hostname: input.hostname,
         amountMinor: 1900,
         currency: "USD",
@@ -1152,19 +1438,31 @@ test("a changed final domain price voids the reviewed purchase path and cannot r
         },
       },
     }),
-    saveRegistrantContact: async () => ({
-      registrantContact: { id: "contact_changed", name: "Customer Owner" },
+    saveRegistrantContact: async (_organizationId, projectId) => ({
+      registrantContact: {
+        id: "contact_changed",
+        projectId,
+        name: "Customer Owner",
+      },
     }),
-    acceptDomainConsent: async () => ({ consent: { id: "consent_changed" } }),
-    createDomainOrder: async () => ({
-      domainOrder: { id: "order_changed", status: "payment_pending" },
+    acceptDomainConsent: async (projectId) => ({
+      consent: { id: "consent_changed", projectId },
     }),
-    listDomainOrders: async () => ({
-      domainOrders: [{ id: "order_changed", status: "paid" }],
+    createDomainOrder: async (projectId) => ({
+      domainOrder: {
+        id: "order_changed",
+        projectId,
+        status: "awaiting_payment",
+        paymentUrl: "/api/v1/domain-orders/order_changed/payment?projectId=project_1",
+      },
     }),
-    refreshDomainPrice: async (orderId) => ({
+    listDomainOrders: async (projectId) => ({
+      domainOrders: [{ id: "order_changed", projectId, status: "authorized" }],
+    }),
+    refreshDomainPrice: async (projectId, orderId) => ({
       priceCheck: {
         priceCheckId: "price_check_changed",
+        projectId,
         orderId,
         status: "changed",
         hostname: "cedar.example",
@@ -1232,7 +1530,7 @@ test("browser API rejects nested domain authority claims before network access",
     (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
   );
   assert.throws(
-    () => client.createDomainQuote({
+    () => client.createDomainQuote("project_1", {
       hostname: "example.com",
       years: 1,
       currency: "USD",

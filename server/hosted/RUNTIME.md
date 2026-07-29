@@ -26,7 +26,7 @@ registrant readback, partial capture of the final registrar amount, active
 registration, and verified DNS writes or deletes.
 
 The order response contains only the same-origin
-`/api/v1/domain-orders/{id}/payment` route. The server persists a Checkout URL
+`/api/v1/domain-orders/{id}/payment?projectId={projectId}` route. The server persists a Checkout URL
 only after accepting an exact `https://checkout.stripe.com` response from
 Checkout creation. Before returning a `303`, the relay rechecks tenant
 ownership, local expiry, and a fresh pending Stripe readback bound to the exact

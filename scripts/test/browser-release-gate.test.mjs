@@ -1096,11 +1096,16 @@ test("npm test builds and verifies the exact artifact before the mandatory brows
     packageJson.scripts["audit:browser"],
     "node --experimental-websocket scripts/browser-audit-vnext.mjs",
   );
+  assert.equal(
+    packageJson.scripts["audit:hosted-domain-browser"],
+    "node --experimental-websocket scripts/browser-hosted-domain-journey.mjs",
+  );
   const sequence = packageJson.scripts.test.split(" && ");
-  assert.deepEqual(sequence.slice(-3), [
+  assert.deepEqual(sequence.slice(-4), [
     "npm run build:pages",
     "npm run check:artifact",
     "npm run audit:browser",
+    "npm run audit:hosted-domain-browser",
   ]);
   assert.match(auditSource, /const DEFAULT_ARTIFACT_ROOT = path\.join\(SITE_ROOT, "_site"\)/u);
   assert.match(

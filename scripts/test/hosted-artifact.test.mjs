@@ -363,6 +363,66 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
     /SiteSourceryAbracadabraPlatform|localStorage|\/abracadabra\/site\//u,
   );
 
+  const domainApi = await readFile(
+    path.join(output, "abracadabra/app/abracadabra-api.js"),
+    "utf8",
+  );
+  const hostedControl = await readFile(
+    path.join(output, "abracadabra/app/abracadabra-hosted-control.js"),
+    "utf8",
+  );
+  const hostedControlDom = await readFile(
+    path.join(output, "abracadabra/app/abracadabra-hosted-control-dom.js"),
+    "utf8",
+  );
+  assert.match(
+    domainApi,
+    /function createDomainQuote\(projectId, input, requestOptions\)/u,
+    "the built browser API must require the selected project for a quote",
+  );
+  assert.match(
+    domainApi,
+    /function getDomainOrder\(projectId, orderId, requestOptions\)/u,
+    "the built browser API must require the selected project for order status",
+  );
+  assert.match(
+    domainApi,
+    /function upsertDnsRecord\(projectId, domainId, input, requestOptions\)/u,
+    "the built browser API must require the selected project for DNS writes",
+  );
+  assert.match(
+    hostedControl,
+    /if \(!exactDomainPaymentPath\(order\)\)/u,
+    "the built control must accept only its exact same-origin payment relay",
+  );
+  assert.match(
+    hostedControl,
+    /function projectBound\(value, projectId, label\)/u,
+    "the built control must reject cross-project domain responses",
+  );
+  assert.match(
+    hostedControlDom,
+    /data-hosted-domain-project-state/u,
+    "the built customer UI must explain that domain work follows the selected project",
+  );
+  for (const stage of ["1", "2", "3", "4"]) {
+    assert.match(
+      hostedControlDom,
+      new RegExp(`"data-domain-stage": "${stage}"`, "u"),
+      `the built customer UI must include progressive domain stage ${stage}`,
+    );
+  }
+  assert.match(
+    hostedControlDom,
+    /window\.location\.assign\(destination\)/u,
+    "the built customer UI must follow only the same-origin payment relay",
+  );
+  assert.equal(
+    count(hostedControlDom, '"/api/v1/domain-orders/"'),
+    1,
+    "the built domain journey must expose only its one exact same-origin payment relay",
+  );
+
   const commercialControl = JSON.parse(
     await readFile(path.join(ROOT, "data/abracadabra-commercial-control.json"), "utf8"),
   );

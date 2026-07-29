@@ -617,7 +617,7 @@ export function privateViewerPopupFailures(
   return failures;
 }
 
-async function chromiumPath() {
+export async function chromiumPath() {
   const requested = process.env.SITESOURCERY_CHROMIUM;
   const choices = requested ? [requested] : DEFAULT_CHROMIUM;
   const failures = [];

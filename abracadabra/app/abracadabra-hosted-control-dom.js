@@ -570,8 +570,11 @@
   function quoteCopy(quote) {
     if (!quote) return "Search for a domain, then check today’s price.";
     var hostname = text(quote.hostname || quote.domain || "Selected domain");
-    var amount = Number(quote.amountMinor);
-    var currency = text(quote.currency).toUpperCase();
+    var money = quote.price && typeof quote.price === "object"
+      ? quote.price
+      : quote;
+    var amount = Number(money.amountMinor);
+    var currency = text(money.currency).toUpperCase();
     var price = "";
     if (Number.isInteger(amount) && amount >= 0 && /^[A-Z]{3}$/u.test(currency)) {
       try {
@@ -634,6 +637,12 @@
 
   function renderDomainStorefront(state) {
     if (!domainUI) return;
+    var projectReady = Boolean(idOf(state.project));
+    domainUI.projectState.textContent = projectReady
+      ? "This domain work belongs to " + text(
+          state.project.name || idOf(state.project)
+        ) + "."
+      : "Choose a project before requesting a quote or saving domain details.";
     var priorResult = domainUI.results.value;
     domainUI.results.replaceChildren();
     state.domainSearchResults.forEach(function (result) {
@@ -646,11 +655,14 @@
       return option.value === priorResult;
     })) domainUI.results.value = priorResult;
     domainUI.results.disabled = !domainUI.results.options.length;
-    domainUI.quoteButton.disabled = domainUI.results.disabled;
+    domainUI.quoteButton.disabled =
+      domainUI.results.disabled || !projectReady;
     var finalCheckCopy = domainPriceCheckCopy(state.domainPriceCheck);
-    domainUI.quoteState.textContent = state.domainQuote
-      ? quoteCopy(state.domainQuote)
-      : finalCheckCopy || quoteCopy(null);
+    domainUI.quoteState.textContent = !projectReady
+      ? "Choose a project first. A search alone does not create a quote or order."
+      : state.domainQuote
+        ? quoteCopy(state.domainQuote)
+        : finalCheckCopy || quoteCopy(null);
 
     var quoteReady = Boolean(idOf(state.domainQuote));
     var contactReady = Boolean(idOf(state.registrantContact));
@@ -765,6 +777,7 @@
     if (!priceCheckReady) domainUI.irreversible.checked = false;
     domainUI.pollButton.disabled = !orderReady;
     domainUI.resumeOrdersButton.disabled = !state.project;
+    domainUI.loadDomainsButton.disabled = !projectReady;
     domainUI.registerBackButton.hidden = orderReady;
     domainUI.registerBackButton.disabled = orderReady;
 
@@ -837,6 +850,12 @@
         "You are the owner. Finish one step to open the next."
       )
     );
+    var projectState = node("p", {
+      "data-hosted-domain-project-state": "",
+      role: "status",
+      "aria-live": "polite"
+    }, "Choose a project before requesting a domain quote.");
+    panel.appendChild(projectState);
 
     var domainProgress = node("ol", {
       class: "platform-setup-progress",
@@ -1068,7 +1087,7 @@
     var managementState = node("p", { "data-hosted-domain-management-state": "" });
 
     var dnsType = node("select", { "aria-label": "DNS record type" });
-    ["A", "AAAA", "CNAME", "TXT", "MX"].forEach(function (type) {
+    ["A", "AAAA", "CNAME", "TXT"].forEach(function (type) {
       dnsType.appendChild(node("option", { value: type }, type));
     });
     var dnsName = hostedField("DNS name", "hostedDnsName");
@@ -1178,11 +1197,14 @@
         return control.createDomainOrder().then(function (order) {
           var destination = order && (order.paymentUrl || order.checkoutUrl);
           if (!destination) return order;
-          var parsed = new URL(destination, window.location.origin);
-          if (parsed.protocol !== "https:" || parsed.origin !== window.location.origin) {
+          var expected = "/api/v1/domain-orders/"
+            + encodeURIComponent(idOf(order))
+            + "/payment?projectId="
+            + encodeURIComponent(idOf(lastState.project));
+          if (destination !== expected) {
             throw new Error("Domain payment must stay inside the Site Sourcery account.");
           }
-          window.location.assign(parsed.href);
+          window.location.assign(destination);
           return order;
         });
       }, "Domain payment order created.").catch(function () {});
@@ -1257,6 +1279,7 @@
 
     return {
       results: results,
+      projectState: projectState,
       quoteButton: quoteButton,
       quoteState: quoteState,
       contactButton: contactButton,
@@ -1269,6 +1292,7 @@
       pollButton: pollButton,
       orderState: orderState,
       domains: domains,
+      loadDomainsButton: loadDomainsButton,
       openDomainButton: openDomainButton,
       managementState: managementState,
       dnsButton: dnsButton,

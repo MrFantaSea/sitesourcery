@@ -721,11 +721,12 @@
       );
     }
 
-    function createDomainQuote(input, requestOptions) {
+    function createDomainQuote(projectId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
       return request("POST", "/domain-quotes", {
         body: {
+          projectId: requiredText(projectId, "Project ID", 200),
           hostname: requiredText(source.hostname, "Domain", 253).toLowerCase(),
           years: integerBetween(source.years == null ? 1 : source.years, "Registration term", 1, 10),
           purpose: source.purpose == null
@@ -736,7 +737,7 @@
       });
     }
 
-    function saveRegistrantContact(organizationId, input, requestOptions) {
+    function saveRegistrantContact(organizationId, projectId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
       return request(
@@ -744,6 +745,7 @@
         "/organizations/" + segment(organizationId, "Organization ID") + "/registrant-contacts",
         {
           body: {
+            projectId: requiredText(projectId, "Project ID", 200),
             name: requiredText(source.name, "Registrant name", 100),
             organization: optionalText(source.organization, 120),
             email: requiredText(source.email, "Registrant email", 254),
@@ -769,7 +771,7 @@
       );
     }
 
-    function acceptDomainConsent(quoteId, input, requestOptions) {
+    function acceptDomainConsent(projectId, quoteId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
       return request(
@@ -777,6 +779,7 @@
         "/domain-quotes/" + segment(quoteId, "Domain quote ID") + "/consents",
         {
           body: {
+            projectId: requiredText(projectId, "Project ID", 200),
             registrantContactId: requiredText(
               source.registrantContactId,
               "Registrant contact ID",
@@ -808,10 +811,11 @@
       );
     }
 
-    function getDomainOrder(orderId, requestOptions) {
+    function getDomainOrder(projectId, orderId, requestOptions) {
       return request(
         "GET",
-        "/domain-orders/" + segment(orderId, "Domain order ID"),
+        "/domain-orders/" + segment(orderId, "Domain order ID")
+          + "?projectId=" + segment(projectId, "Project ID"),
         { signal: requestOptions && requestOptions.signal }
       );
     }
@@ -823,15 +827,18 @@
       );
     }
 
-    function refreshDomainPrice(orderId, requestOptions) {
+    function refreshDomainPrice(projectId, orderId, requestOptions) {
       return request(
         "POST",
         "/domain-orders/" + segment(orderId, "Domain order ID") + "/price-checks",
-        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
+        {
+          body: { projectId: requiredText(projectId, "Project ID", 200) },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
       );
     }
 
-    function requestDomainRegistration(orderId, input, requestOptions) {
+    function requestDomainRegistration(projectId, orderId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
       return request(
@@ -839,6 +846,7 @@
         "/domain-orders/" + segment(orderId, "Domain order ID") + "/registration-requests",
         {
           body: {
+            projectId: requiredText(projectId, "Project ID", 200),
             priceCheckId: requiredText(source.priceCheckId, "Fresh price check ID", 200),
             irreversibleRegistrationAccepted: source.irreversibleRegistrationAccepted === true
           },
@@ -847,22 +855,31 @@
       );
     }
 
-    function listDomains(organizationId) {
+    function listDomains(organizationId, projectId) {
       return request(
         "GET",
         "/organizations/" + segment(organizationId, "Organization ID") + "/domains"
+          + "?projectId=" + segment(projectId, "Project ID")
       );
     }
 
-    function getDomain(domainId) {
-      return request("GET", "/domains/" + segment(domainId, "Domain ID"));
+    function getDomain(projectId, domainId) {
+      return request(
+        "GET",
+        "/domains/" + segment(domainId, "Domain ID")
+          + "?projectId=" + segment(projectId, "Project ID")
+      );
     }
 
-    function listDnsRecords(domainId) {
-      return request("GET", "/domains/" + segment(domainId, "Domain ID") + "/dns-records");
+    function listDnsRecords(projectId, domainId) {
+      return request(
+        "GET",
+        "/domains/" + segment(domainId, "Domain ID") + "/dns-records"
+          + "?projectId=" + segment(projectId, "Project ID")
+      );
     }
 
-    function upsertDnsRecord(domainId, input, requestOptions) {
+    function upsertDnsRecord(projectId, domainId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
       return request(
@@ -871,6 +888,7 @@
           + segment(source.recordId || "new", "DNS record ID"),
         {
           body: {
+            projectId: requiredText(projectId, "Project ID", 200),
             type: requiredText(source.type, "DNS record type", 10).toUpperCase(),
             name: requiredText(source.name, "DNS record name", 253),
             content: requiredText(source.content, "DNS record value", 2000),
@@ -881,42 +899,54 @@
       );
     }
 
-    function deleteDnsRecord(domainId, recordId, requestOptions) {
+    function deleteDnsRecord(projectId, domainId, recordId, requestOptions) {
       return request(
         "DELETE",
         "/domains/" + segment(domainId, "Domain ID") + "/dns-records/"
           + segment(recordId, "DNS record ID"),
-        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
+        {
+          body: { projectId: requiredText(projectId, "Project ID", 200) },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
       );
     }
 
-    function setDomainAutoRenew(domainId, enabled, requestOptions) {
+    function setDomainAutoRenew(projectId, domainId, enabled, requestOptions) {
       return request(
         "PUT",
         "/domains/" + segment(domainId, "Domain ID") + "/auto-renew",
         {
-          body: { enabled: enabled === true },
+          body: {
+            projectId: requiredText(projectId, "Project ID", 200),
+            enabled: enabled === true
+          },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
       );
     }
 
-    function requestDomainRenewalQuote(domainId, years, requestOptions) {
+    function requestDomainRenewalQuote(projectId, domainId, years, requestOptions) {
       return request(
         "POST",
         "/domains/" + segment(domainId, "Domain ID") + "/renewal-quotes",
         {
-          body: { years: integerBetween(years == null ? 1 : years, "Renewal term", 1, 10) },
+          body: {
+            projectId: requiredText(projectId, "Project ID", 200),
+            years: integerBetween(years == null ? 1 : years, "Renewal term", 1, 10)
+          },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
       );
     }
 
-    function requestDomainTransferOut(domainId, requestOptions) {
+    function requestDomainTransferOut(projectId, domainId, requestOptions) {
       return request(
         "POST",
         "/domains/" + segment(domainId, "Domain ID") + "/transfer-out-requests",
-        { idempotencyKey: requestOptions && requestOptions.idempotencyKey }
+        {
+          body: { projectId: requiredText(projectId, "Project ID", 200) },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
       );
     }
 

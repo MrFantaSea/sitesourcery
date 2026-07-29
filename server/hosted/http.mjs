@@ -639,7 +639,8 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
           const redirect =
             await service.getDomainPaymentRedirect(
               actor,
-              route[0]
+              route[0],
+              url.searchParams.get("projectId")
             );
           return new Response(null, {
             status: 303,
@@ -655,7 +656,11 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
           method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/domain-orders\/([^/]+)$/u))
         ) {
-          result = await service.getDomainOrder(actor, route[0]);
+          result = await service.getDomainOrder(
+            actor,
+            route[0],
+            url.searchParams.get("projectId")
+          );
         } else if (
           method === "GET" &&
           (route = match(
@@ -689,17 +694,29 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
             /^\/api\/v1\/organizations\/([^/]+)\/domains$/u
           ))
         ) {
-          result = await service.listDomains(actor, route[0]);
+          result = await service.listDomains(
+            actor,
+            route[0],
+            url.searchParams.get("projectId")
+          );
         } else if (
           method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/domains\/([^/]+)$/u))
         ) {
-          result = await service.getDomain(actor, route[0]);
+          result = await service.getDomain(
+            actor,
+            route[0],
+            url.searchParams.get("projectId")
+          );
         } else if (
           method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/domains\/([^/]+)\/dns-records$/u))
         ) {
-          result = await service.listDnsRecords(actor, route[0]);
+          result = await service.listDnsRecords(
+            actor,
+            route[0],
+            url.searchParams.get("projectId")
+          );
         } else if (
           method === "PUT" &&
           (route = match(

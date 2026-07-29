@@ -481,8 +481,11 @@ test("domain storefront requests carry identifiers and customer consent, never b
     idempotencyFactory: () => "idem_domain",
   });
   await client.me();
-  await client.createDomainQuote({ hostname: "Example.COM", years: 2 });
-  await client.saveRegistrantContact("org_1", {
+  await client.createDomainQuote(
+    "project_1",
+    { hostname: "Example.COM", years: 2 },
+  );
+  await client.saveRegistrantContact("org_1", "project_1", {
     name: "Customer Owner",
     email: "owner@example.com",
     phone: "+1 856 555 0100",
@@ -492,7 +495,7 @@ test("domain storefront requests carry identifiers and customer consent, never b
     postalCode: "08102",
     countryCode: "US",
   });
-  await client.acceptDomainConsent("quote_1", {
+  await client.acceptDomainConsent("project_1", "quote_1", {
     registrantContactId: "contact_1",
     termsVersion: "domain-terms-2026-07",
     registrationAgreementAccepted: true,
@@ -503,14 +506,31 @@ test("domain storefront requests carry identifiers and customer consent, never b
     quoteId: "quote_1",
     consentId: "consent_1",
   });
-  await client.refreshDomainPrice("order_1");
-  await client.requestDomainRegistration("order_1", {
+  await client.getDomainOrder("project_1", "order_1");
+  await client.listDomainOrders("project_1");
+  await client.refreshDomainPrice("project_1", "order_1");
+  await client.requestDomainRegistration("project_1", "order_1", {
     priceCheckId: "price_check_1",
     irreversibleRegistrationAccepted: true,
   });
+  await client.listDomains("org_1", "project_1");
+  await client.getDomain("project_1", "domain_1");
+  await client.listDnsRecords("project_1", "domain_1");
+  await client.upsertDnsRecord("project_1", "domain_1", {
+    type: "A",
+    name: "@",
+    content: "192.0.2.44",
+    ttl: 3600,
+  });
+  await client.deleteDnsRecord(
+    "project_1",
+    "domain_1",
+    "record_1",
+  );
 
   const quote = calls.find((call) => call.url === "/api/v1/domain-quotes");
   assert.deepEqual(JSON.parse(quote.options.body), {
+    projectId: "project_1",
     hostname: "example.com",
     years: 2,
     purpose: "register",
@@ -522,12 +542,15 @@ test("domain storefront requests carry identifiers and customer consent, never b
   });
   const registration = calls.find((call) => call.url.endsWith("/registration-requests"));
   assert.deepEqual(JSON.parse(registration.options.body), {
+    projectId: "project_1",
     priceCheckId: "price_check_1",
     irreversibleRegistrationAccepted: true,
   });
   for (const call of calls.slice(1)) {
     assert.equal(call.options.credentials, "include");
-    assert.equal(call.options.headers["X-CSRF-Token"], "csrf_domain");
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(call.options.method)) {
+      assert.equal(call.options.headers["X-CSRF-Token"], "csrf_domain");
+    }
     const body = call.options.body ? JSON.parse(call.options.body) : {};
     for (const forbidden of [
       "amount",
@@ -538,5 +561,17 @@ test("domain storefront requests carry identifiers and customer consent, never b
     ]) {
       assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
     }
+  }
+  for (const call of calls.filter((candidate) =>
+    /domain-orders|registrant-contacts|domain-quotes|domains/u.test(candidate.url)
+  )) {
+    const body = call.options.body
+      ? JSON.parse(call.options.body)
+      : null;
+    assert.ok(
+      call.url.includes("project_1")
+        || body?.projectId === "project_1",
+      call.url,
+    );
   }
 });
