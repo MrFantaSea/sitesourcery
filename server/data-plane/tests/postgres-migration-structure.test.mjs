@@ -258,3 +258,49 @@ test("hosted payment control plane reconciles effects and models ownership witho
     /stripe_subscription_id[^;]*site_ownership_entitlements/iu
   );
 });
+
+test("export workers use one exact lease, attempt, fence, and bounded failure contract", async () => {
+  const all = await migrations();
+  const exports = all.find(
+    ({ name }) =>
+      name === "202607280015_export_worker_fencing.sql"
+  );
+  assert.ok(exports);
+  for (const column of [
+    "attempt_number",
+    "fence_token",
+    "worker_id",
+    "lease_started_at",
+    "lease_expires_at",
+    "object_attempt_number",
+    "object_fence_token",
+    "failure_code",
+    "failure_facts",
+    "failed_at"
+  ]) {
+    assert.match(
+      exports.sql,
+      new RegExp(`add column ${column}\\b`, "iu")
+    );
+  }
+  assert.match(
+    exports.sql,
+    /EXPORT_LEGACY_BUILD_ORPHANED[\s\S]*where state = 'building'/iu
+  );
+  assert.match(
+    exports.sql,
+    /pg_column_size\(failure_facts\)\s*<=\s*2048/iu
+  );
+  assert.match(
+    exports.sql,
+    /old\.lease_expires_at\s*>\s*new\.lease_started_at[\s\S]*active export lease cannot be stolen/iu
+  );
+  assert.match(
+    exports.sql,
+    /new\.attempt_number\s*<>\s*old\.attempt_number \+ 1[\s\S]*manual export retry must create one new attempt/iu
+  );
+  assert.match(
+    exports.sql,
+    /create function ss\.hosted_runtime_contract_v15\(\)/iu
+  );
+});

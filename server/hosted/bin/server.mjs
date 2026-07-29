@@ -15,6 +15,10 @@ import {
   createCancellationWorker
 } from "../cancellation-worker.mjs";
 import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
+import {
+  createExportWorker,
+  exportWorkerOptionsFromEnvironment
+} from "../export-worker.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -124,7 +128,9 @@ const authority = createCanonicalPostgresAuthority({ pool });
 let apiServer = null;
 let tenantServer = null;
 let cancellationWorker = null;
+let exportWorker = null;
 let shutdownPromise = null;
+const shutdownController = new AbortController();
 
 function closeServer(server) {
   if (!server?.listening) return Promise.resolve();
@@ -138,15 +144,20 @@ function closeServer(server) {
 
 function shutdown() {
   if (!shutdownPromise) {
+    shutdownController.abort();
     shutdownPromise = (async () => {
       await Promise.all([
         closeServer(apiServer),
         closeServer(tenantServer),
         cancellationWorker
           ? cancellationWorker.stop()
+          : Promise.resolve(),
+        exportWorker
+          ? exportWorker.stop()
           : Promise.resolve()
       ]);
       cancellationWorker = null;
+      exportWorker = null;
       await authority.close();
     })();
   }
@@ -253,6 +264,13 @@ async function start() {
     readiness.payments,
     stripeComposition
   );
+  exportWorker = createExportWorker({
+    service,
+    ...exportWorkerOptionsFromEnvironment(),
+    log(entry) {
+      process.stdout.write(`${JSON.stringify(entry)}\n`);
+    }
+  });
 
   apiServer = createServer(
     createApiNodeHandler(createHostedApi(service))
@@ -269,6 +287,10 @@ async function start() {
 
   await listen(apiServer, apiPort);
   await listen(tenantServer, tenantPort);
+
+  exportWorker.start({
+    signal: shutdownController.signal
+  });
 
   if (stripeComposition.mode === "approved_live") {
     cancellationWorker = createCancellationWorker({
@@ -299,6 +321,9 @@ async function start() {
       payments: paymentReadiness,
       cancellationWorker:
         cancellationWorker?.snapshot().state ??
+        "held_not_started",
+      exportWorker:
+        exportWorker?.snapshot().state ??
         "held_not_started"
     })}\n`
   );

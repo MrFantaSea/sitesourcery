@@ -1033,6 +1033,10 @@ insert into ss.export_requests (
   manifest_digest,
   object_key,
   byte_count,
+  attempt_number,
+  fence_token,
+  object_attempt_number,
+  object_fence_token,
   requested_at,
   completed_at,
   expires_at
@@ -1045,6 +1049,10 @@ insert into ss.export_requests (
   repeat('f', 64),
   'exports/00000000-0000-4000-8000-000000000118.zip',
   4096,
+  1,
+  1,
+  1,
+  1,
   '2026-07-28T12:00:00Z',
   '2026-07-28T12:06:00Z',
   '2026-10-26T12:06:00Z'

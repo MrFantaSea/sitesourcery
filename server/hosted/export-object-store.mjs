@@ -33,25 +33,61 @@ function safeId(value, field) {
   return selected;
 }
 
-function exportKey({ organizationId, projectId, exportId }) {
+function positiveSequence(value, field) {
+  const selected = Number(value);
+  invariant(
+    Number.isSafeInteger(selected) && selected > 0,
+    "OBJECT_KEY_INVALID",
+    `${field} is invalid.`,
+    { status: 400 }
+  );
+  return selected;
+}
+
+function exportKey({
+  organizationId,
+  projectId,
+  exportId,
+  attempt,
+  fence
+}) {
+  const selectedAttempt = positiveSequence(
+    attempt,
+    "Export attempt"
+  );
+  const selectedFence = positiveSequence(
+    fence,
+    "Export fence"
+  );
   return [
     "exports",
     safeId(organizationId, "Organization ID"),
     safeId(projectId, "Project ID"),
-    `${safeId(exportId, "Export ID")}.zip`
+    safeId(exportId, "Export ID"),
+    `attempt-${selectedAttempt}-fence-${selectedFence}.zip`
   ].join("/");
 }
 
 function validateKey(value) {
   const selected = String(value ?? "");
   const parts = selected.split("/");
-  invariant(
+  const legacy =
     parts.length === 4 &&
-      parts[0] === "exports" &&
-      SAFE_ID.test(parts[1]) &&
-      SAFE_ID.test(parts[2]) &&
-      parts[3].endsWith(".zip") &&
-      SAFE_ID.test(parts[3].slice(0, -4)),
+    parts[0] === "exports" &&
+    SAFE_ID.test(parts[1]) &&
+    SAFE_ID.test(parts[2]) &&
+    parts[3].endsWith(".zip") &&
+    SAFE_ID.test(parts[3].slice(0, -4));
+  const fenced =
+    parts.length === 5 &&
+    parts[0] === "exports" &&
+    SAFE_ID.test(parts[1]) &&
+    SAFE_ID.test(parts[2]) &&
+    SAFE_ID.test(parts[3]) &&
+    /^attempt-[1-9][0-9]{0,15}-fence-[1-9][0-9]{0,15}\.zip$/u
+      .test(parts[4]);
+  invariant(
+    legacy || fenced,
     "OBJECT_KEY_INVALID",
     "Export object key is invalid.",
     { status: 400 }

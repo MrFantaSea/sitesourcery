@@ -36,6 +36,9 @@ const WRITE_ROLES = new Set(["owner", "admin", "editor"]);
 const BILLING_ROLES = new Set(["owner", "admin", "billing"]);
 const PRODUCT_TERM_KINDS = Object.freeze(["product", "privacy", "website"]);
 const EXPORT_TTL_DAYS = 90;
+const DEFAULT_EXPORT_LEASE_MS = 60 * 1000;
+const MAXIMUM_EXPORT_LEASE_MS = 5 * 60 * 1000;
+const MAXIMUM_EXPORT_BATCH = 100;
 const DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 const RECOVERY_DELIVERY_TTL_MS = 30 * 60 * 1000;
 const CHECKOUT_HOST = "checkout.stripe.com";
@@ -86,6 +89,47 @@ function commandId(value) {
     { status: 400 }
   );
   return selected;
+}
+
+function exportWorkerIdentity(value) {
+  const selected = String(value ?? "");
+  invariant(
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u.test(selected),
+    "EXPORT_WORKER_INVALID",
+    "Export worker identity is invalid.",
+    { status: 500 }
+  );
+  return selected;
+}
+
+function exportBatchLimit(value) {
+  const selected = Number(value);
+  invariant(
+    Number.isSafeInteger(selected) &&
+      selected > 0 &&
+      selected <= MAXIMUM_EXPORT_BATCH,
+    "EXPORT_WORKER_INVALID",
+    "Export worker batch limit is invalid.",
+    { status: 500 }
+  );
+  return selected;
+}
+
+function safeExportCauseCode(error) {
+  const selected =
+    error instanceof HostedError
+      ? error.code
+      : typeof error?.code === "string"
+        ? error.code
+        : "UNEXPECTED_ERROR";
+  return /^[A-Z][A-Z0-9_]{0,127}$/u.test(selected)
+    ? selected
+    : "UNEXPECTED_ERROR";
+}
+
+function exportObjectNotFound(error) {
+  return error?.code === "ENOENT" ||
+    error?.code === "OBJECT_NOT_FOUND";
 }
 
 function addressInput(input, licensedBaseDomain) {
@@ -450,6 +494,8 @@ export function createCanonicalPostgresService({
   clock = { now: () => new Date().toISOString() },
   randomUUID = systemRandomUUID,
   tokenFactory = randomToken,
+  exportWorkerId: suppliedExportWorkerId = null,
+  exportLeaseMs = DEFAULT_EXPORT_LEASE_MS,
   licensedBaseDomain = "sites.sitesourcery.me"
 } = {}) {
   invariant(
@@ -498,12 +544,25 @@ export function createCanonicalPostgresService({
   );
   invariant(
     exportStore &&
+      typeof exportStore.key === "function" &&
       typeof exportStore.put === "function" &&
       typeof exportStore.get === "function" &&
       typeof exportStore.delete === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Private export object store is required.",
     { status: 500 }
+  );
+  invariant(
+    Number.isSafeInteger(exportLeaseMs) &&
+      exportLeaseMs > 0 &&
+      exportLeaseMs <= MAXIMUM_EXPORT_LEASE_MS,
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Export worker lease duration is invalid.",
+    { status: 500 }
+  );
+  const defaultExportWorkerId = exportWorkerIdentity(
+    suppliedExportWorkerId ??
+      `export-worker:${randomUUID()}`
   );
   invariant(
     recoveryMailPort &&
@@ -4464,6 +4523,848 @@ export function createCanonicalPostgresService({
     }
   }
 
+  function exportFailureFacts({
+    phase,
+    certainty,
+    causeCode = null,
+    objectKey = null,
+    recovery = "manual_retry_required"
+  }) {
+    return {
+      phase,
+      certainty,
+      ...(causeCode ? { causeCode } : {}),
+      ...(objectKey ? { objectKey } : {}),
+      recovery
+    };
+  }
+
+  function exportFenceLost() {
+    return new HostedError(
+      "EXPORT_FENCE_LOST",
+      "That export attempt was recovered by another worker.",
+      { status: 409 }
+    );
+  }
+
+  async function failExportClaim(
+    stage,
+    {
+      failureCode,
+      failureFacts
+    }
+  ) {
+    const failed = await authority.service(
+      {},
+      (client) =>
+        client.query(
+          `update ss.export_requests
+              set state = 'failed',
+                  worker_id = null,
+                  lease_started_at = null,
+                  lease_expires_at = null,
+                  completed_at = null,
+                  expires_at = null,
+                  failure_code = $5,
+                  failure_facts = $6::jsonb,
+                  failed_at = $7
+            where id = $1
+              and state = 'building'
+              and worker_id = $2
+              and attempt_number = $3
+              and fence_token = $4
+          returning *`,
+          [
+            stage.exportId,
+            stage.workerId,
+            stage.attempt,
+            stage.fence,
+            failureCode,
+            JSON.stringify(failureFacts),
+            now(clock)
+          ]
+        )
+    );
+    if (failed.rowCount !== 1) throw exportFenceLost();
+    return failed.rows[0];
+  }
+
+  async function releaseExportClaim(stage) {
+    const released = await authority.service(
+      {},
+      (client) =>
+        client.query(
+          `update ss.export_requests
+              set state = 'queued',
+                  worker_id = null,
+                  lease_started_at = null,
+                  lease_expires_at = null,
+                  manifest_digest = null,
+                  object_key = null,
+                  byte_count = null,
+                  object_attempt_number = null,
+                  object_fence_token = null,
+                  completed_at = null,
+                  expires_at = null,
+                  failure_code = null,
+                  failure_facts = null,
+                  failed_at = null
+            where id = $1
+              and state = 'building'
+              and worker_id = $2
+              and attempt_number = $3
+              and fence_token = $4
+          returning *`,
+          [
+            stage.exportId,
+            stage.workerId,
+            stage.attempt,
+            stage.fence
+          ]
+        )
+    );
+    if (released.rowCount !== 1) throw exportFenceLost();
+    return released.rows[0];
+  }
+
+  async function claimExport({
+    exportId = null,
+    workerId
+  }) {
+    const selectedWorkerId =
+      exportWorkerIdentity(workerId);
+    const claimStartedAt = now(clock);
+    const leaseExpiresAt = addMs(
+      claimStartedAt,
+      exportLeaseMs
+    );
+    return authority.service(
+      {},
+      async (client) => {
+        const values = [claimStartedAt];
+        const exactPredicate = exportId
+          ? `and export.id = $${values.push(exportId)}`
+          : "";
+        const selected = await client.query(
+          `select
+             export.*,
+             project.name,
+             project.lifecycle,
+             project.created_at as project_created_at,
+             project.updated_at as project_updated_at,
+             organization.name as organization_name,
+             subscription.retention_ends_at
+           from ss.export_requests export
+           join ss.projects project
+             on project.organization_id = export.organization_id
+            and project.id = export.project_id
+           join ss.organizations organization
+             on organization.id = export.organization_id
+           left join ss.stripe_subscriptions subscription
+             on subscription.organization_id = export.organization_id
+            and subscription.project_id = export.project_id
+          where (
+              export.state = 'queued'
+              or (
+                export.state = 'building'
+                and export.lease_expires_at <= $1
+              )
+            )
+            ${exactPredicate}
+          order by export.requested_at, export.id
+          limit 1
+          for update of export skip locked`,
+          values
+        );
+        const selectedRow = selected.rows[0];
+        if (!selectedRow && exportId) {
+          const existing = await client.query(
+            `select state
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          );
+          invariant(
+            existing.rowCount === 1,
+            "NOT_FOUND",
+            "The requested item was not found.",
+            { status: 404 }
+          );
+          invariant(
+            existing.rows[0].state !== "failed",
+            "EXPORT_RETRY_REQUIRED",
+            "That failed export requires an explicit retry.",
+            { status: 409 }
+          );
+          invariant(
+            false,
+            "EXPORT_CLAIM_UNAVAILABLE",
+            "That export is not available for this worker.",
+            { status: 409 }
+          );
+        }
+        if (!selectedRow) return null;
+
+        const recoveryObject =
+          selectedRow.manifest_digest &&
+          selectedRow.object_key &&
+          selectedRow.byte_count !== null &&
+          selectedRow.object_attempt_number !== null &&
+          selectedRow.object_fence_token !== null
+            ? {
+                key: selectedRow.object_key,
+                sha256: selectedRow.manifest_digest,
+                byteLength: Number(selectedRow.byte_count),
+                attempt: Number(
+                  selectedRow.object_attempt_number
+                ),
+                fence: Number(
+                  selectedRow.object_fence_token
+                )
+              }
+            : null;
+        const claimed = await client.query(
+          `update ss.export_requests
+              set state = 'building',
+                  fence_token = fence_token + 1,
+                  worker_id = $2,
+                  lease_started_at = $3,
+                  lease_expires_at = $4,
+                  completed_at = null,
+                  expires_at = null,
+                  failure_code = null,
+                  failure_facts = null,
+                  failed_at = null
+            where id = $1
+          returning *`,
+          [
+            selectedRow.id,
+            selectedWorkerId,
+            claimStartedAt,
+            leaseExpiresAt
+          ]
+        );
+        const row = {
+          ...selectedRow,
+          ...claimed.rows[0]
+        };
+        const stage = {
+          exportId: row.id,
+          organizationId: row.organization_id,
+          projectId: row.project_id,
+          workerId: selectedWorkerId,
+          attempt: Number(row.attempt_number),
+          fence: Number(row.fence_token),
+          generatedAt: claimStartedAt,
+          retentionEndsAt: row.retention_ends_at
+            ? iso(row.retention_ends_at)
+            : null,
+          recoveryObject
+        };
+
+        if (
+          stage.retentionEndsAt &&
+          Date.parse(stage.retentionEndsAt) <=
+            Date.parse(claimStartedAt)
+        ) {
+          const failureCode =
+            "EXPORT_RETENTION_EXPIRED";
+          const retained = await client.query(
+            `update ss.export_requests
+                set state = 'failed',
+                    worker_id = null,
+                    lease_started_at = null,
+                    lease_expires_at = null,
+                    completed_at = null,
+                    expires_at = null,
+                    failure_code = $5,
+                    failure_facts = $6::jsonb,
+                    failed_at = $7
+              where id = $1
+                and state = 'building'
+                and worker_id = $2
+                and attempt_number = $3
+                and fence_token = $4`,
+            [
+              stage.exportId,
+              stage.workerId,
+              stage.attempt,
+              stage.fence,
+              failureCode,
+              JSON.stringify(
+                exportFailureFacts({
+                  phase: "retention",
+                  certainty: recoveryObject
+                    ? "ambiguous"
+                    : "not_written",
+                  objectKey:
+                    recoveryObject?.key ?? null
+                })
+              ),
+              claimStartedAt
+            ]
+          );
+          invariant(
+            retained.rowCount === 1,
+            "EXPORT_FENCE_LOST",
+            "That export attempt was recovered by another worker.",
+            { status: 409 }
+          );
+          return {
+            ...stage,
+            failureCode
+          };
+        }
+
+        const [draft, versions, addresses, tickets] =
+          await Promise.all([
+            client.query(
+              `select raw_facts, revision, updated_at
+                 from ss.project_drafts
+                where project_id = $1`,
+              [row.project_id]
+            ),
+            client.query(
+              `select
+                 version.id, version.version_number,
+                 version.raw_facts, version.compiler_schema,
+                 version.compiler_revision, version.created_at,
+                 state.state, artifact.artifact_digest,
+                 artifact.html_bytes
+               from ss.site_versions version
+               join ss.artifacts artifact
+                 on artifact.id = version.artifact_id
+               left join ss.version_state_projection state
+                 on state.version_id = version.id
+              where version.project_id = $1
+              order by version.version_number`,
+              [row.project_id]
+            ),
+            client.query(
+              `select
+                 id, kind, ownership, retained_domain,
+                 serving_hostname, state, allocated_at
+               from ss.project_addresses
+              where project_id = $1
+              order by allocated_at, id`,
+              [row.project_id]
+            ),
+            client.query(
+              `select
+                 ticket.id, ticket.subject, ticket.state,
+                 ticket.created_at,
+                 coalesce(
+                   jsonb_agg(
+                     jsonb_build_object(
+                       'authorKind', message.author_kind,
+                       'body', message.body,
+                       'createdAt', message.created_at
+                     )
+                     order by message.created_at, message.id
+                   ) filter (where message.id is not null),
+                   '[]'::jsonb
+                 ) as messages
+               from ss.support_tickets ticket
+               left join ss.support_messages message
+                 on message.ticket_id = ticket.id
+              where ticket.project_id = $1
+              group by ticket.id
+              order by ticket.created_at, ticket.id`,
+              [row.project_id]
+            )
+          ]);
+        return {
+          ...stage,
+          manifest: {
+            schema: "sitesourcery.project-export/v1",
+            generatedAt: claimStartedAt,
+            organization: {
+              id: row.organization_id,
+              name: row.organization_name
+            },
+            project: {
+              id: row.project_id,
+              name: row.name,
+              lifecycle: row.lifecycle,
+              createdAt: iso(row.project_created_at),
+              updatedAt: iso(row.project_updated_at),
+              supportTickets: tickets.rows.map(
+                (ticket) => ({
+                  id: ticket.id,
+                  subject: ticket.subject,
+                  state: ticket.state,
+                  createdAt: iso(ticket.created_at),
+                  messages: ticket.messages
+                })
+              )
+            },
+            site: {
+              draft: draft.rows[0]
+                ? {
+                    revision: Number(
+                      draft.rows[0].revision
+                    ),
+                    rawFacts: draft.rows[0].raw_facts,
+                    updatedAt: iso(
+                      draft.rows[0].updated_at
+                    )
+                  }
+                : null,
+              versions: versions.rows.map(
+                (version) => ({
+                  id: version.id,
+                  versionNumber: Number(
+                    version.version_number
+                  ),
+                  state: version.state,
+                  rawFacts: version.raw_facts,
+                  compilerSchema:
+                    version.compiler_schema,
+                  compilerRevision:
+                    version.compiler_revision,
+                  artifactDigest:
+                    version.artifact_digest,
+                  createdAt: iso(version.created_at)
+                })
+              )
+            },
+            domains: addresses.rows.map(
+              (address) => ({
+                id: address.id,
+                kind: address.kind,
+                ownership: address.ownership,
+                retainedDomain:
+                  address.retained_domain,
+                servingHostname:
+                  address.serving_hostname,
+                state: address.state,
+                allocatedAt: iso(address.allocated_at)
+              })
+            )
+          },
+          versions: versions.rows
+        };
+      }
+    );
+  }
+
+  async function claimExportWithRetry(input) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await claimExport(input);
+      } catch (error) {
+        const retryable =
+          error?.code === "40001" ||
+          error?.code === "40P01" ||
+          (
+            error instanceof HostedError &&
+            error.code === "WRITE_CONFLICT"
+          );
+        if (!retryable) throw error;
+        lastError = error;
+      }
+    }
+    throw translatePostgres(lastError);
+  }
+
+  function buildExportObject(stage) {
+    const json = (value) =>
+      Buffer.from(
+        `${JSON.stringify(value, null, 2)}\n`,
+        "utf8"
+      );
+    const entries = [
+      {
+        name: "manifest.json",
+        bytes: json(stage.manifest)
+      },
+      {
+        name: "site/project.json",
+        bytes: json(stage.manifest.project)
+      },
+      {
+        name: "site/content.json",
+        bytes: json(stage.manifest.site)
+      },
+      {
+        name: "domains/manifest.json",
+        bytes: json(stage.manifest.domains)
+      },
+      ...stage.versions.map((version) => ({
+        name:
+          `site/releases/${version.version_number}-${version.id}.html`,
+        bytes: version.html_bytes
+      }))
+    ];
+    const bytes = createStoredZip(entries, {
+      createdAt: stage.generatedAt
+    });
+    return {
+      key: exportStore.key({
+        organizationId: stage.organizationId,
+        projectId: stage.projectId,
+        exportId: stage.exportId,
+        attempt: stage.attempt,
+        fence: stage.fence
+      }),
+      bytes,
+      sha256: digest(bytes),
+      byteLength: bytes.byteLength,
+      attempt: stage.attempt,
+      fence: stage.fence
+    };
+  }
+
+  async function prepareExportObject(stage, object) {
+    const prepared = await authority.service(
+      {},
+      (client) =>
+        client.query(
+          `update ss.export_requests
+              set manifest_digest = $5,
+                  object_key = $6,
+                  byte_count = $7,
+                  object_attempt_number = $3,
+                  object_fence_token = $4
+            where id = $1
+              and state = 'building'
+              and worker_id = $2
+              and attempt_number = $3
+              and fence_token = $4
+          returning id`,
+          [
+            stage.exportId,
+            stage.workerId,
+            stage.attempt,
+            stage.fence,
+            object.sha256,
+            object.key,
+            object.byteLength
+          ]
+        )
+    );
+    if (prepared.rowCount !== 1) throw exportFenceLost();
+  }
+
+  async function readExactExportObject(object) {
+    return exportStore.get({
+      key: object.key,
+      expectedSha256: object.sha256,
+      expectedByteLength: object.byteLength
+    });
+  }
+
+  function exactExportObject(value, expected) {
+    invariant(
+      value?.key === expected.key &&
+        value?.sha256 === expected.sha256 &&
+        Number(value?.byteLength) ===
+          expected.byteLength,
+      "EXPORT_OBJECT_RESPONSE_INVALID",
+      "The export object store returned different object facts.",
+      { status: 503 }
+    );
+    return {
+      key: expected.key,
+      sha256: expected.sha256,
+      byteLength: expected.byteLength,
+      attempt: expected.attempt,
+      fence: expected.fence
+    };
+  }
+
+  async function failObjectClaim(
+    stage,
+    {
+      failureCode,
+      phase,
+      certainty,
+      cause,
+      objectKey
+    }
+  ) {
+    await failExportClaim(stage, {
+      failureCode,
+      failureFacts: exportFailureFacts({
+        phase,
+        certainty,
+        causeCode: safeExportCauseCode(cause),
+        objectKey
+      })
+    });
+    throw new HostedError(
+      failureCode,
+      "The export object could not be confirmed safely. Use Retry after reviewing the failure.",
+      { status: 503 }
+    );
+  }
+
+  async function reconcileExistingExportObject(
+    stage,
+    object
+  ) {
+    try {
+      return exactExportObject(
+        await readExactExportObject(object),
+        object
+      );
+    } catch (error) {
+      if (exportObjectNotFound(error)) return null;
+      await failObjectClaim(stage, {
+        failureCode:
+          "EXPORT_OBJECT_RECONCILIATION_REQUIRED",
+        phase: "reconcile",
+        certainty: "ambiguous",
+        cause: error,
+        objectKey: object.key
+      });
+    }
+  }
+
+  async function writeAndReconcileExportObject(
+    stage,
+    prepared
+  ) {
+    try {
+      return exactExportObject(
+        await exportStore.put({
+          organizationId: stage.organizationId,
+          projectId: stage.projectId,
+          exportId: stage.exportId,
+          attempt: prepared.attempt,
+          fence: prepared.fence,
+          bytes: prepared.bytes,
+          expectedSha256: prepared.sha256
+        }),
+        prepared
+      );
+    } catch (writeError) {
+      try {
+        return exactExportObject(
+          await readExactExportObject(prepared),
+          prepared
+        );
+      } catch (readError) {
+        if (exportObjectNotFound(readError)) {
+          await failObjectClaim(stage, {
+            failureCode:
+              "EXPORT_OBJECT_WRITE_NOT_CONFIRMED",
+            phase: "put",
+            certainty: "not_written",
+            cause: writeError,
+            objectKey: prepared.key
+          });
+        }
+        await failObjectClaim(stage, {
+          failureCode:
+            writeError?.code ===
+                "OBJECT_KEY_CONFLICT" ||
+              readError?.code ===
+                "OBJECT_INTEGRITY_MISMATCH"
+              ? "EXPORT_OBJECT_KEY_CONFLICT"
+              : "EXPORT_OBJECT_RECONCILIATION_REQUIRED",
+          phase: "put_reconcile",
+          certainty: "ambiguous",
+          cause: readError,
+          objectKey: prepared.key
+        });
+      }
+    }
+  }
+
+  async function finalizeExportClaimOnce(stage, object) {
+    if (
+      stage.retentionEndsAt &&
+      Date.parse(stage.retentionEndsAt) <=
+        Date.parse(now(clock))
+    ) {
+      await failExportClaim(stage, {
+        failureCode: "EXPORT_RETENTION_EXPIRED",
+        failureFacts: exportFailureFacts({
+          phase: "finalize",
+          certainty: "confirmed_not_finalized",
+          objectKey: object.key
+        })
+      });
+      throw new HostedError(
+        "EXPORT_RETENTION_EXPIRED",
+        "The project export retention period has ended.",
+        { status: 410 }
+      );
+    }
+    return authority.service(
+      {},
+      async (client) => {
+        const completedAt = now(clock);
+        const expiresAt =
+          stage.retentionEndsAt ??
+          addDays(completedAt, EXPORT_TTL_DAYS);
+        const updated = await client.query(
+          `update ss.export_requests
+              set state = 'ready',
+                  manifest_digest = $5,
+                  object_key = $6,
+                  byte_count = $7,
+                  completed_at = $8,
+                  expires_at = $9,
+                  worker_id = null,
+                  lease_started_at = null,
+                  lease_expires_at = null,
+                  failure_code = null,
+                  failure_facts = null,
+                  failed_at = null
+            where id = $1
+              and state = 'building'
+              and worker_id = $2
+              and attempt_number = $3
+              and fence_token = $4
+              and manifest_digest = $5
+              and object_key = $6
+              and byte_count = $7
+              and object_attempt_number = $10
+              and object_fence_token = $11
+          returning *`,
+          [
+            stage.exportId,
+            stage.workerId,
+            stage.attempt,
+            stage.fence,
+            object.sha256,
+            object.key,
+            object.byteLength,
+            completedAt,
+            expiresAt,
+            object.attempt,
+            object.fence
+          ]
+        );
+        if (updated.rowCount !== 1) {
+          throw exportFenceLost();
+        }
+        await audit(client, {
+          organizationId: stage.organizationId,
+          projectId: stage.projectId,
+          actorId: "system:export-worker",
+          action: "export.ready",
+          targetType: "export_request",
+          targetId: stage.exportId,
+          metadata: {
+            attempt: stage.attempt,
+            fence: stage.fence,
+            byteLength: object.byteLength,
+            sha256: object.sha256
+          }
+        });
+        return { export: publicExport(updated.rows[0]) };
+      }
+    );
+  }
+
+  async function finalizeExportClaim(stage, object) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await finalizeExportClaimOnce(
+          stage,
+          object
+        );
+      } catch (error) {
+        const retryable =
+          error?.code === "40001" ||
+          error?.code === "40P01" ||
+          (
+            error instanceof HostedError &&
+            error.code === "WRITE_CONFLICT"
+          );
+        if (!retryable) throw error;
+        lastError = error;
+      }
+    }
+    throw translatePostgres(lastError);
+  }
+
+  async function processClaimedExport(
+    stage,
+    { signal = null } = {}
+  ) {
+    if (stage.failureCode) {
+      throw new HostedError(
+        stage.failureCode,
+        "The project export retention period has ended.",
+        { status: 410 }
+      );
+    }
+    if (signal?.aborted) {
+      const released = await releaseExportClaim(stage);
+      return {
+        aborted: true,
+        export: publicExport(released)
+      };
+    }
+
+    let object = null;
+    try {
+      object = stage.recoveryObject
+        ? await reconcileExistingExportObject(
+            stage,
+            stage.recoveryObject
+          )
+        : null;
+      if (!object) {
+        const prepared = buildExportObject(stage);
+        await prepareExportObject(stage, prepared);
+        if (signal?.aborted) {
+          const released = await releaseExportClaim(stage);
+          return {
+            aborted: true,
+            export: publicExport(released)
+          };
+        }
+        object = await writeAndReconcileExportObject(
+          stage,
+          prepared
+        );
+      }
+      return finalizeExportClaim(stage, object);
+    } catch (error) {
+      if (
+        error instanceof HostedError &&
+        [
+          "EXPORT_FENCE_LOST",
+          "EXPORT_OBJECT_KEY_CONFLICT",
+          "EXPORT_OBJECT_RECONCILIATION_REQUIRED",
+          "EXPORT_OBJECT_WRITE_NOT_CONFIRMED",
+          "EXPORT_RETENTION_EXPIRED",
+          "WRITE_CONFLICT"
+        ].includes(error.code)
+      ) {
+        throw error;
+      }
+      const failureCode = object
+        ? "EXPORT_FINALIZE_FAILED"
+        : "EXPORT_BUILD_FAILED";
+      await failExportClaim(stage, {
+        failureCode,
+        failureFacts: exportFailureFacts({
+          phase: object ? "finalize" : "build",
+          certainty: object
+            ? "confirmed_not_finalized"
+            : "not_written",
+          causeCode: safeExportCauseCode(error),
+          objectKey: object?.key ?? null
+        })
+      });
+      throw new HostedError(
+        failureCode,
+        object
+          ? "The confirmed export object could not be finalized. Use Retry to start a new attempt."
+          : "The export could not be built safely. Use Retry to start a new attempt.",
+        { status: 503 }
+      );
+    }
+  }
+
   const service = {
     authenticate(token) {
       return identity.authenticate(token);
@@ -6739,304 +7640,63 @@ export function createCanonicalPostgresService({
       });
     },
 
-    async processExport(exportId) {
-      const selectedExportId = uuid(exportId, "Export ID");
-      const stage = await authority.service(
-        {},
-        async (client) => {
-          const selected = await client.query(
-            `select
-               export.*,
-               project.name,
-               project.lifecycle,
-               project.created_at as project_created_at,
-               project.updated_at as project_updated_at,
-               organization.name as organization_name,
-               subscription.retention_ends_at
-             from ss.export_requests export
-             join ss.projects project
-               on project.organization_id = export.organization_id
-              and project.id = export.project_id
-             join ss.organizations organization
-               on organization.id = export.organization_id
-             left join ss.stripe_subscriptions subscription
-               on subscription.organization_id = export.organization_id
-              and subscription.project_id = export.project_id
-            where export.id = $1
-            for update of export`,
-            [selectedExportId]
-          );
-          const row = selected.rows[0];
-          invariant(
-            row,
-            "NOT_FOUND",
-            "The requested item was not found.",
-            { status: 404 }
-          );
-          invariant(
-            row.state === "queued" || row.state === "failed",
-            "EXPORT_STATE_CONFLICT",
-            "That export is not queued for processing.",
-            { status: 409 }
-          );
-          invariant(
-            !row.retention_ends_at ||
-              Date.parse(row.retention_ends_at) >
-                Date.parse(now(clock)),
-            "EXPORT_RETENTION_EXPIRED",
-            "The project export retention period has ended.",
-            { status: 410 }
-          );
-          await client.query(
-            `update ss.export_requests
-                set state = 'building',
-                    manifest_digest = null,
-                    object_key = null,
-                    byte_count = null,
-                    completed_at = null,
-                    expires_at = null
-              where id = $1`,
-            [selectedExportId]
-          );
-          const [draft, versions, addresses, tickets] =
-            await Promise.all([
-              client.query(
-                `select raw_facts, revision, updated_at
-                   from ss.project_drafts
-                  where project_id = $1`,
-                [row.project_id]
-              ),
-              client.query(
-                `select
-                   version.id, version.version_number,
-                   version.raw_facts, version.compiler_schema,
-                   version.compiler_revision, version.created_at,
-                   state.state, artifact.artifact_digest,
-                   artifact.html_bytes
-                 from ss.site_versions version
-                 join ss.artifacts artifact
-                   on artifact.id = version.artifact_id
-                 left join ss.version_state_projection state
-                   on state.version_id = version.id
-                where version.project_id = $1
-                order by version.version_number`,
-                [row.project_id]
-              ),
-              client.query(
-                `select
-                   id, kind, ownership, retained_domain,
-                   serving_hostname, state, allocated_at
-                 from ss.project_addresses
-                where project_id = $1
-                order by allocated_at, id`,
-                [row.project_id]
-              ),
-              client.query(
-                `select
-                   ticket.id, ticket.subject, ticket.state,
-                   ticket.created_at,
-                   coalesce(
-                     jsonb_agg(
-                       jsonb_build_object(
-                         'authorKind', message.author_kind,
-                         'body', message.body,
-                         'createdAt', message.created_at
-                       )
-                       order by message.created_at, message.id
-                     ) filter (where message.id is not null),
-                     '[]'::jsonb
-                   ) as messages
-                 from ss.support_tickets ticket
-                 left join ss.support_messages message
-                   on message.ticket_id = ticket.id
-                where ticket.project_id = $1
-                group by ticket.id
-                order by ticket.created_at, ticket.id`,
-                [row.project_id]
-              )
-            ]);
-          const generatedAt = now(clock);
-          const manifest = {
-            schema: "sitesourcery.project-export/v1",
-            generatedAt,
-            organization: {
-              id: row.organization_id,
-              name: row.organization_name
-            },
-            project: {
-              id: row.project_id,
-              name: row.name,
-              lifecycle: row.lifecycle,
-              createdAt: iso(row.project_created_at),
-              updatedAt: iso(row.project_updated_at),
-              supportTickets: tickets.rows.map((ticket) => ({
-                id: ticket.id,
-                subject: ticket.subject,
-                state: ticket.state,
-                createdAt: iso(ticket.created_at),
-                messages: ticket.messages
-              }))
-            },
-            site: {
-              draft: draft.rows[0]
-                ? {
-                    revision: Number(draft.rows[0].revision),
-                    rawFacts: draft.rows[0].raw_facts,
-                    updatedAt: iso(draft.rows[0].updated_at)
-                  }
-                : null,
-              versions: versions.rows.map((version) => ({
-                id: version.id,
-                versionNumber: Number(version.version_number),
-                state: version.state,
-                rawFacts: version.raw_facts,
-                compilerSchema: version.compiler_schema,
-                compilerRevision: version.compiler_revision,
-                artifactDigest: version.artifact_digest,
-                createdAt: iso(version.created_at)
-              }))
-            },
-            domains: addresses.rows.map((address) => ({
-              id: address.id,
-              kind: address.kind,
-              ownership: address.ownership,
-              retainedDomain: address.retained_domain,
-              servingHostname: address.serving_hostname,
-              state: address.state,
-              allocatedAt: iso(address.allocated_at)
-            }))
-          };
-          return {
-            exportId: row.id,
-            organizationId: row.organization_id,
-            projectId: row.project_id,
-            generatedAt,
-            retentionEndsAt: row.retention_ends_at
-              ? iso(row.retention_ends_at)
-              : null,
-            manifest,
-            versions: versions.rows
-          };
-        }
+    async processExport(
+      exportId,
+      {
+        workerId = defaultExportWorkerId,
+        signal = null
+      } = {}
+    ) {
+      const selectedExportId = uuid(
+        exportId,
+        "Export ID"
       );
-
-      let object;
-      try {
-        const json = (value) =>
-          Buffer.from(
-            `${JSON.stringify(value, null, 2)}\n`,
-            "utf8"
-          );
-        const entries = [
-          {
-            name: "manifest.json",
-            bytes: json(stage.manifest)
-          },
-          {
-            name: "site/project.json",
-            bytes: json(stage.manifest.project)
-          },
-          {
-            name: "site/content.json",
-            bytes: json(stage.manifest.site)
-          },
-          {
-            name: "domains/manifest.json",
-            bytes: json(stage.manifest.domains)
-          },
-          ...stage.versions.map((version) => ({
-            name: `site/releases/${version.version_number}-${version.id}.html`,
-            bytes: version.html_bytes
-          }))
-        ];
-        const bytes = createStoredZip(entries, {
-          createdAt: stage.generatedAt
-        });
-        object = await exportStore.put({
-          organizationId: stage.organizationId,
-          projectId: stage.projectId,
-          exportId: stage.exportId,
-          bytes,
-          expectedSha256: digest(bytes)
-        });
-      } catch (error) {
-        await authority.service({}, (client) =>
-          client.query(
-            `update ss.export_requests
-                set state = 'failed'
-              where id = $1 and state = 'building'`,
-            [stage.exportId]
-          )
-        );
-        throw error;
-      }
-
-      return authority.service({}, async (client) => {
-        const expiresAt =
-          stage.retentionEndsAt ??
-          addDays(now(clock), EXPORT_TTL_DAYS);
-        const updated = await client.query(
-          `update ss.export_requests
-              set state = 'ready',
-                  manifest_digest = $2,
-                  object_key = $3,
-                  byte_count = $4,
-                  completed_at = $5,
-                  expires_at = $6
-            where id = $1
-              and state = 'building'
-          returning *`,
-          [
-            stage.exportId,
-            object.sha256,
-            object.key,
-            object.byteLength,
-            now(clock),
-            expiresAt
-          ]
-        );
-        invariant(
-          updated.rowCount === 1,
-          "EXPORT_STATE_CONFLICT",
-          "Export state changed during generation.",
-          { status: 409 }
-        );
-        await audit(client, {
-          organizationId: stage.organizationId,
-          projectId: stage.projectId,
-          actorId: "system:export-worker",
-          action: "export.ready",
-          targetType: "export_request",
-          targetId: stage.exportId,
-          metadata: {
-            byteLength: object.byteLength,
-            sha256: object.sha256
+      if (signal?.aborted) {
+        return {
+          aborted: true,
+          export: {
+            exportId: selectedExportId,
+            status: "queued"
           }
-        });
-        return { export: publicExport(updated.rows[0]) };
+        };
+      }
+      const stage = await claimExportWithRetry({
+        exportId: selectedExportId,
+        workerId
       });
+      return processClaimedExport(stage, { signal });
     },
 
-    async processQueuedExports() {
-      const queued = await authority.service(
-        { readOnly: true },
-        async (client) =>
-          (
-            await client.query(
-              `select id
-                 from ss.export_requests
-                where state = 'queued'
-                order by requested_at, id`
-            )
-          ).rows.map((row) => row.id)
-      );
+    async processQueuedExports({
+      workerId = defaultExportWorkerId,
+      signal = null,
+      limit = 25
+    } = {}) {
+      const selectedWorkerId =
+        exportWorkerIdentity(workerId);
+      const selectedLimit = exportBatchLimit(limit);
       const results = [];
-      for (const exportId of queued) {
+      while (
+        results.length < selectedLimit &&
+        !signal?.aborted
+      ) {
+        const stage = await claimExportWithRetry({
+          workerId: selectedWorkerId
+        });
+        if (!stage) break;
         try {
-          results.push(await service.processExport(exportId));
+          const result = await processClaimedExport(
+            stage,
+            { signal }
+          );
+          results.push(result);
+          if (result.aborted) break;
         } catch (error) {
           results.push({
-            export: { exportId, status: "failed" },
+            export: {
+              exportId: stage.exportId,
+              status: "failed"
+            },
             errorCode:
               error instanceof HostedError
                 ? error.code
@@ -7167,17 +7827,24 @@ export function createCanonicalPostgresService({
             "Only failed or expired exports can be regenerated.",
             { status: 409 }
           );
-          if (row.object_key) {
-            await exportStore.delete({ key: row.object_key });
-          }
           const updated = await client.query(
             `update ss.export_requests
                 set state = 'queued',
+                    attempt_number =
+                      attempt_number + 1,
+                    worker_id = null,
+                    lease_started_at = null,
+                    lease_expires_at = null,
                     manifest_digest = null,
                     object_key = null,
                     byte_count = null,
+                    object_attempt_number = null,
+                    object_fence_token = null,
                     completed_at = null,
-                    expires_at = null
+                    expires_at = null,
+                    failure_code = null,
+                    failure_facts = null,
+                    failed_at = null
               where id = $1
             returning *`,
             [selectedExportId]

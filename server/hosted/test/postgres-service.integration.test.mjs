@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  randomUUID
+} from "node:crypto";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -29,6 +33,18 @@ const MIGRATIONS = new URL(
   "../../data-plane/supabase/migrations/",
   import.meta.url
 );
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise(
+    (resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    }
+  );
+  return { promise, resolve, reject };
+}
 
 function createContractPaymentProvider() {
   const calls = {
@@ -129,7 +145,10 @@ function rawEvent(event) {
   return Buffer.from(JSON.stringify(event), "utf8");
 }
 
-async function migrateEmptyDatabase(pool) {
+async function migrateEmptyDatabase(
+  pool,
+  { beforeMigration = null } = {}
+) {
   const existing = await pool.query(
     "select to_regnamespace('ss') is not null as migrated"
   );
@@ -138,6 +157,9 @@ async function migrateEmptyDatabase(pool) {
     .filter((name) => name.endsWith(".sql"))
     .sort();
   for (const name of names) {
+    if (beforeMigration) {
+      await beforeMigration(name, pool);
+    }
     await pool.query(await readFile(new URL(name, MIGRATIONS), "utf8"));
   }
 }
@@ -371,11 +393,148 @@ function createFinalizationCommitFaultAuthority(authority) {
 test(
   "canonical PostgreSQL service completes the owned customer path",
   { skip: !DATABASE_URL },
-  async () => {
+  async (t) => {
     const pool = new Pool({ connectionString: DATABASE_URL });
-    await migrateEmptyDatabase(pool);
+    const legacyExport = Object.freeze({
+      userId: "10000000-0000-4000-8000-000000000001",
+      organizationId:
+        "10000000-0000-4000-8000-000000000002",
+      billingPolicyId:
+        "10000000-0000-4000-8000-000000000003",
+      projectId:
+        "10000000-0000-4000-8000-000000000004",
+      exportId:
+        "10000000-0000-4000-8000-000000000005"
+    });
+    await migrateEmptyDatabase(pool, {
+      async beforeMigration(name, migrationPool) {
+        if (
+          name !==
+          "202607280015_export_worker_fencing.sql"
+        ) {
+          return;
+        }
+        const migrationClient =
+          await migrationPool.connect();
+        try {
+          await migrationClient.query("begin");
+          await migrationClient.query(
+            `insert into auth.users (
+               id, email
+             ) values ($1, $2)`,
+            [
+              legacyExport.userId,
+              "legacy-export-proof@example.test"
+            ]
+          );
+          await migrationClient.query(
+            `insert into ss.billing_policies (
+               id,
+               policy_key,
+               grace_period,
+               retention_period,
+               effective_at
+             ) values (
+               $1,
+               'legacy-export-proof',
+               interval '14 days',
+               interval '90 days',
+               $2
+             )`,
+            [legacyExport.billingPolicyId, NOW]
+          );
+          await migrationClient.query(
+            `insert into ss.organizations (
+               id, created_by_user_id, name
+             ) values ($1, $2, 'Legacy Export Proof')`,
+            [
+              legacyExport.organizationId,
+              legacyExport.userId
+            ]
+          );
+          await migrationClient.query(
+            `insert into ss.organization_memberships (
+               organization_id,
+               user_id,
+               role,
+               state,
+               accepted_at
+             ) values ($1, $2, 'owner', 'active', $3)`,
+            [
+              legacyExport.organizationId,
+              legacyExport.userId,
+              NOW
+            ]
+          );
+          await migrationClient.query(
+            `insert into ss.projects (
+               id,
+               organization_id,
+               created_by_user_id,
+               billing_policy_id,
+               name
+             ) values ($1, $2, $3, $4, $5)`,
+            [
+              legacyExport.projectId,
+              legacyExport.organizationId,
+              legacyExport.userId,
+              legacyExport.billingPolicyId,
+              "Legacy Export Project"
+            ]
+          );
+          await migrationClient.query(
+            `insert into ss.export_requests (
+               id,
+               organization_id,
+               project_id,
+               requested_by_user_id,
+               state,
+               requested_at
+             ) values ($1, $2, $3, $4, 'building', $5)`,
+            [
+              legacyExport.exportId,
+              legacyExport.organizationId,
+              legacyExport.projectId,
+              legacyExport.userId,
+              NOW
+            ]
+          );
+          await migrationClient.query("commit");
+        } catch (error) {
+          await migrationClient.query("rollback");
+          throw error;
+        } finally {
+          migrationClient.release();
+        }
+      }
+    });
     const authority = createCanonicalPostgresAuthority({ pool });
     assert.equal((await authority.assertReady()).ready, true);
+    const recoveredLegacy = (
+      await pool.query(
+        `select *
+           from ss.export_requests
+          where id = $1`,
+        [legacyExport.exportId]
+      )
+    ).rows[0];
+    assert.equal(recoveredLegacy.state, "failed");
+    assert.equal(recoveredLegacy.attempt_number, "1");
+    assert.equal(recoveredLegacy.fence_token, "1");
+    assert.equal(recoveredLegacy.worker_id, null);
+    assert.equal(recoveredLegacy.object_key, null);
+    assert.equal(
+      recoveredLegacy.failure_code,
+      "EXPORT_LEGACY_BUILD_ORPHANED"
+    );
+    assert.deepEqual(recoveredLegacy.failure_facts, {
+      phase: "migration",
+      certainty: "ambiguous",
+      objectKey:
+        `exports/${legacyExport.organizationId}/` +
+        `${legacyExport.projectId}/${legacyExport.exportId}.zip`,
+      recovery: "manual_retry_required"
+    });
     const catalog = createFakeApprovedCatalog();
     await seedCommercialAuthority(pool, catalog);
     const root = await mkdtemp(
@@ -1051,6 +1210,50 @@ test(
     );
     assert.equal(downloaded.contentType, "application/zip");
     assert.ok(downloaded.bytes.byteLength > compiled.htmlBytes.byteLength);
+    const exactDownloadFacts = (
+      await pool.query(
+        `select
+           manifest_digest,
+           byte_count,
+           object_key,
+           attempt_number,
+           fence_token,
+           object_attempt_number,
+           object_fence_token
+         from ss.export_requests
+        where id = $1`,
+        [requestedExport.export.exportId]
+      )
+    ).rows[0];
+    assert.equal(
+      createHash("sha256")
+        .update(downloaded.bytes)
+        .digest("hex"),
+      exactDownloadFacts.manifest_digest
+    );
+    assert.equal(
+      downloaded.bytes.byteLength,
+      Number(exactDownloadFacts.byte_count)
+    );
+    assert.match(
+      exactDownloadFacts.object_key,
+      /\/attempt-1-fence-1\.zip$/u
+    );
+    assert.equal(exactDownloadFacts.attempt_number, "1");
+    assert.equal(exactDownloadFacts.fence_token, "1");
+    assert.equal(
+      exactDownloadFacts.object_attempt_number,
+      "1"
+    );
+    assert.equal(exactDownloadFacts.object_fence_token, "1");
+    await assert.rejects(
+      service.getExport(
+        otherActor,
+        projectId,
+        requestedExport.export.exportId
+      ),
+      (error) => error?.code === "NOT_FOUND"
+    );
     await assert.rejects(
       service.downloadExport(
         actor,
@@ -1059,6 +1262,587 @@ test(
         exportWithGrant.export.download.token
       ),
       (error) => error?.code === "DOWNLOAD_AUTHORIZATION_INVALID"
+    );
+
+    const exportService = ({
+      store = exportStore,
+      selectedClock = clock
+    } = {}) =>
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        exportStore: store,
+        clock: selectedClock,
+        exportLeaseMs: 1_000,
+        recoveryMailPort: recoverySink
+      });
+
+    await t.test(
+      "stale lease recovers a crash before write and fences the late worker",
+      async () => {
+        const requested = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-crash-before-001" }
+        );
+        const exportId = requested.export.exportId;
+        let selectedNow = NOW;
+        const selectedClock = {
+          now: () => selectedNow
+        };
+        const putStarted = deferred();
+        const allowLatePut = deferred();
+        const blockedStore = Object.freeze({
+          ...exportStore,
+          async put(input) {
+            putStarted.resolve(input);
+            await allowLatePut.promise;
+            return exportStore.put(input);
+          }
+        });
+        const oldWorker = exportService({
+          store: blockedStore,
+          selectedClock
+        });
+        const recoveryWorker = exportService({
+          selectedClock
+        });
+        const lateResult = oldWorker.processExport(
+          exportId,
+          { workerId: "export-worker-before-old" }
+        );
+        const oldInput = await putStarted.promise;
+        const prepared = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(prepared.state, "building");
+        assert.equal(prepared.fence_token, "1");
+        assert.equal(
+          prepared.object_key,
+          exportStore.key(oldInput)
+        );
+        await assert.rejects(
+          exportStore.get({
+            key: prepared.object_key,
+            expectedSha256: prepared.manifest_digest,
+            expectedByteLength: Number(
+              prepared.byte_count
+            )
+          }),
+          (error) => error?.code === "ENOENT"
+        );
+        await assert.rejects(
+          recoveryWorker.processExport(exportId, {
+            workerId: "export-worker-active-probe"
+          }),
+          (error) =>
+            error?.code ===
+            "EXPORT_CLAIM_UNAVAILABLE"
+        );
+
+        selectedNow = "2026-07-28T20:00:02.000Z";
+        const recovered =
+          await recoveryWorker.processExport(exportId, {
+            workerId: "export-worker-before-new"
+          });
+        assert.equal(recovered.export.status, "ready");
+        allowLatePut.resolve();
+        await assert.rejects(
+          lateResult,
+          (error) => error?.code === "EXPORT_FENCE_LOST"
+        );
+        const final = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(final.state, "ready");
+        assert.equal(final.fence_token, "2");
+        assert.equal(final.object_fence_token, "2");
+        assert.match(
+          final.object_key,
+          /\/attempt-1-fence-2\.zip$/u
+        );
+        assert.notEqual(
+          final.object_key,
+          exportStore.key(oldInput)
+        );
+      }
+    );
+
+    await t.test(
+      "restart reconciles a crash after immutable object write",
+      async () => {
+        const requested = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-crash-after-001" }
+        );
+        const exportId = requested.export.exportId;
+        let selectedNow = NOW;
+        const selectedClock = {
+          now: () => selectedNow
+        };
+        const objectWritten = deferred();
+        const allowLateReturn = deferred();
+        const blockedStore = Object.freeze({
+          ...exportStore,
+          async put(input) {
+            const saved = await exportStore.put(input);
+            objectWritten.resolve({ input, saved });
+            await allowLateReturn.promise;
+            return saved;
+          }
+        });
+        const oldWorker = exportService({
+          store: blockedStore,
+          selectedClock
+        });
+        const recoveryWorker = exportService({
+          selectedClock
+        });
+        const lateResult = oldWorker.processExport(
+          exportId,
+          { workerId: "export-worker-after-old" }
+        );
+        const written = await objectWritten.promise;
+        const prepared = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(prepared.state, "building");
+        assert.equal(prepared.object_key, written.saved.key);
+
+        selectedNow = "2026-07-28T20:00:02.000Z";
+        const recovered =
+          await recoveryWorker.processExport(exportId, {
+            workerId: "export-worker-after-new"
+          });
+        assert.equal(recovered.export.status, "ready");
+        const final = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(final.fence_token, "2");
+        assert.equal(final.object_fence_token, "1");
+        assert.equal(final.object_key, written.saved.key);
+        allowLateReturn.resolve();
+        await assert.rejects(
+          lateResult,
+          (error) => error?.code === "EXPORT_FENCE_LOST"
+        );
+      }
+    );
+
+    await t.test(
+      "lost object-write response reconciles the exact immutable key",
+      async () => {
+        const requested = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-put-uncertain-001" }
+        );
+        const exportId = requested.export.exportId;
+        let written = null;
+        const uncertainStore = Object.freeze({
+          ...exportStore,
+          async put(input) {
+            written = await exportStore.put(input);
+            const error = new Error(
+              "The object write response was lost."
+            );
+            error.code = "OBJECT_WRITE_RESPONSE_LOST";
+            throw error;
+          }
+        });
+        const uncertainWorker = exportService({
+          store: uncertainStore
+        });
+        const result = await uncertainWorker.processExport(
+          exportId,
+          { workerId: "export-worker-put-uncertain" }
+        );
+        assert.equal(result.export.status, "ready");
+        const final = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(final.state, "ready");
+        assert.equal(final.object_key, written.key);
+        assert.equal(final.manifest_digest, written.sha256);
+        assert.equal(
+          Number(final.byte_count),
+          written.byteLength
+        );
+      }
+    );
+
+    await t.test(
+      "concurrent workers claim separate queued exports with bounded batches",
+      async () => {
+        const first = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-concurrent-001" }
+        );
+        const second = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-concurrent-002" }
+        );
+        const exportIds = [
+          first.export.exportId,
+          second.export.exportId
+        ];
+        const bothStarted = deferred();
+        const allowWrites = deferred();
+        const keys = [];
+        const blockedStore = Object.freeze({
+          ...exportStore,
+          async put(input) {
+            keys.push(exportStore.key(input));
+            if (keys.length === 2) bothStarted.resolve();
+            await allowWrites.promise;
+            return exportStore.put(input);
+          }
+        });
+        const firstWorker = exportService({
+          store: blockedStore
+        });
+        const secondWorker = exportService({
+          store: blockedStore
+        });
+        const firstBatch =
+          firstWorker.processQueuedExports({
+            workerId: "export-worker-concurrent-a",
+            limit: 1
+          });
+        const secondBatch =
+          secondWorker.processQueuedExports({
+            workerId: "export-worker-concurrent-b",
+            limit: 1
+          });
+        await bothStarted.promise;
+        const claimed = await pool.query(
+          `select id, state, worker_id
+             from ss.export_requests
+            where id = any($1::uuid[])
+            order by id`,
+          [exportIds]
+        );
+        assert.equal(claimed.rowCount, 2);
+        assert.deepEqual(
+          new Set(
+            claimed.rows.map((row) => row.worker_id)
+          ),
+          new Set([
+            "export-worker-concurrent-a",
+            "export-worker-concurrent-b"
+          ])
+        );
+        assert.ok(
+          claimed.rows.every(
+            (row) => row.state === "building"
+          )
+        );
+        allowWrites.resolve();
+        const batches = await Promise.all([
+          firstBatch,
+          secondBatch
+        ]);
+        assert.deepEqual(
+          batches.flat().map((entry) => entry.export.status),
+          ["ready", "ready"]
+        );
+        assert.equal(new Set(keys).size, 2);
+      }
+    );
+
+    await t.test(
+      "graceful abort releases prepared claim before object write",
+      async () => {
+        const requested = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-graceful-abort-001" }
+        );
+        const exportId = requested.export.exportId;
+        const shutdown = new AbortController();
+        let puts = 0;
+        const abortingStore = Object.freeze({
+          ...exportStore,
+          key(input) {
+            const key = exportStore.key(input);
+            shutdown.abort();
+            return key;
+          },
+          async put(input) {
+            puts += 1;
+            return exportStore.put(input);
+          }
+        });
+        const abortingWorker = exportService({
+          store: abortingStore
+        });
+        const result = await abortingWorker.processExport(
+          exportId,
+          {
+            workerId: "export-worker-graceful-abort",
+            signal: shutdown.signal
+          }
+        );
+        assert.equal(result.aborted, true);
+        assert.equal(result.export.status, "queued");
+        assert.equal(puts, 0);
+        const released = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(released.state, "queued");
+        assert.equal(released.worker_id, null);
+        assert.equal(released.object_key, null);
+        assert.equal(released.fence_token, "1");
+        assert.equal(
+          (
+            await service.processExport(exportId, {
+              workerId: "export-worker-after-abort"
+            })
+          ).export.status,
+          "ready"
+        );
+      }
+    );
+
+    await t.test(
+      "immutable-key conflict fails closed until explicit new attempt",
+      async () => {
+        const requested = await service.requestExport(
+          actor,
+          projectId,
+          { commandId: "export-conflict-001" }
+        );
+        const exportId = requested.export.exportId;
+        const conflicting = await exportStore.put({
+          organizationId,
+          projectId,
+          exportId,
+          attempt: 1,
+          fence: 1,
+          bytes: Buffer.from(
+            "different bytes already own this immutable key",
+            "utf8"
+          )
+        });
+        await assert.rejects(
+          service.processExport(exportId, {
+            workerId: "export-worker-conflict"
+          }),
+          (error) =>
+            error?.code ===
+            "EXPORT_OBJECT_KEY_CONFLICT"
+        );
+        const failed = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(failed.state, "failed");
+        assert.equal(
+          failed.failure_code,
+          "EXPORT_OBJECT_KEY_CONFLICT"
+        );
+        assert.equal(
+          failed.failure_facts.certainty,
+          "ambiguous"
+        );
+        assert.equal(
+          failed.failure_facts.objectKey,
+          conflicting.key
+        );
+        await assert.rejects(
+          service.processExport(exportId, {
+            workerId: "export-worker-no-auto-retry"
+          }),
+          (error) =>
+            error?.code === "EXPORT_RETRY_REQUIRED"
+        );
+        const retried = await service.retryExport(
+          actor,
+          projectId,
+          exportId,
+          { commandId: "export-conflict-retry-001" }
+        );
+        assert.equal(retried.export.status, "queued");
+        const ready = await service.processExport(
+          exportId,
+          { workerId: "export-worker-retry" }
+        );
+        assert.equal(ready.export.status, "ready");
+        const final = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [exportId]
+          )
+        ).rows[0];
+        assert.equal(final.attempt_number, "2");
+        assert.equal(final.fence_token, "2");
+        assert.equal(final.object_attempt_number, "2");
+        assert.equal(final.object_fence_token, "2");
+        assert.match(
+          final.object_key,
+          /\/attempt-2-fence-2\.zip$/u
+        );
+      }
+    );
+
+    await t.test(
+      "expired retention fails without any object write",
+      async () => {
+        const retentionProject =
+          await service.createProject(
+            actor,
+            organizationId,
+            {
+              name: "Retention Proof",
+              acceptedTerms: true,
+              visibility: "public",
+              address: {
+                kind: "licensed",
+                label: "retention-proof"
+              },
+              commandId:
+                "project-retention-proof-001"
+            }
+        );
+        const retentionProjectId =
+          retentionProject.project.id;
+        const requested = await service.requestExport(
+          actor,
+          retentionProjectId,
+          { commandId: "export-retention-001" }
+        );
+        await pool.query(
+          `insert into ss.stripe_subscriptions (
+             id,
+             organization_id,
+             project_id,
+             stripe_customer_row_id,
+             stripe_subscription_id,
+             stripe_price_id,
+             catalog_price_id,
+             billing_policy_id,
+             status,
+             currency,
+             amount_minor,
+             first_failed_at,
+             grace_ends_at,
+             suspended_at,
+             retention_ends_at,
+             cancelled_at,
+             current_period_ends_at,
+             created_at,
+             updated_at,
+             revision
+           )
+           select
+             $1,
+             organization_id,
+             $2,
+             stripe_customer_row_id,
+             $3,
+             stripe_price_id,
+             catalog_price_id,
+             billing_policy_id,
+             'cancelled',
+             currency,
+             amount_minor,
+             null,
+             null,
+             null,
+             $4,
+             $5,
+             current_period_ends_at,
+             $5,
+             $5,
+             1
+           from ss.stripe_subscriptions
+          where project_id = $6`,
+          [
+            randomUUID(),
+            retentionProjectId,
+            `sub_test_retention_${randomUUID()}`,
+            "2026-07-28T19:59:00.000Z",
+            "2026-07-20T20:00:00.000Z",
+            projectId
+          ]
+        );
+        let puts = 0;
+        const noWriteStore = Object.freeze({
+          ...exportStore,
+          async put(input) {
+            puts += 1;
+            return exportStore.put(input);
+          }
+        });
+        const retentionWorker = exportService({
+          store: noWriteStore
+        });
+        await assert.rejects(
+          retentionWorker.processExport(
+            requested.export.exportId,
+            { workerId: "export-worker-retention" }
+          ),
+          (error) =>
+            error?.code ===
+            "EXPORT_RETENTION_EXPIRED"
+        );
+        assert.equal(puts, 0);
+        const failed = (
+          await pool.query(
+            `select *
+               from ss.export_requests
+              where id = $1`,
+            [requested.export.exportId]
+          )
+        ).rows[0];
+        assert.equal(failed.state, "failed");
+        assert.equal(
+          failed.failure_code,
+          "EXPORT_RETENTION_EXPIRED"
+        );
+        assert.equal(
+          failed.failure_facts.certainty,
+          "not_written"
+        );
+      }
     );
 
     const cancellationPreview =

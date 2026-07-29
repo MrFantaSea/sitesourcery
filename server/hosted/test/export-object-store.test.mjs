@@ -20,7 +20,9 @@ async function storeRoot() {
 const identity = Object.freeze({
   organizationId: "org_00000001",
   projectId: "project_00000001",
-  exportId: "export_00000001"
+  exportId: "export_00000001",
+  attempt: 1,
+  fence: 1
 });
 
 test("private export store atomically persists and verifies exact tenant bytes", async () => {
@@ -29,7 +31,10 @@ test("private export store atomically persists and verifies exact tenant bytes",
   const bytes = Buffer.from("PK\u0003\u0004exact project export", "utf8");
   const saved = await store.put({ ...identity, bytes });
   assert.equal(saved.replay, false);
-  assert.equal(saved.key, "exports/org_00000001/project_00000001/export_00000001.zip");
+  assert.equal(
+    saved.key,
+    "exports/org_00000001/project_00000001/export_00000001/attempt-1-fence-1.zip"
+  );
   const replay = await store.put({ ...identity, bytes });
   assert.equal(replay.replay, true);
   const loaded = await store.get({
@@ -72,6 +77,46 @@ test("object keys are immutable and restart-safe", async () => {
   assert.equal(loaded.bytes.toString("utf8"), "first immutable export");
 });
 
+test("every worker fence writes a separate immutable object", async () => {
+  const root = await storeRoot();
+  const store = await createPrivateExportObjectStore({ root });
+  const first = await store.put({
+    ...identity,
+    bytes: Buffer.from("first worker bytes")
+  });
+  const reclaimed = await store.put({
+    ...identity,
+    fence: 2,
+    bytes: Buffer.from("recovered worker bytes")
+  });
+  const retried = await store.put({
+    ...identity,
+    attempt: 2,
+    fence: 3,
+    bytes: Buffer.from("manual retry bytes")
+  });
+  assert.notEqual(first.key, reclaimed.key);
+  assert.notEqual(reclaimed.key, retried.key);
+  assert.deepEqual(
+    (await store.backupManifest()).entries.map(({ key }) => key),
+    [first.key, reclaimed.key, retried.key]
+  );
+});
+
+test("new object writes require an exact positive attempt and fence", async () => {
+  const root = await storeRoot();
+  const store = await createPrivateExportObjectStore({ root });
+  await assert.rejects(
+    store.put({
+      organizationId: identity.organizationId,
+      projectId: identity.projectId,
+      exportId: identity.exportId,
+      bytes: Buffer.from("unfenced")
+    }),
+    (error) => error?.code === "OBJECT_KEY_INVALID"
+  );
+});
+
 test("tampering and symlink substitution fail closed", async () => {
   const root = await storeRoot();
   const store = await createPrivateExportObjectStore({ root });
@@ -104,7 +149,7 @@ test("tampering and symlink substitution fail closed", async () => {
   await chmod(targetDirectory, 0o700);
   await symlink(
     outside,
-    path.join(targetDirectory, `${identity.exportId}.zip`)
+    path.join(targetDirectory, identity.exportId)
   );
   await assert.rejects(
     second.get({
