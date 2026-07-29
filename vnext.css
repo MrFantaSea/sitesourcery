@@ -785,7 +785,7 @@ h3 {
 .scope-pricing-note p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 1rem;
   line-height: 1.65;
 }
 
@@ -801,7 +801,7 @@ h3 {
   position: relative;
   padding: 1rem 2.25rem 1rem 0;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 820;
   line-height: 1.35;
   cursor: pointer;
@@ -878,7 +878,7 @@ h3 {
 
 .scope-tier header span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 1rem;
   line-height: 1.4;
 }
 
@@ -908,7 +908,7 @@ h3 {
 
 .scope-tier dt {
   color: var(--dim);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 830;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -976,7 +976,7 @@ h3 {
 .creative-proof-intro > p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 1rem;
   line-height: 1.7;
 }
 
@@ -1321,7 +1321,7 @@ h3 {
 
 .scope-receipt dt {
   color: var(--mint);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 830;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1330,7 +1330,7 @@ h3 {
 .scope-receipt dd {
   margin: 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 1rem;
   line-height: 1.5;
 }
 
@@ -1374,7 +1374,7 @@ h3 {
 .process-phase-grid header p {
   margin: 0 0 0.18rem;
   color: var(--dim);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 830;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1402,7 +1402,7 @@ h3 {
 
 .process-phase-grid dt {
   color: var(--mint);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 820;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1450,12 +1450,12 @@ h3 {
 
 .process-rules strong {
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: 1rem;
 }
 
 .process-rules span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 1rem;
   line-height: 1.55;
 }
 
@@ -2055,7 +2055,7 @@ h3 {
 
 .service-compare span {
   color: var(--gold);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 820;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2124,7 +2124,7 @@ h3 {
   max-width: 42rem;
   margin: 0.8rem 0 0;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 1rem;
 }
 
 .solution-section details {
@@ -2136,7 +2136,7 @@ h3 {
   position: relative;
   padding: 1rem 2rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 1rem;
   font-weight: 820;
   cursor: pointer;
   list-style: none;
@@ -2206,7 +2206,7 @@ h3 {
 
 .solution-section .solution-body .solution-fit > strong {
   color: var(--gold);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2390,6 +2390,46 @@ h3 {
 
 .contact-intake-grid .card h3 {
   max-width: 16ch;
+}
+
+.contact-panel > .intake-context {
+  grid-column: 1 / -1;
+}
+
+.intake-topic-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intake-topic-list li {
+  max-width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  scroll-margin-top: 8.5rem;
+}
+
+.intake-topic-list li:target {
+  border-color: var(--gold);
+  color: var(--ink);
+  background: rgba(242, 206, 131, 0.1);
+  box-shadow: 0 0 0 2px rgba(242, 206, 131, 0.14);
+}
+
+.intake-context p:last-child {
+  max-width: 62rem;
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .choice-grid {

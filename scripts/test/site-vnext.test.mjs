@@ -37,6 +37,10 @@ import {
   HOME_HIVE_COPY,
   HOME_DOORS,
   INTAKE_CATEGORIES,
+  INTAKE_TOPIC_LABELS,
+  PAID_ROUTE_INTAKE_TOPICS,
+  PAID_ROUTE_REQUIRED_COPY,
+  PAID_ROUTE_SECTION_CONTRACTS,
   PRIVACY_SECTION_IDS,
   PUBLIC_TRUTH_COPY,
   SOLUTION_ANCHORS,
@@ -109,7 +113,9 @@ function safeAllowlistPlaceholder(file) {
     ].join("\n");
   }
   if (extension === ".css") return "/* allowlisted fixture asset */\n";
-  if (file === "vnext.js") return `${START_DECISION_COPY.join("\n")}\n`;
+  if (file === "vnext.js") {
+    return `${START_DECISION_COPY.join("\n")}\n`;
+  }
   if (file === "abracadabra/abracadabra-showcase.js") {
     return [
       '"use strict";',
@@ -151,6 +157,36 @@ function customerSection(section, extra = "") {
   ].join("");
 }
 
+function paidRouteFixture(route) {
+  const contracts = PAID_ROUTE_SECTION_CONTRACTS[route] ?? [];
+  const intakeTopics = PAID_ROUTE_INTAKE_TOPICS[route] ?? [];
+  let solutionAnchorIndex = 0;
+  return [
+    ...contracts.map((contract) => {
+      const [job, action, evidence] = contract.split("|");
+      const solutionAnchor = route === "/solutions/"
+        && job !== "service-fit"
+        && job !== "service-choices"
+        && job !== "service-intake"
+        ? SOLUTION_ANCHORS[solutionAnchorIndex++]
+        : "";
+      if (solutionAnchor) {
+        return `<article id="${solutionAnchor}" data-solution-anchor="${solutionAnchor}" data-customer-job="${job}" data-section-action="${action}" data-section-evidence="${evidence}">${job}</article>`;
+      }
+      const sectionAttributes = [
+        job === "process-quote" ? ' id="scope"' : "",
+        job === "process-changes"
+          ? ' data-process-mechanics="review-change-schedule"'
+          : "",
+      ].join("");
+      return `<section${sectionAttributes} data-customer-job="${job}" data-section-action="${action}" data-section-evidence="${evidence}">${job}</section>`;
+    }),
+    ...intakeTopics.map((topic) =>
+      `<a href="/contact/#about-${topic}" data-intake-topic="${topic}">${topic}</a>`),
+    ...(PAID_ROUTE_REQUIRED_COPY[route] ?? []).map((phrase) => `<p>${phrase}</p>`),
+  ].join("");
+}
+
 function routeFeature(route) {
   if (route === "/") {
     return [
@@ -169,9 +205,7 @@ function routeFeature(route) {
       .join("");
   }
   if (route === "/solutions/") {
-    return SOLUTION_ANCHORS
-      .map((anchor) => `<section id="${anchor}" data-solution-anchor="${anchor}">${anchor}</section>`)
-      .join("");
+    return paidRouteFixture(route);
   }
   if (route === "/start/") {
     const [chooser, contact] = CUSTOMER_SECTION_CONTRACTS[route];
@@ -187,6 +221,7 @@ function routeFeature(route) {
   }
   if (route === "/custom/scope/") {
     return [
+      paidRouteFixture(route),
       ...CUSTOM_TIERS.map((id) => id === "scale"
         ? '<article data-custom-tier="scale" data-pages="30" data-scale-base="flagship" data-scale-min-units="1" data-scale-max-units="15" data-scale-unit-pages="1" data-scale-unit-sections="4" data-scale-unit-layouts="1" data-scale-unit-words="500" data-scale-unit-media="4">scale</article>'
         : `<article data-custom-tier="${id}">${id}</article>`),
@@ -259,6 +294,10 @@ function routeFeature(route) {
   if (route === "/contact/") {
     const [overview, methods, types, note] = CUSTOMER_SECTION_CONTRACTS[route];
     const methodExtra = [
+      '<div data-intake-context><ul>',
+      ...Object.keys(INTAKE_TOPIC_LABELS).map((topic) =>
+        `<li id="about-${topic}" tabindex="-1" data-intake-topic-target="${topic}">${topic}</li>`),
+      "</ul></div>",
       '<div data-contact-method="phone" data-native-fallback="copy-phone"><a href="tel:+18562441220">(856) 244-1220</a></div>',
       '<div data-contact-method="email" data-native-fallback="copy-email"><a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a></div>',
     ].join("");
@@ -279,12 +318,13 @@ function routeFeature(route) {
   }
   if (route === "/custom/process/") {
     return [
-      '<section id="scope">Scope</section>',
+      paidRouteFixture(route),
       ...CUSTOM_PROCESS_PHASES.map((id) => `<article data-process-phase="${id}">${id}</article>`),
-      '<section data-process-mechanics="review-change-schedule">',
       ...CUSTOM_QUOTE_FIELDS.map((id) => `<div data-receipt-field="${id}">${id}</div>`),
-      "</section>",
     ].join("");
+  }
+  if (route === "/custom/") {
+    return paidRouteFixture(route);
   }
   if (route === "/abracadabra/") {
     return [
@@ -1145,6 +1185,98 @@ test("Custom keeps the complete quote-only catalog surface and exact internal fo
     (root) => modify(root, "custom/process/index.html", (fixture) =>
       fixture.replace('data-process-mechanics="review-change-schedule"', 'data-process-mechanics="review-only"')),
     /must retain explicit review, change, and schedule mechanics/u,
+  ));
+});
+
+test("paid routes keep every section tied to one customer job, action, and evidence source", async (t) => {
+  for (const [route, contracts] of Object.entries(PAID_ROUTE_SECTION_CONTRACTS)) {
+    const source = await readFile(path.join(SITE_ROOT, routeToFile(route)), "utf8");
+    for (const contract of contracts) {
+      const [job, action, evidence] = contract.split("|");
+      assert.ok(
+        source.includes(
+          `data-customer-job="${job}" data-section-action="${action}" data-section-evidence="${evidence}"`,
+        ),
+        `${route} must retain the ${job} customer contract`,
+      );
+    }
+    for (const phrase of PAID_ROUTE_REQUIRED_COPY[route]) {
+      assert.ok(source.includes(phrase), `${route} must retain ${JSON.stringify(phrase)}`);
+    }
+  }
+
+  await t.test("missing section action fails closed", () => expectSiteFailure(
+    (root) => modify(root, "custom/index.html", (source) =>
+      source.replace(' data-section-action="compare-scope"', "")),
+    /paid-route customer job, action, and evidence contracts/u,
+  ));
+  await t.test("missing section evidence fails closed", () => expectSiteFailure(
+    (root) => modify(root, "custom/process/index.html", (source) =>
+      source.replace(' data-section-evidence="roles-and-gates"', "")),
+    /paid-route customer job, action, and evidence contracts/u,
+  ));
+  await t.test("an uncontracted section fails closed", () => expectSiteFailure(
+    (root) => modify(root, "custom/index.html", (source) =>
+      source.replace("</main>", "<section>Unreviewed sales section</section></main>")),
+    /paid-route customer job, action, and evidence contracts/u,
+  ));
+  await t.test("missing commercial boundary fails closed", () => expectSiteFailure(
+    (root) => modify(root, "custom/scope/index.html", (source) =>
+      source.replace(
+        "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
+        "Ownership is handled later.",
+      )),
+    /missing paid-route price, payment, timing, ownership, or domain boundary/u,
+  ));
+});
+
+test("every paid-service ask carries an allowlisted topic into direct contact", async (t) => {
+  for (const [route, topics] of Object.entries(PAID_ROUTE_INTAKE_TOPICS)) {
+    const source = await readFile(path.join(SITE_ROOT, routeToFile(route)), "utf8");
+    for (const topic of new Set(topics)) {
+      assert.ok(
+        source.includes(
+          `href="/contact/#about-${topic}" data-intake-topic="${topic}"`,
+        ),
+        `${route} must carry ${topic} into direct contact`,
+      );
+      assert.ok(INTAKE_TOPIC_LABELS[topic], `${topic} must have a safe customer label`);
+    }
+    assert.equal(
+      source.includes('href="/contact/#direct-contact"'),
+      false,
+      `${route} must not discard paid-service context`,
+    );
+  }
+
+  await t.test("context-free handoff fails closed", () => expectSiteFailure(
+    (root) => modify(root, "solutions/index.html", (source) =>
+      source.replace(
+        'href="/contact/#about-business-email"',
+        'href="/contact/#direct-contact"',
+      )),
+    /(?:must be an anchor|context-free paid-route contact handoff)/u,
+  ));
+  await t.test("topic and query mismatch fails closed", () => expectSiteFailure(
+    (root) => modify(root, "solutions/index.html", (source) =>
+      source.replace(
+        'href="/contact/#about-staff-tool"',
+        'href="/contact/#about-design-piece"',
+      )),
+    /intake topic "staff-tool" must be an anchor/u,
+  ));
+  await t.test("missing contact context fails closed", () => expectSiteFailure(
+    (root) => modify(root, "contact/index.html", (source) =>
+      source.replace(" data-intake-context", "")),
+    /must contain one intake-context container/u,
+  ));
+  await t.test("unfocusable intake target fails closed", () => expectSiteFailure(
+    (root) => modify(root, "contact/index.html", (source) =>
+      source.replace(
+        'id="about-online-selling" tabindex="-1"',
+        'id="about-online-selling"',
+      )),
+    /must be a focusable list item/u,
   ));
 });
 

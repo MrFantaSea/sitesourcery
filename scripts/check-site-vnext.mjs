@@ -270,6 +270,104 @@ export const CUSTOM_QUOTE_FIELDS = Object.freeze([
   "commercial",
   "handoff",
 ]);
+export const PAID_ROUTE_SECTION_CONTRACTS = Object.freeze({
+  "/custom/": Object.freeze([
+    "custom-fit|ask-zack|written-quote",
+    "custom-principles|scan-principles|project-rules",
+    "custom-result|scan-results|agreed-deliverables",
+    "custom-quote|compare-scope|catalog-boundaries",
+    "assessment-alternative|see-assessment|assessment-deliverable",
+    "custom-intake|ask-zack|intake-checklist",
+  ]),
+  "/custom/scope/": Object.freeze([
+    "scope-fit|ask-zack|quote-only",
+    "scope-size|compare-sizes|catalog-limits",
+    "scope-design|compare-design|creativity-catalog",
+    "scope-tools|compare-tools|addon-catalog",
+    "scope-move|plan-replacement|domain-ownership",
+    "scope-intake|ask-zack|commercial-boundaries",
+  ]),
+  "/custom/process/": Object.freeze([
+    "process-fit|ask-zack|written-quote",
+    "process-steps|scan-steps|six-phase-model",
+    "process-quote|open-quote-fields|quote-anatomy",
+    "process-duties|open-responsibilities|roles-and-gates",
+    "process-changes|review-change-rules|change-and-schedule-rules",
+    "process-intake|ask-zack|intake-checklist",
+  ]),
+  "/solutions/": Object.freeze([
+    "service-fit|see-assessment|public-assessment",
+    "service-choices|compare-services|inquiry-boundary",
+    "service-assessment|open-details|assessment-catalog",
+    "service-foundations|open-details|written-scope",
+    "service-care|open-details|separate-care-scope",
+    "service-domain|open-details|registrant-boundary",
+    "service-email|open-details|account-custody",
+    "service-commerce|open-details|customer-payment-account",
+    "service-interface|open-details|bounded-task",
+    "service-design|open-details|single-piece-scope",
+    "service-listings|open-details|business-facts",
+    "service-intake|ask-zack|written-scope",
+  ]),
+});
+export const PAID_ROUTE_INTAKE_TOPICS = Object.freeze({
+  "/custom/": Object.freeze(["custom-website", "custom-website"]),
+  "/custom/scope/": Object.freeze(["custom-website", "custom-website"]),
+  "/custom/process/": Object.freeze(["custom-website", "custom-website"]),
+  "/solutions/": Object.freeze([
+    "website-assessment",
+    "website-foundations",
+    "website-care",
+    "customer-domain",
+    "business-email",
+    "online-selling",
+    "staff-tool",
+    "design-piece",
+    "local-listings",
+    "focused-service",
+  ]),
+});
+export const INTAKE_TOPIC_LABELS = Object.freeze({
+  "custom-website": "a made-for-you website",
+  "website-assessment": "a website assessment",
+  "website-foundations": "the website basics",
+  "website-care": "ongoing website upkeep",
+  "customer-domain": "a web address or domain",
+  "business-email": "business email",
+  "online-selling": "selling online",
+  "staff-tool": "a staff tool",
+  "design-piece": "design or artwork",
+  "local-listings": "local listings",
+  "focused-service": "a focused website job",
+});
+export const PAID_ROUTE_REQUIRED_COPY = Object.freeze({
+  "/custom/": Object.freeze([
+    "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
+    "Site through Scale use half before work starts and half on completion.",
+    "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
+    "A customer-owned web address stays in the customer’s name.",
+  ]),
+  "/custom/scope/": Object.freeze([
+    "These are work limits, not prices.",
+    "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
+    "Site through Scale use half before work starts and half on completion.",
+    "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
+    "A customer-owned web address stays in the customer’s name.",
+  ]),
+  "/custom/process/": Object.freeze([
+    "Dates are confirmed after the scope is accepted and the needed payment, materials, access, and decision-maker are ready.",
+    "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
+    "Site through Scale use half before work starts and half on completion.",
+    "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
+    "A customer-owned web address stays in your name",
+  ]),
+  "/solutions/": Object.freeze([
+    "$350 website assessment",
+    "Every other job on this page is inquiry-only",
+    "the customer is the registrant and Site Sourcery does not become the owner",
+    "The customer keeps control of the payment account and money.",
+  ]),
+});
 export const PRIVACY_SECTION_IDS = Object.freeze([
   "operator",
   "public-pages",
@@ -647,6 +745,7 @@ function markedElements(file, source, attribute, errors) {
         value: attributes.get(attribute),
         href: attributes.get("href"),
         id: attributes.get("id"),
+        tabindex: attributes.get("tabindex"),
       }));
   } catch (error) {
     report(errors, file, error.message);
@@ -1108,6 +1207,116 @@ function checkCustomProcess(source, errors) {
   );
   if (!source.includes('data-process-mechanics="review-change-schedule"')) {
     report(errors, file, "Custom process must retain explicit review, change, and schedule mechanics");
+  }
+}
+
+function checkPaidRouteSectionContracts(routeSources, errors) {
+  for (const [route, expectedContracts] of Object.entries(PAID_ROUTE_SECTION_CONTRACTS)) {
+    const entry = routeSources.get(route);
+    if (!entry) continue;
+    let tags;
+    let contractTags;
+    try {
+      tags = openingTags(entry.source);
+      contractTags = tags.filter(({ name, attributes }) =>
+        name === "section"
+        || (
+          route === "/solutions/"
+          && name === "article"
+          && attributes.has("data-solution-anchor")
+        ));
+    } catch (error) {
+      report(errors, entry.file, error.message);
+      continue;
+    }
+    const actualContracts = contractTags.map(({ attributes }) => [
+      attributes.get("data-customer-job"),
+      attributes.get("data-section-action") ?? "",
+      attributes.get("data-section-evidence") ?? "",
+    ].join("|"));
+    checkExactValues(
+      entry.file,
+      "paid-route customer job, action, and evidence contracts",
+      actualContracts,
+      expectedContracts,
+      errors,
+    );
+    for (const tag of tags.filter(({ attributes }) => attributes.has("data-customer-job"))) {
+      if (tag.name !== "section" && tag.name !== "article") {
+        report(
+          errors,
+          entry.file,
+          `customer job ${JSON.stringify(tag.attributes.get("data-customer-job"))} must mark a section or article`,
+        );
+      }
+    }
+
+    const expectedTopics = PAID_ROUTE_INTAKE_TOPICS[route] ?? [];
+    const intakeLinks = openingTags(entry.source)
+      .filter(({ attributes }) => attributes.has("data-intake-topic"));
+    const actualTopics = intakeLinks.map(({ attributes }) => attributes.get("data-intake-topic"));
+    if (JSON.stringify(actualTopics) !== JSON.stringify(expectedTopics)) {
+      report(
+        errors,
+        entry.file,
+        `intake topics must exactly equal ${expectedTopics.join(", ")} in order; received ${actualTopics.join(", ")}`,
+      );
+    }
+    for (const link of intakeLinks) {
+      const topic = link.attributes.get("data-intake-topic");
+      const expectedHref = `/contact/#about-${topic}`;
+      if (link.name !== "a" || link.attributes.get("href") !== expectedHref) {
+        report(
+          errors,
+          entry.file,
+          `intake topic ${JSON.stringify(topic)} must be an anchor to ${expectedHref}`,
+        );
+      }
+      if (!Object.prototype.hasOwnProperty.call(INTAKE_TOPIC_LABELS, topic)) {
+        report(errors, entry.file, `intake topic ${JSON.stringify(topic)} is not allowlisted`);
+      }
+    }
+    if (entry.source.includes('href="/contact/#direct-contact"')) {
+      report(errors, entry.file, "contains a context-free paid-route contact handoff");
+    }
+    for (const phrase of PAID_ROUTE_REQUIRED_COPY[route] ?? []) {
+      if (!entry.source.includes(phrase)) {
+        report(
+          errors,
+          entry.file,
+          `missing paid-route price, payment, timing, ownership, or domain boundary ${JSON.stringify(phrase)}`,
+        );
+      }
+    }
+  }
+
+  const contact = routeSources.get("/contact/");
+  if (contact) {
+    const contexts = markedElements(contact.file, contact.source, "data-intake-context", errors);
+    const targets = markedElements(contact.file, contact.source, "data-intake-topic-target", errors);
+    if (contexts.length !== 1 || contexts[0].name !== "div") {
+      report(errors, contact.file, "must contain one intake-context container");
+    }
+    checkExactValues(
+      contact.file,
+      "direct-contact intake targets",
+      targets.map(({ value }) => value),
+      Object.keys(INTAKE_TOPIC_LABELS),
+      errors,
+    );
+    for (const target of targets) {
+      if (
+        target.name !== "li"
+        || target.id !== `about-${target.value}`
+        || target.tabindex !== "-1"
+      ) {
+        report(
+          errors,
+          contact.file,
+          `intake target ${JSON.stringify(target.value)} must be a focusable list item with id="about-${target.value}"`,
+        );
+      }
+    }
   }
 }
 
@@ -1894,6 +2103,7 @@ export async function validateSiteVnext(root = process.cwd()) {
   if (customScope) checkCustomCatalogSurface(customScope, errors);
   const customProcess = routeResult.sources.get("/custom/process/")?.source;
   if (customProcess) checkCustomProcess(customProcess, errors);
+  checkPaidRouteSectionContracts(routeResult.sources, errors);
   const about = routeResult.sources.get("/about/")?.source;
   if (about) checkAboutTrust(about, errors);
   const work = routeResult.sources.get("/work/")?.source;
