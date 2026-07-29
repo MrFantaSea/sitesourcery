@@ -20,7 +20,12 @@ export function createHeldExternalPorts() {
       getDomain: held("registrar domain lookup"),
       assessTransferOut: held("registrar transfer assessment"),
       setTransferLock: held("registrar transfer lock mutation"),
-      getAuthCode: held("registrar transfer auth-code retrieval")
+      getAuthCode: held("registrar transfer auth-code retrieval"),
+      getNameservers: held("registrar nameserver lookup"),
+      setNameservers: held("registrar nameserver mutation"),
+      listDnsRecords: held("registrar DNS record lookup"),
+      saveDnsRecords: held("registrar DNS record mutation"),
+      deleteDnsRecords: held("registrar DNS record deletion")
     }),
     payments: Object.freeze({
       authorize: held("payment authorization"),

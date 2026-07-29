@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { domainToASCII } from "node:url";
 import { invariant } from "./errors.mjs";
 
 export function canonicalJson(value) {
@@ -46,9 +47,19 @@ export function requiredInteger(value, label, { minimum = 0, maximum = Number.MA
 }
 
 export function normalizeDomain(value) {
-  const domain = requiredString(value, "domain", 253).toLowerCase().replace(/\.$/u, "");
+  const supplied = requiredString(value, "domain", 253).normalize("NFC").replace(/\.$/u, "");
+  const domain = domainToASCII(supplied).toLowerCase();
   invariant(
-    /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u.test(domain),
+    domain.length >= 4 &&
+      domain.length <= 253 &&
+      domain.includes(".") &&
+      domain.split(".").every(
+        (label) =>
+          label.length >= 1 &&
+          label.length <= 63 &&
+          /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label)
+      ) &&
+      /^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$/u.test(domain.split(".").at(-1)),
     "invalid_domain",
     "domain is invalid",
     { status: 400 }
