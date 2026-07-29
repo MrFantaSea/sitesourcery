@@ -296,6 +296,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   ".gitignore",
   ".htmlvalidate.json",
   ".nvmrc",
+  "_hosted",
   "_site",
   "data",
   "flyer.html",
@@ -305,6 +306,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "print-collateral",
   "QUALITY.md",
   "scripts",
+  "server",
 ]);
 const PUBLIC_ALLOWLIST_COUNT = 66;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
@@ -937,6 +939,26 @@ function checkInteractions(file, route, source, errors) {
   }
 }
 
+function checkMainFocusTarget(file, source, errors) {
+  let elements;
+  try {
+    elements = openingTags(source);
+  } catch (error) {
+    report(errors, file, error.message);
+    return;
+  }
+  const main = elements.find(({ name, attributes }) =>
+    name === "main" && attributes.get("id") === "main"
+  );
+  if (!main) {
+    report(errors, file, 'must contain <main id="main"> for the skip link');
+    return;
+  }
+  if (main.attributes.get("tabindex") !== "-1") {
+    report(errors, file, 'main skip target must carry tabindex="-1"');
+  }
+}
+
 function checkPublicSource(file, source, { route = null } = {}, errors) {
   if (/<form\b/iu.test(source)) report(errors, file, "form elements are forbidden");
   for (const { label, expression } of PROHIBITED_COPY) {
@@ -1224,6 +1246,7 @@ async function check404(root, publicFiles, errors) {
     return;
   }
   const source = await readFile(path.join(root, file), "utf8");
+  checkMainFocusTarget(file, source, errors);
   const h1Count = (source.match(/<h1\b[^>]*>/giu) ?? []).length;
   if (h1Count !== 1) report(errors, file, `must contain exactly one h1; found ${h1Count}`);
   let hasNoindex = false;
@@ -1401,6 +1424,7 @@ export async function validateSiteVnext(root = process.cwd()) {
   for (const [route, { file, source }] of routeResult.sources) {
     if (!sourceFiles.has(file)) continue;
     checkContactTruth(file, source, errors);
+    checkMainFocusTarget(file, source, errors);
     checkPublicSource(file, source, { route }, errors);
     checkEmbeddedStyles(file, source, sourceFiles, errors);
   }

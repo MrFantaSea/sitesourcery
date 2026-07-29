@@ -582,13 +582,13 @@
     function showRecommendation(key) {
       var recommendation = recommendations[key];
       if (!recommendation) return;
+      needStep.hidden = true;
+      detailStep.hidden = true;
+      result.hidden = false;
       resultTitle.textContent = recommendation.title;
       resultCopy.textContent = recommendation.copy;
       resultAction.textContent = recommendation.action;
       resultAction.setAttribute("href", recommendation.href);
-      needStep.hidden = true;
-      detailStep.hidden = true;
-      result.hidden = false;
       focusAndReveal(result);
     }
 

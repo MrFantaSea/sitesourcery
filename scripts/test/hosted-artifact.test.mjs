@@ -20,6 +20,7 @@ import {
   verifyHostedArtifact,
 } from "../build-hosted.mjs";
 import { publicFileAllowlist } from "../build-pages.mjs";
+import { CANONICAL_ROUTE_FILES } from "../check-routes.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldOnlyPhrases,
@@ -198,12 +199,24 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
   const sources = await readTruthFiles(output, hostedTruthRequirements);
   assertRequirements(sources, hostedTruthRequirements);
   assertMissingPhrases(sources, heldOnlyPhrases);
+  for (const file of Object.values(CANONICAL_ROUTE_FILES)) {
+    const source = await readFile(path.join(output, file), "utf8");
+    assert.match(
+      source,
+      /<main\b[^>]*\bid="main"[^>]*\btabindex="-1"/u,
+      `${file}: skip-link main target must accept focus`,
+    );
+  }
   for (const source of sources.values()) {
     assert.equal(source.includes("sitesourcery:truth-slot:"), false);
     assert.equal(source.includes("/abracadabra/site/"), false);
   }
 
   const app = sources.get("abracadabra/app/index.html");
+  assert.ok(
+    app.indexOf('id="workroom"') < app.indexOf('id="control-room"'),
+    "hosted maker must precede account controls in both DOM and visual order",
+  );
   assert.equal(
     count(
       app,

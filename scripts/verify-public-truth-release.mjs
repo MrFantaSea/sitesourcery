@@ -285,6 +285,7 @@ export const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   ".gitignore",
   ".htmlvalidate.json",
   ".nvmrc",
+  "_hosted",
   "_site",
   "data",
   "flyer.html",
@@ -294,6 +295,7 @@ export const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "print-collateral",
   "QUALITY.md",
   "scripts",
+  "server",
 ]);
 
 const SHA1 = /^[0-9a-f]{40}$/u;

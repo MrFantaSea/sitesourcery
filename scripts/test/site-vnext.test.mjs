@@ -273,7 +273,7 @@ function canonicalHtml(route) {
     `<title>${title}</title>`,
     "</head><body>",
     primaryNav(),
-    `<main><h1>${title}</h1>${routeFeature(route)}${[...(PUBLIC_TRUTH_COPY[route] ?? []), ...(BUSINESS_EMAIL_COPY[route] ?? [])].map((phrase) => `<p>${phrase}</p>`).join("")}</main>`,
+    `<main id="main" tabindex="-1"><h1>${title}</h1>${routeFeature(route)}${[...(PUBLIC_TRUTH_COPY[route] ?? []), ...(BUSINESS_EMAIL_COPY[route] ?? [])].map((phrase) => `<p>${phrase}</p>`).join("")}</main>`,
     "<footer>",
     '<a href="tel:+18562441220">(856) 244-1220</a>',
     '<a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>',
@@ -330,7 +330,7 @@ async function makeFixture() {
   await put(
     root,
     "404.html",
-    '<!doctype html><html><head><meta content="noindex" name="robots"></head><body><h1>Not found</h1></body></html>',
+    '<!doctype html><html><head><meta content="noindex" name="robots"></head><body><main id="main" tabindex="-1"><h1>Not found</h1></main></body></html>',
   );
   for (const file of publicFileAllowlist) {
     await putIfMissing(root, file, safeAllowlistPlaceholder(file));
@@ -666,6 +666,14 @@ test("vNext requires exact global contact and legal truth", async (t) => {
     (root) => inject(root, "contact/index.html", "<p>sales@example.com</p>"),
     /alternate public email/u,
   ));
+});
+
+test("vNext requires every skip-link main target to accept focus", async () => {
+  await expectSiteFailure(
+    (root) => modify(root, "about/index.html", (source) =>
+      source.replace('<main id="main" tabindex="-1">', '<main id="main">')),
+    /main skip target must carry tabindex="-1"/u,
+  );
 });
 
 test("vNext requires exact home doors, Hive cells, and solution anchors", async (t) => {

@@ -94,6 +94,7 @@ export const excludedTopLevel = Object.freeze([
   ".gitignore",
   ".htmlvalidate.json",
   ".nvmrc",
+  "_hosted",
   "_site",
   "data",
   "flyer.html",
@@ -103,6 +104,7 @@ export const excludedTopLevel = Object.freeze([
   "print-collateral",
   "QUALITY.md",
   "scripts",
+  "server",
 ]);
 
 function lexical(left, right) {

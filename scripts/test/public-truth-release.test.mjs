@@ -505,8 +505,8 @@ test("candidate changed-path contract is exact, sorted, unique, and complete", (
   assert.equal(PRODUCTION_ORIGIN, "https://sitesourcery.com");
 });
 
-test("artifact exclusion contract covers print, workflow, governance, data, and flyer sources", () => {
-  for (const name of [".github", "data", "flyer.html", "print-collateral", "scripts", "QUALITY.md", "package.json"]) {
+test("artifact exclusion contract covers generated, server, workflow, governance, data, and print sources", () => {
+  for (const name of [".github", "_hosted", "data", "flyer.html", "print-collateral", "scripts", "server", "QUALITY.md", "package.json"]) {
     assert.ok(EXCLUDED_ARTIFACT_TOP_LEVEL.includes(name), name);
   }
 });

@@ -11,7 +11,6 @@
   --spark-gold:var(--gold);
   --spark-mint:var(--mint);
   --spark-danger:var(--danger);
-  min-width:20rem;
   color:var(--spark-ink);
   background:
     radial-gradient(circle at 84% 8%,rgba(133,76,186,.18),transparent 34rem),
@@ -20,9 +19,6 @@
 
 .abracadabra-app-page main{display:flex;flex-direction:column}
 .spark-hero{padding:clamp(2.5rem,5vw,4.5rem) 0;border-bottom:1px solid var(--spark-line)}
-.spark-hero{order:1}
-.spark-workroom{order:2}
-.platform-control{order:3}
 .spark-hero-grid{display:grid;grid-template-columns:1fr;gap:2rem;align-items:end}
 .spark-kicker,.spark-panel-label{margin:0 0 .8rem;color:var(--spark-mint);font-size:.75rem;font-weight:850;letter-spacing:.14em;text-transform:uppercase}
 .spark-hero h1{max-width:15ch;margin:0;font-size:clamp(2.8rem,6.5vw,5.7rem);line-height:.92;letter-spacing:-.06em}
@@ -109,7 +105,7 @@
 [data-address-mode-a],[data-address-mode-b],[data-access-password]{margin-top:1rem}
 .platform-address-input{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;overflow:hidden;border:1px solid var(--spark-line);border-radius:.65rem;background:#0d0813}
 .platform-address-input:focus-within{border-color:var(--spark-violet);outline:3px solid rgba(185,152,255,.2);outline-offset:1px}
-.platform-address-input input{border:0;border-radius:0;outline:0!important}
+.platform-address-input input{border:0;border-radius:0}
 .platform-address-input b{padding-right:.85rem;color:var(--spark-faint);font-size:.76rem}
 
 .platform-project-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;padding:.25rem 0 1.3rem}
@@ -182,7 +178,7 @@
 .platform-release-list li>div{display:grid;min-width:0;gap:.18rem}
 .platform-release-list strong{overflow-wrap:anywhere;color:var(--spark-ink);font-size:.77rem}
 .platform-release-list span,.platform-release-list small{min-width:0;overflow-wrap:anywhere;color:var(--spark-faint);font-size:.75rem;line-height:1.35}
-.platform-release-list .spark-button{flex:0 0 auto;min-height:2.25rem;padding:.35rem .65rem}
+.platform-release-list .spark-button{flex:0 0 auto;min-height:2.75rem;padding:.35rem .65rem}
 .platform-ticket-list li{display:grid;justify-content:stretch}
 .platform-ticket-list strong{color:var(--spark-ink);font-size:.78rem}
 .platform-export-state{margin-top:1rem;padding:.85rem;border:1px solid var(--spark-line);border-radius:.75rem;background:rgba(255,255,255,.035)}
@@ -274,7 +270,7 @@
 .spark-history{margin-top:1rem;padding:1rem;border:1px solid var(--spark-line);border-radius:1rem;background:rgba(7,4,11,.35)}
 .spark-history h3{margin:0;font-size:1rem}.spark-history>p{margin:.35rem 0 .8rem;color:var(--spark-faint);font-size:.75rem}
 .spark-history ol{display:grid;gap:.45rem;margin:0;padding:0;list-style:none}
-.spark-history button{width:100%;padding:.65rem .75rem;border:1px solid var(--spark-line);border-radius:.55rem;color:var(--spark-muted);background:transparent;text-align:left;font:inherit;font-size:.75rem;cursor:pointer}
+.spark-history button{width:100%;min-height:2.75rem;padding:.65rem .75rem;border:1px solid var(--spark-line);border-radius:.55rem;color:var(--spark-muted);background:transparent;text-align:left;font:inherit;font-size:.75rem;cursor:pointer}
 .spark-history button[aria-current="true"]{border-color:var(--spark-mint);color:var(--spark-ink);background:rgba(130,231,196,.08)}
 .spark-history button:focus-visible{outline:3px solid var(--spark-gold);outline-offset:2px}
 .spark-save-gate{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1.5rem;align-items:center;margin-top:1.5rem;padding:clamp(1rem,3vw,1.5rem);border:1px solid rgba(130,231,196,.28);border-radius:1rem;background:linear-gradient(135deg,rgba(47,112,91,.12),rgba(185,152,255,.07))}
