@@ -393,7 +393,7 @@
     elements.statusStage.hidden = false;
     elements.statusDetails.hidden = false;
     elements.retentionDetail.hidden = true;
-    elements.statusActions.hidden = true;
+    elements.statusActions.hidden = false;
     elements.accessForm.hidden = false;
     elements.accessError.hidden = true;
     setText(elements.statusKicker, "Site Sourcery · Access controlled");

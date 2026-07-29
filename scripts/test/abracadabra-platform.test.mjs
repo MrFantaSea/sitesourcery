@@ -52,6 +52,15 @@ test("the published-site frame permits popups without weakening its inert sandbo
   assert.match(viewerSource, /querySelectorAll\("script,iframe,frame,object,embed,base"\)/u);
 });
 
+test("the passphrase gate keeps the return action visible while exports stay locked", () => {
+  const accessGate = viewerSource.match(
+    /function showAccessGate\(normalized, message\) \{[\s\S]*?\n  \}/u,
+  )?.[0] ?? "";
+  assert.match(accessGate, /elements\.statusActions\.hidden = false/u);
+  assert.match(accessGate, /setExportAvailable\(false\)/u);
+  assert.doesNotMatch(accessGate, /elements\.statusActions\.hidden = true/u);
+});
+
 function viewerCredentialHooks() {
   const context = vm.createContext({
     TextEncoder,

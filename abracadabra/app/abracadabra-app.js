@@ -531,7 +531,7 @@
     versions.push({ raw: cloneRaw(reviewedRaw), result: result, platformVersionId: null });
     currentVersionIndex = versions.length - 1;
     markDraftClean();
-    renderCurrentVersion("Made.");
+    renderCurrentVersion("Your page is ready. Open it, download it, or edit it below.");
     setStep("preview");
     emitVersionMade(versions[currentVersionIndex], reviewAttested);
   }
@@ -681,7 +681,7 @@
   maker.setAttribute("aria-disabled", "false");
   /* sitesourcery:truth-slot:abracadabra-app-ready:start */
   bootStatus.textContent = "Abracadabra ready. Your local draft stays in this tab.";
-  bootStatus.hidden = true;
+  bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
   setStep("facts", { focus: false });
