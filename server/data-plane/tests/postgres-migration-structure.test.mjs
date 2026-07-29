@@ -193,3 +193,24 @@ test("mixed one-time and recurring checkout uses normalized exact price lines", 
     /checkout_record\.amount_minor <> amount_due_now/iu
   );
 });
+
+test("terminal deletion seals its ordered billing history as an array", async () => {
+  const all = await migrations();
+  const deletion = all.find(
+    ({ name }) =>
+      name === "202607280012_deletion_billing_snapshot_shape.sql"
+  );
+  assert.ok(deletion);
+  assert.match(
+    deletion.sql,
+    /jsonb_typeof\(billing_timestamps\)\s*=\s*'array'/iu
+  );
+  assert.match(
+    deletion.sql,
+    /create function ss\.hosted_runtime_contract_v12\(\)/iu
+  );
+  assert.doesNotMatch(
+    deletion.sql,
+    /jsonb_typeof\(billing_timestamps\)\s*=\s*'object'/iu
+  );
+});
