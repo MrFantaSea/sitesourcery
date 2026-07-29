@@ -1636,6 +1636,7 @@ const AUDIT_EXPRESSION = `(() => {
   if (hive) {
     const output = hive.querySelector("[data-hive-output]");
     const stageShell = hive.querySelector(".hive-stage-shell");
+    const start = hive.querySelector("[data-hive-start]");
     const stages = Array.from(hive.querySelectorAll("[data-hive-stage]"));
     const live = hive.querySelector("[data-hive-live]");
     result.hiveReady = {
@@ -1659,6 +1660,9 @@ const AUDIT_EXPRESSION = `(() => {
         : 0,
       progressStates: Array.from(hive.querySelectorAll("[data-hive-step-indicator]"))
         .map((item) => item.getAttribute("data-hive-step-state")),
+      startVisible: start
+        ? !start.hidden && getComputedStyle(start).display !== "none"
+        : null,
       stageShellWidth: stageShell ? Math.round(stageShell.getBoundingClientRect().width) : 0,
       visibleStages: stages.filter((stage) => !stage.hidden).length,
       plannerHeight: Math.round(hive.getBoundingClientRect().height),
@@ -2969,6 +2973,10 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
       .map((stage) => Number(stage.getAttribute("data-hive-stage"))),
     inert: stages.filter((stage) => stage.inert)
       .map((stage) => Number(stage.getAttribute("data-hive-stage"))),
+    startVisible: (() => {
+      const start = root.querySelector("[data-hive-start]");
+      return !start.hidden && getComputedStyle(start).display !== "none";
+    })(),
     visible: stages.filter((stage) => !stage.hidden)
       .map((stage) => Number(stage.getAttribute("data-hive-stage")))
   });
@@ -4086,6 +4094,7 @@ export async function auditBrowser({
             || result.hiveReady.downloadDisabled !== true
             || result.hiveReady.progressStates.join(",")
               !== "current,locked,locked,locked,locked"
+            || result.hiveReady.startVisible !== true
             || result.hiveReady.outputLength < 100
           ) {
             errors.push(`${viewport.label} ${route}: Hive planner did not fully enhance`);
@@ -4138,13 +4147,17 @@ export async function auditBrowser({
               || !cell.customerCopyMatches
               || !cell.reviewMatches
               || cell.afterChoice.current !== "2"
+              || cell.afterChoice.startVisible
               || cell.afterChoice.visible.join(",") !== "1,2"
               || cell.afterChoice.inert.join(",") !== "3,4,5"
               || cell.afterTiming.current !== "3"
+              || cell.afterTiming.startVisible
               || cell.afterTiming.visible.join(",") !== "1,3"
               || cell.afterRules.current !== "4"
+              || cell.afterRules.startVisible
               || cell.afterRules.visible.join(",") !== "1,4"
               || cell.afterReview.current !== "5"
+              || cell.afterReview.startVisible
               || cell.afterReview.visible.join(",") !== "1,5"
               || !cell.choiceFocus
               || !cell.timingFocus

@@ -12,6 +12,8 @@ const SOURCE_PATH = path.join(PROJECT_ROOT, "hive/hive-planner.js");
 const SOURCE = await readFile(SOURCE_PATH, "utf8");
 const HTML_PATH = path.join(PROJECT_ROOT, "hive/index.html");
 const HTML = await readFile(HTML_PATH, "utf8");
+const CSS_PATH = path.join(PROJECT_ROOT, "vnext.css");
+const CSS = await readFile(CSS_PATH, "utf8");
 
 const EXPECTED_CELL_IDS = [
   "missed-call",
@@ -601,6 +603,7 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
     HTML,
     /data-hive-stage="5"[^>]*aria-hidden="true"[^>]*hidden inert/iu
   );
+  assert.match(CSS, /\.hive-stage-start\[hidden\][^{]*\{[^}]*display:\s*none/isu);
 });
 
 test("contains no network, persistence, markup-injection, or payment API", () => {

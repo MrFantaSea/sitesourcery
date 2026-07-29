@@ -2864,6 +2864,7 @@ h3 {
   align-content: start;
 }
 
+.hive-stage-start[hidden],
 .hive-stage-card[hidden] {
   display: none;
 }
