@@ -488,6 +488,24 @@ test("browser gate pins one exact reviewed Chromium archive and executable ident
   assert.doesNotMatch(installerSource, /\blatest\b/iu);
 });
 
+test("browser CLI gives every route a fresh reviewed target", () => {
+  const isolationStart = auditSource.indexOf(
+    "async function auditRoutesIndependently",
+  );
+  const isolationEnd = auditSource.indexOf(
+    "if (process.argv[1]",
+    isolationStart,
+  );
+  assert.ok(isolationStart >= 0 && isolationEnd > isolationStart);
+  const isolationSource = auditSource.slice(isolationStart, isolationEnd);
+  assert.match(isolationSource, /for \(const route of routes\)/u);
+  assert.match(isolationSource, /routes: \[route\]/u);
+  assert.match(isolationSource, /combined\.errors\.push/u);
+  assert.match(isolationSource, /combined\.results\.push/u);
+  assert.match(auditSource, /const result = await auditRoutesIndependently\(\{/u);
+  assert.match(auditSource, /one fresh reviewed browser target per route/u);
+});
+
 test("homepage first-paint gate fails closed before load across exact cold scenarios", () => {
   assert.deepEqual(HOME_FIRST_PAINT_VIEWPORTS, [
     { label: "cold-phone-390", width: 390, height: 844, mobile: true },

@@ -5667,6 +5667,33 @@ export async function auditBrowser({
   }
 }
 
+async function auditRoutesIndependently({
+  artifactRoot,
+  origin,
+  routes,
+}) {
+  const combined = {
+    errors: [],
+    results: [],
+  };
+  for (const route of routes) {
+    try {
+      const result = await auditBrowser({
+        artifactRoot,
+        origin,
+        routes: [route],
+      });
+      combined.errors.push(...result.errors);
+      combined.results.push(...result.results);
+    } catch (error) {
+      combined.errors.push(
+        `${route}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return combined;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const requestedArtifactRoot = process.env.SITESOURCERY_ARTIFACT_ROOT
@@ -5677,7 +5704,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       : undefined;
     const selectedRoutes = process.argv.slice(requestedOrigin ? 3 : 2);
     const routes = selectedRoutes.length ? selectedRoutes : CANONICAL_ROUTES;
-    const result = await auditBrowser({
+    const result = await auditRoutesIndependently({
       artifactRoot: requestedArtifactRoot,
       origin: requestedOrigin,
       routes,
@@ -5691,6 +5718,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         `Browser audit passed: ${routes.length} canonical routes at `
         + `${VIEWPORTS.length} primary viewports plus ${HIVE_COMPONENT_VIEWPORTS.length} `
         + `Hive breakpoint views, one no-script phone pass, and one reduced-motion phone pass; `
+        + `one fresh reviewed browser target per route; `
         + `${routes.includes("/") ? "ten bounded homepage cold-load checks; " : ""}`
         + `${routes.length * PROGRESSIVE_FAILURE_SCENARIOS.length} bounded progressive-failure checks; `
         + `no console exceptions, broken images, `
