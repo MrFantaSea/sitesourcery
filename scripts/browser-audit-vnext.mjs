@@ -965,6 +965,28 @@ async function auditHomeFirstPaint(cdp, auditOrigin) {
   await cdp.send("Network.enable");
   try {
     for (const viewport of HOME_FIRST_PAINT_VIEWPORTS) {
+      // A page-cache cold load should not also measure one-time renderer and
+      // compositor startup. Prime those browser processes before each device
+      // class, then clear the browser cache inside every measured scenario.
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 1,
+        mobile: viewport.mobile,
+      });
+      const warmed = await cdp.send("Runtime.evaluate", {
+        expression:
+          "new Promise((resolve) => "
+          + "requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (warmed.exceptionDetails) {
+        throw new Error(
+          `could not prime ${viewport.label} paint target `
+          + `${JSON.stringify(warmed.exceptionDetails)}`,
+        );
+      }
       for (const scenario of HOME_FIRST_PAINT_SCENARIOS) {
         const auditLabel = `${viewport.label} / cold-home / ${scenario}`;
         const heldRequestIds = new Set();

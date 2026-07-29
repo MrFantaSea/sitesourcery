@@ -626,6 +626,26 @@ test("homepage first-paint gate fails closed before load across exact cold scena
   assert.match(coldSource, /asyncWait: !pageScriptDisabled/u);
   assert.match(coldSource, /awaitPromise: !pageScriptDisabled/u);
   assert.match(coldSource, /Network\.clearBrowserCache/u);
+  const coldAuditSource = auditSource.slice(coldStart, coldEnd);
+  const rendererWarmup = coldAuditSource.indexOf(
+    'const warmed = await cdp.send("Runtime.evaluate"',
+  );
+  const measuredScenarios = coldAuditSource.indexOf(
+    "for (const scenario of HOME_FIRST_PAINT_SCENARIOS)",
+  );
+  const measuredCacheClear = coldAuditSource.indexOf(
+    'await cdp.send("Network.clearBrowserCache")',
+  );
+  assert.ok(
+    rendererWarmup >= 0
+    && measuredScenarios > rendererWarmup
+    && measuredCacheClear > measuredScenarios,
+    "renderer/compositor warm-up must precede measured scenarios while every scenario stays cache-cold",
+  );
+  assert.match(
+    coldAuditSource,
+    /requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/u,
+  );
   const coldInvocation = auditSource.indexOf("await auditHomeFirstPaint(cdp, auditOrigin)");
   const ordinaryRuntimeErrors = auditSource.indexOf("const runtimeErrors = []", coldInvocation);
   assert.ok(coldInvocation >= 0 && ordinaryRuntimeErrors > coldInvocation);
