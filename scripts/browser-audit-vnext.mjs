@@ -116,9 +116,48 @@ const PROGRESSIVE_FAILURE_SENTINEL = "SITESOURCERY_PROGRESSIVE_FAILURE_AUDIT";
 const ROUTE_TRANSFER_BUDGET_BYTES = 1024 * 1024;
 const PRIVATE_VIEWER_POPUP_URL = "https://cta.invalid/abracadabra-popup-proof";
 const PRIVATE_VIEWER_POPUP_TIMEOUT_MS = 5000;
+const PRIVATE_VIEWER_ATTACHMENT_TIMEOUT_MS = 5000;
+const PRIVATE_VIEWER_ATTACHMENT_POLL_MS = 25;
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function privateViewerAttachmentPending(error) {
+  const message = String(error?.message ?? error ?? "");
+  return message.startsWith("published-site contentDocument was not attached")
+    || message === "published-site frame target was not attached"
+    || message === "exact compiled external CTA count was 0";
+}
+
+export async function waitForPrivateViewerAttachment(
+  inspect,
+  {
+    now = Date.now,
+    pollMs = PRIVATE_VIEWER_ATTACHMENT_POLL_MS,
+    timeoutMs = PRIVATE_VIEWER_ATTACHMENT_TIMEOUT_MS,
+    wait = delay,
+  } = {},
+) {
+  if (typeof inspect !== "function") {
+    throw new TypeError("private viewer attachment inspector must be a function");
+  }
+  const deadline = now() + timeoutMs;
+  let lastError = null;
+  do {
+    try {
+      return await inspect();
+    } catch (error) {
+      if (!privateViewerAttachmentPending(error)) throw error;
+      lastError = error;
+    }
+    if (now() >= deadline) break;
+    await wait(pollMs);
+  } while (now() <= deadline);
+  throw new Error(
+    `${lastError?.message ?? "published-site attachment was unavailable"} `
+    + `after waiting ${timeoutMs}ms`,
+  );
 }
 
 export function homeFirstPaintFailures(snapshot, checkpoint, scenario) {
@@ -359,7 +398,10 @@ export function privateViewerPopupFailures(
     failures.push(`source frame sandbox is ${JSON.stringify(proof.frame?.sandbox ?? null)}`);
   }
   if (
-    proof.frame?.inspection !== "DOM.getDocument(pierce)"
+    ![
+      "DOM.getDocument(pierce)",
+      "Target.attachToTarget(flatten)",
+    ].includes(proof.frame?.inspection)
     || !proof.frame?.ownerBackendNodeId
     || !proof.frame?.contentDocumentBackendNodeId
   ) {
@@ -427,6 +469,7 @@ export function privateViewerPopupFailures(
     !proof.cleanup?.listenersRemoved
     || !proof.cleanup?.discoveryDisabled
     || !proof.cleanup?.domDisabled
+    || !proof.cleanup?.frameSessionDetached
     || !Array.isArray(proof.cleanup?.remainingTargetIds)
     || (proof.cleanup?.closeErrors?.length ?? 0) > 0
     || remainingTargets.length
@@ -596,13 +639,15 @@ function connectCdp(url) {
     };
   }
 
-  async function send(method, params = {}) {
+  async function send(method, params = {}, sessionId = "") {
     await opened;
     sequence += 1;
     const id = sequence;
     return new Promise((resolve, reject) => {
       pending.set(id, { method, reject, resolve });
-      socket.send(JSON.stringify({ id, method, params }));
+      const message = { id, method, params };
+      if (sessionId) message.sessionId = sessionId;
+      socket.send(JSON.stringify(message));
     });
   }
 
@@ -2468,12 +2513,18 @@ const PRIVATE_VIEWER_CLEANUP_EXPRESSION = `(() => {
 })()`;
 
 async function exercisePrivateViewerPopup(cdp) {
-  const sendBounded = (checkpoint, method, params = {}, timeoutMs = 3000) =>
+  const sendBounded = (
+    checkpoint,
+    method,
+    params = {},
+    timeoutMs = 3000,
+    sessionId = "",
+  ) =>
     new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`${checkpoint} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      cdp.send(method, params).then(
+      cdp.send(method, params, sessionId).then(
         (value) => {
           clearTimeout(timer);
           resolve(value);
@@ -2490,6 +2541,7 @@ async function exercisePrivateViewerPopup(cdp) {
       closeErrors: [],
       discoveryDisabled: false,
       domDisabled: false,
+      frameSessionDetached: false,
       listenersRemoved: false,
       remainingTargetIds: null,
     },
@@ -2507,8 +2559,11 @@ async function exercisePrivateViewerPopup(cdp) {
   const destroyedTargetIds = new Set();
   const windowOpenEvents = [];
   let acceptPopupEvents = false;
+  let attachedFrameSessionId = "";
   let discoveryEnabled = false;
   let domEnabled = false;
+  let frameDomEnabled = false;
+  let framePageEnabled = false;
   let offTargetCreated = () => {};
   let offTargetChanged = () => {};
   let offTargetDestroyed = () => {};
@@ -2542,6 +2597,8 @@ async function exercisePrivateViewerPopup(cdp) {
     }
     const owner = owners[0];
     let contentDocument = owner.contentDocument;
+    let domSessionId = "";
+    let inspection = "DOM.getDocument(pierce)";
     if (!contentDocument) {
       const described = await sendBounded(
         `${checkpoint} owner content`,
@@ -2553,6 +2610,62 @@ async function exercisePrivateViewerPopup(cdp) {
         },
       );
       contentDocument = described.node.contentDocument;
+    }
+    if (!contentDocument) {
+      if (!attachedFrameSessionId) {
+        const targets = await sendBounded(
+          `${checkpoint} frame targets`,
+          "Target.getTargets",
+        );
+        const frameTargets = (targets.targetInfos ?? []).filter((target) =>
+          target.type === "iframe"
+          && target.url === "about:srcdoc"
+        );
+        if (frameTargets.length !== 1) {
+          throw new Error("published-site frame target was not attached");
+        }
+        const attached = await sendBounded(
+          `${checkpoint} attach frame target`,
+          "Target.attachToTarget",
+          {
+            flatten: true,
+            targetId: frameTargets[0].targetId,
+          },
+        );
+        attachedFrameSessionId = attached.sessionId ?? "";
+        if (!attachedFrameSessionId) {
+          throw new Error("published-site frame target was not attached");
+        }
+        await sendBounded(
+          `${checkpoint} enable frame page inspection`,
+          "Page.enable",
+          {},
+          3000,
+          attachedFrameSessionId,
+        );
+        framePageEnabled = true;
+        await sendBounded(
+          `${checkpoint} enable frame DOM inspection`,
+          "DOM.enable",
+          {},
+          3000,
+          attachedFrameSessionId,
+        );
+        frameDomEnabled = true;
+      }
+      const frameDocument = await sendBounded(
+        `${checkpoint} attached frame document`,
+        "DOM.getDocument",
+        {
+          depth: -1,
+          pierce: true,
+        },
+        3000,
+        attachedFrameSessionId,
+      );
+      contentDocument = frameDocument.root;
+      domSessionId = attachedFrameSessionId;
+      inspection = "Target.attachToTarget(flatten)";
     }
     if (!contentDocument) throw new Error("published-site contentDocument was not attached");
     const anchors = collectDomNodes(contentDocument).filter((node) => {
@@ -2571,6 +2684,8 @@ async function exercisePrivateViewerPopup(cdp) {
       contentDocument,
       documentConnected: collectDomNodes(contentDocument)
         .some((node) => node.nodeName === "BODY"),
+      domSessionId,
+      inspection,
       owner,
       ownerAttributes: nodeAttributes(owner),
     };
@@ -2579,7 +2694,9 @@ async function exercisePrivateViewerPopup(cdp) {
   try {
     await sendBounded("enable popup DOM inspection", "DOM.enable");
     domEnabled = true;
-    let attachment = await inspectPublishedCta("inspect compiled CTA attachment");
+    let attachment = await waitForPrivateViewerAttachment(
+      () => inspectPublishedCta("inspect compiled CTA attachment"),
+    );
     const ownerEvaluation = await sendBounded("measure popup frame owner", "Runtime.evaluate", {
       expression: `(() => {
         const frame = document.querySelector("#published-site");
@@ -2615,12 +2732,16 @@ async function exercisePrivateViewerPopup(cdp) {
       "scroll compiled CTA into view",
       "DOM.scrollIntoViewIfNeeded",
       { backendNodeId: attachment.anchor.backendNodeId },
+      3000,
+      attachment.domSessionId,
     );
     await delay(50);
-    attachment = await inspectPublishedCta("reinspect compiled CTA attachment");
+    attachment = await waitForPrivateViewerAttachment(
+      () => inspectPublishedCta("reinspect compiled CTA attachment"),
+    );
     const box = await sendBounded("measure compiled CTA box", "DOM.getBoxModel", {
       backendNodeId: attachment.anchor.backendNodeId,
-    });
+    }, 3000, attachment.domSessionId);
     const quad = box.model?.content;
     if (!Array.isArray(quad) || quad.length !== 8) {
       throw new Error(`compiled external CTA had no content quad ${JSON.stringify(quad ?? null)}`);
@@ -2628,7 +2749,7 @@ async function exercisePrivateViewerPopup(cdp) {
     proof.frame = {
       contentDocumentBackendNodeId: attachment.contentDocument.backendNodeId,
       frameId: attachment.contentDocument.frameId || attachment.owner.frameId || "",
-      inspection: "DOM.getDocument(pierce)",
+      inspection: attachment.inspection,
       ownerBackendNodeId: attachment.owner.backendNodeId,
       sandbox: owner.sandbox,
       sandboxRestrictsOriginAndScripts:
@@ -2639,13 +2760,16 @@ async function exercisePrivateViewerPopup(cdp) {
 
     const x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4;
     const y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4;
+    const clickViewport = attachment.domSessionId
+      ? owner.rect
+      : owner.viewport;
     if (
       !Number.isFinite(x)
       || !Number.isFinite(y)
       || x < 0
       || y < 0
-      || x > owner.viewport.width
-      || y > owner.viewport.height
+      || x > clickViewport.width
+      || y > clickViewport.height
     ) {
       throw new Error(`compiled external CTA was not hit-testable at ${JSON.stringify({ x, y })}`);
     }
@@ -2692,7 +2816,7 @@ async function exercisePrivateViewerPopup(cdp) {
       type: "mouseMoved",
       x,
       y,
-    });
+    }, 3000, attachment.domSessionId);
     acceptPopupEvents = true;
     await sendBounded("press compiled CTA", "Input.dispatchMouseEvent", {
       button: "left",
@@ -2701,7 +2825,7 @@ async function exercisePrivateViewerPopup(cdp) {
       type: "mousePressed",
       x,
       y,
-    });
+    }, 3000, attachment.domSessionId);
     await sendBounded("release compiled CTA", "Input.dispatchMouseEvent", {
       button: "left",
       buttons: 0,
@@ -2709,7 +2833,7 @@ async function exercisePrivateViewerPopup(cdp) {
       type: "mouseReleased",
       x,
       y,
-    });
+    }, 3000, attachment.domSessionId);
     proof.click = {
       backendNodeId: attachment.anchor.backendNodeId,
       coordinates: { x, y },
@@ -2772,7 +2896,9 @@ async function exercisePrivateViewerPopup(cdp) {
       },
     );
     proof.outerAfter = outerAfterEvaluation.result?.value ?? null;
-    const innerAfter = await inspectPublishedCta("verify popup opener DOM attachment");
+    const innerAfter = await waitForPrivateViewerAttachment(
+      () => inspectPublishedCta("verify popup opener DOM attachment"),
+    );
     proof.innerAfter = {
       backendNodeId: innerAfter.anchor.backendNodeId,
       documentConnected: innerAfter.documentConnected,
@@ -2851,6 +2977,47 @@ async function exercisePrivateViewerPopup(cdp) {
       } catch (error) {
         proof.cleanup.closeErrors.push(`DOM cleanup: ${error.message}`);
       }
+    }
+    if (frameDomEnabled) {
+      try {
+        await sendBounded(
+          "disable attached frame DOM inspection",
+          "DOM.disable",
+          {},
+          2000,
+          attachedFrameSessionId,
+        );
+      } catch (error) {
+        proof.cleanup.closeErrors.push(`frame DOM cleanup: ${error.message}`);
+      }
+    }
+    if (framePageEnabled) {
+      try {
+        await sendBounded(
+          "disable attached frame page inspection",
+          "Page.disable",
+          {},
+          2000,
+          attachedFrameSessionId,
+        );
+      } catch (error) {
+        proof.cleanup.closeErrors.push(`frame page cleanup: ${error.message}`);
+      }
+    }
+    if (attachedFrameSessionId) {
+      try {
+        await sendBounded(
+          "detach published-site frame target",
+          "Target.detachFromTarget",
+          { sessionId: attachedFrameSessionId },
+          2000,
+        );
+        proof.cleanup.frameSessionDetached = true;
+      } catch (error) {
+        proof.cleanup.closeErrors.push(`frame target cleanup: ${error.message}`);
+      }
+    } else {
+      proof.cleanup.frameSessionDetached = true;
     }
   }
   return proof;
@@ -4699,29 +4866,37 @@ export async function auditBrowser({
             } else {
               let platformRequests = 0;
               const fulfillments = [];
-              await cdp.send("Fetch.enable", {
-                patterns: [{
-                  requestStage: "Request",
-                  resourceType: "Script",
-                  urlPattern: "*abracadabra/platform/abracadabra-platform.js*",
-                }],
-              });
-              const offPlatformFetch = cdp.on("Fetch.requestPaused", (event) => {
-                platformRequests += 1;
-                fulfillments.push(cdp.send("Fetch.fulfillRequest", {
-                  requestId: event.requestId,
-                  responseCode: 200,
-                  responseHeaders: [{
-                    name: "Content-Type",
-                    value: "application/javascript; charset=utf-8",
-                  }],
-                  body: Buffer.from(
-                    '"use strict"; globalThis.SiteSourceryAbracadabraPlatform = undefined;',
-                    "utf8",
-                  ).toString("base64"),
-                }));
-              });
+              let fetchEnabled = false;
+              let networkEnabled = false;
+              let offPlatformFetch = () => {};
               try {
+                await cdp.send("Network.enable");
+                networkEnabled = true;
+                await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+                await cdp.send("Network.clearBrowserCache");
+                await cdp.send("Fetch.enable", {
+                  patterns: [{
+                    requestStage: "Request",
+                    resourceType: "Script",
+                    urlPattern: "*abracadabra/platform/abracadabra-platform.js*",
+                  }],
+                });
+                fetchEnabled = true;
+                offPlatformFetch = cdp.on("Fetch.requestPaused", (event) => {
+                  platformRequests += 1;
+                  fulfillments.push(cdp.send("Fetch.fulfillRequest", {
+                    requestId: event.requestId,
+                    responseCode: 200,
+                    responseHeaders: [{
+                      name: "Content-Type",
+                      value: "application/javascript; charset=utf-8",
+                    }],
+                    body: Buffer.from(
+                      '"use strict"; globalThis.SiteSourceryAbracadabraPlatform = undefined;',
+                      "utf8",
+                    ).toString("base64"),
+                  }));
+                });
                 await navigate(cdp, viewerUrl);
                 await Promise.all(fulfillments);
                 const missingEvaluation = await cdp.send("Runtime.evaluate", {
@@ -4751,7 +4926,17 @@ export async function auditBrowser({
                 }
               } finally {
                 offPlatformFetch();
-                await cdp.send("Fetch.disable");
+                try {
+                  if (fetchEnabled) await cdp.send("Fetch.disable");
+                } finally {
+                  if (networkEnabled) {
+                    try {
+                      await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+                    } finally {
+                      await cdp.send("Network.disable");
+                    }
+                  }
+                }
               }
             }
           }

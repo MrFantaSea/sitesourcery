@@ -31,6 +31,7 @@ import {
   START_BRANCH_TABLE,
   START_DECISION_TABLE,
   START_INITIAL_TABLE,
+  waitForPrivateViewerAttachment,
 } from "../browser-audit-vnext.mjs";
 import { buildContainedArtifact } from "../build-contained-artifact.mjs";
 import { CANONICAL_ROUTES, PRIMARY_NAV } from "../check-routes.mjs";
@@ -684,11 +685,117 @@ test("Abracadabra browser gate requires control boot, project isolation, and fai
   assert.match(auditSource, /Page\.windowOpen/u);
   assert.match(auditSource, /Target\.targetCreated/u);
   assert.match(auditSource, /Target\.closeTarget/u);
+  assert.match(auditSource, /Target\.attachToTarget/u);
+  assert.match(auditSource, /Target\.detachFromTarget/u);
   assert.match(auditSource, /PRIVATE_VIEWER_POPUP_TIMEOUT_MS/u);
   assert.match(auditSource, /--host-resolver-rules=MAP cta\.invalid ~NOTFOUND/u);
   assert.match(auditSource, /PRIVATE_VIEWER_STALE_GRACE_EXPRESSION/u);
   assert.match(auditSource, /PRIVATE_VIEWER_PLATFORM_MISSING_EXPRESSION/u);
   assert.match(auditSource, /missing lifecycle platform exposed stale grace bytes/u);
+});
+
+test("Abracadabra popup inspection waits only for the asynchronous srcdoc attachment", async () => {
+  let clock = 0;
+  let attempts = 0;
+  const attachment = await waitForPrivateViewerAttachment(
+    async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("published-site contentDocument was not attached");
+      }
+      if (attempts === 2) {
+        throw new Error("exact compiled external CTA count was 0");
+      }
+      return { backendNodeId: 202 };
+    },
+    {
+      now: () => clock,
+      pollMs: 25,
+      timeoutMs: 100,
+      wait: async (milliseconds) => {
+        clock += milliseconds;
+      },
+    },
+  );
+  assert.deepEqual(attachment, { backendNodeId: 202 });
+  assert.equal(attempts, 3);
+  assert.equal(clock, 50);
+
+  await assert.rejects(
+    waitForPrivateViewerAttachment(
+      async () => {
+        throw new Error("published-site owner count was 0");
+      },
+      {
+        now: () => clock,
+        wait: async () => {
+          throw new Error("non-attachment failures must not be retried");
+        },
+      },
+    ),
+    /published-site owner count was 0/u,
+  );
+
+  const popupStart = auditSource.indexOf("async function exercisePrivateViewerPopup");
+  const popupEnd = auditSource.indexOf(
+    "const ABRACADABRA_REDUCED_MOTION_TRANSITION_EXPRESSION",
+    popupStart,
+  );
+  const popupSource = auditSource.slice(popupStart, popupEnd);
+  assert.ok(popupStart >= 0 && popupEnd > popupStart);
+  assert.equal(
+    popupSource.match(/await waitForPrivateViewerAttachment\(/gu)?.length,
+    3,
+  );
+  assert.match(
+    popupSource,
+    /target\.type === "iframe"\s*&& target\.url === "about:srcdoc"/u,
+  );
+  assert.match(
+    popupSource,
+    /"Target\.attachToTarget",\s*\{\s*flatten: true,/u,
+  );
+  assert.match(
+    popupSource,
+    /"Input\.dispatchMouseEvent", \{[\s\S]*?\}, 3000, attachment\.domSessionId\)/u,
+  );
+  assert.match(
+    popupSource,
+    /"Target\.detachFromTarget",\s*\{ sessionId: attachedFrameSessionId \}/u,
+  );
+});
+
+test("Abracadabra missing-platform interception bypasses and clears prior script cache", () => {
+  const staleStart = auditSource.indexOf("let platformRequests = 0");
+  const staleEnd = auditSource.indexOf(
+    "PRIVATE_VIEWER_CLEANUP_EXPRESSION",
+    staleStart,
+  );
+  const staleSource = auditSource.slice(staleStart, staleEnd);
+  assert.ok(staleStart >= 0 && staleEnd > staleStart);
+
+  const networkEnableAt = staleSource.indexOf('cdp.send("Network.enable")');
+  const cacheDisableAt = staleSource.indexOf(
+    'cdp.send("Network.setCacheDisabled", { cacheDisabled: true })',
+  );
+  const cacheClearAt = staleSource.indexOf('cdp.send("Network.clearBrowserCache")');
+  const fetchEnableAt = staleSource.indexOf('cdp.send("Fetch.enable"');
+  const navigateAt = staleSource.indexOf("await navigate(cdp, viewerUrl)");
+  const fetchDisableAt = staleSource.indexOf('cdp.send("Fetch.disable")', navigateAt);
+  const cacheRestoreAt = staleSource.indexOf(
+    'cdp.send("Network.setCacheDisabled", { cacheDisabled: false })',
+    navigateAt,
+  );
+  const networkDisableAt = staleSource.indexOf('cdp.send("Network.disable")', navigateAt);
+
+  assert.ok(networkEnableAt >= 0);
+  assert.ok(networkEnableAt < cacheDisableAt);
+  assert.ok(cacheDisableAt < cacheClearAt);
+  assert.ok(cacheClearAt < fetchEnableAt);
+  assert.ok(fetchEnableAt < navigateAt);
+  assert.ok(navigateAt < fetchDisableAt);
+  assert.ok(fetchDisableAt < cacheRestoreAt);
+  assert.ok(cacheRestoreAt < networkDisableAt);
 });
 
 test("Abracadabra popup proof fails closed and requires target cleanup", () => {
@@ -699,6 +806,7 @@ test("Abracadabra popup proof fails closed and requires target cleanup", () => {
       closeErrors: [],
       discoveryDisabled: true,
       domDisabled: true,
+      frameSessionDetached: true,
       listenersRemoved: true,
       remainingTargetIds: [],
     },
