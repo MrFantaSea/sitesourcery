@@ -19,6 +19,7 @@ function createContext() {
   let csrfIssues = 0;
   const calls = {
     register: [],
+    recovery: [],
     rollback: []
   };
   const service = {
@@ -30,6 +31,14 @@ function createContext() {
       return {
         sessionToken: "new_session_token",
         user: { userId: ACTOR.userId }
+      };
+    },
+    async requestRecovery(input) {
+      calls.recovery.push(input);
+      return {
+        accepted: true,
+        delivery: "manual_operator",
+        emailSent: false
       };
     },
     async me(actor) {
@@ -199,4 +208,29 @@ test("HTTP boundary routes exact rollback intent and emits a valid export digest
     download.headers.get("content-disposition"),
     /filename="customer_export\.zip"/u
   );
+});
+
+test("recovery response states manual delivery without exposing a token", async () => {
+  const context = createContext();
+  const response = await context.api.fetch(
+    writeRequest("/api/v1/auth/recovery", {
+      body: { email: "owner@example.test" },
+      cookie: `ss_csrf=${CSRF}`,
+      idempotencyKey: "recovery-command-1"
+    })
+  );
+  assert.equal(response.status, 202);
+  const payload = await jsonBody(response);
+  assert.deepEqual(payload, {
+    accepted: true,
+    delivery: "manual_operator",
+    emailSent: false
+  });
+  assert.doesNotMatch(JSON.stringify(payload), /token|owner@/iu);
+  assert.deepEqual(context.calls.recovery, [
+    {
+      email: "owner@example.test",
+      commandId: "recovery-command-1"
+    }
+  ]);
 });

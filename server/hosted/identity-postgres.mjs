@@ -292,6 +292,13 @@ export function createPostgresIdentityBridge({
       result.rows[0]?.blocked_until &&
       Date.parse(result.rows[0].blocked_until) > Date.parse(now)
     ) {
+      if (scope === "recovery") {
+        throw new HostedError(
+          "RECOVERY_RATE_LIMITED",
+          "Wait before asking for another recovery email.",
+          { status: 429 }
+        );
+      }
       throw genericAuthFailure(429);
     }
     return { now, subjectDigest: selected };
@@ -617,36 +624,111 @@ export function createPostgresIdentityBridge({
       return true;
     },
 
-    async issueRecoveryForOperator(rawEmail) {
+    async issueRecoveryForDelivery(
+      rawEmail,
+      { commandId, throttleKey = "" } = {}
+    ) {
       const email = normalizeEmail(rawEmail);
-      const now = iso(clock());
-      const result = await query(
-        `select users.id
-           from auth.users users
-           join ss.hosted_account_profiles profile
-             on profile.user_id = users.id
-          where lower(users.email) = $1
-            and users.disabled_at is null
-            and profile.state = 'active'
-          limit 1`,
-        [email]
+      const selectedCommandId = text(
+        commandId,
+        "Recovery idempotency key",
+        200,
+        8
       );
-      if (!result.rows[0]) return { accepted: true, manualDelivery: null };
-      const rawToken = randomBytes(32).toString("base64url");
+      const rawToken = createHmac("sha256", pepper)
+        .update(
+          `sitesourcery.recovery-token/v1\u0000${email}\u0000${selectedCommandId}`,
+          "utf8"
+        )
+        .digest("base64url");
       const tokenDigest = sha256(rawToken);
-      await query(
-        `insert into ss.hosted_recovery_tokens (
-           user_id, token_digest, created_at, expires_at
-         ) values ($1, $2, $3, $4)`,
-        [result.rows[0].id, tokenDigest, now, addMs(now, recoveryTtlMs)]
+      const replay = await query(
+        `select
+           token.id,
+           token.created_at,
+           token.expires_at,
+           users.email
+         from ss.hosted_recovery_tokens token
+         join auth.users users on users.id = token.user_id
+        where token.token_digest = $1
+        limit 1`,
+        [tokenDigest]
       );
+      if (replay.rows[0]) {
+        return {
+          accepted: true,
+          recipient: email,
+          delivery: {
+            tokenId: replay.rows[0].id,
+            email: replay.rows[0].email,
+            token: rawToken,
+            createdAt: iso(replay.rows[0].created_at),
+            expiresAt: iso(replay.rows[0].expires_at),
+            replayed: true
+          }
+        };
+      }
+      const gate = await checkRate("recovery", email, throttleKey);
+      await recordFailure("recovery", gate.subjectDigest, gate.now);
+      const delivery = await transact(async (client) => {
+        const result = await client.query(
+          `select users.id, users.email
+             from auth.users users
+             join ss.hosted_account_profiles profile
+               on profile.user_id = users.id
+            where lower(users.email) = $1
+              and users.disabled_at is null
+              and profile.state = 'active'
+            limit 1
+            for update of users`,
+          [email]
+        );
+        if (!result.rows[0]) return null;
+        const expiresAt = addMs(gate.now, recoveryTtlMs);
+        await client.query(
+          `update ss.hosted_recovery_tokens
+              set used_at = coalesce(used_at, $2)
+            where user_id = $1
+              and token_digest <> $3
+              and used_at is null`,
+          [result.rows[0].id, gate.now, tokenDigest]
+        );
+        const inserted = await client.query(
+          `insert into ss.hosted_recovery_tokens (
+             user_id, token_digest, created_at, expires_at
+           ) values ($1, $2, $3, $4)
+           on conflict (token_digest) do nothing
+           returning id, created_at, expires_at`,
+          [
+            result.rows[0].id,
+            tokenDigest,
+            gate.now,
+            expiresAt
+          ]
+        );
+        const token =
+          inserted.rows[0] ??
+          (
+            await client.query(
+              `select id, created_at, expires_at
+                 from ss.hosted_recovery_tokens
+                where token_digest = $1`,
+              [tokenDigest]
+            )
+          ).rows[0];
+        return {
+          tokenId: token.id,
+          email: result.rows[0].email,
+          token: rawToken,
+          createdAt: iso(token.created_at),
+          expiresAt: iso(token.expires_at),
+          replayed: inserted.rowCount === 0
+        };
+      });
       return {
         accepted: true,
-        manualDelivery: {
-          userId: result.rows[0].id,
-          email,
-          token: rawToken
-        }
+        recipient: email,
+        delivery
       };
     },
 
