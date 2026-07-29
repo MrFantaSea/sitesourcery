@@ -167,3 +167,114 @@ test("network failures do not leak the underlying browser exception", async () =
     }
   );
 });
+
+test("hosted browser client refuses a cross-origin or substituted API base", () => {
+  for (const baseUrl of [
+    "https://api.example.test/api/v1",
+    "//api.example.test/api/v1",
+    "/api/v2",
+  ]) {
+    assert.throws(
+      () => createClient({ baseUrl, fetch: async () => response(200, {}) }),
+      (error) => error instanceof APIError && error.code === "SAME_ORIGIN_API_REQUIRED",
+    );
+  }
+});
+
+test("non-JSON service and proxy responses are discarded instead of exposed", async () => {
+  const client = createClient({
+    fetch: async () => ({
+      ok: false,
+      status: 502,
+      headers: {
+        get(name) {
+          if (name.toLowerCase() === "content-type") return "text/html";
+          if (name.toLowerCase() === "x-request-id") return "req_proxy";
+          return null;
+        },
+      },
+      async text() {
+        return "internal proxy secret and upstream diagnostic";
+      },
+    }),
+  });
+  await assert.rejects(
+    () => client.me(),
+    (error) => {
+      assert.equal(error.status, 502);
+      assert.equal(error.requestId, "req_proxy");
+      assert.doesNotMatch(error.message, /proxy secret|upstream diagnostic/u);
+      return true;
+    },
+  );
+});
+
+test("domain storefront requests carry identifiers and customer consent, never browser price or registrar authority", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return response(200, calls.length === 1 ? { csrfToken: "csrf_domain" } : { accepted: true });
+    },
+    idempotencyFactory: () => "idem_domain",
+  });
+  await client.me();
+  await client.createDomainQuote({ hostname: "Example.COM", years: 2 });
+  await client.saveRegistrantContact("org_1", {
+    name: "Customer Owner",
+    email: "owner@example.com",
+    phone: "+1 856 555 0100",
+    addressLine1: "1 Main Street",
+    city: "Camden",
+    region: "NJ",
+    postalCode: "08102",
+    countryCode: "US",
+  });
+  await client.acceptDomainConsent("quote_1", {
+    registrantContactId: "contact_1",
+    termsVersion: "domain-terms-2026-07",
+    registrationAgreementAccepted: true,
+    registrantCertificationAccepted: true,
+    autoRenewRequested: true,
+  });
+  await client.createDomainOrder("project_1", {
+    quoteId: "quote_1",
+    consentId: "consent_1",
+  });
+  await client.refreshDomainPrice("order_1");
+  await client.requestDomainRegistration("order_1", {
+    priceCheckId: "price_check_1",
+    irreversibleRegistrationAccepted: true,
+  });
+
+  const quote = calls.find((call) => call.url === "/api/v1/domain-quotes");
+  assert.deepEqual(JSON.parse(quote.options.body), {
+    hostname: "example.com",
+    years: 2,
+    purpose: "register",
+  });
+  const order = calls.find((call) => call.url.endsWith("/projects/project_1/domain-orders"));
+  assert.deepEqual(JSON.parse(order.options.body), {
+    quoteId: "quote_1",
+    consentId: "consent_1",
+  });
+  const registration = calls.find((call) => call.url.endsWith("/registration-requests"));
+  assert.deepEqual(JSON.parse(registration.options.body), {
+    priceCheckId: "price_check_1",
+    irreversibleRegistrationAccepted: true,
+  });
+  for (const call of calls.slice(1)) {
+    assert.equal(call.options.credentials, "include");
+    assert.equal(call.options.headers["X-CSRF-Token"], "csrf_domain");
+    const body = call.options.body ? JSON.parse(call.options.body) : {};
+    for (const forbidden of [
+      "amount",
+      "amountMinor",
+      "currency",
+      "registered",
+      "registrarReference",
+    ]) {
+      assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
+    }
+  }
+});

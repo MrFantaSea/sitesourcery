@@ -3,6 +3,10 @@
 
   var platformModule = window.SiteSourceryAbracadabraPlatform;
   var maker = window.SiteSourceryAbracadabraMaker;
+  var modeModule = window.SiteSourceryAbracadabraControlMode;
+  var controlConfiguration = modeModule
+    ? modeModule.resolve(document)
+    : { localRehearsal: true };
   var status = document.getElementById("platform-status");
   var auth = document.getElementById("platform-auth");
   var dashboard = document.getElementById("platform-dashboard");
@@ -12,6 +16,7 @@
     if (status) status.textContent = "The control room could not open. Reload the page to try again.";
     return;
   }
+  if (!controlConfiguration.localRehearsal) return;
 
   // Keep reading, keyboard, and rendered order aligned with the guest-first journey.
   workroom.after(controlRoom);

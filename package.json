@@ -14,7 +14,7 @@
     "check:vnext": "node scripts/check-site-vnext.mjs",
     "check:catalog": "node scripts/check-pricing.mjs",
     "check:abracadabra": "node scripts/check-abracadabra-v1.mjs",
-    "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/hive-planner.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs",
+    "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hive-planner.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs",
     "test:public-truth": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
