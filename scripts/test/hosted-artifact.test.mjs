@@ -15,6 +15,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   assertHeldSourceTruth,
+  assertHeldTruthSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
   verifyHostedArtifact,
@@ -24,6 +25,7 @@ import { CANONICAL_ROUTE_FILES } from "../check-routes.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldOnlyPhrases,
+  heldTruthForbiddenPhrases,
   heldTruthRequirements,
   hostedOnlyPhrases,
   hostedTruthRequirements,
@@ -145,6 +147,12 @@ test("reviewed truth slots are unique, exact, and the held source contains only 
   const sources = await readTruthFiles(ROOT, heldTruthRequirements);
   assertRequirements(sources, heldTruthRequirements);
   assertMissingPhrases(sources, hostedOnlyPhrases);
+  for (const [file, phrases] of Object.entries(heldTruthForbiddenPhrases)) {
+    const source = sources.get(file);
+    for (const phrase of phrases) {
+      assert.equal(source.includes(phrase), false, `${file}: ${phrase}`);
+    }
+  }
 
   const app = sources.get("abracadabra/app/index.html");
   assert.equal(count(app, EXACT_LOCAL_BOUNDARY), 1);
@@ -163,6 +171,22 @@ test("reviewed truth slots are unique, exact, and the held source contains only 
     app,
     /abracadabra-(?:control|hosted-control|hosted-control-dom)\.js|abracadabra-platform\.js/u,
   );
+});
+
+test("held truth semantic gate rejects every retired legal simulator claim", async () => {
+  const sources = await readTruthFiles(ROOT, heldTruthRequirements);
+  assert.equal(assertHeldTruthSemantics(sources), true);
+  for (const [file, phrases] of Object.entries(heldTruthForbiddenPhrases)) {
+    for (const phrase of phrases) {
+      const changed = new Map(sources);
+      changed.set(file, `${sources.get(file)}\n${phrase}\n`);
+      assert.throws(
+        () => assertHeldTruthSemantics(changed),
+        /contains retired held-product phrase/u,
+        `${file}: ${phrase}`,
+      );
+    }
+  }
 });
 
 test("one hosted build emits the exact ledger, one truth variant, hosted controls, and no local viewer", async (t) => {

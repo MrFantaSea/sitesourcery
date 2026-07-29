@@ -244,12 +244,25 @@ function truthFixture() {
       "It does not activate an integration.",
       "Care requires its own explicit written scope.",
       "Provider hosting, public Internet publication, real billing, DNS work, and provider-side storage require a separately released service.",
+      "Using the current maker does not create an account, control room, project record, or saved acceptance.",
+      "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
+      "The current maker has no plan-activation control, checkout, billing state, provider reference, subscription, transaction, payment receipt, or charge.",
+      "This maker has no Publish button or publication state.",
+      "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
     ].join(" "),
     privacyHtml: [
       "Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY.",
       "The ordinary marketing pages contain no inquiry form, visitor upload, advertising tracker, or page-level analytics code.",
+      "The Start chooser uses the buttons you select only to show a recommendation on the current page.",
       "The Hive planner selects from fixed planning blueprints already present in the downloaded page script.",
-      "Abracadabra’s private build contains local billing-lifecycle rehearsal states but no real payment rail.",
+      "The current Abracadabra maker creates no account or organization record.",
+      "Business facts and made versions stay only in this tab. Refreshing or closing it clears them.",
+      "That chosen HTML download is the only maker output that leaves the browser.",
+      "The current maker does not collect registrar credentials, domain proof, DNS records, or a domain order.",
+      "The current maker does not ask for payment-card details, take payment, activate a plan, create a subscription or transaction, or keep billing state.",
+      "The current maker has no account, saved project, product database, cancellation state, nonpayment clock, suspension clock, retained-exit clock, or project-deletion control.",
+      "The current maker does not record a safety hold, report, appeal, restoration result, support note, ticket, review history, or enforcement state.",
+      "Email sent to sitesourcery@proton.me is processed through Proton Mail.",
       "If you call or email, Site Sourcery may retain the communication and reasonable business records needed to respond, scope work, document decisions, deliver accepted work, protect the service, and meet legal obligations.",
     ].join(" "),
     contactHtml: [
@@ -1052,10 +1065,17 @@ test("actual current public-truth files pass the integrated semantic and workflo
 test("public-truth text rejects stale claims and missing workflow gates", () => {
   const fixture = truthFixture();
   fixture.termsHtml += " This public site accepts payments.";
+  fixture.termsHtml += " The current tool lets an owner create a local account and project.";
+  fixture.privacyHtml += " Abracadabra’s private build contains local billing-lifecycle rehearsal states.";
   fixture.contactHtml += " This is a verified public route.";
   fixture.workflowText = "on:\n  push:\npermissions: {}\n";
   const errors = validatePublicTruthTextSet(fixture);
-  assert.ok(errors.some((error) => error.includes("legal/website-terms/index.html contains forbidden visible semantics")));
+  assert.ok(
+    errors.filter((error) =>
+      error.includes("legal/website-terms/index.html contains forbidden visible semantics")).length >= 2,
+  );
+  assert.ok(errors.some((error) =>
+    error.includes("legal/privacy/index.html contains forbidden visible semantics")));
   assert.ok(errors.some((error) => error.includes("verified public")));
   assert.ok(errors.some((error) => error.includes("exactly workflow_dispatch")));
   assert.ok(errors.some((error) => error.includes("--mode candidate")));

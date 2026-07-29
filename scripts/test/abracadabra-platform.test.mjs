@@ -2678,7 +2678,7 @@ test("a spoofed current deletion policy cannot preserve reattached bytes or tick
   assert.equal(repaired.deletion.removed.supportTickets, 1);
 });
 
-test("maker and notices describe project deletion without claiming account or hosted deletion", () => {
+test("local platform deletion stays internal while held maker notices reject simulator controls", () => {
   const appMarkup = readFileSync(new URL("../../abracadabra/app/index.html", import.meta.url), "utf8");
   const hostedControlMarkup = readFileSync(
     new URL("../../scripts/hosted-truth/fragments/abracadabra-app-control.html", import.meta.url),
@@ -2699,9 +2699,19 @@ test("maker and notices describe project deletion without claiming account or ho
     /This build does not create an online account, take payment, register or connect a domain, or publish\./u,
   );
   assert.match(hostedControlMarkup, /does not delete the separate Site Sourcery account/u);
-  assert.match(privacy, /acts only on this browser’s local project store/u);
-  assert.match(privacy, /does not delete the separate local account/u);
-  assert.match(terms, /does not delete the separate browser-local account/u);
+  assert.match(
+    privacy,
+    /The current maker has no account, saved project, product database,[^<]+project-deletion control\./u,
+  );
+  assert.match(
+    terms,
+    /The current maker has no saved project or project-deletion control\./u,
+  );
+  for (const heldNotice of [privacy, terms]) {
+    assert.doesNotMatch(heldNotice, /Project deletion is terminal in the current/iu);
+    assert.doesNotMatch(heldNotice, /separate (?:browser-)?local account/iu);
+    assert.doesNotMatch(heldNotice, /acts only on this browser’s local project store/iu);
+  }
   assert.doesNotMatch(privacy, /reviewed proof reference[^<]*remain/iu);
   assert.doesNotMatch(terms, /reviewed proof reference[^<]*remain/iu);
 });

@@ -20,6 +20,7 @@ import {
 import { publicFileAllowlist } from "./build-pages.mjs";
 import {
   heldOnlyPhrases,
+  heldTruthForbiddenPhrases,
   heldTruthRequirements,
   hostedCodeTransforms,
   hostedOnlyPhrases,
@@ -180,6 +181,29 @@ function assertNoPhrases(sources, phrases, label) {
   }
 }
 
+function assertNoPhraseMap(sources, forbiddenPhrases, label) {
+  for (const [file, phrases] of Object.entries(forbiddenPhrases)) {
+    const source = sources.get(file);
+    if (source == null) throw new Error(`${label} source is missing: ${file}`);
+    for (const phrase of phrases) {
+      if (source.includes(phrase)) {
+        throw new Error(`${file} contains ${label} phrase ${JSON.stringify(phrase)}`);
+      }
+    }
+  }
+}
+
+export function assertHeldTruthSemantics(sources) {
+  assertRequirementMap(sources, heldTruthRequirements, "held truth");
+  assertNoPhrases(sources, hostedOnlyPhrases, "hosted-only");
+  assertNoPhraseMap(
+    sources,
+    heldTruthForbiddenPhrases,
+    "retired held-product",
+  );
+  return true;
+}
+
 function assertManifestShape() {
   const ids = new Set();
   const fragmentPaths = new Set();
@@ -313,8 +337,7 @@ async function loadAndValidateHeldSources(absoluteRoot) {
     }
   }
 
-  assertRequirementMap(sources, heldTruthRequirements, "held truth");
-  assertNoPhrases(sources, hostedOnlyPhrases, "hosted-only");
+  assertHeldTruthSemantics(sources);
   return sources;
 }
 

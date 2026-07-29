@@ -768,17 +768,51 @@ test("vNext locks exact filed identity and local-versus-hosted public truth", as
   ));
   await t.test("terms retain local safety boundary", () => expectSiteFailure(
     (root) => modify(root, "legal/website-terms/index.html", (source) =>
-      source.replace("does not contact a reviewer, suspend a provider site", "uses a review operator")),
+      source.replace("This maker cannot review safety", "This maker reviews safety")),
     /missing filed-name or local-versus-hosted truth/u,
   ));
   await t.test("privacy retains local safety boundary", () => expectSiteFailure(
     (root) => modify(root, "legal/privacy/index.html", (source) =>
-      source.replace("Local rehearsal history is not provider or reviewer history", "The history is reviewed")),
+      source.replace("This maker cannot review safety", "This maker reviews safety")),
+    /missing filed-name or local-versus-hosted truth/u,
+  ));
+  await t.test("terms retain the no-account and no-saved-acceptance boundary", () => expectSiteFailure(
+    (root) => modify(root, "legal/website-terms/index.html", (source) =>
+      source.replace(
+        "Using the current maker does not create an account, control room, project record, or saved acceptance.",
+        "Using the current maker creates an account and records acceptance.",
+      )),
+    /missing filed-name or local-versus-hosted truth/u,
+  ));
+  await t.test("privacy retains the no-account boundary", () => expectSiteFailure(
+    (root) => modify(root, "legal/privacy/index.html", (source) =>
+      source.replace(
+        "The current Abracadabra maker creates no account or organization record.",
+        "The current Abracadabra maker creates an account.",
+      )),
+    /missing filed-name or local-versus-hosted truth/u,
+  ));
+  await t.test("privacy retains Start chooser handling truth", () => expectSiteFailure(
+    (root) => modify(root, "legal/privacy/index.html", (source) =>
+      source.replace(
+        "The Start chooser uses the buttons you select only to show a recommendation on the current page.",
+        "The Start chooser saves your answers.",
+      )),
+    /missing filed-name or local-versus-hosted truth/u,
+  ));
+  await t.test("privacy retains Proton handling truth", () => expectSiteFailure(
+    (root) => modify(root, "legal/privacy/index.html", (source) =>
+      source.replace("processed through Proton Mail", "processed through email")),
     /missing filed-name or local-versus-hosted truth/u,
   ));
   await t.test("terms reject browsewrap claim", () => expectSiteFailure(
     (root) => inject(root, "legal/website-terms/index.html",
       "<p>Using the ordinary public pages accepts these terms for that use.</p>"),
+    /contains retired public-truth statement/u,
+  ));
+  await t.test("terms reject retired local simulator claims", () => expectSiteFailure(
+    (root) => inject(root, "legal/website-terms/index.html",
+      "<p>The current tool lets an owner create a local account and project.</p>"),
     /contains retired public-truth statement/u,
   ));
   await t.test("terms retain on-device custody boundary", () => expectSiteFailure(

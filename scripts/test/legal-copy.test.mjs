@@ -27,6 +27,36 @@ test("all legal routes preserve their clauses, links, summaries, and disclosure 
   assert.equal(result.ok, true, result.errors.join("\n"));
 });
 
+test("held legal makes the operative layer and contact recourse visible by default", async () => {
+  const result = await inspectLegalCopy(SITE_ROOT, { reportOnly: true });
+  const privacy = result.analyses.find(({ route }) => route === "/legal/privacy/");
+  const terms = result.analyses.find(({ route }) => route === "/legal/website-terms/");
+  assert.match(privacy.visibleText, /full text under each topic is the privacy notice that controls/iu);
+  assert.match(terms.visibleText, /full text under each topic contains the terms that control/iu);
+  for (const analysis of [privacy, terms]) {
+    assert.match(analysis.visibleText, /call Zack/iu);
+    assert.match(analysis.visibleText, /email Zack/iu);
+  }
+});
+
+test("held privacy discloses Start chooser and Proton handling without restoring simulator claims", async () => {
+  const [privacy, terms] = await Promise.all([
+    readFile(path.join(SITE_ROOT, "legal/privacy/index.html"), "utf8"),
+    readFile(path.join(SITE_ROOT, "legal/website-terms/index.html"), "utf8"),
+  ]);
+  assert.match(
+    privacy,
+    /The Start chooser uses the buttons you select only to show a recommendation on the current page\./u,
+  );
+  assert.match(privacy, /processed through Proton Mail/u);
+  for (const source of [privacy, terms]) {
+    assert.doesNotMatch(source, /local billing-lifecycle rehearsal/iu);
+    assert.doesNotMatch(source, /Publish accepted version/iu);
+    assert.doesNotMatch(source, /current tool (?:lets an owner create|stores a local hold)/iu);
+    assert.doesNotMatch(source, /Terminal project deletion in this build|Project deletion is terminal in the current/iu);
+  }
+});
+
 test("legal-copy gate rejects a changed substantive clause", async () => {
   const errors = await routeErrors("/legal/privacy/", (source) =>
     source.replace(
