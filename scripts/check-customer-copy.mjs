@@ -63,11 +63,11 @@ function decodeEntities(value) {
     .replace(/&nearr;/giu, "↗");
 }
 
-function mainHtml(source) {
+export function mainHtml(source) {
   return source.match(/<main\b[^>]*>([\s\S]*?)<\/main>/iu)?.[1] ?? "";
 }
 
-function stripClosedDetails(source) {
+export function stripClosedDetails(source) {
   let result = source;
   let previous = "";
   const closedDetails = /<details\b(?![^>]*\bopen(?:\s|=|>))[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)<\/summary>[\s\S]*?<\/details>/giu;
@@ -78,7 +78,7 @@ function stripClosedDetails(source) {
   return result;
 }
 
-function htmlToText(source) {
+export function htmlToText(source) {
   return decodeEntities(
     source
       .replace(/<!--[\s\S]*?-->/gu, " ")
@@ -92,7 +92,7 @@ function htmlToText(source) {
     .trim();
 }
 
-function words(value) {
+export function words(value) {
   return value.match(WORD) ?? [];
 }
 
@@ -106,7 +106,7 @@ function syllablesInWord(value) {
   return Math.max(1, withoutSilentEnding.match(/[aeiouy]{1,2}/gu)?.length ?? 1);
 }
 
-function readingGrade(value) {
+export function readingGrade(value) {
   const foundWords = words(value).filter((word) => /[A-Za-z]/u.test(word));
   if (foundWords.length === 0) return 0;
   const sentences = Math.max(

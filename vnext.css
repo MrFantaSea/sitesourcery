@@ -2648,6 +2648,62 @@ h3 {
   margin-top: 0.5rem;
 }
 
+.legal-topic-summary {
+  max-width: 44rem;
+  margin: 0 0 0.8rem;
+  color: var(--ink-soft) !important;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.legal-topic {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: rgba(8, 7, 12, 0.28);
+}
+
+.legal-topic summary {
+  position: relative;
+  padding: 0.9rem 2.6rem 0.9rem 1rem;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+
+.legal-topic summary::-webkit-details-marker {
+  display: none;
+}
+
+.legal-topic summary::after {
+  position: absolute;
+  top: 0.85rem;
+  right: 1rem;
+  content: "+";
+}
+
+.legal-topic[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-topic[open] summary::after {
+  content: "−";
+}
+
+.legal-topic-body {
+  padding: 1rem;
+}
+
+.legal-topic-body > :first-child {
+  margin-top: 0;
+}
+
+.legal-topic-body > :last-child {
+  margin-bottom: 0;
+}
+
 .hive-planner {
   display: grid;
   grid-template-columns: minmax(16rem, 0.62fr) minmax(0, 1.38fr);
