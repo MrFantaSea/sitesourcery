@@ -117,6 +117,44 @@ async function readJson(request) {
   return value;
 }
 
+async function readRawWebhook(request) {
+  const contentLength = Number(
+    request.headers.get("content-length") ?? 0
+  );
+  invariant(
+    !Number.isFinite(contentLength) ||
+      contentLength <= MAX_BODY_BYTES,
+    "REQUEST_TOO_LARGE",
+    "Request body is too large.",
+    { status: 413 }
+  );
+  invariant(
+    String(
+      request.headers.get("content-type") ?? ""
+    )
+      .toLowerCase()
+      .startsWith("application/json"),
+    "UNSUPPORTED_MEDIA_TYPE",
+    "Stripe webhook JSON is required.",
+    { status: 415 }
+  );
+  const bytes = Buffer.from(
+    await request.arrayBuffer()
+  );
+  invariant(
+    bytes.byteLength > 0 &&
+      bytes.byteLength <= MAX_BODY_BYTES,
+    bytes.byteLength === 0
+      ? "STRIPE_WEBHOOK_BODY_REQUIRED"
+      : "REQUEST_TOO_LARGE",
+    bytes.byteLength === 0
+      ? "Stripe webhook body is required."
+      : "Request body is too large.",
+    { status: bytes.byteLength === 0 ? 400 : 413 }
+  );
+  return bytes;
+}
+
 function match(pathname, pattern) {
   const result = pattern.exec(pathname);
   if (!result) return null;
@@ -186,6 +224,29 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
               "X-Request-Id": requestId
             }
           );
+        }
+
+        if (
+          method === "POST" &&
+          pathname === "/api/v1/webhooks/stripe"
+        ) {
+          invariant(
+            typeof service.ingestStripeWebhook ===
+              "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Stripe webhook ingestion is unavailable.",
+            { status: 500 }
+          );
+          const result =
+            await service.ingestStripeWebhook({
+              rawBody: await readRawWebhook(request),
+              signature: request.headers.get(
+                "stripe-signature"
+              )
+            });
+          return json(result, 200, {
+            "X-Request-Id": requestId
+          });
         }
 
         if (WRITE_METHODS.has(method)) {

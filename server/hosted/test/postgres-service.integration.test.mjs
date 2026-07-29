@@ -30,6 +30,96 @@ const MIGRATIONS = new URL(
   import.meta.url
 );
 
+function createContractPaymentProvider() {
+  const calls = {
+    checkout: [],
+    portal: [],
+    cancellation: [],
+    webhook: []
+  };
+  let checkoutSequence = 0;
+  let portalSequence = 0;
+  return {
+    calls,
+    port: Object.freeze({
+      async readiness() {
+        return {
+          ready: true,
+          provider: "stripe",
+          mode: "contract_test",
+          livemode: false
+        };
+      },
+      async createCheckout(input) {
+        calls.checkout.push(structuredClone(input));
+        checkoutSequence += 1;
+        return {
+          checkoutId:
+            `cs_test_hosted_${checkoutSequence}`,
+          url:
+            `https://checkout.stripe.com/c/pay/cs_test_hosted_${checkoutSequence}`,
+          expiresAt:
+            "2026-07-28T20:30:00.000Z"
+        };
+      },
+      async createBillingPortal(input) {
+        calls.portal.push(structuredClone(input));
+        portalSequence += 1;
+        return {
+          portalSessionId:
+            `bps_test_hosted_${portalSequence}`,
+          url:
+            `https://billing.stripe.com/p/session/bps_test_hosted_${portalSequence}`
+        };
+      },
+      async scheduleCancellation(input) {
+        calls.cancellation.push(
+          structuredClone(input)
+        );
+        return {
+          subscriptionId:
+            input.stripeSubscriptionId,
+          providerStatus: "active",
+          cancelAtPeriodEnd: true,
+          effectiveAt:
+            "2026-08-28T20:00:00.000Z"
+        };
+      },
+      async verifyWebhook({
+        rawBody,
+        signature
+      }) {
+        calls.webhook.push({
+          rawBody: Buffer.from(rawBody),
+          signature
+        });
+        assert.equal(
+          signature,
+          "contract-signature-valid"
+        );
+        return JSON.parse(
+          Buffer.from(rawBody).toString("utf8")
+        );
+      }
+    })
+  };
+}
+
+function stripeEvent(id, type, object) {
+  return {
+    id,
+    type,
+    livemode: false,
+    api_version: "2026-06-24.dahlia",
+    created: Math.floor(Date.parse(NOW) / 1000),
+    data: { object }
+  };
+}
+
+function rawEvent(event) {
+  return Buffer.from(JSON.stringify(event), "utf8");
+}
+
 async function migrateEmptyDatabase(pool) {
   const existing = await pool.query(
     "select to_regnamespace('ss') is not null as migrated"
@@ -312,6 +402,7 @@ test(
     });
     const serviceAuthority =
       createFinalizationCommitFaultAuthority(authority);
+    const payment = createContractPaymentProvider();
     const serviceOptions = {
       authority: serviceAuthority,
       identity,
@@ -326,6 +417,7 @@ test(
         clock
       }),
       exportStore,
+      paymentProvider: payment.port,
       contactVault: createAesGcmContactVault({
         key: randomBytes(32),
         keyVersion: "test-v1"
@@ -345,6 +437,15 @@ test(
     });
     const actor = await service.authenticate(
       registered.sessionToken
+    );
+    const otherRegistered = await service.register({
+      name: "Other Owner",
+      organizationName: "Other Organization",
+      email: `other-owner-${randomUUID()}@example.test`,
+      password: "another correct horse battery staple"
+    });
+    const otherActor = await service.authenticate(
+      otherRegistered.sessionToken
     );
     const recoveryResponse = await service.requestRecovery({
       email: registered.user.email,
@@ -534,6 +635,390 @@ test(
     );
     assert.equal(quote.quote.offerId, rent.offerId);
     assert.equal(quote.quote.totals.recurring.length, 1);
+    await assert.rejects(
+      service.getCommerceQuote(
+        otherActor,
+        projectId,
+        quote.quote.quoteId
+      ),
+      (error) =>
+        error?.code === "NOT_FOUND" &&
+        error?.status === 404
+    );
+    await assert.rejects(
+      service.createCheckout(
+        otherActor,
+        projectId,
+        {
+          quoteId: quote.quote.quoteId,
+          acceptedDisclosureDigest:
+            quote.quote.disclosureDigest,
+          commandId:
+            "cross-tenant-checkout-0001"
+        }
+      ),
+      (error) =>
+        error?.code === "NOT_FOUND" &&
+        error?.status === 404
+    );
+    assert.equal(payment.calls.checkout.length, 0);
+
+    const checkout = await service.createCheckout(
+      actor,
+      projectId,
+      {
+        quoteId: quote.quote.quoteId,
+        acceptedDisclosureDigest:
+          quote.quote.disclosureDigest,
+        commandId: "checkout-create-0001"
+      }
+    );
+    assert.equal(
+      checkout.url,
+      "https://checkout.stripe.com/c/pay/cs_test_hosted_1"
+    );
+    assert.equal(payment.calls.checkout.length, 1);
+    assert.deepEqual(
+      await service.createCheckout(actor, projectId, {
+        quoteId: quote.quote.quoteId,
+        acceptedDisclosureDigest:
+          quote.quote.disclosureDigest,
+        commandId: "checkout-create-0001"
+      }),
+      checkout
+    );
+    assert.equal(payment.calls.checkout.length, 1);
+    const checkoutPurpose =
+      payment.calls.checkout[0].purpose;
+    const checkoutMetadata = {
+      schema: "sitesourcery_checkout_v1",
+      tenant_id: checkoutPurpose.tenantId,
+      customer_id: checkoutPurpose.customerId,
+      project_id: checkoutPurpose.projectId,
+      quote_id: checkoutPurpose.quoteId,
+      quote_version: String(
+        checkoutPurpose.quoteVersion
+      ),
+      catalog_version:
+        checkoutPurpose.catalogVersion,
+      offer_id: checkoutPurpose.offerId,
+      disclosure_digest:
+        checkoutPurpose.disclosureDigest,
+      purpose_digest:
+        payment.calls.checkout[0]
+          .purposeDigest
+    };
+    const stripeCustomerId =
+      "cus_test_hosted_customer_1";
+    const stripeSubscriptionId =
+      "sub_test_hosted_subscription_1";
+    const checkoutPaid = stripeEvent(
+      "evt_test_checkout_paid_1",
+      "checkout.session.completed",
+      {
+        id: "cs_test_hosted_1",
+        client_reference_id:
+          quote.quote.quoteId,
+        metadata: checkoutMetadata,
+        payment_status: "paid",
+        amount_total:
+          rent.amounts.recurring.amountMinor,
+        currency: "usd",
+        customer: stripeCustomerId,
+        subscription: stripeSubscriptionId,
+        payment_intent: null,
+        invoice: "in_test_initial_invoice_1"
+      }
+    );
+    const settledCheckout =
+      await service.ingestStripeWebhook({
+        rawBody: rawEvent(checkoutPaid),
+        signature: "contract-signature-valid"
+      });
+    assert.equal(
+      settledCheckout.status,
+      "processed"
+    );
+    assert.equal(
+      (
+        await service.ingestStripeWebhook({
+          rawBody: rawEvent(checkoutPaid),
+          signature: "contract-signature-valid"
+        })
+      ).duplicate,
+      true
+    );
+    const subscriptionCreated = stripeEvent(
+      "evt_test_subscription_created_1",
+      "customer.subscription.created",
+      {
+        id: stripeSubscriptionId,
+        customer: stripeCustomerId,
+        status: "active",
+        current_period_end: Math.floor(
+          Date.parse(
+            "2026-08-28T20:00:00.000Z"
+          ) / 1000
+        ),
+        metadata: checkoutMetadata,
+        items: {
+          data: [
+            {
+              price: {
+                id:
+                  rent.stripePriceRefs.recurring,
+                unit_amount:
+                  rent.amounts.recurring
+                    .amountMinor,
+                currency: "usd"
+              }
+            }
+          ]
+        }
+      }
+    );
+    await service.ingestStripeWebhook({
+      rawBody: rawEvent(subscriptionCreated),
+      signature: "contract-signature-valid"
+    });
+    assert.equal(
+      (
+        await service.getSubscription(
+          actor,
+          projectId
+        )
+      ).subscription.status,
+      "active"
+    );
+    const failedInvoice = stripeEvent(
+      "evt_test_invoice_failed_1",
+      "invoice.payment_failed",
+      {
+        id: "in_test_failed_invoice_1",
+        subscription: stripeSubscriptionId,
+        customer: stripeCustomerId,
+        amount_due:
+          rent.amounts.recurring.amountMinor,
+        amount_paid: 0,
+        currency: "usd",
+        lines: {
+          data: [
+            {
+              period: {
+                end: Math.floor(
+                  Date.parse(
+                    "2026-08-28T20:00:00.000Z"
+                  ) / 1000
+                )
+              }
+            }
+          ]
+        }
+      }
+    );
+    await service.ingestStripeWebhook({
+      rawBody: rawEvent(failedInvoice),
+      signature: "contract-signature-valid"
+    });
+    assert.equal(
+      (
+        await service.getSubscription(
+          actor,
+          projectId
+        )
+      ).subscription.status,
+      "grace"
+    );
+    const paidInvoice = stripeEvent(
+      "evt_test_invoice_paid_1",
+      "invoice.paid",
+      {
+        id: "in_test_paid_invoice_1",
+        subscription: stripeSubscriptionId,
+        customer: stripeCustomerId,
+        amount_due:
+          rent.amounts.recurring.amountMinor,
+        amount_paid:
+          rent.amounts.recurring.amountMinor,
+        currency: "usd",
+        lines: failedInvoice.data.object.lines
+      }
+    );
+    await service.ingestStripeWebhook({
+      rawBody: rawEvent(paidInvoice),
+      signature: "contract-signature-valid"
+    });
+    assert.equal(
+      (
+        await service.getSubscription(
+          actor,
+          projectId
+        )
+      ).subscription.status,
+      "active"
+    );
+    const portal =
+      await service.createBillingPortal(
+        actor,
+        projectId,
+        {
+          commandId: "billing-portal-0001"
+        }
+      );
+    assert.equal(
+      portal.url,
+      "https://billing.stripe.com/p/session/bps_test_hosted_1"
+    );
+    assert.equal(payment.calls.portal.length, 1);
+
+    const ownedProject =
+      await service.createProject(
+        actor,
+        organizationId,
+        {
+          name: "Owned Workshop",
+          acceptedTerms: true,
+          visibility: "public",
+          address: {
+            kind: "custom",
+            path: "connect",
+            hostname: "owned-workshop.example"
+          },
+          commandId: "project-create-owned-0001"
+        }
+      );
+    const ownedProjectId =
+      ownedProject.project.id;
+    const own = catalog.offers.find(
+      (offer) => offer.tenureId === "own"
+    );
+    const ownQuote =
+      await service.createCommerceQuote(
+        actor,
+        ownedProjectId,
+        {
+          offerId: own.offerId,
+          commandId: "commerce-quote-own-001"
+        }
+      );
+    const ownCheckout =
+      await service.createCheckout(
+        actor,
+        ownedProjectId,
+        {
+          quoteId: ownQuote.quote.quoteId,
+          acceptedDisclosureDigest:
+            ownQuote.quote.disclosureDigest,
+          commandId: "checkout-own-0001"
+        }
+      );
+    assert.equal(
+      ownCheckout.url,
+      "https://checkout.stripe.com/c/pay/cs_test_hosted_2"
+    );
+    const ownPurpose =
+      payment.calls.checkout[1].purpose;
+    const ownMetadata = {
+      schema: "sitesourcery_checkout_v1",
+      tenant_id: ownPurpose.tenantId,
+      customer_id: ownPurpose.customerId,
+      project_id: ownPurpose.projectId,
+      quote_id: ownPurpose.quoteId,
+      quote_version: String(ownPurpose.quoteVersion),
+      catalog_version: ownPurpose.catalogVersion,
+      offer_id: ownPurpose.offerId,
+      disclosure_digest:
+        ownPurpose.disclosureDigest,
+      purpose_digest:
+        payment.calls.checkout[1].purposeDigest
+    };
+    await service.ingestStripeWebhook({
+      rawBody: rawEvent(
+        stripeEvent(
+          "evt_test_checkout_owned_paid_1",
+          "checkout.session.completed",
+          {
+            id: "cs_test_hosted_2",
+            client_reference_id:
+              ownQuote.quote.quoteId,
+            metadata: ownMetadata,
+            payment_status: "paid",
+            amount_total:
+              own.amounts.oneTime.amountMinor,
+            currency: "usd",
+            customer: stripeCustomerId,
+            subscription: null,
+            payment_intent:
+              "pi_test_owned_payment_1",
+            invoice: null
+          }
+        )
+      ),
+      signature: "contract-signature-valid"
+    });
+    assert.equal(
+      (
+        await service.getSubscription(
+          actor,
+          ownedProjectId
+        )
+      ).subscription.status,
+      "paid"
+    );
+    assert.equal(
+      (
+        await authority.service(
+          {},
+          async (client) =>
+            (
+              await client.query(
+                "select ss.has_current_serving_entitlement($1) as eligible",
+                [ownedProjectId]
+              )
+            ).rows[0].eligible
+        )
+      ),
+      true
+    );
+    await service.ingestStripeWebhook({
+      rawBody: rawEvent(
+        stripeEvent(
+          "evt_test_owned_refund_1",
+          "refund.created",
+          {
+            id: "re_test_owned_refund_1",
+            payment_intent:
+              "pi_test_owned_payment_1",
+            amount: 1,
+            currency: "usd",
+            status: "succeeded"
+          }
+        )
+      ),
+      signature: "contract-signature-valid"
+    });
+    assert.equal(
+      (
+        await service.getSubscription(
+          actor,
+          ownedProjectId
+        )
+      ).subscription.status,
+      "inactive"
+    );
+    assert.equal(
+      await authority.service(
+        {},
+        async (client) =>
+          (
+            await client.query(
+              "select ss.has_current_serving_entitlement($1) as eligible",
+              [ownedProjectId]
+            )
+          ).rows[0].eligible
+      ),
+      false
+    );
 
     const requestedExport = await service.requestExport(
       actor,
@@ -567,11 +1052,36 @@ test(
       (error) => error?.code === "DOWNLOAD_AUTHORIZATION_INVALID"
     );
 
-    await seedPaidSubscription(
-      authority,
-      organizationId,
-      projectId,
-      rent.offerId
+    const cancellationPreview =
+      await service.getCancellationPreview(
+        actor,
+        projectId
+      );
+    const cancelled =
+      await service.cancelSubscription(
+        actor,
+        projectId,
+        {
+          previewId:
+            cancellationPreview.preview.previewId,
+          acceptedDisclosureDigest:
+            cancellationPreview.preview
+              .disclosureDigest,
+          commandId:
+            "subscription-cancel-0001"
+        }
+      );
+    assert.equal(
+      cancelled.cancellation.providerStatus,
+      "scheduled"
+    );
+    assert.equal(
+      cancelled.subscription.cancelAt,
+      "2026-08-28T20:00:00.000Z"
+    );
+    assert.equal(
+      payment.calls.cancellation.length,
+      1
     );
     serviceAuthority.failNextFinalizationCommit();
     await assert.rejects(
@@ -645,6 +1155,16 @@ test(
     });
     assert.equal(deleted.state, "completed");
     assert.equal(deleted.deleted, true);
+    const ownedDeleted =
+      await service.deleteProject(
+        actor,
+        ownedProjectId,
+        {
+          commandId:
+            "project-delete-owned-0001"
+        }
+      );
+    assert.equal(ownedDeleted.deleted, true);
     await authority.close();
   }
 );

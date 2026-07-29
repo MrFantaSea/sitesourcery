@@ -33,7 +33,7 @@ const READINESS_QUERY = `
     to_regclass('ss.catalog_offer_price_lines') is not null as offer_prices_ready,
     to_regclass('ss.commerce_quote_price_lines') is not null as quote_prices_ready,
     to_regclass('ss.checkout_intent_price_lines') is not null as checkout_prices_ready,
-    to_regprocedure('ss.hosted_runtime_contract_v12()') is not null
+    to_regprocedure('ss.hosted_runtime_contract_v13()') is not null
       as runtime_contract_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -162,7 +162,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 012 are required.",
+        : "Canonical PostgreSQL migrations 000 through 013 are required.",
       { status: 503, details: status }
     );
     return status;
