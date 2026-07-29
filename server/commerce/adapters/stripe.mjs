@@ -23,6 +23,14 @@ const LIVE_CAPABILITIES = new Set([
   "webhooks:verify"
 ]);
 const BILLING_INTERVALS = new Set(["month", "year"]);
+const CANCELLABLE_SUBSCRIPTION_STATUSES = new Set([
+  "active",
+  "incomplete",
+  "past_due",
+  "paused",
+  "trialing",
+  "unpaid"
+]);
 const CHECKOUT_HOSTS = new Set(["checkout.stripe.com"]);
 const PORTAL_HOSTS = new Set(["billing.stripe.com"]);
 const PROVIDER_ID = /^(?:bps|cs|cus|price|sub)_[A-Za-z0-9_]+$/u;
@@ -718,7 +726,11 @@ function validatePurposePrices(validated, expectations) {
   }
 }
 
-function checkoutResponse(value, config) {
+function checkoutResponse(
+  value,
+  config,
+  expectedExpiresAt
+) {
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -738,7 +750,8 @@ function checkoutResponse(value, config) {
     url.protocol !== "https:" ||
     !CHECKOUT_HOSTS.has(url.hostname) ||
     url.username ||
-    url.password
+    url.password ||
+    url.hash
   ) {
     throw ambiguous(
       "stripe_checkout_response_invalid",
@@ -746,16 +759,17 @@ function checkoutResponse(value, config) {
       { checkoutId }
     );
   }
-  integer(
+  const observedExpiresAt = integer(
     value.expires_at,
     "Stripe Checkout Session expiry",
     1,
     Number.MAX_SAFE_INTEGER
   );
   invariant(
-    value.livemode === config.livemode,
+    value.livemode === config.livemode &&
+      observedExpiresAt === expectedExpiresAt,
     "stripe_checkout_response_invalid",
-    "Stripe Checkout Session livemode changed",
+    "Stripe Checkout Session mode or expiry changed",
     { status: 502 }
   );
   return Object.freeze({
@@ -780,7 +794,8 @@ function portalResponse(value) {
     url.protocol !== "https:" ||
     !PORTAL_HOSTS.has(url.hostname) ||
     url.username ||
-    url.password
+    url.password ||
+    url.hash
   ) {
     throw ambiguous(
       "stripe_billing_portal_response_invalid",
@@ -797,6 +812,9 @@ function cancellationResponse(value, subscriptionId) {
   invariant(
     value?.id === subscriptionId &&
       value.cancel_at_period_end === true &&
+      CANCELLABLE_SUBSCRIPTION_STATUSES.has(
+        value.status
+      ) &&
       Number.isSafeInteger(value.current_period_end) &&
       value.current_period_end > 0,
     "stripe_subscription_response_invalid",
@@ -1033,7 +1051,11 @@ export function createStripeProviderAdapter(options = {}) {
         );
       }
       try {
-        return checkoutResponse(response, config);
+        return checkoutResponse(
+          response,
+          config,
+          expiresAt
+        );
       } catch (error) {
         if (error instanceof ExternalEffectError) throw error;
         throw ambiguous(
@@ -1211,6 +1233,7 @@ export function createStripeProviderAdapter(options = {}) {
           event.type.length > 0 &&
           event.type.length <= 200 &&
           event.livemode === config.livemode &&
+          event.api_version === config.apiVersion &&
           Number.isSafeInteger(event.created) &&
           event.created > 0 &&
           event.data?.object &&

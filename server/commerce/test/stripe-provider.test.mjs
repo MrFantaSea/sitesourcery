@@ -258,6 +258,7 @@ function fakeStripe({
             id: "evt_test_1",
             type: "checkout.session.completed",
             livemode: false,
+            api_version: STRIPE_API_VERSION,
             created: 1785254400,
             data: {
               object: {
@@ -523,6 +524,26 @@ test("Checkout transport failures and unsafe post-effect responses stay ambiguou
         error.certainty === "ambiguous"
     );
   }
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutResponse: {
+        id: "cs_test_checkout_wrong_expiry",
+        url: "https://checkout.stripe.com/c/pay/test_2",
+        expires_at: 1785241801,
+        livemode: false
+      }
+    });
+    const { adapter } = adapterFixture({ config, fake });
+    await assert.rejects(
+      adapter.createCheckout(checkoutRequest()),
+      (error) =>
+        error.code ===
+          "stripe_checkout_response_invalid" &&
+        error.certainty === "ambiguous"
+    );
+  }
 });
 
 test("billing portal is exact and unsafe post-effect responses are ambiguous", async () => {
@@ -657,12 +678,35 @@ test("webhooks require raw bytes, an exact signature, and matching livemode", as
       id: "evt_test_wrong_mode",
       type: "customer.subscription.updated",
       livemode: true,
+      api_version: STRIPE_API_VERSION,
       created: 1785254400,
       data: { object: { id: "sub_test_1" } }
     }
   });
   await assert.rejects(
     adapterFixture({ config, fake: wrongMode })
+      .adapter.verifyWebhook({
+        rawBody,
+        signature: "t=1,v1=signature"
+      }),
+    (error) =>
+      error.code === "stripe_webhook_event_invalid" &&
+      error.status === 400
+  );
+
+  const wrongVersion = fakeStripe({
+    config,
+    webhookEvent: {
+      id: "evt_test_wrong_version",
+      type: "customer.subscription.updated",
+      livemode: false,
+      api_version: "unreviewed",
+      created: 1785254400,
+      data: { object: { id: "sub_test_1" } }
+    }
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake: wrongVersion })
       .adapter.verifyWebhook({
         rawBody,
         signature: "t=1,v1=signature"
