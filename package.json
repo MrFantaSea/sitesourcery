@@ -3,9 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "engines": {
-    "node": "20.20.2"
+    "node": "24.18.0"
   },
   "scripts": {
+    "runtime:check": "node server/domain/assert-runtime.mjs",
     "generate:vnext": "node scripts/generate-site-vnext.mjs",
     "audit:browser": "node --experimental-websocket scripts/browser-audit-vnext.mjs",
     "check": "npm run check:html && npm run check:routes && npm run check:vnext && npm run check:copy && npm run check:legal-copy && npm run check:catalog && npm run check:abracadabra",
@@ -16,11 +17,12 @@
     "check:legal-copy": "node scripts/check-legal-copy.mjs",
     "check:catalog": "node scripts/check-pricing.mjs",
     "check:abracadabra": "node scripts/check-abracadabra-v1.mjs",
-    "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/customer-copy.test.mjs scripts/test/legal-copy.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hive-planner.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs",
+    "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/customer-copy.test.mjs scripts/test/legal-copy.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hive-planner.test.mjs scripts/test/local-deliverable-downloads.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs scripts/test/domain-orchestration.test.mjs",
+    "test:domain": "node server/domain/assert-runtime.mjs && node --test scripts/test/domain-orchestration.test.mjs",
     "test:public-truth": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
-    "test": "npm run check && npm run test:node && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser"
+    "test": "npm run runtime:check && npm run check && npm run test:node && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"

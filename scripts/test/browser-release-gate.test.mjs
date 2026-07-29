@@ -54,6 +54,7 @@ const WORKFLOWS = Object.freeze([
 
 const [
   packageSource,
+  packageLockSource,
   pinnedNodeSource,
   auditSource,
   installerSource,
@@ -61,6 +62,7 @@ const [
   vnextStyleSource,
 ] = await Promise.all([
   readFile(path.join(SITE_ROOT, "package.json"), "utf8"),
+  readFile(path.join(SITE_ROOT, "package-lock.json"), "utf8"),
   readFile(path.join(SITE_ROOT, ".nvmrc"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/browser-audit-vnext.mjs"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/install-reviewed-chromium.sh"), "utf8"),
@@ -68,6 +70,7 @@ const [
   readFile(path.join(SITE_ROOT, "vnext.css"), "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
+const packageLock = JSON.parse(packageLockSource);
 
 test("Start browser gate owns the complete independent decision and Back tables", () => {
   const menuExerciseStart = auditSource.indexOf("const MENU_EXERCISE_EXPRESSION");
@@ -794,8 +797,9 @@ test("npm test builds and verifies the exact artifact before the mandatory brows
 
 test("test commands are executable by the exact pinned Node runtime", () => {
   const pinnedNode = pinnedNodeSource.trim();
-  assert.equal(pinnedNode, "20.20.2");
+  assert.equal(pinnedNode, "24.18.0");
   assert.equal(packageJson.engines.node, pinnedNode);
+  assert.equal(packageLock.packages[""].engines.node, pinnedNode);
   for (const scriptName of ["test:node", "test:public-truth"]) {
     const command = packageJson.scripts[scriptName];
     assert.match(command, /^node --test /u, `${scriptName} must use the built-in test runner`);

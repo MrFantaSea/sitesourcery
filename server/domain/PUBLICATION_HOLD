@@ -1,0 +1,6 @@
+HELD
+
+No live registrar, payment, secret-delivery, DNS, HTTP listener, or deployment
+adapter is authorized by this repository. Only deterministic fake rehearsal is
+implemented. Remove nothing and wire nothing without a separately reviewed
+owner-approved live release.
