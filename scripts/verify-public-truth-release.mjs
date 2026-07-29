@@ -318,7 +318,7 @@ const REVIEWED_NON_FORM_CONTROL_SHA256 = Object.freeze({
   "abracadabra/site/viewer.js":
     "b459639c9209e88f907fc0570565ef7945b545d3d2ca594c4b5a783d57f5d634",
   "hive/hive-planner.js":
-    "c1cfbf9385a844a3e308817a7a35837e707c2ba7003c4074aa7da43d8d2d1cb8",
+    "8ab5bc996ed70e9dee0ed22c0f97c1b9839486af062cd6723fb384bcc59b049c",
 });
 const WEB3FORMS_MARKER = /web3forms/iu;
 const ACCESS_KEY_MARKER = /(?:\bname\s*=\s*(?:"access_key"|'access_key'|access_key)|(?:"access_key"|'access_key'|\baccess_key\b)\s*[:=])/iu;

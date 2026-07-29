@@ -161,7 +161,7 @@ export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
   "/custom/process/": 3,
   "/abracadabra/how/": 7,
   "/about/": 1,
-  "/contact/": 1,
+  "/contact/": 2,
   "/faq/": 13,
   "/solutions/": 9,
   "/legal/": 1,
