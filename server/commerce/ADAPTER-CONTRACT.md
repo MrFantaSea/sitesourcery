@@ -58,6 +58,27 @@ only the verified amount. Registrar failure cancels the authorization; an
 ambiguous provider result enters reconciliation. This prevents a mixed website
 subscription Checkout from charging domain money before registrar proof.
 
+The domain payment port is explicit:
+
+- `createDomainAuthorizationCheckout` creates a separate Stripe-hosted
+  `payment` Checkout with `capture_method=manual`, exact server price data,
+  purpose-bound metadata, and order-bound same-origin return routes;
+- `retrieveDomainAuthorization` expands and verifies the Checkout Session,
+  PaymentIntent, Charge, balance transaction, refunds, authorization expiry,
+  exact money, livemode, and purpose metadata before projecting state;
+- `captureDomainAuthorization` reads the current authorization first and
+  captures no more than the verified registrar amount with a provider
+  idempotency key;
+- `voidDomainAuthorization` reads the exact uncaptured PaymentIntent before
+  releasing the hold;
+- `refundDomainCapture` reads the captured/refunded balance first and binds the
+  refund to operator evidence.
+
+Provider webhooks are wake-up signals, not domain-money authority. The durable
+orchestrator settles authorization, capture, void, and refund state only from
+exact provider readback. Transport failure or an unsafe post-effect response is
+ambiguous and must be reconciled before retry.
+
 `createBillingPortal` uses an exact allowlisted return URL.
 `scheduleCancellation` sets `cancel_at_period_end` and binds the reviewed
 cancellation digest in provider metadata. `verifyWebhook` accepts the exact raw

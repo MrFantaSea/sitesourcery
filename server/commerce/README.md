@@ -111,6 +111,15 @@ capture. A registrar failure cancels the authorization, and any ambiguous
 provider response stops for reconciliation. Website Checkout and domain
 procurement therefore cannot be collapsed into one charge.
 
+The customer still stays inside Site Sourcery. The server creates a dedicated
+Stripe-hosted domain authorization Checkout and returns it through an
+order-bound same-origin relay. It then reads the expanded Checkout Session and
+PaymentIntent from Stripe; a webhook payload alone cannot establish the amount
+or payment state. Only a current `requires_capture` authorization can fund a
+registrar attempt. Only verified domain and registrant readback can trigger
+capture. Cancellation releases an uncaptured hold, while refunds reconcile the
+remaining captured balance and retain operator evidence.
+
 ## Stripe construction
 
 `createStripeProviderAdapter()` defaults to `held`. `contract_test` accepts only
@@ -122,13 +131,17 @@ requires all of the following before construction:
 - a matching `sk_test_` or `sk_live_` server secret;
 - the pinned official Stripe SDK and API version;
 - exact HTTPS return origins, tax decision, webhook secret, and owner-approved
-  Price expectations.
+  Price expectations;
+- exact order-bound domain success/cancel templates and the manual-authorization
+  disclosure when domain capabilities are approved.
 
 Readiness retrieves every Price and compares ID, active state, livemode,
 currency, amount, and recurrence. Checkout derives a provider idempotency key
 from the durable command and purpose digest. Provider timeouts and unsafe
-post-effect responses remain ambiguous for operator reconciliation. Webhooks
-accept raw bytes only and verify `Stripe-Signature` before returning an event.
+post-effect responses remain ambiguous for operator reconciliation. Domain
+readback expands the PaymentIntent, latest Charge, authorization expiry, balance
+transaction, and refunds before projecting any settlement state. Webhooks accept
+raw bytes only and verify `Stripe-Signature` before returning an event.
 
 ## Compatibility
 

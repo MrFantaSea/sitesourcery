@@ -26,6 +26,14 @@ function configuration(overrides = {}) {
     taxMode: "disabled_by_owner",
     webhookSecret: "whsec_contract_test",
     checkoutTtlSeconds: 1800,
+    domainAuthorization: {
+      successUrlTemplate:
+        "https://account.sitesourcery.test/domain-orders/{ORDER_ID}/complete?session_id={CHECKOUT_SESSION_ID}",
+      cancelUrlTemplate:
+        "https://account.sitesourcery.test/domain-orders/{ORDER_ID}/cancel",
+      authorizationDisclosure:
+        "Your card is authorized now and captured only after the domain and registrant are verified."
+    },
     priceExpectations: [
       {
         id: "price_site_once",
@@ -155,6 +163,16 @@ function fakeStripe({
   priceError = null,
   checkoutError = null,
   checkoutResponse = null,
+  checkoutRetrieveError = null,
+  checkoutRetrieveResponse = null,
+  paymentIntentRetrieveError = null,
+  paymentIntentRetrieveResponse = null,
+  captureError = null,
+  captureResponse = null,
+  voidError = null,
+  voidResponse = null,
+  refundError = null,
+  refundResponse = null,
   portalError = null,
   portalResponse = null,
   cancellationError = null,
@@ -165,6 +183,11 @@ function fakeStripe({
   const calls = {
     prices: [],
     checkouts: [],
+    checkoutReads: [],
+    paymentIntentReads: [],
+    captures: [],
+    voids: [],
+    refunds: [],
     portals: [],
     cancellations: [],
     webhooks: []
@@ -203,7 +226,64 @@ function fakeStripe({
               livemode: false
             }
           );
+        },
+        async retrieve(id, params) {
+          calls.checkoutReads.push({
+            id,
+            params: structuredClone(params)
+          });
+          if (checkoutRetrieveError) {
+            throw checkoutRetrieveError;
+          }
+          return structuredClone(
+            checkoutRetrieveResponse
+          );
         }
+      }
+    },
+    paymentIntents: {
+      async retrieve(id, params) {
+        calls.paymentIntentReads.push({
+          id,
+          params: structuredClone(params)
+        });
+        if (paymentIntentRetrieveError) {
+          throw paymentIntentRetrieveError;
+        }
+        return structuredClone(
+          paymentIntentRetrieveResponse
+        );
+      },
+      async capture(id, params, requestOptions) {
+        calls.captures.push({
+          id,
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (captureError) throw captureError;
+        return structuredClone(captureResponse);
+      },
+      async cancel(id, params, requestOptions) {
+        calls.voids.push({
+          id,
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (voidError) throw voidError;
+        return structuredClone(voidResponse);
+      }
+    },
+    refunds: {
+      async create(params, requestOptions) {
+        calls.refunds.push({
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (refundError) throw refundError;
+        return structuredClone(refundResponse);
       }
     },
     billingPortal: {
@@ -291,6 +371,194 @@ function adapterFixture({
   };
 }
 
+const DOMAIN_PURPOSE = Object.freeze({
+  schema: "sitesourcery.domain-authorization.v1",
+  organizationId: "organization_a",
+  projectId: "project_a",
+  customerId: "customer_a",
+  orderId: "order_a",
+  quoteId: "quote_domain_a",
+  domain: "example.com",
+  years: 1,
+  amount: {
+    amountMinor: 1499,
+    currency: "USD"
+  },
+  captureMethod: "manual"
+});
+const DOMAIN_PURPOSE_DIGEST = digest(DOMAIN_PURPOSE);
+const DOMAIN_CHECKOUT_EXPIRES_AT = 1785241800;
+const DOMAIN_AUTHORIZED_AT = 1785240600;
+const DOMAIN_CAPTURE_BEFORE = 1785845400;
+const DOMAIN_CAPTURED_AT = 1785241200;
+const DOMAIN_REFUNDED_AT = 1785241500;
+const DOMAIN_VOIDED_AT = 1785240900;
+
+function domainAuthorizationRequest(overrides = {}) {
+  return {
+    organizationId: DOMAIN_PURPOSE.organizationId,
+    projectId: DOMAIN_PURPOSE.projectId,
+    customerId: DOMAIN_PURPOSE.customerId,
+    orderId: DOMAIN_PURPOSE.orderId,
+    quoteId: DOMAIN_PURPOSE.quoteId,
+    domain: DOMAIN_PURPOSE.domain,
+    years: DOMAIN_PURPOSE.years,
+    amountMinor: DOMAIN_PURPOSE.amount.amountMinor,
+    currency: DOMAIN_PURPOSE.amount.currency,
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    successUrl:
+      "https://account.sitesourcery.test/domain-orders/order_a/complete?session_id={CHECKOUT_SESSION_ID}",
+    cancelUrl:
+      "https://account.sitesourcery.test/domain-orders/order_a/cancel",
+    idempotencyKey:
+      "domain:organization_a:order_a:authorize",
+    ...overrides
+  };
+}
+
+function domainMetadata(overrides = {}) {
+  return {
+    schema: "sitesourcery_domain_authorization_v1",
+    organization_id: DOMAIN_PURPOSE.organizationId,
+    project_id: DOMAIN_PURPOSE.projectId,
+    customer_id: DOMAIN_PURPOSE.customerId,
+    order_id: DOMAIN_PURPOSE.orderId,
+    quote_id: DOMAIN_PURPOSE.quoteId,
+    domain: DOMAIN_PURPOSE.domain,
+    years: String(DOMAIN_PURPOSE.years),
+    amount_minor: String(
+      DOMAIN_PURPOSE.amount.amountMinor
+    ),
+    currency: DOMAIN_PURPOSE.amount.currency,
+    capture_method: DOMAIN_PURPOSE.captureMethod,
+    purpose_digest: DOMAIN_PURPOSE_DIGEST,
+    ...overrides
+  };
+}
+
+function openDomainSession(overrides = {}) {
+  return {
+    id: "cs_test_domain_1",
+    url: "https://checkout.stripe.com/c/pay/domain_1",
+    expires_at: DOMAIN_CHECKOUT_EXPIRES_AT,
+    livemode: false,
+    metadata: domainMetadata(),
+    client_reference_id: DOMAIN_PURPOSE.orderId,
+    mode: "payment",
+    currency: "usd",
+    amount_total: DOMAIN_PURPOSE.amount.amountMinor,
+    status: "open",
+    payment_intent: null,
+    ...overrides
+  };
+}
+
+function authorizedDomainIntent(overrides = {}) {
+  return {
+    id: "pi_test_domain_1",
+    livemode: false,
+    currency: "usd",
+    amount: DOMAIN_PURPOSE.amount.amountMinor,
+    capture_method: "manual",
+    metadata: domainMetadata(),
+    status: "requires_capture",
+    amount_capturable:
+      DOMAIN_PURPOSE.amount.amountMinor,
+    amount_received: 0,
+    latest_charge: {
+      id: "ch_test_domain_1",
+      payment_intent: "pi_test_domain_1",
+      livemode: false,
+      currency: "usd",
+      amount: DOMAIN_PURPOSE.amount.amountMinor,
+      amount_captured: 0,
+      amount_refunded: 0,
+      captured: false,
+      paid: true,
+      status: "succeeded",
+      created: DOMAIN_AUTHORIZED_AT,
+      payment_method_details: {
+        type: "card",
+        card: {
+          capture_before: DOMAIN_CAPTURE_BEFORE
+        }
+      }
+    },
+    ...overrides
+  };
+}
+
+function capturedDomainIntent({
+  refundedAmount = 0,
+  refunds = [],
+  capturedAmount = DOMAIN_PURPOSE.amount.amountMinor,
+  ...overrides
+} = {}) {
+  return {
+    id: "pi_test_domain_1",
+    livemode: false,
+    currency: "usd",
+    amount: DOMAIN_PURPOSE.amount.amountMinor,
+    capture_method: "manual",
+    metadata: domainMetadata(),
+    status: "succeeded",
+    amount_capturable: 0,
+    amount_received: capturedAmount,
+    latest_charge: {
+      id: "ch_test_domain_1",
+      payment_intent: "pi_test_domain_1",
+      livemode: false,
+      currency: "usd",
+      amount: DOMAIN_PURPOSE.amount.amountMinor,
+      amount_captured: capturedAmount,
+      amount_refunded: refundedAmount,
+      captured: true,
+      paid: true,
+      status: "succeeded",
+      created: DOMAIN_AUTHORIZED_AT,
+      balance_transaction: {
+        id: "txn_test_domain_1",
+        created: DOMAIN_CAPTURED_AT,
+        source: "ch_test_domain_1",
+        currency: "usd",
+        amount: capturedAmount,
+        type: "charge"
+      },
+      refunds: {
+        data: structuredClone(refunds)
+      }
+    },
+    ...overrides
+  };
+}
+
+function canceledDomainIntent(overrides = {}) {
+  return {
+    id: "pi_test_domain_1",
+    livemode: false,
+    currency: "usd",
+    amount: DOMAIN_PURPOSE.amount.amountMinor,
+    capture_method: "manual",
+    metadata: domainMetadata(),
+    status: "canceled",
+    amount_capturable: 0,
+    cancellation_reason: "abandoned",
+    canceled_at: DOMAIN_VOIDED_AT,
+    ...overrides
+  };
+}
+
+function settledDomainSession(
+  paymentIntent,
+  overrides = {}
+) {
+  return openDomainSession({
+    status: "complete",
+    payment_intent: paymentIntent,
+    ...overrides
+  });
+}
+
 test("held mode exposes every operation but cannot perform a provider effect", async () => {
   const adapter = createStripeProviderAdapter();
   assert.deepEqual(await adapter.readiness(), {
@@ -300,6 +568,11 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   for (const operation of [
     "createCheckout",
     "createBillingPortal",
+    "createDomainAuthorizationCheckout",
+    "retrieveDomainAuthorization",
+    "captureDomainAuthorization",
+    "voidDomainAuthorization",
+    "refundDomainCapture",
     "scheduleCancellation",
     "verifyWebhook"
   ]) {
@@ -360,6 +633,7 @@ test("readiness reads back every exact owner-approved Price", async () => {
     livemode: false,
     apiVersion: STRIPE_API_VERSION,
     priceCount: 2,
+    domainAuthorization: true,
     webhookVerification: true,
     taxMode: "disabled_by_owner"
   });
@@ -484,6 +758,627 @@ test("ordinary Checkout holds domain money for the separate authorize-register-c
   );
   assert.equal(calls.prices.length, 0);
   assert.equal(calls.checkouts.length, 0);
+});
+
+test("domain purchase creates an exact manual-capture Checkout separate from website Checkout", async () => {
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutResponse: openDomainSession()
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const request = domainAuthorizationRequest();
+  assert.deepEqual(
+    await adapter.createDomainAuthorizationCheckout(
+      request
+    ),
+    {
+      status: "open",
+      checkoutSessionId: "cs_test_domain_1",
+      url:
+        "https://checkout.stripe.com/c/pay/domain_1",
+      expiresAt: "2026-07-28T12:30:00.000Z",
+      amountMinor: 1499,
+      currency: "USD",
+      captureMethod: "manual",
+      purposeDigest: DOMAIN_PURPOSE_DIGEST
+    }
+  );
+  assert.equal(calls.prices.length, 0);
+  assert.equal(calls.checkouts.length, 1);
+  const [{ params, requestOptions }] =
+    calls.checkouts;
+  const metadata = domainMetadata();
+  assert.deepEqual(params, {
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: 1499,
+          product_data: {
+            name: "example.com registration — 1 year",
+            description:
+              "Authorized now; captured only after registrar and registrant readback.",
+            metadata
+          }
+        },
+        quantity: 1
+      }
+    ],
+    success_url: request.successUrl,
+    cancel_url: request.cancelUrl,
+    client_reference_id: "order_a",
+    metadata,
+    expires_at: DOMAIN_CHECKOUT_EXPIRES_AT,
+    customer_creation: "always",
+    automatic_tax: { enabled: false },
+    payment_intent_data: {
+      capture_method: "manual",
+      metadata
+    },
+    custom_text: {
+      submit: {
+        message:
+          config.domainAuthorization
+            .authorizationDisclosure
+      }
+    }
+  });
+  assert.equal(
+    requestOptions.idempotencyKey,
+    `ss:domain_authorization:${digest({
+      operation: "domain_authorization",
+      operatorKey: request.idempotencyKey,
+      purposeDigest: DOMAIN_PURPOSE_DIGEST
+    })}`
+  );
+});
+
+test("domain Checkout rejects forged purpose, money, and return routes before Stripe", async () => {
+  const { adapter, calls } = adapterFixture();
+  for (const [request, code] of [
+    [
+      domainAuthorizationRequest({
+        purposeDigest: "f".repeat(64)
+      }),
+      "stripe_domain_authorization_invalid"
+    ],
+    [
+      domainAuthorizationRequest({
+        amountMinor: 1500
+      }),
+      "stripe_domain_authorization_invalid"
+    ],
+    [
+      domainAuthorizationRequest({
+        successUrl:
+          "https://account.sitesourcery.test/domain-orders/order_b/complete?session_id={CHECKOUT_SESSION_ID}"
+      }),
+      "stripe_redirect_invalid"
+    ]
+  ]) {
+    await assert.rejects(
+      adapter.createDomainAuthorizationCheckout(
+        request
+      ),
+      (error) => error.code === code
+    );
+  }
+  assert.equal(calls.checkouts.length, 0);
+});
+
+test("domain Checkout transport and unsafe post-effect responses remain ambiguous", async () => {
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutError: new Error("timeout")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.createDomainAuthorizationCheckout(
+          domainAuthorizationRequest()
+        ),
+      (error) =>
+        error.code ===
+          "stripe_domain_checkout_effect_unknown" &&
+        error.certainty === "ambiguous" &&
+        /^ss:domain_authorization:/u.test(
+          error.details.idempotencyKey
+        )
+    );
+  }
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutResponse: openDomainSession({
+        metadata: domainMetadata({
+          amount_minor: "1500"
+        })
+      })
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.createDomainAuthorizationCheckout(
+          domainAuthorizationRequest()
+        ),
+      (error) =>
+        error.code ===
+          "stripe_domain_authorization_response_invalid" &&
+        error.certainty === "ambiguous"
+    );
+  }
+});
+
+test("domain authorization readback projects pending, authorized, captured, refunded, voided, and manual-review states", async () => {
+  const refund = {
+    id: "re_test_domain_1",
+    status: "succeeded",
+    payment_intent: "pi_test_domain_1",
+    charge: "ch_test_domain_1",
+    currency: "usd",
+    amount: 499,
+    created: DOMAIN_REFUNDED_AT
+  };
+  const scenarios = [
+    {
+      response: openDomainSession(),
+      status: "pending",
+      expected: {
+        paymentIntentId: null,
+        capturedAmountMinor: 0,
+        refundedAmountMinor: 0
+      }
+    },
+    {
+      response: settledDomainSession(
+        authorizedDomainIntent()
+      ),
+      status: "authorized",
+      expected: {
+        paymentIntentId: "pi_test_domain_1",
+        authorizedAt: new Date(
+          DOMAIN_AUTHORIZED_AT * 1000
+        ).toISOString(),
+        authorizationExpiresAt: new Date(
+          DOMAIN_CAPTURE_BEFORE * 1000
+        ).toISOString()
+      }
+    },
+    {
+      response: settledDomainSession(
+        capturedDomainIntent()
+      ),
+      status: "captured",
+      expected: {
+        paymentIntentId: "pi_test_domain_1",
+        captureId: "ch_test_domain_1",
+        capturedAmountMinor: 1499,
+        refundedAmountMinor: 0,
+        capturedAt: new Date(
+          DOMAIN_CAPTURED_AT * 1000
+        ).toISOString()
+      }
+    },
+    {
+      response: settledDomainSession(
+        capturedDomainIntent({
+          refundedAmount: 499,
+          refunds: [refund]
+        })
+      ),
+      status: "refunded",
+      expected: {
+        paymentIntentId: "pi_test_domain_1",
+        captureId: "ch_test_domain_1",
+        capturedAmountMinor: 1499,
+        refundedAmountMinor: 499,
+        refundedAt: new Date(
+          DOMAIN_REFUNDED_AT * 1000
+        ).toISOString()
+      }
+    },
+    {
+      response: settledDomainSession(
+        canceledDomainIntent()
+      ),
+      status: "voided",
+      expected: {
+        paymentIntentId: "pi_test_domain_1",
+        voidedAt: new Date(
+          DOMAIN_VOIDED_AT * 1000
+        ).toISOString()
+      }
+    },
+    {
+      response: settledDomainSession(
+        "pi_test_domain_1"
+      ),
+      status: "manual_review",
+      expected: {
+        paymentIntentId: null,
+        capturedAmountMinor: 0
+      }
+    }
+  ];
+  for (const scenario of scenarios) {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        scenario.response
+    });
+    const result = await adapterFixture({
+      config,
+      fake
+    }).adapter.retrieveDomainAuthorization({
+      checkoutSessionId: "cs_test_domain_1",
+      orderId: "order_a",
+      purposeDigest: DOMAIN_PURPOSE_DIGEST
+    });
+    assert.equal(result.status, scenario.status);
+    assert.equal(result.checkoutSessionId,
+      "cs_test_domain_1");
+    assert.equal(result.amountMinor, 1499);
+    assert.equal(result.currency, "USD");
+    assert.equal(result.captureMethod, "manual");
+    assert.equal(
+      result.purposeDigest,
+      DOMAIN_PURPOSE_DIGEST
+    );
+    for (const [key, value] of Object.entries(
+      scenario.expected
+    )) {
+      assert.equal(result[key], value);
+    }
+    assert.deepEqual(
+      fake.calls.checkoutReads[0],
+      {
+        id: "cs_test_domain_1",
+        params: {
+          expand: [
+            "payment_intent.latest_charge.balance_transaction",
+            "payment_intent.latest_charge.refunds"
+          ]
+        }
+      }
+    );
+  }
+});
+
+test("domain authorization readback fails closed on session money or identity drift", async () => {
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: openDomainSession({
+      amount_total: 1
+    })
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.retrieveDomainAuthorization({
+        checkoutSessionId: "cs_test_domain_1",
+        orderId: "order_a",
+        purposeDigest: DOMAIN_PURPOSE_DIGEST
+      }),
+    (error) =>
+      error.code ===
+      "stripe_domain_authorization_response_invalid"
+  );
+});
+
+test("domain capture reconciles first, captures the exact authorization once, and returns provider proof", async () => {
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      settledDomainSession(
+        authorizedDomainIntent()
+      ),
+    captureResponse: capturedDomainIntent({
+      capturedAmount: 1299
+    })
+  });
+  const result = await adapterFixture({
+    config,
+    fake
+  }).adapter.captureDomainAuthorization({
+    checkoutSessionId: "cs_test_domain_1",
+    paymentIntentId: "pi_test_domain_1",
+    orderId: "order_a",
+    amountMinor: 1299,
+    currency: "USD",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    idempotencyKey:
+      "domain:order_a:capture:attempt_1"
+  });
+  assert.deepEqual(result, {
+    status: "captured",
+    paymentIntentId: "pi_test_domain_1",
+    captureId: "ch_test_domain_1",
+    amountMinor: 1299,
+    currency: "USD",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    capturedAt: new Date(
+      DOMAIN_CAPTURED_AT * 1000
+    ).toISOString()
+  });
+  assert.equal(fake.calls.checkoutReads.length, 1);
+  assert.equal(fake.calls.captures.length, 1);
+  assert.deepEqual(fake.calls.captures[0].params, {
+    amount_to_capture: 1299,
+    final_capture: true,
+    metadata: {
+      domain_capture_purpose_digest:
+        DOMAIN_PURPOSE_DIGEST,
+      domain_capture_order_id: "order_a"
+    },
+    expand: [
+      "latest_charge.balance_transaction"
+    ]
+  });
+  assert.match(
+    fake.calls.captures[0].requestOptions
+      .idempotencyKey,
+    /^ss:domain_capture:[a-f0-9]{64}$/u
+  );
+});
+
+test("domain capture will not over-capture and treats post-submit uncertainty as ambiguous", async () => {
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        settledDomainSession(
+          authorizedDomainIntent()
+        )
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.captureDomainAuthorization({
+          checkoutSessionId: "cs_test_domain_1",
+          paymentIntentId: "pi_test_domain_1",
+          orderId: "order_a",
+          amountMinor: 1500,
+          currency: "USD",
+          purposeDigest: DOMAIN_PURPOSE_DIGEST,
+          idempotencyKey:
+            "domain:order_a:capture:over"
+        }),
+      (error) =>
+        error.code ===
+        "stripe_domain_capture_invalid"
+    );
+    assert.equal(fake.calls.captures.length, 0);
+  }
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        settledDomainSession(
+          authorizedDomainIntent()
+        ),
+      captureError: new Error("timeout")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.captureDomainAuthorization({
+          checkoutSessionId: "cs_test_domain_1",
+          paymentIntentId: "pi_test_domain_1",
+          orderId: "order_a",
+          amountMinor: 1499,
+          currency: "USD",
+          purposeDigest: DOMAIN_PURPOSE_DIGEST,
+          idempotencyKey:
+            "domain:order_a:capture:timeout"
+        }),
+      (error) =>
+        error.code ===
+          "stripe_domain_capture_effect_unknown" &&
+        error.certainty === "ambiguous"
+    );
+  }
+});
+
+test("domain authorization void reads back the exact PaymentIntent before releasing the hold", async () => {
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    paymentIntentRetrieveResponse:
+      authorizedDomainIntent(),
+    voidResponse: canceledDomainIntent()
+  });
+  const result = await adapterFixture({
+    config,
+    fake
+  }).adapter.voidDomainAuthorization({
+    paymentIntentId: "pi_test_domain_1",
+    orderId: "order_a",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    idempotencyKey:
+      "domain:order_a:void:attempt_1"
+  });
+  assert.deepEqual(result, {
+    status: "voided",
+    paymentIntentId: "pi_test_domain_1",
+    voidId: "pi_test_domain_1",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    voidedAt: new Date(
+      DOMAIN_VOIDED_AT * 1000
+    ).toISOString()
+  });
+  assert.deepEqual(fake.calls.paymentIntentReads, [
+    {
+      id: "pi_test_domain_1",
+      params: { expand: ["latest_charge"] }
+    }
+  ]);
+  assert.deepEqual(fake.calls.voids[0].params, {
+    cancellation_reason: "abandoned"
+  });
+  assert.match(
+    fake.calls.voids[0].requestOptions.idempotencyKey,
+    /^ss:domain_void:[a-f0-9]{64}$/u
+  );
+});
+
+test("domain refund reconciles captured balance and records exact operator evidence", async () => {
+  const config = configuration();
+  const reason =
+    "registrar could not complete registration";
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      settledDomainSession(
+        capturedDomainIntent()
+      ),
+    refundResponse: {
+      id: "re_test_domain_1",
+      status: "succeeded",
+      payment_intent: "pi_test_domain_1",
+      charge: "ch_test_domain_1",
+      amount: 1499,
+      currency: "usd",
+      created: DOMAIN_REFUNDED_AT,
+      metadata: {
+        schema: "sitesourcery_domain_refund_v1",
+        order_id: "order_a",
+        purpose_digest: DOMAIN_PURPOSE_DIGEST,
+        operator_evidence_id: "evidence_a",
+        reason_digest: digest(reason)
+      }
+    }
+  });
+  const result = await adapterFixture({
+    config,
+    fake
+  }).adapter.refundDomainCapture({
+    checkoutSessionId: "cs_test_domain_1",
+    paymentIntentId: "pi_test_domain_1",
+    captureId: "ch_test_domain_1",
+    orderId: "order_a",
+    amountMinor: 1499,
+    currency: "USD",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    reason,
+    operatorEvidenceId: "evidence_a",
+    idempotencyKey:
+      "domain:order_a:refund:attempt_1"
+  });
+  assert.deepEqual(result, {
+    status: "refunded",
+    paymentIntentId: "pi_test_domain_1",
+    captureId: "ch_test_domain_1",
+    refundId: "re_test_domain_1",
+    amountMinor: 1499,
+    currency: "USD",
+    purposeDigest: DOMAIN_PURPOSE_DIGEST,
+    refundedAt: new Date(
+      DOMAIN_REFUNDED_AT * 1000
+    ).toISOString()
+  });
+  assert.deepEqual(fake.calls.refunds[0].params, {
+    payment_intent: "pi_test_domain_1",
+    amount: 1499,
+    reason: "requested_by_customer",
+    metadata: {
+      schema: "sitesourcery_domain_refund_v1",
+      order_id: "order_a",
+      purpose_digest: DOMAIN_PURPOSE_DIGEST,
+      operator_evidence_id: "evidence_a",
+      reason_digest: digest(reason)
+    }
+  });
+  assert.match(
+    fake.calls.refunds[0].requestOptions.idempotencyKey,
+    /^ss:domain_refund:[a-f0-9]{64}$/u
+  );
+});
+
+test("domain refund rejects an amount above the reconciled balance and keeps provider failures ambiguous", async () => {
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        settledDomainSession(
+          capturedDomainIntent({
+            refundedAmount: 1000,
+            refunds: [
+              {
+                id: "re_test_domain_prior",
+                status: "succeeded",
+                payment_intent:
+                  "pi_test_domain_1",
+                charge: "ch_test_domain_1",
+                currency: "usd",
+                amount: 1000,
+                created: DOMAIN_REFUNDED_AT
+              }
+            ]
+          })
+        )
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.refundDomainCapture({
+          checkoutSessionId: "cs_test_domain_1",
+          paymentIntentId: "pi_test_domain_1",
+          captureId: "ch_test_domain_1",
+          orderId: "order_a",
+          amountMinor: 500,
+          currency: "USD",
+          purposeDigest: DOMAIN_PURPOSE_DIGEST,
+          reason: "requested correction",
+          operatorEvidenceId: "evidence_b",
+          idempotencyKey:
+            "domain:order_a:refund:over"
+        }),
+      (error) =>
+        error.code ===
+        "stripe_domain_refund_invalid"
+    );
+    assert.equal(fake.calls.refunds.length, 0);
+  }
+  {
+    const config = configuration();
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        settledDomainSession(
+          capturedDomainIntent()
+        ),
+      refundError: new Error("timeout")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.refundDomainCapture({
+          checkoutSessionId: "cs_test_domain_1",
+          paymentIntentId: "pi_test_domain_1",
+          captureId: "ch_test_domain_1",
+          orderId: "order_a",
+          amountMinor: 1499,
+          currency: "USD",
+          purposeDigest: DOMAIN_PURPOSE_DIGEST,
+          reason: "registrar failure",
+          operatorEvidenceId: "evidence_c",
+          idempotencyKey:
+            "domain:order_a:refund:timeout"
+        }),
+      (error) =>
+        error.code ===
+          "stripe_domain_refund_effect_unknown" &&
+        error.certainty === "ambiguous"
+    );
+  }
 });
 
 test("Checkout transport failures and unsafe post-effect responses stay ambiguous", async () => {
