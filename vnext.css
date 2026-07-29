@@ -2706,7 +2706,7 @@ h3 {
 
 .hive-planner {
   display: grid;
-  grid-template-columns: minmax(16rem, 0.62fr) minmax(0, 1.38fr);
+  grid-template-columns: minmax(17rem, 0.62fr) minmax(0, 1.38fr);
   gap: 1rem;
   padding: 1rem;
   border: 1px solid var(--line);
@@ -2715,10 +2715,48 @@ h3 {
   box-shadow: var(--shadow);
 }
 
+.hive-choice-stage,
+.hive-stage-shell {
+  min-width: 0;
+}
+
+.hive-choice-stage {
+  align-self: start;
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: rgba(8, 7, 12, 0.62);
+}
+
+.hive-choice-stage h3,
+.hive-stage-start h3,
+.hive-stage-card h3 {
+  margin: 0.35rem 0 0;
+  font: 500 clamp(1.55rem, 3vw, 2.35rem)/1 var(--display);
+  letter-spacing: -0.035em;
+}
+
+.hive-choice-stage > p:last-of-type,
+.hive-stage-start > p:last-child {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.hive-stage-number {
+  margin: 0;
+  color: var(--mint);
+  font-size: 0.75rem;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .hive-controls {
   display: grid;
   align-content: start;
   gap: 0.55rem;
+  margin-top: 1rem;
 }
 
 .hive-cell {
@@ -2728,10 +2766,15 @@ h3 {
   border-radius: 0.7rem;
   color: var(--ink-soft);
   background: rgba(8, 7, 12, 0.54);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 760;
   text-align: left;
   cursor: pointer;
+}
+
+.hive-cell:disabled {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .hive-cell:hover,
@@ -2743,9 +2786,7 @@ h3 {
   background: rgba(131, 231, 193, 0.09);
 }
 
-.hive-blueprint {
-  min-width: 0;
-  margin: 0;
+.hive-stage-shell {
   padding: clamp(1rem, 3vw, 1.5rem);
   border: 1px solid var(--line);
   border-radius: 1rem;
@@ -2754,18 +2795,57 @@ h3 {
     rgba(8, 7, 12, 0.72);
 }
 
-.hive-blueprint-head {
+.hive-step-list {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(17rem, 1.2fr);
-  gap: 0.7rem 1.5rem;
-  align-items: end;
-  padding-bottom: 1.2rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0 0 1rem;
   border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.hive-step-list li {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  color: #8f8794;
+  font-size: 0.75rem;
+  font-weight: 760;
+  text-align: center;
+}
+
+.hive-step-list span {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.hive-step-list [data-hive-step-state="current"],
+.hive-step-list [data-hive-step-state="complete"] {
+  color: var(--ink-soft);
+}
+
+.hive-step-list [data-hive-step-state="current"] span {
+  border-color: var(--mint);
+  color: #06110d;
+  background: var(--mint);
+}
+
+.hive-step-list [data-hive-step-state="complete"] span {
+  border-color: rgba(131, 231, 193, 0.5);
+  color: var(--mint);
+  background: rgba(131, 231, 193, 0.08);
 }
 
 .hive-blueprint-status {
-  grid-column: 1 / -1;
   margin: 0;
+  padding-top: 1rem;
   color: var(--mint);
   font-size: 0.75rem;
   font-weight: 820;
@@ -2773,26 +2853,55 @@ h3 {
   text-transform: uppercase;
 }
 
-.hive-blueprint-head h3 {
-  margin: 0;
-  font: 500 clamp(2rem, 4vw, 3.8rem)/0.94 var(--display);
-  letter-spacing: -0.045em;
+.hive-stage-start,
+.hive-stage-card {
+  min-height: 26rem;
+  padding-top: clamp(2rem, 5vw, 4.5rem);
 }
 
-.hive-blueprint-head > p:last-child {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.88rem;
+.hive-stage-start {
+  display: grid;
+  align-content: start;
 }
 
-.hive-blueprint-grid {
+.hive-stage-card[hidden] {
+  display: none;
+}
+
+.hive-stage-card h3:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 0.35rem;
+}
+
+.hive-selected-label {
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.25rem 0 0;
+  padding: 0.38rem 0.65rem;
+  border: 1px solid rgba(131, 231, 193, 0.34);
+  border-radius: 999px;
+  color: var(--mint);
+  background: rgba(131, 231, 193, 0.06);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.hive-result {
+  max-width: 48rem;
+  margin: 1.2rem 0 0;
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  line-height: 1.55;
+}
+
+.hive-answer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-top: 0.75rem;
+  margin-top: 1.35rem;
 }
 
-.hive-blueprint-card {
+.hive-answer-grid article {
   min-width: 0;
   padding: 1rem;
   border: 1px solid var(--line);
@@ -2800,57 +2909,19 @@ h3 {
   background: rgba(18, 14, 24, 0.7);
 }
 
-.hive-blueprint-card h4,
-.hive-kill-switch h4 {
-  margin: 0.25rem 0 0;
-  font-size: clamp(1.15rem, 2vw, 1.5rem);
-}
-
-.hive-blueprint-card > p:last-child,
-.hive-kill-switch > div > p:not(.card-kicker, .hive-pause-status) {
+.hive-answer-grid article > p:last-child {
   margin: 0.65rem 0 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
 }
 
-.hive-blueprint-actions {
-  grid-row: span 2;
+.hive-limit-card {
+  border-color: rgba(238, 138, 122, 0.3) !important;
+  background: rgba(83, 30, 32, 0.16) !important;
 }
 
-.hive-blueprint-actions ol {
-  display: grid;
-  gap: 0.65rem;
-  margin: 0.8rem 0 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: hive-action;
-}
-
-.hive-blueprint-actions li {
-  position: relative;
-  padding: 0.75rem 0.75rem 0.75rem 2.35rem;
-  border-radius: 0.65rem;
-  color: var(--ink-soft);
-  background: rgba(131, 231, 193, 0.055);
-  font-size: 0.76rem;
-  counter-increment: hive-action;
-}
-
-.hive-blueprint-actions li::before {
-  position: absolute;
-  top: 0.72rem;
-  left: 0.75rem;
-  color: var(--mint);
-  font-weight: 850;
-  content: counter(hive-action, decimal-leading-zero);
-}
-
-.hive-blueprint-boundary {
-  border-color: rgba(238, 138, 122, 0.28);
-  background: rgba(83, 30, 32, 0.16);
-}
-
-.hive-kill-switch {
+.hive-pause-demo,
+.hive-finish {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1.25rem;
@@ -2860,6 +2931,19 @@ h3 {
   border: 1px solid rgba(229, 184, 83, 0.34);
   border-radius: 0.85rem;
   background: linear-gradient(120deg, rgba(229, 184, 83, 0.1), rgba(131, 231, 193, 0.05));
+}
+
+.hive-pause-demo h4,
+.hive-finish h4 {
+  margin: 0.3rem 0 0;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+}
+
+.hive-pause-demo > div > p:not(.card-kicker, .hive-pause-status),
+.hive-finish p {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .hive-blueprint-controls {
@@ -2876,7 +2960,43 @@ h3 {
   font-weight: 700;
 }
 
-.hive-planner[data-hive-paused="true"] .hive-blueprint {
+.hive-stage-actions {
+  display: flex;
+  margin-top: 1.25rem;
+  justify-content: flex-end;
+}
+
+.hive-review-list {
+  display: grid;
+  gap: 0;
+  margin: 1.35rem 0 0;
+}
+
+.hive-review-list > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.3fr) minmax(0, 1.7fr);
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.hive-review-list dt {
+  color: var(--mint);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.hive-review-list dd {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.hive-download-status {
+  font-weight: 700;
+}
+
+.hive-planner[data-hive-paused="true"] [data-hive-stage="4"] {
   border-color: rgba(238, 138, 122, 0.48);
 }
 
@@ -2884,6 +3004,19 @@ h3 {
   border-color: rgba(238, 138, 122, 0.58);
   color: #fff0ec;
   background: rgba(154, 56, 55, 0.32);
+}
+
+.hive-noscript h3 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.hive-noscript ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 1rem;
+  margin: 0.8rem 0;
+  padding-left: 1.2rem;
 }
 
 .boundary-note {
@@ -3663,14 +3796,16 @@ h3 {
 
 @media (max-width: 60rem) {
   .hive-planner,
-  .hive-blueprint-head,
-  .hive-blueprint-grid,
-  .hive-kill-switch {
+  .hive-answer-grid,
+  .hive-pause-demo,
+  .hive-finish {
     grid-template-columns: 1fr;
   }
 
-  .hive-blueprint-actions {
-    grid-row: auto;
+  .hive-stage-start,
+  .hive-stage-card {
+    min-height: 0;
+    padding-top: 2rem;
   }
 
   .hive-blueprint-controls {
@@ -4113,6 +4248,19 @@ h3 {
 }
 
 @media (max-width: 30rem) {
+  .hive-step-list li {
+    font-size: 0.75rem;
+  }
+
+  .hive-review-list > div {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .hive-noscript ul {
+    grid-template-columns: 1fr;
+  }
+
   .about-fact-rail {
     grid-template-columns: 1fr;
   }
@@ -4221,7 +4369,11 @@ h3 {
   .contact-panel > *,
   .hive-planner,
   .hive-cell,
-  .hive-blueprint,
+  .hive-choice-stage,
+  .hive-stage-shell,
+  .hive-stage-card,
+  .hive-pause-demo,
+  .hive-finish,
   .button,
   .nav-start,
   .menu-button {

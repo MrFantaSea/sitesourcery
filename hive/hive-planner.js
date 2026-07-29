@@ -119,6 +119,14 @@
     {
       id: "missed-call",
       label: "Missed-call responder",
+      customer: {
+        result: "A missed call becomes a clear follow-up for your team, so the reason for calling is less likely to get lost.",
+        when: "After a call is missed during the hours you choose.",
+        human: "A team member takes over if the caller may need urgent help, the number is unclear, or permission to reply is missing.",
+        permission: "Use only a contact route the caller gave or your business is allowed to use. Keep only the call details needed for follow-up.",
+        limit: "It will not promise emergency help, guess why someone called, record a call, or contact an unapproved number.",
+        pause: "A real pause would stop new replies before they are sent while keeping enough detail for your team to review the missed call."
+      },
       problem: "A legitimate caller reaches the business when nobody can answer, and the reason for the call may be lost.",
       trigger: "An inbound call ends unanswered during an explicitly configured coverage window.",
       allowedActions: [
@@ -134,6 +142,14 @@
     {
       id: "booking",
       label: "Booking guide",
+      customer: {
+        result: "A customer gets the right booking questions, then a person or booking tool confirms the details.",
+        when: "When a customer asks for help booking a service.",
+        human: "A team member takes over for a conflict, special request, access need, or service choice that needs care.",
+        permission: "Ask only for the contact, service, place, and time details needed for the booking request.",
+        limit: "It will not invent an open time, change a calendar, take payment, or say a booking is confirmed without proof.",
+        pause: "A real pause would stop new booking changes and show the customer how to call or email your team."
+      },
       problem: "A person wants an appointment but may not know which service, duration, location, or available time applies.",
       trigger: "A customer starts an approved booking-help path or an eligible inquiry is deliberately routed to booking.",
       allowedActions: [
@@ -149,6 +165,14 @@
     {
       id: "review-request",
       label: "Review request",
+      customer: {
+        result: "An eligible customer gets one fair request for honest feedback after the job is complete.",
+        when: "After the job is complete and the wait time you choose has passed.",
+        human: "A team member takes over for a complaint, refund, unfinished job, or unclear permission to ask.",
+        permission: "Ask only customers who may be contacted for this reason. Give them a clear way to stop more requests.",
+        limit: "It will not make up a review, hide unhappy customers, pressure anyone, or ask for a certain rating.",
+        pause: "A real pause would stop all waiting review requests before they are sent."
+      },
       problem: "Satisfied customers may never be invited to share honest feedback, while careless automation can become spam or manipulate reviews.",
       trigger: "A separately evidenced customer job reaches an eligible completed state and the approved review-request delay expires.",
       allowedActions: [
@@ -164,6 +188,14 @@
     {
       id: "after-hours",
       label: "After-hours information",
+      customer: {
+        result: "A customer gets approved basic information and a clear way to reach a person.",
+        when: "When a customer asks a basic question while your team is closed.",
+        human: "A team member takes over for urgent words, private account questions, or anything without a checked answer.",
+        permission: "Public questions should not need a name. Save contact or chat details only when there is a clear reason.",
+        limit: "It will not give safety, medical, legal, or money advice, make up facts, or pretend a person is replying.",
+        pause: "A real pause would stop automatic answers and show only your checked closed-hours message and contact details."
+      },
       problem: "People need accurate basic information when the business is closed, but an automated answer can easily overstate facts or mishandle urgent situations.",
       trigger: "An approved information request arrives outside the configured staffed window.",
       allowedActions: [
@@ -179,6 +211,14 @@
     {
       id: "follow-up",
       label: "Follow-up",
+      customer: {
+        result: "A promised next step gets a due time and owner, so it is less likely to be forgotten.",
+        when: "At the date and time set for a promised next step.",
+        human: "A team member takes over for a complaint, private topic, old record, unclear person, or decision that needs judgment.",
+        permission: "Keep the original reason for contact, the allowed contact method, and the person responsible for the next step.",
+        limit: "It will not turn one request into marketing, keep contacting someone who said stop, or invent an old conversation.",
+        pause: "A real pause would stop waiting follow-ups before they are sent while keeping the do-not-contact list."
+      },
       problem: "A promised next step can disappear during a busy day, causing a real customer or lead to be forgotten.",
       trigger: "An approved lead, customer, or task record reaches a specifically scheduled follow-up time.",
       allowedActions: [
@@ -194,6 +234,14 @@
     {
       id: "getting-paid",
       label: "Getting-paid reminder",
+      customer: {
+        result: "An overdue invoice gets a clear, respectful reminder and an easy path to ask about a problem.",
+        when: "When the right invoice reaches a due or overdue date.",
+        human: "A team member takes over for a dispute, hardship, part payment, refund, credit, wrong person, or unclear balance.",
+        permission: "Use the right invoice, balance, and customer contact. Keep those details private and check for payments before sending.",
+        limit: "It will not make or change an invoice, charge a card, add a fee, make a threat, or share debt with someone else.",
+        pause: "A real pause would stop every waiting reminder before it is sent while keeping the payment and dispute record clear."
+      },
       problem: "An accepted invoice may become overdue without a clear, respectful reminder and dispute path.",
       trigger: "An exact accepted invoice reaches a configured due or overdue milestone without a reconciled payment, credit, dispute, or pause.",
       allowedActions: [
@@ -254,12 +302,14 @@
     var ui = controls || {};
     return deliverLocalFile(environment, {
       button: ui.button,
-      failureMessage: "The plan download could not start. Nothing was downloaded. Select Download again to retry.",
-      filename: "hive-" + cellId + "-blueprint.json",
+      failureMessage: ui.failureMessage
+        || "The plan download could not start. Nothing was downloaded. Select Download again to retry.",
+      filename: ui.filename || "hive-" + cellId + "-blueprint.json",
       parts: [exportBlueprint(cellId)],
       revokeDelay: 1000,
       status: ui.status,
-      successMessage: "Plan download started. No workflow was activated.",
+      successMessage: ui.successMessage
+        || "Plan download started. No workflow was activated.",
       type: "application/json;charset=utf-8"
     });
   }
@@ -290,39 +340,70 @@
     var controls = Array.prototype.slice.call(
       root.querySelectorAll("[data-hive-cell]")
     );
+    var stages = Array.prototype.slice.call(
+      root.querySelectorAll("[data-hive-stage]")
+    );
+    var indicators = Array.prototype.slice.call(
+      root.querySelectorAll("[data-hive-step-indicator]")
+    );
+    var nextButtons = Array.prototype.slice.call(
+      root.querySelectorAll("[data-hive-next]")
+    );
     var fields = {
+      start: root.querySelector("[data-hive-start]"),
       status: root.querySelector("[data-hive-status]"),
       live: root.querySelector("[data-hive-live]"),
       title: root.querySelector("[data-hive-title]"),
-      problem: root.querySelector("[data-hive-problem]"),
-      trigger: root.querySelector("[data-hive-trigger]"),
-      boundary: root.querySelector("[data-hive-boundary]"),
-      consent: root.querySelector("[data-hive-consent]"),
-      handoff: root.querySelector("[data-hive-handoff]"),
-      killSwitch: root.querySelector("[data-hive-kill-switch]"),
+      result: root.querySelector("[data-hive-result]"),
+      when: root.querySelector("[data-hive-when]"),
+      human: root.querySelector("[data-hive-human]"),
+      permission: root.querySelector("[data-hive-permission]"),
+      limit: root.querySelector("[data-hive-limit]"),
+      pauseCopy: root.querySelector("[data-hive-pause-copy]"),
       pause: root.querySelector("[data-hive-pause]"),
       pauseStatus: root.querySelector("[data-hive-pause-status]"),
-      download: root.querySelector("[data-hive-download]")
+      download: root.querySelector("[data-hive-download]"),
+      downloadStatus: root.querySelector("[data-hive-download-status]"),
+      reviewLabel: root.querySelector("[data-hive-review-label]"),
+      reviewResult: root.querySelector("[data-hive-review-result]"),
+      reviewWhen: root.querySelector("[data-hive-review-when]"),
+      reviewHuman: root.querySelector("[data-hive-review-human]"),
+      reviewLimit: root.querySelector("[data-hive-review-limit]")
     };
-    var actionFields = Array.prototype.slice.call(
-      root.querySelectorAll("[data-hive-action]")
-    );
     var validControls = [];
-    var pausedCells = Object.create(null);
+    var stageByNumber = Object.create(null);
+    var currentStage = 1;
+    var activeCellId = null;
+    var paused = false;
 
     controls.forEach(function (control) {
       var cellId = control.getAttribute("data-hive-cell");
       if (!Object.prototype.hasOwnProperty.call(CELL_BY_ID, cellId)) {
         control.setAttribute("aria-disabled", "true");
+        control.disabled = true;
         return;
       }
       validControls.push(control);
     });
 
+    stages.forEach(function (stage) {
+      var stageNumber = Number(stage.getAttribute("data-hive-stage"));
+      if (
+        Number.isInteger(stageNumber)
+        && stageNumber >= 1
+        && stageNumber <= 5
+        && !stageByNumber[stageNumber]
+      ) {
+        stageByNumber[stageNumber] = stage;
+      }
+    });
+
     var plannerReady = Boolean(
       output
-      && validControls.length > 0
-      && actionFields.length === 3
+      && validControls.length === CELLS.length
+      && Object.keys(stageByNumber).length === 5
+      && indicators.length === 5
+      && nextButtons.length === 3
       && !Object.keys(fields).some(function (key) { return !fields[key]; })
     );
     if (!plannerReady) return false;
@@ -330,38 +411,116 @@
     validControls.forEach(function (control) {
       control.disabled = !plannerReady;
       control.removeAttribute("aria-disabled");
+      control.setAttribute("aria-pressed", "false");
     });
-    fields.pause.disabled = !plannerReady;
-    fields.download.disabled = !plannerReady;
+    fields.pause.disabled = true;
+    fields.download.disabled = true;
+    fields.status.textContent = "Plan only · nothing is connected";
 
-    function renderPause(cellId) {
-      var paused = pausedCells[cellId] === true;
+    function renderPause() {
       root.setAttribute("data-hive-paused", String(paused));
       fields.pause.setAttribute("aria-pressed", String(paused));
-      fields.pause.textContent = paused ? "Resume this cell" : "Pause this cell";
+      fields.pause.textContent = paused ? "End pause demo" : "Try the pause";
       fields.pauseStatus.textContent = paused
-        ? "Cell paused. No next effect would be allowed until a person resumes it."
-        : "This planning cell is open for inspection. Nothing is connected or running.";
+        ? "Pause demo on. A real system would stop before its next action. Nothing is connected here."
+        : "Demo only: nothing is connected or running.";
     }
 
-    function renderBlueprint(cellId) {
-      var blueprint = createBlueprint(cellId);
-      fields.status.textContent = "Planning blueprint · no live effects";
-      fields.title.textContent = blueprint.cell.label;
-      fields.problem.textContent = blueprint.problem;
-      fields.trigger.textContent = blueprint.trigger;
-      fields.boundary.textContent = blueprint.hardBoundary;
-      fields.consent.textContent = blueprint.dataConsentConcern;
-      fields.handoff.textContent = blueprint.fallbackHumanHandoff;
-      fields.killSwitch.textContent = blueprint.killSwitch;
-      actionFields.forEach(function (field, index) {
-        field.textContent = blueprint.allowedActions[index];
+    function renderCustomerPlan(cellId) {
+      var cell = requireCell(cellId);
+      var customer = cell.customer;
+      fields.title.textContent = cell.label;
+      fields.result.textContent = customer.result;
+      fields.when.textContent = customer.when;
+      fields.human.textContent = customer.human;
+      fields.permission.textContent = customer.permission;
+      fields.limit.textContent = customer.limit;
+      fields.pauseCopy.textContent = customer.pause;
+      fields.reviewLabel.textContent = cell.label;
+      fields.reviewResult.textContent = customer.result;
+      fields.reviewWhen.textContent = customer.when;
+      fields.reviewHuman.textContent = customer.human;
+      fields.reviewLimit.textContent = customer.limit;
+      fields.downloadStatus.textContent =
+        "This plan stays in your browser until you download it.";
+      renderPause();
+    }
+
+    function renderProgress() {
+      indicators.forEach(function (indicator) {
+        var step = Number(indicator.getAttribute("data-hive-step-indicator"));
+        var state = step < currentStage
+          ? "complete"
+          : step === currentStage
+            ? "current"
+            : "locked";
+        indicator.setAttribute("data-hive-step-state", state);
+        if (state === "current") {
+          indicator.setAttribute("aria-current", "step");
+        } else {
+          indicator.removeAttribute("aria-current");
+        }
       });
-      renderPause(cellId);
     }
 
-    function select(cellId) {
-      requireCell(cellId);
+    function renderStage(options) {
+      var settings = options || {};
+      root.setAttribute("data-hive-stage-current", String(currentStage));
+      stages.forEach(function (stage) {
+        var stageNumber = Number(stage.getAttribute("data-hive-stage"));
+        var visible = stageNumber === 1 || stageNumber === currentStage;
+        stage.hidden = !visible;
+        stage.inert = !visible;
+        stage.setAttribute("aria-hidden", String(!visible));
+      });
+      fields.start.hidden = currentStage !== 1;
+      fields.start.inert = currentStage !== 1;
+      fields.start.setAttribute("aria-hidden", String(currentStage !== 1));
+      nextButtons.forEach(function (button) {
+        var target = Number(button.getAttribute("data-hive-next"));
+        button.disabled = !activeCellId || target !== currentStage + 1;
+      });
+      fields.pause.disabled = !activeCellId || currentStage !== 4;
+      fields.download.disabled = !activeCellId || currentStage !== 5;
+      renderProgress();
+      if (settings.focus === true && currentStage > 1) {
+        var heading = stageByNumber[currentStage].querySelector(
+          "[data-hive-stage-heading]"
+        );
+        if (heading && typeof heading.focus === "function") heading.focus();
+      }
+      if (settings.announce === true) {
+        fields.live.textContent = "Step " + currentStage + " of 5 is ready.";
+      }
+    }
+
+    function updateHash(cellId) {
+      if (
+        !global.history
+        || typeof global.history.replaceState !== "function"
+        || !global.location
+      ) {
+        return;
+      }
+      try {
+        global.history.replaceState(
+          null,
+          "",
+          String(global.location.pathname || "")
+            + String(global.location.search || "")
+            + "#"
+            + encodeURIComponent(cellId)
+        );
+      } catch (_error) {
+        // The plan still works if a browser blocks history updates.
+      }
+    }
+
+    function select(cellId, options) {
+      var settings = options || {};
+      var cell = requireCell(cellId);
+      activeCellId = cellId;
+      paused = false;
       validControls.forEach(function (control) {
         var selected = control.getAttribute("data-hive-cell") === cellId;
         control.setAttribute("aria-pressed", String(selected));
@@ -370,8 +529,26 @@
       });
       root.setAttribute("data-hive-active", cellId);
       output.setAttribute("data-hive-output-cell", cellId);
-      renderBlueprint(cellId);
-      fields.live.textContent = createBlueprint(cellId).cell.label + " selected.";
+      renderCustomerPlan(cellId);
+      currentStage = 2;
+      renderStage({ focus: settings.focus === true });
+      if (settings.updateHash === true) updateHash(cellId);
+      fields.live.textContent = cell.label + " selected. Step 2 of 5 is ready.";
+    }
+
+    function reset() {
+      activeCellId = null;
+      paused = false;
+      currentStage = 1;
+      validControls.forEach(function (control) {
+        control.setAttribute("aria-pressed", "false");
+        control.removeAttribute("data-hive-selected");
+      });
+      root.removeAttribute("data-hive-active");
+      output.removeAttribute("data-hive-output-cell");
+      renderPause();
+      renderStage();
+      fields.live.textContent = "Choose one business problem to begin.";
     }
 
     validControls.forEach(function (control) {
@@ -381,36 +558,72 @@
         if (event && typeof event.preventDefault === "function") {
           event.preventDefault();
         }
-        select(cellId);
+        select(cellId, { focus: true, updateHash: true });
+      });
+    });
+
+    nextButtons.forEach(function (button) {
+      var target = Number(button.getAttribute("data-hive-next"));
+      button.addEventListener("click", function () {
+        if (!activeCellId || target !== currentStage + 1) return;
+        currentStage = target;
+        renderStage({ focus: true, announce: true });
       });
     });
 
     fields.pause.addEventListener("click", function () {
-      var cellId = root.getAttribute("data-hive-active");
-      requireCell(cellId);
-      pausedCells[cellId] = pausedCells[cellId] !== true;
-      renderPause(cellId);
+      if (!activeCellId || currentStage !== 4) return;
+      paused = !paused;
+      renderPause();
+      fields.live.textContent = paused
+        ? "Pause demo on. Nothing is connected."
+        : "Pause demo ended. Nothing is connected.";
     });
 
     fields.download.addEventListener("click", function () {
       var cellId = root.getAttribute("data-hive-active");
+      if (!cellId || currentStage !== 5) return;
       downloadBlueprint(cellId, global, {
         button: fields.download,
-        status: fields.pauseStatus
+        filename: "hive-" + cellId + "-plan.json",
+        status: fields.downloadStatus,
+        successMessage: "Your plan file is ready. Nothing was sent or connected."
       });
     });
 
-    var preferred = root.getAttribute("data-hive-active");
-    if (global.location && typeof global.location.hash === "string") {
-      var requestedByHash = global.location.hash.replace(/^#/u, "");
-      if (Object.prototype.hasOwnProperty.call(CELL_BY_ID, requestedByHash)) {
-        preferred = requestedByHash;
+    function cellFromHash() {
+      if (!global.location || typeof global.location.hash !== "string") {
+        return null;
       }
+      var requested = global.location.hash.replace(/^#/u, "");
+      try {
+        requested = decodeURIComponent(requested);
+      } catch (_error) {
+        return null;
+      }
+      return Object.prototype.hasOwnProperty.call(CELL_BY_ID, requested)
+        ? requested
+        : null;
     }
-    if (!Object.prototype.hasOwnProperty.call(CELL_BY_ID, preferred)) {
-      preferred = validControls[0].getAttribute("data-hive-cell");
+
+    var preferred = cellFromHash();
+    if (preferred) {
+      select(preferred, { focus: false, updateHash: false });
+    } else {
+      reset();
     }
-    select(preferred);
+
+    if (typeof global.addEventListener === "function") {
+      global.addEventListener("hashchange", function () {
+        var requested = cellFromHash();
+        if (requested) {
+          select(requested, { focus: true, updateHash: false });
+        } else {
+          reset();
+        }
+      });
+    }
+
     root.setAttribute("data-hive-planner-ready", "true");
     return true;
   }

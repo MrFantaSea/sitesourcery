@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Hive — map a bounded business automation | Site Sourcery</title>
-  <meta name="description" content="Explore six planning-only business workflow blueprints with explicit triggers, allowed actions, consent concerns, human handoffs, hard boundaries, and kill switches.">
+  <title>Hive — plan a safer business workflow | Site Sourcery</title>
+  <meta name="description" content="Choose one business problem and build a clear five-step plan for timing, handoff, permissions, limits, and next steps.">
   <meta name="theme-color" content="#08070c">
   <link rel="canonical" href="https://sitesourcery.com/hive/">
   <link rel="preload" as="image" href="/assets/site-sourcery-hive-orchestra-v4.webp" type="image/webp">
@@ -37,114 +37,167 @@
     <section class="hero">
       <div class="site-shell hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">Bounded business-system planner</p>
-          <h1>Map the invisible work before anything moves.</h1>
-          <p class="lede">Hive turns a repetitive business problem into an inspectable blueprint: what starts the workflow, what it may do, what it must never do, when a person takes over, and how the whole cell stops safely.</p>
+          <p class="eyebrow">Business workflow planner</p>
+          <h1>Turn one dropped task into a clear plan.</h1>
+          <p class="lede">Pick the work that keeps slipping. Hive shows the result, when it should happen, who steps in, and how to stop it safely.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#planner">Open the planner</a>
-            <a class="button button-quiet" href="/solutions/#interfaces">Explore custom interfaces</a>
+            <a class="button button-primary" href="#planner">Plan one task</a>
+            <a class="button button-quiet" href="/solutions/#interfaces">See custom tools</a>
           </div>
         </div>
         <figure class="hero-art">
           <img class="hero-image" src="/assets/site-sourcery-hive-orchestra-v4.webp" width="1672" height="941" alt="A luminous mechanical hive chamber where distinct business workflow cells operate around a central control table.">
-          <figcaption>Every cell needs a clear job, a human handoff, and a switch that truly stops it.</figcaption>
+          <figcaption>Every useful system needs one clear job, a person in charge, and a real stop control.</figcaption>
         </figure>
       </div>
     </section>
 
-    <section class="site-shell proof-strip" aria-label="Hive planner boundaries">
-      <div class="proof-item"><strong>Planning only</strong><span>No live integration</span></div>
-      <div class="proof-item"><strong>Fail closed</strong><span>Uncertainty stops the effect</span></div>
-      <div class="proof-item"><strong>Human owned</strong><span>Named handoffs stay visible</span></div>
-      <div class="proof-item"><strong>Kill switched</strong><span>Every cell has a stop path</span></div>
+    <section class="site-shell proof-strip" aria-label="What the Hive planner does">
+      <div class="proof-item"><strong>Plan first</strong><span>Nothing is connected</span></div>
+      <div class="proof-item"><strong>One step at a time</strong><span>See each choice clearly</span></div>
+      <div class="proof-item"><strong>People stay in charge</strong><span>Every handoff has an owner</span></div>
+      <div class="proof-item"><strong>Easy to pause</strong><span>Try the stop control here</span></div>
     </section>
 
     <section class="section" id="planner">
       <div class="site-shell">
         <div class="section-head reveal">
           <div>
-            <p class="eyebrow">Hive blueprint instrument</p>
-            <h2>Choose the work that keeps falling through.</h2>
+            <p class="eyebrow">Five short steps</p>
+            <h2>Choose the work that keeps getting missed.</h2>
           </div>
-          <p>Select a cell to inspect its problem, trigger, allowed actions, hard boundary, data and consent concern, human fallback, and kill switch. The output is a local planning artifact, not an active workflow.</p>
+          <p>Start with one problem. Hive will show a simple result, timing, handoff, rules, and a plan you can save.</p>
         </div>
 
         <noscript>
-          <div class="boundary-note" role="note">
-            The interactive selector needs JavaScript. The missed-call blueprint remains readable below, the six workflow summaries remain available after it, and <a href="/contact/#direct-contact">the studio can map a different workflow with you</a>.
+          <div class="boundary-note hive-noscript" role="note">
+            <h3>Plan with us without JavaScript</h3>
+            <p>The step-by-step tool needs JavaScript, but you can still choose from these six problems:</p>
+            <ul>
+              <li>Missed calls</li>
+              <li>Booking</li>
+              <li>Review requests</li>
+              <li>After-hours questions</li>
+              <li>Follow-up</li>
+              <li>Getting paid</li>
+            </ul>
+            <p>Nothing is connected from this page. <a href="/contact/#direct-contact">Ask for a written scope and price</a> and tell us which problem fits.</p>
           </div>
         </noscript>
 
-        <div class="hive-planner reveal" data-hive-planner data-hive-active="missed-call">
-          <div class="hive-controls" role="group" aria-label="Hive workflow cells">
-            <button class="hive-cell" id="missed-call" type="button" data-hive-cell="missed-call" disabled>Missed-call responder</button>
-            <button class="hive-cell" id="booking" type="button" data-hive-cell="booking" disabled>Booking guide</button>
-            <button class="hive-cell" id="review-request" type="button" data-hive-cell="review-request" disabled>Review request</button>
-            <button class="hive-cell" id="after-hours" type="button" data-hive-cell="after-hours" disabled>After-hours information</button>
-            <button class="hive-cell" id="follow-up" type="button" data-hive-cell="follow-up" disabled>Follow-up</button>
-            <button class="hive-cell" id="getting-paid" type="button" data-hive-cell="getting-paid" disabled>Getting-paid reminder</button>
-          </div>
-          <p class="visually-hidden" data-hive-live role="status" aria-live="polite" aria-atomic="true">Missed-call responder selected.</p>
-          <section class="hive-blueprint" data-hive-output aria-labelledby="hive-blueprint-title">
-            <header class="hive-blueprint-head">
-              <p class="hive-blueprint-status" data-hive-status>Planning blueprint · no live effects</p>
-              <h3 id="hive-blueprint-title" data-hive-title>Missed-call responder</h3>
-              <p data-hive-problem>A legitimate caller reaches the business when nobody can answer, and the reason for the call may be lost.</p>
-            </header>
+        <div class="hive-planner reveal" data-hive-planner data-hive-stage-current="1">
+          <section class="hive-choice-stage" data-hive-stage="1" aria-labelledby="hive-choose-title">
+            <p class="hive-stage-number">Step 1 of 5</p>
+            <h3 id="hive-choose-title">Choose one business problem</h3>
+            <p>Pick the one that costs the most time or trust today.</p>
+            <div class="hive-controls" role="group" aria-label="Business problems">
+              <button class="hive-cell" id="missed-call" type="button" data-hive-cell="missed-call" disabled>Missed calls</button>
+              <button class="hive-cell" id="booking" type="button" data-hive-cell="booking" disabled>Booking</button>
+              <button class="hive-cell" id="review-request" type="button" data-hive-cell="review-request" disabled>Review requests</button>
+              <button class="hive-cell" id="after-hours" type="button" data-hive-cell="after-hours" disabled>After-hours questions</button>
+              <button class="hive-cell" id="follow-up" type="button" data-hive-cell="follow-up" disabled>Follow-up</button>
+              <button class="hive-cell" id="getting-paid" type="button" data-hive-cell="getting-paid" disabled>Getting paid</button>
+            </div>
+          </section>
 
-            <div class="hive-blueprint-grid">
-              <article class="hive-blueprint-card hive-blueprint-trigger">
-                <p class="card-kicker">01 · Starting signal</p>
-                <h4>Trigger</h4>
-                <p data-hive-trigger>An inbound call ends unanswered during an explicitly configured coverage window.</p>
-              </article>
+          <div class="hive-stage-shell" data-hive-output>
+            <ol class="hive-step-list">
+              <li data-hive-step-indicator="1" data-hive-step-state="current" aria-current="step"><span>1</span>Choose</li>
+              <li data-hive-step-indicator="2" data-hive-step-state="locked"><span>2</span>Result</li>
+              <li data-hive-step-indicator="3" data-hive-step-state="locked"><span>3</span>Timing</li>
+              <li data-hive-step-indicator="4" data-hive-step-state="locked"><span>4</span>Rules</li>
+              <li data-hive-step-indicator="5" data-hive-step-state="locked"><span>5</span>Review</li>
+            </ol>
+            <p class="visually-hidden" data-hive-live role="status" aria-live="polite" aria-atomic="true">Choose one business problem to begin.</p>
+            <p class="hive-blueprint-status" data-hive-status>Plan only · nothing is connected</p>
 
-              <article class="hive-blueprint-card hive-blueprint-actions">
-                <p class="card-kicker">02 · Permitted response</p>
-                <h4>Allowed actions</h4>
-                <ol>
-                  <li data-hive-action>Classify the unanswered-call event against approved business hours and routing rules.</li>
-                  <li data-hive-action>Prepare one approved acknowledgement for an eligible, consented contact route.</li>
-                  <li data-hive-action>Create a bounded follow-up item with the original event identity and no invented urgency.</li>
-                </ol>
-              </article>
-
-              <article class="hive-blueprint-card">
-                <p class="card-kicker">03 · Data + permission</p>
-                <h4>Consent check</h4>
-                <p data-hive-consent>A caller number and call metadata are personal data. Purpose, channel permission, retention, suppression, and any provider role must be explicit before an outbound effect.</p>
-              </article>
-
-              <article class="hive-blueprint-card">
-                <p class="card-kicker">04 · Human ownership</p>
-                <h4>Handoff</h4>
-                <p data-hive-handoff>If consent, urgency, identity, routing, or the approved response is uncertain, prepare a human-review item and make no outbound contact.</p>
-              </article>
-
-              <article class="hive-blueprint-card hive-blueprint-boundary">
-                <p class="card-kicker">05 · Hard stop</p>
-                <h4>Never allowed</h4>
-                <p data-hive-boundary>Never claim an emergency response, diagnose intent, record or transcribe a call without a separate lawful basis, promise availability, or contact a person through an unapproved channel.</p>
-              </article>
+            <div class="hive-stage-start" data-hive-start>
+              <h3>Start with one clear problem.</h3>
+              <p>We will keep the next steps hidden until you choose. You can change your choice at any time.</p>
             </div>
 
-            <aside class="hive-kill-switch">
-              <div>
-                <p class="card-kicker">06 · Kill switch</p>
-                <h4>Stop before the next effect.</h4>
-                <p data-hive-kill-switch>A cell-level pause blocks every new outbound effect while preserving the minimum event evidence needed for review and duplicate suppression.</p>
-                <p class="hive-pause-status" data-hive-pause-status>This planning cell is open for inspection. Nothing is connected or running.</p>
+            <section class="hive-stage-card" data-hive-stage="2" aria-labelledby="hive-result-title" aria-hidden="true" hidden inert>
+              <p class="hive-stage-number">Step 2 of 5</p>
+              <h3 id="hive-result-title" data-hive-stage-heading tabindex="-1">See the simple result</h3>
+              <p class="hive-selected-label" data-hive-title></p>
+              <p class="hive-result" data-hive-result></p>
+              <div class="hive-stage-actions">
+                <button class="button button-primary" type="button" data-hive-next="3" disabled>Next: timing and handoff</button>
               </div>
-              <div class="hive-blueprint-controls">
-                <button class="button hive-pause-button" type="button" data-hive-pause aria-pressed="false" disabled>Pause this cell</button>
-                <button class="button button-quiet" type="button" data-hive-download disabled>Download this plan</button>
+            </section>
+
+            <section class="hive-stage-card" data-hive-stage="3" aria-labelledby="hive-timing-title" aria-hidden="true" hidden inert>
+              <p class="hive-stage-number">Step 3 of 5</p>
+              <h3 id="hive-timing-title" data-hive-stage-heading tabindex="-1">Set the timing and handoff</h3>
+              <div class="hive-answer-grid">
+                <article>
+                  <p class="card-kicker">When it should happen</p>
+                  <p data-hive-when></p>
+                </article>
+                <article>
+                  <p class="card-kicker">Who takes over</p>
+                  <p data-hive-human></p>
+                </article>
               </div>
-            </aside>
-          </section>
+              <div class="hive-stage-actions">
+                <button class="button button-primary" type="button" data-hive-next="4" disabled>Next: permissions and limits</button>
+              </div>
+            </section>
+
+            <section class="hive-stage-card" data-hive-stage="4" aria-labelledby="hive-rules-title" aria-hidden="true" hidden inert>
+              <p class="hive-stage-number">Step 4 of 5</p>
+              <h3 id="hive-rules-title" data-hive-stage-heading tabindex="-1">Keep people in control</h3>
+              <div class="hive-answer-grid">
+                <article>
+                  <p class="card-kicker">Permission needed</p>
+                  <p data-hive-permission></p>
+                </article>
+                <article class="hive-limit-card">
+                  <p class="card-kicker">What it will never do</p>
+                  <p data-hive-limit></p>
+                </article>
+              </div>
+              <aside class="hive-pause-demo">
+                <div>
+                  <p class="card-kicker">Try the stop control</p>
+                  <h4>See how a pause should feel.</h4>
+                  <p data-hive-pause-copy></p>
+                  <p class="hive-pause-status" data-hive-pause-status>Demo only: nothing is connected or running.</p>
+                </div>
+                <button class="button hive-pause-button" type="button" data-hive-pause aria-pressed="false" disabled>Try the pause</button>
+              </aside>
+              <div class="hive-stage-actions">
+                <button class="button button-primary" type="button" data-hive-next="5" disabled>Next: review my plan</button>
+              </div>
+            </section>
+
+            <section class="hive-stage-card" data-hive-stage="5" aria-labelledby="hive-review-title" aria-hidden="true" hidden inert>
+              <p class="hive-stage-number">Step 5 of 5</p>
+              <h3 id="hive-review-title" data-hive-stage-heading tabindex="-1">Review your plan</h3>
+              <dl class="hive-review-list">
+                <div><dt>Problem</dt><dd data-hive-review-label></dd></div>
+                <div><dt>Result</dt><dd data-hive-review-result></dd></div>
+                <div><dt>When</dt><dd data-hive-review-when></dd></div>
+                <div><dt>Handoff</dt><dd data-hive-review-human></dd></div>
+                <div><dt>Limit</dt><dd data-hive-review-limit></dd></div>
+              </dl>
+              <div class="hive-finish">
+                <div>
+                  <h4>Ready for a real quote?</h4>
+                  <p>A written scope and price come before anything is connected.</p>
+                  <p class="hive-download-status" data-hive-download-status>This plan stays in your browser until you download it.</p>
+                </div>
+                <div class="hive-blueprint-controls">
+                  <button class="button button-quiet" type="button" data-hive-download disabled>Download my plan</button>
+                  <a class="button button-primary" href="/contact/#direct-contact">Request written scope and price</a>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
         <div class="boundary-note reveal">
-          This planner performs no network request, stores no business or customer data, sends no message, changes no calendar, touches no invoice, and connects to no outside system. It produces an inspectable plan so unsafe assumptions are visible before implementation is considered.
+          This planner does not send a message, change a calendar, touch an invoice, save customer data, or connect to another tool. The download is made in your browser.
         </div>
       </div>
     </section>
@@ -153,26 +206,26 @@
       <div class="site-shell">
         <div class="section-head reveal">
           <div>
-            <p class="eyebrow">Six recurring pressure points</p>
-            <h2>Start where the business loses attention.</h2>
+            <p class="eyebrow">Six common trouble spots</p>
+            <h2>Start where your team loses time.</h2>
           </div>
-          <p>The useful question is not “What can automation do?” It is “Which exact event deserves a bounded response, with whose permission, under whose control?”</p>
+          <p>Choose one job that repeats often, has a clear start, and needs a person when something is unclear.</p>
         </div>
         <div class="card-grid">
           <article class="card reveal">
             <p class="card-kicker">Calls and questions</p>
             <h3>Missed calls · after hours</h3>
-            <p>Acknowledge only eligible events and answer only from approved facts. Urgency, uncertainty, sensitive topics, or missing consent stop the cell and route to a person.</p>
+            <p>Give a missed caller a clear next step. Share only approved facts after hours. Urgent or unclear requests go to a person.</p>
           </article>
           <article class="card reveal">
             <p class="card-kicker">Appointments and trust</p>
             <h3>Booking · reviews</h3>
-            <p>Keep availability provisional until the exact provider receipt exists. Ask neutrally for honest feedback without screening sentiment or creating pressure.</p>
+            <p>Guide a customer toward the right booking. Ask fairly for honest feedback without pressure or special treatment.</p>
           </article>
           <article class="card reveal">
             <p class="card-kicker">Promises and payment</p>
             <h3>Follow-up · getting paid</h3>
-            <p>Preserve purpose, permission, exact record identity, disputes, suppression, and a clear human owner. No cell creates a charge, fee, threat, or new marketing purpose.</p>
+            <p>Keep a promised follow-up from being lost. Send a respectful invoice reminder without making a charge, adding a fee, or ignoring a dispute.</p>
           </article>
         </div>
       </div>
@@ -181,12 +234,12 @@
     <section class="section">
       <div class="site-shell">
         <div class="quote-panel reveal">
-          <p class="eyebrow">Architecture before activity</p>
-          <h2>A serious system begins with the stop button.</h2>
-          <p>The Hive planner gives you the questions a responsible build must answer. A production system would require a separately scoped architecture, reviewed providers, tested permissions, monitoring, recovery, and explicit build authority.</p>
+          <p class="eyebrow">Plan first. Connect later.</p>
+          <h2>A good system begins with one clear job.</h2>
+          <p>A written scope and price come before anything is connected. That written plan will name the tools, setup, checks, support, and stop path.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#planner">Inspect a Hive cell</a>
-            <a class="button" href="/start/">Choose your starting path</a>
+            <a class="button button-primary" href="#planner">Plan one task</a>
+            <a class="button" href="/start/">Choose another starting path</a>
           </div>
         </div>
       </div>

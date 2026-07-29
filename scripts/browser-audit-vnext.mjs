@@ -1634,21 +1634,34 @@ const AUDIT_EXPRESSION = `(() => {
   }
   const hive = document.querySelector("[data-hive-planner]");
   if (hive) {
-    const blueprint = hive.querySelector("[data-hive-output]");
-    const title = hive.querySelector("[data-hive-title]");
+    const output = hive.querySelector("[data-hive-output]");
+    const stageShell = hive.querySelector(".hive-stage-shell");
+    const stages = Array.from(hive.querySelectorAll("[data-hive-stage]"));
     const live = hive.querySelector("[data-hive-live]");
     result.hiveReady = {
       enhanced: hive.getAttribute("data-hive-planner-ready"),
       controls: hive.querySelectorAll("[data-hive-cell]").length,
-      outputLength: (blueprint?.textContent || "").length,
+      choicesEnabled: Array.from(hive.querySelectorAll("[data-hive-cell]"))
+        .filter((control) => !control.disabled).length,
+      currentStage: hive.getAttribute("data-hive-stage-current"),
+      downloadDisabled: hive.querySelector("[data-hive-download]")?.disabled ?? null,
+      inertLaterStages: stages.slice(1).filter((stage) => stage.inert).length,
+      nextButtons: hive.querySelectorAll("[data-hive-next]").length,
+      nextButtonsDisabled: Array.from(hive.querySelectorAll("[data-hive-next]"))
+        .filter((button) => button.disabled).length,
+      outputLength: (output?.textContent || "").length,
+      pauseDisabled: hive.querySelector("[data-hive-pause]")?.disabled ?? null,
       plannerColumns: getComputedStyle(hive).gridTemplateColumns.split(/\\s+/u).filter(Boolean).length,
-      blueprintColumns: blueprint
-        ? getComputedStyle(blueprint.querySelector(".hive-blueprint-grid")).gridTemplateColumns
+      answerColumns: hive.querySelector(".hive-answer-grid")
+        ? getComputedStyle(hive.querySelector(".hive-answer-grid")).gridTemplateColumns
           .split(/\\s+/u).filter(Boolean).length
         : 0,
-      titleWidth: title ? Math.round(title.getBoundingClientRect().width) : 0,
+      progressStates: Array.from(hive.querySelectorAll("[data-hive-step-indicator]"))
+        .map((item) => item.getAttribute("data-hive-step-state")),
+      stageShellWidth: stageShell ? Math.round(stageShell.getBoundingClientRect().width) : 0,
+      visibleStages: stages.filter((stage) => !stage.hidden).length,
       plannerHeight: Math.round(hive.getBoundingClientRect().height),
-      outputLive: blueprint?.hasAttribute("aria-live") || false,
+      outputLive: output?.hasAttribute("aria-live") || false,
       conciseLive: live
         ? {
           role: live.getAttribute("role"),
@@ -1795,7 +1808,16 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
       disabledOperationControls: Array.from(
         hive.querySelectorAll("[data-hive-pause], [data-hive-download]")
       ).filter((control) => control.disabled).length,
-      fallbackVisible: visible(hiveFallback)
+      fallbackChoices: hiveFallback
+        ? hiveFallback.querySelectorAll("li").length
+        : 0,
+      fallbackVisible: visible(hiveFallback),
+      laterStagesHidden: Array.from(hive.querySelectorAll("[data-hive-stage]"))
+        .slice(1)
+        .filter((stage) => stage.hidden).length,
+      laterStagesInert: Array.from(hive.querySelectorAll("[data-hive-stage]"))
+        .slice(1)
+        .filter((stage) => stage.inert).length
     } : null,
     spark: sparkMaker || sparkFallback ? {
       fallbackVisible: visible(sparkFallback),
@@ -2939,22 +2961,52 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
 
 const HIVE_EXERCISE_EXPRESSION = `(() => {
   const root = document.querySelector("[data-hive-planner]");
-  return Array.from(root.querySelectorAll("[data-hive-cell]")).map((button) => {
+  const stages = Array.from(root.querySelectorAll("[data-hive-stage]"));
+  const stageState = () => ({
+    current: root.getAttribute("data-hive-stage-current"),
+    hidden: stages.filter((stage) => stage.hidden)
+      .map((stage) => Number(stage.getAttribute("data-hive-stage"))),
+    inert: stages.filter((stage) => stage.inert)
+      .map((stage) => Number(stage.getAttribute("data-hive-stage"))),
+    visible: stages.filter((stage) => !stage.hidden)
+      .map((stage) => Number(stage.getAttribute("data-hive-stage")))
+  });
+  const nextEnabled = () => Array.from(root.querySelectorAll("[data-hive-next]"))
+    .filter((button) => !button.disabled).length;
+  return Array.from(root.querySelectorAll("[data-hive-cell]")).map((button, index) => {
+    const priorStage = root.getAttribute("data-hive-stage-current");
     button.click();
     const output = root.querySelector("[data-hive-output]");
     const cellId = button.getAttribute("data-hive-cell");
     const blueprint = window.SiteSourceryHivePlanner.createBlueprint(cellId);
-    const actions = Array.from(root.querySelectorAll("[data-hive-action]"));
+    const cell = window.SiteSourceryHivePlanner.cells.find((entry) => entry.id === cellId);
+    const afterChoice = stageState();
+    const choiceFocus = document.activeElement === root.querySelector("#hive-result-title");
+    const choiceNextEnabled = nextEnabled();
+    root.querySelector('[data-hive-next="3"]').click();
+    const afterTiming = stageState();
+    const timingFocus = document.activeElement === root.querySelector("#hive-timing-title");
+    const timingNextEnabled = nextEnabled();
+    root.querySelector('[data-hive-next="4"]').click();
+    const afterRules = stageState();
+    const rulesFocus = document.activeElement === root.querySelector("#hive-rules-title");
+    const rulesNextEnabled = nextEnabled();
     const pause = root.querySelector("[data-hive-pause]");
     pause.click();
     const paused = {
       root: root.getAttribute("data-hive-paused"),
       pressed: pause.getAttribute("aria-pressed"),
-      label: pause.textContent
+      label: pause.textContent,
+      status: root.querySelector("[data-hive-pause-status]").textContent
     };
     pause.click();
+    root.querySelector('[data-hive-next="5"]').click();
+    const afterReview = stageState();
+    const reviewFocus = document.activeElement === root.querySelector("#hive-review-title");
+    const visibleCopy = document.body.innerText.replace(/\\s+/gu, " ").trim();
     return {
       requested: cellId,
+      priorStage,
       active: root.getAttribute("data-hive-active"),
       outputCell: output.getAttribute("data-hive-output-cell"),
       selected: root.querySelectorAll('[data-hive-selected="true"]').length,
@@ -2962,11 +3014,48 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
       status: blueprint.status,
       liveIntegration: blueprint.liveIntegration,
       titleMatches: root.querySelector("[data-hive-title]").textContent === blueprint.cell.label,
-      triggerMatches: root.querySelector("[data-hive-trigger]").textContent === blueprint.trigger,
-      boundaryMatches: root.querySelector("[data-hive-boundary]").textContent === blueprint.hardBoundary,
-      actionsMatch: actions.length === blueprint.allowedActions.length
-        && actions.every((item, index) => item.textContent === blueprint.allowedActions[index]),
-      downloadPresent: Boolean(root.querySelector("[data-hive-download]")),
+      machineFieldsComplete: blueprint.allowedActions.length === 3
+        && typeof blueprint.trigger === "string"
+        && typeof blueprint.hardBoundary === "string"
+        && typeof blueprint.dataConsentConcern === "string"
+        && typeof blueprint.fallbackHumanHandoff === "string"
+        && typeof blueprint.killSwitch === "string",
+      customerCopyMatches:
+        root.querySelector("[data-hive-result]").textContent === cell.customer.result
+        && root.querySelector("[data-hive-when]").textContent === cell.customer.when
+        && root.querySelector("[data-hive-human]").textContent === cell.customer.human
+        && root.querySelector("[data-hive-permission]").textContent === cell.customer.permission
+        && root.querySelector("[data-hive-limit]").textContent === cell.customer.limit,
+      reviewMatches:
+        root.querySelector("[data-hive-review-label]").textContent === cell.label
+        && root.querySelector("[data-hive-review-result]").textContent === cell.customer.result
+        && root.querySelector("[data-hive-review-when]").textContent === cell.customer.when
+        && root.querySelector("[data-hive-review-human]").textContent === cell.customer.human
+        && root.querySelector("[data-hive-review-limit]").textContent === cell.customer.limit,
+      afterChoice,
+      afterTiming,
+      afterRules,
+      afterReview,
+      choiceFocus,
+      timingFocus,
+      rulesFocus,
+      reviewFocus,
+      choiceNextEnabled,
+      timingNextEnabled,
+      rulesNextEnabled,
+      reviewNextEnabled: nextEnabled(),
+      resetLaterProgress: (index === 0 || priorStage === "5")
+        && afterChoice.current === "2"
+        && afterChoice.hidden.includes(3)
+        && afterChoice.hidden.includes(4)
+        && afterChoice.hidden.includes(5),
+      hashMatches: location.hash === "#" + cellId,
+      downloadReady: root.querySelector("[data-hive-download]").disabled === false,
+      writtenScopeLink:
+        root.querySelector('a[href="/contact/#direct-contact"]')?.textContent.trim()
+          === "Request written scope and price",
+      plainVisibleCopy: !/\\b(?:bounded|artifact|authority|effects?|suppression)\\b|provider mutation/iu
+        .test(visibleCopy),
       paused,
       resumed: root.getAttribute("data-hive-paused") === "false"
         && pause.getAttribute("aria-pressed") === "false"
@@ -3984,6 +4073,16 @@ export async function auditBrowser({
           if (
             result.hiveReady.enhanced !== "true"
             || result.hiveReady.controls !== 6
+            || result.hiveReady.choicesEnabled !== 6
+            || result.hiveReady.currentStage !== "1"
+            || result.hiveReady.visibleStages !== 1
+            || result.hiveReady.inertLaterStages !== 4
+            || result.hiveReady.nextButtons !== 3
+            || result.hiveReady.nextButtonsDisabled !== 3
+            || result.hiveReady.pauseDisabled !== true
+            || result.hiveReady.downloadDisabled !== true
+            || result.hiveReady.progressStates.join(",")
+              !== "current,locked,locked,locked,locked"
             || result.hiveReady.outputLength < 100
           ) {
             errors.push(`${viewport.label} ${route}: Hive planner did not fully enhance`);
@@ -4004,8 +4103,8 @@ export async function auditBrowser({
             viewport.componentRoute === "/hive/"
             && (
               result.hiveReady.plannerColumns !== 1
-              || result.hiveReady.blueprintColumns !== 1
-              || result.hiveReady.titleWidth < 200
+              || result.hiveReady.answerColumns !== 1
+              || result.hiveReady.stageShellWidth < 200
               || result.hiveReady.plannerHeight > 4000
             )
           ) {
@@ -4031,13 +4130,36 @@ export async function auditBrowser({
               || cell.status !== "planning_only"
               || cell.liveIntegration !== false
               || !cell.titleMatches
-              || !cell.triggerMatches
-              || !cell.boundaryMatches
-              || !cell.actionsMatch
-              || !cell.downloadPresent
+              || !cell.machineFieldsComplete
+              || !cell.customerCopyMatches
+              || !cell.reviewMatches
+              || cell.afterChoice.current !== "2"
+              || cell.afterChoice.visible.join(",") !== "1,2"
+              || cell.afterChoice.inert.join(",") !== "3,4,5"
+              || cell.afterTiming.current !== "3"
+              || cell.afterTiming.visible.join(",") !== "1,3"
+              || cell.afterRules.current !== "4"
+              || cell.afterRules.visible.join(",") !== "1,4"
+              || cell.afterReview.current !== "5"
+              || cell.afterReview.visible.join(",") !== "1,5"
+              || !cell.choiceFocus
+              || !cell.timingFocus
+              || !cell.rulesFocus
+              || !cell.reviewFocus
+              || cell.choiceNextEnabled !== 1
+              || cell.timingNextEnabled !== 1
+              || cell.rulesNextEnabled !== 1
+              || cell.reviewNextEnabled !== 0
+              || !cell.resetLaterProgress
+              || !cell.hashMatches
+              || !cell.downloadReady
+              || !cell.writtenScopeLink
+              || !cell.plainVisibleCopy
               || cell.paused.root !== "true"
               || cell.paused.pressed !== "true"
-              || cell.paused.label !== "Resume this cell"
+              || cell.paused.label !== "End pause demo"
+              || !cell.paused.status.includes("Pause demo on")
+              || !cell.paused.status.includes("Nothing is connected")
               || !cell.resumed
             )
           ) {
@@ -4709,8 +4831,11 @@ export async function auditBrowser({
             && (
               !result.hive
               || !result.hive.fallbackVisible
+              || result.hive.fallbackChoices !== 6
               || result.hive.disabledCells !== 6
               || result.hive.disabledOperationControls !== 2
+              || result.hive.laterStagesHidden !== 4
+              || result.hive.laterStagesInert !== 4
             )
           ) {
             errors.push(
