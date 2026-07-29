@@ -139,6 +139,13 @@ test("domain choice, existing build tiers, and Host care cannot invent an Abraca
 test("in-app domain procurement is customer-owned, disclosed, ordered, and fail-closed", () => {
   const domain = control.domainProcurementBoundary;
 
+  assert.equal(
+    domain.governanceConstitutionId,
+    "SS-PRODUCT-CONSTITUTION-2026-07-25-V1",
+  );
+  assert.equal(domain.governanceConstitutionState, "HOLD");
+  assert.equal(domain.governanceCommercialAuthorityInherited, false);
+  assert.equal(domain.governanceDomainRoleRule, "SR-04-DOMAIN-ROLE");
   assert.equal(domain.storefrontAndMerchant, "site_sourcery");
   assert.equal(domain.underlyingRegistrarCandidate, "spaceship");
   assert.equal(domain.underlyingRegistrarMustBeDisclosed, true);
@@ -171,4 +178,34 @@ test("in-app domain procurement is customer-owned, disclosed, ordered, and fail-
     "never_hide_the_underlying_registrar",
     "never_make_site_ownership_depend_on_domain_choice",
   ]);
+});
+
+test("Abracadabra variant, tenure, and managed-domain axes never collapse into one SKU", () => {
+  const axes = control.productAxes;
+
+  assert.equal(
+    axes.abracadabraGovernanceSubject,
+    "ss.subject.proposed-ss-13.v1",
+  );
+  assert.equal(axes.abracadabraProposedLabel, "SS-13");
+  assert.deepEqual(axes.abracadabraVariants, [
+    "business",
+    "presence",
+    "spark",
+  ]);
+  assert.equal(axes.tenureIsASeparateAxis, true);
+  assert.equal(axes.tenureModesAreAbracadabraVariants, false);
+  assert.equal(
+    axes.domainGovernanceSubject,
+    "ss.subject.proposed-ss-15.v1",
+  );
+  assert.equal(axes.domainProposedLabel, "SS-15");
+  assert.deepEqual(axes.domainVariants, [
+    "registration",
+    "renewal",
+    "transfer",
+  ]);
+  assert.equal(axes.domainIsASeparateCommercialUnit, true);
+  assert.equal(axes.singleCustomerCheckoutMayContainSeparateUnits, true);
+  assert.equal(axes.separateUnitsMustRetainSeparatePriceTermsAndReceipts, true);
 });

@@ -100,7 +100,32 @@
     "licensedHostnamePattern": "label.sitesourcery.me",
     "retentionAndExportDays": 90
   },
+  "productAxes": {
+    "abracadabraGovernanceSubject": "ss.subject.proposed-ss-13.v1",
+    "abracadabraProposedLabel": "SS-13",
+    "abracadabraVariants": [
+      "business",
+      "presence",
+      "spark"
+    ],
+    "tenureIsASeparateAxis": true,
+    "tenureModesAreAbracadabraVariants": false,
+    "domainGovernanceSubject": "ss.subject.proposed-ss-15.v1",
+    "domainProposedLabel": "SS-15",
+    "domainVariants": [
+      "registration",
+      "renewal",
+      "transfer"
+    ],
+    "domainIsASeparateCommercialUnit": true,
+    "singleCustomerCheckoutMayContainSeparateUnits": true,
+    "separateUnitsMustRetainSeparatePriceTermsAndReceipts": true
+  },
   "domainProcurementBoundary": {
+    "governanceConstitutionId": "SS-PRODUCT-CONSTITUTION-2026-07-25-V1",
+    "governanceConstitutionState": "HOLD",
+    "governanceCommercialAuthorityInherited": false,
+    "governanceDomainRoleRule": "SR-04-DOMAIN-ROLE",
     "storefrontAndMerchant": "site_sourcery",
     "underlyingRegistrarCandidate": "spaceship",
     "underlyingRegistrarMustBeDisclosed": true,
