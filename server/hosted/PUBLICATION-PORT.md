@@ -26,3 +26,17 @@ rollback then use the self-host control store's compare-and-set revisions. A
 target hostname is held while its TLS and release binding are changed, so an
 interrupted update fails dark. Unpublish is intentionally still available
 during an emergency publication hold.
+
+The hosted service never calls the publication runtime from inside the
+transaction that stages a release request. It first commits the exact request,
+loads the committed proof in a read-only transaction, asks the private runtime
+to publish, and then records the bound provider receipt and completes the
+release in a separate serializable transaction. Customer success is returned
+only after that final transaction commits.
+
+If finalization or its commit fails after runtime activation, the service
+immediately calls the private unpublish operation before returning an error.
+That leaves the hostname dark. Replaying the same customer command reuses the
+committed staged request, the runtime's release-request idempotency identity,
+and the exact receipt tuple, so it can safely reconcile without creating a
+second release request or incrementing the project revision twice.

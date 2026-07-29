@@ -591,6 +591,13 @@ export function createSelfHostPublicationPort({
 
   return Object.freeze({
     kind: "private-in-process-selfhost",
+    async readiness() {
+      return {
+        ready: true,
+        kind: "private-in-process-selfhost",
+        held: await held()
+      };
+    },
     request: publish,
     rollback,
     unpublish

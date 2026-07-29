@@ -1,0 +1,281 @@
+#!/usr/bin/env node
+import "../assert-runtime.mjs";
+
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  createNodeHandler as createTenantNodeHandler,
+  SelfHostRuntime
+} from "../../selfhost/src/index.mjs";
+import { createHostedApi } from "../http.mjs";
+import { createPrivateExportObjectStore } from "../export-object-store.mjs";
+import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
+import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
+import { createCanonicalPostgresService } from "../postgres-service.mjs";
+import {
+  createAesGcmContactVault,
+  createConfiguredRecoveryMailPort,
+  createJsonCatalogPort
+} from "../production-ports.mjs";
+import {
+  createCanonicalPostgresAuthority,
+  createPostgresPool
+} from "../repository-postgres.mjs";
+import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
+import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
+
+const moduleRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
+const repositoryRoot = path.resolve(moduleRoot, "../..");
+const host = process.env.SITESOURCERY_HOSTED_HOST ?? "127.0.0.1";
+const apiPort = Number(
+  process.env.SITESOURCERY_HOSTED_PORT ?? "8788"
+);
+const tenantPort = Number(
+  process.env.SITESOURCERY_TENANT_PORT ?? "8080"
+);
+const dataRoot = path.resolve(
+  process.env.SITESOURCERY_DATA_ROOT ??
+    "/var/lib/sitesourcery"
+);
+const licensedBaseDomain =
+  process.env.SITESOURCERY_LICENSED_BASE_DOMAIN ??
+  "sites.sitesourcery.me";
+const approvalPath =
+  process.env.SITESOURCERY_PUBLICATION_APPROVAL_PATH ??
+  "/etc/sitesourcery/PUBLICATION_APPROVED";
+const holdPaths = [
+  path.join(moduleRoot, "PUBLICATION_HOLD"),
+  path.join(
+    repositoryRoot,
+    "server",
+    "selfhost",
+    "PUBLICATION_HOLD"
+  ),
+  "/etc/sitesourcery/PUBLICATION_HOLD"
+];
+
+function requiredEnvironment(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${name} is required.`);
+  }
+  return value;
+}
+
+function secret(name, minimumBytes = 32) {
+  const value = Buffer.from(
+    requiredEnvironment(name),
+    "base64"
+  );
+  if (value.byteLength < minimumBytes) {
+    throw new Error(
+      `${name} must decode to at least ${minimumBytes} bytes.`
+    );
+  }
+  return value;
+}
+
+if (host !== "127.0.0.1") {
+  throw new Error(
+    "Hosted and tenant services must bind to loopback behind the reviewed reverse proxy."
+  );
+}
+for (const [name, value] of [
+  ["SITESOURCERY_HOSTED_PORT", apiPort],
+  ["SITESOURCERY_TENANT_PORT", tenantPort]
+]) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 1024 ||
+    value > 65535
+  ) {
+    throw new Error(`${name} must be an unprivileged TCP port.`);
+  }
+}
+if (apiPort === tenantPort) {
+  throw new Error(
+    "Hosted API and tenant serving ports must be different."
+  );
+}
+
+const pool = createPostgresPool({
+  ssl:
+    process.env.SITESOURCERY_DATABASE_SSL === "require"
+      ? { rejectUnauthorized: true }
+      : undefined
+});
+const authority = createCanonicalPostgresAuthority({ pool });
+let apiServer = null;
+let tenantServer = null;
+let shutdownPromise = null;
+
+function closeServer(server) {
+  if (!server?.listening) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function shutdown() {
+  if (!shutdownPromise) {
+    shutdownPromise = (async () => {
+      await Promise.all([
+        closeServer(apiServer),
+        closeServer(tenantServer)
+      ]);
+      await authority.close();
+    })();
+  }
+  return shutdownPromise;
+}
+
+function listen(server, port) {
+  return new Promise((resolve, reject) => {
+    function onError(error) {
+      server.off("listening", onListening);
+      reject(error);
+    }
+    function onListening() {
+      server.off("error", onError);
+      resolve();
+    }
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
+}
+
+async function start() {
+  await authority.assertReady();
+
+  const identityPepper = secret(
+    "SITESOURCERY_IDENTITY_PEPPER"
+  );
+  const identity = createPostgresIdentityBridge({
+    pool,
+    authority,
+    pepper: identityPepper,
+    pepperVersion:
+      process.env.SITESOURCERY_IDENTITY_PEPPER_VERSION ??
+      "v1"
+  });
+  const contactVault = createAesGcmContactVault({
+    key: secret(
+      "SITESOURCERY_CONTACT_VAULT_KEY",
+      32
+    ),
+    keyVersion:
+      process.env
+        .SITESOURCERY_CONTACT_VAULT_KEY_VERSION ?? "v1"
+  });
+  const compiler = await createSparkCompilerPort({
+    expectedSourceDigest: requiredEnvironment(
+      "SITESOURCERY_SPARK_COMPILER_SHA256"
+    )
+  });
+  const exportStore = await createPrivateExportObjectStore({
+    root: path.resolve(
+      process.env.SITESOURCERY_EXPORT_ROOT ??
+        path.join(dataRoot, "private-exports")
+    )
+  });
+  const publicationHeld = () =>
+    !existsSync(approvalPath) ||
+    holdPaths.some((target) => existsSync(target));
+  const tenantRuntime = await SelfHostRuntime.open({
+    root: path.join(dataRoot, "tenant-runtime"),
+    publicationHeld,
+    controlHost: host,
+    platformBaseDomain: licensedBaseDomain
+  });
+  const publicationPort = createSelfHostPublicationPort({
+    runtime: tenantRuntime
+  });
+  const recoveryMailPort =
+    await createConfiguredRecoveryMailPort();
+  const service = createCanonicalPostgresService({
+    authority,
+    identity,
+    compiler,
+    catalogPort: createJsonCatalogPort(
+      requiredEnvironment(
+        "SITESOURCERY_OFFER_CATALOG_PATH"
+      )
+    ),
+    publicationPort,
+    exportStore,
+    recoveryMailPort,
+    contactVault,
+    licensedBaseDomain
+  });
+
+  const readiness = await service.readiness();
+  if (!readiness.ready) {
+    throw new Error(
+      `Hosted runtime is not ready: ${JSON.stringify(
+        readiness
+      )}`
+    );
+  }
+
+  apiServer = createServer(
+    createApiNodeHandler(createHostedApi(service))
+  );
+  tenantServer = createServer(
+    createTenantNodeHandler(tenantRuntime)
+  );
+  for (const server of [apiServer, tenantServer]) {
+    server.requestTimeout = 15_000;
+    server.headersTimeout = 10_000;
+    server.keepAliveTimeout = 5_000;
+    server.maxHeadersCount = 100;
+  }
+
+  await listen(apiServer, apiPort);
+  await listen(tenantServer, tenantPort);
+
+  process.stdout.write(
+    `${JSON.stringify({
+      event: "sitesourcery.hosted.started",
+      host,
+      apiPort,
+      tenantPort,
+      publicationHeld: readiness.publication.held,
+      recoveryMode: readiness.recovery.mode,
+      recoveryProvider:
+        readiness.recovery.provider ?? null,
+      database: readiness.persistence.database,
+      compilerRevision: readiness.compiler.revision,
+      catalogVersion: readiness.catalog.catalogVersion
+    })}\n`
+  );
+}
+
+try {
+  await start();
+} catch (error) {
+  try {
+    await shutdown();
+  } catch {
+    // Preserve the startup error as the authoritative failure.
+  }
+  throw error;
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    shutdown()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
+    setTimeout(() => process.exit(1), 10_000).unref();
+  });
+}

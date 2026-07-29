@@ -279,6 +279,7 @@ test("publication adapter is in-process and does not expose a network control su
   assert.equal(context.port.kind, "private-in-process-selfhost");
   assert.deepEqual(Object.keys(context.port).sort(), [
     "kind",
+    "readiness",
     "request",
     "rollback",
     "unpublish"
