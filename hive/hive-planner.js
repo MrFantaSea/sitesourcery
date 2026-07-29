@@ -7,6 +7,106 @@
   var STATUS = "planning_only";
   var NOTICE = "Planning blueprint only. No Hive integration, message, booking, review request, invoice action, or provider connection is active.";
 
+  function safeRevokeObjectUrl(environment, objectUrl) {
+    if (
+      !objectUrl
+      || !environment
+      || !environment.URL
+      || typeof environment.URL.revokeObjectURL !== "function"
+    ) return;
+    try {
+      environment.URL.revokeObjectURL(objectUrl);
+    } catch (_error) {
+      // The delivery outcome must stay truthful even when browser cleanup fails.
+    }
+  }
+
+  function deliverLocalFile(environment, options) {
+    var objectUrl = "";
+    var link = null;
+    var revokeScheduled = false;
+    var delivered = false;
+    var button = options && options.button;
+    var status = options && options.status;
+
+    if (button) button.disabled = true;
+    try {
+      if (
+        !environment
+        || typeof environment.Blob !== "function"
+        || !environment.URL
+        || typeof environment.URL.createObjectURL !== "function"
+        || typeof environment.URL.revokeObjectURL !== "function"
+        || !environment.document
+        || !environment.document.body
+        || typeof environment.document.body.appendChild !== "function"
+        || typeof environment.document.createElement !== "function"
+        || !options
+        || !Array.isArray(options.parts)
+      ) {
+        throw new Error("Local file delivery is not supported.");
+      }
+
+      var file = new environment.Blob(options.parts, { type: options.type });
+      objectUrl = environment.URL.createObjectURL(file);
+      if (typeof objectUrl !== "string" || objectUrl.length === 0) {
+        throw new Error("The browser did not create a local file address.");
+      }
+
+      link = environment.document.createElement("a");
+      if (!link || typeof link.click !== "function") {
+        throw new Error("The browser did not create a local file link.");
+      }
+      link.href = objectUrl;
+      if (options.filename) link.download = options.filename;
+      link.hidden = true;
+      environment.document.body.appendChild(link);
+      link.click();
+      delivered = true;
+
+      if (typeof environment.setTimeout === "function") {
+        revokeScheduled = true;
+        try {
+          environment.setTimeout(function () {
+            safeRevokeObjectUrl(environment, objectUrl);
+          }, options.revokeDelay || 1000);
+        } catch (_error) {
+          revokeScheduled = false;
+          safeRevokeObjectUrl(environment, objectUrl);
+          objectUrl = "";
+        }
+      } else {
+        safeRevokeObjectUrl(environment, objectUrl);
+        objectUrl = "";
+      }
+    } catch (_error) {
+      delivered = false;
+    } finally {
+      if (link) {
+        try {
+          if (typeof link.remove === "function") link.remove();
+          else if (
+            link.parentNode
+            && typeof link.parentNode.removeChild === "function"
+          ) link.parentNode.removeChild(link);
+        } catch (_error) {
+          // The object URL is still revoked below.
+        }
+      }
+      if (objectUrl && !revokeScheduled) {
+        safeRevokeObjectUrl(environment, objectUrl);
+      }
+      if (button) button.disabled = false;
+    }
+
+    if (status) {
+      status.textContent = delivered
+        ? options.successMessage
+        : options.failureMessage;
+    }
+    return delivered;
+  }
+
   function deepFreeze(value) {
     if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
     Object.keys(value).forEach(function (key) {
@@ -149,6 +249,21 @@
     return JSON.stringify(createBlueprint(cellId), null, 2) + "\n";
   }
 
+  function downloadBlueprint(cellId, environment, controls) {
+    requireCell(cellId);
+    var ui = controls || {};
+    return deliverLocalFile(environment, {
+      button: ui.button,
+      failureMessage: "The plan download could not start. Nothing was downloaded. Select Download again to retry.",
+      filename: "hive-" + cellId + "-blueprint.json",
+      parts: [exportBlueprint(cellId)],
+      revokeDelay: 1000,
+      status: ui.status,
+      successMessage: "Plan download started. No workflow was activated.",
+      type: "application/json;charset=utf-8"
+    });
+  }
+
   function rootsWithin(scope) {
     if (!scope) return [];
     if (
@@ -279,28 +394,10 @@
 
     fields.download.addEventListener("click", function () {
       var cellId = root.getAttribute("data-hive-active");
-      requireCell(cellId);
-      if (
-        !global.Blob
-        || !global.URL
-        || typeof global.URL.createObjectURL !== "function"
-        || !global.document
-        || typeof global.document.createElement !== "function"
-      ) {
-        fields.pauseStatus.textContent = "This browser could not prepare the local plan file.";
-        return;
-      }
-      var file = new global.Blob([exportBlueprint(cellId)], { type: "application/json;charset=utf-8" });
-      var objectUrl = global.URL.createObjectURL(file);
-      var link = global.document.createElement("a");
-      link.href = objectUrl;
-      link.download = "hive-" + cellId + "-blueprint.json";
-      link.hidden = true;
-      global.document.body.appendChild(link);
-      link.click();
-      link.remove();
-      global.setTimeout(function () { global.URL.revokeObjectURL(objectUrl); }, 1000);
-      fields.pauseStatus.textContent = "Plan download prepared. No workflow was activated.";
+      downloadBlueprint(cellId, global, {
+        button: fields.download,
+        status: fields.pauseStatus
+      });
     });
 
     var preferred = root.getAttribute("data-hive-active");
@@ -329,6 +426,8 @@
     status: STATUS,
     cells: CELLS,
     createBlueprint: createBlueprint,
+    deliverLocalFile: deliverLocalFile,
+    downloadBlueprint: downloadBlueprint,
     exportBlueprint: exportBlueprint,
     enhance: enhance
   });

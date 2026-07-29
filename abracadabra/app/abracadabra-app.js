@@ -1,6 +1,115 @@
 (function () {
   "use strict";
 
+  function safeRevokeObjectUrl(environment, objectUrl) {
+    if (
+      !objectUrl
+      || !environment
+      || !environment.URL
+      || typeof environment.URL.revokeObjectURL !== "function"
+    ) return;
+    try {
+      environment.URL.revokeObjectURL(objectUrl);
+    } catch (_error) {
+      // The delivery outcome must stay truthful even when browser cleanup fails.
+    }
+  }
+
+  function deliverLocalFile(environment, options) {
+    var objectUrl = "";
+    var link = null;
+    var revokeScheduled = false;
+    var delivered = false;
+    var button = options && options.button;
+    var status = options && options.status;
+
+    if (button) button.disabled = true;
+    try {
+      if (
+        !environment
+        || typeof environment.Blob !== "function"
+        || !environment.URL
+        || typeof environment.URL.createObjectURL !== "function"
+        || typeof environment.URL.revokeObjectURL !== "function"
+        || !environment.document
+        || !environment.document.body
+        || typeof environment.document.body.appendChild !== "function"
+        || typeof environment.document.createElement !== "function"
+        || !options
+        || !Array.isArray(options.parts)
+      ) {
+        throw new Error("Local file delivery is not supported.");
+      }
+
+      var file = new environment.Blob(options.parts, { type: options.type });
+      objectUrl = environment.URL.createObjectURL(file);
+      if (typeof objectUrl !== "string" || objectUrl.length === 0) {
+        throw new Error("The browser did not create a local file address.");
+      }
+
+      link = environment.document.createElement("a");
+      if (!link || typeof link.click !== "function") {
+        throw new Error("The browser did not create a local file link.");
+      }
+      link.href = objectUrl;
+      if (options.filename) link.download = options.filename;
+      if (options.target) link.target = options.target;
+      if (options.rel) link.rel = options.rel;
+      link.hidden = true;
+      environment.document.body.appendChild(link);
+      link.click();
+      delivered = true;
+
+      if (typeof environment.setTimeout === "function") {
+        revokeScheduled = true;
+        try {
+          environment.setTimeout(function () {
+            safeRevokeObjectUrl(environment, objectUrl);
+          }, options.revokeDelay || 1000);
+        } catch (_error) {
+          revokeScheduled = false;
+          safeRevokeObjectUrl(environment, objectUrl);
+          objectUrl = "";
+        }
+      } else {
+        safeRevokeObjectUrl(environment, objectUrl);
+        objectUrl = "";
+      }
+    } catch (_error) {
+      delivered = false;
+    } finally {
+      if (link) {
+        try {
+          if (typeof link.remove === "function") link.remove();
+          else if (
+            link.parentNode
+            && typeof link.parentNode.removeChild === "function"
+          ) link.parentNode.removeChild(link);
+        } catch (_error) {
+          // The object URL is still revoked below.
+        }
+      }
+      if (objectUrl && !revokeScheduled) {
+        safeRevokeObjectUrl(environment, objectUrl);
+      }
+      if (button) button.disabled = false;
+    }
+
+    if (status) {
+      status.textContent = delivered
+        ? options.successMessage
+        : options.failureMessage;
+    }
+    return delivered;
+  }
+
+  if (typeof module === "object" && module.exports) {
+    module.exports = Object.freeze({
+      deliverLocalFile: deliverLocalFile
+    });
+    return;
+  }
+
   var compiler = window.AbracadabraCompiler;
   var maker = document.getElementById("spark-maker");
   var bootStatus = document.getElementById("spark-boot-status");
@@ -438,44 +547,42 @@
     return slug ? slug + "-website.html" : "my-website.html";
   }
 
-  function fileForCurrentVersion() {
-    var current = versions[currentVersionIndex];
-    return current
-      ? new Blob([current.result.html], { type: "text/html;charset=utf-8" })
-      : null;
-  }
-
   function downloadCurrent() {
     var current = versions[currentVersionIndex];
-    if (!current) return;
-    var file = fileForCurrentVersion();
-    var objectUrl = URL.createObjectURL(file);
-    var link = document.createElement("a");
-    link.href = objectUrl;
-    link.download = safeFilename(current.result.facts.businessName);
-    link.hidden = true;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 1000);
-    versionStatus.textContent = "Download started for version " + (currentVersionIndex + 1)
-      + ". Check your Downloads folder.";
+    if (!current) {
+      versionStatus.textContent = "Make a version before downloading. Then try again.";
+      return;
+    }
+    deliverLocalFile(window, {
+      button: downloadButton,
+      failureMessage: "The download could not start. Nothing was downloaded. Select Download again to retry.",
+      filename: safeFilename(current.result.facts.businessName),
+      parts: [current.result.html],
+      revokeDelay: 1000,
+      status: versionStatus,
+      successMessage: "Download started for version " + (currentVersionIndex + 1)
+        + ". Check your Downloads folder.",
+      type: "text/html;charset=utf-8"
+    });
   }
 
   function openCurrentPreview() {
-    var file = fileForCurrentVersion();
-    if (!file) return;
-    var objectUrl = URL.createObjectURL(file);
-    var link = document.createElement("a");
-    link.href = objectUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.hidden = true;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
-    versionStatus.textContent = "Working preview requested in a new tab.";
+    var current = versions[currentVersionIndex];
+    if (!current) {
+      versionStatus.textContent = "Make a version before opening it. Then try again.";
+      return;
+    }
+    deliverLocalFile(window, {
+      button: openButton,
+      failureMessage: "The working page could not open. Nothing was changed. Select Open again to retry.",
+      parts: [current.result.html],
+      rel: "noopener noreferrer",
+      revokeDelay: 60000,
+      status: versionStatus,
+      successMessage: "Working page opened in a new tab.",
+      target: "_blank",
+      type: "text/html;charset=utf-8"
+    });
   }
 
   function loadFictionalSample() {

@@ -192,6 +192,26 @@ a {
   text-transform: uppercase;
 }
 
+.export-status {
+  position: fixed;
+  z-index: 20;
+  top: 5.1rem;
+  right: clamp(1rem, 3vw, 2rem);
+  max-width: min(30rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 0.7rem;
+  color: var(--ink);
+  background: rgba(21, 16, 29, 0.97);
+  box-shadow: 0 0.8rem 2.2rem rgba(0, 0, 0, 0.34);
+  font-size: 0.82rem;
+}
+
+.export-status:empty {
+  display: none;
+}
+
 body[data-viewer-state="missing"] .state-chip,
 body[data-viewer-state="draft"] .state-chip,
 body[data-viewer-state="cancelled"] .state-chip,

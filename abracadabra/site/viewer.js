@@ -1,6 +1,106 @@
 (function () {
   "use strict";
 
+  function safeRevokeObjectUrl(environment, objectUrl) {
+    if (
+      !objectUrl
+      || !environment
+      || !environment.URL
+      || typeof environment.URL.revokeObjectURL !== "function"
+    ) return;
+    try {
+      environment.URL.revokeObjectURL(objectUrl);
+    } catch (_error) {
+      // The delivery outcome must stay truthful even when browser cleanup fails.
+    }
+  }
+
+  function deliverLocalFile(environment, options) {
+    var objectUrl = "";
+    var link = null;
+    var revokeScheduled = false;
+    var delivered = false;
+    var button = options && options.button;
+    var status = options && options.status;
+
+    if (button) button.disabled = true;
+    try {
+      if (
+        !environment
+        || typeof environment.Blob !== "function"
+        || !environment.URL
+        || typeof environment.URL.createObjectURL !== "function"
+        || typeof environment.URL.revokeObjectURL !== "function"
+        || !environment.document
+        || !environment.document.body
+        || typeof environment.document.body.appendChild !== "function"
+        || typeof environment.document.createElement !== "function"
+        || !options
+        || !Array.isArray(options.parts)
+      ) {
+        throw new Error("Local file delivery is not supported.");
+      }
+
+      var file = new environment.Blob(options.parts, { type: options.type });
+      objectUrl = environment.URL.createObjectURL(file);
+      if (typeof objectUrl !== "string" || objectUrl.length === 0) {
+        throw new Error("The browser did not create a local file address.");
+      }
+
+      link = environment.document.createElement("a");
+      if (!link || typeof link.click !== "function") {
+        throw new Error("The browser did not create a local file link.");
+      }
+      link.href = objectUrl;
+      if (options.filename) link.download = options.filename;
+      link.hidden = true;
+      environment.document.body.appendChild(link);
+      link.click();
+      delivered = true;
+
+      if (typeof environment.setTimeout === "function") {
+        revokeScheduled = true;
+        try {
+          environment.setTimeout(function () {
+            safeRevokeObjectUrl(environment, objectUrl);
+          }, options.revokeDelay || 1000);
+        } catch (_error) {
+          revokeScheduled = false;
+          safeRevokeObjectUrl(environment, objectUrl);
+          objectUrl = "";
+        }
+      } else {
+        safeRevokeObjectUrl(environment, objectUrl);
+        objectUrl = "";
+      }
+    } catch (_error) {
+      delivered = false;
+    } finally {
+      if (link) {
+        try {
+          if (typeof link.remove === "function") link.remove();
+          else if (
+            link.parentNode
+            && typeof link.parentNode.removeChild === "function"
+          ) link.parentNode.removeChild(link);
+        } catch (_error) {
+          // The object URL is still revoked below.
+        }
+      }
+      if (objectUrl && !revokeScheduled) {
+        safeRevokeObjectUrl(environment, objectUrl);
+      }
+      if (button) button.disabled = false;
+    }
+
+    if (status) {
+      status.textContent = delivered
+        ? options.successMessage
+        : options.failureMessage;
+    }
+    return delivered;
+  }
+
   var STORE_KEY = "sitesourcery.abracadabra.platform.v1";
   var STORE_SCHEMA = "sitesourcery.abracadabra.platform/v1";
   var VIEWER_SESSION_KEY = "sitesourcery.abracadabra.viewer-session.v1";
@@ -11,6 +111,7 @@
   if (typeof module === "object" && module.exports) {
     module.exports = Object.freeze({
       credentialFingerprint: credentialFingerprint,
+      deliverLocalFile: deliverLocalFile,
       normalizeCredential: normalizeCredential,
       verifyCredential: verifyCredential
     });
@@ -23,6 +124,7 @@
     detailProject: document.getElementById("detail-project"),
     detailRetention: document.getElementById("detail-retention"),
     exportButtons: Array.from(document.querySelectorAll("[data-export]")),
+    exportStatus: document.getElementById("export-status"),
     passphrase: document.getElementById("site-passphrase"),
     projectName: document.getElementById("project-name"),
     publishedSite: document.getElementById("published-site"),
@@ -636,20 +738,23 @@
     return (stem || "website") + ".html";
   }
 
-  function downloadExport(record) {
-    if (!record || typeof record.html !== "string") return;
-    var blob = new Blob([record.html], { type: "text/html;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    link.href = url;
-    link.download = safeFilename(record.name);
-    link.hidden = true;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
+  function downloadExport(record, button) {
+    if (!record || typeof record.html !== "string") {
+      if (elements.exportStatus) {
+        elements.exportStatus.textContent = "The website file is not ready. Reload, then select Download again.";
+      }
+      return false;
+    }
+    return deliverLocalFile(window, {
+      button: button,
+      failureMessage: "The download could not start. Nothing was downloaded. Select Download again to retry.",
+      filename: safeFilename(record.name),
+      parts: [record.html],
+      revokeDelay: 1000,
+      status: elements.exportStatus,
+      successMessage: "Download started. Check your Downloads folder.",
+      type: "text/html;charset=utf-8"
+    });
   }
 
   function showResolutionFailure() {
@@ -833,7 +938,7 @@
   });
   elements.exportButtons.forEach(function (button) {
     button.addEventListener("click", function () {
-      downloadExport(runtime.exportRecord);
+      downloadExport(runtime.exportRecord, button);
     });
   });
 
