@@ -125,13 +125,28 @@ insert into ss.catalog_plans (
   catalog_version,
   display_name,
   active_from
-) values (
-  '00000000-0000-4000-8000-000000000105',
-  'spark-rent',
-  'abracadabra.spark.2026-07-28',
-  'Spark rent',
-  '2026-07-28T00:00:00Z'
-);
+) values
+  (
+    '00000000-0000-4000-8000-000000000105',
+    'spark-rent',
+    'abracadabra.spark.2026-07-28',
+    'Spark rent',
+    '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000121',
+    'spark-own',
+    'abracadabra.spark.2026-07-28',
+    'Spark own',
+    '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000123',
+    'spark-owned-managed',
+    'abracadabra.spark.2026-07-28',
+    'Spark owned and managed',
+    '2026-07-28T00:00:00Z'
+  );
 
 insert into ss.catalog_prices (
   id,
@@ -141,15 +156,43 @@ insert into ss.catalog_prices (
   cadence,
   approved_at,
   active_from
-) values (
-  '00000000-0000-4000-8000-000000000106',
-  '00000000-0000-4000-8000-000000000105',
-  'USD',
-  2500,
-  'month',
-  '2026-07-28T00:00:00Z',
-  '2026-07-28T00:00:00Z'
-);
+) values
+  (
+    '00000000-0000-4000-8000-000000000106',
+    '00000000-0000-4000-8000-000000000105',
+    'USD',
+    2500,
+    'month',
+    '2026-07-28T00:00:00Z',
+    '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000122',
+    '00000000-0000-4000-8000-000000000121',
+    'USD',
+    35000,
+    'one_time',
+    '2026-07-28T00:00:00Z',
+    '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000124',
+    '00000000-0000-4000-8000-000000000123',
+    'USD',
+    35000,
+    'one_time',
+    '2026-07-28T00:00:00Z',
+    '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000125',
+    '00000000-0000-4000-8000-000000000123',
+    'USD',
+    2500,
+    'month',
+    '2026-07-28T00:00:00Z',
+    '2026-07-28T00:00:00Z'
+  );
 
 insert into ss.catalog_offer_policies (
   id,
@@ -181,15 +224,143 @@ insert into ss.catalog_offer_policies (
     '00000000-0000-4000-8000-000000000108',
     'spark-own',
     'abracadabra.spark.2026-07-28',
-    '00000000-0000-4000-8000-000000000105',
-    '00000000-0000-4000-8000-000000000106',
+    '00000000-0000-4000-8000-000000000121',
+    '00000000-0000-4000-8000-000000000122',
     'spark',
     'own',
     'abracadabra-product-terms/v1',
     array['customer_owned'],
     '{"summary":"Customer-owned Spark handoff"}',
     '2026-07-28T00:00:00Z'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000126',
+    'spark-owned-managed',
+    'abracadabra.spark.2026-07-28',
+    '00000000-0000-4000-8000-000000000123',
+    '00000000-0000-4000-8000-000000000125',
+    'spark',
+    'owned_managed',
+    'abracadabra-product-terms/v1',
+    array['licensed', 'customer_owned'],
+    '{"summary":"Customer-owned Spark plus managed hosting"}',
+    '2026-07-28T00:00:00Z'
   );
+
+insert into ss.catalog_offer_price_lines (
+  id,
+  offer_policy_id,
+  component,
+  catalog_price_id,
+  stripe_price_ref
+) values
+  (
+    '00000000-0000-4000-8000-000000000127',
+    '00000000-0000-4000-8000-000000000107',
+    'recurring',
+    '00000000-0000-4000-8000-000000000106',
+    'price_spark_rent_month'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000128',
+    '00000000-0000-4000-8000-000000000108',
+    'one_time',
+    '00000000-0000-4000-8000-000000000122',
+    'price_spark_own_once'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000129',
+    '00000000-0000-4000-8000-000000000126',
+    'one_time',
+    '00000000-0000-4000-8000-000000000124',
+    'price_spark_owned_managed_once'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000130',
+    '00000000-0000-4000-8000-000000000126',
+    'recurring',
+    '00000000-0000-4000-8000-000000000125',
+    'price_spark_owned_managed_month'
+  );
+
+do $$
+begin
+  begin
+    insert into ss.catalog_plans (
+      id,
+      plan_key,
+      catalog_version,
+      display_name,
+      active_from
+    ) values (
+      '00000000-0000-4000-8000-000000000137',
+      'invalid-managed',
+      'abracadabra.spark.2026-07-28',
+      'Invalid managed fixture',
+      '2026-07-28T00:00:00Z'
+    );
+    insert into ss.catalog_prices (
+      id,
+      plan_id,
+      currency,
+      unit_amount_minor,
+      cadence,
+      approved_at,
+      active_from
+    ) values (
+      '00000000-0000-4000-8000-000000000138',
+      '00000000-0000-4000-8000-000000000137',
+      'USD',
+      35000,
+      'one_time',
+      '2026-07-28T00:00:00Z',
+      '2026-07-28T00:00:00Z'
+    );
+    insert into ss.catalog_offer_policies (
+      id,
+      offer_key,
+      catalog_version,
+      plan_id,
+      price_id,
+      product_id,
+      tenure_id,
+      terms_version,
+      eligible_address_modes,
+      disclosure_snapshot,
+      active_from
+    ) values (
+      '00000000-0000-4000-8000-000000000139',
+      'invalid-managed',
+      'abracadabra.spark.2026-07-28',
+      '00000000-0000-4000-8000-000000000137',
+      '00000000-0000-4000-8000-000000000138',
+      'spark',
+      'owned_managed',
+      'abracadabra-product-terms/v1',
+      array['licensed', 'customer_owned'],
+      '{"summary":"invalid missing recurring line"}',
+      '2026-07-28T00:00:00Z'
+    );
+    insert into ss.catalog_offer_price_lines (
+      id,
+      offer_policy_id,
+      component,
+      catalog_price_id,
+      stripe_price_ref
+    ) values (
+      '00000000-0000-4000-8000-000000000140',
+      '00000000-0000-4000-8000-000000000139',
+      'one_time',
+      '00000000-0000-4000-8000-000000000138',
+      'price_invalid_managed_once'
+    );
+    set constraints all immediate;
+    raise exception 'owned-managed offer omitted its recurring price';
+  exception
+    when check_violation then null;
+  end;
+end
+$$;
 
 insert into ss.stripe_customers (
   id,
@@ -275,6 +446,32 @@ insert into ss.commerce_quotes (
   '2026-07-28T12:00:00Z',
   '2026-07-28T12:30:00Z',
   '00000000-0000-4000-8000-000000000100'
+);
+
+insert into ss.commerce_quote_price_lines (
+  id,
+  organization_id,
+  project_id,
+  quote_id,
+  position,
+  source_kind,
+  billing_cadence,
+  catalog_offer_price_line_id,
+  currency,
+  amount_minor,
+  stripe_price_ref
+) values (
+  '00000000-0000-4000-8000-000000000136',
+  '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-8000-000000000103',
+  '00000000-0000-4000-8000-000000000111',
+  1,
+  'abracadabra_product',
+  'month',
+  '00000000-0000-4000-8000-000000000127',
+  'USD',
+  2500,
+  'price_spark_rent_month'
 );
 
 do $$
@@ -390,6 +587,312 @@ begin
   end;
 end
 $$;
+
+delete from ss.checkout_intents
+where id = '00000000-0000-4000-8000-000000000113';
+
+insert into ss.commerce_quotes (
+  id,
+  organization_id,
+  project_id,
+  offer_policy_id,
+  offer_key,
+  catalog_version,
+  terms_version,
+  product_id,
+  tenure_id,
+  eligible_address_modes,
+  address_id,
+  address_mode,
+  address_revision,
+  subscription_id,
+  subscription_revision,
+  currency,
+  line_items,
+  totals,
+  disclosure_digest,
+  issued_at,
+  expires_at,
+  created_by_user_id
+) values (
+  '00000000-0000-4000-8000-000000000131',
+  '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-8000-000000000103',
+  '00000000-0000-4000-8000-000000000126',
+  'spark-owned-managed',
+  'abracadabra.spark.2026-07-28',
+  'abracadabra-product-terms/v1',
+  'spark',
+  'owned_managed',
+  array['licensed', 'customer_owned'],
+  '00000000-0000-4000-8000-000000000104',
+  'licensed',
+  2,
+  '00000000-0000-4000-8000-000000000110',
+  1,
+  'USD',
+  '[{"kind":"abracadabra_product","oneTime":{"amountMinor":35000,"currency":"USD"},"recurring":{"amountMinor":2500,"currency":"USD","interval":"month"}}]',
+  '{"oneTime":{"amountMinor":35000,"currency":"USD"},"recurring":[{"amountMinor":2500,"currency":"USD","interval":"month"}]}',
+  repeat('7', 64),
+  '2026-07-28T12:02:00Z',
+  '2026-07-28T12:32:00Z',
+  '00000000-0000-4000-8000-000000000100'
+);
+
+insert into ss.commerce_quote_price_lines (
+  id,
+  organization_id,
+  project_id,
+  quote_id,
+  position,
+  source_kind,
+  billing_cadence,
+  catalog_offer_price_line_id,
+  currency,
+  amount_minor,
+  stripe_price_ref
+) values
+  (
+    '00000000-0000-4000-8000-000000000132',
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103',
+    '00000000-0000-4000-8000-000000000131',
+    1,
+    'abracadabra_product',
+    'one_time',
+    '00000000-0000-4000-8000-000000000129',
+    'USD',
+    35000,
+    'price_spark_owned_managed_once'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000133',
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103',
+    '00000000-0000-4000-8000-000000000131',
+    2,
+    'abracadabra_product',
+    'month',
+    '00000000-0000-4000-8000-000000000130',
+    'USD',
+    2500,
+    'price_spark_owned_managed_month'
+  );
+
+insert into ss.checkout_intents (
+  id,
+  organization_id,
+  project_id,
+  catalog_price_id,
+  currency,
+  amount_minor,
+  state,
+  created_by_user_id,
+  created_at,
+  updated_at,
+  expires_at
+) values (
+  '00000000-0000-4000-8000-000000000134',
+  '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-8000-000000000103',
+  '00000000-0000-4000-8000-000000000125',
+  'USD',
+  37500,
+  'created',
+  '00000000-0000-4000-8000-000000000100',
+  '2026-07-28T12:02:00Z',
+  '2026-07-28T12:02:00Z',
+  '2026-07-28T12:32:00Z'
+);
+
+insert into ss.checkout_quote_bindings (
+  organization_id,
+  project_id,
+  checkout_intent_id,
+  quote_id,
+  accepted_disclosure_digest,
+  accepted_by_user_id,
+  accepted_at
+) values (
+  '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-8000-000000000103',
+  '00000000-0000-4000-8000-000000000134',
+  '00000000-0000-4000-8000-000000000131',
+  repeat('7', 64),
+  '00000000-0000-4000-8000-000000000100',
+  '2026-07-28T12:03:00Z'
+);
+
+insert into ss.checkout_intent_price_lines (
+  organization_id,
+  project_id,
+  checkout_intent_id,
+  quote_price_line_id
+) values
+  (
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103',
+    '00000000-0000-4000-8000-000000000134',
+    '00000000-0000-4000-8000-000000000132'
+  ),
+  (
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103',
+    '00000000-0000-4000-8000-000000000134',
+    '00000000-0000-4000-8000-000000000133'
+  );
+
+do $$
+begin
+  begin
+    insert into ss.commerce_quotes (
+      id,
+      organization_id,
+      project_id,
+      offer_policy_id,
+      offer_key,
+      catalog_version,
+      terms_version,
+      product_id,
+      tenure_id,
+      eligible_address_modes,
+      address_id,
+      address_mode,
+      address_revision,
+      subscription_id,
+      subscription_revision,
+      currency,
+      line_items,
+      totals,
+      disclosure_digest,
+      issued_at,
+      expires_at,
+      created_by_user_id
+    ) values (
+      '00000000-0000-4000-8000-000000000142',
+      '00000000-0000-4000-8000-000000000102',
+      '00000000-0000-4000-8000-000000000103',
+      '00000000-0000-4000-8000-000000000126',
+      'spark-owned-managed',
+      'abracadabra.spark.2026-07-28',
+      'abracadabra-product-terms/v1',
+      'spark',
+      'owned_managed',
+      array['licensed', 'customer_owned'],
+      '00000000-0000-4000-8000-000000000104',
+      'licensed',
+      2,
+      '00000000-0000-4000-8000-000000000110',
+      1,
+      'USD',
+      '[{"kind":"abracadabra_product","oneTime":{"amountMinor":35000,"currency":"USD"},"recurring":{"amountMinor":2500,"currency":"USD","interval":"month"}}]',
+      '{"oneTime":{"amountMinor":35000,"currency":"USD"},"recurring":[{"amountMinor":2500,"currency":"USD","interval":"month"}]}',
+      repeat('8', 64),
+      '2026-07-28T12:02:00Z',
+      '2026-07-28T12:32:00Z',
+      '00000000-0000-4000-8000-000000000100'
+    );
+    insert into ss.commerce_quote_price_lines (
+      id,
+      organization_id,
+      project_id,
+      quote_id,
+      position,
+      source_kind,
+      billing_cadence,
+      catalog_offer_price_line_id,
+      currency,
+      amount_minor,
+      stripe_price_ref
+    ) values
+      (
+        '00000000-0000-4000-8000-000000000143',
+        '00000000-0000-4000-8000-000000000102',
+        '00000000-0000-4000-8000-000000000103',
+        '00000000-0000-4000-8000-000000000142',
+        1,
+        'abracadabra_product',
+        'one_time',
+        '00000000-0000-4000-8000-000000000129',
+        'USD',
+        35000,
+        'price_spark_owned_managed_once'
+      ),
+      (
+        '00000000-0000-4000-8000-000000000144',
+        '00000000-0000-4000-8000-000000000102',
+        '00000000-0000-4000-8000-000000000103',
+        '00000000-0000-4000-8000-000000000142',
+        2,
+        'abracadabra_product',
+        'month',
+        '00000000-0000-4000-8000-000000000130',
+        'USD',
+        2500,
+        'price_spark_owned_managed_month'
+      );
+    insert into ss.checkout_intents (
+      id,
+      organization_id,
+      project_id,
+      catalog_price_id,
+      currency,
+      amount_minor,
+      state,
+      created_by_user_id,
+      created_at,
+      updated_at,
+      expires_at
+    ) values (
+      '00000000-0000-4000-8000-000000000141',
+      '00000000-0000-4000-8000-000000000102',
+      '00000000-0000-4000-8000-000000000103',
+      '00000000-0000-4000-8000-000000000125',
+      'USD',
+      37500,
+      'created',
+      '00000000-0000-4000-8000-000000000100',
+      '2026-07-28T12:02:00Z',
+      '2026-07-28T12:02:00Z',
+      '2026-07-28T12:32:00Z'
+    );
+    insert into ss.checkout_quote_bindings (
+      organization_id,
+      project_id,
+      checkout_intent_id,
+      quote_id,
+      accepted_disclosure_digest,
+      accepted_by_user_id,
+      accepted_at
+    ) values (
+      '00000000-0000-4000-8000-000000000102',
+      '00000000-0000-4000-8000-000000000103',
+      '00000000-0000-4000-8000-000000000141',
+      '00000000-0000-4000-8000-000000000142',
+      repeat('8', 64),
+      '00000000-0000-4000-8000-000000000100',
+      '2026-07-28T12:03:00Z'
+    );
+    insert into ss.checkout_intent_price_lines (
+      organization_id,
+      project_id,
+      checkout_intent_id,
+      quote_price_line_id
+    ) values (
+      '00000000-0000-4000-8000-000000000102',
+      '00000000-0000-4000-8000-000000000103',
+      '00000000-0000-4000-8000-000000000141',
+      '00000000-0000-4000-8000-000000000143'
+    );
+    set constraints all immediate;
+    raise exception 'checkout omitted an authoritative recurring price line';
+  exception
+    when check_violation then null;
+  end;
+end
+$$;
+
+set constraints all immediate;
 
 insert into ss.subscription_cancellation_previews (
   id,
@@ -686,7 +1189,8 @@ begin
     where project_id = '00000000-0000-4000-8000-000000000103'
       and state = 'purging'
       and removal_counts @> '{
-        "commerceQuotes": 1,
+        "commerceQuotes": 2,
+        "checkoutQuoteBindings": 1,
         "cancellationPreviews": 2,
         "cancellationAcceptances": 1,
         "exportDownloadAuthorizations": 1

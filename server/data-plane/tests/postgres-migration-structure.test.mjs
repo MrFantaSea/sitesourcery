@@ -162,3 +162,34 @@ test("hosted API edges participate in the sealed terminal purge boundary", async
     /disable trigger|session_replication_role/iu
   );
 });
+
+test("mixed one-time and recurring checkout uses normalized exact price lines", async () => {
+  const all = await migrations();
+  const pricing = all.find(
+    ({ name }) =>
+      name === "202607280011_multi_line_checkout_authority.sql"
+  );
+  assert.ok(pricing);
+  for (const table of [
+    "catalog_offer_price_lines",
+    "commerce_quote_price_lines",
+    "checkout_intent_price_lines"
+  ]) {
+    assert.match(
+      pricing.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.match(
+    pricing.sql,
+    /when 'owned_managed' then array\['one_time', 'recurring'\]/iu
+  );
+  assert.match(
+    pricing.sql,
+    /checkout does not bind the complete quote price set/iu
+  );
+  assert.match(
+    pricing.sql,
+    /checkout_record\.amount_minor <> amount_due_now/iu
+  );
+});
