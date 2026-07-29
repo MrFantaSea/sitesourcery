@@ -164,9 +164,11 @@ export const FAQ_ANCHORS = Object.freeze([
   "getting-started",
 ]);
 export const HOME_HIVE_COPY = Object.freeze([
-  "Six plans you can inspect",
-  "The planner does not turn anything on. A separate project is required to build a working system.",
+  "Six plans for common business handoffs",
+  "The planner shows the steps but does not turn anything on. Building a working setup is separate, quoted work.",
 ]);
+export const HOME_EVIDENCE_COPY =
+  "one real founder-owned venture and two fictional design studies that are not client work";
 export const HOME_ABRACADABRA_COPY = Object.freeze([
   "Works in this browser",
   "Makes and downloads a real web page.",
@@ -473,6 +475,9 @@ function checkHomeDoors(source, errors) {
     if (!lowerSource.includes(phrase.toLocaleLowerCase("en-US"))) {
       report(errors, file, `missing plain-language Abracadabra state copy ${JSON.stringify(phrase)}`);
     }
+  }
+  if (!lowerSource.includes(HOME_EVIDENCE_COPY)) {
+    report(errors, file, `missing exact home evidence disclosure ${JSON.stringify(HOME_EVIDENCE_COPY)}`);
   }
   for (const phrase of RETIRED_HOME_HIVE_COPY) {
     if (lowerSource.includes(phrase.toLocaleLowerCase("en-US"))) {

@@ -50,8 +50,8 @@ test("customer-copy gate rejects an overlong paragraph", async () => {
 test("customer-copy gate keeps one clear hero action", async () => {
   const errors = await homeErrors((source) =>
     source.replace(
-      '<a class="button button-primary" href="/start/">Find the right starting point</a>',
-      '<a class="button button-primary" href="/start/">Find the right starting point</a><a href="/contact/">Contact</a>',
+      '<a class="button button-primary" href="/start/">Answer three questions</a>',
+      '<a class="button button-primary" href="/start/">Answer three questions</a><a href="/contact/">Contact</a>',
     ));
   assert.match(errors.join("\n"), /exactly one next-action link/u);
 });

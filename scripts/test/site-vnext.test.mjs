@@ -31,6 +31,7 @@ import {
   FAQ_ANCHORS,
   HIVE_CELLS,
   HOME_ABRACADABRA_COPY,
+  HOME_EVIDENCE_COPY,
   HOME_HIVE_COPY,
   HOME_DOORS,
   PRIVACY_SECTION_IDS,
@@ -141,6 +142,7 @@ function routeFeature(route) {
         .map((door) => `<a data-home-door="${door}" href="/${door}/">${door}</a>`),
       ...HOME_HIVE_COPY.map((phrase) => `<p>${phrase}</p>`),
       ...HOME_ABRACADABRA_COPY.map((phrase) => `<p>${phrase}</p>`),
+      `<p>${HOME_EVIDENCE_COPY}</p>`,
       "</section>",
     ].join("");
   }
@@ -451,6 +453,10 @@ test("canonical route ledger is exact and stable", () => {
   ]);
   assert.equal(HOME_HIVE_COPY.length, 2);
   assert.equal(HOME_ABRACADABRA_COPY.length, 3);
+  assert.equal(
+    HOME_EVIDENCE_COPY,
+    "one real founder-owned venture and two fictional design studies that are not client work",
+  );
   assert.equal(PRIVACY_SECTION_IDS.length, 16);
   assert.equal(TERMS_SECTION_IDS.length, 17);
   assert.equal(FAQ_ANCHORS.length, 13);
@@ -942,7 +948,7 @@ test("vNext locks Hive planning truth and long-page deep links", async (t) => {
   await t.test("Hive planning truth", () => expectSiteFailure(
     (root) => modify(root, "index.html", (source) =>
       source.replace(
-        "The planner does not turn anything on. A separate project is required to build a working system.",
+        "The planner shows the steps but does not turn anything on. Building a working setup is separate, quoted work.",
         "Ready-made and commissioned systems",
       )),
     /(?:missing Hive planning-versus-commission copy|contains retired Hive product model)/u,
