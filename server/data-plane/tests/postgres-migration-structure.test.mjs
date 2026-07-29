@@ -133,3 +133,32 @@ test("authenticated forced-RLS helpers have an explicit executable contract", as
     );
   }
 });
+
+test("hosted API edges participate in the sealed terminal purge boundary", async () => {
+  const all = await migrations();
+  const purge = all.find(
+    ({ name }) =>
+      name === "202607280010_hosted_edge_terminal_purge.sql"
+  );
+  assert.ok(purge);
+  assert.match(purge.sql, /app\.terminal_purge_project_id/iu);
+  assert.match(
+    purge.sql,
+    /request\.project_id = row_project_id[\s\S]*request\.state = 'purging'/iu
+  );
+  for (const table of [
+    "subscription_cancellation_acceptances",
+    "subscription_cancellation_previews",
+    "checkout_quote_bindings",
+    "commerce_quotes"
+  ]) {
+    assert.match(
+      purge.sql,
+      new RegExp(`delete from ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.doesNotMatch(
+    purge.sql,
+    /disable trigger|session_replication_role/iu
+  );
+});

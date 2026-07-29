@@ -641,6 +641,62 @@ begin
 end
 $$;
 
+do $$
+begin
+  begin
+    delete from ss.export_download_authorizations
+    where id = '00000000-0000-4000-8000-000000000119';
+    raise exception 'ordinary export authorization deletion bypassed immutability';
+  exception
+    when sqlstate '55000' then null;
+  end;
+end
+$$;
+
+select ss.begin_terminal_project_purge(
+  '00000000-0000-4000-8000-000000000103',
+  'hosted-terminal-purge/v1',
+  '00000000-0000-4000-8000-000000000100'
+);
+
+do $$
+begin
+  if exists (
+    select 1 from ss.commerce_quotes
+    where project_id = '00000000-0000-4000-8000-000000000103'
+    union all
+    select 1 from ss.checkout_quote_bindings
+    where project_id = '00000000-0000-4000-8000-000000000103'
+    union all
+    select 1 from ss.subscription_cancellation_previews
+    where project_id = '00000000-0000-4000-8000-000000000103'
+    union all
+    select 1 from ss.subscription_cancellation_acceptances
+    where project_id = '00000000-0000-4000-8000-000000000103'
+    union all
+    select 1 from ss.export_download_authorizations
+    where project_id = '00000000-0000-4000-8000-000000000103'
+  ) then
+    raise exception 'terminal purge left hosted API edge rows behind';
+  end if;
+
+  if not exists (
+    select 1
+    from ss.deletion_requests
+    where project_id = '00000000-0000-4000-8000-000000000103'
+      and state = 'purging'
+      and removal_counts @> '{
+        "commerceQuotes": 1,
+        "cancellationPreviews": 2,
+        "cancellationAcceptances": 1,
+        "exportDownloadAuthorizations": 1
+      }'::jsonb
+  ) then
+    raise exception 'terminal purge did not seal hosted edge removal counts';
+  end if;
+end
+$$;
+
 select 'HOSTED_API_INVARIANTS_PASS' as result;
 
 rollback;
