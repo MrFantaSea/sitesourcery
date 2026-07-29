@@ -11,11 +11,13 @@ It is under `PUBLICATION_HOLD`. The repository contains:
 - a deterministic in-memory transactional repository for tests;
 - deterministic fake registrar, payment, and one-time-secret ports;
 - adapters that explicitly refuse every external capability;
+- a held-by-default, mock-transport-tested Spaceship registrar adapter;
+- a fail-closed exact-price preview interface and zero-call readiness check;
 - a relational migration contract;
 - orchestration and adversarial tests.
 
-There are no Stripe keys, Spaceship keys, DNS calls, sockets, provider SDKs,
-package additions, installs, or deployment actions.
+There are no Stripe keys, Spaceship keys, MCP/OAuth tokens, DNS calls, provider
+calls, provider SDKs, package additions, installs, or deployment actions.
 
 ## Customer path
 
@@ -86,6 +88,7 @@ From the repository root, using exact Node 24.18.0:
 
 ```sh
 npm run test:domain
+npm run test:spaceship
 npm run test:node
 ```
 
@@ -95,5 +98,8 @@ checked-in migration.
 ## Production blockers
 
 The migration is a contract, not an installed database. The memory adapter is
-not production persistence. The held provider ports are not implementations.
-See `ADAPTER-CONTRACT.md` and `RUNBOOK.md` before considering any live wiring.
+not production persistence. The Spaceship implementation is not live
+composition: it has no credential vault, contact vault, authenticated exact
+price bridge, written reseller consent, or owner release approval. See
+`SPACESHIP-PROVIDER.md`, `ADAPTER-CONTRACT.md`, and `RUNBOOK.md` before
+considering any live wiring.

@@ -1,6 +1,8 @@
 HELD
 
 No live registrar, payment, secret-delivery, DNS, HTTP listener, or deployment
-adapter is authorized by this repository. Only deterministic fake rehearsal is
-implemented. Remove nothing and wire nothing without a separately reviewed
-owner-approved live release.
+adapter is authorized by this repository. A mock-tested Spaceship registrar
+adapter exists, but its default composition and exact-price source are held.
+It contains no credentials or OAuth transport and has made no provider call.
+Remove nothing and wire nothing without the provider/legal/readiness checks and
+a separately reviewed owner-approved live release.

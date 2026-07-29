@@ -61,6 +61,18 @@ Unknown failures are ambiguous. Spaceship does not publicly document an atomic
 maximum-price guard or registration idempotency key, so local idempotency is not
 permission to repeat an ambiguous confirmation.
 
+`adapters/spaceship.mjs` implements these REST capabilities with a fixed
+official origin and injected transport/clock/vault. Its ordinary REST
+availability check is not price authority for standard domains. The
+`pricePreview` dependency must return a current exact integer USD result from
+the dated, documented no-charge preview contract or registration stays held.
+The adapter does not implement or assume a generic MCP OAuth/token transport.
+
+The documented REST HTTP 202 registration response provides an async operation
+ID but not a final provider charge. The adapter therefore returns no
+provider-observed price at confirmation. Payment capture remains in review
+until separate authoritative registrar billing evidence exists.
+
 There is intentionally no renewal mutation port. Current public Spaceship
 documentation does not provide a safe general exact standard-domain renewal
 preview. Notices/manual review may be added, but automatic billed renewal stays
@@ -78,7 +90,10 @@ support tickets, and exports must never contain the raw code.
 
 ## Held state
 
-`adapters/held.mjs` is the only non-test external composition. It returns
-authoritative `not_submitted` refusals and never plausible provider data.
+Held remains the default external composition. It returns authoritative
+`not_submitted` refusals and never plausible provider data. Constructing the
+Spaceship adapter in live mode requires explicit environment-bound owner
+approval, a provider written-consent reference, exact capabilities, injected
+vaults, and an exact-price source. This repository supplies none of those.
 `adapters/fake.mjs` is test-only and requires `mutationMode: "fake"` plus an
 order-, tenant-, domain-, quote-, and environment-scoped execution approval.
