@@ -13,7 +13,7 @@
   function ControlError(input) {
     var source = input || {};
     this.name = "AbracadabraHostedControlError";
-    this.message = source.message || "The hosted control could not complete this request.";
+    this.message = source.message || "We couldn’t complete that request.";
     this.code = source.code || "CONTROL_FAILED";
     this.retryable = source.retryable === true;
     this.requestId = source.requestId || null;
@@ -81,7 +81,7 @@
     }
     throw new ControlError({
       code: "IDEMPOTENCY_UNAVAILABLE",
-      message: "This browser cannot safely identify a hosted write."
+      message: "Please update your browser before saving changes."
     });
   }
 
@@ -104,7 +104,7 @@
     if (!api || typeof api.me !== "function") {
       throw new ControlError({
         code: "API_REQUIRED",
-        message: "The same-origin hosted API client is required."
+        message: "Saved projects could not connect securely."
       });
     }
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
@@ -252,7 +252,7 @@
           return result;
         })
         .catch(function (error) {
-          var presented = safeError(error, "The hosted request failed.");
+          var presented = safeError(error, "We couldn’t complete that request.");
           if (operations[name] && operations[name].token === token) {
             operations[name] = {
               status: "error",
@@ -273,7 +273,7 @@
       if (!retryTask || !operation || operation.status !== "error" || !operation.error.retryable) {
         return Promise.reject(new ControlError({
           code: "RETRY_UNAVAILABLE",
-          message: "That hosted action cannot be retried."
+          message: "Please start that step again."
         }));
       }
       return retryTask();
@@ -958,7 +958,7 @@
       if (!orderId) {
         return Promise.reject(new ControlError({
           code: "DOMAIN_ORDER_REQUIRED",
-          message: "Complete domain payment before requesting the mandatory fresh price check."
+          message: "Pay for the domain before checking its final price."
         }));
       }
       var key = idempotencyFactory();
@@ -985,7 +985,7 @@
       if (!orderId || !priceCheckId) {
         return Promise.reject(new ControlError({
           code: "FRESH_DOMAIN_PRICE_REQUIRED",
-          message: "Run the mandatory fresh availability and price check immediately before registration."
+          message: "Check the domain’s price and availability again before registering it."
         }));
       }
       if (!input || input.irreversibleRegistrationAccepted !== true) {
@@ -1038,7 +1038,7 @@
         if (!domain || idOf(domain) !== selected) {
           throw new ControlError({
             code: "DOMAIN_RESPONSE_INVALID",
-            message: "The hosted domain response was invalid."
+            message: "We couldn’t load that domain."
           });
         }
         state.selectedDomain = domain;

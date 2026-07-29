@@ -25,7 +25,7 @@
   ) {
     if (status) {
       status.hidden = false;
-      status.textContent = "Hosted controls are unavailable. Your guest preview remains in this tab.";
+      status.textContent = "We couldn’t open saved projects. Your preview is still here.";
       status.classList.add("is-error");
     }
     return;
@@ -127,7 +127,7 @@
 
   function run(button, operationName, action, successMessage) {
     if (button) button.disabled = true;
-    announce("Working securely…");
+    announce("Working…");
     return Promise.resolve()
       .then(action)
       .then(function (result) {
@@ -135,7 +135,7 @@
         return result;
       })
       .catch(function (error) {
-        announce(explain(error, "The hosted request could not be completed."), "error");
+        announce(explain(error, "We couldn’t complete that request."), "error");
         throw error;
       })
       .finally(function () {
@@ -151,7 +151,7 @@
     if (queued.projectId !== idOf(lastState.project)) return;
     draftSaving = true;
     control.saveDraft(queued.raw).catch(function (error) {
-      announce(explain(error, "The hosted draft could not be saved."), "error");
+      announce(explain(error, "We couldn’t save this draft. Your work is still in the maker."), "error");
     }).finally(function () {
       draftSaving = false;
       if (queuedDraft) flushDraft();
@@ -212,7 +212,7 @@
           return control.selectProject(idOf(project)).then(function (selected) {
             if (selected && !maker.loadProject(selected)) {
               announce(
-                "The hosted project opened, but its saved preview could not replace unsaved maker work.",
+                "Your project opened, but we kept your unsaved maker changes.",
                 "error"
               );
             }
@@ -237,7 +237,7 @@
     var versions = acceptedVersions(state.project);
     if (!versions.length) {
       var empty = document.createElement("li");
-      empty.textContent = "No accepted hosted versions yet.";
+      empty.textContent = "No saved versions yet.";
       list.appendChild(empty);
       return;
     }
@@ -255,11 +255,11 @@
       button.disabled = state.selectedVersionId === versionId;
       button.addEventListener("click", function () {
         if (!maker.selectPlatformVersion(versionId)) {
-          announce("That hosted version does not include restorable preview bytes.", "error");
+          announce("We couldn’t open that saved version.", "error");
           return;
         }
         control.selectVersion(versionId);
-        announce("Exact accepted version selected for publication.", "success");
+        announce("Version selected.", "success");
       });
       item.append(title, button);
       list.appendChild(item);
@@ -267,7 +267,7 @@
   }
 
   function addressCopy(address) {
-    return text(address.hostname || address.domain || address.label || "Address pending");
+    return text(address.hostname || address.domain || address.label || "Not connected yet");
   }
 
   function renderProject(state) {
@@ -316,13 +316,13 @@
       ? "Version · " + text(selected.rawFacts && selected.rawFacts.businessName || idOf(selected))
       : "No accepted version selected";
     one("[data-selected-release-summary]").textContent = selected
-      ? "This exact accepted version will be sent in the publication request."
-      : "Make and review a version below, or choose one from the hosted release history.";
+      ? "This is the version you chose to publish."
+      : "Make and review a version below, or choose a saved version.";
     one("[data-publish]").disabled = !selected || operationPending("requestRelease");
     one("[data-unpublish]").hidden = !(project.serving && project.serving.state === "live");
     one("[data-release-copy]").textContent = selected
-      ? "Publication remains a server-verified request. The browser cannot claim that it succeeded."
-      : "Select the exact accepted version before requesting publication.";
+      ? "We’ll confirm this exact version is ready before it goes live."
+      : "Choose a saved version before publishing.";
     renderReleaseList(state);
 
     var addressId = idOf(address);
@@ -333,12 +333,12 @@
       address.verificationStatus || address.state || "pending"
     );
     one("[data-domain-review-receipt]").textContent = text(
-      address.verificationRequestId || "No server receipt yet"
+      address.verificationRequestId || "Not sent yet"
     );
-    one("[data-domain-review-proof]").textContent = "Proof is reviewed outside the customer browser.";
+    one("[data-domain-review-proof]").textContent = "We’ll check the proof before connecting the domain.";
     one("[data-domain-review-time]").textContent = text(address.updatedAt || "Not verified");
     one("[data-domain-review-copy]").textContent =
-      "The server records the request. Only the domain verifier can mark this address verified.";
+      "Send your proof here. We’ll let you know when the domain is connected.";
   }
 
   function renderRetry(state) {
@@ -355,11 +355,11 @@
     button.type = "button";
     button.className = "spark-button";
     button.setAttribute("data-hosted-retry", "");
-    button.textContent = "Retry last secure action";
+    button.textContent = "Try again";
     button.onclick = function () {
       run(button, failedName, function () {
         return control.retry(failedName);
-      }, "Secure action completed on retry.").catch(function () {});
+      }, "Done.").catch(function () {});
     };
     if (!existing) status.insertAdjacentElement("afterend", button);
   }
@@ -406,7 +406,7 @@
   }
 
   function quoteCopy(quote) {
-    if (!quote) return "Search for a domain, then request a current server quote.";
+    if (!quote) return "Search for a domain, then check today’s price.";
     var hostname = text(quote.hostname || quote.domain || "Selected domain");
     var amount = Number(quote.amountMinor);
     var currency = text(quote.currency).toUpperCase();
@@ -423,7 +423,7 @@
     }
     var expiry = quote.expiresAt ? " · expires " + new Date(quote.expiresAt).toLocaleString() : "";
     return hostname + (price ? " · " + price : "") + expiry
-      + ". Price and availability remain server-confirmed facts.";
+      + ". We’ll check again right before registration.";
   }
 
   function domainResultHostname(result) {
@@ -465,7 +465,7 @@
 
     var order = state.domainOrder;
     domainUI.orderState.textContent = order
-      ? "Order " + idOf(order) + " · " + stateLabel(
+      ? "Registration · " + stateLabel(
         order.state || order.status || order.registrationState || "pending"
       )
       : "No domain order selected.";
@@ -489,7 +489,7 @@
     var selectedDomain = state.selectedDomain;
     domainUI.managementState.textContent = selectedDomain
       ? text(selectedDomain.hostname || selectedDomain.domain || idOf(selectedDomain))
-        + " · customer is legal registrant · " + stateLabel(
+        + " · you own this domain · " + stateLabel(
           selectedDomain.state || selectedDomain.status || "managed"
         )
       : "Load and choose a customer-owned domain to manage it here.";
@@ -525,12 +525,11 @@
     });
     panel.append(
       node("p", { class: "spark-kicker" }, "Customer-owned domains"),
-      node("h4", {}, "Search, buy, register, and manage without leaving Site Sourcery."),
+      node("h4", {}, "You own the domain. Search, pay, register, and manage it here."),
       node(
         "p",
         {},
-        "Site Sourcery is the storefront and agent. The customer is the legal registrant. "
-          + "Registrar credentials and provider screens are never exposed here."
+        "Your name goes on the registration. Site Sourcery handles the setup for you."
       )
     );
 
@@ -553,11 +552,11 @@
     searchActions.append(searchButton, results, years, quoteButton);
     panel.append(searchField.label, searchActions, quoteState);
 
-    var registrantHeading = node("h5", {}, "Customer registrant details");
+    var registrantHeading = node("h5", {}, "Domain owner details");
     var registrantCopy = node(
       "p",
       {},
-      "These details identify the customer—not Site Sourcery—as the domain registrant."
+      "We’ll register the domain in your name."
     );
     var fields = {};
     [
@@ -585,7 +584,7 @@
     var agreement = node("input", { type: "checkbox", name: "hostedDomainAgreementAccepted" });
     agreementLabel.append(
       agreement,
-      node("span", {}, "I accept the current domain-registration agreement for this exact quote.")
+      node("span", {}, "I accept the domain agreement for this name and price.")
     );
     var certificationLabel = node("label", { class: "spark-confirmation" });
     var certification = node("input", { type: "checkbox", name: "hostedRegistrantCertified" });
@@ -607,12 +606,12 @@
     var irreversible = node("input", { type: "checkbox", name: "hostedDomainIrreversible" });
     irreversibleLabel.append(
       irreversible,
-      node("span", {}, "I understand that submitting registration is an irreversible purchase.")
+      node("span", {}, "I understand that a completed domain registration cannot be undone.")
     );
     var registerButton = node(
       "button",
       { type: "button", class: "spark-button spark-button-primary" },
-      "Submit domain registration"
+      "Register this domain"
     );
     var resumeOrdersButton = node("button", { type: "button", class: "spark-button" }, "Resume latest order");
     var pollButton = node("button", { type: "button", class: "spark-button" }, "Check registration progress");
@@ -640,8 +639,7 @@
       node(
         "p",
         {},
-        "DNS, renewal, and transfer-out requests stay in this account. "
-          + "Transfer-out remains available because the customer owns the domain."
+        "Update DNS, renew the domain, or move it to another registrar from this account."
       )
     );
     var loadDomainsButton = node("button", { type: "button", class: "spark-button" }, "Load my domains");
@@ -708,7 +706,7 @@
           years: Number(years.value),
           purpose: "register"
         });
-      }, "Current domain quote saved.").catch(function () {});
+      }, "Price saved for this step.").catch(function () {});
     });
     contactButton.addEventListener("click", function () {
       run(contactButton, "registrantContact", function () {
@@ -724,7 +722,7 @@
           postalCode: fields.hostedRegistrantPostal.value,
           countryCode: fields.hostedRegistrantCountry.value
         });
-      }, "Customer registrant details saved.").catch(function () {});
+      }, "Domain owner details saved.").catch(function () {});
     });
     consentButton.addEventListener("click", function () {
       run(consentButton, "domainConsent", function () {
@@ -758,7 +756,7 @@
     priceCheckButton.addEventListener("click", function () {
       run(priceCheckButton, "domainPriceCheck", function () {
         return control.refreshDomainPrice();
-      }, "Fresh server price and availability check completed.").catch(function () {});
+      }, "Price and availability checked.").catch(function () {});
     });
     irreversible.addEventListener("change", function () { renderDomainStorefront(lastState); });
     registerButton.addEventListener("click", function () {
@@ -766,14 +764,14 @@
         return control.requestDomainRegistration({
           irreversibleRegistrationAccepted: irreversible.checked
         });
-      }, "Registration request submitted. The order is processing asynchronously.")
+      }, "We’re registering your domain. Check progress here.")
         .then(function () { window.setTimeout(function () { pollButton.click(); }, 1500); })
         .catch(function () {});
     });
     pollButton.addEventListener("click", function () {
       run(pollButton, "domainOrderPoll", function () {
         return control.pollDomainOrder();
-      }, "Domain order state refreshed.").catch(function () {});
+      }, "Domain progress updated.").catch(function () {});
     });
     loadDomainsButton.addEventListener("click", function () {
       run(loadDomainsButton, "domains", function () {
@@ -783,7 +781,7 @@
     openDomainButton.addEventListener("click", function () {
       run(openDomainButton, "domain", function () {
         return control.selectDomain(domains.value);
-      }, "Domain management state loaded.").catch(function () {});
+      }, "Domain controls are ready.").catch(function () {});
     });
     dnsButton.addEventListener("click", function () {
       run(dnsButton, "upsertDnsRecord", function () {
@@ -806,10 +804,10 @@
       }, "Current renewal quote requested.").catch(function () {});
     });
     transferButton.addEventListener("click", function () {
-      if (!window.confirm("Request transfer-out access for this customer-owned domain?")) return;
+      if (!window.confirm("Move this domain to another registrar?")) return;
       run(transferButton, "domainTransferOut", function () {
         return control.requestDomainTransferOut();
-      }, "Transfer-out request recorded securely.").catch(function () {});
+      }, "Transfer request started.").catch(function () {});
     });
 
     return {
@@ -850,7 +848,7 @@
     if (!configuration.catalog || !Object.keys(configuration.catalog.variants).length) {
       var held = document.createElement("option");
       held.value = "";
-      held.textContent = "Prices awaiting owner approval";
+      held.textContent = "Online payment isn’t open yet";
       selector.appendChild(held);
       selector.disabled = true;
     } else {
@@ -871,7 +869,7 @@
       run(checkoutButton, "checkout", function () {
         return control.checkout(selector.value).then(function (result) {
           var destination = result && (result.url || result.checkoutUrl);
-          if (!destination) throw new Error("The payment provider did not return a destination.");
+          if (!destination) throw new Error("We couldn’t open payment.");
           var parsed = new URL(destination, window.location.origin);
           if (parsed.protocol !== "https:") {
             throw new Error("The payment destination was not secure.");
@@ -890,7 +888,7 @@
       run(portalButton, "billingPortal", function () {
         return control.billingPortal().then(function (result) {
           var destination = result && (result.url || result.portalUrl);
-          if (!destination) throw new Error("The billing provider did not return a destination.");
+          if (!destination) throw new Error("We couldn’t open billing.");
           var parsed = new URL(destination, window.location.origin);
           if (parsed.protocol !== "https:") throw new Error("The billing destination was not secure.");
           window.location.assign(parsed.href);
@@ -900,8 +898,8 @@
     });
     actions.prepend(selector, checkoutButton, portalButton);
     one("[data-billing-copy]").textContent = selector.disabled
-      ? "Payment remains held until the owner approves exact Rent, Own, and Managed service prices."
-      : "Subscription state comes from signed provider webhooks, never from this browser.";
+      ? "Payment is not available until prices are set."
+      : "Your plan updates after payment is confirmed.";
     one("[data-cancel-project]").textContent = "Cancel subscription";
   }
 
@@ -938,7 +936,7 @@
         email: value("accountEmail"),
         password: value("accountPassword")
       });
-    }, "Account created securely.").catch(function () {});
+    }, "Account created.").catch(function () {});
   });
 
   one("[data-sign-in]").addEventListener("click", function (event) {
@@ -948,7 +946,7 @@
         email: value("signInEmail"),
         password: value("signInPassword")
       });
-    }, "Signed in securely.").catch(function () {});
+    }, "Signed in.").catch(function () {});
   });
 
   one("[data-request-recovery]").addEventListener("click", function (event) {
@@ -1036,7 +1034,7 @@
         }
         return project;
       });
-    }, "Project saved to the hosted account.").catch(function () {});
+    }, "Project saved to your account.").catch(function () {});
   });
 
   one("[data-toggle-settings]").addEventListener("click", function () {
@@ -1062,7 +1060,7 @@
         accessPassword: value("manageAccessPassword")
       });
       one("[data-project-settings]").hidden = true;
-    }, "Hosted address and access requests saved.").catch(function () {});
+    }, "Address and privacy settings saved.").catch(function () {});
   });
 
   one("[data-request-domain-review]").addEventListener("click", function (event) {
@@ -1074,14 +1072,14 @@
         method: value("manageDomainProofMethod"),
         reference: value("manageDomainProofReference")
       });
-    }, "Domain verification request saved for independent review.").catch(function () {});
+    }, "We received your domain proof. We’ll check it before connecting the domain.").catch(function () {});
   });
 
   one("[data-publish]").addEventListener("click", function (event) {
     var button = event.currentTarget;
     run(button, "requestRelease", function () {
       return control.requestRelease();
-    }, "Publication request accepted. Refreshing server state will show the verified outcome.")
+    }, "We got your publish request. This page will show when the site is live.")
       .catch(function () {});
   });
   one("[data-unpublish]").addEventListener("click", function (event) {
@@ -1108,11 +1106,11 @@
     var button = event.currentTarget;
     run(button, "requestExport", function () {
       return control.requestExport();
-    }, "Export requested. The hosted account will show when it is ready.").catch(function () {});
+    }, "Export requested. We’ll show it here when it’s ready.").catch(function () {});
   });
 
   one("[data-cancel-project]").addEventListener("click", function (event) {
-    if (!window.confirm("Cancel this hosted subscription at the provider-defined effective date?")) return;
+    if (!window.confirm("Cancel this plan? We’ll show the exact end date before anything is removed.")) return;
     var button = event.currentTarget;
     run(button, "cancelSubscription", function () {
       return control.cancelSubscription();
@@ -1120,18 +1118,18 @@
   });
 
   one("[data-delete-project]").addEventListener("click", function (event) {
-    if (!window.confirm("Permanently request deletion of this hosted project? This cannot be undone.")) return;
+    if (!window.confirm("Delete this project and all saved website content? This cannot be undone.")) return;
     var button = event.currentTarget;
     run(button, "deleteProject", function () {
       return control.deleteProject();
-    }, "Hosted project deletion completed.").catch(function () {});
+    }, "Project deleted.").catch(function () {});
   });
 
   one("[data-detach-domain]").hidden = true;
   one("[data-submit-safety-appeal]").hidden = true;
   one("[data-safety-appeal-field]").hidden = true;
   one("[data-safety-copy]").textContent =
-    "Safety decisions remain server/operator authority. The customer browser cannot place or clear a hold.";
+    "Site Sourcery may pause a site for safety review. Contact support if you think a pause is a mistake.";
 
   window.addEventListener("abracadabra:draftchange", function (event) {
     if (!lastState.project) return;
@@ -1150,16 +1148,16 @@
     if (!lastState.account || !lastState.project) {
       pendingGuestCandidate = JSON.parse(JSON.stringify(event.detail));
       announce(
-        "Private preview made. Create or sign in to a hosted account only when you want to save it.",
+        "Preview ready. Create an account or sign in when you want to save it.",
         "success"
       );
       return;
     }
     control.acceptMadeVersion(event.detail).then(function (version) {
       maker.markCurrentPlatformVersion(idOf(version));
-      announce("Reviewed version accepted by the hosted service.", "success");
+      announce("Version saved to your account.", "success");
     }).catch(function (error) {
-      announce(explain(error, "The hosted version could not be accepted."), "error");
+      announce(explain(error, "We couldn’t save that version."), "error");
     });
   });
 
@@ -1171,8 +1169,8 @@
     revealControlRoom(lastState.account ? "sign-in" : "create");
     announce(
       lastState.account
-        ? "Create a hosted project to save this reviewed preview."
-        : "Create or sign in to a hosted account to save this reviewed preview."
+        ? "Create a project to save this preview."
+        : "Create an account or sign in to save this preview."
     );
   });
 
@@ -1180,29 +1178,28 @@
   openAccount.disabled = false;
   openAccount.addEventListener("click", function () {
     revealControlRoom("sign-in");
-    announce("Sign in to your hosted Site Sourcery account.");
+    announce("Sign in to your Site Sourcery account.");
   });
 
   var boundary = one(".platform-boundary");
-  boundary.querySelector("strong").textContent = "Hosted staging boundary";
+  boundary.querySelector("strong").textContent = "Saved securely";
   boundary.querySelector("span").textContent =
-    "Account and project actions use the same-origin hosted service. Payment, domain verification, "
-    + "subscription, and publication outcomes remain provider or server authority; the browser only requests them.";
+    "Save projects to your account, manage billing and domains, and choose exactly what goes live.";
   all(".platform-proof-note").forEach(function (note) {
     note.textContent =
-      "Saving proof sends a handoff to the hosted verifier. Only that verifier can mark a domain configured.";
+      "Send your proof here. We’ll check it before connecting the domain.";
   });
 
   renderChoices();
   renderManagementChoices();
   setAuthMode(hostedRecoveryToken ? "recover" : "create");
-  announce("Checking for a secure hosted session…");
+  announce("Opening your account…");
   controlRoom.setAttribute("data-control-ready", "hosted");
   document.documentElement.setAttribute("data-abracadabra-control-ready", "hosted");
   control.boot().then(function () {
-    if (control.getState().account) announce("Hosted account ready.", "success");
+    if (control.getState().account) announce("Account ready.", "success");
     else announce("Guest preview is ready. Sign in only when you want to save.");
   }).catch(function (error) {
-    announce(explain(error, "The hosted account service is unavailable. Guest preview still works."), "error");
+    announce(explain(error, "We couldn’t open your account. Your guest preview still works."), "error");
   });
 }());

@@ -112,7 +112,7 @@
       if (FORBIDDEN_AUTHORITY_FIELDS_NORMALIZED.has(key.toLowerCase())) {
         throw new APIError({
           code: "OWNER_AUTHORITY_REJECTED",
-          message: "Payment, subscription, verification, and publication authority comes from verified providers."
+          message: "Payment, domain, plan, and publishing results are confirmed by Site Sourcery."
         });
       }
       if (isObject(source[key])) rejectClaimedAuthority(source[key]);
@@ -140,7 +140,7 @@
     if (!/^\/api\/v1\/?$/u.test(configuredBaseUrl)) {
       throw new APIError({
         code: "SAME_ORIGIN_API_REQUIRED",
-        message: "Abracadabra hosted controls require the same-origin /api/v1 service."
+        message: "Saved projects could not connect securely."
       });
     }
     var baseUrl = configuredBaseUrl.replace(/\/+$/u, "");

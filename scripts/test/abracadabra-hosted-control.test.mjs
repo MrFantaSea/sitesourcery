@@ -174,6 +174,36 @@ test("staging catalog configuration rejects browser amount and currency authorit
   );
 });
 
+test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon", async () => {
+  const source = await readFile(
+    new URL("../../abracadabra/app/abracadabra-hosted-control-dom.js", import.meta.url),
+    "utf8",
+  );
+  for (const copy of [
+    "You own the domain. Search, pay, register, and manage it here.",
+    "Payment is not available until prices are set.",
+    "We’ll check again right before registration.",
+    "Register this domain",
+    "We got your publish request. This page will show when the site is live.",
+    "Save projects to your account, manage billing and domains, and choose exactly what goes live.",
+  ]) {
+    assert.ok(source.includes(copy), copy);
+  }
+  for (const jargon of [
+    "Hosted staging boundary",
+    "server-verified",
+    "provider authority",
+    "owner approval",
+    "processing asynchronously",
+    "exact accepted version",
+    "legal registrant",
+    "non-transactional",
+    "state-machine",
+  ]) {
+    assert.doesNotMatch(source, new RegExp(jargon, "iu"), jargon);
+  }
+});
+
 test("async actions expose pending and safe retry state while reusing the original idempotency key", async () => {
   const requestKeys = [];
   let attempt = 0;
