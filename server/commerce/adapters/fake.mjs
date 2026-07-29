@@ -73,6 +73,10 @@ export function createFakeApprovedCatalog(overrides = {}) {
         productId,
         tenureId,
         state: "approved",
+        eligibleAddressModes:
+          tenureId === "own"
+            ? ["customer_owned"]
+            : ["licensed", "customer_owned"],
         amounts,
         stripePriceRefs: Object.fromEntries(
           Object.keys(amounts).map((key) => [key, `price_fake_${productId}_${tenureId}_${key}`])

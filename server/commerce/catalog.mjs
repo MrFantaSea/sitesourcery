@@ -65,6 +65,24 @@ function validateOffer(offer, products, tenures) {
   invariant(offer.state === "approved", "invalid_catalog", `offer ${offerId} is not approved`, { status: 500 });
   const shape = BILLING_SHAPES[tenureId];
   invariant(Boolean(shape), "invalid_catalog", `offer ${offerId} tenure shape is unknown`, { status: 500 });
+  invariant(
+    Array.isArray(offer.eligibleAddressModes) &&
+      offer.eligibleAddressModes.length > 0 &&
+      offer.eligibleAddressModes.every(
+        (mode) => mode === "licensed" || mode === "customer_owned"
+      ),
+    "invalid_catalog",
+    `offer ${offerId} eligible address modes are invalid`,
+    { status: 500 }
+  );
+  const eligibleAddressModes = [...new Set(offer.eligibleAddressModes)];
+  invariant(
+    tenureId !== "own" ||
+      (eligibleAddressModes.length === 1 && eligibleAddressModes[0] === "customer_owned"),
+    "invalid_catalog",
+    `offer ${offerId} Own tenure must require a customer-owned address`,
+    { status: 500 }
+  );
   const amounts = {};
   const stripePriceRefs = {};
   for (const key of ["oneTime", "recurring"]) {
@@ -95,6 +113,7 @@ function validateOffer(offer, products, tenures) {
     productId,
     tenureId,
     state: "approved",
+    eligibleAddressModes: Object.freeze(eligibleAddressModes),
     amounts: Object.freeze(amounts),
     stripePriceRefs: Object.freeze(stripePriceRefs)
   });
@@ -231,10 +250,11 @@ export function toBrowserSafeCatalog(catalog) {
         name,
         billingShape: { ...billingShape }
       })),
-    offers: catalog.offers.map(({ offerId, productId, tenureId }) => ({
+    offers: catalog.offers.map(({ offerId, productId, tenureId, eligibleAddressModes }) => ({
       offerId,
       productId,
-      tenureId
+      tenureId,
+      eligibleAddressModes: [...eligibleAddressModes]
     }))
   });
 }

@@ -121,7 +121,16 @@ test("browser-safe catalog exposes pair IDs but no prices, amounts, terms, or St
   assert.equal(result.offers.length, 3);
   assert.deepEqual(result.products.map((row) => row.productId), ["spark"]);
   assert.equal(result.products[0].implementationContract, "abracadabra.spark/v1");
-  assert.deepEqual(Object.keys(result.offers[0]).sort(), ["offerId", "productId", "tenureId"]);
+  assert.deepEqual(Object.keys(result.offers[0]).sort(), [
+    "eligibleAddressModes",
+    "offerId",
+    "productId",
+    "tenureId"
+  ]);
+  assert.deepEqual(
+    result.offers.find((row) => row.tenureId === "own").eligibleAddressModes,
+    ["customer_owned"]
+  );
   assert.equal(JSON.stringify(result).includes("stripe"), false);
   assert.equal(JSON.stringify(result).includes("amountMinor"), false);
   assert.equal(JSON.stringify(result).includes("price_fake"), false);
