@@ -33,6 +33,9 @@ no deployment, Stripe, DNS, email, or hosting-provider calls.
 - `d1/src/repository.mjs` — tenant-scoped transactional repository boundaries.
 - `d1/tests/` — clean-room SQLite schema and behavioral tests.
 - `supabase/migrations/` — ordered PostgreSQL portability migrations.
+- `supabase/migrations/202607280007_hosted_api_edges.sql` — additive
+  same-origin API edges for opaque sessions, exact offer/address quote
+  bindings, immutable cancellation evidence, and one-time export downloads.
 - `tests/postgres-bootstrap.sql` — minimal Supabase `auth.users` stand-in for disposable
   PostgreSQL validation only.
 - `tests/postgres-invariants.sql` — PostgreSQL schema and launch assertions.
@@ -58,3 +61,15 @@ DATABASE_URL=postgresql://... ./scripts/test-postgres.sh
 
 Do not run `tests/postgres-bootstrap.sql` against Supabase. The harness only applies it
 when `auth.users` is absent.
+
+## Hosted identity boundary
+
+`auth.users` remains the identity authority. The hosted API migration never
+creates or shadows it. Supabase Auth, or a reviewed self-host identity bridge,
+must create the `auth.users` row before the API writes
+`ss.hosted_account_profiles` and credential/session material. Direct browser
+access to password verifiers, session digests, and recovery digests is denied;
+only the server-side service role may use those tables.
+
+PostgreSQL is the production system of record. The D1/SQLite lane is retained
+for portability and emulator tests only.

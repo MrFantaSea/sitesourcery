@@ -19,3 +19,6 @@ done
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f "$project_directory/tests/postgres-invariants.sql"
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f "$project_directory/tests/hosted-api-invariants.sql"

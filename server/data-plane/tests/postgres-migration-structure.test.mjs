@@ -47,3 +47,37 @@ test("organizations relies on its primary key without a duplicate synthetic UNIQ
   );
   assert.doesNotMatch(foundation.sql, /unique\s*\(\s*id\s*,\s*id\s*\)/iu);
 });
+
+test("hosted API migration is additive to the canonical ss schema", async () => {
+  const hosted = (await migrations()).find(
+    ({ name }) => name === "202607280007_hosted_api_edges.sql"
+  );
+  assert.ok(hosted);
+  assert.doesNotMatch(hosted.sql, /\bss_hosted\b|runtime_state|runtime_revisions/iu);
+  assert.doesNotMatch(
+    hosted.sql,
+    /create table ss\.(?:organizations|projects|project_drafts|site_versions|project_addresses|stripe_subscriptions|release_requests|support_tickets|export_requests|domain_quotes|domain_registrations)\b/iu
+  );
+  for (const table of [
+    "hosted_account_profiles",
+    "hosted_password_credentials",
+    "hosted_sessions",
+    "hosted_recovery_tokens",
+    "catalog_offer_policies",
+    "commerce_quotes",
+    "checkout_quote_bindings",
+    "subscription_cancellation_previews",
+    "subscription_cancellation_acceptances",
+    "export_download_authorizations"
+  ]) {
+    assert.match(hosted.sql, new RegExp(`create table ss\\.${table}\\b`, "iu"));
+  }
+  assert.match(
+    hosted.sql,
+    /tenure_id = 'own'[\s\S]*eligible_address_modes = array\['customer_owned'\]/iu
+  );
+  assert.match(
+    hosted.sql,
+    /tenure_id in \('rent', 'owned_managed'\)[\s\S]*array\['licensed', 'customer_owned'\]/iu
+  );
+});
