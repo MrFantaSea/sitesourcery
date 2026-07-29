@@ -1,0 +1,7 @@
+HELD — no live Stripe adapter, no approved production offer catalog, and no HTTP route is installed.
+
+This directory is a server-side integration contract and test harness. Remove this
+hold only after the owner approves the explicitly sellable implemented offers,
+production Stripe Price references are supplied through secret server
+configuration, a persistent repository implements the migration, and the release
+checklist is complete.
