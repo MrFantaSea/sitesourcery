@@ -39,8 +39,12 @@ function createContractPaymentProvider() {
   };
   let checkoutSequence = 0;
   let portalSequence = 0;
+  let cancellationFailure = null;
   return {
     calls,
+    failNextCancellation(error) {
+      cancellationFailure = error;
+    },
     port: Object.freeze({
       async readiness() {
         return {
@@ -76,6 +80,11 @@ function createContractPaymentProvider() {
         calls.cancellation.push(
           structuredClone(input)
         );
+        if (cancellationFailure) {
+          const failure = cancellationFailure;
+          cancellationFailure = null;
+          throw failure;
+        }
         return {
           subscriptionId:
             input.stripeSubscriptionId,
@@ -1082,6 +1091,79 @@ test(
     assert.equal(
       payment.calls.cancellation.length,
       1
+    );
+    const reconciliationPreview =
+      await service.getCancellationPreview(
+        actor,
+        projectId
+      );
+    const ambiguousCancellation = new Error(
+      "Provider response was not received."
+    );
+    ambiguousCancellation.code =
+      "stripe_cancellation_effect_unknown";
+    ambiguousCancellation.certainty =
+      "ambiguous";
+    payment.failNextCancellation(
+      ambiguousCancellation
+    );
+    const reconciliation =
+      await service.cancelSubscription(
+        actor,
+        projectId,
+        {
+          previewId:
+            reconciliationPreview.preview
+              .previewId,
+          acceptedDisclosureDigest:
+            reconciliationPreview.preview
+              .disclosureDigest,
+          commandId:
+            "subscription-cancel-reconciliation-0001"
+        }
+      );
+    assert.equal(
+      reconciliation.cancellation.providerStatus,
+      "reconciliation_required"
+    );
+    assert.equal(
+      payment.calls.cancellation.length,
+      2
+    );
+    const reconciliationPoll =
+      await service.processPaymentOutbox({
+        limit: 10,
+        workerId:
+          "test-reconciliation-poll"
+      });
+    assert.equal(
+      reconciliationPoll.processed,
+      0
+    );
+    assert.equal(
+      payment.calls.cancellation.length,
+      2
+    );
+    const heldCancellation = await pool.query(
+      `select
+         available_at::text as available_at,
+         last_error
+       from ss.transactional_outbox
+       where event_type =
+               'subscription.cancellation_requested'
+         and payload ->> 'previewId' = $1`,
+      [
+        reconciliationPreview.preview
+          .previewId
+      ]
+    );
+    assert.deepEqual(
+      heldCancellation.rows[0],
+      {
+        available_at: "infinity",
+        last_error:
+          "ambiguous:stripe_cancellation_effect_unknown"
+      }
     );
     serviceAuthority.failNextFinalizationCommit();
     await assert.rejects(

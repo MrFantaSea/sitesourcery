@@ -10,6 +10,10 @@ import {
   createNodeHandler as createTenantNodeHandler,
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
+import {
+  cancellationWorkerOptionsFromEnvironment,
+  createCancellationWorker
+} from "../cancellation-worker.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -26,6 +30,11 @@ import {
 } from "../repository-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
+import {
+  assertApprovedStripeReady,
+  createConfiguredStripeProvider,
+  redactStripeReadiness
+} from "../stripe-production-config.mjs";
 
 const moduleRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -113,6 +122,7 @@ const pool = createPostgresPool({
 const authority = createCanonicalPostgresAuthority({ pool });
 let apiServer = null;
 let tenantServer = null;
+let cancellationWorker = null;
 let shutdownPromise = null;
 
 function closeServer(server) {
@@ -130,8 +140,12 @@ function shutdown() {
     shutdownPromise = (async () => {
       await Promise.all([
         closeServer(apiServer),
-        closeServer(tenantServer)
+        closeServer(tenantServer),
+        cancellationWorker
+          ? cancellationWorker.stop()
+          : Promise.resolve()
       ]);
+      cancellationWorker = null;
       await authority.close();
     })();
   }
@@ -156,6 +170,8 @@ function listen(server, port) {
 
 async function start() {
   await authority.assertReady();
+  const stripeComposition =
+    createConfiguredStripeProvider();
 
   const identityPepper = secret(
     "SITESOURCERY_IDENTITY_PEPPER"
@@ -215,17 +231,24 @@ async function start() {
     exportStore,
     recoveryMailPort,
     contactVault,
+    paymentProvider: stripeComposition.adapter,
     licensedBaseDomain
   });
 
   const readiness = await service.readiness();
+  assertApprovedStripeReady(
+    stripeComposition,
+    readiness.payments
+  );
   if (!readiness.ready) {
     throw new Error(
-      `Hosted runtime is not ready: ${JSON.stringify(
-        readiness
-      )}`
+      "Hosted runtime is not ready; inspect the private readiness endpoint for exact held dependencies."
     );
   }
+  const paymentReadiness = redactStripeReadiness(
+    readiness.payments,
+    stripeComposition
+  );
 
   apiServer = createServer(
     createApiNodeHandler(createHostedApi(service))
@@ -243,6 +266,19 @@ async function start() {
   await listen(apiServer, apiPort);
   await listen(tenantServer, tenantPort);
 
+  if (stripeComposition.mode === "approved_live") {
+    cancellationWorker = createCancellationWorker({
+      service,
+      ...cancellationWorkerOptionsFromEnvironment(),
+      log(entry) {
+        process.stdout.write(
+          `${JSON.stringify(entry)}\n`
+        );
+      }
+    });
+    cancellationWorker.start();
+  }
+
   process.stdout.write(
     `${JSON.stringify({
       event: "sitesourcery.hosted.started",
@@ -255,7 +291,11 @@ async function start() {
         readiness.recovery.provider ?? null,
       database: readiness.persistence.database,
       compilerRevision: readiness.compiler.revision,
-      catalogVersion: readiness.catalog.catalogVersion
+      catalogVersion: readiness.catalog.catalogVersion,
+      payments: paymentReadiness,
+      cancellationWorker:
+        cancellationWorker?.snapshot().state ??
+        "held_not_started"
     })}\n`
   );
 }
@@ -276,6 +316,5 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     shutdown()
       .then(() => process.exit(0))
       .catch(() => process.exit(1));
-    setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

@@ -14,18 +14,40 @@ function jsonBody(response) {
   return response.json();
 }
 
-function createContext() {
+function createContext({
+  readiness = {
+    ready: true,
+    persistence: {
+      ready: true,
+      database:
+        "postgresql://private-database"
+    },
+    payments: {
+      ready: false,
+      secretKey: "sk_live_never-public",
+      webhookSecret:
+        "whsec_never-public"
+    }
+  }
+} = {}) {
   let requestSequence = 0;
   let csrfIssues = 0;
   const calls = {
     register: [],
     recovery: [],
     rollback: [],
-    webhook: []
+    webhook: [],
+    authenticate: [],
+    readiness: []
   };
   const service = {
     async authenticate(token) {
+      calls.authenticate.push(token);
       return token === SESSION ? ACTOR : null;
+    },
+    async readiness() {
+      calls.readiness.push(true);
+      return structuredClone(readiness);
     },
     async register(input) {
       calls.register.push(input);
@@ -177,6 +199,59 @@ test("CSRF bootstrap is same-origin, stable across tabs, and required before wri
   );
 });
 
+test("health and readiness probes are sessionless, bounded, and nonsecret", async () => {
+  const context = createContext();
+  const health = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/health`)
+  );
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), {
+    ok: true,
+    service: "sitesourcery-hosted-runtime"
+  });
+  assert.equal(
+    health.headers.get("cache-control"),
+    "no-store"
+  );
+  assert.equal(
+    health.headers.get("x-request-id"),
+    "req_1"
+  );
+
+  const ready = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/ready`)
+  );
+  assert.equal(ready.status, 200);
+  const readyPayload = await ready.json();
+  assert.deepEqual(readyPayload, {
+    ready: true,
+    service: "sitesourcery-hosted-runtime"
+  });
+  assert.deepEqual(context.calls.authenticate, []);
+  assert.equal(context.calls.readiness.length, 1);
+  assert.doesNotMatch(
+    JSON.stringify(readyPayload),
+    /postgresql|sk_live|whsec|payments|database/iu
+  );
+
+  const held = createContext({
+    readiness: {
+      ready: false,
+      reason:
+        "private dependency diagnostic"
+    }
+  });
+  const unavailable = await held.api.fetch(
+    new Request(`${ORIGIN}/api/v1/ready`)
+  );
+  assert.equal(unavailable.status, 503);
+  assert.deepEqual(await unavailable.json(), {
+    ready: false,
+    service: "sitesourcery-hosted-runtime"
+  });
+  assert.deepEqual(held.calls.authenticate, []);
+});
+
 test("HTTP boundary routes exact rollback intent and emits a valid export digest", async () => {
   const context = createContext();
   const cookie = `ss_csrf=${CSRF}; ss_session=${SESSION}`;
@@ -282,4 +357,5 @@ test("Stripe webhook route preserves exact raw bytes and relies on signature ins
     context.calls.webhook[0].signature,
     "t=1785268800,v1=signature-proof"
   );
+  assert.deepEqual(context.calls.authenticate, []);
 });

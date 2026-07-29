@@ -2389,7 +2389,11 @@ export function createCanonicalPostgresService({
                 locked_by = null,
                 last_error = $3,
                 available_at =
-                  $4::timestamptz + interval '5 minutes'
+                  case
+                    when $4 = 'ambiguous'
+                      then 'infinity'::timestamptz
+                    else $5::timestamptz + interval '5 minutes'
+                  end
           where id = $1
             and locked_by = $2
             and published_at is null`,
@@ -2397,6 +2401,7 @@ export function createCanonicalPostgresService({
           dispatch.id,
           dispatch.locked_by,
           `${certainty}:${code}`,
+          certainty,
           now(clock)
         ]
       )

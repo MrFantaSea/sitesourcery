@@ -11,6 +11,11 @@ email, publication, or public deployment. Checkout, registrar, and DNS remain
 explicit held provider boundaries. Repository and system publication holds
 remain in force, and no code removes them.
 
+`GET /api/v1/health` and `GET /api/v1/ready` are the only sessionless probe
+routes. They run before authentication and CSRF, return only the service name
+and one boolean, and never expose dependency configuration or diagnostics.
+Stripe webhooks remain the separate raw-body, signature-authenticated route.
+
 ## Required configuration
 
 - `SITESOURCERY_DATABASE_URL`
@@ -51,3 +56,82 @@ launch operation, not a build step.
 The database, server compiler, accepted version, screening, paid entitlement,
 and verified address form one exact publication proof. See
 `PUBLICATION-PORT.md` for the transaction, compensation, and retry contract.
+
+## Stripe production composition
+
+`bin/server.mjs` constructs exactly one Stripe adapter and injects that same
+instance into the hosted service. Checkout, Billing Portal, cancellation, and
+the raw `/api/v1/webhooks/stripe` signature-verification path therefore cannot
+silently use different credentials or modes.
+
+`SITESOURCERY_STRIPE_MODE` defaults to `held`. Production composition accepts
+only `held` or `approved_live`; it rejects `contract_test` even though the
+provider adapter retains that mode for isolated no-network contract tests.
+Selecting `approved_live` does not remove the publication hold and is not itself
+owner authorization.
+
+Approved composition requires every item below:
+
+- `SITESOURCERY_DEPLOYMENT_ENVIRONMENT`: exactly `staging` or `production`.
+  Staging is pinned to Stripe test mode; production is pinned to live mode.
+- `SITESOURCERY_STRIPE_API_VERSION`: exactly `2026-06-24.dahlia`.
+- `SITESOURCERY_STRIPE_LIVEMODE`: exactly `false` for staging or `true` for
+  production.
+- `SITESOURCERY_STRIPE_APPROVAL_JSON`: the exact JSON approval object, with no
+  extra fields. It contains `provider`, `approved`, `environment`, `livemode`,
+  `apiVersion`, `approvalId`, `approvedAt`, and `capabilities`.
+- `SITESOURCERY_STRIPE_SECRET_KEY`: a server-only `sk_test_` or `sk_live_` key
+  matching the bound environment and livemode.
+- `SITESOURCERY_STRIPE_WEBHOOK_SECRET`: the server-only `whsec_` signing secret
+  for the same Stripe endpoint.
+- `SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON`: a non-empty JSON array of exact
+  Price ID, livemode, USD amount, and recurrence expectations.
+- `SITESOURCERY_STRIPE_APPROVED_RETURN_ORIGINS_JSON`: a non-empty JSON array of
+  exact HTTPS origins.
+- `SITESOURCERY_STRIPE_CHECKOUT_SUCCESS_URL`,
+  `SITESOURCERY_STRIPE_CHECKOUT_CANCEL_URL`, and
+  `SITESOURCERY_STRIPE_PORTAL_RETURN_URL`, all on an approved origin.
+- `SITESOURCERY_STRIPE_TAX_MODE`: exactly `automatic` or
+  `disabled_by_owner`.
+
+The approval must include all hosted capabilities: `checkout:create`,
+`billing_portal:create`, `prices:read`, `subscriptions:cancel`, and
+`webhooks:verify`. Domain capabilities are all-or-none. If approved, they also
+require:
+
+- `SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE`;
+- `SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE`;
+- `SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE`.
+
+Both templates contain the exact `{ORDER_ID}` placeholder, and the success
+template also contains `{CHECKOUT_SESSION_ID}`. Configuring domain templates
+without the complete manual-authorization capability set fails startup.
+
+`SITESOURCERY_STRIPE_CHECKOUT_TTL_SECONDS` is optional and remains bounded by the
+adapter. Approved startup calls Stripe readiness, including exact Price
+readback, and refuses startup if readiness is not exact. Startup and worker logs
+emit only an allowlisted readiness projection; secret keys, webhook secrets,
+Price IDs, approval IDs, and return URLs are never serialized.
+
+## Durable worker inventory
+
+Only a durable job with an implemented lease and exact effect-certainty contract
+may be started automatically.
+
+| Work | Production behavior | Recovery truth |
+| --- | --- | --- |
+| Subscription cancellation | A bounded, non-overlapping worker calls `processPaymentOutbox()` only in `approved_live` mode. It uses the existing `FOR UPDATE SKIP LOCKED` lease. | Confirmed effects settle once. Known no-effect failures become eligible after the service-owned five-minute delay. Ambiguous effects are held at PostgreSQL `infinity` and require separately reviewed operator reconciliation; the worker cannot retry them. |
+| Project export | No background worker is started. | `processQueuedExports()` can claim a queued row by moving it to `building`, but it has no crash-recoverable lease. A crashed `building` row is a real release-candidate blocker until a lease/recovery contract exists. |
+| Publication/release | No background worker is started. | Publication is synchronous through the private in-process port. A local finalization failure is recovered only by replaying the exact idempotent customer command; the audit outbox row is not treated as deployment authority. |
+
+Cancellation worker polling is bounded by these optional settings:
+
+- `SITESOURCERY_PAYMENT_WORKER_BATCH_LIMIT` (default `10`, maximum `100`);
+- `SITESOURCERY_PAYMENT_WORKER_INTERVAL_MS` (default `5000`);
+- `SITESOURCERY_PAYMENT_WORKER_ERROR_BACKOFF_MS` (default `5000`);
+- `SITESOURCERY_PAYMENT_WORKER_MAXIMUM_BACKOFF_MS` (default `60000`).
+
+Cycles run serially, cycle failures use capped exponential backoff, and shutdown
+aborts the wait then awaits any active leased cycle before closing PostgreSQL.
+The worker does not define provider retry policy; durable row eligibility and
+effect certainty remain owned by the service transaction.

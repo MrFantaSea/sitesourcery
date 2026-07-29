@@ -214,6 +214,45 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
         const cookies = parseCookies(request.headers.get("cookie"));
         requireSameOrigin(request, url);
 
+        if (
+          method === "GET" &&
+          pathname === "/api/v1/health"
+        ) {
+          return json(
+            {
+              ok: true,
+              service:
+                "sitesourcery-hosted-runtime"
+            },
+            200,
+            { "X-Request-Id": requestId }
+          );
+        }
+
+        if (
+          method === "GET" &&
+          pathname === "/api/v1/ready"
+        ) {
+          invariant(
+            typeof service.readiness === "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Hosted readiness is unavailable.",
+            { status: 500 }
+          );
+          const readiness =
+            await service.readiness();
+          const ready = readiness?.ready === true;
+          return json(
+            {
+              ready,
+              service:
+                "sitesourcery-hosted-runtime"
+            },
+            ready ? 200 : 503,
+            { "X-Request-Id": requestId }
+          );
+        }
+
         if (method === "GET" && pathname === "/api/v1/csrf") {
           const csrfToken = currentCsrfToken(cookies, nextCsrfToken);
           return json(
@@ -267,12 +306,7 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
         let status = 200;
         let headers = { "X-Request-Id": requestId };
 
-        if (method === "GET" && pathname === "/api/v1/health") {
-          result = { ok: true, service: "sitesourcery-hosted-runtime" };
-        } else if (method === "GET" && pathname === "/api/v1/ready") {
-          result = await service.readiness();
-          status = result.ready ? 200 : 503;
-        } else if (method === "POST" && pathname === "/api/v1/auth/register") {
+        if (method === "POST" && pathname === "/api/v1/auth/register") {
           const created = await service.register(write);
           const { sessionToken, ...safe } = created;
           result = safe;

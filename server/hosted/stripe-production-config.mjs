@@ -1,0 +1,512 @@
+import {
+  STRIPE_API_VERSION,
+  createStripeProviderAdapter
+} from "../commerce/adapters/stripe.mjs";
+
+const PRODUCTION_MODES = new Set([
+  "held",
+  "approved_live"
+]);
+const ENVIRONMENT_LIVEMODE = Object.freeze({
+  staging: false,
+  production: true
+});
+const APPROVAL_FIELDS = Object.freeze([
+  "apiVersion",
+  "approvalId",
+  "approved",
+  "approvedAt",
+  "capabilities",
+  "environment",
+  "livemode",
+  "provider"
+]);
+const HOSTED_CAPABILITIES = Object.freeze([
+  "billing_portal:create",
+  "checkout:create",
+  "prices:read",
+  "subscriptions:cancel",
+  "webhooks:verify"
+]);
+const DOMAIN_CAPABILITIES = Object.freeze([
+  "domain_authorization:cancel",
+  "domain_authorization:capture",
+  "domain_authorization:create",
+  "domain_authorization:read",
+  "domain_refunds:create"
+]);
+const APPROVED_CAPABILITIES = new Set([
+  ...HOSTED_CAPABILITIES,
+  ...DOMAIN_CAPABILITIES
+]);
+const DOMAIN_ENVIRONMENT_FIELDS = Object.freeze([
+  "SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE",
+  "SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE",
+  "SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE"
+]);
+const SAFE_LOG_TOKEN = /^[A-Za-z0-9._:-]{1,200}$/u;
+const SENSITIVE_LOG_TOKEN =
+  /^(?:approval|pk_|price_|rk_|sk_(?:live|test)|whsec_)/iu;
+
+function configurationError(code, message) {
+  const error = new Error(message);
+  error.name = "StripeProductionConfigurationError";
+  error.code = code;
+  return error;
+}
+
+function fail(code, message) {
+  throw configurationError(code, message);
+}
+
+function text(environment, name, maximum = 20_000) {
+  const value = environment?.[name];
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > maximum
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED",
+      `${name} is required for approved Stripe composition.`
+    );
+  }
+  return value;
+}
+
+function optionalText(environment, name, maximum = 20_000) {
+  const value = environment?.[name];
+  if (value === undefined || value === "") return null;
+  if (typeof value !== "string" || value.length > maximum) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_INVALID",
+      `${name} is invalid.`
+    );
+  }
+  return value;
+}
+
+function json(environment, name) {
+  const source = text(environment, name, 100_000);
+  try {
+    return JSON.parse(source);
+  } catch {
+    fail(
+      "STRIPE_PRODUCTION_JSON_INVALID",
+      `${name} must contain valid JSON.`
+    );
+  }
+}
+
+function exactObject(value, fields, code, message) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    JSON.stringify(Object.keys(value).sort()) !==
+      JSON.stringify([...fields].sort())
+  ) {
+    fail(code, message);
+  }
+  return value;
+}
+
+function boolean(environment, name) {
+  const value = text(environment, name, 5);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  fail(
+    "STRIPE_PRODUCTION_CONFIGURATION_INVALID",
+    `${name} must be exactly true or false.`
+  );
+}
+
+function positiveInteger(environment, name) {
+  const value = optionalText(environment, name, 20);
+  if (value === null) return undefined;
+  if (!/^[1-9][0-9]*$/u.test(value)) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_INVALID",
+      `${name} must be a positive integer.`
+    );
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_INVALID",
+      `${name} is outside the supported range.`
+    );
+  }
+  return parsed;
+}
+
+function exactArray(value, name) {
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_INVALID",
+      `${name} must contain a non-empty JSON array.`
+    );
+  }
+  return value;
+}
+
+function exactApproval(environment, deployment, livemode) {
+  const approval = exactObject(
+    json(environment, "SITESOURCERY_STRIPE_APPROVAL_JSON"),
+    APPROVAL_FIELDS,
+    "STRIPE_PRODUCTION_APPROVAL_INVALID",
+    "SITESOURCERY_STRIPE_APPROVAL_JSON must contain the exact approval fields."
+  );
+  if (
+    approval.provider !== "stripe" ||
+    approval.approved !== true ||
+    approval.environment !== deployment ||
+    approval.livemode !== livemode ||
+    approval.apiVersion !== STRIPE_API_VERSION ||
+    typeof approval.approvalId !== "string" ||
+    approval.approvalId.length < 8 ||
+    approval.approvalId.length > 200 ||
+    !Number.isFinite(Date.parse(approval.approvedAt)) ||
+    !Array.isArray(approval.capabilities) ||
+    approval.capabilities.length === 0 ||
+    approval.capabilities.some(
+      (capability) =>
+        typeof capability !== "string" ||
+        !SAFE_LOG_TOKEN.test(capability) ||
+        !APPROVED_CAPABILITIES.has(capability)
+    ) ||
+    new Set(approval.capabilities).size !==
+      approval.capabilities.length
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_APPROVAL_INVALID",
+      "Stripe approval is not bound to the exact deployment, livemode, API version, and capability set."
+    );
+  }
+  const capabilities = new Set(approval.capabilities);
+  if (
+    HOSTED_CAPABILITIES.some(
+      (capability) => !capabilities.has(capability)
+    )
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE",
+      "Stripe approval does not include the complete hosted payment capability set."
+    );
+  }
+  const approvedDomainCapabilities =
+    DOMAIN_CAPABILITIES.filter((capability) =>
+      capabilities.has(capability)
+    );
+  if (
+    approvedDomainCapabilities.length !== 0 &&
+    approvedDomainCapabilities.length !==
+      DOMAIN_CAPABILITIES.length
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE",
+      "Stripe domain approval must include the complete manual-authorization capability set."
+    );
+  }
+  return {
+    approval,
+    domainApproved:
+      approvedDomainCapabilities.length ===
+      DOMAIN_CAPABILITIES.length
+  };
+}
+
+function domainAuthorization(
+  environment,
+  domainApproved
+) {
+  const supplied = DOMAIN_ENVIRONMENT_FIELDS.filter(
+    (name) => optionalText(environment, name) !== null
+  );
+  if (!domainApproved) {
+    if (supplied.length > 0) {
+      fail(
+        "STRIPE_PRODUCTION_DOMAIN_APPROVAL_REQUIRED",
+        "Stripe domain templates cannot be configured without the complete approved domain capability set."
+      );
+    }
+    return null;
+  }
+  return {
+    successUrlTemplate: text(
+      environment,
+      "SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE"
+    ),
+    cancelUrlTemplate: text(
+      environment,
+      "SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE"
+    ),
+    authorizationDisclosure: text(
+      environment,
+      "SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE",
+      500
+    )
+  };
+}
+
+function keyForMode(environment, livemode) {
+  const secretKey = text(
+    environment,
+    "SITESOURCERY_STRIPE_SECRET_KEY",
+    500
+  );
+  if (
+    !secretKey.startsWith(
+      livemode ? "sk_live_" : "sk_test_"
+    )
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_KEY_MODE_MISMATCH",
+      "Stripe secret key does not match the approved livemode."
+    );
+  }
+  return secretKey;
+}
+
+function webhookSecret(environment) {
+  const selected = text(
+    environment,
+    "SITESOURCERY_STRIPE_WEBHOOK_SECRET",
+    500
+  );
+  if (!selected.startsWith("whsec_")) {
+    fail(
+      "STRIPE_PRODUCTION_WEBHOOK_SECRET_INVALID",
+      "Stripe webhook signing secret is invalid."
+    );
+  }
+  return selected;
+}
+
+export function createConfiguredStripeProvider({
+  environment = process.env,
+  adapterFactory = createStripeProviderAdapter
+} = {}) {
+  if (typeof adapterFactory !== "function") {
+    fail(
+      "STRIPE_PRODUCTION_FACTORY_INVALID",
+      "Stripe production composition requires the reviewed adapter factory."
+    );
+  }
+  const mode =
+    optionalText(
+      environment,
+      "SITESOURCERY_STRIPE_MODE",
+      50
+    ) ?? "held";
+  if (!PRODUCTION_MODES.has(mode)) {
+    fail(
+      "STRIPE_PRODUCTION_MODE_INVALID",
+      "Production composition permits only held or approved_live Stripe mode."
+    );
+  }
+  if (mode === "held") {
+    return Object.freeze({
+      adapter: adapterFactory({ mode: "held" }),
+      mode: "held",
+      environment: null,
+      livemode: null,
+      apiVersion: STRIPE_API_VERSION
+    });
+  }
+
+  const deployment = text(
+    environment,
+    "SITESOURCERY_DEPLOYMENT_ENVIRONMENT",
+    50
+  );
+  if (!(deployment in ENVIRONMENT_LIVEMODE)) {
+    fail(
+      "STRIPE_PRODUCTION_ENVIRONMENT_INVALID",
+      "Approved Stripe composition requires the exact staging or production deployment environment."
+    );
+  }
+  const apiVersion = text(
+    environment,
+    "SITESOURCERY_STRIPE_API_VERSION",
+    100
+  );
+  if (apiVersion !== STRIPE_API_VERSION) {
+    fail(
+      "STRIPE_PRODUCTION_API_VERSION_MISMATCH",
+      "Stripe API version does not match the pinned runtime version."
+    );
+  }
+  const livemode = boolean(
+    environment,
+    "SITESOURCERY_STRIPE_LIVEMODE"
+  );
+  if (
+    livemode !==
+    ENVIRONMENT_LIVEMODE[deployment]
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_LIVEMODE_MISMATCH",
+      "Stripe livemode does not match the deployment environment."
+    );
+  }
+  const { approval, domainApproved } =
+    exactApproval(
+      environment,
+      deployment,
+      livemode
+    );
+  const priceExpectations = exactArray(
+    json(
+      environment,
+      "SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON"
+    ),
+    "SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON"
+  );
+  const approvedReturnOrigins = exactArray(
+    json(
+      environment,
+      "SITESOURCERY_STRIPE_APPROVED_RETURN_ORIGINS_JSON"
+    ),
+    "SITESOURCERY_STRIPE_APPROVED_RETURN_ORIGINS_JSON"
+  );
+  const checkoutTtlSeconds = positiveInteger(
+    environment,
+    "SITESOURCERY_STRIPE_CHECKOUT_TTL_SECONDS"
+  );
+  const config = {
+    apiVersion,
+    livemode,
+    successUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_CHECKOUT_SUCCESS_URL"
+    ),
+    cancelUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_CHECKOUT_CANCEL_URL"
+    ),
+    portalReturnUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_PORTAL_RETURN_URL"
+    ),
+    approvedReturnOrigins,
+    taxMode: text(
+      environment,
+      "SITESOURCERY_STRIPE_TAX_MODE",
+      100
+    ),
+    webhookSecret: webhookSecret(environment),
+    priceExpectations,
+    domainAuthorization: domainAuthorization(
+      environment,
+      domainApproved
+    ),
+    ...(checkoutTtlSeconds === undefined
+      ? {}
+      : { checkoutTtlSeconds })
+  };
+  const adapter = adapterFactory({
+    mode: "approved_live",
+    secretKey: keyForMode(environment, livemode),
+    liveApproval: approval,
+    config
+  });
+  return Object.freeze({
+    adapter,
+    mode: "approved_live",
+    environment: deployment,
+    livemode,
+    apiVersion
+  });
+}
+
+function safeToken(value, fallback) {
+  return typeof value === "string" &&
+    SAFE_LOG_TOKEN.test(value) &&
+    !SENSITIVE_LOG_TOKEN.test(value)
+    ? value
+    : fallback;
+}
+
+export function redactStripeReadiness(
+  readiness,
+  composition = {}
+) {
+  const value =
+    readiness &&
+    typeof readiness === "object" &&
+    !Array.isArray(readiness)
+      ? readiness
+      : {};
+  return Object.freeze({
+    ready: value.ready === true,
+    provider: "stripe",
+    mode:
+      value.mode === "approved_live" ||
+      value.mode === "held"
+        ? value.mode
+        : composition.mode === "approved_live"
+          ? "approved_live"
+          : "held",
+    environment:
+      value.environment === "staging" ||
+      value.environment === "production"
+        ? value.environment
+        : composition.environment ?? "unbound",
+    livemode:
+      typeof value.livemode === "boolean"
+        ? value.livemode
+        : composition.livemode ?? null,
+    apiVersion:
+      value.apiVersion === STRIPE_API_VERSION
+        ? value.apiVersion
+        : composition.apiVersion ===
+            STRIPE_API_VERSION
+          ? composition.apiVersion
+          : STRIPE_API_VERSION,
+    priceCount: Number.isSafeInteger(
+      value.priceCount
+    )
+      ? value.priceCount
+      : 0,
+    domainAuthorization:
+      value.domainAuthorization === true,
+    webhookVerification:
+      value.webhookVerification === true,
+    taxMode:
+      value.taxMode === "automatic" ||
+      value.taxMode === "disabled_by_owner"
+        ? value.taxMode
+        : "unconfigured",
+    code: safeToken(
+      value.code ?? value.reason,
+      value.ready === true
+        ? "ready"
+        : "stripe_not_ready"
+    )
+  });
+}
+
+export function assertApprovedStripeReady(
+  composition,
+  readiness
+) {
+  if (
+    composition?.mode === "approved_live" &&
+    readiness?.ready !== true
+  ) {
+    throw configurationError(
+      "STRIPE_PRODUCTION_NOT_READY",
+      "Approved Stripe composition failed exact provider readiness."
+    );
+  }
+}
+
+export const STRIPE_PRODUCTION_CONTRACT =
+  Object.freeze({
+    apiVersion: STRIPE_API_VERSION,
+    modes: Object.freeze([...PRODUCTION_MODES]),
+    hostedCapabilities: HOSTED_CAPABILITIES,
+    domainCapabilities: DOMAIN_CAPABILITIES
+  });
