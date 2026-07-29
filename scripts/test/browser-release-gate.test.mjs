@@ -540,7 +540,7 @@ test("homepage first-paint gate fails closed before load across exact cold scena
     path: "/",
     primaryAction: visibleElement({
       href: "/start/",
-      text: "Find the right starting point",
+      text: "Find the right next step",
       height: 48,
       width: 180,
     }),
@@ -675,6 +675,7 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/custom/process/": 3,
     "/abracadabra/how/": 7,
     "/about/": 1,
+    "/contact/": 1,
     "/faq/": 13,
     "/solutions/": 9,
     "/legal/": 1,

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#08070c">
-  <title>Answer three questions · Site Sourcery</title>
-  <meta name="description" content="Answer three plain questions to choose between a website, help with calls and follow-up, or a focused website service.">
+  <title>Find the right next step · Site Sourcery</title>
+  <meta name="description" content="Use a few plain choices to find the closest next step for a website, calls and follow-up, or a focused website service.">
   <link rel="canonical" href="https://sitesourcery.com/start/">
   <link rel="stylesheet" href="/vnext.css">
   <script src="/vnext.js" defer></script>
@@ -32,17 +32,17 @@
     </div>
   </header>
   <main id="main" tabindex="-1">
-    <section class="hero start-hero">
+    <section class="hero start-hero" id="start-path" aria-labelledby="start-path-title" data-customer-section="choose-help">
       <div class="site-shell start-layout">
         <div class="hero-copy reveal">
-          <p class="eyebrow">Three quick questions</p>
-          <h1>Tell me what you need help with.</h1>
+          <p class="eyebrow">A few quick choices</p>
+          <h1 id="start-path-title" data-customer-job="choose-help">Find the right kind of help.</h1>
           <p class="lede">Business owners do not need to know the service name. Pick the problem that sounds closest and this page will point you in the right direction. It does not place an order or charge you. Paid work still needs a written scope and price.</p>
           <p class="start-direct-link">Pick an answer below, or <a href="tel:+18562441220">call Zack at (856) 244-1220</a>.</p>
         </div>
 
         <noscript>
-          <div class="boundary-note start-noscript" role="note">
+          <div class="boundary-note start-noscript" role="note" data-start-fallback="no-script">
             <strong>The question tool needs JavaScript turned on.</strong>
             <span>You do not need it to get help. Go straight to <a href="/custom/">websites</a>, <a href="/hive/">calls and follow-up</a>, or <a href="/solutions/">other website help</a>—or <a href="tel:+18562441220">call Zack</a>.</span>
           </div>
@@ -53,9 +53,9 @@
             <p class="card-kicker">Question 1 · What needs to change?</p>
             <h2>What do you need help with?</h2>
             <div class="chooser-options">
-              <button type="button" data-start-path="website"><strong>A website</strong><small>Make a new site or replace one that already exists.</small></button>
-              <button type="button" data-start-path="system"><strong>Calls and follow-up</strong><small>Stop missed calls, bookings, reviews, or payments from slipping.</small></button>
-              <button type="button" data-start-path="service"><strong>Other website help</strong><small>Review an existing site, ask about upkeep, or solve one specific problem.</small></button>
+              <button type="button" data-start-path="website" data-intake-category="website"><strong>A website</strong><small>Make a new site or replace one that already exists.</small></button>
+              <button type="button" data-start-path="system" data-intake-category="system"><strong>Calls and follow-up</strong><small>Stop missed calls, bookings, reviews, or payments from slipping.</small></button>
+              <button type="button" data-start-path="service" data-intake-category="service"><strong>Other website help</strong><small>Review an existing site, ask about upkeep, or solve one specific problem.</small></button>
             </div>
           </div>
 
@@ -78,23 +78,23 @@
             <p class="chooser-human"><a href="/contact/">See every contact option</a></p>
           </div>
         </div>
-        <div class="boundary-note start-noscript">
+        <div class="boundary-note start-noscript" data-start-fallback="skip">
           <strong>Want to skip the questions?</strong>
           <span>Open <a href="/custom/">websites</a>, <a href="/hive/">calls and follow-up</a>, or <a href="/solutions/">other website help</a>. You can also <a href="/contact/">contact Zack directly</a>.</span>
         </div>
       </div>
     </section>
 
-    <section class="section section-dark" id="direct-contact" data-intake-state="open">
+    <section class="section section-dark" id="direct-contact" aria-labelledby="start-human-title" data-customer-section="ask-zack" data-intake-state="open">
       <div class="site-shell contact-panel">
         <div class="reveal">
           <p class="eyebrow">Prefer to ask Zack?</p>
-          <h2>You do not need a polished brief.</h2>
+          <h2 id="start-human-title" data-customer-job="ask-zack">You do not need a polished brief.</h2>
           <p>Share what is not working, the result you want, and anything that already exists.</p>
         </div>
         <div class="reveal">
           <p class="card-kicker">Project inquiries are open</p>
-          <a class="button button-primary" href="/contact/">Call or email Zack</a>
+          <a class="button button-primary" href="/contact/" data-primary-action="start-contact">Call or email Zack</a>
         </div>
       </div>
     </section>

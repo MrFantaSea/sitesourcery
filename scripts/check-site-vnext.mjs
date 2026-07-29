@@ -43,6 +43,165 @@ export const SOLUTION_ANCHORS = Object.freeze([
   "network",
 ]);
 export const START_PATHS = Object.freeze(["website", "system", "service"]);
+export const INTAKE_CATEGORIES = Object.freeze(["website", "system", "service"]);
+export const CUSTOMER_SECTION_CONTRACTS = Object.freeze({
+  "/start/": Object.freeze([
+    Object.freeze({
+      id: "choose-help",
+      elementId: "start-path",
+      labelledBy: "start-path-title",
+      job: "choose-help",
+      copy: "Find the right kind of help.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "ask-zack",
+      elementId: "direct-contact",
+      labelledBy: "start-human-title",
+      job: "ask-zack",
+      copy: "You do not need a polished brief.",
+      action: Object.freeze({ id: "start-contact", href: "/contact/" }),
+    }),
+  ]),
+  "/work/": Object.freeze([
+    Object.freeze({
+      id: "evidence-overview",
+      elementId: "work-overview",
+      labelledBy: "work-title",
+      job: "separate-the-proof",
+      copy: "See what is real, fictional, and working.",
+      action: Object.freeze({ id: "work-contact", href: "/contact/#direct-contact" }),
+    }),
+    Object.freeze({
+      id: "founder-owned-example",
+      elementId: "scone-sourcery",
+      labelledBy: "scone-title",
+      job: "inspect-real-example",
+      copy: "Inspect the real venture.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "fictional-range",
+      elementId: "fictional-studies",
+      labelledBy: "demonstrations-title",
+      job: "inspect-fictional-range",
+      copy: "See two styles without fake client claims.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "working-tools",
+      elementId: "working-tools",
+      labelledBy: "working-proof-title",
+      job: "try-working-tools",
+      copy: "Try the working tools yourself.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "website-inquiry",
+      elementId: "work-inquiry",
+      labelledBy: "work-closing-title",
+      job: "ask-about-your-site",
+      copy: "Ask about a website built for your business.",
+      action: Object.freeze({ id: "work-closing-contact", href: "/contact/#direct-contact" }),
+    }),
+  ]),
+  "/about/": Object.freeze([
+    Object.freeze({
+      id: "studio-owner",
+      elementId: "about-studio",
+      labelledBy: "about-studio-title",
+      job: "know-who-is-responsible",
+      copy: "Work with the person doing the work.",
+      action: Object.freeze({ id: "about-contact", href: "/contact/#direct-contact" }),
+    }),
+    Object.freeze({
+      id: "one-person-model",
+      elementId: "the-difference",
+      labelledBy: "one-person-title",
+      job: "understand-one-person-model",
+      copy: "Why work with one person?",
+      action: null,
+    }),
+    Object.freeze({
+      id: "accountable-process",
+      elementId: "accountable-process",
+      labelledBy: "accountable-process-title",
+      job: "follow-the-work",
+      copy: "How will the work stay clear?",
+      action: null,
+    }),
+    Object.freeze({
+      id: "inspectable-proof",
+      elementId: "inspectable-proof",
+      labelledBy: "inspectable-proof-title",
+      job: "inspect-before-deciding",
+      copy: "What can you inspect before deciding?",
+      action: null,
+    }),
+    Object.freeze({
+      id: "direct-inquiry",
+      elementId: "about-contact",
+      labelledBy: "about-contact-title",
+      job: "explain-the-problem",
+      copy: "Want to explain the problem directly?",
+      action: Object.freeze({ id: "about-closing-contact", href: "/contact/#direct-contact" }),
+    }),
+  ]),
+  "/contact/": Object.freeze([
+    Object.freeze({
+      id: "contact-overview",
+      elementId: "contact-overview",
+      labelledBy: "contact-title",
+      job: "reach-zack",
+      copy: "Call or email Zack.",
+      action: Object.freeze({ id: "choose-contact-method", href: "#direct-contact" }),
+    }),
+    Object.freeze({
+      id: "contact-methods",
+      elementId: "direct-contact",
+      labelledBy: "direct-contact-title",
+      job: "choose-contact-method",
+      copy: "Choose the contact method that works for you.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "inquiry-types",
+      elementId: "inquiry-types",
+      labelledBy: "inquiry-types-title",
+      job: "choose-inquiry-type",
+      copy: "Start with the closest kind of help.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "first-note",
+      elementId: "first-note",
+      labelledBy: "first-note-title",
+      job: "prepare-first-note",
+      copy: "A short first note is enough.",
+      action: Object.freeze({ id: "contact-start-chooser", href: "/start/" }),
+    }),
+  ]),
+});
+export const CUSTOMER_EVIDENCE_CONTRACTS = Object.freeze({
+  "/work/": Object.freeze([
+    Object.freeze({ id: "founder-owned-current-site", kind: "founder-owned-venture" }),
+    Object.freeze({ id: "founder-owned-live-link", kind: "founder-owned-venture" }),
+    Object.freeze({ id: "fictional-hospitality", kind: "fictional-design-study" }),
+    Object.freeze({ id: "fictional-local-service", kind: "fictional-design-study" }),
+    Object.freeze({ id: "working-abracadabra", kind: "working-browser-tool" }),
+    Object.freeze({ id: "working-hive", kind: "working-planner" }),
+  ]),
+  "/about/": Object.freeze([
+    Object.freeze({ id: "studio-base", kind: "studio-stated" }),
+    Object.freeze({ id: "entity-formed", kind: "public-record" }),
+    Object.freeze({ id: "studio-operator", kind: "studio-stated" }),
+    Object.freeze({ id: "legal-seller", kind: "public-record" }),
+    Object.freeze({ id: "labeled-work", kind: "labeled-example-index" }),
+    Object.freeze({ id: "published-scope", kind: "published-scope" }),
+    Object.freeze({ id: "working-maker", kind: "working-browser-tool" }),
+    Object.freeze({ id: "working-planner", kind: "working-planner" }),
+  ]),
+});
 export const ARTIFACT_SIZE_BUDGETS = Object.freeze({
   total: 4 * 1024 * 1024,
   html: 48 * 1024,
@@ -395,6 +554,35 @@ const RETIRED_HOME_HIVE_COPY = Object.freeze([
   "Ready-made and commissioned systems",
   "Start with After-Hours for missed calls",
 ]);
+const TARGET_CUSTOMER_ROUTES = Object.freeze([
+  "/",
+  "/start/",
+  "/work/",
+  "/about/",
+  "/contact/",
+]);
+const FORBIDDEN_CUSTOMER_INVENTIONS = Object.freeze([
+  Object.freeze({
+    label: "false fixed Start question count",
+    expression: /\b(?:answer three questions|answer three plain questions|three quick questions)\b/iu,
+  }),
+  Object.freeze({
+    label: "invented response-time promise",
+    expression: /\b(?:reply|respond|hear back)\b[^.!?]{0,48}\b(?:within|same|next)\b[^.!?]{0,24}\b(?:hour|day|week)s?\b/iu,
+  }),
+  Object.freeze({
+    label: "invented delivery timeline",
+    expression: /\b(?:deliver|finish|launch|complete|ready)\w*\b[^.!?]{0,48}\b(?:in|within)\s+(?:\d+|one|two|three|four|five|six)\s+(?:business\s+)?(?:hour|day|week)s?\b/iu,
+  }),
+  Object.freeze({
+    label: "invented service area",
+    expression: /\b(?:serve|serving)\s+(?:all\s+of\s+)?(?:business(?:es)?|clients?|customers?)?\s*(?:in|across|throughout)?\s*(?:New Jersey|South Jersey|Pennsylvania|Philadelphia)\b/iu,
+  }),
+  Object.freeze({
+    label: "invented client result",
+    expression: /\b(?:our clients?|client success|clients? (?:doubled|increased|grew)|helped (?:a |the )?client)\b/iu,
+  }),
+]);
 
 function lexical(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -471,6 +659,245 @@ function checkExactValues(file, label, actual, expected, errors) {
     report(errors, file, `${label} must exactly equal ${expected.join(", ")} in order; received ${actual.join(", ")}`);
   }
   if (new Set(actual).size !== actual.length) report(errors, file, `${label} values must be unique`);
+}
+
+function customerSectionBlocks(file, source, errors) {
+  const main = source.match(/<main\b[^>]*>([\s\S]*?)<\/main>/iu)?.[1] ?? "";
+  const sections = [];
+  try {
+    for (const match of main.matchAll(/<section\b([^>]*)>([\s\S]*?)<\/section>/giu)) {
+      sections.push({
+        attributes: parseAttributes(match[1]),
+        body: match[2],
+      });
+    }
+  } catch (error) {
+    report(errors, file, error.message);
+  }
+  return sections;
+}
+
+function checkCustomerSections(routeSources, errors) {
+  for (const [route, expectedSections] of Object.entries(CUSTOMER_SECTION_CONTRACTS)) {
+    const entry = routeSources.get(route);
+    if (!entry) continue;
+    const sections = customerSectionBlocks(entry.file, entry.source, errors);
+    const actualIds = sections.map(({ attributes }) => attributes.get("data-customer-section") ?? "");
+    checkExactValues(
+      entry.file,
+      "customer section jobs",
+      actualIds,
+      expectedSections.map(({ id }) => id),
+      errors,
+    );
+    for (const [index, expected] of expectedSections.entries()) {
+      const section = sections[index];
+      if (!section) continue;
+      if (
+        section.attributes.get("id") !== expected.elementId
+        || section.attributes.get("aria-labelledby") !== expected.labelledBy
+      ) {
+        report(
+          errors,
+          entry.file,
+          `customer section ${expected.id} must be #${expected.elementId} labelled by #${expected.labelledBy}`,
+        );
+      }
+      let tags = [];
+      try {
+        tags = openingTags(section.body);
+      } catch (error) {
+        report(errors, entry.file, error.message);
+      }
+      const jobs = tags.filter(({ attributes }) => attributes.has("data-customer-job"));
+      if (
+        jobs.length !== 1
+        || !["h1", "h2"].includes(jobs[0]?.name)
+        || jobs[0]?.attributes.get("data-customer-job") !== expected.job
+        || jobs[0]?.attributes.get("id") !== expected.labelledBy
+      ) {
+        report(
+          errors,
+          entry.file,
+          `customer section ${expected.id} must contain exactly one labelled h1/h2 job ${expected.job}`,
+        );
+      }
+      if (!section.body.includes(expected.copy)) {
+        report(errors, entry.file, `customer section ${expected.id} is missing exact job copy ${JSON.stringify(expected.copy)}`);
+      }
+      const actions = tags.filter(({ attributes }) => attributes.has("data-primary-action"));
+      if (!expected.action) {
+        if (actions.length !== 0) {
+          report(errors, entry.file, `customer section ${expected.id} must not claim a primary action`);
+        }
+      } else if (
+        actions.length !== 1
+        || actions[0].name !== "a"
+        || actions[0].attributes.get("data-primary-action") !== expected.action.id
+        || actions[0].attributes.get("href") !== expected.action.href
+      ) {
+        report(
+          errors,
+          entry.file,
+          `customer section ${expected.id} must contain exactly one primary anchor ${expected.action.id} to ${expected.action.href}`,
+        );
+      }
+    }
+  }
+}
+
+function checkCustomerEvidence(routeSources, errors) {
+  for (const [route, expectedEvidence] of Object.entries(CUSTOMER_EVIDENCE_CONTRACTS)) {
+    const entry = routeSources.get(route);
+    if (!entry) continue;
+    let evidence = [];
+    try {
+      evidence = openingTags(entry.source)
+        .filter(({ attributes }) => attributes.has("data-evidence-id"));
+    } catch (error) {
+      report(errors, entry.file, error.message);
+    }
+    const actualIds = evidence.map(({ attributes }) => attributes.get("data-evidence-id"));
+    checkExactValues(
+      entry.file,
+      "customer evidence labels",
+      actualIds,
+      expectedEvidence.map(({ id }) => id),
+      errors,
+    );
+    for (const [index, expected] of expectedEvidence.entries()) {
+      if (evidence[index]?.attributes.get("data-evidence-kind") !== expected.kind) {
+        report(
+          errors,
+          entry.file,
+          `customer evidence ${expected.id} must retain kind ${expected.kind}`,
+        );
+      }
+    }
+  }
+}
+
+function checkIntakeCongruence(routeSources, errors) {
+  const start = routeSources.get("/start/");
+  const contact = routeSources.get("/contact/");
+  if (start) {
+    const categories = markedElements(start.file, start.source, "data-intake-category", errors);
+    checkExactValues(
+      start.file,
+      "Start intake categories",
+      categories.map(({ value }) => value),
+      INTAKE_CATEGORIES,
+      errors,
+    );
+    for (const category of categories) {
+      if (category.name !== "button" || category.href != null) {
+        report(errors, start.file, `Start intake category ${category.value} must remain a non-navigating button`);
+      }
+    }
+    const fallbacks = markedElements(start.file, start.source, "data-start-fallback", errors);
+    checkExactValues(
+      start.file,
+      "Start non-JavaScript and skip fallbacks",
+      fallbacks.map(({ value }) => value),
+      ["no-script", "skip"],
+      errors,
+    );
+    for (const marker of [
+      "The question tool needs JavaScript turned on.",
+      'href="/custom/"',
+      'href="/hive/"',
+      'href="/solutions/"',
+      'href="tel:+18562441220"',
+      'data-start-back',
+      'data-start-restart',
+    ]) {
+      if (!start.source.includes(marker)) {
+        report(errors, start.file, `missing exact chooser fallback or return path ${JSON.stringify(marker)}`);
+      }
+    }
+  }
+  if (contact) {
+    const categories = markedElements(contact.file, contact.source, "data-intake-category", errors);
+    checkExactValues(
+      contact.file,
+      "Contact intake categories",
+      categories.map(({ value }) => value),
+      INTAKE_CATEGORIES,
+      errors,
+    );
+    const hrefs = new Map([
+      ["website", "/custom/"],
+      ["system", "/hive/"],
+      ["service", "/solutions/"],
+    ]);
+    for (const category of categories) {
+      if (category.name !== "a" || category.href !== hrefs.get(category.value)) {
+        report(errors, contact.file, `Contact intake category ${category.value} must link to ${hrefs.get(category.value)}`);
+      }
+    }
+    const methods = markedElements(contact.file, contact.source, "data-contact-method", errors);
+    checkExactValues(
+      contact.file,
+      "native contact methods",
+      methods.map(({ value }) => value),
+      ["phone", "email"],
+      errors,
+    );
+    const fallbacks = markedElements(contact.file, contact.source, "data-native-fallback", errors);
+    checkExactValues(
+      contact.file,
+      "native contact copy fallbacks",
+      fallbacks.map(({ value }) => value),
+      ["copy-phone", "copy-email"],
+      errors,
+    );
+  }
+}
+
+function targetCustomerText(source) {
+  const main = source.match(/<main\b[^>]*>([\s\S]*?)<\/main>/iu)?.[1] ?? "";
+  return main
+    .replace(/<blockquote\b[^>]*data-personal-quote="[^"]+"[^>]*>[\s\S]*?<\/blockquote>/giu, " ")
+    .replace(/<!--[\s\S]*?-->/gu, " ")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function checkTargetCustomerClaims(routeSources, errors) {
+  for (const route of TARGET_CUSTOMER_ROUTES) {
+    const entry = routeSources.get(route);
+    if (!entry) continue;
+    const text = targetCustomerText(entry.source);
+    const firstPersonPlural = text.match(/\b(?:we|we['’](?:re|ve|ll)|us|our|ours|ourselves)\b/iu);
+    if (firstPersonPlural) {
+      report(
+        errors,
+        entry.file,
+        `contains one-person-studio contradiction outside an explicit personal quote ${JSON.stringify(firstPersonPlural[0])}`,
+      );
+    }
+    for (const forbidden of FORBIDDEN_CUSTOMER_INVENTIONS) {
+      const match = text.match(forbidden.expression);
+      if (match) {
+        report(errors, entry.file, `contains ${forbidden.label} ${JSON.stringify(match[0])}`);
+      }
+    }
+  }
+}
+
+function checkContactSelectionContract(source, errors) {
+  const file = "vnext.css";
+  for (const marker of [
+    'a[href^="tel:"]',
+    'a[href^="mailto:"]',
+    "-webkit-user-select: text",
+    "user-select: text",
+  ]) {
+    if (!source.includes(marker)) {
+      report(errors, file, `missing selectable phone/email contract ${JSON.stringify(marker)}`);
+    }
+  }
 }
 
 function checkHomeDoors(source, errors) {
@@ -1471,6 +1898,10 @@ export async function validateSiteVnext(root = process.cwd()) {
   if (about) checkAboutTrust(about, errors);
   const work = routeResult.sources.get("/work/")?.source;
   if (work) checkWorkExternalProof(work, errors);
+  checkCustomerSections(routeResult.sources, errors);
+  checkCustomerEvidence(routeResult.sources, errors);
+  checkIntakeCongruence(routeResult.sources, errors);
+  checkTargetCustomerClaims(routeResult.sources, errors);
   checkInformationWayfinding(routeResult.sources, errors);
   checkAbracadabraProductCoherence(routeResult.sources, errors);
   checkPublicTruthCoherence(routeResult.sources, errors);
@@ -1488,7 +1919,10 @@ export async function validateSiteVnext(root = process.cwd()) {
     if (extension === ".css") {
       checkCssReferences(file, source, sourceFiles, errors);
       checkCssTypeFloor(file, source, errors);
-      if (file === "vnext.css") checkStartMotionContract(source, errors);
+      if (file === "vnext.css") {
+        checkStartMotionContract(source, errors);
+        checkContactSelectionContract(source, errors);
+      }
     }
     if (file === "abracadabra/abracadabra-showcase.js") {
       checkAbracadabraShowcaseCopy(source, errors);

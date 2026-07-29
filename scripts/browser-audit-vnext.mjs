@@ -161,6 +161,7 @@ export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
   "/custom/process/": 3,
   "/abracadabra/how/": 7,
   "/about/": 1,
+  "/contact/": 1,
   "/faq/": 13,
   "/solutions/": 9,
   "/legal/": 1,
@@ -316,7 +317,7 @@ export function homeFirstPaintFailures(snapshot, checkpoint, scenario) {
       href: "/start/",
       minimumHeight: 44,
       minimumWidth: 44,
-      text: "Find the right starting point",
+      text: "Find the right next step",
     }),
   })) {
     const element = snapshot[name];

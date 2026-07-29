@@ -22,6 +22,8 @@ import {
   ABRACADABRA_PRODUCT_COPY,
   ABRACADABRA_STATE_BADGE,
   BUSINESS_EMAIL_COPY,
+  CUSTOMER_EVIDENCE_CONTRACTS,
+  CUSTOMER_SECTION_CONTRACTS,
   CUSTOM_COMPONENTS,
   CUSTOM_CREATIVE_PROOFS,
   CUSTOM_CREATIVITY,
@@ -34,6 +36,7 @@ import {
   HOME_EVIDENCE_COPY,
   HOME_HIVE_COPY,
   HOME_DOORS,
+  INTAKE_CATEGORIES,
   PRIVACY_SECTION_IDS,
   PUBLIC_TRUTH_COPY,
   SOLUTION_ANCHORS,
@@ -101,6 +104,7 @@ function safeAllowlistPlaceholder(file) {
     return [
       "html.start-chooser-page { overflow-anchor: none; }",
       ".js .start-chooser.reveal { transition: none; }",
+      'a[href^="tel:"], a[href^="mailto:"] { -webkit-user-select: text; user-select: text; }',
       "",
     ].join("\n");
   }
@@ -134,6 +138,19 @@ function primaryNav() {
   ].join("");
 }
 
+function customerSection(section, extra = "") {
+  const action = section.action
+    ? `<a data-primary-action="${section.action.id}" href="${section.action.href}">${section.action.id}</a>`
+    : "";
+  return [
+    `<section id="${section.elementId}" aria-labelledby="${section.labelledBy}" data-customer-section="${section.id}">`,
+    `<h2 id="${section.labelledBy}" data-customer-job="${section.job}">${section.copy}</h2>`,
+    extra,
+    action,
+    "</section>",
+  ].join("");
+}
+
 function routeFeature(route) {
   if (route === "/") {
     return [
@@ -157,12 +174,16 @@ function routeFeature(route) {
       .join("");
   }
   if (route === "/start/") {
-    return [
-      ...START_PATHS
-        .map((startPath) => `<button type="button" data-start-path="${startPath}">${startPath}</button>`),
+    const [chooser, contact] = CUSTOMER_SECTION_CONTRACTS[route];
+    const chooserExtra = [
+      ...START_PATHS.map((startPath) =>
+        `<button type="button" data-start-path="${startPath}" data-intake-category="${startPath}">${startPath}</button>`),
       '<h2 data-start-question tabindex="-1">Question</h2>',
       '<div data-start-result role="status" aria-live="polite" tabindex="-1"></div>',
+      '<div data-start-fallback="no-script">The question tool needs JavaScript turned on. <a href="/custom/">websites</a><a href="/hive/">calls</a><a href="/solutions/">services</a><a href="tel:+18562441220">call</a></div>',
+      '<div data-start-fallback="skip"><button data-start-back>Back</button><button data-start-restart>Restart</button></div>',
     ].join("");
+    return customerSection(chooser, chooserExtra) + customerSection(contact);
   }
   if (route === "/custom/scope/") {
     return [
@@ -192,19 +213,68 @@ function routeFeature(route) {
       abracadabra: "/abracadabra/app/",
       hive: "/hive/",
     };
+    const [studio, model, process, proof, contact] = CUSTOMER_SECTION_CONTRACTS[route];
+    const evidence = CUSTOMER_EVIDENCE_CONTRACTS[route];
+    const studioExtra = ABOUT_TRUST_FACTS.map((id, index) =>
+      `<div data-about-trust="${id}" data-evidence-id="${evidence[index].id}" data-evidence-kind="${evidence[index].kind}">${id}</div>`)
+      .join("");
+    const proofExtra = ABOUT_PROOFS.map((id, index) => {
+      const item = evidence[index + ABOUT_TRUST_FACTS.length];
+      return `<a href="${hrefs[id]}" data-about-proof="${id}" data-evidence-id="${item.id}" data-evidence-kind="${item.kind}">${id}</a>`;
+    }).join("");
     return [
-      '<section id="the-difference">Difference</section>',
-      ...ABOUT_TRUST_FACTS.map((id) => `<div data-about-trust="${id}">${id}</div>`),
-      ...ABOUT_PROOFS.map((id) => `<a href="${hrefs[id]}" data-about-proof="${id}">${id}</a>`),
+      customerSection(studio, studioExtra),
+      customerSection(model, '<blockquote data-personal-quote="zack">I keep the work direct.</blockquote>'),
+      customerSection(process),
+      customerSection(proof, proofExtra),
+      customerSection(contact),
     ].join("");
   }
   if (route === "/work/") {
+    const [overview, founder, fictional, tools, contact] = CUSTOMER_SECTION_CONTRACTS[route];
+    const evidence = CUSTOMER_EVIDENCE_CONTRACTS[route];
     return [
-      '<div data-external-proof="scone-sourcery" data-proof-state="verified-founder-owned">',
-      "<strong>Explore the live venture</strong>",
-      "<span>Scone Sourcery is a separate founder-owned venture, not a client engagement. Its public site shows the current interface and current business state.</span>",
-      '<a data-external-proof-link="scone-sourcery" href="https://sconesourcery.com/" rel="external">Visit Scone Sourcery</a>',
-      "</div>",
+      customerSection(
+        overview,
+        `<figure data-evidence-id="${evidence[0].id}" data-evidence-kind="${evidence[0].kind}">Founder-owned venture · not client work</figure>`,
+      ),
+      customerSection(founder, [
+        `<div data-external-proof="scone-sourcery" data-proof-state="verified-founder-owned" data-evidence-id="${evidence[1].id}" data-evidence-kind="${evidence[1].kind}">`,
+        "<strong>Explore the live venture</strong>",
+        "<span>Scone Sourcery is a separate founder-owned venture, not a client engagement. Its public site shows the current interface and current business state.</span>",
+        '<a data-external-proof-link="scone-sourcery" href="https://sconesourcery.com/" rel="external">Visit Scone Sourcery</a>',
+        "</div>",
+      ].join("")),
+      customerSection(fictional, [
+        `<article data-evidence-id="${evidence[2].id}" data-evidence-kind="${evidence[2].kind}">Fictional demonstration</article>`,
+        `<article data-evidence-id="${evidence[3].id}" data-evidence-kind="${evidence[3].kind}">Fictional demonstration</article>`,
+      ].join("")),
+      customerSection(tools, [
+        `<a href="/abracadabra/app/" data-evidence-id="${evidence[4].id}" data-evidence-kind="${evidence[4].kind}">Abracadabra</a>`,
+        `<a href="/hive/" data-evidence-id="${evidence[5].id}" data-evidence-kind="${evidence[5].kind}">Hive</a>`,
+      ].join("")),
+      customerSection(contact),
+    ].join("");
+  }
+  if (route === "/contact/") {
+    const [overview, methods, types, note] = CUSTOMER_SECTION_CONTRACTS[route];
+    const methodExtra = [
+      '<div data-contact-method="phone" data-native-fallback="copy-phone"><a href="tel:+18562441220">(856) 244-1220</a></div>',
+      '<div data-contact-method="email" data-native-fallback="copy-email"><a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a></div>',
+    ].join("");
+    const hrefs = new Map([
+      ["website", "/custom/"],
+      ["system", "/hive/"],
+      ["service", "/solutions/"],
+    ]);
+    const typeExtra = INTAKE_CATEGORIES
+      .map((id) => `<a href="${hrefs.get(id)}" data-intake-category="${id}">${id}</a>`)
+      .join("");
+    return [
+      customerSection(overview),
+      customerSection(methods, methodExtra),
+      customerSection(types, typeExtra),
+      customerSection(note),
     ].join("");
   }
   if (route === "/custom/process/") {
@@ -417,6 +487,9 @@ test("canonical route ledger is exact and stable", () => {
     ["assessment", "foundations", "care", "domains", "email", "commerce", "interfaces", "studio", "network"],
   );
   assert.deepEqual(START_PATHS, ["website", "system", "service"]);
+  assert.deepEqual(INTAKE_CATEGORIES, ["website", "system", "service"]);
+  assert.deepEqual(Object.keys(CUSTOMER_SECTION_CONTRACTS), ["/start/", "/work/", "/about/", "/contact/"]);
+  assert.deepEqual(Object.keys(CUSTOMER_EVIDENCE_CONTRACTS), ["/work/", "/about/"]);
   assert.deepEqual(ARTIFACT_SIZE_BUDGETS, {
     total: 4 * 1024 * 1024,
     html: 48 * 1024,
@@ -704,8 +777,8 @@ test("vNext requires Start path controls to remain non-navigating buttons", asyn
   await expectSiteFailure(
     (root) => modify(root, "start/index.html", (source) =>
       source.replace(
-        '<button type="button" data-start-path="system">system</button>',
-        '<a href="/hive/" data-start-path="system">system</a>',
+        '<button type="button" data-start-path="system" data-intake-category="system">system</button>',
+        '<a href="/hive/" data-start-path="system" data-intake-category="system">system</a>',
       )),
     /Start chooser path system must be a button without navigation fallback/u,
   );
@@ -722,6 +795,103 @@ test("vNext locks Start question and result accessibility semantics", async (t) 
       source.replace('role="status" aria-live="polite"', 'role="region" aria-live="off"')),
     /missing Start focus or live-region semantics/u,
   ));
+});
+
+test("every assigned trust and intake section keeps one exact customer job and action priority", async (t) => {
+  await t.test("missing section marker", () => expectSiteFailure(
+    (root) => modify(root, "about/index.html", (source) =>
+      source.replace(' data-customer-section="accountable-process"', "")),
+    /customer section jobs must exactly equal/u,
+  ));
+  await t.test("missing job marker", () => expectSiteFailure(
+    (root) => modify(root, "work/index.html", (source) =>
+      source.replace(' data-customer-job="inspect-fictional-range"', "")),
+    /must contain exactly one labelled h1\/h2 job inspect-fictional-range/u,
+  ));
+  await t.test("mislabelled section", () => expectSiteFailure(
+    (root) => modify(root, "contact/index.html", (source) =>
+      source.replace('aria-labelledby="direct-contact-title"', 'aria-labelledby="contact-title"')),
+    /customer section contact-methods must be #direct-contact labelled by #direct-contact-title/u,
+  ));
+  await t.test("rerouted primary action", () => expectSiteFailure(
+    (root) => modify(root, "about/index.html", (source) =>
+      source.replace(
+        '<a data-primary-action="about-closing-contact" href="/contact/#direct-contact">',
+        '<a data-primary-action="about-closing-contact" href="/start/">',
+      )),
+    /must contain exactly one primary anchor about-closing-contact to \/contact\/#direct-contact/u,
+  ));
+  await t.test("extra primary claim", () => expectSiteFailure(
+    (root) => modify(root, "work/index.html", (source) =>
+      source.replace(
+        '<a data-external-proof-link="scone-sourcery"',
+        '<a data-primary-action="competing-action" data-external-proof-link="scone-sourcery"',
+      )),
+    /customer section founder-owned-example must not claim a primary action/u,
+  ));
+});
+
+test("evidence labels, intake categories, and native fallbacks fail closed", async (t) => {
+  await t.test("invented evidence kind", () => expectSiteFailure(
+    (root) => modify(root, "work/index.html", (source) =>
+      source.replace(
+        'data-evidence-id="fictional-hospitality" data-evidence-kind="fictional-design-study"',
+        'data-evidence-id="fictional-hospitality" data-evidence-kind="client-result"',
+      )),
+    /customer evidence fictional-hospitality must retain kind fictional-design-study/u,
+  ));
+  await t.test("missing Start category", () => expectSiteFailure(
+    (root) => modify(root, "start/index.html", (source) =>
+      source.replace(' data-intake-category="system"', "")),
+    /Start intake categories must exactly equal/u,
+  ));
+  await t.test("contact category route drift", () => expectSiteFailure(
+    (root) => modify(root, "contact/index.html", (source) =>
+      source.replace('href="/solutions/" data-intake-category="service"', 'href="/custom/" data-intake-category="service"')),
+    /Contact intake category service must link to \/solutions\//u,
+  ));
+  await t.test("missing no-script fallback", () => expectSiteFailure(
+    (root) => modify(root, "start/index.html", (source) =>
+      source.replace(' data-start-fallback="no-script"', "")),
+    /Start non-JavaScript and skip fallbacks must exactly equal/u,
+  ));
+  await t.test("missing back path", () => expectSiteFailure(
+    (root) => modify(root, "start/index.html", (source) =>
+      source.replace("data-start-back", "data-retired-back")),
+    /missing exact chooser fallback or return path "data-start-back"/u,
+  ));
+  await t.test("phone and email stop being selectable", () => expectSiteFailure(
+    (root) => modify(root, "vnext.css", (source) =>
+      source.replace("-webkit-user-select: text; user-select: text;", "user-select: none;")),
+    /missing selectable phone\/email contract/u,
+  ));
+});
+
+test("one-person voice and unproved customer promises are rejected", async (t) => {
+  await t.test("studio plural outside a quote", () => expectSiteFailure(
+    (root) => inject(root, "about/index.html", "<p>We build every website together.</p>"),
+    /one-person-studio contradiction outside an explicit personal quote "We"/u,
+  ));
+  await t.test("explicit personal quote remains the only exception", async () => {
+    await inFixture(async (root) => {
+      await modify(root, "about/index.html", (source) =>
+        source.replace("I keep the work direct.", "We keep the work direct."));
+      const result = await validateSiteVnext(root);
+      assert.equal(result.ok, true, result.errors.join("\n"));
+    });
+  });
+  for (const [label, file, copy, expression] of [
+    ["fixed question count", "index.html", "<p>Answer three questions.</p>", /false fixed Start question count/u],
+    ["response promise", "contact/index.html", "<p>We respond within 24 hours.</p>", /invented response-time promise/u],
+    ["delivery timeline", "work/index.html", "<p>Sites launch in two weeks.</p>", /invented delivery timeline/u],
+    ["service area", "about/index.html", "<p>Serving businesses throughout New Jersey.</p>", /invented service area/u],
+    ["client result", "work/index.html", "<p>Our clients doubled their sales.</p>", /invented client result/u],
+  ]) {
+    await t.test(label, () => expectSiteFailure(
+      (root) => inject(root, file, copy),
+      expression,
+    ));
+  }
 });
 
 test("vNext locks fail-closed Start replacement and migration routing", async (t) => {

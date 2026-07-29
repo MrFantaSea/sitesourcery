@@ -87,6 +87,12 @@ a {
   text-underline-offset: 0.2em;
 }
 
+a[href^="tel:"],
+a[href^="mailto:"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 button,
 input,
 select,
@@ -2359,6 +2365,31 @@ h3 {
   font-family: var(--display);
   font-size: clamp(1.2rem, 3vw, 2rem);
   overflow-wrap: anywhere;
+}
+
+.contact-method-label {
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 830;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.contact-method-value {
+  margin: 0;
+}
+
+.contact-method-value + p {
+  color: var(--muted);
+}
+
+.contact-intake-grid .card {
+  min-height: 0;
+}
+
+.contact-intake-grid .card h3 {
+  max-width: 16ch;
 }
 
 .choice-grid {
