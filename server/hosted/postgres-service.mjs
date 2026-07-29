@@ -23,6 +23,7 @@ import {
   validatePassword
 } from "./security.mjs";
 import { createStoredZip } from "./zip.mjs";
+import { createHeldDomainRuntime } from "./domain-postgres-runtime.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -324,6 +325,7 @@ export function createCanonicalPostgresService({
   exportStore,
   recoveryMailPort,
   contactVault = null,
+  domainRuntime = null,
   clock = { now: () => new Date().toISOString() },
   randomUUID = systemRandomUUID,
   tokenFactory = randomToken,
@@ -391,6 +393,35 @@ export function createCanonicalPostgresService({
     { status: 500 }
   );
   normalizeHostname(`probe.${licensedBaseDomain}`);
+  const domains =
+    domainRuntime ?? createHeldDomainRuntime();
+  for (const method of [
+    "searchDomains",
+    "createDomainQuote",
+    "saveRegistrantContact",
+    "acceptDomainConsent",
+    "createDomainOrder",
+    "getDomainOrder",
+    "listDomainOrders",
+    "getDomainPaymentRedirect",
+    "resumeDomainAuthorization",
+    "refreshDomainPrice",
+    "requestDomainRegistration",
+    "listDnsRecords",
+    "upsertDnsRecord",
+    "deleteDnsRecord",
+    "setDomainAutoRenew",
+    "requestDomainRenewalQuote",
+    "requestDomainTransferOut",
+    "readiness"
+  ]) {
+    invariant(
+      typeof domains[method] === "function",
+      "RUNTIME_CONFIGURATION_ERROR",
+      `Domain runtime is missing ${method}.`,
+      { status: 500 }
+    );
+  }
 
   async function approvedCatalog() {
     return validateOfferCatalog(await catalogPort.current());
@@ -4051,40 +4082,71 @@ export function createCanonicalPostgresService({
       }
     },
 
-    async searchDomains() {
-      held("domain_search");
+    async searchDomains(actor, query) {
+      return domains.searchDomains(actor, query);
     },
 
-    async createDomainQuote() {
-      held("domain_quote");
+    async createDomainQuote(actor, input) {
+      return domains.createDomainQuote(actor, input);
     },
 
-    async saveRegistrantContact() {
-      held("domain_contact");
+    async saveRegistrantContact(actor, organizationId, input) {
+      return domains.saveRegistrantContact(
+        actor,
+        organizationId,
+        input
+      );
     },
 
-    async acceptDomainConsent() {
-      held("domain_consent");
+    async acceptDomainConsent(actor, quoteId, input) {
+      return domains.acceptDomainConsent(
+        actor,
+        quoteId,
+        input
+      );
     },
 
-    async createDomainOrder() {
-      held("domain_order");
+    async createDomainOrder(actor, projectId, input) {
+      return domains.createDomainOrder(
+        actor,
+        projectId,
+        input
+      );
     },
 
-    async getDomainOrder() {
-      held("domain_order");
+    async getDomainOrder(actor, orderId) {
+      return domains.getDomainOrder(actor, orderId);
     },
 
-    async listDomainOrders() {
-      held("domain_order");
+    async listDomainOrders(actor, projectId) {
+      return domains.listDomainOrders(actor, projectId);
     },
 
-    async refreshDomainPrice() {
-      held("domain_price_check");
+    async getDomainPaymentRedirect(actor, orderId) {
+      return domains.getDomainPaymentRedirect(
+        actor,
+        orderId
+      );
     },
 
-    async requestDomainRegistration() {
-      held("domain_registration");
+    async resumeDomainAuthorization(input) {
+      return domains.resumeDomainAuthorization(input);
+    },
+
+    async refreshDomainPrice(actor, orderId, input) {
+      return domains.refreshDomainPrice(
+        actor,
+        orderId,
+        input
+      );
+    },
+
+    async requestDomainRegistration(actor, orderId, input) {
+      return domains.requestDomainRegistration(
+        actor,
+        orderId,
+        input
+      );
     },
 
     async listDomains(actor, organizationId) {
@@ -4177,63 +4239,59 @@ export function createCanonicalPostgresService({
     },
 
     async listDnsRecords(actor, domainId) {
-      const { domain } = await service.getDomain(actor, domainId);
-      return authority.service(
-        {
-          userId: actor.userId,
-          organizationId: domain.organizationId,
-          readOnly: true
-        },
-        async (client) => {
-          const result = await client.query(
-            `select record.*
-               from ss.domain_dns_records record
-               join ss.domain_dns_change_sets change_set
-                 on change_set.organization_id =
-                      record.organization_id
-                and change_set.id = record.change_set_id
-              where record.organization_id = $1
-                and change_set.registration_id = $2
-              order by change_set.requested_at desc,
-                       record.record_type,
-                       record.name,
-                       record.id`,
-            [domain.organizationId, domain.id]
-          );
-          return {
-            records: result.rows.map((row) => ({
-              id: row.id,
-              domainId: domain.id,
-              type: row.record_type,
-              name: row.name,
-              value: row.value,
-              ttl: row.ttl_seconds,
-              priority: row.priority,
-              state: row.state
-            }))
-          };
-        }
+      return domains.listDnsRecords(actor, domainId);
+    },
+
+    async upsertDnsRecord(
+      actor,
+      domainId,
+      recordId,
+      input
+    ) {
+      return domains.upsertDnsRecord(
+        actor,
+        domainId,
+        recordId,
+        input
       );
     },
 
-    async upsertDnsRecord() {
-      held("dns");
+    async deleteDnsRecord(
+      actor,
+      domainId,
+      recordId,
+      input
+    ) {
+      return domains.deleteDnsRecord(
+        actor,
+        domainId,
+        recordId,
+        input
+      );
     },
 
-    async deleteDnsRecord() {
-      held("dns");
+    async setDomainAutoRenew(actor, domainId, input) {
+      return domains.setDomainAutoRenew(
+        actor,
+        domainId,
+        input
+      );
     },
 
-    async setDomainAutoRenew() {
-      held("domain_auto_renew");
+    async requestDomainRenewalQuote(actor, domainId, input) {
+      return domains.requestDomainRenewalQuote(
+        actor,
+        domainId,
+        input
+      );
     },
 
-    async requestDomainRenewalQuote() {
-      held("domain_renewal");
-    },
-
-    async requestDomainTransferOut() {
-      held("domain_transfer");
+    async requestDomainTransferOut(actor, domainId, input) {
+      return domains.requestDomainTransferOut(
+        actor,
+        domainId,
+        input
+      );
     },
 
     async readiness() {
@@ -4281,6 +4339,7 @@ export function createCanonicalPostgresService({
               held: null
             };
       const recovery = await recoveryMailPort.readiness();
+      const domainProviders = await domains.readiness();
       return {
         ready:
           persistence.ready &&
@@ -4310,8 +4369,12 @@ export function createCanonicalPostgresService({
         },
         providers: {
           checkout: "held",
-          registrar: "held",
-          dns: "held",
+          registrar:
+            domainProviders.ready
+              ? "ready"
+              : domainProviders.mode,
+          dns: domainProviders.dns ?? "held",
+          domains: domainProviders,
           email:
             recovery.mode === "production" &&
             recovery.ready === true &&

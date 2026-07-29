@@ -11,6 +11,32 @@ email, publication, or public deployment. Checkout, registrar, and DNS remain
 explicit held provider boundaries. Repository and system publication holds
 remain in force, and no code removes them.
 
+## Domain runtime
+
+`domain-postgres-runtime.mjs` supplies the normalized PostgreSQL domain
+contract, but its default composition is held. The tested customer sequence is
+quote/contact/consent, a separate Stripe Checkout manual authorization, fresh
+registrar reprice, one registrar submission, operation/domain/customer-
+registrant readback, partial capture of the final registrar amount, active
+registration, and verified DNS writes or deletes.
+
+The order response contains only the same-origin
+`/api/v1/domain-orders/{id}/payment` route. The server persists a Checkout URL
+only after accepting an exact `https://checkout.stripe.com` response from
+Checkout creation. Before returning a `303`, the relay rechecks tenant
+ownership, local expiry, and a fresh pending Stripe readback bound to the exact
+session, amount, currency, manual-capture mode, and purpose digest. Browser
+input and webhook payloads are never payment authority.
+
+Approved-live composition still requires explicit environment-scoped owner
+approval, Stripe and Spaceship credentials, the reviewed legal documents,
+encrypted contact-vault wiring, and authoritative registrar final-charge
+evidence. The current Spaceship REST response does not itself prove that final
+charge, so the live adapter deliberately stops before capture without an
+approved billing bridge. Auto-renew, billed renewal, and transfer-out remain
+held. The browser must also send the selected `projectId` for quote and
+registrant-contact commands before the customer journey is complete.
+
 ## Required configuration
 
 - `SITESOURCERY_DATABASE_URL`

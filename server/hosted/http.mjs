@@ -536,6 +536,28 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
           status = 201;
         } else if (
           method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/domain-orders\/([^/]+)\/payment$/u
+          ))
+        ) {
+          const redirect =
+            await service.getDomainPaymentRedirect(
+              actor,
+              route[0]
+            );
+          return new Response(null, {
+            status: 303,
+            headers: {
+              "Cache-Control": "no-store",
+              "Location": redirect.url,
+              "Referrer-Policy": "no-referrer",
+              "X-Content-Type-Options": "nosniff",
+              "X-Request-Id": requestId
+            }
+          });
+        } else if (
+          method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/domain-orders\/([^/]+)$/u))
         ) {
           result = await service.getDomainOrder(actor, route[0]);

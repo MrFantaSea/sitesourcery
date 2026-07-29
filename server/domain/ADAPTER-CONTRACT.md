@@ -20,6 +20,12 @@ contains no PII, card data, API credentials, raw EPP codes, or delivery tokens.
 
 The production payment adapter must use server-side manual capture.
 
+- Domain money uses a separate `mode=payment` Checkout Session; it is not mixed
+  into a website/subscription Checkout.
+- Checkout creation returns an allowlisted Stripe-hosted URL, but public order
+  JSON exposes only Site Sourcery's same-origin payment relay.
+- A verified webhook is a notification to reconcile. Authorization, capture,
+  void, and refund state comes from exact provider readback.
 - Authorization metadata must contain the exact `purposeDigest`, tenant,
   customer, order, domain, and purpose kind.
 - The adapter must return the provider's observed amount, currency, capture
@@ -34,6 +40,13 @@ The production payment adapter must use server-side manual capture.
 - Refund response amount, currency, and purpose must be verified. An ambiguous
   refund is not retried until provider reconciliation proves the prior effect.
 - The domain remains customer-owned after a capture/refund failure.
+
+The hosted adapter contract is
+`createDomainAuthorizationCheckout`, `retrieveDomainAuthorization`,
+`captureDomainAuthorization`, `voidDomainAuthorization`, and
+`refundDomainCapture`. Every response is bound to the order and canonical
+purpose digest. Dynamic domain money is forbidden in ordinary mixed website
+Checkout.
 
 ## Registrar
 

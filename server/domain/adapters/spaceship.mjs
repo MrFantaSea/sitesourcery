@@ -180,7 +180,121 @@ export function createSpaceshipRegistrarAdapter(options = {}) {
     };
   }
 
+  async function availability(domain) {
+    requireCapability("domains:read");
+    const name = normalizeDomain(domain);
+    const response = await transport.request({
+      method: "GET",
+      path: `${SPACESHIP_API_PREFIX}/domains/${name}/available`,
+      effect: "read",
+      successStatuses: [200],
+      responseKind: "json"
+    });
+    invariant(
+      normalizeDomain(response?.domain) === name &&
+        AVAILABILITY_RESULTS.has(response?.result),
+      "spaceship_availability_response_invalid",
+      "Spaceship returned invalid availability data",
+      { status: 502 }
+    );
+    return Object.freeze({
+      domain: name,
+      result: response.result,
+      available: response.result === "available"
+    });
+  }
+
   const registrar = {
+    mode,
+    providerCode: "spaceship",
+
+    async readiness() {
+      return Object.freeze({
+        ready: mode === "contract_test" || mode === "approved_live",
+        mode,
+        provider: "spaceship",
+        capabilities:
+          liveCapabilities === null
+            ? "contract_test"
+            : [...liveCapabilities].sort()
+      });
+    },
+
+    async searchDomains({ query } = {}) {
+      const result = await availability(query);
+      return Object.freeze({
+        results: Object.freeze([
+          Object.freeze({
+            hostname: result.domain,
+            available: result.available,
+            result: result.result,
+            registrar: "Spaceship"
+          })
+        ])
+      });
+    },
+
+    async quoteRegistration({
+      tenantId,
+      domain,
+      years = 1
+    } = {}) {
+      const name = normalizeDomain(domain);
+      const period = integer(years, "years", 1, 10);
+      const checked = await availability(name);
+      if (!checked.available) {
+        return Object.freeze({
+          status: "unavailable",
+          domain: name,
+          reason: checked.result
+        });
+      }
+      let preview;
+      try {
+        preview = await pricePreview.previewRegistration({
+          tenantId: opaque(tenantId, "tenantId", 128),
+          domain: name,
+          years: period,
+          autoRenew: false,
+          privacy: { level: "high", userConsent: true },
+          contacts: null
+        });
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw external(
+          "spaceship_price_preview_unavailable",
+          "A documented no-charge Spaceship exact-price preview is unavailable",
+          "not_submitted"
+        );
+      }
+      const normalized = validateExactPreview(preview, {
+        domain: name,
+        years: period,
+        nowMs: clockNowMs(clock),
+        config
+      });
+      return Object.freeze({
+        status: "confirmation_required",
+        domain: name,
+        years: period,
+        price: normalized.price,
+        renewalPrice:
+          preview?.renewalPrice === undefined
+            ? null
+            : exactUsdPrice(preview.renewalPrice),
+        renewalDisclosure:
+          nullableString(preview?.renewalDisclosure, 2_000),
+        quoteId: normalized.evidenceId,
+        observedAt: normalized.observedAt,
+        expiresAt: new Date(
+          Date.parse(normalized.observedAt) +
+            config.previewMaxAgeMs
+        ).toISOString(),
+        priceSource: SPACESHIP_MCP_PREVIEW_SOURCE,
+        noCharge: true
+      });
+    },
+
     async ensureContacts({
       tenantId,
       customerId,
@@ -357,25 +471,12 @@ export function createSpaceshipRegistrarAdapter(options = {}) {
       const name = normalizeDomain(domain);
       const period = integer(years, "years", 1, 10);
       validateRegistrationOptions({ autoRenew, privacy, contacts });
-      const availability = await transport.request({
-        method: "GET",
-        path: `${SPACESHIP_API_PREFIX}/domains/${name}/available`,
-        effect: "read",
-        successStatuses: [200],
-        responseKind: "json"
-      });
-      invariant(
-        normalizeDomain(availability?.domain) === name &&
-          AVAILABILITY_RESULTS.has(availability?.result),
-        "spaceship_availability_response_invalid",
-        "Spaceship returned invalid availability data",
-        { status: 502 }
-      );
-      if (availability.result !== "available") {
+      const checked = await availability(name);
+      if (!checked.available) {
         return Object.freeze({
           status: "unavailable",
           domain: name,
-          reason: availability.result
+          reason: checked.result
         });
       }
 
@@ -1011,6 +1112,14 @@ function validateExpectedPrice(value) {
     "An exact accepted USD price is required before confirmation",
     { status: 409 }
   );
+}
+
+function exactUsdPrice(value) {
+  validateExpectedPrice(value);
+  return Object.freeze({
+    amountMinor: value.amountMinor,
+    currency: "USD"
+  });
 }
 
 function normalizeContactIds(value) {

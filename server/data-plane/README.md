@@ -23,8 +23,11 @@ hosting-provider calls by itself.
   exist.
 - Domain registration cannot reach a provider operation until an unexpired
   exact quote, encrypted customer-as-registrant snapshot, exact agent/terms
-  consent, captured Stripe allocation, and separate irreversible confirmation
-  all agree.
+  consent, purpose-bound Stripe manual authorization, a fresh registrar
+  reprice, and separate irreversible customer confirmation all agree.
+- Stripe capture is forbidden before the registrar reports success and exact
+  domain/customer-registrant readback succeeds. An active registration requires
+  the resulting partial capture to be normalized as captured.
 - Stripe customer payment and registrar debit are separate immutable receipts.
 - Registrar integration is provider-neutral. No registrar or infrastructure
   vendor is selected or called by these artifacts.
@@ -37,6 +40,10 @@ hosting-provider calls by itself.
   bindings, immutable cancellation evidence, and one-time export downloads.
 - `supabase/migrations/202607280009_authenticated_rls_execution.sql` —
   executable forced-RLS helper contract for real authenticated transactions.
+- `supabase/migrations/202607280014_safe_domain_authorization.sql` — additive
+  correction to the earlier captured-before-registration rule, plus durable
+  authorization attempts, registrar reprices, contact bindings, final-price
+  evidence, and DNS upsert/delete projections.
 - `tests/postgres-bootstrap.sql` — disposable PostgreSQL role/bootstrap
   compatibility harness.
 - `tests/postgres-invariants.sql` — PostgreSQL schema and launch assertions.
