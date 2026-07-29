@@ -150,16 +150,16 @@ export const TERMS_SECTION_IDS = Object.freeze([
 ]);
 export const FAQ_ANCHORS = Object.freeze([
   "paths",
-  "abracadabra-now",
-  "address-choices",
-  "private-sites",
-  "missed-payment",
   "custom-scope",
   "custom-payment",
   "custom-timing",
   "ownership",
   "assessment",
   "care",
+  "abracadabra-now",
+  "address-choices",
+  "private-sites",
+  "missed-payment",
   "hive-planner",
   "getting-started",
 ]);
