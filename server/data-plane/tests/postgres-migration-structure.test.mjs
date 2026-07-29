@@ -103,3 +103,33 @@ test("first-party identity is explicit and does not require Supabase Auth", asyn
     /supabase auth|clerk/iu
   );
 });
+
+test("authenticated forced-RLS helpers have an explicit executable contract", async () => {
+  const all = await migrations();
+  const roleGrant = all.find(
+    ({ name }) =>
+      name === "202607280009_authenticated_rls_execution.sql"
+  );
+  assert.ok(roleGrant);
+  for (const signature of [
+    "ss.jwt_claims()",
+    "ss.current_user_id()",
+    "ss.current_org_id()",
+    "ss.is_org_member(uuid)",
+    "ss.has_org_role(uuid, text[])",
+    "ss.can_access_org(uuid)"
+  ]) {
+    assert.match(
+      roleGrant.sql,
+      new RegExp(
+        `grant execute on function ${signature
+          .replaceAll(".", "\\.")
+          .replaceAll("(", "\\(")
+          .replaceAll(")", "\\)")
+          .replaceAll("[", "\\[")
+          .replaceAll("]", "\\]")}\\s+to authenticated`,
+        "iu"
+      )
+    );
+  }
+});
