@@ -20,6 +20,8 @@ import {
   HOME_FIRST_PAINT_SCENARIOS,
   HOME_FIRST_PAINT_VIEWPORTS,
   homeFirstPaintFailures,
+  PRIMARY_NAV_CONTRACT,
+  primaryNavContractFailures,
   privateViewerPopupFailures,
   PROGRESSIVE_DISCLOSURE_COUNTS,
   PROGRESSIVE_FAILURE_SCENARIOS,
@@ -34,7 +36,10 @@ import {
   waitForPrivateViewerAttachment,
 } from "../browser-audit-vnext.mjs";
 import { buildContainedArtifact } from "../build-contained-artifact.mjs";
-import { CANONICAL_ROUTES, PRIMARY_NAV } from "../check-routes.mjs";
+import {
+  CANONICAL_ROUTES,
+  PRIMARY_NAV as ROUTE_PRIMARY_NAV,
+} from "../check-routes.mjs";
 import {
   assertExactWorktreeDeletion,
   prepareContainment,
@@ -73,6 +78,67 @@ const [
 const packageJson = JSON.parse(packageSource);
 const packageLock = JSON.parse(packageLockSource);
 
+test("browser gate owns the exact customer navigation and route-only current state", () => {
+  assert.deepEqual(PRIMARY_NAV_CONTRACT, [
+    { label: "Websites", href: "/custom/", className: "" },
+    { label: "Calls & follow-up", href: "/hive/", className: "" },
+    { label: "Services", href: "/solutions/", className: "" },
+    { label: "Examples", href: "/work/", className: "" },
+    { label: "About", href: "/about/", className: "" },
+    { label: "FAQ", href: "/faq/", className: "" },
+    { label: "Contact", href: "/contact/", className: "nav-start" },
+    {
+      label: "Call Zack: (856) 244-1220",
+      href: "tel:+18562441220",
+      className: "nav-call",
+    },
+  ]);
+  assert.deepEqual(
+    ROUTE_PRIMARY_NAV,
+    PRIMARY_NAV_CONTRACT.map(({ label, href }) => ({ label, href })),
+    "the browser-owned chrome and canonical route ledger must stay synchronized",
+  );
+  const entries = (route, visible = true) => PRIMARY_NAV_CONTRACT.map((entry) => ({
+    ...entry,
+    ariaCurrent: entry.href === route ? "page" : "",
+    visible,
+  }));
+  assert.deepEqual(primaryNavContractFailures(entries("/custom/"), "/custom/"), []);
+  assert.deepEqual(
+    primaryNavContractFailures(entries("/custom/scope/"), "/custom/scope/"),
+    [],
+    "nested routes must not mark a parent navigation destination as current",
+  );
+  assert.deepEqual(
+    primaryNavContractFailures(entries("/contact/"), "/contact/", { visibility: "all" }),
+    [],
+  );
+  const desktop = entries("/faq/");
+  desktop.at(-1).visible = false;
+  assert.deepEqual(
+    primaryNavContractFailures(desktop, "/faq/", { visibility: "desktop" }),
+    [],
+  );
+  const wrongOrder = entries("/custom/");
+  [wrongOrder[0], wrongOrder[1]] = [wrongOrder[1], wrongOrder[0]];
+  assert.ok(
+    primaryNavContractFailures(wrongOrder, "/custom/")
+      .some((failure) => failure.includes("entry 0 label")),
+  );
+  const wrongCurrent = entries("/custom/");
+  wrongCurrent[0].ariaCurrent = "";
+  assert.ok(
+    primaryNavContractFailures(wrongCurrent, "/custom/")
+      .some((failure) => failure.includes("aria-current")),
+  );
+  const exposedDesktopCall = desktop.map((entry) => ({ ...entry }));
+  exposedDesktopCall.at(-1).visible = true;
+  assert.ok(
+    primaryNavContractFailures(exposedDesktopCall, "/faq/", { visibility: "desktop" })
+      .some((failure) => failure.includes("visibility")),
+  );
+});
+
 test("Start browser gate owns the complete independent decision and Back tables", () => {
   const menuExerciseStart = auditSource.indexOf("const MENU_EXERCISE_EXPRESSION");
   const startExerciseStart = auditSource.indexOf("const START_EXERCISE_EXPRESSION");
@@ -93,17 +159,17 @@ test("Start browser gate owns the complete independent decision and Back tables"
       {
         key: "website",
         label: "A website",
-        note: "Make a new site or safely replace an existing one.",
+        note: "Make a new site or replace one that already exists.",
       },
       {
         key: "system",
-        label: "A working system",
-        note: "Stop a repetitive handoff from falling through.",
+        label: "Calls and follow-up",
+        note: "Stop missed calls, bookings, reviews, or payments from slipping.",
       },
       {
         key: "service",
-        label: "A supporting service",
-        note: "Assessment, domains, email, care, commerce, interfaces, studio work, or connections.",
+        label: "Other website help",
+        note: "Review an existing site, ask about upkeep, or solve one specific problem.",
       },
     ],
   );
@@ -126,7 +192,7 @@ test("Start browser gate owns the complete independent decision and Back tables"
       },
       {
         key: "website-self-service",
-        question: "Does the exact self-service boundary fit?",
+        question: "Does this one-page option fit?",
         optionKeys: ["abracadabra", "self-service-uncertain"],
       },
       {
@@ -252,7 +318,7 @@ test("Start browser gate owns the complete independent decision and Back tables"
   assert.match(auditSource, /route === "\/abracadabra\/"/u);
   assert.match(auditSource, /!result\.abracadabraHeroAction\.meaningful/u);
   assert.match(auditSource, /actual\.actionTag !== "A"/u);
-  assert.match(auditSource, /actual\.humanHref !== "#direct-contact"/u);
+  assert.match(auditSource, /actual\.humanHref !== "\/contact\/"/u);
   assert.match(auditSource, /actual\.humanTag !== "A"/u);
   assert.match(auditSource, /actual\.actionText !== expected\.action/u);
   assert.match(auditSource, /actual\.copy !== expected\.copy/u);
@@ -304,6 +370,26 @@ test("Start usable-control gate mutates a live control through every rejected st
     auditSource,
     /controlGuardProbes\.probes\.every\(\(\{ rejected \}\) => rejected\)/u,
   );
+});
+
+test("Solutions browser gate follows the current primary assessment anchor", () => {
+  const exerciseStart = auditSource.indexOf(
+    "const SOLUTIONS_PRIMARY_ANCHOR_EXERCISE_EXPRESSION",
+  );
+  const exerciseEnd = auditSource.indexOf(
+    "const SETTLE_IMAGES_EXPRESSION",
+    exerciseStart,
+  );
+  const exercise = auditSource.slice(exerciseStart, exerciseEnd);
+  assert.ok(exerciseStart >= 0 && exerciseEnd > exerciseStart);
+  assert.match(exercise, /document\.querySelector\("#assessment"\)/u);
+  assert.match(exercise, /\.solution-card-head \.card-kicker/u);
+  assert.match(exercise, /\.solution-card-head h2/u);
+  assert.match(exercise, /location\.hash = "assessment"/u);
+  assert.doesNotMatch(exercise, /#service-shelf|\.anchor-nav/u);
+  assert.match(auditSource, /shelf\.hash !== "#assessment"/u);
+  assert.match(auditSource, /shelf\.kickerTop < shelf\.obstructionBottom - 1/u);
+  assert.match(auditSource, /shelf\.headingTop < shelf\.obstructionBottom - 1/u);
 });
 
 test("containment porcelain parser preserves both status columns and permits only one worktree deletion", () => {
@@ -377,7 +463,7 @@ test("homepage first-paint gate fails closed before load across exact cold scena
     elapsedMs: checkpoint.atMs + 20,
     firstContentfulPaintMs: 250,
     forcedFailureTriggered: scenario === "forced-early-javascript-failure",
-    h1: visibleElement({ text: "Your source for websites." }),
+    h1: visibleElement({ text: "A clearer website for your small business." }),
     hasJsClass: scenario !== "javascript-disabled",
     heroHeldRequests: scenario === "hero-image-held" ? 1 : 0,
     heroImage: {
@@ -391,8 +477,8 @@ test("homepage first-paint gate fails closed before load across exact cold scena
       : 0,
     path: "/",
     primaryAction: visibleElement({
-      href: "#websites",
-      text: "Find your website",
+      href: "/start/",
+      text: "Find the right starting point",
       height: 48,
       width: 180,
     }),
@@ -523,9 +609,15 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/start/",
   ]);
   assert.deepEqual(PROGRESSIVE_DISCLOSURE_COUNTS, {
-    "/abracadabra/how/": 6,
+    "/custom/scope/": 4,
+    "/custom/process/": 3,
+    "/abracadabra/how/": 7,
+    "/about/": 1,
     "/faq/": 13,
     "/solutions/": 9,
+    "/legal/": 1,
+    "/legal/privacy/": 16,
+    "/legal/website-terms/": 17,
   });
   assert.equal(CANONICAL_ROUTES.length, 17);
 
@@ -547,8 +639,13 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     hasJsClass: true,
     menuReady: scenario.menuReady,
     nav: {
+      entries: PRIMARY_NAV_CONTRACT.map((entry) => ({
+        ...entry,
+        ariaCurrent: scenario.key !== "after-root-js" && entry.href === "/solutions/"
+          ? "page"
+          : "",
+      })),
       failures: [],
-      hrefs: PRIMARY_NAV.map(({ href }) => href),
       mode: scenario.menuReady ? "enhanced-disclosure" : "fallback-links",
       usable: true,
     },

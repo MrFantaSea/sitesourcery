@@ -5,7 +5,7 @@ import { access, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANONICAL_ROUTES, PRIMARY_NAV } from "./check-routes.mjs";
+import { CANONICAL_ROUTES } from "./check-routes.mjs";
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SITE_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
@@ -108,10 +108,30 @@ export const PROGRESSIVE_REVEAL_ROUTES = Object.freeze([
   "/start/",
 ]);
 export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
-  "/abracadabra/how/": 6,
+  "/custom/scope/": 4,
+  "/custom/process/": 3,
+  "/abracadabra/how/": 7,
+  "/about/": 1,
   "/faq/": 13,
   "/solutions/": 9,
+  "/legal/": 1,
+  "/legal/privacy/": 16,
+  "/legal/website-terms/": 17,
 });
+export const PRIMARY_NAV_CONTRACT = Object.freeze([
+  Object.freeze({ label: "Websites", href: "/custom/", className: "" }),
+  Object.freeze({ label: "Calls & follow-up", href: "/hive/", className: "" }),
+  Object.freeze({ label: "Services", href: "/solutions/", className: "" }),
+  Object.freeze({ label: "Examples", href: "/work/", className: "" }),
+  Object.freeze({ label: "About", href: "/about/", className: "" }),
+  Object.freeze({ label: "FAQ", href: "/faq/", className: "" }),
+  Object.freeze({ label: "Contact", href: "/contact/", className: "nav-start" }),
+  Object.freeze({
+    label: "Call Zack: (856) 244-1220",
+    href: "tel:+18562441220",
+    className: "nav-call",
+  }),
+]);
 const PROGRESSIVE_FAILURE_SENTINEL = "SITESOURCERY_PROGRESSIVE_FAILURE_AUDIT";
 const ROUTE_TRANSFER_BUDGET_BYTES = 1024 * 1024;
 const PRIVATE_VIEWER_POPUP_URL = "https://cta.invalid/abracadabra-popup-proof";
@@ -121,6 +141,65 @@ const PRIVATE_VIEWER_ATTACHMENT_POLL_MS = 25;
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export function primaryNavContractFailures(
+  entries,
+  route,
+  {
+    current = "required",
+    visibility = "ignore",
+  } = {},
+) {
+  const failures = [];
+  if (!Array.isArray(entries)) return ["primary navigation entries are missing"];
+  if (!["required", "absent", "ignore"].includes(current)) {
+    return [`unknown primary navigation current mode ${JSON.stringify(current)}`];
+  }
+  if (!["all", "closed", "desktop", "ignore"].includes(visibility)) {
+    return [`unknown primary navigation visibility mode ${JSON.stringify(visibility)}`];
+  }
+  if (entries.length !== PRIMARY_NAV_CONTRACT.length) {
+    failures.push(
+      `primary navigation entry count is ${entries.length}; `
+      + `expected ${PRIMARY_NAV_CONTRACT.length}`,
+    );
+  }
+  for (const [index, expected] of PRIMARY_NAV_CONTRACT.entries()) {
+    const actual = entries[index];
+    if (!actual) {
+      failures.push(`primary navigation entry ${index} is missing`);
+      continue;
+    }
+    for (const field of ["label", "href", "className"]) {
+      if (actual[field] !== expected[field]) {
+        failures.push(
+          `primary navigation entry ${index} ${field} is `
+          + `${JSON.stringify(actual[field])}; expected ${JSON.stringify(expected[field])}`,
+        );
+      }
+    }
+    if (current !== "ignore") {
+      const expectedCurrent = current === "required" && expected.href === route ? "page" : "";
+      if (actual.ariaCurrent !== expectedCurrent) {
+        failures.push(
+          `primary navigation entry ${index} aria-current is `
+          + `${JSON.stringify(actual.ariaCurrent)}; expected ${JSON.stringify(expectedCurrent)}`,
+        );
+      }
+    }
+    if (visibility !== "ignore") {
+      const expectedVisible = visibility === "all"
+        || (visibility === "desktop" && expected.className !== "nav-call");
+      if (actual.visible !== expectedVisible) {
+        failures.push(
+          `primary navigation entry ${index} visibility is `
+          + `${JSON.stringify(actual.visible)}; expected ${expectedVisible}`,
+        );
+      }
+    }
+  }
+  return failures;
 }
 
 function privateViewerAttachmentPending(error) {
@@ -182,13 +261,13 @@ export function homeFirstPaintFailures(snapshot, checkpoint, scenario) {
       href: null,
       minimumHeight: 24,
       minimumWidth: 44,
-      text: "Your source for websites.",
+      text: "A clearer website for your small business.",
     }),
     primaryAction: Object.freeze({
-      href: "#websites",
+      href: "/start/",
       minimumHeight: 44,
       minimumWidth: 44,
-      text: "Find your website",
+      text: "Find the right starting point",
     }),
   })) {
     const element = snapshot[name];
@@ -315,14 +394,22 @@ export function progressiveFailureFailures(snapshot, scenarioKey, route) {
   ) {
     failures.push(`route H1 is not usable ${JSON.stringify(snapshot.h1 ?? null)}`);
   }
-  const expectedNavHrefs = PRIMARY_NAV.map(({ href }) => href);
+  const navContractFailures = primaryNavContractFailures(snapshot.nav?.entries, route, {
+    current: scenario.key === "after-root-js" ? "absent" : "required",
+  });
   if (
     !snapshot.nav?.usable
-    || JSON.stringify(snapshot.nav.hrefs) !== JSON.stringify(expectedNavHrefs)
     || snapshot.nav.mode !== (scenario.menuReady ? "enhanced-disclosure" : "fallback-links")
     || snapshot.nav.failures?.length
+    || navContractFailures.length
   ) {
-    failures.push(`primary navigation is not usable ${JSON.stringify(snapshot.nav ?? null)}`);
+    failures.push(
+      `primary navigation is not usable `
+      + `${JSON.stringify({
+        contractFailures: navContractFailures,
+        snapshot: snapshot.nav ?? null,
+      })}`,
+    );
   }
   if (
     !Number.isInteger(snapshot.essential?.count)
@@ -813,7 +900,7 @@ function homeFirstPaintExpression(checkpoint, { asyncWait = true } = {}) {
         : null,
       path: location.pathname,
       primaryAction: describe(
-        document.querySelector('.home-hero .hero-actions .button-primary[href="#websites"]')
+        document.querySelector('.home-hero .hero-actions .button-primary[href="/start/"]')
       ),
       readyState: document.readyState
     };
@@ -1228,8 +1315,13 @@ const PROGRESSIVE_FAILURE_AUDIT_EXPRESSION = `(async () => {
     }
   }
   const nav = {
+    entries: navLinks.map((link) => ({
+      ariaCurrent: link.getAttribute("aria-current") || "",
+      className: typeof link.className === "string" ? link.className : "",
+      href: link.getAttribute("href") || "",
+      label: (link.textContent || "").replace(/\\s+/gu, " ").trim()
+    })),
     failures: navFailures.slice(0, 20),
-    hrefs: navLinks.map((link) => link.getAttribute("href") || ""),
     mode: navMode,
     usable: navFailures.length === 0
   };
@@ -1468,16 +1560,19 @@ const AUDIT_EXPRESSION = `(() => {
   const images = Array.from(document.images);
   const canonical = document.querySelector('link[rel="canonical"]');
   const path = location.pathname;
-  const visibleHeaderDescendants = Array.from(
-    document.querySelectorAll(".site-header, .site-header *")
-  ).filter((element) => {
+  const visible = (element) => {
+    if (!element || element.hidden || element.closest("[hidden]")) return false;
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     return style.display !== "none"
       && style.visibility !== "hidden"
+      && Number.parseFloat(style.opacity) > 0
       && rect.width > 0
       && rect.height > 0;
-  });
+  };
+  const visibleHeaderDescendants = Array.from(
+    document.querySelectorAll(".site-header, .site-header *")
+  ).filter(visible);
   const renderedScale = (element) => {
     let scale = 1;
     for (let current = element; current && current.nodeType === Node.ELEMENT_NODE; current = current.parentElement) {
@@ -1668,13 +1763,21 @@ const AUDIT_EXPRESSION = `(() => {
   const menuButton = document.querySelector("[data-menu-button]");
   const menu = document.querySelector("[data-menu]");
   if (menuButton || menu) {
+    const links = menu ? Array.from(menu.querySelectorAll("a[href]")) : [];
     result.menuReady = {
       button: Boolean(menuButton),
       menu: Boolean(menu),
       buttonDisplay: menuButton ? getComputedStyle(menuButton).display : "",
+      entries: links.map((link) => ({
+        ariaCurrent: link.getAttribute("aria-current") || "",
+        className: typeof link.className === "string" ? link.className : "",
+        href: link.getAttribute("href") || "",
+        label: (link.textContent || "").replace(/\\s+/gu, " ").trim(),
+        visible: visible(link)
+      })),
       expanded: menuButton ? menuButton.getAttribute("aria-expanded") : "",
       open: menu ? menu.hasAttribute("data-open") : false,
-      links: menu ? menu.querySelectorAll("a[href]").length : 0
+      links: links.length
     };
   }
   const hive = document.querySelector("[data-hive-planner]");
@@ -1839,6 +1942,7 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
   window.scrollTo(originalX, window.scrollY);
   const main = document.querySelector("main");
   const nav = document.querySelector("[data-primary-nav]");
+  const navLinks = nav ? Array.from(nav.querySelectorAll("a[href]")) : [];
   const menuButton = document.querySelector("[data-menu-button]");
   const startChooser = document.querySelector("[data-start-chooser]");
   const startFallback = document.querySelector(".start-noscript");
@@ -1858,9 +1962,14 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
     mainTextLength: (main?.innerText || "").trim().length,
     mainVisible: visible(main),
     menuButtonVisible: visible(menuButton),
-    navVisibleLinks: nav
-      ? Array.from(nav.querySelectorAll("a[href]")).filter(visible).length
-      : 0,
+    navEntries: navLinks.map((link) => ({
+      ariaCurrent: link.getAttribute("aria-current") || "",
+      className: typeof link.className === "string" ? link.className : "",
+      href: link.getAttribute("href") || "",
+      label: (link.textContent || "").replace(/\\s+/gu, " ").trim(),
+      visible: visible(link)
+    })),
+    navVisibleLinks: navLinks.filter(visible).length,
     path: location.pathname,
     reachableX,
     start: startChooser || startFallback ? {
@@ -2001,13 +2110,17 @@ const MENU_EXERCISE_EXPRESSION = `(async () => {
     const visibleTop = Math.max(0, menuRect.top);
     const visibleBottom = Math.min(window.innerHeight, menuRect.bottom);
     destinations.push({
+      ariaCurrent: link.getAttribute("aria-current") || "",
+      className: typeof link.className === "string" ? link.className : "",
       href: link.getAttribute("href") || "",
+      label: (link.textContent || "").replace(/\\s+/gu, " ").trim(),
       left: Math.round(rect.left),
       right: Math.round(rect.right),
       top: Math.round(rect.top),
       bottom: Math.round(rect.bottom),
       horizontallyContained: rect.left >= -1 && rect.right <= root.clientWidth + 1,
-      verticallyContained: rect.top >= visibleTop - 1 && rect.bottom <= visibleBottom + 1
+      verticallyContained: rect.top >= visibleTop - 1 && rect.bottom <= visibleBottom + 1,
+      visible: visible(link)
     });
   }
   const opened = {
@@ -2040,25 +2153,22 @@ const MENU_EXERCISE_EXPRESSION = `(async () => {
   return { escaped, opened, selected };
 })()`;
 
-const SOLUTIONS_SHELF_EXERCISE_EXPRESSION = `(async () => {
-  const target = document.querySelector("#service-shelf");
-  const eyebrow = target?.querySelector(".service-shelf-head .eyebrow");
-  const heading = target?.querySelector(".service-shelf-head h2");
+const SOLUTIONS_PRIMARY_ANCHOR_EXERCISE_EXPRESSION = `(async () => {
+  const target = document.querySelector("#assessment");
+  const kicker = target?.querySelector(".solution-card-head .card-kicker");
+  const heading = target?.querySelector(".solution-card-head h2");
   const header = document.querySelector(".site-header");
-  const rail = document.querySelector(".anchor-nav");
-  if (!target || !eyebrow || !heading || !header || !rail) return null;
+  if (!target || !kicker || !heading || !header) return null;
   history.replaceState(null, "", location.pathname + location.search);
-  location.hash = "service-shelf";
+  location.hash = "assessment";
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const headerRect = header.getBoundingClientRect();
-  const railRect = rail.getBoundingClientRect();
-  const eyebrowRect = eyebrow.getBoundingClientRect();
+  const kickerRect = kicker.getBoundingClientRect();
   const headingRect = heading.getBoundingClientRect();
-  const obstructionBottom = Math.max(headerRect.bottom, railRect.bottom);
   return {
     hash: location.hash,
-    obstructionBottom: Math.round(obstructionBottom),
-    eyebrowTop: Math.round(eyebrowRect.top),
+    obstructionBottom: Math.round(headerRect.bottom),
+    kickerTop: Math.round(kickerRect.top),
     headingTop: Math.round(headingRect.top),
     headingBottom: Math.round(headingRect.bottom)
   };
@@ -3263,17 +3373,17 @@ export const START_INITIAL_TABLE = Object.freeze([
   {
     key: "website",
     label: "A website",
-    note: "Make a new site or safely replace an existing one.",
+    note: "Make a new site or replace one that already exists.",
   },
   {
     key: "system",
-    label: "A working system",
-    note: "Stop a repetitive handoff from falling through.",
+    label: "Calls and follow-up",
+    note: "Stop missed calls, bookings, reviews, or payments from slipping.",
   },
   {
     key: "service",
-    label: "A supporting service",
-    note: "Assessment, domains, email, care, commerce, interfaces, studio work, or connections.",
+    label: "Other website help",
+    note: "Review an existing site, ask about upkeep, or solve one specific problem.",
   },
 ]);
 
@@ -3285,12 +3395,12 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "website-new",
         label: "A new website",
-        note: "There is no existing website to replace: no URLs need preserving, no content needs migrating, and no provider cutover needs managing. Brochure copy or brand facts can still be entered manually.",
+        note: "Nothing is being replaced. No old links or content need to move, and no host or domain switch is needed. You can still enter facts from a brochure or brand guide.",
       },
       {
         key: "website-replace",
         label: "Replace an existing site",
-        note: "Something already exists and the change may involve migration or cutover.",
+        note: "A site already exists, so links, content, tools, hosting, or the domain may need a safe move.",
       },
     ],
   },
@@ -3301,28 +3411,28 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "custom",
         label: "Make it for me",
-        note: "I want professional judgment, art direction, delivery, or a human revision loop.",
+        note: "I want professional planning, design, delivery, and human review.",
       },
       {
         key: "website-self-service",
-        label: "Let me make one bounded page",
-        note: "I will enter the facts or reusable source material manually; no existing URLs need preserving, no content needs migrating, and no provider cutover needs managing.",
+        label: "Let me make one page",
+        note: "I will type in the facts myself. No old links or content need to move, and no host or domain switch is needed.",
       },
     ],
   },
   {
     key: "website-self-service",
-    question: "Does the exact self-service boundary fit?",
+    question: "Does this one-page option fit?",
     options: [
       {
         key: "abracadabra",
-        label: "Yes · no live-site replacement risk",
-        note: "One page and manual entry fit; no existing URLs need preserving, no content needs migrating, no provider cutover needs managing, and no integrations or human revision are required.",
+        label: "Yes · nothing old needs replacing",
+        note: "One page is enough. I can type the facts myself and do not need old links, content, outside tools, or human revisions.",
       },
       {
         key: "self-service-uncertain",
         label: "I am not completely sure",
-        note: "Keep the decision with a person instead of risking lost content or URLs.",
+        note: "I want a person to check before I risk losing content or links.",
       },
     ],
   },
@@ -3332,8 +3442,8 @@ export const START_BRANCH_TABLE = Object.freeze([
     options: [
       {
         key: "replace-redirects",
-        label: "Existing URLs or search history",
-        note: "I need an inventory, redirect map, or search-safe replacement.",
+        label: "Old links or search traffic",
+        note: "Old page addresses need to keep working or point to the right new page.",
       },
       {
         key: "replace-migration",
@@ -3342,13 +3452,13 @@ export const START_BRANCH_TABLE = Object.freeze([
       },
       {
         key: "replace-cutover",
-        label: "Providers, integrations, or cutover",
-        note: "The existing host, domain, forms, tools, or release timing matter.",
+        label: "Hosting, tools, or the switch",
+        note: "The current host, domain, forms, tools, or launch timing matter.",
       },
       {
         key: "replace-uncertain",
         label: "I do not know what must survive",
-        note: "I want a human to inspect the replacement risk before choosing a product.",
+        note: "I want a person to check the old site before I choose.",
       },
     ],
   },
@@ -3364,12 +3474,12 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "hive-booking",
         label: "Booking",
-        note: "Service, timing, location, or confirmation needs a bounded handoff.",
+        note: "Service, timing, location, or confirmation keeps getting lost.",
       },
       {
         key: "hive-review-request",
         label: "Review requests",
-        note: "Eligible customers need one neutral, permission-aware request.",
+        note: "The right customers need one fair request at the right time.",
       },
       {
         key: "hive-after-hours",
@@ -3384,7 +3494,7 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "hive-getting-paid",
         label: "Getting paid",
-        note: "An exact invoice needs a factual reminder and dispute path.",
+        note: "An unpaid invoice needs a clear reminder and a way to raise a problem.",
       },
       {
         key: "commission",
@@ -3405,7 +3515,7 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "foundations",
         label: "Website foundations",
-        note: "Structure, accessibility, speed, metadata, or release quality.",
+        note: "Structure, basic accessibility, speed, page information, or launch quality.",
       },
       {
         key: "care",
@@ -3420,17 +3530,17 @@ export const START_BRANCH_TABLE = Object.freeze([
       {
         key: "email",
         label: "Business email",
-        note: "Addresses, routing, authentication, recovery, or migration.",
+        note: "Addresses, delivery checks, routing, recovery, or moving mail.",
       },
       {
         key: "commerce",
         label: "Commerce",
-        note: "Catalog, buying, fulfillment, receipt, refund, or processor path.",
+        note: "Products, buying, delivery, receipts, refunds, or a payment service.",
       },
       {
         key: "interfaces",
         label: "Interfaces",
-        note: "Focused controls for a phone, tablet, counter, kiosk, or display.",
+        note: "Focused controls for a phone, tablet, counter, kiosk, or screen.",
       },
       {
         key: "studio",
@@ -3447,29 +3557,29 @@ export const START_BRANCH_TABLE = Object.freeze([
 ]);
 
 export const START_DECISION_TABLE = Object.freeze([
-  { key: "website-custom", path: ["website", "website-new", "custom"], title: "Custom — made for you", action: "Explore Custom", href: "/custom/", copy: "Choose Custom when the work needs professional judgment, distinctive art direction, migration, integrations, or a human revision loop." },
-  { key: "website-abracadabra", path: ["website", "website-new", "website-self-service", "abracadabra"], title: "Abracadabra — make it yourself", action: "Open the local Abracadabra path", href: "/abracadabra/", copy: "Make and download real HTML for one page from facts you enter in this device-local rehearsal. It neither hosts nor publicly publishes; it does not preserve existing URLs, migrate content, manage provider cutover, change DNS, add integrations, or include human revisions." },
-  { key: "website-self-service-uncertain", path: ["website", "website-new", "website-self-service", "self-service-uncertain"], title: "Ask a human before choosing", action: "Contact the studio", href: "/contact/", copy: "If the one-page, manual-entry boundary is not certain, keep the decision with the studio. Nothing needs to be forced into Abracadabra." },
-  { key: "website-replace-redirects", path: ["website", "website-replace", "replace-redirects"], title: "Custom — preserve the route", action: "Explore Custom", href: "/custom/", copy: "Existing URLs, redirects, and search history make this replacement work. Custom inventories what must survive and plans the cutover." },
-  { key: "website-replace-migration", path: ["website", "website-replace", "replace-migration"], title: "Custom — migrate the content", action: "Explore Custom", href: "/custom/", copy: "Existing pages, words, or media need human inventory, judgment, and migration. Abracadabra does not promise that work." },
-  { key: "website-replace-cutover", path: ["website", "website-replace", "replace-cutover"], title: "Custom — plan the cutover", action: "Explore Custom", href: "/custom/", copy: "Provider changes, integrations, forms, domains, and release timing require an explicit migration and cutover plan." },
-  { key: "website-replace-uncertain", path: ["website", "website-replace", "replace-uncertain"], title: "Start with a human review", action: "Contact the studio", href: "/contact/", copy: "An uncertain replacement stays out of self-service until the existing URLs, content, providers, integrations, and cutover risks are understood." },
-  { key: "system-missed-call", path: ["system", "hive-missed-call"], title: "Hive · Missed-call responder", action: "Inspect missed-call responder", href: "/hive/#missed-call", copy: "Inspect the exact trigger, allowed acknowledgement, consent boundary, human handoff, and cell-level pause for an unanswered call." },
-  { key: "system-booking", path: ["system", "hive-booking"], title: "Hive · Booking guide", action: "Inspect booking guide", href: "/hive/#booking", copy: "Inspect a booking handoff that keeps availability provisional and never claims confirmation without the exact provider receipt." },
-  { key: "system-review-request", path: ["system", "hive-review-request"], title: "Hive · Review request", action: "Inspect review request", href: "/hive/#review-request", copy: "Inspect a neutral review request with eligibility, permission, suppression, and dispute boundaries visible." },
-  { key: "system-after-hours", path: ["system", "hive-after-hours"], title: "Hive · After-hours information", action: "Inspect after-hours information", href: "/hive/#after-hours", copy: "Inspect a bounded information path that answers only from approved facts and routes uncertainty or urgency to a person." },
-  { key: "system-follow-up", path: ["system", "hive-follow-up"], title: "Hive · Follow-up", action: "Inspect follow-up", href: "/hive/#follow-up", copy: "Inspect a permission-aware follow-up that preserves the original purpose, owner, due time, and human decision path." },
-  { key: "system-getting-paid", path: ["system", "hive-getting-paid"], title: "Hive · Getting-paid reminder", action: "Inspect getting-paid reminder", href: "/hive/#getting-paid", copy: "Inspect a factual invoice reminder that fails closed on disputes, credits, identity, or balance uncertainty." },
-  { key: "system-commission", path: ["system", "commission"], title: "Commission a working system", action: "Discuss the system", href: "/contact/", copy: "A commission is the better fit when the channels, rules, providers, interface, or handoff need to match the way your business actually works." },
-  { key: "service-assessment", path: ["service", "assessment"], title: "Website assessment", action: "Explore the assessment", href: "/solutions/#assessment", copy: "Choose the assessment for written, severity-ranked findings with screenshot evidence before remediation is scoped." },
-  { key: "service-foundations", path: ["service", "foundations"], title: "Website foundations", action: "Explore foundations", href: "/solutions/#foundations", copy: "Choose foundations for structure, accessibility, performance, metadata, measurement, or release readiness." },
-  { key: "service-care", path: ["service", "care"], title: "Care", action: "Explore Care", href: "/solutions/#care", copy: "Choose Care for a named maintenance, change, monitoring, recovery, handoff, and exit arrangement." },
-  { key: "service-domains", path: ["service", "domains"], title: "Domains", action: "Explore Domains", href: "/solutions/#domains", copy: "Buy with you named as registrant, connect an address you own, manage renewal, plan a transfer, or license monthly use of a Site Sourcery-owned address." },
-  { key: "service-email", path: ["service", "email"], title: "Business email", action: "Explore business email", href: "/solutions/#email", copy: "Choose business email for address roles, domain authentication, routing, recovery, migration, and exit documentation." },
-  { key: "service-commerce", path: ["service", "commerce"], title: "Commerce", action: "Explore Commerce", href: "/solutions/#commerce", copy: "Choose Commerce for the catalog, buying, fulfillment, receipt, refund, and client-owned processor path." },
-  { key: "service-interfaces", path: ["service", "interfaces"], title: "Interfaces", action: "Explore Interfaces", href: "/solutions/#interfaces", copy: "Choose Interfaces for operator-centered controls, permission-aware states, visible failure, and a manual fallback." },
-  { key: "service-studio", path: ["service", "studio"], title: "Studio", action: "Explore Studio", href: "/solutions/#studio", copy: "Choose Studio for a focused art-direction, illustration, motion, editorial, campaign, or physical-to-digital piece." },
-  { key: "service-network", path: ["service", "network"], title: "Connections", action: "Explore Connections", href: "/solutions/#network", copy: "Choose Connections for local listings, directories, referrals, shared resources, or community discovery with removal explicit." },
+  { key: "website-custom", path: ["website", "website-new", "custom"], title: "Custom — made for you", action: "See Custom websites", href: "/custom/", copy: "Choose Custom when you want the site planned, designed, built, and reviewed with you, or when an old site must be replaced safely." },
+  { key: "website-abracadabra", path: ["website", "website-new", "website-self-service", "abracadabra"], title: "Abracadabra — make it yourself", action: "Try Abracadabra", href: "/abracadabra/", copy: "Make and download one real web page from facts you type into this browser. It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions." },
+  { key: "website-self-service-uncertain", path: ["website", "website-new", "website-self-service", "self-service-uncertain"], title: "Ask a human before choosing", action: "Contact the studio", href: "/contact/", copy: "If you are not sure one page and manual entry are enough, ask the studio to check first." },
+  { key: "website-replace-redirects", path: ["website", "website-replace", "replace-redirects"], title: "Custom — protect old links", action: "See Custom websites", href: "/custom/", copy: "Old page addresses and search traffic need a careful list and redirect plan before the new site replaces the old one." },
+  { key: "website-replace-migration", path: ["website", "website-replace", "replace-migration"], title: "Custom — move the content", action: "See Custom websites", href: "/custom/", copy: "Existing pages, words, or images need a person to review what stays, what changes, and where it belongs." },
+  { key: "website-replace-cutover", path: ["website", "website-replace", "replace-cutover"], title: "Custom — plan the switch", action: "See Custom websites", href: "/custom/", copy: "Hosting, forms, outside tools, domains, and launch timing need a written moving plan." },
+  { key: "website-replace-uncertain", path: ["website", "website-replace", "replace-uncertain"], title: "Start with a human review", action: "Contact the studio", href: "/contact/", copy: "Ask the studio to inspect the old links, content, hosting, tools, and domain before choosing how to replace the site." },
+  { key: "system-missed-call", path: ["system", "hive-missed-call"], title: "Hive · Missed-call responder", action: "Inspect missed-call responder", href: "/hive/#missed-call", copy: "See a plan for recording a missed call, sending an allowed reply, handing it to a person, and stopping the system." },
+  { key: "system-booking", path: ["system", "hive-booking"], title: "Hive · Booking guide", action: "Inspect booking guide", href: "/hive/#booking", copy: "See a booking plan that treats times as open until the booking service confirms them." },
+  { key: "system-review-request", path: ["system", "hive-review-request"], title: "Hive · Review request", action: "Inspect review request", href: "/hive/#review-request", copy: "See a fair review-request plan with clear timing, permission, stop rules, and a path for problems." },
+  { key: "system-after-hours", path: ["system", "hive-after-hours"], title: "Hive · After-hours information", action: "Inspect after-hours information", href: "/hive/#after-hours", copy: "See an after-hours plan that uses approved facts and sends unclear or urgent questions to a person." },
+  { key: "system-follow-up", path: ["system", "hive-follow-up"], title: "Hive · Follow-up", action: "Inspect follow-up", href: "/hive/#follow-up", copy: "See a follow-up plan that keeps the reason, owner, due time, permission, and human decision clear." },
+  { key: "system-getting-paid", path: ["system", "hive-getting-paid"], title: "Hive · Getting-paid reminder", action: "Inspect getting-paid reminder", href: "/hive/#getting-paid", copy: "See an invoice reminder plan that stops when the balance, identity, credit, or dispute is unclear." },
+  { key: "system-commission", path: ["system", "commission"], title: "Ask about a working system", action: "Discuss the system", href: "/contact/", copy: "A separate project may fit when the messages, rules, outside services, controls, or handoff must match your business." },
+  { key: "service-assessment", path: ["service", "assessment"], title: "Website assessment", action: "Explore the assessment", href: "/solutions/#assessment", copy: "Choose the assessment for written findings, screenshots, and a clear order of importance before deciding on fixes." },
+  { key: "service-foundations", path: ["service", "foundations"], title: "Website foundations", action: "Explore foundations", href: "/solutions/#foundations", copy: "Ask about foundations for site structure, basic accessibility, speed, page information, measurement, or launch quality." },
+  { key: "service-care", path: ["service", "care"], title: "Care", action: "Explore Care", href: "/solutions/#care", copy: "Ask about Care for a written maintenance, change, monitoring, recovery, handoff, and exit agreement." },
+  { key: "service-domains", path: ["service", "domains"], title: "Domains", action: "See possible domain help", href: "/solutions/#domains", copy: "Ask whether help is available for registration, connection, renewal, or transfer. Ownership, price, and provider terms must be confirmed first." },
+  { key: "service-email", path: ["service", "email"], title: "Business email", action: "Explore business email", href: "/solutions/#email", copy: "Ask about business email for role addresses, delivery checks, routing, recovery, moving mail, and exit notes." },
+  { key: "service-commerce", path: ["service", "commerce"], title: "Commerce", action: "See possible commerce help", href: "/solutions/#commerce", copy: "Ask whether help is available for product pages and a path to a client-owned payment service." },
+  { key: "service-interfaces", path: ["service", "interfaces"], title: "Interfaces", action: "Explore Interfaces", href: "/solutions/#interfaces", copy: "Ask about a focused screen with clear permissions, visible errors, and a manual backup." },
+  { key: "service-studio", path: ["service", "studio"], title: "Studio", action: "Explore Studio", href: "/solutions/#studio", copy: "Ask about one focused design, illustration, motion, story, campaign, or printed-and-digital piece." },
+  { key: "service-network", path: ["service", "network"], title: "Connections", action: "Explore Connections", href: "/solutions/#network", copy: "Ask about local listings, directories, referrals, shared resources, or community discovery." },
 ]);
 
 export const START_BACK_TABLE = Object.freeze([
@@ -3484,9 +3594,9 @@ export const START_BACK_TABLE = Object.freeze([
 function startInitialControlsPass(snapshot) {
   return Boolean(
     snapshot
-    && snapshot.humanHref === "#direct-contact"
+    && snapshot.humanHref === "tel:+18562441220"
     && snapshot.humanTag === "A"
-    && snapshot.humanText === "Skip the chooser and contact the studio"
+    && snapshot.humanText === "call Zack at (856) 244-1220"
     && snapshot.humanControl?.usable
     && snapshot.pathsVisible
     && snapshot.pathsAreButtons
@@ -4146,13 +4256,25 @@ export async function auditBrowser({
             errors.push(`${viewport.label} ${route}: expected one primary nav; found ${result.primaryNavCount}`);
           }
           const usesDisclosureMenu = viewport.width <= 928;
+          const closedNavContractFailures = result.menuReady
+            ? primaryNavContractFailures(result.menuReady.entries, route, {
+              visibility: usesDisclosureMenu ? "closed" : "desktop",
+            })
+            : ["shared menu snapshot is missing"];
           if (
             !result.menuReady
             || !result.menuReady.button
             || !result.menuReady.menu
-            || result.menuReady.links < 1
+            || result.menuReady.links !== PRIMARY_NAV_CONTRACT.length
+            || closedNavContractFailures.length
           ) {
-            errors.push(`${viewport.label} ${route}: shared menu controls are incomplete`);
+            errors.push(
+              `${viewport.label} ${route}: shared menu controls are incomplete `
+              + `${JSON.stringify({
+                contractFailures: closedNavContractFailures,
+                menuReady: result.menuReady,
+              })}`,
+            );
           } else if (usesDisclosureMenu) {
             if (
               result.menuReady.buttonDisplay === "none"
@@ -4169,6 +4291,11 @@ export async function auditBrowser({
                 returnByValue: true,
               });
               const menuFlow = exercised.result?.value;
+              const openedNavContractFailures = menuFlow
+                ? primaryNavContractFailures(menuFlow.opened?.destinations, route, {
+                  visibility: "all",
+                })
+                : ["opened menu snapshot is missing"];
               if (
                 exercised.exceptionDetails
                 || !menuFlow
@@ -4181,10 +4308,14 @@ export async function auditBrowser({
                 || !menuFlow.escaped.buttonFocused
                 || menuFlow.selected.expanded !== "false"
                 || menuFlow.selected.open
+                || openedNavContractFailures.length
               ) {
                 errors.push(
                   `${viewport.label} ${route}: mobile menu open/Escape/select exercise failed `
-                  + `${JSON.stringify(menuFlow ?? exercised.exceptionDetails ?? null)}`,
+                  + `${JSON.stringify({
+                    contractFailures: openedNavContractFailures,
+                    exercise: menuFlow ?? exercised.exceptionDetails ?? null,
+                  })}`,
                 );
               }
               if (viewport.phone && menuFlow) {
@@ -4230,7 +4361,7 @@ export async function auditBrowser({
           }
           if (route === "/solutions/" && viewport.label === "phone-390") {
             const exercised = await cdp.send("Runtime.evaluate", {
-              expression: SOLUTIONS_SHELF_EXERCISE_EXPRESSION,
+              expression: SOLUTIONS_PRIMARY_ANCHOR_EXERCISE_EXPRESSION,
               awaitPromise: true,
               returnByValue: true,
             });
@@ -4238,13 +4369,13 @@ export async function auditBrowser({
             if (
               exercised.exceptionDetails
               || !shelf
-              || shelf.hash !== "#service-shelf"
-              || shelf.eyebrowTop < shelf.obstructionBottom - 1
+              || shelf.hash !== "#assessment"
+              || shelf.kickerTop < shelf.obstructionBottom - 1
               || shelf.headingTop < shelf.obstructionBottom - 1
               || shelf.headingBottom <= shelf.headingTop
             ) {
               errors.push(
-                `${viewport.label} ${route}: service-shelf primary anchor is obscured `
+                `${viewport.label} ${route}: assessment primary anchor is obscured `
                 + `${JSON.stringify(shelf ?? exercised.exceptionDetails ?? null)}`,
               );
             }
@@ -4632,9 +4763,9 @@ export async function auditBrowser({
                 || !actual.actionControl.usable
                 || actual.actionControl.viewportVisiblePixels
                   < Math.min(actual.actionControl.height, 44)
-                || actual.humanHref !== "#direct-contact"
+                || actual.humanHref !== "/contact/"
                 || actual.humanTag !== "A"
-                || actual.humanText !== "I would rather ask a human"
+                || actual.humanText !== "See every contact option"
                 || !actual.humanControl.usable
                 || actual.restartControl.tag !== "BUTTON"
                 || actual.restartControl.type !== "button"
@@ -5058,11 +5189,22 @@ export async function auditBrowser({
               `${NO_SCRIPT_VIEWPORT.label} ${route}: expected one h1; found ${result.h1Count}`,
             );
           }
-          if (result.navVisibleLinks !== 6 || result.menuButtonVisible) {
+          const noScriptNavContractFailures = primaryNavContractFailures(
+            result.navEntries,
+            route,
+            { current: "absent", visibility: "all" },
+          );
+          if (
+            result.navVisibleLinks !== PRIMARY_NAV_CONTRACT.length
+            || result.menuButtonVisible
+            || noScriptNavContractFailures.length
+          ) {
             errors.push(
               `${NO_SCRIPT_VIEWPORT.label} ${route}: fallback navigation was not fully available `
               + `${JSON.stringify({
+                contractFailures: noScriptNavContractFailures,
                 menuButtonVisible: result.menuButtonVisible,
+                navEntries: result.navEntries,
                 navVisibleLinks: result.navVisibleLinks,
               })}`,
             );
@@ -5084,7 +5226,7 @@ export async function auditBrowser({
               || result.start.chooserVisible
               || !result.start.fallbackVisible
               || result.start.fallbackLinks.join(",")
-                !== "/custom/,/hive/,/solutions/,#direct-contact"
+                !== "/custom/,/hive/,/solutions/,tel:+18562441220"
             )
           ) {
             errors.push(
