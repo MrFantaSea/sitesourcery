@@ -43,6 +43,7 @@ class FakeElement {
     this.queries = new Map();
     this.listeners = new Map();
     this.textContent = "";
+    this.checked = false;
     this.disabled = false;
     this.hidden = false;
     this.inert = false;
@@ -91,12 +92,15 @@ class FakeElement {
     this.listeners.get(type).push(listener);
   }
 
-  dispatch(type) {
+  dispatch(type, properties = {}) {
     let prevented = false;
     const event = {
+      ...properties,
       preventDefault() {
         prevented = true;
+        this.defaultPrevented = true;
       },
+      defaultPrevented: false,
     };
     for (const listener of this.listeners.get(type) || []) listener(event);
     return prevented;
@@ -127,6 +131,7 @@ function buildPlannerFixture({ hash = "" } = {}) {
     stage.queries.set("[data-hive-stage-heading]", heading);
     return heading;
   });
+  const startHeading = new FakeElement({ "data-hive-stage-heading": "" });
   const indicators = Array.from({ length: 5 }, (_, index) =>
     new FakeElement({ "data-hive-step-indicator": index + 1 })
   );
@@ -151,14 +156,18 @@ function buildPlannerFixture({ hash = "" } = {}) {
     pauseCopy: new FakeElement({ "data-hive-pause-copy": "" }),
     pause: new FakeElement({ "data-hive-pause": "" }),
     pauseStatus: new FakeElement({ "data-hive-pause-status": "" }),
+    back: new FakeElement({ "data-hive-back": "" }),
     download: new FakeElement({ "data-hive-download": "" }),
     downloadStatus: new FakeElement({ "data-hive-download-status": "" }),
     reviewLabel: new FakeElement({ "data-hive-review-label": "" }),
     reviewResult: new FakeElement({ "data-hive-review-result": "" }),
     reviewWhen: new FakeElement({ "data-hive-review-when": "" }),
     reviewHuman: new FakeElement({ "data-hive-review-human": "" }),
+    reviewPermission: new FakeElement({ "data-hive-review-permission": "" }),
     reviewLimit: new FakeElement({ "data-hive-review-limit": "" }),
+    reviewPause: new FakeElement({ "data-hive-review-pause": "" }),
   };
+  fields.start.queries.set("[data-hive-stage-heading]", startHeading);
   root.controls = [...controls, invalidControl];
   root.stages = stages;
   root.indicators = indicators;
@@ -172,11 +181,43 @@ function buildPlannerFixture({ hash = "" } = {}) {
 
   const location = { hash, pathname: "/hive/", search: "" };
   const historyUrls = [];
+  const historyActions = [];
+  const initialUrl = `/hive/${hash}`;
+  const historyEntries = [{ state: null, url: initialUrl }];
+  let historyIndex = 0;
   const windowListeners = new Map();
+  function updateLocation(url) {
+    location.hash = url.includes("#") ? `#${url.split("#")[1]}` : "";
+  }
+  function dispatchWindow(type, event = {}) {
+    for (const listener of windowListeners.get(type) || []) listener(event);
+  }
   const history = {
-    replaceState(_state, _title, url) {
+    get state() {
+      return historyEntries[historyIndex].state;
+    },
+    replaceState(state, _title, url) {
       historyUrls.push(url);
-      location.hash = url.includes("#") ? `#${url.split("#")[1]}` : "";
+      historyActions.push({ method: "replace", state, url });
+      historyEntries[historyIndex] = { state, url };
+      updateLocation(url);
+    },
+    pushState(state, _title, url) {
+      historyUrls.push(url);
+      historyActions.push({ method: "push", state, url });
+      historyEntries.splice(historyIndex + 1);
+      historyEntries.push({ state, url });
+      historyIndex = historyEntries.length - 1;
+      updateLocation(url);
+    },
+    back() {
+      if (historyIndex === 0) return;
+      const oldHash = location.hash;
+      historyIndex -= 1;
+      const entry = historyEntries[historyIndex];
+      updateLocation(entry.url);
+      dispatchWindow("popstate", { state: entry.state });
+      if (oldHash !== location.hash) dispatchWindow("hashchange");
     },
   };
   const globalValues = {
@@ -193,6 +234,9 @@ function buildPlannerFixture({ hash = "" } = {}) {
     controls,
     fields,
     globalValues,
+    history,
+    historyActions,
+    historyEntries,
     historyUrls,
     indicators,
     invalidControl,
@@ -200,6 +244,7 @@ function buildPlannerFixture({ hash = "" } = {}) {
     output,
     planner,
     root,
+    startHeading,
     stageHeadings,
     stages,
     windowListeners,
@@ -221,6 +266,7 @@ test("exports exactly six frozen deterministic Hive cell definitions", () => {
   for (const cell of planner.cells) {
     assert.equal(Object.isFrozen(cell), true);
     assert.equal(Object.isFrozen(cell.customer), true);
+    assert.deepEqual(Object.keys(cell).sort(), ["customer", "id", "label"]);
     assert.equal(typeof cell.label, "string");
     assert.ok(cell.label.length > 0);
     assert.deepEqual(
@@ -237,11 +283,20 @@ test("exports exactly six frozen deterministic Hive cell definitions", () => {
   }
 });
 
-test("creates complete planning-only blueprints without live authority", () => {
+test("creates customer-readable planning-only blueprints without internal controls", () => {
   const planner = loadPlanner();
-  const requiredStrings = [
+  const customerFields = [
+    "human",
+    "limit",
+    "pause",
+    "permission",
+    "result",
+    "when",
+  ];
+  const forbiddenFields = [
     "problem",
     "trigger",
+    "allowedActions",
     "hardBoundary",
     "dataConsentConcern",
     "fallbackHumanHandoff",
@@ -254,20 +309,36 @@ test("creates complete planning-only blueprints without live authority", () => {
     assert.equal(blueprint.schema, "sitesourcery.hive-blueprint.v1");
     assert.equal(blueprint.status, "planning_only");
     assert.equal(blueprint.liveIntegration, false);
-    assert.match(blueprint.notice, /Planning blueprint only/);
+    assert.equal(
+      blueprint.notice,
+      "Planning only. This file did not send a message, change a calendar or invoice, save customer data, or connect another tool."
+    );
     assert.equal(blueprint.cell.id, cellId);
+    assert.equal(
+      blueprint.cell.label,
+      planner.cells.find((cell) => cell.id === cellId).label
+    );
+    assert.deepEqual(
+      Object.keys(blueprint.cell.customer).sort(),
+      customerFields
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(blueprint.cell.customer)),
+      JSON.parse(JSON.stringify(
+        planner.cells.find((cell) => cell.id === cellId).customer
+      ))
+    );
     assert.ok(Object.isFrozen(blueprint));
     assert.ok(Object.isFrozen(blueprint.cell));
-    assert.ok(Object.isFrozen(blueprint.allowedActions));
-    assert.ok(blueprint.allowedActions.length >= 3);
+    assert.ok(Object.isFrozen(blueprint.cell.customer));
+    assert.deepEqual(
+      Object.keys(blueprint).sort(),
+      ["cell", "liveIntegration", "notice", "schema", "status"]
+    );
 
-    for (const field of requiredStrings) {
-      assert.equal(typeof blueprint[field], "string");
-      assert.ok(blueprint[field].length > 20, `${cellId}.${field}`);
-    }
-    for (const action of blueprint.allowedActions) {
-      assert.equal(typeof action, "string");
-      assert.ok(action.length > 20);
+    for (const field of forbiddenFields) {
+      assert.equal(field in blueprint, false, `${cellId}.${field}`);
+      assert.equal(field in blueprint.cell, false, `${cellId}.cell.${field}`);
     }
   }
 });
@@ -339,8 +410,21 @@ test("starts with one choice and keeps every later stage hidden and inert", () =
     true
   );
   assert.equal(controls.every((control) => control.disabled === false), true);
+  assert.equal(
+    controls.every((control) =>
+      control.getAttribute("role") === "radio" &&
+      control.getAttribute("aria-checked") === "false" &&
+      control.hasAttribute("aria-pressed") === false),
+    true
+  );
+  assert.deepEqual(
+    controls.map((control) => control.getAttribute("tabindex")),
+    ["0", "-1", "-1", "-1", "-1", "-1"]
+  );
   assert.equal(nextButtons.every((button) => button.disabled), true);
   assert.equal(fields.pause.disabled, true);
+  assert.equal(fields.back.hidden, true);
+  assert.equal(fields.back.disabled, true);
   assert.equal(fields.download.disabled, true);
   assert.equal(indicators[0].getAttribute("aria-current"), "step");
   assert.equal(invalidControl.getAttribute("aria-disabled"), "true");
@@ -367,6 +451,11 @@ test("a choice reveals only the result and each Next unlocks one stage", () => {
   assert.equal(root.getAttribute("data-hive-active"), "missed-call");
   assert.equal(root.getAttribute("data-hive-stage-current"), "2");
   assert.equal(output.getAttribute("data-hive-output-cell"), "missed-call");
+  assert.equal(controls[0].getAttribute("aria-checked"), "true");
+  assert.equal(controls[0].hasAttribute("aria-pressed"), false);
+  assert.equal(fields.back.hidden, false);
+  assert.equal(fields.back.disabled, false);
+  assert.equal(fields.back.textContent, "← Back to choose");
   assert.equal(stages[1].hidden, false);
   assert.equal(stages[1].inert, false);
   assert.equal(
@@ -391,6 +480,7 @@ test("a choice reveals only the result and each Next unlocks one stage", () => {
   assert.equal(stages[3].hidden, true);
   assert.equal(stages[4].hidden, true);
   assert.equal(stageHeadings[2].focused, true);
+  assert.equal(fields.back.textContent, "← Back to result");
   assert.deepEqual(nextButtons.map((button) => button.disabled), [true, false, true]);
   assert.equal(fields.live.textContent, "Step 3 of 5 is ready.");
 
@@ -401,6 +491,92 @@ test("a choice reveals only the result and each Next unlocks one stage", () => {
   assert.equal(stages[4].hidden, true);
   assert.deepEqual(nextButtons.map((button) => button.disabled), [true, true, false]);
   assert.equal(fields.pause.disabled, false);
+});
+
+test("Back and browser history walk every Hive stage before leaving the planner", () => {
+  const fixture = buildPlannerFixture();
+  const {
+    controls,
+    fields,
+    globalValues,
+    history,
+    nextButtons,
+    planner,
+    root,
+    startHeading,
+  } = fixture;
+  planner.enhance(root);
+  controls[1].click();
+  nextButtons[0].click();
+  nextButtons[1].click();
+  nextButtons[2].click();
+
+  assert.equal(root.getAttribute("data-hive-stage-current"), "5");
+  assert.equal(globalValues.location.hash, "#booking");
+
+  fields.back.click();
+  assert.equal(root.getAttribute("data-hive-stage-current"), "4");
+  assert.equal(fields.back.textContent, "← Back to timing");
+  assert.equal(globalValues.location.hash, "#booking");
+
+  history.back();
+  assert.equal(root.getAttribute("data-hive-stage-current"), "3");
+  assert.equal(fields.back.textContent, "← Back to result");
+
+  fields.back.click();
+  assert.equal(root.getAttribute("data-hive-stage-current"), "2");
+  assert.equal(fields.back.textContent, "← Back to choose");
+
+  fields.back.click();
+  assert.equal(root.getAttribute("data-hive-stage-current"), "1");
+  assert.equal(root.hasAttribute("data-hive-active"), false);
+  assert.equal(globalValues.location.hash, "");
+  assert.equal(fields.back.hidden, true);
+  assert.equal(fields.back.disabled, true);
+  assert.equal(startHeading.focused, true);
+  assert.equal(
+    controls.every((control) => control.getAttribute("aria-checked") === "false"),
+    true
+  );
+});
+
+test("a deep-linked choice seeds a safe in-page Back destination", () => {
+  const fixture = buildPlannerFixture({ hash: "#booking" });
+  const {
+    fields,
+    globalValues,
+    historyEntries,
+    planner,
+    root,
+  } = fixture;
+  planner.enhance(root);
+
+  assert.equal(historyEntries.length, 2);
+  assert.equal(root.getAttribute("data-hive-stage-current"), "2");
+  fields.back.click();
+  assert.equal(root.getAttribute("data-hive-stage-current"), "1");
+  assert.equal(root.hasAttribute("data-hive-active"), false);
+  assert.equal(globalValues.location.hash, "");
+});
+
+test("arrow keys make one radio choice and keep focus with that choice", () => {
+  const fixture = buildPlannerFixture();
+  const { controls, planner, root, stageHeadings } = fixture;
+  planner.enhance(root);
+
+  assert.equal(controls[0].dispatch("keydown", { key: "ArrowDown" }), true);
+  assert.equal(root.getAttribute("data-hive-active"), "booking");
+  assert.equal(controls[1].getAttribute("aria-checked"), "true");
+  assert.equal(controls[1].getAttribute("tabindex"), "0");
+  assert.equal(controls[0].getAttribute("aria-checked"), "false");
+  assert.equal(controls[0].getAttribute("tabindex"), "-1");
+  assert.equal(controls[1].focused, true);
+  assert.equal(stageHeadings[1].focused, false);
+
+  assert.equal(controls[1].dispatch("keydown", { key: "End" }), true);
+  assert.equal(root.getAttribute("data-hive-active"), "getting-paid");
+  assert.equal(controls[5].getAttribute("aria-checked"), "true");
+  assert.equal(controls[5].focused, true);
 });
 
 test("choosing a different problem resets timing, rules, review, and pause progress", () => {
@@ -456,7 +632,7 @@ test("a valid URL hash opens that problem and later hash changes reset the flow"
   windowListeners.get("hashchange")[0]();
   assert.equal(root.getAttribute("data-hive-active"), "follow-up");
   assert.equal(root.getAttribute("data-hive-stage-current"), "2");
-  assert.equal(controls[4].getAttribute("aria-pressed"), "true");
+  assert.equal(controls[4].getAttribute("aria-checked"), "true");
 
   globalValues.location.hash = "#planner";
   windowListeners.get("hashchange")[0]();
@@ -489,10 +665,12 @@ test("pause is an honest demo state and review stays locked until step five", ()
   assert.equal(fields.pause.disabled, true);
   assert.equal(fields.download.disabled, false);
   assert.equal(fields.reviewLabel.textContent, "Getting-paid reminder");
+  assert.match(fields.reviewPermission.textContent, /right invoice/u);
   assert.match(fields.reviewLimit.textContent, /will not make or change an invoice/u);
+  assert.match(fields.reviewPause.textContent, /stop every waiting reminder/u);
 });
 
-test("download creates one local JSON plan without changing the machine schema", () => {
+test("download creates one local customer plan without exposing internal controls", () => {
   const fixture = buildPlannerFixture();
   const { controls, fields, globalValues, nextButtons, planner, root } = fixture;
   const blobs = [];
@@ -546,6 +724,21 @@ test("download creates one local JSON plan without changing the machine schema",
   assert.equal(blueprint.status, "planning_only");
   assert.equal(blueprint.liveIntegration, false);
   assert.equal(blueprint.cell.id, "review-request");
+  assert.deepEqual(
+    Object.keys(blueprint.cell.customer).sort(),
+    ["human", "limit", "pause", "permission", "result", "when"]
+  );
+  for (const field of [
+    "problem",
+    "trigger",
+    "allowedActions",
+    "hardBoundary",
+    "dataConsentConcern",
+    "fallbackHumanHandoff",
+    "killSwitch",
+  ]) {
+    assert.equal(field in blueprint, false);
+  }
   assert.deepEqual(downloads, [{
     download: "hive-review-request-plan.json",
     href: "blob:hive-plan",
@@ -604,6 +797,38 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
     /data-hive-stage="5"[^>]*aria-hidden="true"[^>]*hidden inert/iu
   );
   assert.match(CSS, /\.hive-stage-start\[hidden\][^{]*\{[^}]*display:\s*none/isu);
+  assert.match(HTML, /role="radiogroup"[^>]*aria-labelledby="hive-choose-title"/u);
+  assert.equal((HTML.match(/role="radio"/gu) || []).length, 6);
+  assert.equal((HTML.match(/data-hive-back/gu) || []).length, 1);
+  assert.match(CSS, /\.hive-cell\[aria-checked="true"\]/u);
+});
+
+test("JavaScript-off and static copy exactly match all six customer examples", () => {
+  const planner = loadPlanner();
+  const escapeRegExp = (value) =>
+    value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+  assert.equal((HTML.match(/data-hive-noscript-cell=/gu) || []).length, 6);
+  assert.equal((HTML.match(/data-hive-static-cell=/gu) || []).length, 6);
+
+  for (const cell of planner.cells) {
+    const label = escapeRegExp(cell.label);
+    const result = escapeRegExp(cell.customer.result);
+    assert.match(
+      HTML,
+      new RegExp(
+        `data-hive-noscript-cell="${cell.id}"[^>]*>\\s*<strong>${label}</strong>\\s*<span data-hive-noscript-result>${result}</span>`,
+        "u"
+      )
+    );
+    assert.match(
+      HTML,
+      new RegExp(
+        `data-hive-static-cell="${cell.id}"[\\s\\S]*?<h3>${label}</h3>\\s*<p data-hive-static-result>${result}</p>`,
+        "u"
+      )
+    );
+  }
 });
 
 test("contains no network, persistence, markup-injection, or payment API", () => {

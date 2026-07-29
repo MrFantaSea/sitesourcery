@@ -74,14 +74,14 @@
         <noscript>
           <div class="boundary-note hive-noscript" role="note">
             <h3>Plan with us without JavaScript</h3>
-            <p>The step-by-step tool needs JavaScript, but you can still choose from these six problems:</p>
+            <p>The step-by-step tool needs JavaScript, but these are the same six examples it shows:</p>
             <ul>
-              <li>Missed calls</li>
-              <li>Booking</li>
-              <li>Review requests</li>
-              <li>After-hours questions</li>
-              <li>Follow-up</li>
-              <li>Getting paid</li>
+              <li data-hive-noscript-cell="missed-call"><strong>Missed-call responder</strong><span data-hive-noscript-result>A missed call becomes a clear follow-up for your team, so the reason for calling is less likely to get lost.</span></li>
+              <li data-hive-noscript-cell="booking"><strong>Booking guide</strong><span data-hive-noscript-result>A customer gets the right booking questions, then a person or booking tool confirms the details.</span></li>
+              <li data-hive-noscript-cell="review-request"><strong>Review request</strong><span data-hive-noscript-result>An eligible customer gets one fair request for honest feedback after the job is complete.</span></li>
+              <li data-hive-noscript-cell="after-hours"><strong>After-hours information</strong><span data-hive-noscript-result>A customer gets approved basic information and a clear way to reach a person.</span></li>
+              <li data-hive-noscript-cell="follow-up"><strong>Follow-up</strong><span data-hive-noscript-result>A promised next step gets a due time and owner, so it is less likely to be forgotten.</span></li>
+              <li data-hive-noscript-cell="getting-paid"><strong>Getting-paid reminder</strong><span data-hive-noscript-result>An overdue invoice gets a clear, respectful reminder and an easy path to ask about a problem.</span></li>
             </ul>
             <p>Nothing is connected from this page. <a href="/contact/#direct-contact">Ask for a written scope and price</a> and tell us which problem fits.</p>
           </div>
@@ -92,14 +92,16 @@
             <p class="hive-stage-number">Step 1 of 5</p>
             <h3 id="hive-choose-title">Choose one business problem</h3>
             <p>Pick the one that costs the most time or trust today.</p>
-            <div class="hive-controls" role="group" aria-label="Business problems">
-              <button class="hive-cell" id="missed-call" type="button" data-hive-cell="missed-call" disabled>Missed calls</button>
-              <button class="hive-cell" id="booking" type="button" data-hive-cell="booking" disabled>Booking</button>
-              <button class="hive-cell" id="review-request" type="button" data-hive-cell="review-request" disabled>Review requests</button>
-              <button class="hive-cell" id="after-hours" type="button" data-hive-cell="after-hours" disabled>After-hours questions</button>
-              <button class="hive-cell" id="follow-up" type="button" data-hive-cell="follow-up" disabled>Follow-up</button>
-              <button class="hive-cell" id="getting-paid" type="button" data-hive-cell="getting-paid" disabled>Getting paid</button>
+            <!-- [html-validate-disable prefer-native-element -- Hive is deliberately a non-form, local-only planner.] -->
+            <div class="hive-controls" role="radiogroup" aria-labelledby="hive-choose-title">
+              <button class="hive-cell" id="missed-call" type="button" role="radio" aria-checked="false" tabindex="0" data-hive-cell="missed-call" disabled>Missed calls</button>
+              <button class="hive-cell" id="booking" type="button" role="radio" aria-checked="false" tabindex="-1" data-hive-cell="booking" disabled>Booking</button>
+              <button class="hive-cell" id="review-request" type="button" role="radio" aria-checked="false" tabindex="-1" data-hive-cell="review-request" disabled>Review requests</button>
+              <button class="hive-cell" id="after-hours" type="button" role="radio" aria-checked="false" tabindex="-1" data-hive-cell="after-hours" disabled>After-hours questions</button>
+              <button class="hive-cell" id="follow-up" type="button" role="radio" aria-checked="false" tabindex="-1" data-hive-cell="follow-up" disabled>Follow-up</button>
+              <button class="hive-cell" id="getting-paid" type="button" role="radio" aria-checked="false" tabindex="-1" data-hive-cell="getting-paid" disabled>Getting paid</button>
             </div>
+            <!-- [html-validate-enable prefer-native-element] -->
           </section>
 
           <div class="hive-stage-shell" data-hive-output>
@@ -112,9 +114,12 @@
             </ol>
             <p class="visually-hidden" data-hive-live role="status" aria-live="polite" aria-atomic="true">Choose one business problem to begin.</p>
             <p class="hive-blueprint-status" data-hive-status>Plan only · nothing is connected</p>
+            <div class="hive-stage-navigation">
+              <button class="button hive-back-button" type="button" data-hive-back hidden disabled>← Back</button>
+            </div>
 
             <div class="hive-stage-start" data-hive-start>
-              <h3>Start with one clear problem.</h3>
+              <h3 data-hive-stage-heading tabindex="-1">Start with one clear problem.</h3>
               <p>We will keep the next steps hidden until you choose. You can change your choice at any time.</p>
             </div>
 
@@ -182,7 +187,9 @@
                 <div><dt>Result</dt><dd data-hive-review-result></dd></div>
                 <div><dt>When</dt><dd data-hive-review-when></dd></div>
                 <div><dt>Handoff</dt><dd data-hive-review-human></dd></div>
+                <div><dt>Permission</dt><dd data-hive-review-permission></dd></div>
                 <div><dt>Limit</dt><dd data-hive-review-limit></dd></div>
+                <div><dt>Pause</dt><dd data-hive-review-pause></dd></div>
               </dl>
               <div class="hive-finish">
                 <div>
@@ -215,20 +222,35 @@
           <p>Choose one job that repeats often, has a clear start, and needs a person when something is unclear.</p>
         </div>
         <div class="card-grid">
-          <article class="card reveal">
+          <article class="card reveal" data-hive-static-cell="missed-call">
             <p class="card-kicker">Calls and questions</p>
-            <h3>Missed calls · after hours</h3>
-            <p>Give a missed caller a clear next step. Share only approved facts after hours. Urgent or unclear requests go to a person.</p>
+            <h3>Missed-call responder</h3>
+            <p data-hive-static-result>A missed call becomes a clear follow-up for your team, so the reason for calling is less likely to get lost.</p>
           </article>
-          <article class="card reveal">
+          <article class="card reveal" data-hive-static-cell="booking">
             <p class="card-kicker">Appointments and trust</p>
-            <h3>Booking · reviews</h3>
-            <p>Guide a customer toward the right booking. Ask fairly for honest feedback without pressure or special treatment.</p>
+            <h3>Booking guide</h3>
+            <p data-hive-static-result>A customer gets the right booking questions, then a person or booking tool confirms the details.</p>
           </article>
-          <article class="card reveal">
+          <article class="card reveal" data-hive-static-cell="review-request">
+            <p class="card-kicker">Appointments and trust</p>
+            <h3>Review request</h3>
+            <p data-hive-static-result>An eligible customer gets one fair request for honest feedback after the job is complete.</p>
+          </article>
+          <article class="card reveal" data-hive-static-cell="after-hours">
+            <p class="card-kicker">Calls and questions</p>
+            <h3>After-hours information</h3>
+            <p data-hive-static-result>A customer gets approved basic information and a clear way to reach a person.</p>
+          </article>
+          <article class="card reveal" data-hive-static-cell="follow-up">
             <p class="card-kicker">Promises and payment</p>
-            <h3>Follow-up · getting paid</h3>
-            <p>Keep a promised follow-up from being lost. Send a respectful invoice reminder without making a charge, adding a fee, or ignoring a dispute.</p>
+            <h3>Follow-up</h3>
+            <p data-hive-static-result>A promised next step gets a due time and owner, so it is less likely to be forgotten.</p>
+          </article>
+          <article class="card reveal" data-hive-static-cell="getting-paid">
+            <p class="card-kicker">Promises and payment</p>
+            <h3>Getting-paid reminder</h3>
+            <p data-hive-static-result>An overdue invoice gets a clear, respectful reminder and an easy path to ask about a problem.</p>
           </article>
         </div>
       </div>

@@ -5,7 +5,9 @@
 
   var SCHEMA = "sitesourcery.hive-blueprint.v1";
   var STATUS = "planning_only";
-  var NOTICE = "Planning blueprint only. No Hive integration, message, booking, review request, invoice action, or provider connection is active.";
+  var NOTICE = "Planning only. This file did not send a message, change a calendar or invoice, save customer data, or connect another tool.";
+  var HISTORY_KEY = "siteSourceryHivePlanner";
+  var HISTORY_VERSION = 1;
 
   function safeRevokeObjectUrl(environment, objectUrl) {
     if (
@@ -262,6 +264,14 @@
   });
   Object.freeze(CELL_BY_ID);
 
+  var PUBLIC_CELLS = deepFreeze(CELLS.map(function (cell) {
+    return {
+      id: cell.id,
+      label: cell.label,
+      customer: cell.customer
+    };
+  }));
+
   function requireCell(cellId) {
     if (
       typeof cellId !== "string" ||
@@ -281,15 +291,9 @@
       notice: NOTICE,
       cell: {
         id: cell.id,
-        label: cell.label
-      },
-      problem: cell.problem,
-      trigger: cell.trigger,
-      allowedActions: cell.allowedActions.slice(),
-      hardBoundary: cell.hardBoundary,
-      dataConsentConcern: cell.dataConsentConcern,
-      fallbackHumanHandoff: cell.fallbackHumanHandoff,
-      killSwitch: cell.killSwitch
+        label: cell.label,
+        customer: cell.customer
+      }
     });
   }
 
@@ -362,19 +366,24 @@
       pauseCopy: root.querySelector("[data-hive-pause-copy]"),
       pause: root.querySelector("[data-hive-pause]"),
       pauseStatus: root.querySelector("[data-hive-pause-status]"),
+      back: root.querySelector("[data-hive-back]"),
       download: root.querySelector("[data-hive-download]"),
       downloadStatus: root.querySelector("[data-hive-download-status]"),
       reviewLabel: root.querySelector("[data-hive-review-label]"),
       reviewResult: root.querySelector("[data-hive-review-result]"),
       reviewWhen: root.querySelector("[data-hive-review-when]"),
       reviewHuman: root.querySelector("[data-hive-review-human]"),
-      reviewLimit: root.querySelector("[data-hive-review-limit]")
+      reviewPermission: root.querySelector("[data-hive-review-permission]"),
+      reviewLimit: root.querySelector("[data-hive-review-limit]"),
+      reviewPause: root.querySelector("[data-hive-review-pause]")
     };
     var validControls = [];
     var stageByNumber = Object.create(null);
     var currentStage = 1;
     var activeCellId = null;
     var paused = false;
+    var historyDepth = 0;
+    var lastKnownHash = "";
 
     controls.forEach(function (control) {
       var cellId = control.getAttribute("data-hive-cell");
@@ -408,12 +417,17 @@
     );
     if (!plannerReady) return false;
 
-    validControls.forEach(function (control) {
+    validControls.forEach(function (control, index) {
       control.disabled = !plannerReady;
       control.removeAttribute("aria-disabled");
-      control.setAttribute("aria-pressed", "false");
+      control.removeAttribute("aria-pressed");
+      control.setAttribute("role", "radio");
+      control.setAttribute("aria-checked", "false");
+      control.setAttribute("tabindex", index === 0 ? "0" : "-1");
     });
     fields.pause.disabled = true;
+    fields.back.disabled = true;
+    fields.back.hidden = true;
     fields.download.disabled = true;
     fields.status.textContent = "Plan only · nothing is connected";
 
@@ -440,7 +454,9 @@
       fields.reviewResult.textContent = customer.result;
       fields.reviewWhen.textContent = customer.when;
       fields.reviewHuman.textContent = customer.human;
+      fields.reviewPermission.textContent = customer.permission;
       fields.reviewLimit.textContent = customer.limit;
+      fields.reviewPause.textContent = customer.pause;
       fields.downloadStatus.textContent =
         "This plan stays in your browser until you download it.";
       renderPause();
@@ -463,8 +479,23 @@
       });
     }
 
+    function stageHeading() {
+      var container = currentStage === 1
+        ? fields.start
+        : stageByNumber[currentStage];
+      return container && container.querySelector(
+        "[data-hive-stage-heading]"
+      );
+    }
+
     function renderStage(options) {
       var settings = options || {};
+      var backLabels = {
+        2: "← Back to choose",
+        3: "← Back to result",
+        4: "← Back to timing",
+        5: "← Back to rules"
+      };
       root.setAttribute("data-hive-stage-current", String(currentStage));
       stages.forEach(function (stage) {
         var stageNumber = Number(stage.getAttribute("data-hive-stage"));
@@ -476,6 +507,9 @@
       fields.start.hidden = currentStage !== 1;
       fields.start.inert = currentStage !== 1;
       fields.start.setAttribute("aria-hidden", String(currentStage !== 1));
+      fields.back.hidden = currentStage === 1;
+      fields.back.disabled = currentStage === 1;
+      fields.back.textContent = backLabels[currentStage] || "← Back";
       nextButtons.forEach(function (button) {
         var target = Number(button.getAttribute("data-hive-next"));
         button.disabled = !activeCellId || target !== currentStage + 1;
@@ -483,10 +517,8 @@
       fields.pause.disabled = !activeCellId || currentStage !== 4;
       fields.download.disabled = !activeCellId || currentStage !== 5;
       renderProgress();
-      if (settings.focus === true && currentStage > 1) {
-        var heading = stageByNumber[currentStage].querySelector(
-          "[data-hive-stage-heading]"
-        );
+      if (settings.focus === true) {
+        var heading = stageHeading();
         if (heading && typeof heading.focus === "function") heading.focus();
       }
       if (settings.announce === true) {
@@ -494,71 +526,202 @@
       }
     }
 
-    function updateHash(cellId) {
+    function plannerState(cellId, stage, pauseState, depth) {
+      var envelope = {};
+      envelope[HISTORY_KEY] = {
+        version: HISTORY_VERSION,
+        cellId: cellId || null,
+        stage: stage,
+        paused: pauseState === true,
+        depth: depth
+      };
+      return envelope;
+    }
+
+    function stateDetails(state) {
+      var details = state && state[HISTORY_KEY];
       if (
-        !global.history
-        || typeof global.history.replaceState !== "function"
-        || !global.location
-      ) {
-        return;
+        !details
+        || details.version !== HISTORY_VERSION
+        || !Number.isInteger(details.stage)
+        || details.stage < 1
+        || details.stage > 5
+        || !Number.isInteger(details.depth)
+        || details.depth < 0
+      ) return null;
+      if (details.stage === 1) {
+        return {
+          cellId: null,
+          stage: 1,
+          paused: false,
+          depth: details.depth
+        };
       }
+      if (!Object.prototype.hasOwnProperty.call(CELL_BY_ID, details.cellId)) {
+        return null;
+      }
+      return {
+        cellId: details.cellId,
+        stage: details.stage,
+        paused: details.paused === true,
+        depth: details.depth
+      };
+    }
+
+    function baseUrl() {
+      if (!global.location) return "";
+      return String(global.location.pathname || "")
+        + String(global.location.search || "");
+    }
+
+    function urlForCell(cellId) {
+      return baseUrl() + (cellId ? "#" + encodeURIComponent(cellId) : "");
+    }
+
+    function currentUrl() {
+      return baseUrl() + (
+        global.location && typeof global.location.hash === "string"
+          ? global.location.hash
+          : ""
+      );
+    }
+
+    function hasHistory(method) {
+      var methodName = method === "back" ? "back" : method + "State";
+      return Boolean(
+        global.history
+        && typeof global.history[methodName] === "function"
+        && global.location
+      );
+    }
+
+    function writeHistory(method, details, url) {
+      if (!hasHistory(method)) return false;
       try {
-        global.history.replaceState(
-          null,
+        global.history[method + "State"](
+          plannerState(
+            details.cellId,
+            details.stage,
+            details.paused,
+            details.depth
+          ),
           "",
-          String(global.location.pathname || "")
-            + String(global.location.search || "")
-            + "#"
-            + encodeURIComponent(cellId)
+          url
         );
+        lastKnownHash = String(global.location.hash || "");
+        return true;
       } catch (_error) {
-        // The plan still works if a browser blocks history updates.
+        return false;
       }
     }
 
-    function select(cellId, options) {
+    function renderState(details, options) {
       var settings = options || {};
-      var cell = requireCell(cellId);
-      activeCellId = cellId;
-      paused = false;
+      currentStage = details.stage;
+      historyDepth = details.depth;
+      if (currentStage === 1) {
+        activeCellId = null;
+        paused = false;
+        validControls.forEach(function (control, index) {
+          control.setAttribute("aria-checked", "false");
+          control.setAttribute("tabindex", index === 0 ? "0" : "-1");
+          control.removeAttribute("data-hive-selected");
+        });
+        root.removeAttribute("data-hive-active");
+        output.removeAttribute("data-hive-output-cell");
+        renderPause();
+        renderStage({ focus: settings.focus === true });
+        fields.live.textContent = settings.announce === true
+          ? "Step 1 of 5 is ready. Choose one business problem."
+          : "Choose one business problem to begin.";
+        return;
+      }
+
+      var cell = requireCell(details.cellId);
+      activeCellId = cell.id;
+      paused = details.paused === true;
       validControls.forEach(function (control) {
-        var selected = control.getAttribute("data-hive-cell") === cellId;
-        control.setAttribute("aria-pressed", String(selected));
+        var selected = control.getAttribute("data-hive-cell") === cell.id;
+        control.setAttribute("aria-checked", String(selected));
+        control.setAttribute("tabindex", selected ? "0" : "-1");
         if (selected) control.setAttribute("data-hive-selected", "true");
         else control.removeAttribute("data-hive-selected");
       });
-      root.setAttribute("data-hive-active", cellId);
-      output.setAttribute("data-hive-output-cell", cellId);
-      renderCustomerPlan(cellId);
-      currentStage = 2;
-      renderStage({ focus: settings.focus === true });
-      if (settings.updateHash === true) updateHash(cellId);
-      fields.live.textContent = cell.label + " selected. Step 2 of 5 is ready.";
-    }
-
-    function reset() {
-      activeCellId = null;
-      paused = false;
-      currentStage = 1;
-      validControls.forEach(function (control) {
-        control.setAttribute("aria-pressed", "false");
-        control.removeAttribute("data-hive-selected");
+      root.setAttribute("data-hive-active", cell.id);
+      output.setAttribute("data-hive-output-cell", cell.id);
+      renderCustomerPlan(cell.id);
+      renderStage({
+        focus: settings.focus === true,
+        announce: settings.announce === true
       });
-      root.removeAttribute("data-hive-active");
-      output.removeAttribute("data-hive-output-cell");
-      renderPause();
-      renderStage();
-      fields.live.textContent = "Choose one business problem to begin.";
+      if (settings.selectionAnnouncement === true) {
+        fields.live.textContent =
+          cell.label + " selected. Step 2 of 5 is ready.";
+      }
     }
 
-    validControls.forEach(function (control) {
+    function selectFromControl(cellId, options) {
+      var settings = options || {};
+      requireCell(cellId);
+      if (
+        currentStage !== 1
+        && hasHistory("replace")
+        && hasHistory("push")
+      ) {
+        writeHistory("replace", {
+          cellId: null,
+          stage: 1,
+          paused: false,
+          depth: 0
+        }, urlForCell(null));
+      }
+      var details = {
+        cellId: cellId,
+        stage: 2,
+        paused: false,
+        depth: 1
+      };
+      renderState(details, {
+        focus: settings.focusHeading === true,
+        selectionAnnouncement: true
+      });
+      if (!writeHistory("push", details, urlForCell(cellId))) {
+        historyDepth = 0;
+      }
+      if (settings.focusControl && typeof settings.focusControl.focus === "function") {
+        settings.focusControl.focus();
+      }
+    }
+
+    validControls.forEach(function (control, controlIndex) {
       var cellId = control.getAttribute("data-hive-cell");
-      control.setAttribute("aria-pressed", "false");
       control.addEventListener("click", function (event) {
         if (event && typeof event.preventDefault === "function") {
           event.preventDefault();
         }
-        select(cellId, { focus: true, updateHash: true });
+        selectFromControl(cellId, { focusHeading: true });
+      });
+      control.addEventListener("keydown", function (event) {
+        if (!event || typeof event.key !== "string") return;
+        var targetIndex = controlIndex;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          targetIndex = (controlIndex + 1) % validControls.length;
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          targetIndex =
+            (controlIndex - 1 + validControls.length) % validControls.length;
+        } else if (event.key === "Home") {
+          targetIndex = 0;
+        } else if (event.key === "End") {
+          targetIndex = validControls.length - 1;
+        } else {
+          return;
+        }
+        if (typeof event.preventDefault === "function") event.preventDefault();
+        var targetControl = validControls[targetIndex];
+        selectFromControl(
+          targetControl.getAttribute("data-hive-cell"),
+          { focusControl: targetControl }
+        );
       });
     });
 
@@ -566,15 +729,54 @@
       var target = Number(button.getAttribute("data-hive-next"));
       button.addEventListener("click", function () {
         if (!activeCellId || target !== currentStage + 1) return;
-        currentStage = target;
-        renderStage({ focus: true, announce: true });
+        var details = {
+          cellId: activeCellId,
+          stage: target,
+          paused: paused,
+          depth: historyDepth + 1
+        };
+        renderState(details, { focus: true, announce: true });
+        if (!writeHistory("push", details, urlForCell(activeCellId))) {
+          historyDepth = 0;
+        }
       });
+    });
+
+    fields.back.addEventListener("click", function () {
+      if (currentStage === 1) return;
+      if (historyDepth > 0 && hasHistory("back")) {
+        try {
+          global.history.back();
+          return;
+        } catch (_error) {
+          // Fall back to an in-place stage change below.
+        }
+      }
+      var target = currentStage - 1;
+      var details = {
+        cellId: target === 1 ? null : activeCellId,
+        stage: target,
+        paused: target === 1 ? false : paused,
+        depth: Math.max(0, historyDepth - 1)
+      };
+      renderState(details, { focus: true, announce: true });
+      writeHistory(
+        "replace",
+        details,
+        target === 1 ? urlForCell(null) : urlForCell(activeCellId)
+      );
     });
 
     fields.pause.addEventListener("click", function () {
       if (!activeCellId || currentStage !== 4) return;
       paused = !paused;
       renderPause();
+      writeHistory("replace", {
+        cellId: activeCellId,
+        stage: currentStage,
+        paused: paused,
+        depth: historyDepth
+      }, urlForCell(activeCellId));
       fields.live.textContent = paused
         ? "Pause demo on. Nothing is connected."
         : "Pause demo ended. Nothing is connected.";
@@ -607,20 +809,96 @@
     }
 
     var preferred = cellFromHash();
-    if (preferred) {
-      select(preferred, { focus: false, updateHash: false });
+    if (preferred && hasHistory("replace") && hasHistory("push")) {
+      var startDetails = {
+        cellId: null,
+        stage: 1,
+        paused: false,
+        depth: 0
+      };
+      writeHistory("replace", startDetails, urlForCell(null));
+      var preferredDetails = {
+        cellId: preferred,
+        stage: 2,
+        paused: false,
+        depth: 1
+      };
+      renderState(preferredDetails);
+      if (!writeHistory("push", preferredDetails, urlForCell(preferred))) {
+        historyDepth = 0;
+      }
+    } else if (preferred) {
+      renderState({
+        cellId: preferred,
+        stage: 2,
+        paused: false,
+        depth: 0
+      });
+      lastKnownHash = String(global.location && global.location.hash || "");
     } else {
-      reset();
+      var initialDetails = {
+        cellId: null,
+        stage: 1,
+        paused: false,
+        depth: 0
+      };
+      renderState(initialDetails);
+      writeHistory("replace", initialDetails, currentUrl());
+      lastKnownHash = String(global.location && global.location.hash || "");
     }
 
     if (typeof global.addEventListener === "function") {
-      global.addEventListener("hashchange", function () {
-        var requested = cellFromHash();
-        if (requested) {
-          select(requested, { focus: true, updateHash: false });
-        } else {
-          reset();
+      global.addEventListener("popstate", function (event) {
+        var details = stateDetails(event && event.state);
+        if (!details) {
+          var requested = cellFromHash();
+          details = requested
+            ? {
+                cellId: requested,
+                stage: 2,
+                paused: false,
+                depth: 1
+              }
+            : {
+                cellId: null,
+                stage: 1,
+                paused: false,
+                depth: 0
+              };
         }
+        lastKnownHash = String(global.location && global.location.hash || "");
+        renderState(details, { focus: true, announce: true });
+        if (typeof global.setTimeout === "function") {
+          var expectedStage = details.stage;
+          global.setTimeout(function () {
+            if (currentStage !== expectedStage) return;
+            var heading = stageHeading();
+            if (heading && typeof heading.focus === "function") heading.focus();
+          }, 0);
+        }
+      });
+      global.addEventListener("hashchange", function () {
+        var hash = String(global.location && global.location.hash || "");
+        if (hash === lastKnownHash) return;
+        var requested = cellFromHash();
+        var details = requested
+          ? {
+              cellId: requested,
+              stage: 2,
+              paused: false,
+              depth: Math.max(1, historyDepth + 1)
+            }
+          : {
+              cellId: null,
+              stage: 1,
+              paused: false,
+              depth: 0
+            };
+        renderState(details, {
+          focus: true,
+          selectionAnnouncement: Boolean(requested)
+        });
+        writeHistory("replace", details, currentUrl());
       });
     }
 
@@ -637,7 +915,7 @@
   var api = Object.freeze({
     schema: SCHEMA,
     status: STATUS,
-    cells: CELLS,
+    cells: PUBLIC_CELLS,
     createBlueprint: createBlueprint,
     deliverLocalFile: deliverLocalFile,
     downloadBlueprint: downloadBlueprint,

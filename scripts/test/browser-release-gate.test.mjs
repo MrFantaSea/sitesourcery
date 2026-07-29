@@ -20,6 +20,9 @@ import {
   HOME_FIRST_PAINT_SCENARIOS,
   HOME_FIRST_PAINT_VIEWPORTS,
   homeFirstPaintFailures,
+  HIVE_CUSTOMER_EXAMPLES,
+  HIVE_CUSTOMER_FIELDS,
+  HIVE_FORBIDDEN_PUBLIC_FIELDS,
   PRIMARY_NAV_CONTRACT,
   primaryNavContractFailures,
   privateViewerPopupFailures,
@@ -137,6 +140,65 @@ test("browser gate owns the exact customer navigation and route-only current sta
     primaryNavContractFailures(exposedDesktopCall, "/faq/", { visibility: "desktop" })
       .some((failure) => failure.includes("visibility")),
   );
+});
+
+test("Hive browser gate owns exact customer plans, examples, radio choices, and Back history", () => {
+  assert.deepEqual(HIVE_CUSTOMER_FIELDS, [
+    "human",
+    "limit",
+    "pause",
+    "permission",
+    "result",
+    "when",
+  ]);
+  assert.deepEqual(HIVE_FORBIDDEN_PUBLIC_FIELDS, [
+    "allowedActions",
+    "dataConsentConcern",
+    "fallbackHumanHandoff",
+    "hardBoundary",
+    "killSwitch",
+    "problem",
+    "trigger",
+  ]);
+  assert.deepEqual(HIVE_CUSTOMER_EXAMPLES, [
+    {
+      id: "missed-call",
+      label: "Missed-call responder",
+      result: "A missed call becomes a clear follow-up for your team, so the reason for calling is less likely to get lost.",
+    },
+    {
+      id: "booking",
+      label: "Booking guide",
+      result: "A customer gets the right booking questions, then a person or booking tool confirms the details.",
+    },
+    {
+      id: "review-request",
+      label: "Review request",
+      result: "An eligible customer gets one fair request for honest feedback after the job is complete.",
+    },
+    {
+      id: "after-hours",
+      label: "After-hours information",
+      result: "A customer gets approved basic information and a clear way to reach a person.",
+    },
+    {
+      id: "follow-up",
+      label: "Follow-up",
+      result: "A promised next step gets a due time and owner, so it is less likely to be forgotten.",
+    },
+    {
+      id: "getting-paid",
+      label: "Getting-paid reminder",
+      result: "An overdue invoice gets a clear, respectful reminder and an easy path to ask about a problem.",
+    },
+  ]);
+  assert.match(auditSource, /const HIVE_HISTORY_EXERCISE_EXPRESSION/u);
+  assert.match(auditSource, /history\.back\(\)/u);
+  assert.match(auditSource, /browserBackToTiming/u);
+  assert.match(auditSource, /role"\) === "radiogroup"/u);
+  assert.match(auditSource, /JSON\.stringify\(result\.hive\.fallbackExamples\)/u);
+  assert.match(auditSource, /JSON\.stringify\(result\.hiveReady\.staticExamples\)/u);
+  assert.doesNotMatch(auditSource, /machineFieldsComplete/u);
 });
 
 test("Start browser gate owns the complete independent decision and Back tables", () => {

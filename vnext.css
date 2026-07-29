@@ -2785,7 +2785,7 @@ h3 {
 
 .hive-cell:hover,
 .hive-cell:focus-visible,
-.hive-cell[aria-pressed="true"],
+.hive-cell[aria-checked="true"],
 .hive-cell[data-hive-selected="true"] {
   border-color: var(--mint);
   color: var(--ink);
@@ -2859,6 +2859,32 @@ h3 {
   text-transform: uppercase;
 }
 
+.hive-stage-navigation {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  margin-top: 0.55rem;
+}
+
+.hive-back-button {
+  min-height: 2.75rem;
+  padding-inline: 0.8rem;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.hive-back-button:hover,
+.hive-back-button:focus-visible {
+  border-color: var(--line-bright);
+  color: var(--mint);
+  background: rgba(131, 231, 193, 0.06);
+}
+
+.hive-back-button[hidden] {
+  display: none;
+}
+
 .hive-stage-start,
 .hive-stage-card {
   min-height: 26rem;
@@ -2875,6 +2901,7 @@ h3 {
   display: none;
 }
 
+.hive-stage-start h3:focus-visible,
 .hive-stage-card h3:focus-visible {
   outline: 2px solid var(--mint);
   outline-offset: 0.35rem;
@@ -3025,9 +3052,26 @@ h3 {
 .hive-noscript ul {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 1rem;
+  gap: 0.65rem 1rem;
   margin: 0.8rem 0;
   padding-left: 1.2rem;
+}
+
+.hive-noscript li {
+  padding-left: 0.2rem;
+}
+
+.hive-noscript li strong,
+.hive-noscript li span {
+  display: block;
+}
+
+.hive-noscript li strong {
+  color: var(--ink-soft);
+}
+
+.hive-noscript li span {
+  margin-top: 0.2rem;
 }
 
 .boundary-note {

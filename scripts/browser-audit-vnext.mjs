@@ -51,6 +51,55 @@ const HIVE_COMPONENT_VIEWPORTS = Object.freeze([
   Object.freeze({ label: "hive-769", width: 769, height: 1024, mobile: false, componentRoute: "/hive/" }),
   Object.freeze({ label: "hive-landscape", width: 844, height: 390, mobile: false, componentRoute: "/hive/" }),
 ]);
+export const HIVE_CUSTOMER_EXAMPLES = Object.freeze([
+  Object.freeze({
+    id: "missed-call",
+    label: "Missed-call responder",
+    result: "A missed call becomes a clear follow-up for your team, so the reason for calling is less likely to get lost.",
+  }),
+  Object.freeze({
+    id: "booking",
+    label: "Booking guide",
+    result: "A customer gets the right booking questions, then a person or booking tool confirms the details.",
+  }),
+  Object.freeze({
+    id: "review-request",
+    label: "Review request",
+    result: "An eligible customer gets one fair request for honest feedback after the job is complete.",
+  }),
+  Object.freeze({
+    id: "after-hours",
+    label: "After-hours information",
+    result: "A customer gets approved basic information and a clear way to reach a person.",
+  }),
+  Object.freeze({
+    id: "follow-up",
+    label: "Follow-up",
+    result: "A promised next step gets a due time and owner, so it is less likely to be forgotten.",
+  }),
+  Object.freeze({
+    id: "getting-paid",
+    label: "Getting-paid reminder",
+    result: "An overdue invoice gets a clear, respectful reminder and an easy path to ask about a problem.",
+  }),
+]);
+export const HIVE_CUSTOMER_FIELDS = Object.freeze([
+  "human",
+  "limit",
+  "pause",
+  "permission",
+  "result",
+  "when",
+]);
+export const HIVE_FORBIDDEN_PUBLIC_FIELDS = Object.freeze([
+  "allowedActions",
+  "dataConsentConcern",
+  "fallbackHumanHandoff",
+  "hardBoundary",
+  "killSwitch",
+  "problem",
+  "trigger",
+]);
 export const HOME_FIRST_PAINT_VIEWPORTS = Object.freeze([
   Object.freeze({ label: "cold-phone-390", width: 390, height: 844, mobile: true }),
   Object.freeze({ label: "cold-desktop", width: 1440, height: 1000, mobile: false }),
@@ -1787,12 +1836,20 @@ const AUDIT_EXPRESSION = `(() => {
     const start = hive.querySelector("[data-hive-start]");
     const stages = Array.from(hive.querySelectorAll("[data-hive-stage]"));
     const live = hive.querySelector("[data-hive-live]");
+    const back = hive.querySelector("[data-hive-back]");
+    const cells = Array.from(hive.querySelectorAll("[data-hive-cell]"));
     result.hiveReady = {
       activation: hive.getAttribute("data-hive-activation"),
       enhanced: hive.getAttribute("data-hive-planner-ready"),
       controls: hive.querySelectorAll("[data-hive-cell]").length,
-      choicesEnabled: Array.from(hive.querySelectorAll("[data-hive-cell]"))
-        .filter((control) => !control.disabled).length,
+      choicesEnabled: cells.filter((control) => !control.disabled).length,
+      radioGroupRole: hive.querySelector(".hive-controls")?.getAttribute("role") || "",
+      radioCount: cells.filter((control) => control.getAttribute("role") === "radio").length,
+      radioChecked: cells.filter((control) => control.getAttribute("aria-checked") === "true").length,
+      radioPressedAttributes: cells.filter((control) => control.hasAttribute("aria-pressed")).length,
+      rovingTabStops: cells.filter((control) => control.getAttribute("tabindex") === "0").length,
+      backDisabled: back?.disabled ?? null,
+      backHidden: back?.hidden ?? null,
       currentStage: hive.getAttribute("data-hive-stage-current"),
       downloadDisabled: hive.querySelector("[data-hive-download]")?.disabled ?? null,
       inertLaterStages: stages.slice(1).filter((stage) => stage.inert).length,
@@ -1814,6 +1871,12 @@ const AUDIT_EXPRESSION = `(() => {
       stageShellWidth: stageShell ? Math.round(stageShell.getBoundingClientRect().width) : 0,
       visibleStages: stages.filter((stage) => !stage.hidden).length,
       plannerHeight: Math.round(hive.getBoundingClientRect().height),
+      staticExamples: Array.from(document.querySelectorAll("[data-hive-static-cell]"))
+        .map((card) => ({
+          id: card.getAttribute("data-hive-static-cell") || "",
+          label: card.querySelector("h3")?.textContent.trim() || "",
+          result: card.querySelector("[data-hive-static-result]")?.textContent.trim() || ""
+        })),
       outputLive: output?.hasAttribute("aria-live") || false,
       conciseLive: live
         ? {
@@ -1989,6 +2052,14 @@ const NO_SCRIPT_AUDIT_EXPRESSION = `(() => {
       fallbackChoices: hiveFallback
         ? hiveFallback.querySelectorAll("li").length
         : 0,
+      fallbackExamples: hiveFallback
+        ? Array.from(hiveFallback.querySelectorAll("[data-hive-noscript-cell]"))
+          .map((item) => ({
+            id: item.getAttribute("data-hive-noscript-cell") || "",
+            label: item.querySelector("strong")?.textContent.trim() || "",
+            result: item.querySelector("[data-hive-noscript-result]")?.textContent.trim() || ""
+          }))
+        : [],
       fallbackVisible: visible(hiveFallback),
       laterStagesHidden: Array.from(hive.querySelectorAll("[data-hive-stage]"))
         .slice(1)
@@ -3263,6 +3334,8 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
 const HIVE_EXERCISE_EXPRESSION = `(() => {
   const root = document.querySelector("[data-hive-planner]");
   const stages = Array.from(root.querySelectorAll("[data-hive-stage]"));
+  const customerFields = ${JSON.stringify(HIVE_CUSTOMER_FIELDS)};
+  const forbiddenFields = ${JSON.stringify(HIVE_FORBIDDEN_PUBLIC_FIELDS)};
   const stageState = () => ({
     current: root.getAttribute("data-hive-stage-current"),
     hidden: stages.filter((stage) => stage.hidden)
@@ -3285,9 +3358,16 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
     const cellId = button.getAttribute("data-hive-cell");
     const blueprint = window.SiteSourceryHivePlanner.createBlueprint(cellId);
     const cell = window.SiteSourceryHivePlanner.cells.find((entry) => entry.id === cellId);
+    const exported = window.SiteSourceryHivePlanner.exportBlueprint(cellId);
+    const parsedExport = JSON.parse(exported);
     const afterChoice = stageState();
     const choiceFocus = document.activeElement === root.querySelector("#hive-result-title");
     const choiceNextEnabled = nextEnabled();
+    const choiceBack = {
+      disabled: root.querySelector("[data-hive-back]").disabled,
+      hidden: root.querySelector("[data-hive-back]").hidden,
+      label: root.querySelector("[data-hive-back]").textContent.trim()
+    };
     root.querySelector('[data-hive-next="3"]').click();
     const afterTiming = stageState();
     const timingFocus = document.activeElement === root.querySelector("#hive-timing-title");
@@ -3316,28 +3396,48 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
       active: root.getAttribute("data-hive-active"),
       outputCell: output.getAttribute("data-hive-output-cell"),
       selected: root.querySelectorAll('[data-hive-selected="true"]').length,
+      checked: root.querySelectorAll('[data-hive-cell][aria-checked="true"]').length,
+      pressedAttributes: root.querySelectorAll("[data-hive-cell][aria-pressed]").length,
+      radioGroup: root.querySelector(".hive-controls").getAttribute("role") === "radiogroup",
+      radios: root.querySelectorAll('[data-hive-cell][role="radio"]').length,
+      rovingTabStops: root.querySelectorAll('[data-hive-cell][tabindex="0"]').length,
       schema: blueprint.schema,
       status: blueprint.status,
       liveIntegration: blueprint.liveIntegration,
+      noticeExact: blueprint.notice
+        === "Planning only. This file did not send a message, change a calendar or invoice, save customer data, or connect another tool.",
       titleMatches: root.querySelector("[data-hive-title]").textContent === blueprint.cell.label,
-      machineFieldsComplete: blueprint.allowedActions.length === 3
-        && typeof blueprint.trigger === "string"
-        && typeof blueprint.hardBoundary === "string"
-        && typeof blueprint.dataConsentConcern === "string"
-        && typeof blueprint.fallbackHumanHandoff === "string"
-        && typeof blueprint.killSwitch === "string",
+      publicPlanComplete:
+        Object.keys(blueprint).sort().join(",")
+          === "cell,liveIntegration,notice,schema,status"
+        && Object.keys(blueprint.cell).sort().join(",") === "customer,id,label"
+        && Object.keys(blueprint.cell.customer).sort().join(",")
+          === customerFields.join(",")
+        && JSON.stringify(blueprint.cell.customer) === JSON.stringify(cell.customer)
+        && Object.keys(cell).sort().join(",") === "customer,id,label",
+      internalFieldsAbsent: forbiddenFields.every((field) =>
+        !(field in blueprint)
+        && !(field in blueprint.cell)
+        && !(field in cell)
+        && !exported.includes('"' + field + '"')
+      ),
+      exportMatches: exported.endsWith("\\n")
+        && JSON.stringify(parsedExport) === JSON.stringify(blueprint),
       customerCopyMatches:
         root.querySelector("[data-hive-result]").textContent === cell.customer.result
         && root.querySelector("[data-hive-when]").textContent === cell.customer.when
         && root.querySelector("[data-hive-human]").textContent === cell.customer.human
         && root.querySelector("[data-hive-permission]").textContent === cell.customer.permission
-        && root.querySelector("[data-hive-limit]").textContent === cell.customer.limit,
+        && root.querySelector("[data-hive-limit]").textContent === cell.customer.limit
+        && root.querySelector("[data-hive-pause-copy]").textContent === cell.customer.pause,
       reviewMatches:
         root.querySelector("[data-hive-review-label]").textContent === cell.label
         && root.querySelector("[data-hive-review-result]").textContent === cell.customer.result
         && root.querySelector("[data-hive-review-when]").textContent === cell.customer.when
         && root.querySelector("[data-hive-review-human]").textContent === cell.customer.human
-        && root.querySelector("[data-hive-review-limit]").textContent === cell.customer.limit,
+        && root.querySelector("[data-hive-review-permission]").textContent === cell.customer.permission
+        && root.querySelector("[data-hive-review-limit]").textContent === cell.customer.limit
+        && root.querySelector("[data-hive-review-pause]").textContent === cell.customer.pause,
       afterChoice,
       afterTiming,
       afterRules,
@@ -3350,6 +3450,7 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
       timingNextEnabled,
       rulesNextEnabled,
       reviewNextEnabled: nextEnabled(),
+      choiceBack,
       resetLaterProgress: (index === 0 || priorStage === "5")
         && afterChoice.current === "2"
         && afterChoice.hidden.includes(3)
@@ -3367,6 +3468,81 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
         && pause.getAttribute("aria-pressed") === "false"
     };
   });
+})()`;
+
+const HIVE_HISTORY_EXERCISE_EXPRESSION = `(async () => {
+  const root = document.querySelector("[data-hive-planner]");
+  const stage = () => root.getAttribute("data-hive-stage-current");
+  const waitForStage = async (expected) => {
+    const deadline = performance.now() + 1500;
+    while (stage() !== expected && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    if (stage() === expected) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return stage() === expected;
+  };
+  const next = (target) => root.querySelector('[data-hive-next="' + target + '"]').click();
+  const back = root.querySelector("[data-hive-back]");
+  root.querySelector('[data-hive-cell="missed-call"]').click();
+  next(3);
+  next(4);
+  next(5);
+  const atReview = {
+    stage: stage(),
+    path: location.pathname,
+    hash: location.hash,
+    visible: !back.hidden,
+    enabled: !back.disabled
+  };
+  back.click();
+  const toolBackToRules = await waitForStage("4");
+  const rulesFocus = document.activeElement === root.querySelector("#hive-rules-title");
+  history.back();
+  const browserBackToTiming = await waitForStage("3");
+  const timingFocus = document.activeElement === root.querySelector("#hive-timing-title");
+  back.click();
+  const toolBackToResult = await waitForStage("2");
+  back.click();
+  const toolBackToChoose = await waitForStage("1");
+  const startFocus = document.activeElement
+    === root.querySelector("[data-hive-start] [data-hive-stage-heading]");
+  const afterChoose = {
+    active: root.hasAttribute("data-hive-active"),
+    backDisabled: back.disabled,
+    backHidden: back.hidden,
+    checked: root.querySelectorAll('[data-hive-cell][aria-checked="true"]').length,
+    hash: location.hash,
+    path: location.pathname
+  };
+  const first = root.querySelector('[data-hive-cell="missed-call"]');
+  const second = root.querySelector('[data-hive-cell="booking"]');
+  first.focus();
+  first.dispatchEvent(new KeyboardEvent("keydown", {
+    bubbles: true,
+    key: "ArrowDown"
+  }));
+  const keyboard = {
+    active: root.getAttribute("data-hive-active"),
+    checked: root.querySelectorAll('[data-hive-cell][aria-checked="true"]').length,
+    focused: document.activeElement === second,
+    pressedAttributes: root.querySelectorAll("[data-hive-cell][aria-pressed]").length,
+    rovingTabStops: root.querySelectorAll('[data-hive-cell][tabindex="0"]').length,
+    stage: stage()
+  };
+  return {
+    afterChoose,
+    atReview,
+    browserBackToTiming,
+    keyboard,
+    rulesFocus,
+    startFocus,
+    timingFocus,
+    toolBackToChoose,
+    toolBackToResult,
+    toolBackToRules
+  };
 })()`;
 
 export const START_INITIAL_TABLE = Object.freeze([
@@ -4415,6 +4591,13 @@ export async function auditBrowser({
             || result.hiveReady.enhanced !== "true"
             || result.hiveReady.controls !== 6
             || result.hiveReady.choicesEnabled !== 6
+            || result.hiveReady.radioGroupRole !== "radiogroup"
+            || result.hiveReady.radioCount !== 6
+            || result.hiveReady.radioChecked !== 0
+            || result.hiveReady.radioPressedAttributes !== 0
+            || result.hiveReady.rovingTabStops !== 1
+            || result.hiveReady.backDisabled !== true
+            || result.hiveReady.backHidden !== true
             || result.hiveReady.currentStage !== "1"
             || result.hiveReady.visibleStages !== 1
             || result.hiveReady.inertLaterStages !== 4
@@ -4426,6 +4609,8 @@ export async function auditBrowser({
               !== "current,locked,locked,locked,locked"
             || result.hiveReady.startVisible !== true
             || result.hiveReady.outputLength < 100
+            || JSON.stringify(result.hiveReady.staticExamples)
+              !== JSON.stringify(HIVE_CUSTOMER_EXAMPLES)
           ) {
             errors.push(`${viewport.label} ${route}: Hive planner did not fully enhance`);
           }
@@ -4472,10 +4657,18 @@ export async function auditBrowser({
               || cell.schema !== "sitesourcery.hive-blueprint.v1"
               || cell.status !== "planning_only"
               || cell.liveIntegration !== false
+              || !cell.noticeExact
               || !cell.titleMatches
-              || !cell.machineFieldsComplete
+              || !cell.publicPlanComplete
+              || !cell.internalFieldsAbsent
+              || !cell.exportMatches
               || !cell.customerCopyMatches
               || !cell.reviewMatches
+              || cell.checked !== 1
+              || cell.pressedAttributes !== 0
+              || !cell.radioGroup
+              || cell.radios !== 6
+              || cell.rovingTabStops !== 1
               || cell.afterChoice.current !== "2"
               || cell.afterChoice.startVisible
               || cell.afterChoice.visible.join(",") !== "1,2"
@@ -4497,6 +4690,9 @@ export async function auditBrowser({
               || cell.timingNextEnabled !== 1
               || cell.rulesNextEnabled !== 1
               || cell.reviewNextEnabled !== 0
+              || cell.choiceBack.disabled
+              || cell.choiceBack.hidden
+              || cell.choiceBack.label !== "← Back to choose"
               || !cell.resetLaterProgress
               || !cell.hashMatches
               || !cell.downloadReady
@@ -4513,6 +4709,45 @@ export async function auditBrowser({
             errors.push(
               `${viewport.label} ${route}: six-cell Hive exercise failed `
               + `${JSON.stringify(cells ?? exercise.exceptionDetails ?? null)}`,
+            );
+          }
+          const historyExercise = await cdp.send("Runtime.evaluate", {
+            expression: HIVE_HISTORY_EXERCISE_EXPRESSION,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const historyFlow = historyExercise.result?.value;
+          if (
+            historyExercise.exceptionDetails
+            || !historyFlow
+            || historyFlow.atReview.stage !== "5"
+            || historyFlow.atReview.path !== "/hive/"
+            || historyFlow.atReview.hash !== "#missed-call"
+            || !historyFlow.atReview.visible
+            || !historyFlow.atReview.enabled
+            || !historyFlow.toolBackToRules
+            || !historyFlow.browserBackToTiming
+            || !historyFlow.toolBackToResult
+            || !historyFlow.toolBackToChoose
+            || !historyFlow.rulesFocus
+            || !historyFlow.timingFocus
+            || !historyFlow.startFocus
+            || historyFlow.afterChoose.active
+            || !historyFlow.afterChoose.backDisabled
+            || !historyFlow.afterChoose.backHidden
+            || historyFlow.afterChoose.checked !== 0
+            || historyFlow.afterChoose.hash !== ""
+            || historyFlow.afterChoose.path !== "/hive/"
+            || historyFlow.keyboard.active !== "booking"
+            || historyFlow.keyboard.checked !== 1
+            || !historyFlow.keyboard.focused
+            || historyFlow.keyboard.pressedAttributes !== 0
+            || historyFlow.keyboard.rovingTabStops !== 1
+            || historyFlow.keyboard.stage !== "2"
+          ) {
+            errors.push(
+              `${viewport.label} ${route}: Hive Back, browser history, or radio-keyboard flow failed `
+              + `${JSON.stringify(historyFlow ?? historyExercise.exceptionDetails ?? null)}`,
             );
           }
         }
@@ -5240,6 +5475,8 @@ export async function auditBrowser({
               !result.hive
               || !result.hive.fallbackVisible
               || result.hive.fallbackChoices !== 6
+              || JSON.stringify(result.hive.fallbackExamples)
+                !== JSON.stringify(HIVE_CUSTOMER_EXAMPLES)
               || result.hive.disabledCells !== 6
               || result.hive.disabledOperationControls !== 2
               || result.hive.laterStagesHidden !== 4
