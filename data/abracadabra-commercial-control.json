@@ -1,0 +1,203 @@
+{
+  "schema": "sitesourcery.abracadabra-commercial-control/v1",
+  "version": "2026-07-28.1",
+  "state": "hold",
+  "currency": "USD",
+  "checkout": {
+    "enabled": false,
+    "reason": "Abracadabra tenure prices and Stripe Price IDs are not owner-approved.",
+    "requiresBeforeEnable": [
+      "owner_approved_tenure_prices",
+      "owner_approved_customer_terms",
+      "stripe_test_price_ids",
+      "verified_stripe_test_webhook",
+      "staging_end_to_end_pass",
+      "separate_live_payment_authority"
+    ]
+  },
+  "domainCheckout": {
+    "enabled": false,
+    "reason": "The in-app registrar adapter, customer terms, renewal policy, price treatment, and live purchase authority are not approved or verified.",
+    "customerLeavesSiteSourceryToPurchase": false,
+    "requiresBeforeEnable": [
+      "owner_approved_domain_price_treatment",
+      "owner_approved_domain_customer_terms",
+      "owner_approved_domain_renewal_policy",
+      "registrar_adapter_conformance_pass",
+      "stripe_domain_payment_reconciliation_pass",
+      "staging_domain_journey_pass_without_real_purchase",
+      "separate_live_domain_purchase_authority"
+    ]
+  },
+  "costPolicy": {
+    "baselineMonthlyCommitmentCents": 0,
+    "automaticProviderUpgradesAllowed": false,
+    "automaticUsageOveragesAllowed": false,
+    "providerPurchasesAuthorized": false,
+    "hardStopBeforeBillableUsageRequired": true,
+    "ownerApprovalRequiredBeforeAnyFixedSpend": true,
+    "hostingDecisionState": "under_owner_review",
+    "cloudflareCandidateStack": {
+      "applicationAndTenantServing": "cloudflare_workers_free",
+      "relationalData": "cloudflare_d1_free",
+      "artifactsAndExports": "cloudflare_r2_free",
+      "durableJobs": "cloudflare_queues_free",
+      "authentication": "clerk_hobby_free",
+      "transactionalEmail": "resend_free",
+      "payments": "stripe_pay_as_you_go"
+    },
+    "fleetCandidateStack": {
+      "primaryApplicationAndData": "dell",
+      "backupAndRecovery": "hq",
+      "sourceTestingAndReleaseControl": "github_not_pages_hosting",
+      "domainRegistrar": "spaceship",
+      "authentication": "provider_neutral_pending_review",
+      "transactionalEmail": "provider_neutral_pending_review",
+      "payments": "stripe_pay_as_you_go"
+    },
+    "hybridCandidateStack": {
+      "privateApplicationAndData": "dell_with_hq_recovery",
+      "sourceTestingAndReleaseControl": "github_not_pages_hosting",
+      "publicFinishedSiteFiles": "provider_pending_review",
+      "domainRegistrar": "spaceship",
+      "payments": "stripe_pay_as_you_go"
+    },
+    "githubBoundary": {
+      "allowedRoles": [
+        "source_control",
+        "code_review",
+        "test_automation",
+        "release_manifest_and_provenance"
+      ],
+      "githubPagesCommercialHostingSelected": false,
+      "customerAccountsStoredOnGitHub": false,
+      "privateCustomerDraftsStoredOnGitHub": false,
+      "paymentOrRegistrantRecordsStoredOnGitHub": false
+    },
+    "notSelected": [
+      "vercel_pro",
+      "supabase_pro"
+    ],
+    "excludedFromBaselineMonthlyCommitment": [
+      "existing_domain_renewals",
+      "customer_domain_registration",
+      "successful_payment_fees",
+      "refund_dispute_and_currency_fees",
+      "taxes",
+      "owner_approved_future_capacity"
+    ]
+  },
+  "sharedProductBoundary": {
+    "pageLimit": 1,
+    "activeServingAddressLimit": 1,
+    "freeTrialDays": 0,
+    "customerOwnedDomainConnectionIncludedWhereHosted": true,
+    "customerOwnedDomainProcurementOfferedInApp": true,
+    "customerOwnedDomainRegistrationIncludedInWebsitePrice": false,
+    "registrarRedirectRequired": false,
+    "customerOwnedDomainRegistrant": "customer",
+    "customerOwnedDomainFeesPaidBy": "customer",
+    "licensedHostnamePattern": "label.sitesourcery.me",
+    "retentionAndExportDays": 90
+  },
+  "domainProcurementBoundary": {
+    "storefrontAndMerchant": "site_sourcery",
+    "underlyingRegistrarCandidate": "spaceship",
+    "underlyingRegistrarMustBeDisclosed": true,
+    "siteSourceryRepresentsItselfAsIcannAccredited": false,
+    "customerIsRegistrant": true,
+    "siteSourceryActsOnlyWithRecordedAuthority": true,
+    "registrationPriceState": "unresolved",
+    "renewalPriceState": "provider_quoted_and_disclosed_before_consent",
+    "serviceFeeState": "unresolved",
+    "registrationFeeIsSeparateFromWebsiteOwnership": true,
+    "providerPurchasesAuthorized": false,
+    "requiredOrderSequence": [
+      "server_side_availability_and_price_quote",
+      "registrant_contact_validation",
+      "versioned_registrar_terms_and_agent_consent",
+      "site_sourcery_payment_verified",
+      "fresh_availability_and_price_readback",
+      "explicit_irreversible_registration_confirm",
+      "asynchronous_provider_operation_poll",
+      "registration_success_receipt_before_ownership_claim",
+      "dns_configuration",
+      "renewal_notice_and_customer_control",
+      "transfer_out_and_export_available"
+    ],
+    "failClosedRules": [
+      "never_register_without_verified_payment",
+      "never_register_from_an_expired_quote",
+      "never_register_after_an_unapproved_price_change",
+      "never_retry_irreversible_confirm_without_idempotency_proof",
+      "never_claim_registration_before_provider_success",
+      "never_hide_the_underlying_registrar",
+      "never_make_site_ownership_depend_on_domain_choice"
+    ]
+  },
+  "tenureModes": [
+    {
+      "id": "rent",
+      "label": "Rent",
+      "priceState": "unresolved",
+      "stripePriceId": null,
+      "billingShape": "recurring",
+      "deliverableOwnership": "licensed_while_eligible_and_active",
+      "platformHostingIncluded": true,
+      "eligibleAddressModes": [
+        "licensed_sitesourcery_hostname",
+        "customer_owned_domain_connection"
+      ],
+      "cancelAnytime": true,
+      "paymentGraceDays": 14,
+      "retentionAndExportDays": 90
+    },
+    {
+      "id": "own",
+      "label": "Own",
+      "priceState": "unresolved",
+      "stripePriceId": null,
+      "billingShape": "one_time",
+      "deliverableOwnership": "transfers_after_final_payment",
+      "platformHostingIncluded": false,
+      "eligibleAddressModes": [
+        "customer_owned_domain_handoff"
+      ],
+      "cancelAnytime": null,
+      "paymentGraceDays": null,
+      "retentionAndExportDays": 90
+    },
+    {
+      "id": "owned_managed",
+      "label": "Owned + managed",
+      "priceState": "unresolved",
+      "oneTimeStripePriceId": null,
+      "recurringStripePriceId": null,
+      "billingShape": "one_time_plus_recurring",
+      "deliverableOwnership": "transfers_after_final_one_time_payment",
+      "platformHostingIncluded": true,
+      "eligibleAddressModes": [
+        "licensed_sitesourcery_hostname",
+        "customer_owned_domain_connection"
+      ],
+      "cancelAnytime": true,
+      "paymentGraceDays": 14,
+      "retentionAndExportDays": 90
+    }
+  ],
+  "catalogSeparation": {
+    "existingCustomBuildTiersAuthorizeAbracadabraPrices": false,
+    "existingCareHostLineAuthorizesAbracadabraPrice": false,
+    "customerDomainChoiceChangesDeliverableOwnership": false
+  },
+  "unresolvedOwnerDecisions": [
+    "rent_price_and_interval",
+    "own_one_time_price_and_payment_timing",
+    "owned_managed_one_time_and_recurring_prices",
+    "refund_policy",
+    "tax_treatment",
+    "domain_registration_markup_or_management_fee",
+    "domain_renewal_consent_and_charge_policy",
+    "hosting_and_private_data_custody_model"
+  ]
+}
