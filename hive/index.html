@@ -85,7 +85,7 @@
           </div>
         </noscript>
 
-        <div class="hive-planner reveal" data-hive-planner data-hive-stage-current="1">
+        <div class="hive-planner reveal" data-hive-planner data-hive-stage-current="1" data-hive-activation="locked">
           <section class="hive-choice-stage" data-hive-stage="1" aria-labelledby="hive-choose-title">
             <p class="hive-stage-number">Step 1 of 5</p>
             <h3 id="hive-choose-title">Choose one business problem</h3>
@@ -120,6 +120,7 @@
               <p class="hive-stage-number">Step 2 of 5</p>
               <h3 id="hive-result-title" data-hive-stage-heading tabindex="-1">See the simple result</h3>
               <p class="hive-selected-label" data-hive-title></p>
+              <p class="card-kicker hive-answer-label">What it can do</p>
               <p class="hive-result" data-hive-result></p>
               <div class="hive-stage-actions">
                 <button class="button button-primary" type="button" data-hive-next="3" disabled>Next: timing and handoff</button>
@@ -131,11 +132,11 @@
               <h3 id="hive-timing-title" data-hive-stage-heading tabindex="-1">Set the timing and handoff</h3>
               <div class="hive-answer-grid">
                 <article>
-                  <p class="card-kicker">When it should happen</p>
+                  <p class="card-kicker">When it starts</p>
                   <p data-hive-when></p>
                 </article>
                 <article>
-                  <p class="card-kicker">Who takes over</p>
+                  <p class="card-kicker">When a person takes over</p>
                   <p data-hive-human></p>
                 </article>
               </div>
@@ -159,7 +160,7 @@
               </div>
               <aside class="hive-pause-demo">
                 <div>
-                  <p class="card-kicker">Try the stop control</p>
+                  <p class="card-kicker">How to pause</p>
                   <h4>See how a pause should feel.</h4>
                   <p data-hive-pause-copy></p>
                   <p class="hive-pause-status" data-hive-pause-status>Demo only: nothing is connected or running.</p>

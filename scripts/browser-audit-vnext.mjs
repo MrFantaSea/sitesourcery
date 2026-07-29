@@ -1639,6 +1639,7 @@ const AUDIT_EXPRESSION = `(() => {
     const stages = Array.from(hive.querySelectorAll("[data-hive-stage]"));
     const live = hive.querySelector("[data-hive-live]");
     result.hiveReady = {
+      activation: hive.getAttribute("data-hive-activation"),
       enhanced: hive.getAttribute("data-hive-planner-ready"),
       controls: hive.querySelectorAll("[data-hive-cell]").length,
       choicesEnabled: Array.from(hive.querySelectorAll("[data-hive-cell]"))
@@ -3006,6 +3007,7 @@ const HIVE_EXERCISE_EXPRESSION = `(() => {
     const visibleCopy = document.body.innerText.replace(/\\s+/gu, " ").trim();
     return {
       requested: cellId,
+      activationLocked: root.getAttribute("data-hive-activation") === "locked",
       priorStage,
       active: root.getAttribute("data-hive-active"),
       outputCell: output.getAttribute("data-hive-output-cell"),
@@ -4071,7 +4073,8 @@ export async function auditBrowser({
         }
         if (profile === "vnext" && result.hiveReady) {
           if (
-            result.hiveReady.enhanced !== "true"
+            result.hiveReady.activation !== "locked"
+            || result.hiveReady.enhanced !== "true"
             || result.hiveReady.controls !== 6
             || result.hiveReady.choicesEnabled !== 6
             || result.hiveReady.currentStage !== "1"
@@ -4124,6 +4127,7 @@ export async function auditBrowser({
             || cells.length !== 6
             || cells.some((cell) =>
               cell.requested !== cell.active
+              || !cell.activationLocked
               || cell.requested !== cell.outputCell
               || cell.selected !== 1
               || cell.schema !== "sitesourcery.hive-blueprint.v1"

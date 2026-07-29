@@ -581,8 +581,13 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
   for (const phrase of [
     "Choose one business problem",
     "See the simple result",
+    "What it can do",
     "Set the timing and handoff",
+    "When it starts",
+    "When a person takes over",
     "Keep people in control",
+    "What it will never do",
+    "How to pause",
     "Review your plan",
     "A written scope and price come before anything is connected.",
     "Request written scope and price",
@@ -591,6 +596,7 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
   }
   assert.equal((HTML.match(/data-hive-stage="[1-5]"/gu) || []).length, 5);
   assert.equal((HTML.match(/data-hive-next="[3-5]"/gu) || []).length, 3);
+  assert.match(HTML, /data-hive-activation="locked"/u);
   assert.match(
     HTML,
     /data-hive-stage="5"[^>]*aria-hidden="true"[^>]*hidden inert/iu
