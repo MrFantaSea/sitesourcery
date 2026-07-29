@@ -41,7 +41,7 @@ export const SHARED_FOOTER = `<footer class="site-footer">
         <a href="/legal/website-terms/">Website terms</a>
       </nav>
       <address class="footer-contact">
-        <strong>Contact</strong>
+        <strong>Contact Zack</strong>
         <a href="tel:+18562441220">(856) 244-1220</a>
         <a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a>
       </address>

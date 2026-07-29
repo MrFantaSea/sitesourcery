@@ -267,8 +267,9 @@ export const BUSINESS_EMAIL_COPY = Object.freeze({
     "Custody and exit documentation",
   ]),
   "/contact/": Object.freeze([
-    "Direct public intake mailbox",
-    "studio’s current public intake address",
+    'data-business-email="public-intake"',
+    "This is Site Sourcery’s current public email address.",
+    "copy the address above",
   ]),
 });
 const RETIRED_PUBLIC_TRUTH_COPY = Object.freeze([

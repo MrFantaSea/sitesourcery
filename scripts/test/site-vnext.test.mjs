@@ -793,7 +793,7 @@ test("vNext keeps business-email value congruent with the studio mailbox", async
   ));
   await t.test("current intake label", () => expectSiteFailure(
     (root) => modify(root, "contact/index.html", (source) =>
-      source.replace("Direct public intake mailbox", "Business email")),
+      source.replace('data-business-email="public-intake"', 'data-business-email="generic"')),
     /missing business-email custody copy/u,
   ));
 });

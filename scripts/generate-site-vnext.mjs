@@ -50,22 +50,27 @@ function notFoundPage() {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#08070c">
-  <title>Lost in the stacks · Site Sourcery</title>
-  <meta name="description" content="That Site Sourcery address does not lead to a public page.">
+  <title>Page not found · Site Sourcery</title>
+  <meta name="description" content="That page is not here. Return to Site Sourcery, see what we do, or call Zack.">
+  <meta property="og:title" content="Page not found · Site Sourcery">
+  <meta property="og:description" content="That page is not here. Return to Site Sourcery or see what we do.">
+  <meta property="og:image" content="https://sitesourcery.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="/vnext.css">
   <script src="/vnext.js" defer></script>
 </head>
 <body class="vnext-page">
-  <a class="skip-link" href="#main">Skip to the page</a>
+  <a class="skip-link" href="#main">Skip to the main content</a>
   ${SHARED_HEADER}
   <main class="not-found site-shell" id="main">
     <div>
-      <p class="eyebrow">A turn beyond the map</p>
-      <h1>404</h1>
-      <p>The page is not here, but the way back is still clear.</p>
+      <p class="eyebrow">Page not found</p>
+      <h1>That page is not here.</h1>
+      <p>The link may be old or slightly mistyped. Choose where to go next:</p>
       <div class="hero-actions">
-        <a class="button button-primary" href="/">Return home</a>
-        <a class="button" href="/start/">Choose a path</a>
+        <a class="button button-primary" href="/">Go to the home page</a>
+        <a class="button" href="/solutions/">See what Site Sourcery does</a>
+        <a class="button" href="tel:+18562441220">Call Zack: (856) 244-1220</a>
       </div>
     </div>
   </main>
