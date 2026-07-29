@@ -15,7 +15,12 @@ All boxes remain unchecked. Code-level tests do not authorize publication.
 ## Machine and process
 
 - [ ] Dedicated `sitesourcery` Unix user/group created with no interactive login.
-- [ ] Exact Node 20 production binary provenance and patch level recorded.
+- [ ] Exact Node 24.18.0 production binary provenance and checksum recorded.
+- [ ] `/opt/sitesourcery/node-24.18.0/bin/node --version` returns exactly
+      `v24.18.0`; EOL Node 20 is not used by the service.
+- [ ] Any future `node:sqlite` control-store adapter is reviewed separately as
+      release-candidate API and does not replace the immutable filesystem
+      release store without durability and restore evidence.
 - [ ] Exact Caddy version installed from an approved source and recorded.
 - [ ] Held Caddyfile passes `caddy validate` and `caddy adapt` on the target.
 - [ ] Held systemd unit passes `systemd-analyze verify` on Dell and HQ.

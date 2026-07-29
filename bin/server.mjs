@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import "./assert-runtime.mjs";
 import { createNodeHandler, SelfHostRuntime } from "../src/index.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

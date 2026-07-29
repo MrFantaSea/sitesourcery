@@ -1,6 +1,6 @@
 # Site Sourcery self-host foundation
 
-This is an isolated, dependency-free Node 20 foundation for serving Site
+This is an isolated, dependency-free Node 24.18.0 foundation for serving Site
 Sourcery customer static sites from Dell/HQ-owned Linux machines without
 Cloudflare, Vercel, Supabase, Docker, or GitHub Pages.
 
@@ -163,15 +163,28 @@ drill. See [BACKUP-RESTORE.md](./docs/BACKUP-RESTORE.md).
 
 ## Run tests
 
-No install is required:
+No install is required. Tests and the server entry point fail closed unless the
+runtime is exactly Node 24.18.0:
 
 ```sh
+nvm use
 npm test
 npm run check
 ```
 
 The test suite creates temporary private filesystem trees only. It never invokes
 `bin/server.mjs`.
+
+Node 20 is EOL and is not an accepted production runtime. Dell already has
+Node 24.18.0 under NVM; an approved production installation must place a
+verified copy at `/opt/sitesourcery/node-24.18.0/bin/node`, matching the held
+systemd candidate.
+
+Node 24.18.0 includes the built-in `node:sqlite` module at stability 1.2
+(release candidate). A future control-store adapter may evaluate it, but this
+foundation neither imports nor depends on it. Immutable release serving remains
+filesystem-backed; adopting SQLite would require its own durability,
+backup/restore, migration, and upgrade evidence.
 
 ## Operational limits
 
