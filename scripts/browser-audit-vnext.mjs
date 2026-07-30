@@ -2480,6 +2480,8 @@ const GUEST_FIRST_EXERCISE_EXPRESSION = `(async () => {
   set(maker, "summary", "Makes careful website previews before account creation.");
   set(maker, "about", "A deterministic browser exercise for the guest-first Abracadabra path.");
   set(maker, "email", "guest-preview@example.com");
+  click(maker, '[data-next="details"]');
+  click(maker, '[data-next="contact"]');
   click(maker, '[data-next="vibe"]');
   click(maker, '[data-next="truth"]');
   set(maker, "truthConfirmed", true);
@@ -3329,6 +3331,10 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
   set("location", "New Jersey");
   set("email", "audit@example.com");
   set("primaryAction", "email");
+  click('[data-next="details"]');
+  progressive.details = stepState();
+  click('[data-next="contact"]');
+  progressive.contact = stepState();
   click('[data-next="vibe"]');
   progressive.vibe = stepState();
   const arcane = maker.querySelector('input[name="theme"][value="arcane"]');
@@ -3360,7 +3366,7 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
     primaryAction: (maker.querySelector("#spark-preview").getAttribute("srcdoc") || "")
       .includes('class="action primary" href="mailto:audit@example.com"'),
     versions: maker.querySelectorAll("#spark-version-list li").length,
-    downloadEnabled: !maker.querySelector("#download-version").disabled
+    freeDownloadAbsent: !maker.querySelector("#download-version")
   };
   const originalOpen = window.open;
   let blockedOpen;
@@ -3377,6 +3383,8 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
   click("[data-edit-facts]");
   progressive.factsAfterEdit = stepState();
   set("summary", "Builds memorable digital places from explicit reviewed facts.");
+  click('[data-next="details"]');
+  click('[data-next="contact"]');
   click('[data-next="vibe"]');
   click('[data-next="truth"]');
   confirmation.checked = true;
@@ -3395,6 +3403,8 @@ const SPARK_EXERCISE_EXPRESSION = `(async () => {
   };
   click("[data-edit-facts]");
   set("summary", "Builds a third branch without deleting either earlier version.");
+  click('[data-next="details"]');
+  click('[data-next="contact"]');
   click('[data-next="vibe"]');
   click('[data-next="truth"]');
   confirmation.checked = true;
@@ -4920,13 +4930,17 @@ export async function auditBrowser({
             || flow.first.srcdocLength < 1000
             || !flow.first.primaryAction
             || flow.first.versions !== 1
-            || !flow.first.downloadEnabled
+            || !flow.first.freeDownloadAbsent
             || flow.first.focused !== "preview"
             || !flow.blockedOpen
             || !flow.blockedOpen.buttonEnabled
             || flow.blockedOpen.status
               !== "The working page could not open. Nothing was changed. Select Open again to retry."
             || flow.progressive.initial.visible.join(",") !== "facts"
+            || flow.progressive.details.focused !== "details"
+            || flow.progressive.details.visible.join(",") !== "details"
+            || flow.progressive.contact.focused !== "contact"
+            || flow.progressive.contact.visible.join(",") !== "contact"
             || flow.progressive.vibe.focused !== "vibe"
             || flow.progressive.vibe.visible.join(",") !== "vibe"
             || flow.progressive.truth.focused !== "truth"

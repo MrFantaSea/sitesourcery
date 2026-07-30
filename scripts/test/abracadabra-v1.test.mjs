@@ -351,14 +351,15 @@ test("held maker stays account-free while hosted adoption code can carry a revie
     /<section class="spark-workroom" id="workroom"[^>]*\shidden>/u,
   );
   for (const marker of [
-    "This build does not create an online account, take payment, register or connect a domain, or publish.",
-    "Your page is not saved.",
-    "If you refresh this page or close the tab, you will start over.",
+    "Your free preview stays in this tab.",
+    "Refresh or close the tab and you will start over.",
     "No account is required to build and test the first version.",
-    "Download the version you approved.",
+    "Download is $5 once for this editor project.",
   ]) {
     assert.ok(pageHtml.includes(marker), marker);
   }
+  assert.doesNotMatch(pageHtml, /id="download-version"|Download this HTML/u);
+  assert.doesNotMatch(appSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
   assert.match(pageHtml, /abracadabra-control-mode\.js/u);
   assert.doesNotMatch(
     pageHtml,
@@ -391,7 +392,8 @@ test("held and hosted landing pages keep a truthful generated-example fallback w
     assert.equal(source.split(fallbackCopy).length - 1, 4);
     assert.equal(source.split(noScriptCopy).length - 1, 1);
     assert.match(source, /<noscript>[\s\S]*class="site-shell abracadabra-noscript"/u);
-    assert.match(source, /href="\/abracadabra\/how\/">Read the four-step guide/u);
+    assert.match(source, /href="#plans">Compare what happens next/u);
+    assert.match(source, /Six short steps/u);
     assert.doesNotMatch(source, />Opening (?:the example|Clear|Warm|Arcane)…</u);
   }
   assert.match(showcaseSource, /data-showcase-state", "loading"/u);
@@ -406,10 +408,10 @@ test("held and hosted landing pages keep a truthful generated-example fallback w
 });
 
 test("guest data-loss truth stays visible in both artifacts and hosted controls boot from complete markup", () => {
-  assert.match(pageHtml, /<strong>Your page is not saved\.<\/strong>/u);
+  assert.match(pageHtml, /<strong>Your free preview stays in this tab\.<\/strong>/u);
   assert.match(
     hostedHeroMarkup,
-    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account, you start over/u,
+    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account and you will start over/u,
   );
   assert.match(
     hostedReadySource,
@@ -436,7 +438,7 @@ test("Abracadabra speaks as one operator instead of an invented team", () => {
   }
 });
 
-test("UI implements memory-only history, undo, sandbox preview, and local download without egress or storage", () => {
+test("UI implements memory-only history, undo, and sandbox preview without a free Download path", () => {
   for (const marker of [
     "var versions = []",
     "currentVersionIndex",
@@ -445,10 +447,12 @@ test("UI implements memory-only history, undo, sandbox preview, and local downlo
     "URL.createObjectURL",
     "URL.revokeObjectURL",
     "Previous version",
-    "Download this HTML",
+    "Open working preview",
   ]) {
     assert.ok(appSource.includes(marker) || pageHtml.includes(marker), marker);
   }
+  assert.doesNotMatch(pageHtml, /id="download-version"|Download this HTML/u);
+  assert.doesNotMatch(appSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
   assert.match(
     appSource,
     /currentStep === "truth" && event\.target !== truthConfirmed/u,
@@ -640,7 +644,7 @@ test("hosted domain purchase reveals only the next of four steps and blocks dupl
   );
 });
 
-test("public page keeps current contact and legal identity without placeholder or sales claims", () => {
+test("public page keeps current contact, legal identity, and only the accepted $5 amount", () => {
   assert.match(pageHtml, /tel:\+18562441220/u);
   assert.match(pageHtml, /\(856\) 244-1220/u);
   assert.match(pageHtml, /mailto:sitesourcery@proton\.me/u);
@@ -653,10 +657,10 @@ test("public page keeps current contact and legal identity without placeholder o
     /\bpre-?launch\b/iu,
     /\bwaitlist\b/iu,
     /\bsubscribe\b/iu,
-    /\$\s*\d/iu,
     /"@type"\s*:\s*"Offer"/iu,
     /\b(?:checkout|buy now|order now|live in minutes)\b/iu,
   ]) {
     assert.doesNotMatch(pageHtml, pattern);
   }
+  assert.deepEqual(pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu), ["$5"]);
 });

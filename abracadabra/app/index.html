@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <!-- sitesourcery:truth-slot:abracadabra-app-head:start -->
-  <title>Make and download a page with Abracadabra | Site Sourcery</title>
-  <meta name="description" content="Build, review, test, and download a one-page business website in this browser.">
+  <title>Build and preview a page with Abracadabra | Site Sourcery</title>
+  <meta name="description" content="Build, review, and preview a one-page business website in this browser for free.">
   <!-- sitesourcery:truth-slot:abracadabra-app-head:end -->
   <meta name="theme-color" content="#100b19">
   <meta name="sitesourcery-abracadabra-control-mode" content="hold">
@@ -48,15 +48,14 @@
       <div class="site-shell spark-hero-grid">
         <div>
           <p class="spark-kicker">Abracadabra · browser page maker</p>
-          <h1 id="spark-title">Build, test, and download one page.</h1>
-          <p class="spark-lede">Add the business details, choose a look, review the exact facts, then open or download the HTML.</p>
-          <p>This build does not create an online account, take payment, register or connect a domain, or publish.</p>
-          <p><strong>Your page is not saved.</strong> If you refresh this page or close the tab, you will start over. Download the HTML when it is ready.</p>
+          <h1 id="spark-title">Build and preview one page for free.</h1>
+          <p class="spark-lede">Add your business details, choose a look, and review the page before deciding how to keep it.</p>
+          <p><strong>Your free preview stays in this tab.</strong> Refresh or close the tab and you will start over.</p>
           <ul class="spark-trust">
-            <li>No online account</li>
+            <li>No account to preview</li>
             <li>Three distinct looks</li>
             <li>You approve every detail</li>
-            <li>Download any reviewed version</li>
+            <li>Choose Download afterward</li>
           </ul>
           <div class="spark-hero-actions">
             <a class="spark-button spark-button-primary" href="#workroom">Build my page</a>
@@ -77,7 +76,7 @@
         <!-- sitesourcery:truth-slot:abracadabra-app-noscript:start -->
         <noscript>
           <div class="spark-noscript" role="note">
-            JavaScript is required to make, preview, and download the page. Nothing is submitted while it is off.
+            JavaScript is required to build and preview the page. Nothing is submitted while it is off.
           </div>
         </noscript>
         <!-- sitesourcery:truth-slot:abracadabra-app-noscript:end -->
@@ -86,10 +85,12 @@
 
         <div id="spark-maker" class="spark-maker" aria-disabled="true" inert>
           <ol class="spark-progress">
-            <li data-progress-step="facts" aria-current="step"><span>1</span>Business</li>
-            <li data-progress-step="vibe"><span>2</span>Look</li>
-            <li data-progress-step="truth"><span>3</span>Review</li>
-            <li data-progress-step="preview"><span>4</span>Preview</li>
+            <li data-progress-step="facts" aria-current="step"><span>1</span>Basics</li>
+            <li data-progress-step="details"><span>2</span>Details</li>
+            <li data-progress-step="contact"><span>3</span>Contact</li>
+            <li data-progress-step="vibe"><span>4</span>Look</li>
+            <li data-progress-step="truth"><span>5</span>Review</li>
+            <li data-progress-step="preview"><span>6</span>Preview</li>
           </ol>
 
           <div class="spark-return" data-return-bar hidden>
@@ -103,8 +104,8 @@
           </div>
 
           <fieldset class="spark-step" data-step="facts">
-            <legend>1. Add the business details</legend>
-            <p class="spark-step-intro">Add the name, one clear sentence, one useful detail, and one way for customers to act. Blank fields stay off the page.</p>
+            <legend>1. Start with the basics</legend>
+            <p class="spark-step-intro">Add the name and one plain sentence about the business.</p>
 
             <div class="spark-quick-start">
               <p><strong>Want an example?</strong> Load a fictional business, then replace it with your own details.</p>
@@ -126,7 +127,18 @@
                 <textarea id="summary" name="summary" maxlength="180" rows="3" required aria-describedby="summary-help"></textarea>
                 <small id="summary-help">Use one plain sentence.</small>
               </label>
+            </div>
 
+            <div class="spark-step-actions">
+              <button class="spark-button spark-button-primary" type="button" data-next="details" data-validate-step="facts">Add useful details</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="spark-step" data-step="details" hidden>
+            <legend>2. Add useful details</legend>
+            <p class="spark-step-intro">Add at least one detail that helps a visitor decide what to do next.</p>
+
+            <div class="spark-fields">
               <label class="spark-field spark-field-wide">
                 <span>What else should customers know?</span>
                 <textarea id="about" name="about" maxlength="800" rows="5" aria-describedby="about-help"></textarea>
@@ -148,7 +160,19 @@
                 <span>Hours</span>
                 <input id="hours" name="hours" type="text" maxlength="240" autocomplete="off" placeholder="Only if you want them shown">
               </label>
+            </div>
 
+            <div class="spark-step-actions">
+              <button class="spark-button" type="button" data-back="facts">Back to basics</button>
+              <button class="spark-button spark-button-primary" type="button" data-next="contact" data-validate-step="details">Add contact choices</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="spark-step" data-step="contact" hidden>
+            <legend>3. Add a visitor’s next step</legend>
+            <p class="spark-step-intro">Add at least one real way for a customer to contact you or continue.</p>
+
+            <div class="spark-fields">
               <label class="spark-field">
                 <span>Phone</span>
                 <input id="phone" name="phone" type="tel" maxlength="32" inputmode="tel" autocomplete="off">
@@ -178,12 +202,13 @@
             </div>
 
             <div class="spark-step-actions">
-              <button class="spark-button spark-button-primary" type="button" data-next="vibe">Choose the look</button>
+              <button class="spark-button" type="button" data-back="details">Back to details</button>
+              <button class="spark-button spark-button-primary" type="button" data-next="vibe" data-validate-step="contact">Choose the look</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="vibe" hidden>
-            <legend>2. Choose a look</legend>
+            <legend>4. Choose a look</legend>
             <p class="spark-step-intro">The look changes the style, not your words.</p>
 
             <div class="spark-theme-grid">
@@ -208,13 +233,13 @@
             </div>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="facts">Back to business details</button>
+              <button class="spark-button" type="button" data-back="contact">Back to contact choices</button>
               <button class="spark-button spark-button-primary" type="button" data-next="truth">Review the page</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="truth" hidden>
-            <legend>3. Review the page details</legend>
+            <legend>5. Review the page details</legend>
             <p class="spark-step-intro">Read the details below. If you change anything, review them again.</p>
 
             <div id="spark-truth-review" class="spark-truth-review" aria-live="polite"></div>
@@ -225,22 +250,20 @@
             </label>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="facts">Back to business details</button>
               <button class="spark-button" type="button" data-back="vibe">Back to the look</button>
               <button class="spark-button spark-button-primary" id="make-preview" type="button">Make my preview</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="preview" hidden>
-            <legend>4. Preview and download</legend>
-            <p class="spark-step-intro">Test the full page in a new tab, download it, or go back and make changes.</p>
+            <legend>6. Preview</legend>
+            <p class="spark-step-intro">Test the full page in a new tab, or go back and make changes.</p>
 
             <div class="spark-preview-toolbar">
               <p id="spark-version-status" role="status" aria-live="polite">No version has been made.</p>
               <div>
                 <button class="spark-button" id="previous-version" type="button" disabled>Previous version</button>
                 <button class="spark-button" id="open-version" type="button" disabled>Open working preview</button>
-                <button class="spark-button spark-button-primary" id="download-version" type="button" disabled>Download this HTML</button>
               </div>
             </div>
 
@@ -253,16 +276,19 @@
             </section>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-edit-facts>Edit business details</button>
+              <button class="spark-button" type="button" data-edit-facts>Edit the basics</button>
+              <button class="spark-button" type="button" data-edit-details>Edit details</button>
+              <button class="spark-button" type="button" data-edit-contact>Edit contact choices</button>
               <button class="spark-button" type="button" data-edit-look>Change the look</button>
             </div>
 
             <!-- sitesourcery:truth-slot:abracadabra-app-save-gate:start -->
             <section class="spark-save-gate" aria-labelledby="save-direction-title">
               <div>
-                <p class="spark-kicker">Keep your file</p>
-                <h3 id="save-direction-title">Download the version you approved.</h3>
-                <p>The download is a self-contained HTML file. Keep a copy somewhere you control.</p>
+                <p class="spark-kicker">Keep your page</p>
+                <h3 id="save-direction-title">Choose only after the preview looks right.</h3>
+                <p>Download is $5 once for this editor project. Publishing is a separate service. No option is selected and nothing is charged from a free preview.</p>
+                <a class="spark-button spark-button-primary" href="/abracadabra/#plans">See the ways to keep it</a>
               </div>
             </section>
             <!-- sitesourcery:truth-slot:abracadabra-app-save-gate:end -->

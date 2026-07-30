@@ -204,7 +204,6 @@
   var versionList = document.getElementById("spark-version-list");
   var undoButton = document.getElementById("previous-version");
   var openButton = document.getElementById("open-version");
-  var downloadButton = document.getElementById("download-version");
   var makeButton = document.getElementById("make-preview");
   var returnBar = maker.querySelector("[data-return-bar]");
   var returnButton = maker.querySelector("[data-return-preview]");
@@ -375,6 +374,34 @@
       showErrors([{ field: "facts", message: "Abracadabra could not validate these business details." }]);
       return null;
     }
+  }
+
+  function validateProgressStep(name, raw) {
+    var errors = [];
+    if (name === "facts") {
+      if (!String(raw.businessName || "").trim()) {
+        errors.push({ field: "businessName", message: "Add the business name." });
+      }
+      if (!String(raw.summary || "").trim()) {
+        errors.push({ field: "summary", message: "Add one plain sentence about the business." });
+      }
+    } else if (name === "details") {
+      if (![raw.about, raw.offerings, raw.location, raw.hours].some(function (entry) {
+        return String(entry || "").trim();
+      })) {
+        errors.push({
+          field: "pageDetails",
+          message: "Add at least one useful detail, offering, location, or set of hours."
+        });
+      }
+    } else if (name === "contact") {
+      return Boolean(validate(raw));
+    }
+    if (errors.length) {
+      showErrors(errors);
+      return false;
+    }
+    return true;
   }
 
   function setStep(name, options) {
@@ -549,7 +576,6 @@
     var current = versions[currentVersionIndex];
     var hasCurrentVersion = Boolean(current);
     openButton.disabled = !hasCurrentVersion;
-    downloadButton.disabled = !hasCurrentVersion;
     if (!current) {
       preview.removeAttribute("srcdoc");
       versionStatus.textContent = "No version has been made.";
@@ -639,39 +665,9 @@
     versions.push({ raw: cloneRaw(reviewedRaw), result: result, platformVersionId: null });
     currentVersionIndex = versions.length - 1;
     markDraftClean();
-    renderCurrentVersion("Your page is ready. Open it, download it, or edit it below.");
+    renderCurrentVersion("Your page is ready. Open it or edit it below.");
     setStep("preview");
     emitVersionMade(versions[currentVersionIndex], reviewAttested);
-  }
-
-  function safeFilename(name) {
-    var slug = String(name)
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/gu, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, "-")
-      .replace(/^-+|-+$/gu, "")
-      .slice(0, 48);
-    return slug ? slug + "-website.html" : "my-website.html";
-  }
-
-  function downloadCurrent() {
-    var current = versions[currentVersionIndex];
-    if (!current) {
-      versionStatus.textContent = "Make a version before downloading. Then try again.";
-      return;
-    }
-    deliverLocalFile(window, {
-      button: downloadButton,
-      failureMessage: "The download could not start. Nothing was downloaded. Select Download again to retry.",
-      filename: safeFilename(current.result.facts.businessName),
-      parts: [current.result.html],
-      revokeDelay: 1000,
-      status: versionStatus,
-      successMessage: "Download started for version " + (currentVersionIndex + 1)
-        + ". Check your Downloads folder.",
-      type: "text/html;charset=utf-8"
-    });
   }
 
   function openCurrentPreview() {
@@ -703,9 +699,9 @@
       location: "South Jersey",
       hours: "Tuesday–Saturday, 10–6",
       phone: "(856) 555-0142",
-      email: "hello@example.com",
+      email: "",
       website: "",
-      primaryAction: "email",
+      primaryAction: "phone",
       theme: "warm"
     });
     emitDraftChanged();
@@ -746,7 +742,10 @@
   maker.querySelectorAll("[data-next]").forEach(function (button) {
     button.addEventListener("click", function () {
       var raw = collectRawFacts();
-      if (!validate(raw)) return;
+      var progressStep = button.getAttribute("data-validate-step");
+      if (progressStep) {
+        if (!validateProgressStep(progressStep, raw)) return;
+      } else if (!validate(raw)) return;
       setStep(button.getAttribute("data-next"));
     });
   });
@@ -756,6 +755,18 @@
   maker.querySelector("[data-edit-facts]").addEventListener("click", function () {
     setStep("facts");
   });
+  var editDetailsButton = maker.querySelector("[data-edit-details]");
+  if (editDetailsButton) {
+    editDetailsButton.addEventListener("click", function () {
+      setStep("details");
+    });
+  }
+  var editContactButton = maker.querySelector("[data-edit-contact]");
+  if (editContactButton) {
+    editContactButton.addEventListener("click", function () {
+      setStep("contact");
+    });
+  }
   maker.querySelector("[data-edit-look]").addEventListener("click", function () {
     setStep("vibe");
   });
@@ -772,7 +783,6 @@
     emitVersionSelected(versions[currentVersionIndex]);
   });
   openButton.addEventListener("click", openCurrentPreview);
-  downloadButton.addEventListener("click", downloadCurrent);
   returnButton.addEventListener("click", function () { setStep("preview"); });
   sampleButton.addEventListener("click", loadFictionalSample);
   clearDraftButton.addEventListener("click", clearDraft);

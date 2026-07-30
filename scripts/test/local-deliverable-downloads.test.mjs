@@ -126,29 +126,11 @@ function deliveryHarness(initialFailure = "") {
   };
 }
 
-const makerDownloadFailure = "The download could not start. Nothing was downloaded. Select Download again to retry.";
 const makerOpenFailure = "The working page could not open. Nothing was changed. Select Open again to retry.";
 const viewerFailure = "The download could not start. Nothing was downloaded. Select Download again to retry.";
 const hiveFailure = "The plan download could not start. Nothing was downloaded. Select Download again to retry.";
 
 const providers = [
-  {
-    failure: makerDownloadFailure,
-    invoke(environment, button, status) {
-      return makerModule.deliverLocalFile(environment, {
-        button,
-        failureMessage: makerDownloadFailure,
-        filename: "maker-website.html",
-        parts: ["<!doctype html><title>Maker</title>"],
-        revokeDelay: 1000,
-        status,
-        successMessage: "Download started for version 1. Check your Downloads folder.",
-        type: "text/html;charset=utf-8",
-      });
-    },
-    name: "Abracadabra maker download",
-    success: "Download started for version 1. Check your Downloads folder.",
-  },
   {
     failure: viewerFailure,
     invoke(environment, button, status) {
@@ -293,7 +275,7 @@ test("Hive download contains the selected deterministic JSON blueprint", () => {
   const harness = deliveryHarness();
 
   assert.equal(
-    providers[2].invoke(
+    providers[1].invoke(
       harness.environment,
       { disabled: false },
       { textContent: "" }
@@ -310,11 +292,8 @@ test("Hive download contains the selected deterministic JSON blueprint", () => {
   );
 });
 
-test("the three customer-facing handlers use the guarded delivery path", () => {
-  assert.match(
-    makerSource,
-    /function downloadCurrent\(\)[\s\S]*?deliverLocalFile\(window,[\s\S]*?function openCurrentPreview\(\)/u
-  );
+test("free Abracadabra preview has no direct Download handler while paid/local exports stay guarded", () => {
+  assert.doesNotMatch(makerSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
   assert.match(
     makerSource,
     /function openCurrentPreview\(\)[\s\S]*?openLocalPreview\(window,[\s\S]*?function loadFictionalSample\(\)/u

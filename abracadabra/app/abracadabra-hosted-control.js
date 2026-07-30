@@ -263,6 +263,7 @@
     var selectionEpoch = 0;
     var sessionEpoch = 0;
     var commerceEpoch = 0;
+    var downloadCommerceEpoch = 0;
     var domainSearchEpoch = 0;
     var domainSelectionEpoch = 0;
     var domainOrderEpoch = 0;
@@ -279,6 +280,7 @@
       cancellationPreview: null,
       exportJob: null,
       commerceQuote: null,
+      downloadQuote: null,
       domainSearchResults: [],
       domainQuote: null,
       registrantContact: null,
@@ -305,6 +307,7 @@
         cancellationPreview: clone(state.cancellationPreview),
         exportJob: clone(state.exportJob),
         commerceQuote: clone(state.commerceQuote),
+        downloadQuote: clone(state.downloadQuote),
         domainSearchResults: clone(state.domainSearchResults),
         domainQuote: clone(state.domainQuote),
         registrantContact: clone(state.registrantContact),
@@ -408,6 +411,8 @@
       state.selectedDomain = null;
       state.dnsRecords = [];
       state.commerceQuote = null;
+      downloadCommerceEpoch += 1;
+      state.downloadQuote = null;
     }
 
     function validatedExport(payload, projectId, expectedExportId) {
@@ -618,6 +623,48 @@
       });
     }
 
+    function beginRegistration(input) {
+      if (typeof api.register !== "function") {
+        return Promise.reject(new ControlError({
+          code: "REGISTRATION_UNAVAILABLE",
+          message: "Account creation is not available yet."
+        }));
+      }
+      var key = idempotencyFactory();
+      var retryCall = function () {
+        return task("beginRegistration", function () {
+          return api.register({
+            name: input && input.name,
+            organizationName:
+              input && input.organizationName,
+            email: input && input.email,
+            password: input && input.password
+          }, { idempotencyKey: key });
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function completeRegistration(input) {
+      if (
+        typeof api.completeRegistration !==
+        "function"
+      ) {
+        return Promise.reject(new ControlError({
+          code: "REGISTRATION_ACTIVATION_UNAVAILABLE",
+          message: "Account activation is not available yet."
+        }));
+      }
+      return authenticate(
+        "completeRegistration",
+        function (requestOptions) {
+          return api.completeRegistration({
+            token: input && input.token
+          }, requestOptions);
+        }
+      );
+    }
+
     function signIn(input) {
       return authenticate("signIn", function (requestOptions) {
         return api.signIn({
@@ -823,6 +870,8 @@
             || idOf(state.project) !== projectId
           ) return null;
           state.selectedVersionId = versionId;
+          downloadCommerceEpoch += 1;
+          state.downloadQuote = null;
           await refreshProject(projectId, expectedSelectionEpoch);
           return entityFrom(acceptedPayload, "version") || version;
         }, { write: true, retry: retryCall });
@@ -831,7 +880,12 @@
     }
 
     function selectVersion(versionId) {
-      state.selectedVersionId = String(versionId || "") || null;
+      var selected = String(versionId || "") || null;
+      if (selected !== state.selectedVersionId) {
+        downloadCommerceEpoch += 1;
+        state.downloadQuote = null;
+      }
+      state.selectedVersionId = selected;
       emit();
     }
 
@@ -984,6 +1038,120 @@
             var updated = entityFrom(payload, "quote");
             if (updated && commerceQuoteIdOf(updated) === quoteId) state.commerceQuote = updated;
           }
+          return payload;
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function quoteDownload(versionId) {
+      var projectId = assertProject();
+      var selectedVersionId = String(
+        versionId || state.selectedVersionId || ""
+      );
+      if (!selectedVersionId) {
+        return Promise.reject(new ControlError({
+          code: "VERSION_REQUIRED",
+          message: "Choose the exact saved version before reviewing Download."
+        }));
+      }
+      if (typeof api.createDownloadQuote !== "function") {
+        return Promise.reject(new ControlError({
+          code: "DOWNLOAD_COMMERCE_HELD",
+          message: "Download purchasing is not available yet."
+        }));
+      }
+      var key = idempotencyFactory();
+      var expectedSelectionEpoch = selectionEpoch;
+      var expectedDownloadEpoch = ++downloadCommerceEpoch;
+      state.downloadQuote = null;
+      var retryCall = function () {
+        return task("downloadQuote", async function () {
+          var payload = await api.createDownloadQuote(
+            projectId,
+            { versionId: selectedVersionId },
+            { idempotencyKey: key }
+          );
+          if (
+            expectedSelectionEpoch !== selectionEpoch
+            || expectedDownloadEpoch !== downloadCommerceEpoch
+            || !state.project
+            || idOf(state.project) !== projectId
+            || state.selectedVersionId !== selectedVersionId
+          ) return null;
+          var quote = entityFrom(payload, "quote");
+          if (
+            !quote
+            || !commerceQuoteIdOf(quote)
+            || String(quote.offerId || "") !== "spark_download"
+            || String(quote.entitlementKind || "") !== "spark_download"
+            || String(quote.project && quote.project.projectId || "") !== projectId
+            || String(quote.version && quote.version.versionId || "") !== selectedVersionId
+            || !quote.price
+            || Number(quote.price.amountMinor) !== 500
+            || String(quote.price.currency || "").toUpperCase() !== "USD"
+            || String(quote.price.billing || "") !== "one_time"
+            || String(quote.disclosureDigest || "").length !== 64
+            || String(quote.snapshotDigest || "").length !== 64
+            || !Number.isFinite(Date.parse(quote.expiresAt))
+            || Date.parse(quote.expiresAt) <= Date.now()
+          ) {
+            throw new ControlError({
+              code: "DOWNLOAD_QUOTE_RESPONSE_INVALID",
+              message: "The $5 Download quote could not be verified. Try again."
+            });
+          }
+          state.downloadQuote = quote;
+          return quote;
+        }, { write: true, retry: retryCall });
+      };
+      return retryCall();
+    }
+
+    function prepareDownloadCheckout() {
+      var projectId = assertProject();
+      var quote = state.downloadQuote;
+      var quoteId = commerceQuoteIdOf(quote);
+      var versionId = String(
+        quote && quote.version && quote.version.versionId || ""
+      );
+      var acceptedDisclosureDigest = String(
+        quote && quote.disclosureDigest || ""
+      );
+      if (
+        !quoteId
+        || !acceptedDisclosureDigest
+        || String(quote && quote.offerId || "") !== "spark_download"
+        || String(quote && quote.project && quote.project.projectId || "") !== projectId
+        || !versionId
+        || versionId !== state.selectedVersionId
+        || !Number.isFinite(Date.parse(quote.expiresAt))
+        || Date.parse(quote.expiresAt) <= Date.now()
+        || typeof api.prepareDownloadCheckout !== "function"
+      ) {
+        return Promise.reject(new ControlError({
+          code: "DOWNLOAD_QUOTE_REVIEW_REQUIRED",
+          message: "Review the current $5 Download quote before continuing."
+        }));
+      }
+      var key = idempotencyFactory();
+      var expectedSelectionEpoch = selectionEpoch;
+      var expectedDownloadEpoch = downloadCommerceEpoch;
+      var retryCall = function () {
+        return task("downloadCheckout", async function () {
+          var payload = await api.prepareDownloadCheckout(
+            projectId,
+            quoteId,
+            {
+              acceptedDisclosureDigest:
+                acceptedDisclosureDigest
+            },
+            { idempotencyKey: key }
+          );
+          if (
+            expectedSelectionEpoch !== selectionEpoch
+            || expectedDownloadEpoch !== downloadCommerceEpoch
+          ) return null;
           return payload;
         }, { write: true, retry: retryCall });
       };
@@ -1807,6 +1975,9 @@
       retry: retry,
       boot: boot,
       register: register,
+      beginRegistration: beginRegistration,
+      completeRegistration:
+        completeRegistration,
       signIn: signIn,
       signOut: signOut,
       requestRecovery: requestRecovery,
@@ -1821,6 +1992,9 @@
       requestDomainVerification: requestDomainVerification,
       quoteOffer: quoteOffer,
       checkoutQuotedOffer: checkoutQuotedOffer,
+      quoteDownload: quoteDownload,
+      prepareDownloadCheckout:
+        prepareDownloadCheckout,
       billingPortal: billingPortal,
       refreshSubscription: refreshSubscription,
       previewCancellation: previewCancellation,

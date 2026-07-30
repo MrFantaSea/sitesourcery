@@ -61,12 +61,16 @@ for (const [pattern, label] of [
   [/\bpre-?launch\b/iu, "pre-launch copy"],
   [/\bwaitlist\b/iu, "waitlist copy"],
   [/\bsubscribe\b/iu, "subscription copy"],
-  [/\$\s*\d/iu, "public dollar amount"],
   [/"@type"\s*:\s*"Offer"/iu, "Offer structured data"],
   [/\b(?:checkout|buy now|order now|live in minutes)\b/iu, "purchase or instant-publication claim"],
 ]) {
   check(!pattern.test(sources.html), `app page contains ${label}`);
 }
+const publicAmounts = sources.html.match(/\$\s*\d+(?:[.,]\d+)?/gu) || [];
+check(
+  publicAmounts.length === 1 && publicAmounts[0].replace(/\s+/gu, "") === "$5",
+  "app page must contain only the accepted one-time $5 Download amount",
+);
 
 const executableSources = `${sources.compiler}\n${sources.app}`;
 for (const [pattern, label] of [
@@ -196,5 +200,5 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log("Abracadabra Spark V1 checks passed: zero forms/network/storage/uploads; deterministic fact-only compiler, three themes, sandboxed preview, in-session history, and self-contained safe export verified.");
+  console.log("Abracadabra Spark V1 checks passed: zero forms/network/storage/uploads; deterministic fact-only compiler, three themes, sandboxed free preview, in-session history, and accepted $5 Download boundary verified.");
 }

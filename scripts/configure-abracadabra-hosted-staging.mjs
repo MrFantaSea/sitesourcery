@@ -143,7 +143,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
   }
   if (
     source.includes("abracadabra-hosted-control.js")
-    || source.includes("abracadabra-hosted-control-dom.js")
+    || source.includes("abracadabra-customer-control-dom.js")
   ) {
     throw new Error("Abracadabra source is already configured for a hosted control");
   }
@@ -151,13 +151,12 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     throw new Error("Abracadabra held-mode marker must be unique");
   }
 
-  const catalog = safeCatalog(options.catalog);
+  safeCatalog(options.catalog);
   const hostedScripts = [
     '<script src="/abracadabra/app/abracadabra-api.js" defer></script>',
-    `<script id="abracadabra-hosted-catalog" type="application/json">${scriptJson(catalog)}</script>`,
     '<script src="/abracadabra/app/abracadabra-hosted-control.js" defer></script>',
     APP_SCRIPT,
-    '<script src="/abracadabra/app/abracadabra-hosted-control-dom.js" defer></script>',
+    '<script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>',
   ].join("\n  ");
 
   return source
@@ -168,7 +167,6 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
 export const hostedStagingAssets = Object.freeze([
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-control-mode.js",
-  "abracadabra/app/abracadabra-control.js",
-  "abracadabra/app/abracadabra-hosted-control-dom.js",
+  "abracadabra/app/abracadabra-customer-control-dom.js",
   "abracadabra/app/abracadabra-hosted-control.js",
 ]);

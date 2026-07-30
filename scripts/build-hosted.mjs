@@ -534,16 +534,6 @@ async function writeHostedArtifact({
   }
 }
 
-function assertNoPrivateCatalogAuthority(value, keyPath = "catalog") {
-  if (!value || typeof value !== "object") return;
-  for (const [key, child] of Object.entries(value)) {
-    if (/^(?:amount|amountMinor|price|priceId|stripePriceId|stripePriceRefs|lineItems|totals)$/iu.test(key)) {
-      throw new Error(`hosted artifact exposes private price authority at ${keyPath}.${key}`);
-    }
-    assertNoPrivateCatalogAuthority(child, `${keyPath}.${key}`);
-  }
-}
-
 export async function verifyHostedArtifact({
   root = process.cwd(),
   output = path.join(path.resolve(root), "_hosted"),
@@ -632,22 +622,19 @@ export async function verifyHostedArtifact({
   if (app.includes("/abracadabra/site/")) {
     throw new Error("hosted Abracadabra app links to the source-only local viewer");
   }
-  const catalogMatch = app.match(
-    /<script id="abracadabra-hosted-catalog" type="application\/json">([^<]+)<\/script>/u,
-  );
-  if (!catalogMatch) throw new Error("hosted browser catalog was not injected");
-  const browserCatalog = JSON.parse(catalogMatch[1]);
-  assertNoPrivateCatalogAuthority(browserCatalog);
   if (
-    JSON.stringify(Object.keys(browserCatalog.products)) !==
-      JSON.stringify(["spark"])
-    || browserCatalog.products.spark?.implementationContract !==
-      "abracadabra.spark/v1"
-    || JSON.stringify(
-      browserCatalog.offers["spark.own"]?.eligibleAddressModes,
-    ) !== JSON.stringify(["customer_owned"])
+    app.includes("abracadabra-hosted-catalog")
+    || occurrences(
+      app,
+      "/abracadabra/app/abracadabra-customer-control-dom.js",
+    ) !== 1
+    || app.includes(
+      "/abracadabra/app/abracadabra-hosted-control-dom.js",
+    )
   ) {
-    throw new Error("hosted browser catalog violates the released Spark/address boundary");
+    throw new Error(
+      "hosted Abracadabra must load the customer-first control without a browser catalog",
+    );
   }
   return true;
 }

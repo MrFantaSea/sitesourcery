@@ -116,6 +116,13 @@ export function createHeldHostedDownloadCommerce() {
     );
   }
   return Object.freeze({
+    async readiness() {
+      return {
+        quote: false,
+        payment: false,
+        state: "held"
+      };
+    },
     createQuote: held,
     prepareCheckout: held
   });
@@ -156,6 +163,13 @@ export function createHostedDownloadCommerce({
   }
 
   return Object.freeze({
+    async readiness() {
+      return {
+        quote: true,
+        payment: false,
+        state: "quote_only"
+      };
+    },
     async createQuote(actor, projectId, input) {
       return translated(async () => {
         invariant(

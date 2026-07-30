@@ -1,0 +1,203 @@
+    <section class="platform-control customer-control" id="control-room" aria-labelledby="control-room-title" hidden>
+      <div class="site-shell">
+        <header class="spark-section-head platform-heading">
+          <p class="spark-kicker">Keep this page</p>
+          <h2 id="control-room-title">Save the version you reviewed.</h2>
+          <p>Finish one small step at a time. Nothing is charged until you review and accept the exact $5 Download quote.</p>
+        </header>
+
+        <ol class="customer-control-progress" aria-label="Save and Download progress">
+          <li data-customer-progress="account" aria-current="step"><span>1</span>Account</li>
+          <li data-customer-progress="project"><span>2</span>Project</li>
+          <li data-customer-progress="quote"><span>3</span>$5 quote</li>
+          <li data-customer-progress="download"><span>4</span>Download</li>
+        </ol>
+
+        <div class="platform-status" id="platform-status" role="status" aria-live="polite">Opening your account options…</div>
+
+        <div class="platform-account-bar" data-session-bar hidden>
+          <div>
+            <span>Signed in</span>
+            <strong data-account-name>Account</strong>
+            <small data-account-email></small>
+          </div>
+          <button class="spark-button" type="button" data-sign-out>Sign out</button>
+        </div>
+
+        <section class="customer-control-stage" data-customer-stage="account" aria-labelledby="customer-account-title">
+          <div class="customer-stage-heading">
+            <p class="spark-kicker">Step 1</p>
+            <h3 id="customer-account-title">Create an account or sign in.</h3>
+            <p>Your free preview stays in this tab until a saved project accepts it.</p>
+          </div>
+
+          <div class="platform-auth" id="platform-auth">
+            <div class="platform-tabs" role="tablist" aria-label="Account access">
+              <button id="auth-create-tab" type="button" role="tab" aria-selected="true" aria-controls="auth-create" data-auth-mode="create">Create account</button>
+              <button id="auth-sign-in-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-sign-in" data-auth-mode="sign-in">Sign in</button>
+              <button id="auth-recover-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-recover" data-auth-mode="recover">Recover access</button>
+            </div>
+
+            <fieldset class="platform-panel platform-auth-panel" id="auth-create" role="tabpanel" tabindex="0" aria-labelledby="auth-create-tab" data-auth-panel="create">
+              <legend>Create your account</legend>
+              <div class="platform-fields">
+                <label class="spark-field">
+                  <span>Your name</span>
+                  <input name="accountName" type="text" maxlength="100" autocomplete="name">
+                </label>
+                <label class="spark-field">
+                  <span>Business or organization</span>
+                  <input name="organizationName" type="text" maxlength="120" autocomplete="organization">
+                </label>
+                <label class="spark-field">
+                  <span>Email</span>
+                  <input name="accountEmail" type="email" maxlength="254" autocomplete="email">
+                </label>
+                <label class="spark-field">
+                  <span>Password</span>
+                  <input name="accountPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password">
+                  <small>Use at least 12 characters.</small>
+                </label>
+              </div>
+              <p data-registration-availability role="status">Checking whether account email is ready…</p>
+              <div class="platform-actions">
+                <button class="spark-button spark-button-primary" type="button" data-create-account disabled>Create account</button>
+              </div>
+            </fieldset>
+
+            <fieldset class="platform-panel platform-auth-panel" id="auth-activate" role="tabpanel" tabindex="0" aria-labelledby="auth-create-tab" data-auth-panel="activate" hidden>
+              <legend>Check your email</legend>
+              <p>Open the Site Sourcery message and use its activation link. If the link opened this page, the code is filled in automatically.</p>
+              <label class="spark-field">
+                <span>Activation code</span>
+                <input name="activationToken" type="text" maxlength="512" autocomplete="one-time-code">
+              </label>
+              <div class="platform-actions">
+                <button class="spark-button spark-button-primary" type="button" data-complete-registration>Activate account</button>
+                <button class="spark-button" type="button" data-return-to-create>Use a different email</button>
+              </div>
+            </fieldset>
+
+            <fieldset class="platform-panel platform-auth-panel" id="auth-sign-in" role="tabpanel" tabindex="0" aria-labelledby="auth-sign-in-tab" data-auth-panel="sign-in" hidden>
+              <legend>Sign in</legend>
+              <div class="platform-fields">
+                <label class="spark-field">
+                  <span>Email</span>
+                  <input name="signInEmail" type="email" maxlength="254" autocomplete="email">
+                </label>
+                <label class="spark-field">
+                  <span>Password</span>
+                  <input name="signInPassword" type="password" maxlength="256" autocomplete="current-password">
+                </label>
+              </div>
+              <div class="platform-actions">
+                <button class="spark-button spark-button-primary" type="button" data-sign-in>Sign in</button>
+              </div>
+            </fieldset>
+
+            <fieldset class="platform-panel platform-auth-panel" id="auth-recover" role="tabpanel" tabindex="0" aria-labelledby="auth-recover-tab" data-auth-panel="recover" hidden>
+              <legend>Recover account access</legend>
+              <p>Enter the account email. Site Sourcery will not reveal whether an account exists.</p>
+              <label class="spark-field">
+                <span>Account email</span>
+                <input name="recoveryEmail" type="email" maxlength="254" autocomplete="email">
+              </label>
+              <div class="platform-actions">
+                <button class="spark-button spark-button-primary" type="button" data-request-recovery>Request account recovery</button>
+              </div>
+              <p data-recovery-support hidden><a href="/contact/#direct-contact">Contact Site Sourcery for account recovery</a></p>
+              <div class="platform-panel" data-recovery-complete hidden>
+                <p class="spark-kicker">Recovery link opened</p>
+                <label class="spark-field">
+                  <span>Recovery code</span>
+                  <input name="recoveryToken" type="text" maxlength="512" autocomplete="one-time-code">
+                </label>
+                <label class="spark-field">
+                  <span>New password</span>
+                  <input name="recoveryPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password">
+                </label>
+                <div class="platform-actions">
+                  <button class="spark-button spark-button-primary" type="button" data-complete-recovery>Reset password</button>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        </section>
+
+        <section class="customer-control-stage" data-customer-stage="project" aria-labelledby="customer-project-title" hidden>
+          <div class="customer-stage-heading">
+            <p class="spark-kicker">Step 2</p>
+            <h3 id="customer-project-title">Save this preview as a project.</h3>
+            <p>Name the project so you can recognize it later. A new project has its own one-time $5 Download unlock.</p>
+          </div>
+          <ol class="customer-project-list" data-project-list></ol>
+          <fieldset class="platform-panel">
+            <legend>New project</legend>
+            <label class="spark-field">
+              <span>Project name</span>
+              <input name="projectName" type="text" maxlength="120" autocomplete="off">
+            </label>
+            <label class="platform-checkbox">
+              <input name="acceptedProjectTerms" type="checkbox">
+              <span>I accept the <a href="/legal/website-terms/" target="_blank" rel="noopener">website terms</a> for this project.</span>
+            </label>
+            <div class="platform-actions">
+              <button class="spark-button spark-button-primary" type="button" data-create-project>Save preview to this project</button>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="customer-control-stage" data-customer-stage="quote" aria-labelledby="customer-quote-title" hidden>
+          <div class="customer-stage-heading">
+            <p class="spark-kicker">Step 3</p>
+            <h3 id="customer-quote-title">Review Download for this project.</h3>
+            <p data-selected-version>Choose a saved version from the preview above.</p>
+          </div>
+          <div class="customer-download-facts" aria-label="Download facts">
+            <div><strong>$5 once</strong><span>One payment for this editor project</span></div>
+            <div><strong>No renewal</strong><span>Download does not start a subscription</span></div>
+            <div><strong>Your HTML file</strong><span>Modify it or host it yourself</span></div>
+          </div>
+          <div class="platform-actions">
+            <button class="spark-button spark-button-primary" type="button" data-request-download-quote disabled>Get the exact $5 quote</button>
+          </div>
+          <p data-download-availability role="status">Checking whether secure Download is ready…</p>
+
+          <section class="platform-panel customer-quote-review" data-download-quote-review tabindex="-1" hidden>
+            <p class="spark-kicker">Exact quote</p>
+            <h4>Download this project</h4>
+            <dl>
+              <div><dt>Due now</dt><dd data-download-price>$5.00 USD</dd></div>
+              <div><dt>Renews</dt><dd>No</dd></div>
+              <div><dt>Project</dt><dd data-download-project>Selected project</dd></div>
+              <div><dt>Version</dt><dd data-download-version>Selected version</dd></div>
+              <div><dt>Quote expires</dt><dd data-download-expiry>Not loaded</dd></div>
+            </dl>
+            <p data-download-disclosure>The one-time Download unlock belongs to this editor project and is not used up by another click.</p>
+            <label class="platform-checkbox">
+              <input type="checkbox" data-accept-download-quote>
+              <span>I reviewed this exact $5 one-time quote.</span>
+            </label>
+            <div class="platform-actions">
+              <button class="spark-button spark-button-primary" type="button" data-continue-download-payment disabled>Continue to secure payment</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="customer-control-stage" data-customer-stage="download" aria-labelledby="customer-download-title" hidden>
+          <div class="customer-stage-heading">
+            <p class="spark-kicker">Step 4</p>
+            <h3 id="customer-download-title">Download the HTML file.</h3>
+            <p data-download-ready-copy>Payment must be confirmed before Download is enabled.</p>
+          </div>
+          <div class="platform-actions">
+            <button class="spark-button spark-button-primary" type="button" data-download-html disabled>Download HTML</button>
+          </div>
+        </section>
+
+        <aside class="customer-separate-help">
+          <strong>Need publishing or a domain too?</strong>
+          <span>Those are separate from the $5 file Download. <a href="/contact/#direct-contact">Ask Zack before anything is ordered or connected.</a></span>
+        </aside>
+      </div>
+    </section>

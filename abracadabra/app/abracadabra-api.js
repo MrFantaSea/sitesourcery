@@ -363,6 +363,22 @@
       });
     }
 
+    function completeRegistration(input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      return request("POST", "/auth/register/complete", {
+        body: {
+          token: requiredText(
+            source.token,
+            "Activation code",
+            512
+          )
+        },
+        idempotencyKey:
+          requestOptions &&
+          requestOptions.idempotencyKey
+      });
+    }
+
     function signIn(input, requestOptions) {
       var source = isObject(input) ? input : {};
       return request("POST", "/auth/sessions", {
@@ -401,6 +417,10 @@
 
     function me() {
       return request("GET", "/me");
+    }
+
+    function capabilities() {
+      return request("GET", "/capabilities");
     }
 
     function listOrganizations() {
@@ -571,6 +591,42 @@
             acceptedDisclosureDigest: requiredText(
               source.acceptedDisclosureDigest,
               "Accepted quote digest",
+              100
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function createDownloadQuote(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID") + "/download-quotes",
+        {
+          body: {
+            versionId: requiredText(source.versionId, "Version ID", 200)
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function prepareDownloadCheckout(projectId, quoteId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/download-quotes/" + segment(quoteId, "Download quote ID")
+          + "/checkout-command",
+        {
+          body: {
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted Download quote digest",
               100
             )
           },
@@ -953,11 +1009,14 @@
     return Object.freeze({
       request: request,
       register: register,
+      completeRegistration:
+        completeRegistration,
       signIn: signIn,
       signOut: signOut,
       requestRecovery: requestRecovery,
       completeRecovery: completeRecovery,
       me: me,
+      capabilities: capabilities,
       listOrganizations: listOrganizations,
       listProjects: listProjects,
       getProject: getProject,
@@ -972,6 +1031,8 @@
       createCommerceQuote: createCommerceQuote,
       getCommerceQuote: getCommerceQuote,
       createCommerceCheckout: createCommerceCheckout,
+      createDownloadQuote: createDownloadQuote,
+      prepareDownloadCheckout: prepareDownloadCheckout,
       billingPortal: billingPortal,
       subscription: subscription,
       cancellationPreview: cancellationPreview,

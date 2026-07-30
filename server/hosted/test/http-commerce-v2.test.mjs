@@ -68,6 +68,31 @@ function createBaseService() {
       async authenticate(token) {
         authenticateCalls.push(token);
         return token === SESSION_TOKEN ? ACTOR : null;
+      },
+      async readiness() {
+        return {
+          ready: true,
+          registration: {
+            ready: false,
+            verified: false,
+            mode: "held"
+          },
+          recovery: {
+            ready: false,
+            verified: false,
+            mode: "held"
+          },
+          publication: {
+            ready: true,
+            held: true
+          },
+          providers: {
+            domains: {
+              ready: false,
+              registrar: "held"
+            }
+          }
+        };
       }
     }
   };
@@ -252,6 +277,36 @@ test("held runtime authenticates but cannot create a Download quote", async () =
     (await signedOut.json()).error.code,
     "AUTHENTICATION_REQUIRED"
   );
+});
+
+test("public capabilities enable only actions whose server boundary can succeed", async () => {
+  const held = createContext({ held: true });
+  const heldResponse = await held.api.fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(heldResponse.status, 200);
+  assert.deepEqual(await heldResponse.json(), {
+    accountRegistration: false,
+    accountRecoveryEmail: false,
+    downloadQuote: false,
+    downloadPayment: false,
+    domainPurchase: false,
+    publishing: false
+  });
+
+  const quoteReady = createContext();
+  const quoteResponse = await quoteReady.api.fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(quoteResponse.status, 200);
+  assert.deepEqual(await quoteResponse.json(), {
+    accountRegistration: false,
+    accountRecoveryEmail: false,
+    downloadQuote: true,
+    downloadPayment: false,
+    domainPurchase: false,
+    publishing: false
+  });
 });
 
 test("Download quote route exposes the exact held $5 snapshot and no provisional offer", async () => {

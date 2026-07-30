@@ -62,6 +62,66 @@ test("every browser write carries a stable idempotency key and current CSRF toke
   assert.equal(calls[1].options.method, "POST");
 });
 
+test("verified registration stages the account before activation creates the session", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, {
+          csrfToken: "csrf_registration"
+        });
+      }
+      return response(
+        url.endsWith("/complete") ? 201 : 202,
+        url.endsWith("/complete")
+          ? { user: { id: "user_1" } }
+          : {
+              accepted: true,
+              verificationRequired: true,
+              delivery: "email",
+              emailSent: true
+            }
+      );
+    },
+    idempotencyFactory: () =>
+      "registration-idempotency-key"
+  });
+
+  await client.register({
+    name: "Customer Owner",
+    organizationName: "Customer Business",
+    email: "owner@example.test",
+    password: "correct horse battery staple"
+  });
+  await client.completeRegistration({
+    token: "activation_token_12345678901234567890"
+  });
+
+  const writes = calls.filter(
+    ({ url }) => url !== "/api/v1/csrf"
+  );
+  assert.equal(
+    writes[0].url,
+    "/api/v1/auth/register"
+  );
+  assert.equal(
+    writes[1].url,
+    "/api/v1/auth/register/complete"
+  );
+  assert.deepEqual(JSON.parse(writes[1].options.body), {
+    token: "activation_token_12345678901234567890"
+  });
+  assert.equal(
+    writes[0].options.headers["X-CSRF-Token"],
+    "csrf_registration"
+  );
+  assert.equal(
+    writes[1].options.headers["Idempotency-Key"],
+    "registration-idempotency-key"
+  );
+});
+
 test("concurrent first writes share one CSRF bootstrap", async () => {
   const calls = [];
   let sequence = 0;
@@ -172,6 +232,73 @@ test("commerce uses only an offer ID, an exact server quote, and its disclosure 
   for (const call of commerceCalls) {
     const body = JSON.parse(call.options.body);
     for (const forbidden of ["amount", "amountMinor", "currency", "price", "priceId", "stripePriceId"]) {
+      assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
+    }
+  }
+});
+
+test("Download commerce sends only the accepted version and the reviewed server digest", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_download" });
+      }
+      return response(201, url.endsWith("/download-quotes")
+        ? {
+            quoteId: "download_quote_1",
+            offerId: "spark_download",
+            disclosureDigest: "d".repeat(64),
+          }
+        : {
+            quoteId: "download_quote_1",
+            state: "held",
+            dispatchAuthorized: false,
+          });
+    },
+    idempotencyFactory: () => "download-idempotency-key"
+  });
+
+  await client.createDownloadQuote("project_1", {
+    versionId: "version_1"
+  });
+  await client.prepareDownloadCheckout(
+    "project_1",
+    "download_quote_1",
+    { acceptedDisclosureDigest: "d".repeat(64) }
+  );
+
+  const writes = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.equal(
+    writes[0].url,
+    "/api/v1/projects/project_1/download-quotes"
+  );
+  assert.deepEqual(JSON.parse(writes[0].options.body), {
+    versionId: "version_1"
+  });
+  assert.equal(
+    writes[1].url,
+    "/api/v1/projects/project_1/download-quotes/download_quote_1/checkout-command"
+  );
+  assert.deepEqual(JSON.parse(writes[1].options.body), {
+    acceptedDisclosureDigest: "d".repeat(64)
+  });
+  for (const call of writes) {
+    assert.equal(
+      call.options.headers["Idempotency-Key"],
+      "download-idempotency-key"
+    );
+    const body = JSON.parse(call.options.body);
+    for (const forbidden of [
+      "amount",
+      "amountMinor",
+      "currency",
+      "offerId",
+      "priceId",
+      "provider",
+      "tenureId"
+    ]) {
       assert.equal(Object.hasOwn(body, forbidden), false, forbidden);
     }
   }

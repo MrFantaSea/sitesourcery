@@ -282,6 +282,58 @@ export function createHostedApi(
           );
         }
 
+        if (
+          method === "GET" &&
+          pathname === "/api/v1/capabilities"
+        ) {
+          invariant(
+            typeof service.readiness === "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Hosted capabilities are unavailable.",
+            { status: 500 }
+          );
+          const readiness =
+            await service.readiness();
+          const download =
+            typeof downloadBoundary.readiness ===
+              "function"
+              ? await downloadBoundary.readiness()
+              : {
+                  quote: false,
+                  payment: false
+                };
+          const registration =
+            readiness?.registration ?? {};
+          const recovery =
+            readiness?.recovery ?? {};
+          const domains =
+            readiness?.providers?.domains ?? {};
+          return json(
+            {
+              accountRegistration:
+                registration.ready === true &&
+                registration.verified === true,
+              accountRecoveryEmail:
+                recovery.ready === true &&
+                recovery.verified === true,
+              downloadQuote:
+                download.quote === true,
+              downloadPayment:
+                download.payment === true,
+              domainPurchase:
+                domains.ready === true &&
+                domains.registrar === "ready",
+              publishing:
+                readiness?.publication?.ready ===
+                  true &&
+                readiness?.publication?.held ===
+                  false
+            },
+            200,
+            { "X-Request-Id": requestId }
+          );
+        }
+
         if (method === "GET" && pathname === "/api/v1/csrf") {
           const csrfToken = currentCsrfToken(cookies, nextCsrfToken);
           return json(

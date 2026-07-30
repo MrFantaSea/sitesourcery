@@ -17,6 +17,9 @@ const {
 const {
   recoveryRequestOutcome,
 } = require("../../abracadabra/app/abracadabra-hosted-control-dom.js");
+const customerControl = require(
+  "../../abracadabra/app/abracadabra-customer-control-dom.js"
+);
 
 function response(status, payload, requestId = "req_hosted") {
   return {
@@ -89,6 +92,122 @@ async function selectedControl(overrides = {}, options = {}) {
   await control.selectProject("project_1");
   return control;
 }
+
+test("customer control accepts only exact activation fragments, quotes, and Stripe Checkout", () => {
+  assert.equal(
+    customerControl.registrationTokenFromLocation({
+      hash: "#verify-registration=token%2Fwith%20space",
+    }),
+    "token/with space",
+  );
+  assert.equal(
+    customerControl.recoveryTokenFromLocation({
+      hash: "#recovery=recovery_token_1",
+    }),
+    "recovery_token_1",
+  );
+  assert.equal(
+    customerControl.registrationTokenFromLocation({
+      hash: "#recovery=wrong",
+    }),
+    "",
+  );
+
+  assert.equal(
+    customerControl.safeCheckoutDestination({
+      checkoutUrl: "https://checkout.stripe.com/c/pay/test",
+    }),
+    "https://checkout.stripe.com/c/pay/test",
+  );
+  for (const destination of [
+    "http://checkout.stripe.com/c/pay/test",
+    "https://checkout.stripe.com.attacker.test/c/pay/test",
+    "https://attacker.test/c/pay/test",
+    "/same-origin-but-not-stripe",
+  ]) {
+    assert.equal(
+      customerControl.safeCheckoutDestination({
+        checkoutUrl: destination,
+      }),
+      "",
+    );
+  }
+
+  const quote = {
+    quoteId: "download_quote_1",
+    project: { projectId: "project_1" },
+    version: { versionId: "version_1" },
+    offerId: "spark_download",
+    entitlementKind: "spark_download",
+    price: {
+      amountMinor: 500,
+      currency: "USD",
+      billing: "one_time",
+      interval: null,
+    },
+    expiresAt: "2099-08-01T00:00:00.000Z",
+    disclosure: {
+      terms: {
+        projectScope:
+          "One Download applies to this editor project.",
+      },
+    },
+    disclosureDigest: "d".repeat(64),
+    snapshotDigest: "s".repeat(64),
+  };
+  const view = customerControl.verifiedDownloadQuote(
+    quote,
+    "project_1",
+    "version_1",
+    Date.parse("2099-07-01T00:00:00.000Z"),
+  );
+  assert.equal(view.price, "$5.00 USD");
+  assert.equal(
+    customerControl.verifiedDownloadQuote(
+      {
+        ...quote,
+        price: { ...quote.price, amountMinor: 501 },
+      },
+      "project_1",
+      "version_1",
+      Date.parse("2099-07-01T00:00:00.000Z"),
+    ),
+    null,
+  );
+});
+
+test("customer control claims activation or recovery email only from exact delivery evidence", () => {
+  assert.deepEqual(
+    customerControl.registrationOutcome({
+      accepted: true,
+      verificationRequired: true,
+      delivery: "email",
+      emailSent: true,
+    }),
+    {
+      activationReady: true,
+      supportRequired: false,
+      message:
+        "Check your email and open the Site Sourcery activation link.",
+    },
+  );
+  assert.equal(
+    customerControl.registrationOutcome({
+      accepted: true,
+      delivery: "held",
+      emailSent: false,
+    }).supportRequired,
+    true,
+  );
+  assert.equal(
+    customerControl.recoveryOutcome({
+      accepted: true,
+      delivery: "manual_operator",
+      emailSent: false,
+    }).supportRequired,
+    true,
+  );
+});
 
 test("control mode is server-configured, invalid or absent configuration holds, and catalog prices fail closed", () => {
   assert.equal(modeModule.resolve(documentFixture(null)).mode, "hold");
@@ -208,10 +327,9 @@ test("private staging injection selects hosted mode in strict script order witho
   const ordered = [
     "/abracadabra/app/abracadabra-control-mode.js",
     "/abracadabra/app/abracadabra-api.js",
-    'id="abracadabra-hosted-catalog"',
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
-    "/abracadabra/app/abracadabra-hosted-control-dom.js",
+    "/abracadabra/app/abracadabra-customer-control-dom.js",
   ];
   let cursor = -1;
   for (const marker of ordered) {
@@ -222,29 +340,14 @@ test("private staging injection selects hosted mode in strict script order witho
   assert.doesNotMatch(
     hosted,
     /\/abracadabra\/app\/abracadabra-control\.js/u,
-    "the reviewed hosted fragment, not the generic configurator, adds the progressive control",
+    "the hosted app must not load the local rehearsal control",
   );
-  assert.match(hosted, /"domainTermsVersion":"domain-terms-staging-1"/u);
-  const catalogJson = hosted.match(
-    /<script id="abracadabra-hosted-catalog" type="application\/json">([^<]+)<\/script>/u,
-  )[1];
-  const browserCatalog = JSON.parse(catalogJson);
-  assert.equal(browserCatalog.catalogVersion, "catalog_staging_1");
-  assert.equal(
-    browserCatalog.products.spark.implementationContract,
-    "abracadabra.spark/v1",
-  );
-  assert.deepEqual(browserCatalog.offers["spark.rent"], {
-    productId: "spark",
-    tenureId: "rent",
-    eligibleAddressModes: ["customer_owned", "licensed"],
-  });
-  assert.equal(Object.hasOwn(browserCatalog.offers["spark.rent"], "priceId"), false);
-  assert.equal(Object.hasOwn(browserCatalog.offers["spark.rent"], "amountMinor"), false);
+  assert.doesNotMatch(hosted, /abracadabra-hosted-catalog/u);
+  assert.doesNotMatch(hosted, /spark\.rent|Rent|Own|Owned \+ managed/u);
   assert.deepEqual(hostedStagingAssets, [...hostedStagingAssets].sort());
 });
 
-test("hosted domain controls are progressive enhancement and a failed enhancer leaves the maker usable", async () => {
+test("customer account and Download controls progressively enhance the still-usable maker", async () => {
   const publicHtml = await readFile(
     new URL("../../abracadabra/app/index.html", import.meta.url),
     "utf8",
@@ -266,7 +369,7 @@ test("hosted domain controls are progressive enhancement and a failed enhancer l
     },
   });
   const enhancer =
-    '  <script src="/abracadabra/app/abracadabra-hosted-control-dom.js" defer></script>';
+    '  <script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>';
   assert.match(hosted, new RegExp(enhancer.trim().replaceAll("/", "\\/"), "u"));
   const failedEnhancement = hosted.replace(enhancer, "");
 
@@ -276,7 +379,7 @@ test("hosted domain controls are progressive enhancement and a failed enhancer l
   );
   assert.doesNotMatch(
     publicHtml,
-    /abracadabra-hosted-control(?:-dom)?\.js/u,
+    /abracadabra-(?:hosted-control|customer-control-dom)\.js/u,
   );
   assert.match(
     failedEnhancement,
@@ -284,7 +387,7 @@ test("hosted domain controls are progressive enhancement and a failed enhancer l
   );
   assert.doesNotMatch(
     failedEnhancement,
-    /abracadabra-hosted-control-dom\.js/u,
+    /abracadabra-customer-control-dom\.js/u,
   );
   for (const fallback of [
     'name="businessName"',
@@ -303,22 +406,22 @@ test("hosted domain controls are progressive enhancement and a failed enhancer l
 
   const enhancerSource = await readFile(
     new URL(
-      "../../abracadabra/app/abracadabra-hosted-control-dom.js",
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
       import.meta.url,
     ),
     "utf8",
   );
   assert.match(
     enhancerSource,
-    /data-hosted-domain-project-state/u,
+    /data-customer-stage/u,
   );
   assert.match(
     enhancerSource,
-    /Finish one step to open the next\./u,
+    /client\.capabilities\(\)/u,
   );
   assert.match(
     enhancerSource,
-    /\/api\/v1\/domain-orders\/"[\s\S]+\/payment/u,
+    /control\.quoteDownload\(\)/u,
   );
 });
 
@@ -350,35 +453,33 @@ test("staging catalog configuration rejects every private price authority field"
 });
 
 test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon", async () => {
-  const source = await readFile(
-    new URL("../../abracadabra/app/abracadabra-hosted-control-dom.js", import.meta.url),
-    "utf8",
-  );
+  const source = [
+    await readFile(
+      new URL("../../abracadabra/app/abracadabra-customer-control-dom.js", import.meta.url),
+      "utf8",
+    ),
+    await readFile(
+      new URL("../hosted-truth/fragments/abracadabra-app-customer-control.html", import.meta.url),
+      "utf8",
+    ),
+  ].join("\n");
   for (const copy of [
-    "Buy a domain without leaving Site Sourcery.",
-    "Finish one step to open the next.",
-    "You are the owner.",
-    "Payment is not available until prices are set.",
-    "Choose the website, then choose how to keep it.",
-    "A domain is priced separately.",
-    "Nothing is charged on this screen.",
-    "Accept quote and continue to secure payment",
-    "The name, price, and owner are checked again right before registration.",
-    "Payment is authorized first.",
-    "Register this domain",
-    "Publish request received. This page will show when the site is live.",
-    "Save projects to your account, manage billing and domains, and choose exactly what goes live.",
+    "Finish one small step at a time.",
+    "Create an account or sign in.",
+    "Save this preview as a project.",
+    "Review Download for this project.",
+    "$5 once",
+    "No renewal",
+    "Your HTML file",
+    "Continue to secure payment",
+    "Need publishing or a domain too?",
+    "Nothing was charged.",
   ]) {
     assert.ok(source.includes(copy), copy);
   }
   assert.doesNotMatch(source, /\b(?:we|us|our)\b|we[’'](?:ll|re)/iu);
-  assert.match(
-    source,
-    /href: "\/legal\/website-terms\/#customer-domains"/u,
-  );
-  assert.doesNotMatch(source, /website-terms\/#domains/u);
-  assert.match(source, /moneyCopy\(totals\.oneTime\)/u);
-  assert.doesNotMatch(source, /totals\.dueNow/u);
+  assert.match(source, /href="\/legal\/website-terms\/"/u);
+  assert.doesNotMatch(source, /Rent|Own|Owned \+ managed/u);
   for (const jargon of [
     "Hosted staging boundary",
     "server-verified",
@@ -389,15 +490,16 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
     "legal registrant",
     "non-transactional",
     "state-machine",
+    "tenure",
   ]) {
     assert.doesNotMatch(source, new RegExp(jargon, "iu"), jargon);
   }
-  const quoteAt = source.indexOf("control.quoteOffer(offerId)");
-  const acceptanceAt = source.indexOf("acceptance.checked !== true");
-  const checkoutAt = source.indexOf("control.checkoutQuotedOffer(reviewedOfferId)");
+  const quoteAt = source.indexOf("control.quoteDownload()");
+  const acceptanceAt = source.indexOf("activeQuote");
+  const checkoutAt = source.indexOf("prepareDownloadCheckout()");
   assert.ok(quoteAt >= 0, "server quote call");
-  assert.ok(acceptanceAt > quoteAt, "explicit quote acceptance follows disclosure");
-  assert.ok(checkoutAt > acceptanceAt, "checkout follows explicit acceptance");
+  assert.ok(acceptanceAt >= 0, "explicit quote acceptance is required");
+  assert.ok(checkoutAt > quoteAt, "checkout follows a server quote");
   assert.doesNotMatch(source, /control\.checkout\s*\(/u);
   assert.doesNotMatch(source, /priceId|stripePrice/u);
 });
@@ -579,6 +681,67 @@ test("hosted mode never falls back to local authority after its first mutation",
   assert.equal(control.getState().hostedMutationStarted, true);
 });
 
+test("registration remains signed out until the emailed activation token completes", async () => {
+  const calls = [];
+  const control = createHostedControl({
+    api: baseApi({
+      register: async (input, options) => {
+        calls.push(["register", input, options]);
+        return {
+          accepted: true,
+          verificationRequired: true,
+          delivery: "email",
+          emailSent: true,
+          expiresAt: "2099-08-01T00:00:00.000Z",
+        };
+      },
+      completeRegistration: async (input, options) => {
+        calls.push(["complete", input, options]);
+        return { user: { id: "user_1" } };
+      },
+    }),
+    idempotencyFactory: (() => {
+      let value = 0;
+      return () => `registration_idem_${++value}`;
+    })(),
+  });
+
+  const staged = await control.beginRegistration({
+    name: "Customer Owner",
+    organizationName: "Customer Business",
+    email: "owner@example.test",
+    password: "correct horse battery staple",
+  });
+  assert.equal(staged.verificationRequired, true);
+  assert.equal(control.getState().account, null);
+  assert.equal(control.getState().phase, "idle");
+
+  await control.completeRegistration({
+    token: "activation_token_12345678901234567890",
+  });
+  assert.equal(control.getState().account.id, "user_1");
+  assert.equal(control.getState().phase, "ready");
+  assert.deepEqual(calls, [
+    [
+      "register",
+      {
+        name: "Customer Owner",
+        organizationName: "Customer Business",
+        email: "owner@example.test",
+        password: "correct horse battery staple",
+      },
+      { idempotencyKey: "registration_idem_1" },
+    ],
+    [
+      "complete",
+      {
+        token: "activation_token_12345678901234567890",
+      },
+      { idempotencyKey: "registration_idem_2" },
+    ],
+  ]);
+});
+
 test("checkout is held without an offer, then requires an exact server quote and matching disclosure acceptance", async () => {
   let quoteCall = null;
   let checkoutCall = null;
@@ -739,6 +902,93 @@ test("checkout is held without an offer, then requires an exact server quote and
   assert.equal(Object.hasOwn(checkoutCall, "amount"), false);
   assert.equal(Object.hasOwn(checkoutCall, "currency"), false);
   assert.equal(Object.hasOwn(checkoutCall, "priceId"), false);
+});
+
+test("the accepted $5 Download path binds one saved version and invalidates a stale quote", async () => {
+  const calls = [];
+  const digest = "d".repeat(64);
+  const control = await selectedControl({
+    createDownloadQuote: async (projectId, input, options) => {
+      calls.push(["quote", projectId, input, options]);
+      return {
+        schema: "sitesourcery.abracadabra-quote-snapshot.v2",
+        quoteId: "download_quote_1",
+        project: { projectId },
+        version: {
+          versionId: input.versionId,
+          state: "accepted",
+          contentDigest: "a".repeat(64),
+        },
+        offerId: "spark_download",
+        entitlementKind: "spark_download",
+        price: {
+          amountMinor: 500,
+          currency: "USD",
+          billing: "one_time",
+          interval: null,
+        },
+        expiresAt: "2099-08-01T00:00:00.000Z",
+        disclosureDigest: digest,
+        snapshotDigest: "s".repeat(64),
+      };
+    },
+    prepareDownloadCheckout: async (projectId, quoteId, input, options) => {
+      calls.push(["checkout", projectId, quoteId, input, options]);
+      return {
+        quoteId,
+        projectId,
+        versionId: "version_1",
+        offerId: "spark_download",
+        state: "held",
+        provider: null,
+        dispatchAuthorized: false,
+      };
+    },
+  }, {
+    idempotencyFactory: (() => {
+      let value = 0;
+      return () => `download_idem_${++value}`;
+    })(),
+  });
+
+  await assert.rejects(
+    () => control.quoteDownload(),
+    (error) => error instanceof ControlError && error.code === "VERSION_REQUIRED",
+  );
+  control.selectVersion("version_1");
+  await assert.rejects(
+    () => control.prepareDownloadCheckout(),
+    (error) => error instanceof ControlError
+      && error.code === "DOWNLOAD_QUOTE_REVIEW_REQUIRED",
+  );
+
+  const quote = await control.quoteDownload();
+  assert.equal(quote.price.amountMinor, 500);
+  assert.equal(control.getState().downloadQuote.quoteId, "download_quote_1");
+  assert.deepEqual(calls[0], [
+    "quote",
+    "project_1",
+    { versionId: "version_1" },
+    { idempotencyKey: "download_idem_1" },
+  ]);
+
+  const prepared = await control.prepareDownloadCheckout();
+  assert.equal(prepared.dispatchAuthorized, false);
+  assert.deepEqual(calls[1], [
+    "checkout",
+    "project_1",
+    "download_quote_1",
+    { acceptedDisclosureDigest: digest },
+    { idempotencyKey: "download_idem_2" },
+  ]);
+
+  control.selectVersion("version_2");
+  assert.equal(control.getState().downloadQuote, null);
+  await assert.rejects(
+    () => control.prepareDownloadCheckout(),
+    (error) => error instanceof ControlError
+      && error.code === "DOWNLOAD_QUOTE_REVIEW_REQUIRED",
+  );
 });
 
 test("publication stays disabled without both paid entitlement and a verified address", async () => {
