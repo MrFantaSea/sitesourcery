@@ -738,15 +738,12 @@
       });
     }
 
-    function selectProject(projectId) {
+    function selectProject(
+      projectId,
+      confirmOpen
+    ) {
       var selected = String(projectId || "");
       var expectedSelectionEpoch = ++selectionEpoch;
-      state.project = { id: selected };
-      state.selectedVersionId = null;
-      state.subscription = null;
-      state.cancellationPreview = null;
-      state.exportJob = null;
-      resetDomains();
       return task("project", async function () {
         var projectPayload = await api.getProject(selected);
         if (expectedSelectionEpoch !== selectionEpoch) return null;
@@ -754,10 +751,19 @@
         if (!project || idOf(project) !== selected) {
           throw new ControlError({ code: "PROJECT_RESPONSE_INVALID", message: "The project response was invalid." });
         }
-        replaceProject(project);
-        var subscriptionPayload = await api.subscription(selected);
+        if (
+          typeof confirmOpen === "function"
+          && confirmOpen(project) !== true
+        ) {
+          return null;
+        }
         if (expectedSelectionEpoch !== selectionEpoch) return null;
-        state.subscription = entityFrom(subscriptionPayload, "subscription");
+        state.selectedVersionId = null;
+        state.subscription = null;
+        state.cancellationPreview = null;
+        state.exportJob = null;
+        resetDomains();
+        replaceProject(project);
         return project;
       });
     }

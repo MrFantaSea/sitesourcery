@@ -176,6 +176,97 @@ test("customer control accepts only exact activation fragments, quotes, and Stri
   );
 });
 
+test("Download readiness requires exact project, version, settlement, and same-origin delivery evidence", () => {
+  const project = {
+    id: "project_1",
+    versions: [{
+      id: "version_1",
+      state: "accepted",
+    }],
+    entitlements: [{
+      id: "entitlement_1",
+      projectId: "project_1",
+      kind: "spark_download",
+      scope: "editor_project",
+      state: "active",
+      activatedAt:
+        "2026-07-30T12:00:00.000Z",
+      expiresAt: null,
+      acceptedDisclosureDigest:
+        "d".repeat(64),
+      downloadUrl:
+        "/api/v1/projects/project_1/versions/version_1/download",
+      payment: {
+        status: "paid",
+        provider: "stripe",
+        receiptId: "receipt_1",
+        amountMinor: 500,
+        currency: "USD",
+        settledAt:
+          "2026-07-30T12:00:00.000Z",
+      },
+    }],
+  };
+  assert.equal(
+    customerControl.downloadEntitlement(
+      project,
+      "version_1"
+    ).id,
+    "entitlement_1"
+  );
+  assert.equal(
+    customerControl.versionLabel(
+      project,
+      "version_1"
+    ),
+    "Version 1"
+  );
+  for (const entitlement of [
+    {
+      ...project.entitlements[0],
+      projectId: "project_foreign",
+    },
+    {
+      ...project.entitlements[0],
+      state: "paid",
+    },
+    {
+      ...project.entitlements[0],
+      acceptedDisclosureDigest: "",
+    },
+    {
+      ...project.entitlements[0],
+      payment: {
+        ...project.entitlements[0].payment,
+        status: "pending",
+      },
+    },
+    {
+      ...project.entitlements[0],
+      downloadUrl:
+        "https://attacker.example/file.html",
+    },
+  ]) {
+    assert.equal(
+      customerControl.downloadEntitlement(
+        {
+          ...project,
+          entitlements: [entitlement],
+        },
+        "version_1"
+      ),
+      null
+    );
+  }
+  assert.equal(
+    customerControl.downloadEntitlement(
+      project,
+      "version_foreign"
+    ),
+    null
+  );
+});
+
 test("customer control claims activation or recovery email only from exact delivery evidence", () => {
   assert.deepEqual(
     customerControl.registrationOutcome({
@@ -512,6 +603,21 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
     /control\s*\.signOut\(\)\s*\.then\(function \(\) \{\s*return \{ signedOut: true \};/u,
     "successful sign-out remains distinguishable from a swallowed failure",
   );
+  assert.match(
+    source,
+    /recoveryButton\.disabled\s*=\s*!capabilities\.accountRecoveryEmail/u,
+    "recovery cannot unlock while delivery is held",
+  );
+  assert.match(
+    source,
+    /projectButton\.disabled\s*=\s*!pendingGuestCandidate/u,
+    "project creation requires a reviewed preview",
+  );
+  assert.match(
+    source,
+    /Date\.parse\(\s*activeQuote\.expiresAt\s*\)\s*>\s*Date\.now\(\)/u,
+    "Continue rechecks visible quote expiry",
+  );
 });
 
 test("async actions expose pending and safe retry state while reusing the original idempotency key", async () => {
@@ -670,8 +776,79 @@ test("a late project response cannot replace the newer selection or its operatio
   await openingA;
 
   assert.equal(control.getState().project.id, "project_b");
-  assert.equal(control.getState().subscription.id, "sub_project_b");
+  assert.equal(control.getState().subscription, null);
   assert.equal(control.getState().operations.project.status, "success");
+});
+
+test("project switching commits only after the visible project accepts opening", async () => {
+  const drafts = [];
+  let subscriptionCalls = 0;
+  const projectA = {
+    id: "project_a",
+    draft: { revision: 3, rawFacts: {} },
+    versions: [],
+  };
+  const projectB = {
+    id: "project_b",
+    draft: { revision: 7, rawFacts: {} },
+    versions: [],
+  };
+  const control = createHostedControl({
+    api: baseApi({
+      listProjects: async () => ({
+        projects: [projectA, projectB],
+      }),
+      getProject: async (id) => ({
+        project: id === "project_a"
+          ? projectA
+          : projectB,
+      }),
+      subscription: async () => {
+        subscriptionCalls += 1;
+        throw new Error(
+          "legacy subscription must not gate project opening"
+        );
+      },
+      saveDraft: async (input) => {
+        drafts.push(input);
+        return { revision: 4 };
+      },
+    }),
+    idempotencyFactory: () =>
+      "idem_project_switch",
+  });
+
+  await control.boot();
+  await control.selectProject(
+    "project_a",
+    () => true
+  );
+  const canceled = await control.selectProject(
+    "project_b",
+    () => false
+  );
+  assert.equal(canceled, null);
+  assert.equal(
+    control.getState().project.id,
+    "project_a"
+  );
+  await control.saveDraft({
+    businessName: "Visible project A",
+  });
+  assert.equal(
+    drafts[0].projectId,
+    "project_a"
+  );
+
+  await control.selectProject(
+    "project_b",
+    () => true
+  );
+  assert.equal(
+    control.getState().project.id,
+    "project_b"
+  );
+  assert.equal(subscriptionCalls, 0);
 });
 
 test("hosted mode never falls back to local authority after its first mutation", async () => {
@@ -1026,6 +1203,7 @@ test("publication stays disabled without both paid entitlement and a verified ad
       assert.fail("unverified publication must not reach the API");
     },
   });
+  await unverified.refreshSubscription();
   await assert.rejects(
     () => unverified.requestRelease("version_1"),
     (error) => error instanceof ControlError && error.code === "VERIFIED_ADDRESS_REQUIRED",

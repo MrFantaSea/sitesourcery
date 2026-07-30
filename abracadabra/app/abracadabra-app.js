@@ -659,7 +659,21 @@
       fillForm(versions[existingIndex].raw);
       renderCurrentVersion("That version already exists; restored.");
       setStep("preview");
-      emitVersionMade(versions[existingIndex], reviewAttested);
+      if (
+        isDurableVersionId(
+          versions[existingIndex]
+            .platformVersionId
+        )
+      ) {
+        emitVersionSelected(
+          versions[existingIndex]
+        );
+      } else {
+        emitVersionMade(
+          versions[existingIndex],
+          reviewAttested
+        );
+      }
       return;
     }
     versions.push({ raw: cloneRaw(reviewedRaw), result: result, platformVersionId: null });

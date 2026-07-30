@@ -223,9 +223,20 @@ function bootMaker() {
     if (type === "beforeunload") unloadHandlers.push(handler);
   };
   const madeDetails = [];
+  const selectedDetails = [];
   context.dispatchEvent = (event) => {
     if (event && event.type === "abracadabra:versionmade" && event.detail) {
       madeDetails.push(JSON.parse(JSON.stringify(event.detail)));
+    }
+    if (
+      event
+      && event.type ===
+        "abracadabra:versionselected"
+      && event.detail
+    ) {
+      selectedDetails.push(
+        JSON.parse(JSON.stringify(event.detail))
+      );
     }
     return true;
   };
@@ -284,7 +295,7 @@ function bootMaker() {
 
   return {
     ...dom, unloadIsBlocked, typeInto, makeVersion, api, context,
-    madeDetails, lastMadeDetail,
+    madeDetails, selectedDetails, lastMadeDetail,
   };
 }
 
@@ -371,6 +382,43 @@ test("a restored project of saved versions does not block unload", () => {
     app.unloadIsBlocked(),
     false,
     "a restored project whose versions are all platform-marked must not block"
+  );
+});
+
+test("re-making an unchanged saved version selects it without creating another server write", () => {
+  const source = bootMaker();
+  source.makeVersion();
+  const made = source.api().getCurrentVersion();
+  const app = bootMaker();
+  assert.equal(
+    app.api().loadProject({
+      id: "project_1",
+      serving: {
+        currentVersionId: "ver_saved_1"
+      },
+      versions: [{
+        id: "ver_saved_1",
+        rawFacts: made.raw,
+        artifact: {
+          digest:
+            made.result.artifactDigest,
+          html: made.result.html
+        }
+      }]
+    }),
+    true
+  );
+  const writesBefore = app.madeDetails.length;
+  app.makeVersion();
+  assert.equal(
+    app.madeDetails.length,
+    writesBefore,
+    "restoring identical saved bytes cannot emit another versionmade write"
+  );
+  assert.equal(
+    app.selectedDetails.at(-1)
+      .platformVersionId,
+    "ver_saved_1"
   );
 });
 

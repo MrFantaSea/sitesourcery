@@ -105,6 +105,7 @@
               <div class="platform-actions">
                 <button class="spark-button spark-button-primary" type="button" data-request-recovery>Request account recovery</button>
               </div>
+              <p data-recovery-availability role="status">Checking whether recovery email is ready…</p>
               <p data-recovery-support hidden><a href="/contact/#direct-contact">Contact Site Sourcery for account recovery</a></p>
               <div class="platform-panel" data-recovery-complete hidden>
                 <p class="spark-kicker">Recovery link opened</p>
@@ -142,8 +143,9 @@
               <span>I accept the <a href="/legal/website-terms/" target="_blank" rel="noopener">website terms</a> for this project.</span>
             </label>
             <div class="platform-actions">
-              <button class="spark-button spark-button-primary" type="button" data-create-project>Save preview to this project</button>
+              <button class="spark-button spark-button-primary" type="button" data-create-project disabled>Save preview to this project</button>
             </div>
+            <p data-project-availability role="status">Make and review a preview before creating its project.</p>
           </fieldset>
         </section>
 

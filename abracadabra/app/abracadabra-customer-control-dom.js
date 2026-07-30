@@ -191,6 +191,22 @@
     );
   }
 
+  function versionLabel(project, versionId) {
+    var selectedId = text(versionId);
+    var versions =
+      project && Array.isArray(project.versions)
+        ? project.versions
+        : [];
+    var index = versions.findIndex(
+      function (version) {
+        return idOf(version) === selectedId;
+      }
+    );
+    return index >= 0
+      ? "Version " + (index + 1)
+      : "Saved version";
+  }
+
   function verifiedDownloadQuote(
     quote,
     projectId,
@@ -241,19 +257,83 @@
     });
   }
 
-  function downloadEntitlement(project) {
+  function downloadEntitlement(
+    project,
+    versionId
+  ) {
+    var projectId = idOf(project);
+    var selectedVersionId = text(versionId);
+    var selectedVersion =
+      project
+      && Array.isArray(project.versions)
+        ? project.versions.find(function (version) {
+            return (
+              idOf(version) === selectedVersionId
+              && [
+                "accepted",
+                "accepted_release"
+              ].includes(
+                text(
+                  version
+                  && (
+                    version.state
+                    || version.status
+                  )
+                ).toLowerCase()
+              )
+            );
+          })
+        : null;
+    if (
+      !projectId
+      || !selectedVersion
+    ) return null;
+    var expectedDownloadUrl =
+      "/api/v1/projects/"
+      + encodeURIComponent(projectId)
+      + "/versions/"
+      + encodeURIComponent(selectedVersionId)
+      + "/download";
     var entitlements =
       project && Array.isArray(project.entitlements)
         ? project.entitlements
         : [];
     return entitlements.find(function (entry) {
+      var payment =
+        entry
+        && typeof entry.payment === "object"
+          ? entry.payment
+          : {};
       return (
-        text(entry && (entry.kind || entry.entitlementKind))
-          === "spark_download"
-        && ["active", "current", "paid"].includes(
-          text(entry && (entry.state || entry.status))
-            .toLowerCase()
+        text(
+          entry
+          && (entry.id || entry.entitlementId)
         )
+        && text(entry.projectId) === projectId
+        && text(entry.scope) === "editor_project"
+        && text(entry && (entry.kind || entry.entitlementKind))
+          === "spark_download"
+        && text(
+          entry && (entry.state || entry.status)
+        ).toLowerCase() === "active"
+        && Number.isFinite(
+          Date.parse(entry.activatedAt)
+        )
+        && entry.expiresAt === null
+        && /^[a-f0-9]{64}$/u.test(
+          text(entry.acceptedDisclosureDigest)
+        )
+        && text(payment.status) === "paid"
+        && text(payment.provider) === "stripe"
+        && text(payment.receiptId)
+        && Number(payment.amountMinor) === 500
+        && text(payment.currency).toUpperCase()
+          === "USD"
+        && Number.isFinite(
+          Date.parse(payment.settledAt)
+        )
+        && text(entry.downloadUrl)
+          === expectedDownloadUrl
       );
     }) || null;
   }
@@ -320,6 +400,8 @@
     var draftSaving = false;
     var lastState = control.getState();
     var activeQuote = null;
+    var activeEntitlement = null;
+    var quoteExpiryTimer = null;
     var capabilities = Object.freeze({
       accountRegistration: false,
       accountRecoveryEmail: false,
@@ -416,17 +498,33 @@
 
     function setAuthMode(mode) {
       var selectedMode = text(mode) || "create";
+      var selectedTabMode =
+        selectedMode === "activate"
+          ? "create"
+          : selectedMode;
       all("[data-auth-mode]").forEach(
         function (button) {
           var selected =
             button.getAttribute(
               "data-auth-mode"
-            ) === selectedMode;
+            ) === selectedTabMode;
           button.setAttribute(
             "aria-selected",
             String(selected)
           );
           button.tabIndex = selected ? 0 : -1;
+          if (
+            button.getAttribute(
+              "data-auth-mode"
+            ) === "create"
+          ) {
+            button.setAttribute(
+              "aria-controls",
+              selectedMode === "activate"
+                ? "auth-activate"
+                : "auth-create"
+            );
+          }
         }
       );
       all("[data-auth-panel]").forEach(
@@ -500,7 +598,12 @@
         detail.textContent =
           idOf(project) === idOf(state.project)
             ? "Selected"
-            : "Open project";
+            : project.updatedAt
+              ? "Open project · Last changed "
+                + new Date(
+                  project.updatedAt
+                ).toLocaleString()
+              : "Open project";
         if (
           idOf(project) === idOf(state.project)
         ) {
@@ -517,26 +620,22 @@
               button,
               function () {
                 return control
-                  .selectProject(idOf(project))
-                  .then(function (selected) {
-                    if (!selected) return null;
-                    var opened =
-                      maker.loadProject(selected);
-                    if (!opened) {
-                      throw new Error(
-                        "The project was selected, but your unsaved preview stayed open."
+                  .selectProject(
+                    idOf(project),
+                    function (selected) {
+                      return maker.loadProject(
+                        selected
                       );
                     }
+                  )
+                  .then(function (selected) {
+                    if (!selected) return null;
+                    pendingGuestCandidate = null;
                     var version =
                       acceptedProjectVersion(selected);
                     control.selectVersion(
                       idOf(version)
                     );
-                    if (pendingGuestCandidate) {
-                      return saveCandidate(
-                        pendingGuestCandidate
-                      );
-                    }
                     return selected;
                   });
               },
@@ -550,6 +649,12 @@
     }
 
     function renderQuote(state) {
+      if (quoteExpiryTimer) {
+        windowRef.clearTimeout(
+          quoteExpiryTimer
+        );
+        quoteExpiryTimer = null;
+      }
       var review =
         one("[data-download-quote-review]");
       var accepted =
@@ -581,7 +686,10 @@
         text(state.project && state.project.name)
         || "Selected project";
       one("[data-download-version]").textContent =
-        "Saved version " + view.versionId;
+        versionLabel(
+          state.project,
+          view.versionId
+        );
       one("[data-download-expiry]").textContent =
         new Date(view.expiresAt).toLocaleString();
       one("[data-download-disclosure]")
@@ -590,6 +698,27 @@
       if (continueButton) {
         continueButton.disabled = true;
       }
+      quoteExpiryTimer =
+        windowRef.setTimeout(
+          function () {
+            quoteExpiryTimer = null;
+            render(control.getState());
+            if (!activeQuote) {
+              announce(
+                "That quote expired. Get a new exact $5 quote before continuing."
+              );
+            }
+          },
+          Math.max(
+            0,
+            Math.min(
+              2147483647,
+              Date.parse(view.expiresAt)
+                - Date.now()
+                + 25
+            )
+          )
+        );
     }
 
     function renderCapabilities(state) {
@@ -603,6 +732,28 @@
         capabilities.accountRegistration
           ? "Account activation email is ready."
           : "New account email is not open yet. Existing customers can still sign in.";
+
+      var recoveryButton =
+        one("[data-request-recovery]");
+      var recoveryCopy =
+        one("[data-recovery-availability]");
+      recoveryButton.disabled =
+        !capabilities.accountRecoveryEmail;
+      recoveryCopy.textContent =
+        capabilities.accountRecoveryEmail
+          ? "Account recovery email is ready."
+          : "Recovery email is not open yet. Contact Site Sourcery for help.";
+
+      var projectButton =
+        one("[data-create-project]");
+      var projectCopy =
+        one("[data-project-availability]");
+      projectButton.disabled =
+        !pendingGuestCandidate;
+      projectCopy.textContent =
+        pendingGuestCandidate
+          ? "Your reviewed preview is ready to save."
+          : "Make and review a preview before creating its project.";
 
       var quoteButton =
         one("[data-request-download-quote]");
@@ -647,7 +798,11 @@
       renderCapabilities(state);
 
       var entitlement =
-        downloadEntitlement(state.project);
+        downloadEntitlement(
+          state.project,
+          state.selectedVersionId
+        );
+      activeEntitlement = entitlement;
       var downloadButton =
         one("[data-download-html]");
       if (entitlement) {
@@ -672,8 +827,12 @@
         setStage("quote");
         one("[data-selected-version]")
           .textContent =
-            "The exact quote will use saved version "
-            + state.selectedVersionId + ".";
+            "The exact quote will use "
+            + versionLabel(
+              state.project,
+              state.selectedVersionId
+            ).toLowerCase()
+            + ".";
       }
     }
 
@@ -920,6 +1079,11 @@
               "Accept the website terms before saving this project."
             );
           }
+          if (!pendingGuestCandidate) {
+            throw new Error(
+              "Make and review a preview before saving its project."
+            );
+          }
           return control.createProject({
             name: value("projectName"),
             acceptedTerms: true
@@ -955,6 +1119,9 @@
       one("[data-continue-download-payment]")
           .disabled = !(
             activeQuote
+            && Date.parse(
+              activeQuote.expiresAt
+            ) > Date.now()
             && event.currentTarget.checked
             && capabilities.downloadPayment
           );
@@ -1003,9 +1170,20 @@
 
     one("[data-download-html]")
       .addEventListener("click", function () {
-        announce(
-          "The secure HTML file is not ready yet.",
-          "error"
+        if (
+          !activeEntitlement
+          || !text(
+            activeEntitlement.downloadUrl
+          )
+        ) {
+          announce(
+            "The secure HTML file is not ready yet.",
+            "error"
+          );
+          return;
+        }
+        windowRef.location.assign(
+          activeEntitlement.downloadUrl
         );
       });
 
@@ -1034,6 +1212,7 @@
         if (!event.detail) return;
         pendingGuestCandidate =
           clone(event.detail);
+        render(control.getState());
         if (
           !lastState.account
           || !lastState.project
@@ -1197,6 +1376,8 @@
       acceptedProjectVersion,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
+    downloadEntitlement:
+      downloadEntitlement,
     recoveryOutcome: recoveryOutcome,
     recoveryTokenFromLocation:
       recoveryTokenFromLocation,
@@ -1206,6 +1387,7 @@
       registrationTokenFromLocation,
     safeCheckoutDestination:
       safeCheckoutDestination,
+    versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote
   });
