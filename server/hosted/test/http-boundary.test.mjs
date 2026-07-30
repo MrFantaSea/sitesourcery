@@ -35,6 +35,7 @@ function createContext({
   const calls = {
     domains: [],
     register: [],
+    completeRegistration: [],
     recovery: [],
     rollback: [],
     webhook: [],
@@ -53,8 +54,22 @@ function createContext({
     async register(input) {
       calls.register.push(input);
       return {
-        sessionToken: "new_session_token",
-        user: { userId: ACTOR.userId }
+        accepted: true,
+        verificationRequired: true,
+        delivery: "email",
+        emailSent: true,
+        expiresAt: "2026-07-30T14:00:00.000Z",
+        replayed: false
+      };
+    },
+    async completeRegistration(input) {
+      calls.completeRegistration.push(input);
+      return {
+        sessionToken:
+          "activated_session_token_12345678901234567890",
+        user: { userId: ACTOR.userId },
+        organization: { id: "organization_1" },
+        replayed: false
       };
     },
     async requestRecovery(input) {
@@ -263,12 +278,51 @@ test("CSRF bootstrap is same-origin, stable across tabs, and required before wri
       cookie: csrfCookie
     })
   );
-  assert.equal(valid.status, 201);
-  assert.match(valid.headers.get("set-cookie"), /^ss_session=new_session_token;/u);
+  assert.equal(valid.status, 202);
+  assert.equal(valid.headers.get("set-cookie"), null);
+  assert.deepEqual(await valid.json(), {
+    accepted: true,
+    verificationRequired: true,
+    delivery: "email",
+    emailSent: true,
+    expiresAt: "2026-07-30T14:00:00.000Z",
+    replayed: false
+  });
   assert.equal(context.calls.register.length, 1);
   assert.equal(
     context.calls.register[0].commandId,
     "command-customer-1"
+  );
+
+  const activated = await context.api.fetch(
+    writeRequest("/api/v1/auth/register/complete", {
+      body: {
+        token: "verification_token_12345678901234567890"
+      },
+      cookie: csrfCookie,
+      idempotencyKey:
+        "registration-activation-command-1"
+    })
+  );
+  assert.equal(activated.status, 201);
+  assert.match(
+    activated.headers.get("set-cookie"),
+    /^ss_session=activated_session_token_12345678901234567890;/u
+  );
+  assert.deepEqual(
+    context.calls.completeRegistration,
+    [
+      {
+        token:
+          "verification_token_12345678901234567890",
+        commandId:
+          "registration-activation-command-1"
+      }
+    ]
+  );
+  assert.deepEqual(
+    context.calls.authenticate,
+    [undefined]
   );
 });
 

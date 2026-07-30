@@ -509,6 +509,10 @@ export function createCanonicalPostgresService({
     identity &&
       typeof identity.authenticate === "function" &&
       typeof identity.register === "function" &&
+      typeof identity.completeRegistration ===
+        "function" &&
+      typeof identity.registrationReadiness ===
+        "function" &&
       typeof identity.signIn === "function" &&
       typeof identity.signOut === "function" &&
       typeof identity.issueRecoveryForDelivery === "function" &&
@@ -5374,6 +5378,10 @@ export function createCanonicalPostgresService({
       return identity.register(input);
     },
 
+    completeRegistration(input) {
+      return identity.completeRegistration(input);
+    },
+
     signIn(input) {
       return identity.signIn(input);
     },
@@ -8400,6 +8408,8 @@ export function createCanonicalPostgresService({
               held: null
             };
       const recovery = await recoveryMailPort.readiness();
+      const registration =
+        await identity.registrationReadiness();
       let payments;
       try {
         payments = await paymentProvider.readiness();
@@ -8439,6 +8449,13 @@ export function createCanonicalPostgresService({
               recovery.ready === true &&
               recovery.verified === true
             )
+          ) &&
+          (
+            registration.mode !== "production" ||
+            (
+              registration.ready === true &&
+              registration.verified === true
+            )
           ),
         service: "sitesourcery-hosted-runtime",
         runtime: process.version,
@@ -8450,6 +8467,7 @@ export function createCanonicalPostgresService({
         },
         catalog,
         publication,
+        registration,
         recovery,
         exports: {
           ready: true,
@@ -8470,6 +8488,12 @@ export function createCanonicalPostgresService({
               ? domainProviders.dns ?? "ready"
               : "held",
           domains: domainProviders,
+          registrationEmail:
+            registration.mode === "production" &&
+            registration.ready === true &&
+            registration.verified === true
+              ? "ready"
+              : registration.mode,
           email:
             recovery.mode === "production" &&
             recovery.ready === true &&

@@ -43,6 +43,8 @@ function readyRow(overrides = {}) {
     passwords_ready: true,
     sessions_ready: true,
     auth_limits_ready: true,
+    registration_ready: true,
+    registration_contract_ready: true,
     organizations_ready: true,
     memberships_ready: true,
     projects_ready: true,
@@ -54,6 +56,7 @@ function readyRow(overrides = {}) {
     quote_prices_ready: true,
     checkout_prices_ready: true,
     runtime_contract_ready: true,
+    verified_registration_contract_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -80,6 +83,20 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   });
   assert.deepEqual((await authority.readiness()).missing, [
     "runtime_contract"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        registration_contract_ready: false,
+        verified_registration_contract_ready:
+          false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "registration_contract",
+    "verified_registration_contract"
   ]);
 
   authority = createCanonicalPostgresAuthority({

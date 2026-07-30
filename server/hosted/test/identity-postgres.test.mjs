@@ -6,6 +6,9 @@ import {
   hashPasswordWithPepper,
   verifyPasswordWithPepper
 } from "../identity-postgres.mjs";
+import {
+  createHeldRegistrationMailPort
+} from "../registration-mail-port.mjs";
 
 const PEPPER = Buffer.alloc(32, 0x5a);
 const PRIOR = Buffer.alloc(32, 0x2a);
@@ -88,6 +91,54 @@ test("identity bridge refuses missing PostgreSQL and weak pepper configuration",
       }),
     (error) => error?.code === "IDENTITY_CONFIGURATION_ERROR"
   );
+  assert.throws(
+    () =>
+      createPostgresIdentityBridge({
+        pool: {
+          query() {},
+          connect() {}
+        },
+        pepper: PEPPER,
+        rateLimit: {
+          attempts: 0
+        }
+      }),
+    (error) => error?.code === "IDENTITY_CONFIGURATION_ERROR"
+  );
+});
+
+test("held registration rejects before any identity query or transaction", async () => {
+  const calls = [];
+  const identity = createPostgresIdentityBridge({
+    pool: {
+      async query(...input) {
+        calls.push(["query", ...input]);
+        return { rowCount: 0, rows: [] };
+      },
+      async connect() {
+        calls.push(["connect"]);
+        throw new Error(
+          "held registration must not open a transaction"
+        );
+      }
+    },
+    pepper: PEPPER,
+    registrationMailPort:
+      createHeldRegistrationMailPort()
+  });
+  await assert.rejects(
+    identity.register({
+      name: "Test Owner",
+      organizationName: "Test Company",
+      email: "owner@example.test",
+      password: "correct horse battery staple",
+      commandId: "registration-command-held"
+    }),
+    (error) =>
+      error?.code === "ACCOUNT_REGISTRATION_HELD" &&
+      error?.status === 503
+  );
+  assert.deepEqual(calls, []);
 });
 
 test("production identity queries run through the canonical service-role authority", async () => {
@@ -120,9 +171,10 @@ test("production identity queries run through the canonical service-role authori
     pepper: PEPPER
   });
   assert.deepEqual(await identity.cleanup(), {
+    registrationRequests: 2,
     sessions: 2,
     recoveryTokens: 2
   });
   assert.deepEqual(directCalls, []);
-  assert.deepEqual(serviceCalls, [{}, {}]);
+  assert.deepEqual(serviceCalls, [{}, {}, {}]);
 });

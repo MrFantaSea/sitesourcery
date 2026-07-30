@@ -23,6 +23,20 @@ const READINESS_QUERY = `
     to_regclass('ss.hosted_password_credentials') is not null as passwords_ready,
     to_regclass('ss.hosted_sessions') is not null as sessions_ready,
     to_regclass('ss.hosted_auth_rate_limits') is not null as auth_limits_ready,
+    to_regclass('ss.hosted_registration_requests') is not null
+      as registration_ready,
+    (
+      select count(*) = 4
+        from information_schema.columns
+       where table_schema = 'ss'
+         and table_name = 'hosted_registration_requests'
+         and column_name in (
+           'token_digest',
+           'state',
+           'activation_command_id',
+           'delivery_receipt_digest'
+         )
+    ) as registration_contract_ready,
     to_regclass('ss.organizations') is not null as organizations_ready,
     to_regclass('ss.organization_memberships') is not null as memberships_ready,
     to_regclass('ss.projects') is not null as projects_ready,
@@ -39,6 +53,8 @@ const READINESS_QUERY = `
       and to_regprocedure('ss.hosted_runtime_contract_v15()') is not null
     )
       as runtime_contract_ready,
+    to_regprocedure('ss.hosted_runtime_contract_v18()') is not null
+      as verified_registration_contract_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
@@ -166,7 +182,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus identity migrations 017 and 018 are required.",
       { status: 503, details: status }
     );
     return status;

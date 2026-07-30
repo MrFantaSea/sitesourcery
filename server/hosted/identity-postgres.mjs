@@ -9,6 +9,9 @@ import {
 import { promisify } from "node:util";
 
 import { HostedError, invariant } from "./errors.mjs";
+import {
+  createHeldRegistrationMailPort
+} from "./registration-mail-port.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SCRYPT_N = 32768;
@@ -17,6 +20,7 @@ const SCRYPT_P = 1;
 const SCRYPT_BYTES = 64;
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const RECOVERY_MS = 30 * 60 * 1000;
+const REGISTRATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_RATE_LIMIT = Object.freeze({
   attempts: 6,
   windowMs: 15 * 60 * 1000,
@@ -224,6 +228,9 @@ export function createPostgresIdentityBridge({
   randomUUID = systemRandomUUID,
   sessionTtlMs = SESSION_MS,
   recoveryTtlMs = RECOVERY_MS,
+  registrationTtlMs = REGISTRATION_MS,
+  registrationMailPort =
+    createHeldRegistrationMailPort(),
   rateLimit = DEFAULT_RATE_LIMIT
 } = {}) {
   invariant(
@@ -251,21 +258,54 @@ export function createPostgresIdentityBridge({
     Number.isInteger(sessionTtlMs) &&
       sessionTtlMs > 0 &&
       Number.isInteger(recoveryTtlMs) &&
-      recoveryTtlMs > 0,
+      recoveryTtlMs > 0 &&
+      Number.isInteger(registrationTtlMs) &&
+      registrationTtlMs > 0 &&
+      registrationTtlMs <= 24 * 60 * 60 * 1000,
     "IDENTITY_CONFIGURATION_ERROR",
     "Identity token lifetimes are invalid.",
+    { status: 500 }
+  );
+  invariant(
+    registrationMailPort &&
+      typeof registrationMailPort.readiness ===
+        "function" &&
+      typeof registrationMailPort.deliver === "function",
+    "IDENTITY_CONFIGURATION_ERROR",
+    "A registration verification mail port is required.",
     { status: 500 }
   );
   const configuredRateLimit = {
     ...DEFAULT_RATE_LIMIT,
     ...rateLimit
   };
+  invariant(
+    Number.isInteger(configuredRateLimit.attempts) &&
+      configuredRateLimit.attempts >= 1 &&
+      configuredRateLimit.attempts <= 100 &&
+      Number.isInteger(configuredRateLimit.windowMs) &&
+      configuredRateLimit.windowMs >= 1_000 &&
+      configuredRateLimit.windowMs <= 24 * 60 * 60 * 1000 &&
+      Number.isInteger(configuredRateLimit.blockMs) &&
+      configuredRateLimit.blockMs >= 1_000 &&
+      configuredRateLimit.blockMs <= 24 * 60 * 60 * 1000,
+    "IDENTITY_CONFIGURATION_ERROR",
+    "Identity rate limits are invalid.",
+    { status: 500 }
+  );
   const query = (text, values) =>
     authority
       ? authority.service({}, (client) => client.query(text, values))
       : pool.query(text, values);
   const transact = (work) =>
     authority ? authority.service({}, work) : transaction(pool, work);
+  const rateTransact = (work) =>
+    authority
+      ? authority.service(
+          { isolation: "read-committed" },
+          work
+        )
+      : transaction(pool, work);
 
   async function pepperFor(version) {
     if (version === pepperVersion) return pepper;
@@ -273,49 +313,63 @@ export function createPostgresIdentityBridge({
     return Buffer.isBuffer(prior) ? prior : null;
   }
 
-  function subjectDigest(scope, email, throttleKey = "") {
+  function subjectDigest(scope, subject) {
     return createHmac("sha256", pepper)
-      .update(`${scope}\u0000${email}\u0000${String(throttleKey)}`, "utf8")
+      .update(`${scope}\u0000${subject}`, "utf8")
       .digest("hex");
   }
 
-  async function checkRate(scope, email, throttleKey) {
-    const now = iso(clock());
-    const selected = subjectDigest(scope, email, throttleKey);
-    const result = await query(
-      `select blocked_until
-         from ss.hosted_auth_rate_limits
-        where scope = $1 and subject_digest = $2`,
-      [scope, selected]
-    );
-    if (
-      result.rows[0]?.blocked_until &&
-      Date.parse(result.rows[0].blocked_until) > Date.parse(now)
-    ) {
-      if (scope === "recovery") {
-        throw new HostedError(
-          "RECOVERY_RATE_LIMITED",
-          "Wait before asking for another recovery email.",
-          { status: 429 }
-        );
-      }
-      throw genericAuthFailure(429);
+  function rateLimitError(scope) {
+    if (scope === "recovery") {
+      return new HostedError(
+        "RECOVERY_RATE_LIMITED",
+        "Wait before asking for another recovery email.",
+        { status: 429 }
+      );
     }
-    return { now, subjectDigest: selected };
+    if (scope === "registration") {
+      return new HostedError(
+        "REGISTRATION_RATE_LIMITED",
+        "Wait before asking for another account verification email.",
+        { status: 429 }
+      );
+    }
+    return genericAuthFailure(429);
   }
 
-  async function recordFailure(scope, selected, now) {
-    await transact(async (client) => {
+  async function consumeRateAttempt(scope, subject) {
+    const now = iso(clock());
+    const selected = subjectDigest(scope, subject);
+    await rateTransact(async (client) => {
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended($1, 0)
+         )`,
+        [
+          `sitesourcery.identity-rate:${scope}:${selected}`
+        ]
+      );
       const existing = await client.query(
-        `select window_started_at, attempt_count
+        `select
+           window_started_at, attempt_count, blocked_until
            from ss.hosted_auth_rate_limits
           where scope = $1 and subject_digest = $2
           for update`,
         [scope, selected]
       );
       const row = existing.rows[0];
+      if (
+        row?.blocked_until &&
+        Date.parse(row.blocked_until) > Date.parse(now)
+      ) {
+        throw rateLimitError(scope);
+      }
       const freshWindow =
         !row ||
+        (
+          row.blocked_until &&
+          Date.parse(row.blocked_until) <= Date.parse(now)
+        ) ||
         Date.parse(row.window_started_at) + configuredRateLimit.windowMs <=
           Date.parse(now);
       const attempts = freshWindow ? 1 : Number(row.attempt_count) + 1;
@@ -339,6 +393,7 @@ export function createPostgresIdentityBridge({
         [scope, selected, windowStartedAt, attempts, blockedUntil]
       );
     });
+    return { now, subjectDigest: selected };
   }
 
   async function clearRate(scope, selected) {
@@ -349,8 +404,24 @@ export function createPostgresIdentityBridge({
     );
   }
 
-  async function issueSession(client, userId, now, reauthenticated = true) {
-    const rawToken = randomBytes(32).toString("base64url");
+  async function issueSession(
+    client,
+    userId,
+    now,
+    reauthenticated = true,
+    suppliedRawToken = null
+  ) {
+    const rawToken =
+      suppliedRawToken ??
+      randomBytes(32).toString("base64url");
+    invariant(
+      typeof rawToken === "string" &&
+        rawToken.length >= 32 &&
+        rawToken.length <= 512,
+      "IDENTITY_CONFIGURATION_ERROR",
+      "Identity session token generator returned invalid bytes.",
+      { status: 500 }
+    );
     const tokenDigest = sha256(rawToken);
     const sessionId = randomUUID();
     const expiresAt = addMs(now, sessionTtlMs);
@@ -386,94 +457,637 @@ export function createPostgresIdentityBridge({
       name,
       organizationName,
       email: rawEmail,
-      password: rawPassword
+      password: rawPassword,
+      commandId
     }) {
       const email = normalizeEmail(rawEmail);
       const displayName = text(name, "Name", 100);
       const orgName = text(organizationName, "Organization name", 120, 2);
-      const gate = await checkRate("registration", email, "");
-      const encoded = await hashPasswordWithPepper(rawPassword, {
+      const selectedPassword = password(rawPassword);
+      const selectedCommandId = text(
+        commandId,
+        "Registration idempotency key",
+        200,
+        8
+      );
+      const mailReadiness =
+        await registrationMailPort.readiness();
+      invariant(
+        mailReadiness?.ready === true &&
+          mailReadiness?.verified === true,
+        "ACCOUNT_REGISTRATION_HELD",
+        "New account registration is not open yet. Contact Site Sourcery for help.",
+        {
+          status: 503,
+          details: {
+            delivery: "held",
+            emailSent: false
+          }
+        }
+      );
+      const requestDigest = createHmac("sha256", pepper)
+        .update(
+          JSON.stringify({
+            schema:
+              "sitesourcery.registration-request/v1",
+            commandId: selectedCommandId,
+            displayName,
+            organizationName: orgName,
+            email,
+            password: selectedPassword
+          }),
+          "utf8"
+        )
+        .digest("hex");
+      const prior = await query(
+        `select
+           id, request_digest, state, expires_at
+         from ss.hosted_registration_requests
+        where command_id = $1
+        limit 1`,
+        [selectedCommandId]
+      );
+      if (prior.rows[0]) {
+        invariant(
+          prior.rows[0].request_digest === requestDigest,
+          "REGISTRATION_IDEMPOTENCY_CONFLICT",
+          "That registration request key was already used for different details.",
+          { status: 409 }
+        );
+        invariant(
+          ["delivered", "activated"].includes(
+            prior.rows[0].state
+          ),
+          "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
+          "That registration email may not have completed. Contact Site Sourcery before trying again.",
+          { status: 409 }
+        );
+        return {
+          accepted: true,
+          verificationRequired: true,
+          delivery:
+            prior.rows[0].state === "delivered"
+              ? "email"
+              : "already_verified",
+          emailSent:
+            prior.rows[0].state === "delivered",
+          expiresAt: iso(prior.rows[0].expires_at),
+          replayed: true
+        };
+      }
+      const gate = await consumeRateAttempt(
+        "registration",
+        email
+      );
+      const encoded = await hashPasswordWithPepper(selectedPassword, {
         pepper,
         pepperVersion,
         randomBytes
       });
+      const tokenBytes = randomBytes(32);
+      invariant(
+        Buffer.isBuffer(tokenBytes) &&
+          tokenBytes.byteLength === 32,
+        "IDENTITY_CONFIGURATION_ERROR",
+        "Identity registration token generator returned invalid bytes.",
+        { status: 500 }
+      );
+      const rawToken = tokenBytes.toString("base64url");
+      const tokenDigest = sha256(rawToken);
+      const registrationId = randomUUID();
+      const expiresAt = addMs(gate.now, registrationTtlMs);
+      const deliveryIdempotencyKey =
+        `registration_${registrationId}`;
       try {
-        const result = await transact(async (client) => {
-          const userId = randomUUID();
-          const organizationId = randomUUID();
-          const created = await client.query(
-            `insert into auth.users (id, email, created_at, updated_at)
-             values ($1, $2, $3, $3)
-             on conflict do nothing
-             returning id, email, created_at`,
-            [userId, email, gate.now]
+        const staged = await transact(async (client) => {
+          await client.query(
+            `select pg_advisory_xact_lock(
+               hashtextextended($1, 0)
+             )`,
+            [
+              `sitesourcery.registration.command:${selectedCommandId}`
+            ]
+          );
+          await client.query(
+            `select pg_advisory_xact_lock(
+               hashtextextended($1, 0)
+             )`,
+            [
+              `sitesourcery.registration.email:${email}`
+            ]
+          );
+          const concurrent = await client.query(
+            `select request_digest, state, expires_at
+               from ss.hosted_registration_requests
+              where command_id = $1
+              limit 1
+              for update`,
+            [selectedCommandId]
+          );
+          if (concurrent.rows[0]) {
+            invariant(
+              concurrent.rows[0].request_digest ===
+                requestDigest,
+              "REGISTRATION_IDEMPOTENCY_CONFLICT",
+              "That registration request key was already used for different details.",
+              { status: 409 }
+            );
+            return {
+              replayed: true,
+              state: concurrent.rows[0].state,
+              expiresAt: iso(
+                concurrent.rows[0].expires_at
+              )
+            };
+          }
+          const existingUser = await client.query(
+            `select id
+               from auth.users
+              where lower(email) = $1
+              limit 1
+              for update`,
+            [email]
           );
           invariant(
-            created.rowCount === 1,
+            existingUser.rowCount === 0,
             "ACCOUNT_UNAVAILABLE",
             "That account cannot be created.",
             { status: 409 }
           );
           await client.query(
-            `insert into ss.hosted_account_profiles (
-               user_id, display_name, state, created_at, updated_at
-             ) values ($1, $2, 'active', $3, $3)`,
-            [userId, displayName, gate.now]
+            `update ss.hosted_registration_requests
+                set state = 'superseded',
+                    superseded_at = $2
+              where lower(email) = $1
+                and state in (
+                  'pending_delivery',
+                  'delivered',
+                  'delivery_unknown'
+                )
+                and expires_at <= $2`,
+            [email, gate.now]
           );
-          await client.query(
-            `insert into ss.hosted_password_credentials (
-               user_id, password_phc, pepper_version, revision,
-               created_at, updated_at, rotated_at
-             ) values ($1, $2, $3, 1, $4, $4, $4)`,
-            [userId, encoded, pepperVersion, gate.now]
+          const pending = await client.query(
+            `select state, expires_at
+               from ss.hosted_registration_requests
+              where lower(email) = $1
+                and state in (
+                  'pending_delivery',
+                  'delivered',
+                  'delivery_unknown'
+                )
+              limit 1
+              for update`,
+            [email]
           );
-          await client.query(
-            `insert into ss.organizations (
-               id, created_by_user_id, name, state, created_at, updated_at
-             ) values ($1, $2, $3, 'active', $4, $4)`,
-            [organizationId, userId, orgName, gate.now]
+          invariant(
+            pending.rowCount === 0,
+            "REGISTRATION_ALREADY_PENDING",
+            "A verification request is already pending for that email. Use the verification message already sent or wait for it to expire.",
+            { status: 409 }
           );
-          await client.query(
-            `insert into ss.organization_memberships (
-               organization_id, user_id, role, state, accepted_at,
-               created_at, updated_at
-             ) values ($1, $2, 'owner', 'active', $3, $3, $3)`,
-            [organizationId, userId, gate.now]
-          );
-          const session = await issueSession(client, userId, gate.now);
-          return {
-            user: {
-              id: userId,
-              name: displayName,
+          const inserted = await client.query(
+            `insert into ss.hosted_registration_requests (
+               id, command_id, request_digest, email,
+               display_name, organization_name, password_phc,
+               pepper_version, token_digest, state,
+               created_at, expires_at
+             ) values (
+               $1, $2, $3, $4,
+               $5, $6, $7,
+               $8, $9, 'pending_delivery',
+               $10, $11
+             )`,
+            [
+              registrationId,
+              selectedCommandId,
+              requestDigest,
               email,
-              createdAt: gate.now
-            },
-            organization: {
-              id: organizationId,
-              name: orgName,
-              role: "owner",
-              state: "active",
-              createdAt: gate.now
-            },
-            ...session
+              displayName,
+              orgName,
+              encoded,
+              pepperVersion,
+              tokenDigest,
+              gate.now,
+              expiresAt
+            ]
+          );
+          invariant(
+            inserted.rowCount === 1,
+            "REGISTRATION_STAGE_FAILED",
+            "The registration request could not be staged.",
+            { status: 500 }
+          );
+          return {
+            replayed: false,
+            state: "pending_delivery",
+            expiresAt
           };
         });
-        await clearRate("registration", gate.subjectDigest);
-        return result;
+        if (staged.replayed) {
+          invariant(
+            ["delivered", "activated"].includes(
+              staged.state
+            ),
+            "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
+            "That registration email may not have completed. Contact Site Sourcery before trying again.",
+            { status: 409 }
+          );
+          return {
+            accepted: true,
+            verificationRequired: true,
+            delivery:
+              staged.state === "delivered"
+                ? "email"
+                : "already_verified",
+            emailSent: staged.state === "delivered",
+            expiresAt: staged.expiresAt,
+            replayed: true
+          };
+        }
+        let receipt;
+        try {
+          receipt = await registrationMailPort.deliver({
+            idempotencyKey: deliveryIdempotencyKey,
+            recipient: email,
+            token: rawToken,
+            requestedAt: gate.now,
+            expiresAt
+          });
+        } catch (error) {
+          await query(
+            `update ss.hosted_registration_requests
+                set state = 'delivery_unknown'
+              where id = $1
+                and state = 'pending_delivery'`,
+            [registrationId]
+          );
+          throw error;
+        }
+        invariant(
+          receipt?.state === "delivered" &&
+            receipt.idempotencyKey ===
+              deliveryIdempotencyKey &&
+            receipt.expiresAt === expiresAt &&
+            /^[a-f0-9]{64}$/u.test(receipt.receiptId) &&
+            /^[a-f0-9]{64}$/u.test(receipt.payloadDigest),
+          "REGISTRATION_DELIVERY_RECEIPT_INVALID",
+          "Registration transport returned an invalid delivery receipt.",
+          { status: 502 }
+        );
+        const receiptFacts = {
+          schema:
+            "sitesourcery.registration-delivery-evidence/v1",
+          receiptId: receipt.receiptId,
+          mode: receipt.mode,
+          provider: receipt.provider,
+          providerMessageId: receipt.providerMessageId,
+          idempotencyKey: receipt.idempotencyKey,
+          payloadDigest: receipt.payloadDigest,
+          acceptedAt: receipt.acceptedAt,
+          expiresAt: receipt.expiresAt
+        };
+        const receiptDigest = sha256(
+          JSON.stringify(receiptFacts)
+        );
+        await transact(async (client) => {
+          const locked = await client.query(
+            `select
+               request_digest, token_digest, state, expires_at
+             from ss.hosted_registration_requests
+            where id = $1
+            for update`,
+            [registrationId]
+          );
+          invariant(
+            locked.rowCount === 1 &&
+              locked.rows[0].request_digest ===
+                requestDigest &&
+              locked.rows[0].token_digest ===
+                tokenDigest &&
+              locked.rows[0].state ===
+                "pending_delivery" &&
+              iso(locked.rows[0].expires_at) === expiresAt,
+            "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
+            "Registration state changed while email was being delivered.",
+            { status: 409 }
+          );
+          const finalized = await client.query(
+            `update ss.hosted_registration_requests
+                set state = 'delivered',
+                    delivery_provider = $2,
+                    delivery_receipt = $3::jsonb,
+                    delivery_receipt_digest = $4,
+                    delivered_at = $5
+              where id = $1
+                and state = 'pending_delivery'`,
+            [
+              registrationId,
+              receipt.provider,
+              JSON.stringify(receiptFacts),
+              receiptDigest,
+              receipt.acceptedAt
+            ]
+          );
+          invariant(
+            finalized.rowCount === 1,
+            "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
+            "Registration delivery could not be finalized.",
+            { status: 409 }
+          );
+        });
+        return {
+          accepted: true,
+          verificationRequired: true,
+          delivery: "email",
+          emailSent: true,
+          expiresAt,
+          replayed: false
+        };
       } catch (error) {
-        await recordFailure(
-          "registration",
-          gate.subjectDigest,
-          gate.now
+        await query(
+          `update ss.hosted_registration_requests
+              set state = 'delivery_unknown'
+            where id = $1
+              and state = 'pending_delivery'`,
+          [registrationId]
         );
         throw error;
       }
     },
 
-    async signIn({ email: rawEmail, password: rawPassword, throttleKey = "" }) {
+    async completeRegistration({
+      token: rawToken,
+      commandId: rawCommandId
+    } = {}) {
+      const selectedRawToken = text(
+        rawToken,
+        "Registration verification token",
+        512,
+        32
+      );
+      const selectedCommandId = text(
+        rawCommandId,
+        "Registration activation idempotency key",
+        200,
+        8
+      );
+      const tokenDigest = sha256(selectedRawToken);
+      const sessionToken = createHmac("sha256", pepper)
+        .update(
+          `sitesourcery.registration-session/v1\u0000${selectedRawToken}`,
+          "utf8"
+        )
+        .digest("base64url");
+      const sessionTokenDigest = sha256(sessionToken);
+      const activatedAt = iso(clock());
+      const result = await transact(async (client) => {
+        const selected = await client.query(
+          `select *
+             from ss.hosted_registration_requests
+            where token_digest = $1
+              and state in ('delivered', 'activated')
+              and expires_at > $2
+            for update`,
+          [tokenDigest, activatedAt]
+        );
+        invariant(
+          selected.rowCount === 1,
+          "REGISTRATION_TOKEN_INVALID",
+          "That account verification link is invalid or expired.",
+          { status: 409 }
+        );
+        const registration = selected.rows[0];
+        if (registration.state === "activated") {
+          invariant(
+            registration.activation_command_id ===
+              selectedCommandId,
+            "REGISTRATION_ALREADY_COMPLETED",
+            "That account is verified. Sign in to continue.",
+            { status: 409 }
+          );
+          const replay = await client.query(
+            `select
+               users.id,
+               users.email,
+               users.created_at,
+               profile.display_name,
+               organization.id as organization_id,
+               organization.name as organization_name,
+               organization.state as organization_state,
+               organization.created_at as organization_created_at,
+               membership.role as organization_role,
+               session.id as session_id,
+               session.created_at as session_created_at,
+               session.expires_at as session_expires_at,
+               session.reauthenticated_at
+             from auth.users users
+             join ss.hosted_account_profiles profile
+               on profile.user_id = users.id
+             join ss.organizations organization
+               on organization.id = $2
+             join ss.organization_memberships membership
+               on membership.organization_id =
+                  organization.id
+              and membership.user_id = users.id
+             join ss.hosted_sessions session
+               on session.user_id = users.id
+              and session.token_digest = $3
+              and session.revoked_at is null
+              and session.expires_at > $4
+            where users.id = $1
+              and users.disabled_at is null
+              and profile.state = 'active'
+              and organization.state = 'active'
+              and membership.state = 'active'
+            limit 1`,
+            [
+              registration.activated_user_id,
+              registration.activated_organization_id,
+              sessionTokenDigest,
+              activatedAt
+            ]
+          );
+          invariant(
+            replay.rowCount === 1,
+            "REGISTRATION_ALREADY_COMPLETED",
+            "That account is verified. Sign in to continue.",
+            { status: 409 }
+          );
+          const row = replay.rows[0];
+          return {
+            email: row.email,
+            user: {
+              id: row.id,
+              name: row.display_name,
+              email: row.email,
+              createdAt: iso(row.created_at)
+            },
+            organization: {
+              id: row.organization_id,
+              name: row.organization_name,
+              role: row.organization_role,
+              state: row.organization_state,
+              createdAt: iso(
+                row.organization_created_at
+              )
+            },
+            sessionToken,
+            session: {
+              id: row.session_id,
+              tokenDigest: sessionTokenDigest,
+              userId: row.id,
+              createdAt: iso(
+                row.session_created_at
+              ),
+              expiresAt: iso(
+                row.session_expires_at
+              ),
+              reauthenticatedAt:
+                row.reauthenticated_at
+                  ? iso(row.reauthenticated_at)
+                  : null
+            },
+            replayed: true
+          };
+        }
+        const userId = randomUUID();
+        const organizationId = randomUUID();
+        const created = await client.query(
+          `insert into auth.users (
+             id, email, created_at, updated_at
+           ) values ($1, $2, $3, $3)
+           on conflict do nothing
+           returning id`,
+          [userId, registration.email, activatedAt]
+        );
+        invariant(
+          created.rowCount === 1,
+          "ACCOUNT_UNAVAILABLE",
+          "That account cannot be created.",
+          { status: 409 }
+        );
+        const profile = await client.query(
+          `insert into ss.hosted_account_profiles (
+             user_id, display_name, state,
+             created_at, updated_at
+           ) values ($1, $2, 'active', $3, $3)`,
+          [
+            userId,
+            registration.display_name,
+            activatedAt
+          ]
+        );
+        const credential = await client.query(
+          `insert into ss.hosted_password_credentials (
+             user_id, password_phc, pepper_version, revision,
+             created_at, updated_at, rotated_at
+           ) values ($1, $2, $3, 1, $4, $4, $4)`,
+          [
+            userId,
+            registration.password_phc,
+            registration.pepper_version,
+            activatedAt
+          ]
+        );
+        const organization = await client.query(
+          `insert into ss.organizations (
+             id, created_by_user_id, name, state,
+             created_at, updated_at
+           ) values ($1, $2, $3, 'active', $4, $4)`,
+          [
+            organizationId,
+            userId,
+            registration.organization_name,
+            activatedAt
+          ]
+        );
+        const membership = await client.query(
+          `insert into ss.organization_memberships (
+             organization_id, user_id, role, state,
+             accepted_at, created_at, updated_at
+           ) values (
+             $1, $2, 'owner', 'active', $3, $3, $3
+           )`,
+          [organizationId, userId, activatedAt]
+        );
+        invariant(
+          profile.rowCount === 1 &&
+            credential.rowCount === 1 &&
+            organization.rowCount === 1 &&
+            membership.rowCount === 1,
+          "REGISTRATION_ACTIVATION_FAILED",
+          "The verified account could not be activated.",
+          { status: 500 }
+        );
+        const consumed = await client.query(
+          `update ss.hosted_registration_requests
+              set state = 'activated',
+                  activated_at = $2,
+                  activated_user_id = $3,
+                  activated_organization_id = $4,
+                  activation_command_id = $5
+            where id = $1
+              and state = 'delivered'`,
+          [
+            registration.id,
+            activatedAt,
+            userId,
+            organizationId,
+            selectedCommandId
+          ]
+        );
+        invariant(
+          consumed.rowCount === 1,
+          "REGISTRATION_ACTIVATION_FAILED",
+          "The verification token could not be consumed.",
+          { status: 409 }
+        );
+        const session = await issueSession(
+          client,
+          userId,
+          activatedAt,
+          true,
+          sessionToken
+        );
+        return {
+          email: registration.email,
+          user: {
+            id: userId,
+            name: registration.display_name,
+            email: registration.email,
+            createdAt: activatedAt
+          },
+          organization: {
+            id: organizationId,
+            name: registration.organization_name,
+            role: "owner",
+            state: "active",
+            createdAt: activatedAt
+          },
+          ...session,
+          replayed: false
+        };
+      });
+      await clearRate(
+        "registration",
+        subjectDigest("registration", result.email)
+      );
+      const { email: _email, ...safe } = result;
+      return safe;
+    },
+
+    registrationReadiness() {
+      return registrationMailPort.readiness();
+    },
+
+    async signIn({ email: rawEmail, password: rawPassword }) {
       const email = normalizeEmail(rawEmail);
       password(rawPassword);
-      const gate = await checkRate("sign_in", email, throttleKey);
+      const gate = await consumeRateAttempt(
+        "sign_in",
+        email
+      );
       const found = await query(
         `select
            users.id,
@@ -502,7 +1116,6 @@ export function createPostgresIdentityBridge({
           pepperFor
         ));
       if (!valid) {
-        await recordFailure("sign_in", gate.subjectDigest, gate.now);
         throw genericAuthFailure();
       }
       const session = await transact((client) =>
@@ -564,15 +1177,14 @@ export function createPostgresIdentityBridge({
       return { signedOut: true };
     },
 
-    async reauthenticate(actor, rawPassword, { throttleKey = "" } = {}) {
+    async reauthenticate(actor, rawPassword) {
       invariant(actor?.userId && actor?.sessionDigest, "AUTHENTICATION_REQUIRED", "Sign in to continue.", {
         status: 401
       });
       password(rawPassword);
-      const gate = await checkRate(
+      const gate = await consumeRateAttempt(
         "reauthentication",
-        actor.userId,
-        throttleKey
+        actor.userId
       );
       const found = await query(
         `select password_phc
@@ -588,11 +1200,6 @@ export function createPostgresIdentityBridge({
           pepperFor
         ));
       if (!valid) {
-        await recordFailure(
-          "reauthentication",
-          gate.subjectDigest,
-          gate.now
-        );
         throw genericAuthFailure();
       }
       const updated = await query(
@@ -626,7 +1233,7 @@ export function createPostgresIdentityBridge({
 
     async issueRecoveryForDelivery(
       rawEmail,
-      { commandId, throttleKey = "" } = {}
+      { commandId } = {}
     ) {
       const email = normalizeEmail(rawEmail);
       const selectedCommandId = text(
@@ -668,8 +1275,10 @@ export function createPostgresIdentityBridge({
           }
         };
       }
-      const gate = await checkRate("recovery", email, throttleKey);
-      await recordFailure("recovery", gate.subjectDigest, gate.now);
+      const gate = await consumeRateAttempt(
+        "recovery",
+        email
+      );
       const delivery = await transact(async (client) => {
         const result = await client.query(
           `select users.id, users.email
@@ -827,6 +1436,15 @@ export function createPostgresIdentityBridge({
     },
 
     async cleanup() {
+      const registrations = await query(
+        `delete from ss.hosted_registration_requests
+          where expires_at <= clock_timestamp()
+             or (
+               state = 'superseded'
+               and superseded_at <
+                 clock_timestamp() - interval '24 hours'
+             )`
+      );
       const sessions = await query(
         `delete from ss.hosted_sessions
           where expires_at <= clock_timestamp()
@@ -841,6 +1459,7 @@ export function createPostgresIdentityBridge({
              or used_at is not null`
       );
       return {
+        registrationRequests: registrations.rowCount,
         sessions: sessions.rowCount,
         recoveryTokens: recovery.rowCount
       };

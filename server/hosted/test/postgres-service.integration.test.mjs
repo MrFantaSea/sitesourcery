@@ -21,6 +21,9 @@ import {
   createDevelopmentRecoveryMailSink,
   createProductionRecoveryMailPort
 } from "../recovery-mail-port.mjs";
+import {
+  createDevelopmentRegistrationMailSink
+} from "../registration-mail-port.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
@@ -541,12 +544,19 @@ test(
       path.join(os.tmpdir(), "sitesourcery-pg-service-")
     );
     const clock = { now: () => NOW };
+    const registrationSink =
+      createDevelopmentRegistrationMailSink({
+        registrationBaseUrl:
+          "https://staging.sitesourcery.test/abracadabra/app/",
+        clock
+      });
     const identity = createPostgresIdentityBridge({
       pool,
       authority,
       pepper: randomBytes(32),
       pepperVersion: "test-v1",
       clock: () => new Date(NOW),
+      registrationMailPort: registrationSink,
       rateLimit: {
         attempts: 2,
         windowMs: 15 * 60 * 1000,
@@ -597,21 +607,103 @@ test(
       recoveryMailPort: recoverySink
     });
 
-    const registered = await service.register({
+    const ownerEmail =
+      `owner-${randomUUID()}@example.test`;
+    const ownerRegistration = await service.register({
       name: "Test Owner",
       organizationName: "Test Organization",
-      email: `owner-${randomUUID()}@example.test`,
-      password: "correct horse battery staple"
+      email: ownerEmail,
+      password: "correct horse battery staple",
+      commandId: "registration-owner-001"
     });
+    assert.equal(ownerRegistration.emailSent, true);
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select
+             (select count(*)::integer
+                from auth.users
+               where lower(email) = $1) as users,
+             (select count(*)::integer
+                from ss.organizations organization
+                join auth.users users
+                  on users.id =
+                     organization.created_by_user_id
+               where lower(users.email) = $1)
+               as organizations,
+             (select count(*)::integer
+                from ss.hosted_sessions session
+                join auth.users users
+                  on users.id = session.user_id
+               where lower(users.email) = $1)
+               as sessions`,
+          [ownerEmail]
+        )
+      ).rows[0],
+      {
+        users: 0,
+        organizations: 0,
+        sessions: 0
+      }
+    );
+    const ownerToken = decodeURIComponent(
+      new URL(
+        registrationSink.readForTest(ownerEmail)[0]
+          .verificationUrl
+      ).hash.slice("#verify-registration=".length)
+    );
+    const registered =
+      await service.completeRegistration({
+        token: ownerToken,
+        commandId:
+          "registration-activation-owner-001"
+      });
+    assert.equal(registered.replayed, false);
+    assert.equal(
+      (
+        await service.completeRegistration({
+          token: ownerToken,
+          commandId:
+            "registration-activation-owner-001"
+        })
+      ).replayed,
+      true
+    );
+    await assert.rejects(
+      service.completeRegistration({
+        token: ownerToken,
+        commandId:
+          "registration-activation-owner-foreign"
+      }),
+      (error) =>
+        error?.code ===
+        "REGISTRATION_ALREADY_COMPLETED"
+    );
     const actor = await service.authenticate(
       registered.sessionToken
     );
-    const otherRegistered = await service.register({
+    const otherEmail =
+      `other-owner-${randomUUID()}@example.test`;
+    await service.register({
       name: "Other Owner",
       organizationName: "Other Organization",
-      email: `other-owner-${randomUUID()}@example.test`,
-      password: "another correct horse battery staple"
+      email: otherEmail,
+      password:
+        "another correct horse battery staple",
+      commandId: "registration-other-owner-001"
     });
+    const otherToken = decodeURIComponent(
+      new URL(
+        registrationSink.readForTest(otherEmail)[0]
+          .verificationUrl
+      ).hash.slice("#verify-registration=".length)
+    );
+    const otherRegistered =
+      await service.completeRegistration({
+        token: otherToken,
+        commandId:
+          "registration-activation-other-owner-001"
+      });
     const otherActor = await service.authenticate(
       otherRegistered.sessionToken
     );

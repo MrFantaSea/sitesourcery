@@ -12,6 +12,13 @@ const JSON_HEADERS = Object.freeze({
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY"
 });
+const SESSIONLESS_IDENTITY_WRITES = new Set([
+  "/api/v1/auth/register",
+  "/api/v1/auth/register/complete",
+  "/api/v1/auth/sessions",
+  "/api/v1/auth/recovery",
+  "/api/v1/auth/recovery/complete"
+]);
 
 function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
@@ -320,7 +327,13 @@ export function createHostedApi(
           );
         }
 
-        const actor = await service.authenticate(cookies.ss_session);
+        const actor =
+          method === "POST" &&
+          SESSIONLESS_IDENTITY_WRITES.has(pathname)
+            ? null
+            : await service.authenticate(
+                cookies.ss_session
+              );
         const body = WRITE_METHODS.has(method) ? await readJson(request) : {};
         const write = { ...body, commandId: commandId(request) };
         let route;
@@ -329,11 +342,35 @@ export function createHostedApi(
         let headers = { "X-Request-Id": requestId };
 
         if (method === "POST" && pathname === "/api/v1/auth/register") {
-          const created = await service.register(write);
+          const staged = await service.register(write);
+          const { sessionToken, ...safe } = staged;
+          invariant(
+            sessionToken === undefined,
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Unverified registration must not create a session.",
+            { status: 500 }
+          );
+          result = safe;
+          status = 202;
+        } else if (
+          method === "POST" &&
+          pathname ===
+            "/api/v1/auth/register/complete"
+        ) {
+          const created =
+            await service.completeRegistration(write);
           const { sessionToken, ...safe } = created;
+          invariant(
+            typeof sessionToken === "string" &&
+              sessionToken.length >= 32,
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Registration activation did not create a valid session.",
+            { status: 500 }
+          );
           result = safe;
           status = 201;
-          headers["Set-Cookie"] = sessionCookie(sessionToken);
+          headers["Set-Cookie"] =
+            sessionCookie(sessionToken);
         } else if (method === "POST" && pathname === "/api/v1/auth/sessions") {
           const signedIn = await service.signIn(write);
           const { sessionToken, ...safe } = signedIn;
