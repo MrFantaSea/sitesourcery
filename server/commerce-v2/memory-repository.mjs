@@ -31,6 +31,18 @@ export function createMemoryCommerceV2Repository() {
         command?.fingerprint,
         "command.fingerprint"
       );
+      const customerId = requiredText(
+        command?.customerId,
+        "command.customerId"
+      );
+      const actorId = requiredText(
+        command?.actorId,
+        "command.actorId"
+      );
+      const projectId = requiredText(
+        command?.projectId,
+        "command.projectId"
+      );
       const key = commandKey(tenantId, commandId);
       const previous = commands.get(key);
       if (!previous) {
@@ -39,6 +51,9 @@ export function createMemoryCommerceV2Repository() {
           commandId,
           operation,
           fingerprint,
+          customerId,
+          actorId,
+          projectId,
           state: "pending",
           result: null
         });
@@ -46,7 +61,10 @@ export function createMemoryCommerceV2Repository() {
       }
       if (
         previous.operation !== operation ||
-        previous.fingerprint !== fingerprint
+        previous.fingerprint !== fingerprint ||
+        previous.customerId !== customerId ||
+        previous.actorId !== actorId ||
+        previous.projectId !== projectId
       ) {
         return { status: "conflict" };
       }
@@ -69,7 +87,10 @@ export function createMemoryCommerceV2Repository() {
         previous &&
           previous.state === "pending" &&
           previous.operation === command.operation &&
-          previous.fingerprint === command.fingerprint,
+          previous.fingerprint === command.fingerprint &&
+          previous.customerId === command.customerId &&
+          previous.actorId === command.actorId &&
+          previous.projectId === command.projectId,
         "repository_conflict",
         "the command claim changed before completion",
         { status: 500 }
@@ -95,7 +116,10 @@ export function createMemoryCommerceV2Repository() {
         previous &&
           previous.state === "pending" &&
           previous.operation === command.operation &&
-          previous.fingerprint === command.fingerprint,
+          previous.fingerprint === command.fingerprint &&
+          previous.customerId === command.customerId &&
+          previous.actorId === command.actorId &&
+          previous.projectId === command.projectId,
         "repository_conflict",
         "the command claim changed before completion",
         { status: 500 }
@@ -123,14 +147,30 @@ export function createMemoryCommerceV2Repository() {
       if (
         previous?.state === "pending" &&
         previous.operation === command.operation &&
-        previous.fingerprint === command.fingerprint
+        previous.fingerprint === command.fingerprint &&
+        previous.customerId === command.customerId &&
+        previous.actorId === command.actorId &&
+        previous.projectId === command.projectId
       ) {
         commands.delete(key);
       }
     },
 
-    async findQuote(quoteId) {
-      return clone(quotes.get(quoteId) ?? null);
+    async findQuote({
+      tenantId,
+      customerId,
+      projectId,
+      quoteId
+    } = {}) {
+      const quote = quotes.get(quoteId);
+      if (
+        quote?.tenantId !== tenantId ||
+        quote?.customerId !== customerId ||
+        quote?.project?.projectId !== projectId
+      ) {
+        return null;
+      }
+      return clone(quote);
     },
 
     inspect() {

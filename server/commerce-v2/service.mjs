@@ -59,12 +59,18 @@ function identity(input) {
 
 function commandRecord({
   tenantId,
+  customerId,
+  actorId,
+  projectId,
   commandId,
   operation,
   purpose
 }) {
   return {
     tenantId,
+    customerId,
+    actorId,
+    projectId,
     commandId: requiredText(commandId, "commandId"),
     operation,
     fingerprint: digest(purpose)
@@ -253,6 +259,9 @@ export function createCommerceV2Service(
       };
       const command = commandRecord({
         tenantId: actor.tenantId,
+        customerId: actor.customerId,
+        actorId: actor.actorId,
+        projectId,
         commandId: input?.commandId,
         operation: "create_v2_quote",
         purpose
@@ -363,7 +372,12 @@ export function createCommerceV2Service(
         "clock.now"
       );
       const quote = validateStoredQuote(
-        await ports.repository.findQuote(quoteId),
+        await ports.repository.findQuote({
+          tenantId: actor.tenantId,
+          customerId: actor.customerId,
+          projectId,
+          quoteId
+        }),
         {
           tenantId: actor.tenantId,
           customerId: actor.customerId,
@@ -388,6 +402,9 @@ export function createCommerceV2Service(
       const purposeDigest = digest(purpose);
       const command = commandRecord({
         tenantId: actor.tenantId,
+        customerId: actor.customerId,
+        actorId: actor.actorId,
+        projectId,
         commandId: input?.commandId,
         operation: "prepare_v2_checkout",
         purpose

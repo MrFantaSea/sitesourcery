@@ -11,9 +11,17 @@ import {
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
 import {
+  createCommerceV2Boundary,
+  createCommerceV2Service,
+  createHostedDownloadCommerce
+} from "../../commerce-v2/index.mjs";
+import {
   cancellationWorkerOptionsFromEnvironment,
   createCancellationWorker
 } from "../cancellation-worker.mjs";
+import {
+  createPostgresCommerceV2Adapter
+} from "../commerce-v2-postgres.mjs";
 import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
 import {
   createExportWorker,
@@ -183,6 +191,23 @@ function listen(server, port) {
 
 async function start() {
   await authority.assertReady();
+  const commerceV2 =
+    createPostgresCommerceV2Adapter({
+      authority
+    });
+  const downloadCommerce =
+    createHostedDownloadCommerce({
+      boundary: createCommerceV2Boundary(
+        createCommerceV2Service({
+          projects: commerceV2.projects,
+          versions: commerceV2.versions,
+          repository: commerceV2.repository,
+          clock: commerceV2.clock,
+          ids: commerceV2.ids
+        })
+      ),
+      resolveSession: commerceV2.resolveSession
+    });
   const stripeComposition =
     createConfiguredStripeProvider();
   const domainRuntime =
@@ -277,7 +302,11 @@ async function start() {
   });
 
   apiServer = createServer(
-    createApiNodeHandler(createHostedApi(service))
+    createApiNodeHandler(
+      createHostedApi(service, {
+        downloadCommerce
+      })
+    )
   );
   tenantServer = createServer(
     createTenantNodeHandler(tenantRuntime)

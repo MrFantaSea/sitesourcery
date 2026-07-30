@@ -47,6 +47,8 @@ hosting-provider calls by itself.
 - `tests/postgres-bootstrap.sql` — disposable PostgreSQL role/bootstrap
   compatibility harness.
 - `tests/postgres-invariants.sql` — PostgreSQL schema and launch assertions.
+- `tests/commerce-v2-download-invariants.sql` — held Download persistence,
+  accepted-version binding, and terminal-purge assertions.
 - `scripts/test-postgres.sh` — applies all migrations and runs the SQL tests
   against `DATABASE_URL`.
 - `d1/migrations/`, `d1/src/`, and `d1/tests/` — SQLite/D1 portability and

@@ -304,3 +304,113 @@ test("export workers use one exact lease, attempt, fence, and bounded failure co
     /create function ss\.hosted_runtime_contract_v15\(\)/iu
   );
 });
+
+test("commerce v2 Download persistence is held, accepted-version-bound, service-only, and purge-safe", async () => {
+  const all = await migrations();
+  const commerce = all.find(
+    ({ name }) =>
+      name ===
+      "202607280019_commerce_v2_download_preparation.sql"
+  );
+  assert.ok(commerce);
+
+  for (const table of [
+    "commerce_v2_commands",
+    "commerce_v2_download_quotes",
+    "commerce_v2_checkout_preparations"
+  ]) {
+    assert.match(
+      commerce.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      commerce.sql,
+      new RegExp(
+        `alter table ss\\.${table}\\s+force row level security`,
+        "iu"
+      )
+    );
+  }
+
+  assert.match(
+    commerce.sql,
+    /catalog_version\s+text not null[\s\S]*spark-actions\.2026-07-30\.v1/iu
+  );
+  assert.match(
+    commerce.sql,
+    /terms_version\s+text not null[\s\S]*spark-actions-held\.2026-07-30\.v1/iu
+  );
+  assert.match(
+    commerce.sql,
+    /amount_minor\s+integer not null[\s\S]*amount_minor = 500/iu
+  );
+  assert.match(
+    commerce.sql,
+    /state\s+text not null[\s\S]*state = 'held'/iu
+  );
+  assert.match(
+    commerce.sql,
+    /dispatch_authorized\s+boolean not null[\s\S]*dispatch_authorized = false/iu
+  );
+  assert.match(
+    commerce.sql,
+    /join ss\.fact_sets fact[\s\S]*fact\.content_digest\s*=\s*new\.version_content_digest/iu
+  );
+  assert.match(
+    commerce.sql,
+    /state\.state = 'accepted_release'/iu
+  );
+  assert.match(
+    commerce.sql,
+    /quote\.disclosure_digest\s*=\s*new\.accepted_disclosure_digest[\s\S]*quote\.snapshot_digest\s*=\s*new\.quote_snapshot_digest[\s\S]*new\.prepared_at < quote\.expires_at/iu
+  );
+  assert.match(
+    commerce.sql,
+    /from ss\.commerce_v2_download_quotes quote[\s\S]*project\.lifecycle = 'active'[\s\S]*organization\.state = 'active'[\s\S]*version_state\.state = 'accepted_release'[\s\S]*fact\.content_digest\s*=\s*quote\.version_content_digest/iu
+  );
+  assert.match(
+    commerce.sql,
+    /quote\.snapshot = new\.result[\s\S]*prep\.preparation = new\.result/iu
+  );
+
+  assert.match(
+    commerce.sql,
+    /create trigger deletion_requests_activate_commerce_v2_purge[\s\S]*before insert or update of state on ss\.deletion_requests/iu
+  );
+  assert.match(
+    commerce.sql,
+    /create trigger deletion_requests_purge_commerce_v2[\s\S]*after insert or update of state on ss\.deletion_requests/iu
+  );
+  assert.match(
+    commerce.sql,
+    /delete from ss\.commerce_v2_checkout_preparations[\s\S]*delete from ss\.commerce_v2_download_quotes[\s\S]*delete from ss\.commerce_v2_commands/iu
+  );
+  for (const count of [
+    "commerceV2Commands",
+    "commerceV2DownloadQuotes",
+    "commerceV2CheckoutPreparations"
+  ]) {
+    assert.match(commerce.sql, new RegExp(`'${count}'`, "u"));
+  }
+
+  assert.match(
+    commerce.sql,
+    /revoke all on[\s\S]*ss\.commerce_v2_commands,[\s\S]*from public, anon, authenticated/iu
+  );
+  assert.match(
+    commerce.sql,
+    /grant all privileges on[\s\S]*ss\.commerce_v2_checkout_preparations[\s\S]*to service_role/iu
+  );
+  assert.match(
+    commerce.sql,
+    /create function ss\.hosted_runtime_contract_v19\(\)/iu
+  );
+  assert.doesNotMatch(
+    commerce.sql,
+    /\b(?:checkout_intents|stripe_[a-z_]+|provider_receipts|catalog_prices|site_ownership_entitlements|transactional_outbox)\b/iu
+  );
+  assert.doesNotMatch(
+    commerce.sql,
+    /\bprovider_(?:id|reference|receipt|url)\b/iu
+  );
+});

@@ -24,4 +24,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f "$project_directory/tests/hosted-api-invariants.sql"
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f "$project_directory/tests/commerce-v2-download-invariants.sql"
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f "$project_directory/tests/authenticated-role-invariants.sql"
