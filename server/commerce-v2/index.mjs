@@ -17,6 +17,10 @@ export {
   createMemoryCommerceV2Repository
 } from "./memory-repository.mjs";
 export {
+  createHeldHostedDownloadCommerce,
+  createHostedDownloadCommerce
+} from "./hosted-download.mjs";
+export {
   createCommerceV2Service,
   digestQuoteSnapshot
 } from "./service.mjs";

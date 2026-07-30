@@ -34,3 +34,14 @@ all v1 tenure fields or IDs.
 later accepted versions belonging to the same editor project, and downstream
 self-hosting without another purchase. Cross-project use is indistinguishable
 from a missing entitlement.
+
+The hosted test boundary exposes only:
+
+- `POST /api/v1/projects/{projectId}/download-quotes`
+- `POST /api/v1/projects/{projectId}/download-quotes/{quoteId}/checkout-command`
+
+The first route fixes the offer to `spark_download`; it does not accept an offer
+ID. The second returns only the held checkout-command preparation. There is no
+v2 customer catalog, publish-offer, provider-dispatch, or settlement route.
+Without an explicitly injected project-scoped v2 boundary, both routes return
+the production-safe `DOWNLOAD_COMMERCE_HELD` response.

@@ -1,6 +1,9 @@
 import { MAX_BODY_BYTES, WRITE_METHODS } from "./constants.mjs";
 import { HostedError, invariant, publicError } from "./errors.mjs";
 import { digest, randomToken } from "./security.mjs";
+import {
+  createHeldHostedDownloadCommerce
+} from "../commerce-v2/hosted-download.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -194,10 +197,29 @@ function requireCsrf(request, cookies) {
   );
 }
 
-export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
+export function createHostedApi(
+  service,
+  {
+    requestIds,
+    csrfTokens,
+    downloadCommerce = null
+  } = {}
+) {
   invariant(service && typeof service.authenticate === "function", "RUNTIME_CONFIGURATION_ERROR", "Hosted service is required.", {
     status: 500
   });
+  const downloadBoundary =
+    downloadCommerce ??
+    createHeldHostedDownloadCommerce();
+  invariant(
+    typeof downloadBoundary.createQuote ===
+      "function" &&
+      typeof downloadBoundary.prepareCheckout ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Download commerce boundary is invalid.",
+    { status: 500 }
+  );
   const nextRequestId =
     requestIds?.next?.bind(requestIds) ??
     (() => `req_${randomToken(12)}`);
@@ -411,6 +433,34 @@ export function createHostedApi(service, { requestIds, csrfTokens } = {}) {
             write
           );
           status = 202;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/download-quotes$/u
+          ))
+        ) {
+          result = await downloadBoundary.createQuote(
+            actor,
+            route[0],
+            write
+          );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/download-quotes\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          result =
+            await downloadBoundary.prepareCheckout(
+              actor,
+              route[0],
+              route[1],
+              write
+            );
+          status = 201;
         } else if (
           method === "GET" &&
           (pathname === "/api/v1/offers" || pathname === "/api/v1/offer-catalog")
