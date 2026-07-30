@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   createDevelopmentRegistrationMailSink,
-  createHeldRegistrationMailPort
+  createHeldRegistrationMailPort,
+  createProductionRegistrationMailPort
 } from "../registration-mail-port.mjs";
 
 const NOW = "2026-07-30T12:00:00.000Z";
@@ -93,4 +94,102 @@ test("registration mail adapters reject unsafe base URLs", () => {
         "REGISTRATION_DELIVERY_CONFIGURATION_REQUIRED"
     );
   }
+});
+
+test("production registration refuses an absent or unverified transport", async () => {
+  let port = createProductionRegistrationMailPort();
+  assert.equal(
+    (await port.readiness()).code,
+    "REGISTRATION_TRANSPORT_REQUIRED"
+  );
+  await assert.rejects(
+    port.deliver(REQUEST),
+    (error) => error?.code === "ACCOUNT_REGISTRATION_HELD"
+  );
+
+  port = createProductionRegistrationMailPort({
+    transport: {
+      async readiness() {
+        return {
+          ready: true,
+          verified: false,
+          provider: "unverified"
+        };
+      },
+      async sendRegistration() {
+        assert.fail(
+          "an unverified transport must never receive a secret"
+        );
+      }
+    }
+  });
+  assert.equal(
+    (await port.readiness()).code,
+    "REGISTRATION_TRANSPORT_UNVERIFIED"
+  );
+});
+
+test("verified registration transport returns one exact bound receipt", async () => {
+  const sends = [];
+  const transport = {
+    async readiness() {
+      return {
+        ready: true,
+        verified: true,
+        provider: "test-transactional-mail"
+      };
+    },
+    async sendRegistration(input) {
+      sends.push(input);
+      return {
+        accepted: true,
+        provider: "test-transactional-mail",
+        providerMessageId: "registration_message_0001",
+        idempotencyKey: input.idempotencyKey,
+        payloadDigest: input.payloadDigest,
+        acceptedAt: NOW
+      };
+    }
+  };
+  const port = createProductionRegistrationMailPort({
+    transport,
+    clock: { now: () => NOW }
+  });
+  const first = await port.deliver(REQUEST);
+  const replay = await port.deliver(REQUEST);
+  assert.deepEqual(replay, first);
+  assert.equal(sends.length, 1);
+  assert.equal(first.state, "delivered");
+  assert.equal(first.provider, "test-transactional-mail");
+  assert.match(first.receiptId, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(
+    JSON.stringify(first),
+    /owner@example|vvvvvvvv/iu
+  );
+
+  const invalid = createProductionRegistrationMailPort({
+    transport: {
+      ...transport,
+      async sendRegistration(input) {
+        return {
+          accepted: true,
+          provider: "test-transactional-mail",
+          providerMessageId: "registration_message_tampered",
+          idempotencyKey: input.idempotencyKey,
+          payloadDigest: "0".repeat(64),
+          acceptedAt: NOW
+        };
+      }
+    },
+    clock: { now: () => NOW }
+  });
+  await assert.rejects(
+    invalid.deliver({
+      ...REQUEST,
+      idempotencyKey: "registration-command-tampered"
+    }),
+    (error) =>
+      error?.code ===
+      "REGISTRATION_DELIVERY_RECEIPT_INVALID"
+  );
 });

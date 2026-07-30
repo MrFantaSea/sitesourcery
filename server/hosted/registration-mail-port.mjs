@@ -251,3 +251,126 @@ export function createDevelopmentRegistrationMailSink({
     }
   });
 }
+
+export function createProductionRegistrationMailPort({
+  transport = null,
+  registrationBaseUrl =
+    "https://sitesourcery.com/abracadabra/app/",
+  clock = { now: () => new Date().toISOString() }
+} = {}) {
+  const baseUrl = registrationBase(registrationBaseUrl);
+  const deliveries = new Map();
+
+  async function transportReadiness() {
+    if (
+      !transport ||
+      typeof transport.readiness !== "function" ||
+      typeof transport.sendRegistration !== "function"
+    ) {
+      return {
+        ready: false,
+        verified: false,
+        kind: "registration-mail",
+        mode: "production",
+        code: "REGISTRATION_TRANSPORT_REQUIRED"
+      };
+    }
+    try {
+      const status = await transport.readiness();
+      if (
+        status?.ready !== true ||
+        status?.verified !== true ||
+        typeof status.provider !== "string" ||
+        status.provider.length === 0
+      ) {
+        return {
+          ready: false,
+          verified: false,
+          kind: "registration-mail",
+          mode: "production",
+          code: "REGISTRATION_TRANSPORT_UNVERIFIED"
+        };
+      }
+      return {
+        ready: true,
+        verified: true,
+        kind: "registration-mail",
+        mode: "production",
+        provider: status.provider
+      };
+    } catch {
+      return {
+        ready: false,
+        verified: false,
+        kind: "registration-mail",
+        mode: "production",
+        code: "REGISTRATION_TRANSPORT_UNAVAILABLE"
+      };
+    }
+  }
+
+  return Object.freeze({
+    kind: "registration-mail",
+    mode: "production",
+    readiness: transportReadiness,
+    async deliver(input) {
+      const status = await transportReadiness();
+      if (!status.ready) throw heldError();
+      const request = normalizeRequest(input, {
+        baseUrl,
+        clock
+      });
+      const prior = deliveries.get(request.idempotencyKey);
+      if (prior) {
+        if (prior.payloadDigest !== request.payloadDigest) {
+          throw idempotencyConflict();
+        }
+        return prior.receipt;
+      }
+      const providerReceipt =
+        await transport.sendRegistration({
+          idempotencyKey: request.idempotencyKey,
+          payloadDigest: request.payloadDigest,
+          ...request.payload
+        });
+      const providerMessageId = text(
+        providerReceipt?.providerMessageId,
+        "Registration provider message ID",
+        500
+      );
+      const acceptedAt = instant(
+        providerReceipt?.acceptedAt,
+        "Registration provider acceptance time"
+      );
+      invariant(
+        providerReceipt?.accepted === true &&
+          providerReceipt.provider === status.provider &&
+          providerReceipt.idempotencyKey ===
+            request.idempotencyKey &&
+          providerReceipt.payloadDigest ===
+            request.payloadDigest &&
+          Date.parse(acceptedAt) >=
+            Date.parse(request.payload.requestedAt) &&
+          Date.parse(acceptedAt) <
+            Date.parse(request.payload.expiresAt),
+        "REGISTRATION_DELIVERY_RECEIPT_INVALID",
+        "Registration transport returned an invalid delivery receipt.",
+        { status: 502 }
+      );
+      const receipt = publicReceipt({
+        mode: "production",
+        provider: status.provider,
+        providerMessageId,
+        idempotencyKey: request.idempotencyKey,
+        payloadDigest: request.payloadDigest,
+        acceptedAt,
+        expiresAt: request.payload.expiresAt
+      });
+      deliveries.set(request.idempotencyKey, {
+        payloadDigest: request.payloadDigest,
+        receipt
+      });
+      return receipt;
+    }
+  });
+}

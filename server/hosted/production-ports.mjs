@@ -10,9 +10,19 @@ import {
   createHeldRecoveryMailPort,
   createProductionRecoveryMailPort
 } from "./recovery-mail-port.mjs";
+import {
+  createDevelopmentRegistrationMailSink,
+  createHeldRegistrationMailPort,
+  createProductionRegistrationMailPort
+} from "./registration-mail-port.mjs";
 import { digest } from "./security.mjs";
 
 const RECOVERY_MODES = new Set([
+  "production",
+  "held",
+  "dev-sink"
+]);
+const REGISTRATION_MODES = new Set([
   "production",
   "held",
   "dev-sink"
@@ -159,5 +169,78 @@ export async function createConfiguredRecoveryMailPort({
   return createProductionRecoveryMailPort({
     transport,
     recoveryBaseUrl
+  });
+}
+
+export async function createConfiguredRegistrationMailPort({
+  environment = process.env,
+  importModule = (specifier) => import(specifier)
+} = {}) {
+  const mode =
+    environmentValue(
+      environment,
+      "SITESOURCERY_REGISTRATION_MAIL_MODE"
+    ) ?? "production";
+  invariant(
+    REGISTRATION_MODES.has(mode),
+    "REGISTRATION_DELIVERY_CONFIGURATION_REQUIRED",
+    "SITESOURCERY_REGISTRATION_MAIL_MODE must be production, held, or dev-sink.",
+    { status: 500 }
+  );
+  const registrationBaseUrl =
+    environmentValue(
+      environment,
+      "SITESOURCERY_REGISTRATION_BASE_URL"
+    ) ??
+    (mode === "dev-sink"
+      ? "https://staging.sitesourcery.test/abracadabra/app/"
+      : "https://sitesourcery.com/abracadabra/app/");
+
+  if (mode === "held") {
+    return createHeldRegistrationMailPort({
+      registrationBaseUrl
+    });
+  }
+  if (mode === "dev-sink") {
+    invariant(
+      environmentValue(environment, "NODE_ENV") !==
+        "production",
+      "REGISTRATION_DELIVERY_CONFIGURATION_REQUIRED",
+      "The development registration sink is forbidden in production.",
+      { status: 500 }
+    );
+    return createDevelopmentRegistrationMailSink({
+      registrationBaseUrl
+    });
+  }
+
+  const modulePath = environmentValue(
+    environment,
+    "SITESOURCERY_REGISTRATION_TRANSPORT_MODULE"
+  );
+  let transport = null;
+  if (modulePath) {
+    invariant(
+      path.isAbsolute(modulePath),
+      "REGISTRATION_DELIVERY_CONFIGURATION_REQUIRED",
+      "The registration transport module path must be absolute.",
+      { status: 500 }
+    );
+    const loaded = await importModule(
+      pathToFileURL(modulePath).href
+    );
+    invariant(
+      typeof loaded?.createRegistrationTransport ===
+        "function",
+      "REGISTRATION_DELIVERY_CONFIGURATION_REQUIRED",
+      "The registration transport module must export createRegistrationTransport.",
+      { status: 500 }
+    );
+    transport =
+      await loaded.createRegistrationTransport();
+  }
+  return createProductionRegistrationMailPort({
+    transport,
+    registrationBaseUrl
   });
 }

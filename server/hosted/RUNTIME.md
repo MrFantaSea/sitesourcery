@@ -54,7 +54,18 @@ The data, export, port, base-domain, and PostgreSQL TLS environment variables
 have fail-closed defaults in `bin/server.mjs`. Both HTTP ports must be distinct,
 unprivileged loopback ports behind a reviewed reverse proxy.
 
-## Recovery delivery modes
+## Account-email delivery modes
+
+`SITESOURCERY_REGISTRATION_MAIL_MODE` accepts exactly:
+
+- `production` (the default): startup readiness requires a verified transport;
+- `held`: account creation stays unavailable and sends no email;
+- `dev-sink`: an in-memory test sink, rejected when `NODE_ENV=production`.
+
+Production registration transport code is loaded only from the absolute path in
+`SITESOURCERY_REGISTRATION_TRANSPORT_MODULE`. That reviewed module must export
+`createRegistrationTransport()` and return an object with `readiness()` and
+`sendRegistration()` methods matching `registration-mail-port.mjs`.
 
 `SITESOURCERY_RECOVERY_MAIL_MODE` accepts exactly:
 
@@ -69,8 +80,8 @@ Production transport code is loaded only from the absolute path in
 by `recovery-mail-port.mjs`. Merely naming a module does not make it ready: its
 readiness result must be both `ready` and `verified`.
 
-No recovery token, recipient, or recovery URL is included in public API
-responses, startup output, or durable provider-receipt facts.
+No registration or recovery token, recipient, or action URL is included in
+public API responses, startup output, or durable provider-receipt facts.
 
 ## Publication authorization
 

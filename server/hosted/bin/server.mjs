@@ -22,13 +22,11 @@ import {
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
-import {
-  createHeldRegistrationMailPort
-} from "../registration-mail-port.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
   createAesGcmContactVault,
+  createConfiguredRegistrationMailPort,
   createConfiguredRecoveryMailPort,
   createJsonCatalogPort
 } from "../production-ports.mjs";
@@ -194,7 +192,7 @@ async function start() {
     "SITESOURCERY_IDENTITY_PEPPER"
   );
   const registrationMailPort =
-    createHeldRegistrationMailPort();
+    await createConfiguredRegistrationMailPort();
   const identity = createPostgresIdentityBridge({
     pool,
     authority,
