@@ -399,7 +399,7 @@ test("starts with one choice and keeps every later stage hidden and inert", () =
   assert.equal(fields.live.getAttribute("role"), "status");
   assert.equal(fields.live.getAttribute("aria-live"), "polite");
   assert.equal(fields.live.getAttribute("aria-atomic"), "true");
-  assert.equal(fields.live.textContent, "Choose one business problem to begin.");
+  assert.equal(fields.live.textContent, "Choose one stuck moment to begin.");
   assert.equal(fields.start.hidden, false);
   assert.equal(stages[0].hidden, false);
   assert.equal(
@@ -463,7 +463,7 @@ test("a choice reveals only the result and each Next unlocks one stage", () => {
     true
   );
   assert.equal(fields.title.textContent, "Missed-call responder");
-  assert.match(fields.result.textContent, /clear follow-up/u);
+  assert.match(fields.result.textContent, /follow-up with a clear owner/u);
   assert.equal(fields.live.textContent, "Missed-call responder selected. Step 2 of 5 is ready.");
   assert.equal(stageHeadings[1].focused, true);
   assert.deepEqual(
@@ -480,7 +480,7 @@ test("a choice reveals only the result and each Next unlocks one stage", () => {
   assert.equal(stages[3].hidden, true);
   assert.equal(stages[4].hidden, true);
   assert.equal(stageHeadings[2].focused, true);
-  assert.equal(fields.back.textContent, "← Back to result");
+  assert.equal(fields.back.textContent, "← Back to outcome");
   assert.deepEqual(nextButtons.map((button) => button.disabled), [true, false, true]);
   assert.equal(fields.live.textContent, "Step 3 of 5 is ready.");
 
@@ -516,12 +516,12 @@ test("Back and browser history walk every Hive stage before leaving the planner"
 
   fields.back.click();
   assert.equal(root.getAttribute("data-hive-stage-current"), "4");
-  assert.equal(fields.back.textContent, "← Back to timing");
+  assert.equal(fields.back.textContent, "← Back to handoff");
   assert.equal(globalValues.location.hash, "#booking");
 
   history.back();
   assert.equal(root.getAttribute("data-hive-stage-current"), "3");
-  assert.equal(fields.back.textContent, "← Back to result");
+  assert.equal(fields.back.textContent, "← Back to outcome");
 
   fields.back.click();
   assert.equal(root.getAttribute("data-hive-stage-current"), "2");
@@ -579,7 +579,7 @@ test("arrow keys make one radio choice and keep focus with that choice", () => {
   assert.equal(controls[5].focused, true);
 });
 
-test("choosing a different problem resets timing, rules, review, and pause progress", () => {
+test("choosing a different moment resets handoff, boundaries, review, and stop-note progress", () => {
   const fixture = buildPlannerFixture();
   const {
     controls,
@@ -603,7 +603,7 @@ test("choosing a different problem resets timing, rules, review, and pause progr
   assert.equal(root.getAttribute("data-hive-paused"), "false");
   assert.equal(fields.pause.getAttribute("aria-pressed"), "false");
   assert.equal(fields.title.textContent, "After-hours information");
-  assert.match(fields.result.textContent, /approved basic information/u);
+  assert.match(fields.result.textContent, /checked answer/u);
   assert.equal(stages[1].hidden, false);
   assert.equal(stages.slice(2).every((stage) => stage.hidden && stage.inert), true);
   assert.deepEqual(nextButtons.map((button) => button.disabled), [false, true, true]);
@@ -641,7 +641,7 @@ test("a valid URL hash opens that problem and later hash changes reset the flow"
   assert.equal(fields.start.hidden, false);
 });
 
-test("pause is an honest demo state and review stays locked until step five", () => {
+test("the stop-note control is local and review stays locked until step five", () => {
   const fixture = buildPlannerFixture();
   const { controls, fields, nextButtons, planner, root, stages } = fixture;
   planner.enhance(root);
@@ -654,9 +654,9 @@ test("pause is an honest demo state and review stays locked until step five", ()
   fields.pause.click();
   assert.equal(root.getAttribute("data-hive-paused"), "true");
   assert.equal(fields.pause.getAttribute("aria-pressed"), "true");
-  assert.equal(fields.pause.textContent, "End pause demo");
-  assert.match(fields.pauseStatus.textContent, /Pause demo on/u);
-  assert.match(fields.pauseStatus.textContent, /Nothing is connected/u);
+  assert.equal(fields.pause.textContent, "Unmark this stop note");
+  assert.match(fields.pauseStatus.textContent, /Marked for the conversation/u);
+  assert.match(fields.pauseStatus.textContent, /outside your browser/u);
 
   nextButtons[2].click();
   assert.equal(root.getAttribute("data-hive-stage-current"), "5");
@@ -665,12 +665,12 @@ test("pause is an honest demo state and review stays locked until step five", ()
   assert.equal(fields.pause.disabled, true);
   assert.equal(fields.download.disabled, false);
   assert.equal(fields.reviewLabel.textContent, "Getting-paid reminder");
-  assert.match(fields.reviewPermission.textContent, /right invoice/u);
-  assert.match(fields.reviewLimit.textContent, /will not make or change an invoice/u);
-  assert.match(fields.reviewPause.textContent, /stop every waiting reminder/u);
+  assert.match(fields.reviewPermission.textContent, /invoice, balance/u);
+  assert.match(fields.reviewLimit.textContent, /No changed invoice/u);
+  assert.match(fields.reviewPause.textContent, /Stop every waiting reminder/u);
 });
 
-test("download creates one local customer plan without exposing internal controls", () => {
+test("download creates local conversation notes without exposing internal controls", () => {
   const fixture = buildPlannerFixture();
   const { controls, fields, globalValues, nextButtons, planner, root } = fixture;
   const blobs = [];
@@ -740,11 +740,11 @@ test("download creates one local customer plan without exposing internal control
     assert.equal(field in blueprint, false);
   }
   assert.deepEqual(downloads, [{
-    download: "hive-review-request-plan.json",
+    download: "hive-review-request-conversation-notes.json",
     href: "blob:hive-plan",
   }]);
   assert.deepEqual(revoked, ["blob:hive-plan"]);
-  assert.match(fields.downloadStatus.textContent, /Nothing was sent or connected/u);
+  assert.match(fields.downloadStatus.textContent, /Nothing was sent or started/u);
 });
 
 test("enhancement is idempotent", () => {
@@ -773,25 +773,30 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
     assert.doesNotMatch(HTML, pattern);
     assert.doesNotMatch(customerCopy, pattern);
   }
+  assert.equal(
+    planner.cells.every((cell) =>
+      Object.values(cell.customer).every((value) => value.length <= 80)),
+    true
+  );
   for (const phrase of [
-    "Choose one business problem",
-    "See the simple result",
-    "What it can do",
-    "Set the timing and handoff",
-    "When it starts",
-    "When a person takes over",
-    "Keep people in control",
-    "What it will never do",
-    "How to pause",
-    "Review your plan",
-    "A written scope and price come before anything is connected.",
-    "Request written scope and price",
+    "Pick the closest moment",
+    "Describe a better outcome",
+    "A useful outcome",
+    "Name the moment and the person",
+    "When it comes up",
+    "When a person steps in",
+    "Set the boundaries",
+    "What stays off-limits",
+    "How should it stop?",
+    "Review your conversation notes",
+    "Any proposed work gets a written scope and price before you decide.",
+    "Download conversation notes",
   ]) {
     assert.ok(HTML.includes(phrase), phrase);
   }
   assert.equal((HTML.match(/data-hive-stage="[1-5]"/gu) || []).length, 5);
   assert.equal((HTML.match(/data-hive-next="[3-5]"/gu) || []).length, 3);
-  assert.match(HTML, /data-hive-activation="locked"/u);
+  assert.match(HTML, /data-hive-mode="conversation-only"/u);
   assert.match(
     HTML,
     /data-hive-stage="5"[^>]*aria-hidden="true"[^>]*hidden inert/iu
@@ -801,6 +806,65 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
   assert.equal((HTML.match(/role="radio"/gu) || []).length, 6);
   assert.equal((HTML.match(/data-hive-back/gu) || []).length, 1);
   assert.match(CSS, /\.hive-cell\[aria-checked="true"\]/u);
+});
+
+test("the main experience is a scoped conversation with only local, phone, or email actions", () => {
+  const main = HTML.match(/<main\b[\s\S]*?<\/main>/u)?.[0];
+  assert.ok(main);
+
+  for (const phrase of [
+    "A scoped sales conversation",
+    "Hive is a short, in-person or phone conversation with Zack.",
+    "This page cannot place an order, reserve time, or start anything.",
+    "No self-service start",
+    "Conversation only · nothing starts here",
+  ]) {
+    assert.ok(main.includes(phrase), phrase);
+  }
+
+  const visibleCopy = main
+    .replace(/<script\b[\s\S]*?<\/script>/gu, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gu, " ")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/\s+/gu, " ");
+  for (const pattern of [
+    /\bactivate(?:d|s|ion)?\b/iu,
+    /\bbuy now\b/iu,
+    /\bcheckout\b/iu,
+    /\bsubscribe\b/iu,
+    /\badd to cart\b/iu,
+    /\bcreate an account\b/iu,
+    /\bsign up\b/iu,
+  ]) {
+    assert.doesNotMatch(visibleCopy, pattern);
+  }
+
+  assert.doesNotMatch(main, /<form\b/iu);
+  assert.doesNotMatch(main, /href="\/(?:contact|solutions|start)\//u);
+  const hrefs = Array.from(
+    main.matchAll(/<a\b[^>]*\bhref="([^"]+)"/gu),
+    (match) => match[1]
+  );
+  assert.ok(hrefs.includes("#planner"));
+  assert.ok(hrefs.includes("tel:+18562441220"));
+  assert.ok(hrefs.includes("mailto:sitesourcery@proton.me"));
+  assert.equal(
+    hrefs.every((href) =>
+      href.startsWith("#")
+      || href === "tel:+18562441220"
+      || href === "mailto:sitesourcery@proton.me"),
+    true
+  );
+
+  const buttons = Array.from(main.matchAll(/<button\b([^>]*)>/gu));
+  assert.ok(buttons.length > 0);
+  for (const [, attributes] of buttons) {
+    assert.match(attributes, /\btype="button"/u);
+    assert.match(
+      attributes,
+      /\bdata-hive-(?:back|cell|download|next|pause)(?:=|\s|$)/u
+    );
+  }
 });
 
 test("JavaScript-off and static copy exactly match all six customer examples", () => {
