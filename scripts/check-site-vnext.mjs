@@ -22,7 +22,7 @@ import {
   validateRouteContract,
 } from "./check-routes.mjs";
 
-export const HOME_DOORS = Object.freeze(["custom", "abracadabra", "hive"]);
+export const HOME_DOORS = Object.freeze(["websites", "hive", "services"]);
 export const HIVE_CELLS = Object.freeze([
   "missed-call",
   "booking",
@@ -45,6 +45,82 @@ export const SOLUTION_ANCHORS = Object.freeze([
 export const START_PATHS = Object.freeze(["website", "system", "service"]);
 export const INTAKE_CATEGORIES = Object.freeze(["website", "system", "service"]);
 export const CUSTOMER_SECTION_CONTRACTS = Object.freeze({
+  "/websites/": Object.freeze([
+    Object.freeze({
+      id: "website-choice-overview",
+      elementId: "website-choice-overview",
+      labelledBy: "website-choice-title",
+      job: "choose-website-path",
+      copy: "Choose how your website gets made.",
+      action: Object.freeze({ id: "see-website-paths", href: "#website-paths" }),
+    }),
+    Object.freeze({
+      id: "website-paths",
+      elementId: "website-paths",
+      labelledBy: "website-paths-title",
+      job: "compare-website-paths",
+      copy: "Have it made for you, or build one page yourself.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "website-proof",
+      elementId: "website-proof",
+      labelledBy: "website-proof-title",
+      job: "inspect-website-proof",
+      copy: "See real and clearly labeled example work.",
+      action: Object.freeze({ id: "see-website-examples", href: "/work/" }),
+    }),
+    Object.freeze({
+      id: "website-help",
+      elementId: "website-help",
+      labelledBy: "website-help-title",
+      job: "ask-about-website-fit",
+      copy: "Ask without choosing first.",
+      action: Object.freeze({ id: "ask-about-website-fit", href: "/contact/#about-custom-website" }),
+    }),
+  ]),
+  "/websites/made-for-you/": Object.freeze([
+    Object.freeze({
+      id: "made-for-you-overview",
+      elementId: "made-for-you-overview",
+      labelledBy: "made-for-you-title",
+      job: "understand-made-for-you-fit",
+      copy: "A website planned and built around your business.",
+      action: Object.freeze({ id: "ask-about-made-for-you", href: "/contact/#about-custom-website" }),
+    }),
+    Object.freeze({
+      id: "made-for-you-includes",
+      elementId: "made-for-you-includes",
+      labelledBy: "made-for-you-includes-title",
+      job: "understand-made-for-you-work",
+      copy: "What does made-for-you include?",
+      action: null,
+    }),
+    Object.freeze({
+      id: "made-for-you-process",
+      elementId: "made-for-you-process",
+      labelledBy: "made-for-you-process-title",
+      job: "follow-made-for-you-process",
+      copy: "A clear path from first conversation to handoff.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "made-for-you-proof",
+      elementId: "made-for-you-proof",
+      labelledBy: "made-for-you-proof-title",
+      job: "inspect-made-for-you-proof",
+      copy: "See real and clearly labeled example work.",
+      action: Object.freeze({ id: "see-made-for-you-examples", href: "/work/" }),
+    }),
+    Object.freeze({
+      id: "made-for-you-contact",
+      elementId: "made-for-you-contact",
+      labelledBy: "made-for-you-contact-title",
+      job: "start-made-for-you-inquiry",
+      copy: "Start with the business problem.",
+      action: Object.freeze({ id: "contact-about-made-for-you", href: "/contact/#about-custom-website" }),
+    }),
+  ]),
   "/start/": Object.freeze([
     Object.freeze({
       id: "choose-help",
@@ -210,17 +286,12 @@ export const ARTIFACT_SIZE_BUDGETS = Object.freeze({
   image: 640 * 1024,
 });
 export const START_DECISION_COPY = Object.freeze([
-  "website-new",
-  "website-replace",
-  "website-self-service",
-  "replace-redirects",
-  "replace-migration",
-  "replace-cutover",
-  "replace-uncertain",
-  "No old links or content need to move, and no host or domain switch is needed",
-  "I will type in the facts myself",
-  "Make and download one real web page from facts you type into this browser",
-  "It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions",
+  "made-for-you",
+  "website-unsure",
+  "How do you want the website made?",
+  "Build and preview privately for free.",
+  "Download is $5 once per editor project, not per click or version.",
+  "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   "detailTrail",
   "showPreviousDetail",
   "focusAndReveal",
@@ -362,8 +433,8 @@ export const PAID_ROUTE_REQUIRED_COPY = Object.freeze({
     "A customer-owned web address stays in your name",
   ]),
   "/solutions/": Object.freeze([
-    "$350 website assessment",
-    "Every other job on this page is inquiry-only",
+    "A website assessment gives you written findings and screenshots.",
+    "Every job on this page is inquiry-only",
     "the customer is the registrant and Site Sourcery does not become the owner",
     "The customer keeps control of the payment account and money.",
   ]),
@@ -421,15 +492,14 @@ export const FAQ_ANCHORS = Object.freeze([
   "getting-started",
 ]);
 export const HOME_HIVE_COPY = Object.freeze([
-  "Six plans for common business handoffs",
-  "The planner shows the steps but does not turn anything on. Building a working setup is separate, quoted work.",
+  "Talk through one task that keeps slipping.",
+  "Hive is a short phone or in-person conversation with Zack. If work is useful, scope and price come in writing before you decide.",
 ]);
 export const HOME_EVIDENCE_COPY =
   "one real founder-owned venture and two fictional design studies that are not client work";
 export const HOME_ABRACADABRA_COPY = Object.freeze([
-  "Works in this browser",
-  "Makes and downloads a real web page.",
-  "It does not put the site online or take payment.",
+  "Build and preview one page for free.",
+  "Download is a one-time $5 unlock for that editor project",
 ]);
 export const ABRACADABRA_STATE_BADGE = Object.freeze([
   "Local working rehearsal",
@@ -439,47 +509,56 @@ export const ABRACADABRA_STATE_BADGE = Object.freeze([
 export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
   "/abracadabra/": Object.freeze([
     "One-page website maker",
-    "Make a working page in this browser.",
-    "This build does not create an online account, take payment, register or connect a domain, or publish.",
-    "No account",
-    "No payment",
-    "No domain changes",
-    "No publishing",
+    "Build and preview one page for free.",
+    "Download is a one-time $5 unlock for each editor project",
+    "Free to build",
+    "Private preview",
+    "$5 Download",
+    "Your downloaded file",
     "Finish one step, then open the next.",
-    "Business",
+    "Basics",
+    "Details",
+    "Contact",
     "Look",
     "Review",
-    "Test &amp; download",
-    "Build and download",
+    "Preview",
+    "Preview for free. Download only when you want the file.",
   ]),
   "/abracadabra/how/": Object.freeze([
-    "From business details to a downloadable page.",
-    "Use four short steps",
-    "No account, payment, domain, or publishing step is part of this build.",
-    "What leaves the browser",
-    "Only the file you choose to download.",
-    "Test &amp; download",
+    "Build and preview your page in six short steps.",
+    "Building and previewing are free.",
+    "The private preview is free. Download is $5 once per editor project.",
+    "Basics",
+    "Details",
+    "Contact",
+    "Look",
+    "Review",
+    "Preview",
     "Build the first version now.",
   ]),
   "/abracadabra/app/": Object.freeze([
-    "Build, test, and download one page.",
-    "This build does not create an online account, take payment, register or connect a domain, or publish.",
-    "No online account",
-    "No account is required to build and test the first version.",
-    "Your page is not saved.",
-    "If you refresh this page or close the tab, you will start over.",
+    "Build and preview one page for free.",
+    "Your free preview stays in this tab.",
+    "Refresh or close the tab and you will start over.",
+    "No account to preview",
+    "Choose Download afterward",
+    "Basics",
+    "Details",
+    "Contact",
+    "Look",
+    "Review",
+    "Preview",
     "Project versions",
-    "Download the version you approved.",
-    "Download this HTML",
+    "Choose only after the preview looks right.",
+    "Download is $5 once for this editor project.",
   ]),
 });
 export const PUBLIC_TRUTH_COPY = Object.freeze({
   "/faq/": Object.freeze([
-    "Abracadabra works only in this browser",
-    "it makes a real page you can download",
-    "it does not put the page online or take payment",
-    "Abracadabra currently works only in this browser.",
-    "It does not create an online account, publish a site, take payment, send email, or change a domain.",
+    "build and preview one page privately for free",
+    "Download is $5 once per editor project",
+    "Build, revise, and test the private preview for free.",
+    "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "/legal/": Object.freeze([
     "filed alternate name SITESOURCERY",
@@ -557,9 +636,9 @@ const RETIRED_PUBLIC_TRUTH_COPY = Object.freeze([
 ]);
 
 const HOME_DOOR_HREFS = Object.freeze({
-  custom: "/custom/",
-  abracadabra: "/abracadabra/",
+  websites: "/websites/",
   hive: "/hive/",
+  services: "/solutions/",
 });
 const REQUIRED_RELEASE_FLAGS = Object.freeze([
   "allowsDeployment",
@@ -585,7 +664,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "scripts",
   "server",
 ]);
-const PUBLIC_ALLOWLIST_COUNT = 66;
+const PUBLIC_ALLOWLIST_COUNT = 68;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 const EXPECTED_ARTIFACT_ROUTE_ERROR =
   "thanks.html: missing legacy redirect to /contact/";
@@ -602,13 +681,19 @@ const CSS_VALUE_ATTRIBUTES = new Set([
   "stroke",
   "style",
 ]);
-const PRICE = /(?:[$£€¥]\s*\d|\b(?:USD|EUR|GBP|CAD|AUD)\s*\d|\bUS\$\s*\d|\b\d+(?:\.\d+)?\s*(?:\/\s*(?:mo|month|yr|year)\b|per\s+(?:month|year)\b))/iu;
+const PRICE = /(?:[$£€¥]\s*\d[\d,.]*|\b(?:USD|EUR|GBP|CAD|AUD)\s*\d[\d,.]*|\bUS\$\s*\d[\d,.]*|\b\d+(?:\.\d+)?\s*(?:\/\s*(?:mo|month|yr|year)\b|per\s+(?:month|year)\b))/giu;
 const PRICE_ATTRIBUTE = /(?:\bdata-(?:price|monthly|minimum|premium|rate|amount|cost|fee)[a-z-]*\s*=|"(?:price|lowPrice|highPrice|priceCurrency)"\s*:)/iu;
-const APPROVED_PUBLIC_PRICE_CLAIMS = Object.freeze({
-  "faq/index.html": Object.freeze(["$350 website assessment"]),
-  "legal/website-terms/index.html": Object.freeze(["$350 website assessment"]),
-  "solutions/index.html": Object.freeze(["$350 website assessment"]),
-});
+const FIVE_DOLLAR_PROPOSITION_FILES = new Set([
+  "abracadabra/app/abracadabra-app.js",
+  "abracadabra/app/index.html",
+  "abracadabra/how/index.html",
+  "abracadabra/index.html",
+  "faq/index.html",
+  "index.html",
+  "legal/website-terms/index.html",
+  "vnext.js",
+  "websites/index.html",
+]);
 const OFFER = /(?:"@type"\s*:\s*(?:\[[^\]]*?"Offer"|"Offer")|schema\.org\/Offer\b|\bitemtype\s*=\s*["'][^"']*\/Offer\b|\bitemprop\s*=\s*["'](?:price|priceCurrency)["'])/iu;
 const PAYMENT_ENDPOINT = /(?:buy\.stripe\.com|checkout\.stripe\.com|js\.stripe\.com|api\.stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|checkout\.com|squareup\.com|square\.link|payment_intent|createCheckoutSession|apple-pay|google-pay)/iu;
 const NETWORK_SINK = /\b(?:fetch\s*\(|XMLHttpRequest\b|sendBeacon\s*\(|WebSocket\s*\(|EventSource\s*\(|RTCPeerConnection\b|importScripts\s*\(|new\s+(?:Shared)?Worker\s*\()/u;
@@ -651,9 +736,13 @@ const RETIRED_ABRACADABRA_PRODUCT_COPY = Object.freeze([
 const RETIRED_HOME_HIVE_COPY = Object.freeze([
   "Ready-made and commissioned systems",
   "Start with After-Hours for missed calls",
+  "Plan one handoff that keeps slipping.",
+  "The planner shows the steps but does not turn anything on.",
 ]);
 const TARGET_CUSTOMER_ROUTES = Object.freeze([
   "/",
+  "/websites/",
+  "/websites/made-for-you/",
   "/start/",
   "/work/",
   "/about/",
@@ -903,7 +992,7 @@ function checkIntakeCongruence(routeSources, errors) {
     );
     for (const marker of [
       "The question tool needs JavaScript turned on.",
-      'href="/custom/"',
+      'href="/websites/"',
       'href="/hive/"',
       'href="/solutions/"',
       'href="tel:+18562441220"',
@@ -925,7 +1014,7 @@ function checkIntakeCongruence(routeSources, errors) {
       errors,
     );
     const hrefs = new Map([
-      ["website", "/custom/"],
+      ["website", "/websites/"],
       ["system", "/hive/"],
       ["service", "/solutions/"],
     ]);
@@ -1012,7 +1101,7 @@ function checkHomeDoors(source, errors) {
   const lowerSource = source.toLocaleLowerCase("en-US");
   for (const phrase of HOME_HIVE_COPY) {
     if (!lowerSource.includes(phrase.toLocaleLowerCase("en-US"))) {
-      report(errors, file, `missing Hive planning-versus-commission copy ${JSON.stringify(phrase)}`);
+      report(errors, file, `missing Hive conversation-versus-written-scope copy ${JSON.stringify(phrase)}`);
     }
   }
   for (const phrase of HOME_ABRACADABRA_COPY) {
@@ -1506,8 +1595,8 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const hero = firstAction >= 0 ? landing.source.slice(0, firstAction) : "";
     for (const phrase of [
       "One-page website maker",
-      "Make a working page in this browser.",
-      "This build does not create an online account, take payment, register or connect a domain, or publish.",
+      "Build and preview one page for free.",
+      "Download is a one-time $5 unlock for each editor project",
     ]) {
       if (!hero.includes(phrase)) {
         report(errors, landing.file, `missing above-fold Abracadabra product truth ${JSON.stringify(phrase)}`);
@@ -1517,7 +1606,7 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const heroAndProof = firstContentSection >= 0
       ? landing.source.slice(0, firstContentSection)
       : "";
-    for (const phrase of ["No account", "No payment", "No domain changes", "No publishing"]) {
+    for (const phrase of ["Free to build", "Private preview", "$5 Download", "Your downloaded file"]) {
       if (!heroAndProof.includes(phrase)) {
         report(errors, landing.file, `missing above-fold local-only proof ${JSON.stringify(phrase)}`);
       }
@@ -1525,7 +1614,7 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     if (landing.source.toLocaleLowerCase("en-US").includes("live example")) {
       report(errors, landing.file, "contains retired live-example wording for a generated srcdoc demonstration");
     }
-    const pathCardCopy = "Build it, review it, test it, and download the HTML.";
+    const pathCardCopy = "Build and preview privately for free. Choose the $5 Download only when you want the HTML file.";
     if (landing.source.split(pathCardCopy).length - 1 !== 1) {
       report(errors, landing.file, "Abracadabra path-card proof paragraph must appear exactly once");
     }
@@ -1537,9 +1626,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const journeys = markedElements(entry.file, entry.source, "data-abracadabra-journey", errors);
     checkExactValues(
       entry.file,
-      "Abracadabra local-download journey markers",
+      "Abracadabra preview-and-Download journey markers",
       journeys.map(({ value }) => value),
-      ["local-download"],
+      ["free-preview-paid-download"],
       errors,
     );
   }
@@ -1549,11 +1638,20 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const stateModels = markedElements(entry.file, entry.source, "data-abracadabra-state-model", errors);
     checkExactValues(
       entry.file,
-      "Abracadabra session-only state markers",
+      "Abracadabra editor-project state markers",
       stateModels.map(({ value }) => value),
-      ["session-only"],
+      ["editor-project"],
       errors,
     );
+  }
+}
+
+function checkCanonicalPublicEmail(file, source, errors) {
+  const emails = source.match(/\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}\b/giu) ?? [];
+  for (const email of emails) {
+    if (email !== CANONICAL_MAILBOX) {
+      report(errors, file, `alternate public email is forbidden: ${email}`);
+    }
   }
 }
 
@@ -1568,12 +1666,6 @@ function checkContactTruth(file, source, errors) {
     if (!source.includes(marker)) report(errors, file, `missing exact global marker ${JSON.stringify(marker)}`);
   }
 
-  const emails = source.match(/\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}\b/giu) ?? [];
-  for (const email of emails) {
-    if (email !== CANONICAL_MAILBOX) {
-      report(errors, file, `alternate public email is forbidden: ${email}`);
-    }
-  }
   const displayedPhones = source.match(/\(?\d{3}\)?[ .-]+\d{3}[ .-]+\d{4}\b/gu) ?? [];
   for (const phone of displayedPhones) {
     if (phone !== CANONICAL_PHONE.display) {
@@ -1624,15 +1716,14 @@ function checkPublicSource(file, source, { route = null } = {}, errors) {
     const match = source.match(expression);
     if (match) report(errors, file, `contains ${label}: ${JSON.stringify(match[0])}`);
   }
-  const priceSource = (APPROVED_PUBLIC_PRICE_CLAIMS[file] || []).reduce(function (value, claim) {
-    const occurrences = value.split(claim).length - 1;
-    if (occurrences > 1) {
-      report(errors, file, `approved public price claim may appear at most once: ${JSON.stringify(claim)}`);
+  for (const price of source.match(PRICE) ?? []) {
+    if (
+      !FIVE_DOLLAR_PROPOSITION_FILES.has(file)
+      || Number(price.replace(/[^\d.]/gu, "")) !== 5
+    ) {
+      report(errors, file, `contains public price outside the $5 Abracadabra project proposition: ${JSON.stringify(price)}`);
     }
-    return occurrences === 1 ? value.replace(claim, "") : value;
-  }, source);
-  const price = priceSource.match(PRICE);
-  if (price) report(errors, file, `contains public price: ${JSON.stringify(price[0])}`);
+  }
   const priceAttribute = source.match(PRICE_ATTRIBUTE);
   if (priceAttribute) report(errors, file, `contains public price-bearing attribute: ${JSON.stringify(priceAttribute[0])}`);
   const offer = source.match(OFFER);
@@ -2083,6 +2174,7 @@ export async function validateSiteVnext(root = process.cwd()) {
   for (const [route, { file, source }] of routeResult.sources) {
     if (!sourceFiles.has(file)) continue;
     checkContactTruth(file, source, errors);
+    checkCanonicalPublicEmail(file, source, errors);
     checkMainFocusTarget(file, source, errors);
     checkPublicSource(file, source, { route }, errors);
     checkEmbeddedStyles(file, source, sourceFiles, errors);
@@ -2123,6 +2215,7 @@ export async function validateSiteVnext(root = process.cwd()) {
     if (!TEXT_EXTENSIONS.has(extension)) continue;
     if ([...routeResult.sources.values()].some((entry) => entry.file === file)) continue;
     const source = await readFile(path.join(absoluteRoot, file), "utf8");
+    checkCanonicalPublicEmail(file, source, errors);
     const functionalRoute = Object.entries(FUNCTIONAL_APP_ROUTE_FILES)
       .find(([, routeFile]) => routeFile === file)?.[0] ?? null;
     checkPublicSource(file, source, { route: functionalRoute }, errors);

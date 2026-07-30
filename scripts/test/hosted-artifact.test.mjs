@@ -27,7 +27,9 @@ import {
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
   heldTruthRequirements,
+  hostedCodeTransforms,
   hostedOnlyPhrases,
+  hostedStagingAssetSha256,
   hostedTruthRequirements,
   hostedTruthSlots,
 } from "../hosted-truth/manifest.mjs";
@@ -36,8 +38,52 @@ const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../..",
 );
-const EXACT_LOCAL_BOUNDARY =
-  "This build does not create an online account, take payment, register or connect a domain, or publish.";
+
+const EXPECTED_HOSTED_STAGING_ASSETS = [
+  "abracadabra/app/abracadabra-api.js",
+  "abracadabra/app/abracadabra-control-mode.js",
+  "abracadabra/app/abracadabra-customer-control-dom.js",
+  "abracadabra/app/abracadabra-hosted-control.js",
+];
+
+const PRIVACY_TOPICS = [
+  "operator",
+  "public-pages",
+  "accounts",
+  "projects",
+  "published-sites",
+  "hive-planner",
+  "network-records",
+  "domains",
+  "billing",
+  "retention",
+  "safety-support",
+  "communications",
+  "choices",
+  "security",
+  "changes",
+  "contact",
+];
+
+const TERMS_TOPICS = [
+  "acceptance",
+  "self-service",
+  "address-modes",
+  "customer-domains",
+  "billing-cancellation",
+  "publication",
+  "customer-content",
+  "prohibited-uses",
+  "safety-holds",
+  "custom-work",
+  "assessment",
+  "hive-planner",
+  "care",
+  "site-ownership",
+  "warranty",
+  "limits",
+  "changes-contact",
+];
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -79,6 +125,19 @@ async function readTruthFiles(root, requirements) {
   );
 }
 
+async function readTextFiles(root, files) {
+  return new Map(
+    await Promise.all(
+      files
+        .filter((file) => /\.(?:html|js|json|xml|txt)$/u.test(file))
+        .map(async (file) => [
+          file,
+          await readFile(path.join(root, file), "utf8"),
+        ]),
+    ),
+  );
+}
+
 function assertRequirements(sources, requirements) {
   for (const [file, phrases] of Object.entries(requirements)) {
     const source = sources.get(file);
@@ -94,8 +153,25 @@ function assertMissingPhrases(sources, phrases) {
   }
 }
 
-test("reviewed truth slots are unique, exact, and the held source contains only held copy", async () => {
-  assert.equal(hostedTruthSlots.length, 26);
+function topicIds(source) {
+  return [...source.matchAll(/<details\b[^>]*\bdata-legal-topic="([^"]+)"/gu)]
+    .map((match) => match[1]);
+}
+
+function publicDollarValues(sources) {
+  return [...sources].flatMap(([file, source]) =>
+    [...source.matchAll(/\$(\d+(?:\.\d{2})?)/gu)]
+      .map((match) => ({ file, value: match[1] })));
+}
+
+function publicEmails(sources) {
+  return [...sources].flatMap(([file, source]) =>
+    [...source.matchAll(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/giu)]
+      .map((match) => ({ email: match[0].toLocaleLowerCase("en-US"), file })));
+}
+
+test("reviewed truth inputs are unique, exact, and held mode exposes no hosted account surface", async () => {
+  assert.equal(hostedTruthSlots.length, 13);
   assert.equal(
     new Set(hostedTruthSlots.map(({ id }) => id)).size,
     hostedTruthSlots.length,
@@ -104,14 +180,18 @@ test("reviewed truth slots are unique, exact, and the held source contains only 
     new Set(hostedTruthSlots.map(({ hostedFragment }) => hostedFragment)).size,
     hostedTruthSlots.length,
   );
-  assert.equal(
-    publicFileAllowlist.includes("abracadabra/app/abracadabra-control.js"),
-    false,
-  );
-  assert.equal(
-    hostedStagingAssets.includes("abracadabra/app/abracadabra-control.js"),
-    true,
-  );
+  assert.deepEqual(hostedCodeTransforms, []);
+  assert.deepEqual(hostedStagingAssets, EXPECTED_HOSTED_STAGING_ASSETS);
+  assert.deepEqual(Object.keys(hostedStagingAssetSha256), hostedStagingAssets);
+
+  for (const hostedOnlyAsset of [
+    "abracadabra/app/abracadabra-api.js",
+    "abracadabra/app/abracadabra-customer-control-dom.js",
+    "abracadabra/app/abracadabra-hosted-control.js",
+  ]) {
+    assert.equal(publicFileAllowlist.includes(hostedOnlyAsset), false);
+    assert.equal(hostedFileAllowlist.includes(hostedOnlyAsset), true);
+  }
   for (const heldViewerFile of [
     "abracadabra/platform/abracadabra-platform.js",
     "abracadabra/site/index.html",
@@ -155,41 +235,50 @@ test("reviewed truth slots are unique, exact, and the held source contains only 
   }
 
   const app = sources.get("abracadabra/app/index.html");
-  assert.equal(count(app, EXACT_LOCAL_BOUNDARY), 1);
   assert.match(
     app,
     /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
   );
-  assert.doesNotMatch(app, /class="platform-control"|data-open-account|data-save-direction/u);
-  assert.doesNotMatch(
-    app,
-    /data-request-recovery|recoveryEmail|Recover account access/u,
-    "held local maker must expose no account-recovery surface",
-  );
   assert.match(app, /abracadabra-control-mode\.js/u);
   assert.doesNotMatch(
     app,
-    /abracadabra-(?:control|hosted-control|hosted-control-dom)\.js|abracadabra-platform\.js/u,
+    /data-customer-stage|data-create-account|data-request-recovery|data-request-download-quote/u,
+  );
+  assert.doesNotMatch(
+    app,
+    /abracadabra-(?:hosted-control|customer-control-dom)\.js|abracadabra-platform\.js/u,
   );
 });
 
-test("held truth semantic gate rejects every retired legal simulator claim", async () => {
+test("held truth semantic gate rejects every hosted-only or retired held-product claim", async () => {
   const sources = await readTruthFiles(ROOT, heldTruthRequirements);
   assert.equal(assertHeldTruthSemantics(sources), true);
+
+  for (const phrase of hostedOnlyPhrases) {
+    const [file] = sources.keys();
+    const changed = new Map(sources);
+    changed.set(file, `${sources.get(file)}\n${phrase}\n`);
+    assert.throws(
+      () => assertHeldTruthSemantics(changed),
+      /contains hosted-only phrase/u,
+      phrase,
+    );
+  }
+
   for (const [file, phrases] of Object.entries(heldTruthForbiddenPhrases)) {
     for (const phrase of phrases) {
       const changed = new Map(sources);
       changed.set(file, `${sources.get(file)}\n${phrase}\n`);
       assert.throws(
         () => assertHeldTruthSemantics(changed),
-        /contains retired held-product phrase/u,
+        /contains (?:hosted-only|retired held-product) phrase/u,
         `${file}: ${phrase}`,
       );
     }
   }
 });
 
-test("one hosted build emits the exact ledger, one truth variant, hosted controls, and no local viewer", async (t) => {
+test("one hosted build emits the exact $5 Download contract, customer controls, and no retired product", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-artifact-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = path.join(temporary, "artifact");
@@ -197,20 +286,21 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
   assert.equal(await buildHostedArtifact({ root: ROOT, output }), output);
   await verifyHostedArtifact({ root: ROOT, output });
 
-  const hostedDomOutput = path.join(
+  const customerControlOutput = path.join(
     output,
-    "abracadabra/app/abracadabra-hosted-control-dom.js",
+    "abracadabra/app/abracadabra-customer-control-dom.js",
   );
-  const exactHostedDomOutput = await readFile(hostedDomOutput, "utf8");
-  await writeFile(hostedDomOutput, `${exactHostedDomOutput}\nchanged\n`, "utf8");
+  const exactCustomerControl = await readFile(customerControlOutput, "utf8");
+  await writeFile(customerControlOutput, `${exactCustomerControl}\nchanged\n`, "utf8");
   await assert.rejects(
     verifyHostedArtifact({ root: ROOT, output }),
     /hosted artifact staging asset digest mismatch/u,
   );
-  await writeFile(hostedDomOutput, exactHostedDomOutput, "utf8");
+  await writeFile(customerControlOutput, exactCustomerControl, "utf8");
   await verifyHostedArtifact({ root: ROOT, output });
 
-  assert.deepEqual((await walk(output)).sort(), [...hostedFileAllowlist]);
+  const files = (await walk(output)).sort();
+  assert.deepEqual(files, [...hostedFileAllowlist]);
   for (const file of [
     "abracadabra/site/index.html",
     "abracadabra/site/viewer.css",
@@ -236,10 +326,26 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
     assert.equal(source.includes("/abracadabra/site/"), false);
   }
 
+  const allText = await readTextFiles(output, files);
+  const dollars = publicDollarValues(allText);
+  assert.ok(dollars.length > 0);
+  for (const { file, value } of dollars) {
+    assert.ok(value === "5" || value === "5.00", `${file}: $${value}`);
+  }
+  const emails = publicEmails(allText);
+  assert.ok(emails.length > 0);
+  for (const { email, file } of emails) {
+    assert.equal(email, "sitesourcery@proton.me", file);
+  }
+  assert.doesNotMatch(
+    [...allText.values()].join("\n"),
+    /\b(?:Rent|Owned \+ managed|spark\.rent|spark\.own|offer & tenure)\b/iu,
+  );
+
   const app = sources.get("abracadabra/app/index.html");
   assert.ok(
     app.indexOf('id="workroom"') < app.indexOf('id="control-room"'),
-    "hosted maker must precede account controls in both DOM and visual order",
+    "hosted maker must precede account controls in DOM and visual order",
   );
   assert.equal(
     count(
@@ -252,61 +358,51 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
   for (const asset of [
     "/abracadabra/app/abracadabra-api.js",
     "/abracadabra/app/abracadabra-hosted-control.js",
-    "/abracadabra/app/abracadabra-hosted-control-dom.js",
-    "/abracadabra/app/abracadabra-control.js",
+    "/abracadabra/app/abracadabra-app.js",
+    "/abracadabra/app/abracadabra-customer-control-dom.js",
   ]) {
-    assert.ok(app.includes(asset), asset);
+    assert.equal(count(app, asset), 1, asset);
   }
-  assert.doesNotMatch(app, /abracadabra-platform\.js/u);
   assert.doesNotMatch(
     app,
-    /Internal lifecycle test|Test plan state|Test missed payment|Test suspension|Test deletion|data-internal-control/iu,
+    /abracadabra-hosted-catalog|abracadabra-control\.js|abracadabra-hosted-control-dom\.js|abracadabra-platform\.js/u,
   );
-
-  const catalogJson = app.match(
-    /<script id="abracadabra-hosted-catalog" type="application\/json">([^<]+)<\/script>/u,
-  )?.[1];
-  assert.ok(catalogJson);
-  const catalog = JSON.parse(catalogJson);
-  assert.deepEqual(Object.keys(catalog.products), ["spark"]);
-  assert.equal(
-    catalog.products.spark.implementationContract,
-    "abracadabra.spark/v1",
+  assert.doesNotMatch(
+    app,
+    /data-publish|data-domain-stage|data-save-address|data-save-access/u,
   );
-  assert.deepEqual(Object.keys(catalog.offers), [
-    "spark.rent",
-    "spark.own",
-    "spark.owned_managed",
-  ]);
+  assert.match(
+    app,
+    /href="\/contact\/#direct-contact">Contact Site Sourcery for account recovery<\/a>/u,
+  );
   assert.deepEqual(
-    catalog.offers["spark.own"].eligibleAddressModes,
-    ["customer_owned"],
+    [...app.matchAll(/data-customer-stage="([^"]+)"/gu)].map((match) => match[1]),
+    ["account", "project", "quote", "download"],
   );
-  assert.equal(JSON.stringify(catalog).includes("priceId"), false);
-  assert.equal(JSON.stringify(catalog).includes("amountMinor"), false);
+  assert.match(app, /\$5 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
 
-  const journey = [
-    "<h3>Account</h3>",
-    "<h3>Project Name</h3>",
-    "<h3>Address</h3>",
-    "<h3>Access</h3>",
-    "<h3>Offer &amp; tenure</h3>",
-    "<h3>Quote &amp; payment</h3>",
-    "<h3>Verified address</h3>",
-    "<h3>Reviewed version</h3>",
-    "<h3>Publish</h3>",
+  const makerSteps = [
+    "<h3>Basics</h3>",
+    "<h3>Details</h3>",
+    "<h3>Contact</h3>",
+    "<h3>Look</h3>",
+    "<h3>Review</h3>",
+    "<h3>Preview</h3>",
   ];
-  for (const route of [
-    "abracadabra/index.html",
-    "abracadabra/how/index.html",
-  ]) {
-    const journeySource = sources.get(route);
-    let cursor = -1;
-    for (const step of journey) {
-      const next = journeySource.indexOf(step);
-      assert.ok(next > cursor, `${route}: ${step}`);
-      cursor = next;
-    }
+  const landing = sources.get("abracadabra/index.html");
+  let cursor = -1;
+  for (const step of makerSteps) {
+    const next = landing.indexOf(step);
+    assert.ok(next > cursor, step);
+    cursor = next;
+  }
+  for (const route of ["abracadabra/index.html", "abracadabra/how/index.html"]) {
+    const source = sources.get(route);
+    assert.equal(count(source, 'data-abracadabra-state-model="editor-project"'), 1);
+    assert.equal(
+      count(source, 'data-abracadabra-journey="free-preview-paid-download"'),
+      1,
+    );
   }
 
   const faq = sources.get("faq/index.html");
@@ -320,108 +416,31 @@ test("one hosted build emits the exact ledger, one truth variant, hosted control
     assert.equal(count(faq, `id="${anchor}" data-faq-anchor="${anchor}"`), 1);
   }
 
+  const privacy = sources.get("legal/privacy/index.html");
   const terms = sources.get("legal/website-terms/index.html");
-  const hostedApp = sources.get("abracadabra/app/index.html");
-  assert.match(
-    hostedApp,
-    /href="\/contact\/#direct-contact">Contact Site Sourcery for account recovery<\/a>/u,
-  );
-  assert.doesNotMatch(
-    [...sources.values()].join("\n"),
-    /\bOwn \+ managed\b/u,
-    "the third tenure must stay named Owned + managed on every hosted surface",
-  );
-  for (const topic of [
-    "account",
-    "provider",
-    "serving",
-    "payment",
-    "Rent",
-    "Own",
-    "Owned + managed",
-    "domain",
-    "support",
-    "safety",
-    "export",
-    "deletion",
+  assert.deepEqual(topicIds(privacy), PRIVACY_TOPICS);
+  assert.deepEqual(topicIds(terms), TERMS_TOPICS);
+  for (const phrase of [
+    "$5 once per editor project unlocks Download for that project.",
+    "Later accepted versions and repeat downloads from the same retained editor project do not require another Site Sourcery purchase.",
+    "A different editor project has its own one-time $5 Download unlock.",
+    "The customer may modify it and self-host it without another Site Sourcery payment.",
+    "Made-for-you design, writing, migration, integrations, domain help, and publishing need a separate written scope.",
+    "Hive is a short phone or in-person conversation with Zack",
   ]) {
-    assert.ok(
-      terms.toLocaleLowerCase("en-US").includes(
-        topic.toLocaleLowerCase("en-US"),
-      ),
-      topic,
-    );
+    assert.ok(terms.includes(phrase), phrase);
   }
-
-  const control = await readFile(
-    path.join(output, "abracadabra/app/abracadabra-control.js"),
-    "utf8",
-  );
-  assert.match(control, /^\(function \(root, factory\) \{/u);
-  assert.doesNotMatch(
-    control,
-    /SiteSourceryAbracadabraPlatform|localStorage|\/abracadabra\/site\//u,
-  );
-
-  const domainApi = await readFile(
-    path.join(output, "abracadabra/app/abracadabra-api.js"),
-    "utf8",
-  );
-  const hostedControl = await readFile(
-    path.join(output, "abracadabra/app/abracadabra-hosted-control.js"),
-    "utf8",
-  );
-  const hostedControlDom = await readFile(
-    path.join(output, "abracadabra/app/abracadabra-hosted-control-dom.js"),
-    "utf8",
-  );
-  assert.match(
-    domainApi,
-    /function createDomainQuote\(projectId, input, requestOptions\)/u,
-    "the built browser API must require the selected project for a quote",
-  );
-  assert.match(
-    domainApi,
-    /function getDomainOrder\(projectId, orderId, requestOptions\)/u,
-    "the built browser API must require the selected project for order status",
-  );
-  assert.match(
-    domainApi,
-    /function upsertDnsRecord\(projectId, domainId, input, requestOptions\)/u,
-    "the built browser API must require the selected project for DNS writes",
-  );
-  assert.match(
-    hostedControl,
-    /if \(!exactDomainPaymentPath\(order\)\)/u,
-    "the built control must accept only its exact same-origin payment relay",
-  );
-  assert.match(
-    hostedControl,
-    /function projectBound\(value, projectId, label\)/u,
-    "the built control must reject cross-project domain responses",
-  );
-  assert.match(
-    hostedControlDom,
-    /data-hosted-domain-project-state/u,
-    "the built customer UI must explain that domain work follows the selected project",
-  );
-  for (const stage of ["1", "2", "3", "4"]) {
+  for (const legalSource of [privacy, terms]) {
+    assert.match(legalSource, /href="tel:\+18562441220">\(856\) 244-1220<\/a>/u);
     assert.match(
-      hostedControlDom,
-      new RegExp(`"data-domain-stage": "${stage}"`, "u"),
-      `the built customer UI must include progressive domain stage ${stage}`,
+      legalSource,
+      /href="mailto:sitesourcery@proton\.me">sitesourcery@proton\.me<\/a>/u,
+    );
+    assert.doesNotMatch(
+      legalSource,
+      /\b(?:cancel anytime|refund within|retained for \d+ days?|Rent|Owned \+ managed)\b/iu,
     );
   }
-  assert.match(
-    hostedControlDom,
-    /window\.location\.assign\(destination\)/u,
-    "the built customer UI must follow only the same-origin payment relay",
-  );
-  assert.equal(
-    count(hostedControlDom, '"/api/v1/domain-orders/"'),
-    1,
-    "the built domain journey must expose only its one exact same-origin payment relay",
-  );
 
   const commercialControl = JSON.parse(
     await readFile(path.join(ROOT, "data/abracadabra-commercial-control.json"), "utf8"),
@@ -449,22 +468,25 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
     },
   });
 
-  const homeFile = path.join(fixture, "index.html");
+  const appFile = path.join(fixture, "abracadabra/app/index.html");
   const fragmentFile = path.join(
     fixture,
-    "scripts/hosted-truth/fragments/home-abracadabra-card.html",
+    "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
   );
-  const originalHome = await readFile(homeFile, "utf8");
-  const originalFragment = await readFile(fragmentFile, "utf8");
-  const hostedDomFile = path.join(
+  const customerControlFile = path.join(
     fixture,
-    "abracadabra/app/abracadabra-hosted-control-dom.js",
+    "abracadabra/app/abracadabra-customer-control-dom.js",
   );
-  const originalHostedDom = await readFile(hostedDomFile, "utf8");
+  const originalApp = await readFile(appFile, "utf8");
+  const originalFragment = await readFile(fragmentFile, "utf8");
+  const originalCustomerControl = await readFile(customerControlFile, "utf8");
 
   await writeFile(
-    homeFile,
-    originalHome.replace("Works in this browser", "Works somewhere"),
+    appFile,
+    originalApp.replace(
+      "Build and preview one page for free.",
+      "Build and preview a changed page for free.",
+    ),
     "utf8",
   );
   await assert.rejects(
@@ -472,7 +494,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
     /held truth changed without reviewed manifest update/u,
   );
   await assert.rejects(access(output));
-  await writeFile(homeFile, originalHome, "utf8");
+  await writeFile(appFile, originalApp, "utf8");
 
   await writeFile(fragmentFile, `${originalFragment}\nchanged\n`, "utf8");
   await assert.rejects(
@@ -482,31 +504,34 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await assert.rejects(access(output));
   await writeFile(fragmentFile, originalFragment, "utf8");
 
-  await writeFile(hostedDomFile, `${originalHostedDom}\nchanged\n`, "utf8");
+  await writeFile(customerControlFile, `${originalCustomerControl}\nchanged\n`, "utf8");
   await assert.rejects(
     buildHostedArtifact({ root: fixture, output }),
     /hosted staging asset changed without reviewed manifest update/u,
   );
   await assert.rejects(access(output));
-  await writeFile(hostedDomFile, originalHostedDom, "utf8");
+  await writeFile(customerControlFile, originalCustomerControl, "utf8");
 
   const startMarker =
-    "<!-- sitesourcery:truth-slot:home-abracadabra-card:start -->";
-  await writeFile(homeFile, originalHome.replace(startMarker, ""), "utf8");
+    "<!-- sitesourcery:truth-slot:abracadabra-app-hero:start -->";
+  await writeFile(appFile, originalApp.replace(startMarker, ""), "utf8");
   await assert.rejects(
     buildHostedArtifact({ root: fixture, output }),
     /truth slot markers must each appear once/u,
   );
   await assert.rejects(access(output));
-  await writeFile(homeFile, originalHome, "utf8");
+  await writeFile(appFile, originalApp, "utf8");
 
   await buildHostedArtifact({ root: fixture, output });
-  const lastGood = await readFile(path.join(output, "index.html"), "utf8");
+  const lastGood = await readFile(
+    path.join(output, "abracadabra/app/index.html"),
+    "utf8",
+  );
   await writeFile(
-    homeFile,
-    originalHome.replace(
-      "It does not put the site online or take payment.",
-      "Everything is live.",
+    appFile,
+    originalApp.replace(
+      "Choose only after the preview looks right.",
+      "Choose immediately.",
     ),
     "utf8",
   );
@@ -515,7 +540,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
     /held truth changed without reviewed manifest update/u,
   );
   assert.equal(
-    await readFile(path.join(output, "index.html"), "utf8"),
+    await readFile(path.join(output, "abracadabra/app/index.html"), "utf8"),
     lastGood,
     "failed build must preserve the last complete artifact",
   );

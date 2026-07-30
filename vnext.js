@@ -185,72 +185,22 @@
 
     var pathChoices = {
       website: {
-        question: "Is this a new website or a replacement?",
+        question: "How do you want the website made?",
         options: [
           {
-            key: "website-new",
-            label: "A new website",
-            note: "Nothing is being replaced. No old links or content need to move, and no host or domain switch is needed. You can still enter facts from a brochure or brand guide."
-          },
-          {
-            key: "website-replace",
-            label: "Replace an existing site",
-            note: "A site already exists, so links, content, tools, hosting, or the domain may need a safe move."
-          }
-        ]
-      },
-      "website-new": {
-        question: "How do you want the new website made?",
-        options: [
-          {
-            key: "custom",
+            key: "made-for-you",
             label: "Make it for me",
-            note: "I want professional planning, design, delivery, and human review."
+            note: "I want a person to plan, design, build, test, and review the site with me."
           },
-          {
-            key: "website-self-service",
-            label: "Let me make one page",
-            note: "I will type in the facts myself. No old links or content need to move, and no host or domain switch is needed."
-          }
-        ]
-      },
-      "website-self-service": {
-        question: "Does this one-page option fit?",
-        options: [
           {
             key: "abracadabra",
-            label: "Yes · nothing old needs replacing",
-            note: "One page is enough. I can type the facts myself and do not need old links, content, outside tools, or human revisions."
+            label: "Let me build one page",
+            note: "I will enter the facts and shape a private preview myself. Download is $5 once per editor project."
           },
           {
-            key: "self-service-uncertain",
-            label: "I am not completely sure",
-            note: "I want a person to check before I risk losing content or links."
-          }
-        ]
-      },
-      "website-replace": {
-        question: "What must survive or change?",
-        options: [
-          {
-            key: "replace-redirects",
-            label: "Old links or search traffic",
-            note: "Old page addresses need to keep working or point to the right new page."
-          },
-          {
-            key: "replace-migration",
-            label: "Existing pages, words, or media",
-            note: "Content must be reviewed, moved, reshaped, or preserved."
-          },
-          {
-            key: "replace-cutover",
-            label: "Hosting, tools, or the switch",
-            note: "The current host, domain, forms, tools, or launch timing matter."
-          },
-          {
-            key: "replace-uncertain",
-            label: "I do not know what must survive",
-            note: "I want a person to check the old site before I choose."
+            key: "website-unsure",
+            label: "I am not sure",
+            note: "I want to compare the two paths or ask Zack before choosing."
           }
         ]
       },
@@ -347,84 +297,58 @@
     };
 
     var recommendations = {
-      custom: {
-        title: "Custom — made for you",
-        copy: "Choose Custom when you want the site planned, designed, built, and reviewed with you, or when an old site must be replaced safely.",
-        action: "See Custom websites",
-        href: "/custom/"
+      "made-for-you": {
+        title: "A made-for-you website",
+        copy: "Choose this path for original design, more than one page, outside tools, or an old site that needs a careful replacement. Scope and price come in writing before paid work begins.",
+        action: "See made-for-you websites",
+        href: "/websites/made-for-you/"
       },
-      /* sitesourcery:truth-slot:start-recommendation-abracadabra:start */
       abracadabra: {
-        title: "Abracadabra — make it yourself",
-        copy: "Make and download one real web page from facts you type into this browser. It does not put the page online, replace an old site, move content, change a domain, connect outside tools, or include human revisions.",
-        action: "Try Abracadabra",
+        title: "Build one page yourself",
+        copy: "Build and preview privately for free. Download is $5 once per editor project, not per click or version. The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
+        action: "See the one-page maker",
         href: "/abracadabra/"
       },
-      /* sitesourcery:truth-slot:start-recommendation-abracadabra:end */
-      "self-service-uncertain": {
-        title: "Ask a human before choosing",
-        copy: "If you are not sure one page and manual entry are enough, ask the studio to check first.",
-        action: "Contact the studio",
-        href: "/contact/"
-      },
-      "replace-redirects": {
-        title: "Custom — protect old links",
-        copy: "Old page addresses and search traffic need a careful list and redirect plan before the new site replaces the old one.",
-        action: "See Custom websites",
-        href: "/custom/"
-      },
-      "replace-migration": {
-        title: "Custom — move the content",
-        copy: "Existing pages, words, or images need a person to review what stays, what changes, and where it belongs.",
-        action: "See Custom websites",
-        href: "/custom/"
-      },
-      "replace-cutover": {
-        title: "Custom — plan the switch",
-        copy: "Hosting, forms, outside tools, domains, and launch timing need a written moving plan.",
-        action: "See Custom websites",
-        href: "/custom/"
-      },
-      "replace-uncertain": {
-        title: "Start with a human review",
-        copy: "Ask the studio to inspect the old links, content, hosting, tools, and domain before choosing how to replace the site.",
-        action: "Contact the studio",
-        href: "/contact/"
+      "website-unsure": {
+        title: "Compare the website paths",
+        copy: "See the made-for-you and build-it-yourself choices side by side, or contact Zack without choosing first.",
+        action: "Compare website options",
+        href: "/websites/"
       },
       "hive-missed-call": {
         title: "Hive · Missed-call responder",
-        copy: "See a plan for recording a missed call, sending an allowed reply, handing it to a person, and stopping the system.",
-        action: "Inspect missed-call responder",
+        copy: "Use a missed call as the starting point for a short conversation about the better outcome, human handoff, and boundaries.",
+        action: "Open this Hive starting point",
         href: "/hive/#missed-call"
       },
       "hive-booking": {
         title: "Hive · Booking guide",
-        copy: "See a booking plan that treats times as open until the booking service confirms them.",
-        action: "Inspect booking guide",
+        copy: "Use a booking problem as the starting point for a short conversation about the questions, confirmation, and human handoff.",
+        action: "Open this Hive starting point",
         href: "/hive/#booking"
       },
       "hive-review-request": {
         title: "Hive · Review request",
-        copy: "See a fair review-request plan with clear timing, permission, stop rules, and a path for problems.",
-        action: "Inspect review request",
+        copy: "Use a review request as the starting point for a short conversation about timing, permission, and an easy stop.",
+        action: "Open this Hive starting point",
         href: "/hive/#review-request"
       },
       "hive-after-hours": {
         title: "Hive · After-hours information",
-        copy: "See an after-hours plan that uses approved facts and sends unclear or urgent questions to a person.",
-        action: "Inspect after-hours information",
+        copy: "Use an after-hours question as the starting point for a short conversation about checked facts and the path to a person.",
+        action: "Open this Hive starting point",
         href: "/hive/#after-hours"
       },
       "hive-follow-up": {
         title: "Hive · Follow-up",
-        copy: "See a follow-up plan that keeps the reason, owner, due time, permission, and human decision clear.",
-        action: "Inspect follow-up",
+        copy: "Use a missed follow-up as the starting point for a short conversation about the reason, owner, due time, and human decision.",
+        action: "Open this Hive starting point",
         href: "/hive/#follow-up"
       },
       "hive-getting-paid": {
         title: "Hive · Getting-paid reminder",
-        copy: "See an invoice reminder plan that stops when the balance, identity, credit, or dispute is unclear.",
-        action: "Inspect getting-paid reminder",
+        copy: "Use an overdue invoice as the starting point for a short conversation about a respectful reminder and a clear way to question it.",
+        action: "Open this Hive starting point",
         href: "/hive/#getting-paid"
       },
       commission: {

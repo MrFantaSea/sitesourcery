@@ -35,7 +35,7 @@ test("customer-copy gate rejects internal jargon", async () => {
 test("customer-copy gate rejects an overlong heading", async () => {
   const errors = await homeErrors((source) =>
     source.replace(
-      "<h1>A clearer website for your small business.</h1>",
+      "<h1>A clearer path for your small business online.</h1>",
       "<h1>This heading has far too many words for a person scanning the website quickly on a phone today</h1>",
     ));
   assert.match(errors.join("\n"), /heading is \d+ words/u);
@@ -50,8 +50,8 @@ test("customer-copy gate rejects an overlong paragraph", async () => {
 test("customer-copy gate keeps one clear hero action", async () => {
   const errors = await homeErrors((source) =>
     source.replace(
-      '<a class="button button-primary" href="/start/">Find the right next step</a>',
-      '<a class="button button-primary" href="/start/">Find the right next step</a><a href="/contact/">Contact</a>',
+      '<a class="button button-primary" href="/websites/">Choose a website path</a>',
+      '<a class="button button-primary" href="/websites/">Choose a website path</a><a href="/contact/">Contact</a>',
     ));
   assert.match(errors.join("\n"), /exactly one next-action link/u);
 });

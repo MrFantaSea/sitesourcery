@@ -290,7 +290,10 @@ async function assertHostedStagingAssets(absoluteRoot) {
 
 async function loadAndValidateHeldSources(absoluteRoot) {
   assertManifestShape();
-  const files = [...new Set(hostedTruthSlots.map(({ file }) => file))].sort(lexical);
+  const files = [...new Set([
+    ...hostedTruthSlots.map(({ file }) => file),
+    ...Object.keys(heldTruthRequirements),
+  ])].sort(lexical);
   const sources = new Map();
   for (const file of files) {
     await assertRegularSource(absoluteRoot, file);

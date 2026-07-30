@@ -15,7 +15,7 @@
     "audit:browser": "node --experimental-websocket scripts/browser-audit-vnext.mjs",
     "audit:hosted-domain-browser": "node --experimental-websocket scripts/browser-hosted-domain-journey.mjs",
     "check": "npm run check:html && npm run check:routes && npm run check:vnext && npm run check:sections && npm run check:copy && npm run check:legal-copy && npm run check:catalog && npm run check:abracadabra && npm run check:hosted",
-    "check:html": "html-validate \"*.html\" \"about/**/*.html\" \"abracadabra/**/*.html\" \"contact/**/*.html\" \"custom/**/*.html\" \"faq/**/*.html\" \"hive/**/*.html\" \"legal/**/*.html\" \"solutions/**/*.html\" \"start/**/*.html\" \"work/**/*.html\"",
+    "check:html": "html-validate \"*.html\" \"about/**/*.html\" \"abracadabra/**/*.html\" \"contact/**/*.html\" \"custom/**/*.html\" \"faq/**/*.html\" \"hive/**/*.html\" \"legal/**/*.html\" \"solutions/**/*.html\" \"start/**/*.html\" \"websites/**/*.html\" \"work/**/*.html\"",
     "check:routes": "node scripts/check-routes.mjs",
     "check:vnext": "node scripts/check-site-vnext.mjs",
     "check:sections": "node scripts/check-customer-section-ledger.mjs",

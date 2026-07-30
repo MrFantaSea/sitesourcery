@@ -174,25 +174,21 @@ const assessment = publicCatalog.professionalServices?.find((service) =>
 if (!assessment || assessment.priceCents !== 35000) {
   errors.push("data/public-catalog.json: website-assessment must retain the exact $350 internal record");
 } else {
-  const displayAmount = `$${new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(assessment.priceCents / 100)}`;
-  const expectedDisplays = [
-    ["faq/index.html", `${displayAmount} website assessment`],
-    ["legal/website-terms/index.html", `${displayAmount} website assessment`],
-    ["solutions/index.html", `${displayAmount} website assessment`],
-  ];
-  for (const [file, text] of expectedDisplays) requireText(file, text);
-
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
     for (const match of files[file].matchAll(/\$\s?\d[\d,.]*/gu)) {
       observedDisplays.push(`${file}:${match[0].replace(/\s/gu, "")}`);
     }
   }
-  const expectedObserved = expectedDisplays.map(([file]) => `${file}:${displayAmount}`);
-  if (JSON.stringify(observedDisplays.sort()) !== JSON.stringify(expectedObserved.sort())) {
-    errors.push(`public HTML dollar displays must be only the three exact assessment disclosures; received ${JSON.stringify(observedDisplays.sort())}`);
+  const invalidDisplays = observedDisplays.filter((entry) => {
+    const amount = entry.slice(entry.lastIndexOf(":") + 1).replace(/[$,]/gu, "");
+    return Number(amount) !== 5;
+  });
+  if (invalidDisplays.length > 0) {
+    errors.push(`public HTML dollar displays must use only the $5 Abracadabra project proposition; received ${JSON.stringify(invalidDisplays.sort())}`);
+  }
+  if (!files["abracadabra/index.html"].includes("$5")) {
+    errors.push("abracadabra/index.html: missing the reviewed $5 project Download proposition");
   }
 }
 
@@ -205,5 +201,5 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records match the private projection; only three exact $350 assessment disclosures are public; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
+  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records match the private projection; public dollar copy is limited to the $5 Abracadabra project proposition; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
 }

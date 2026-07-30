@@ -8,6 +8,8 @@ export const SITE_ORIGIN = "https://sitesourcery.com";
 
 export const CANONICAL_ROUTES = Object.freeze([
   "/",
+  "/websites/",
+  "/websites/made-for-you/",
   "/custom/",
   "/custom/scope/",
   "/custom/process/",
@@ -31,14 +33,12 @@ export const FUNCTIONAL_APP_ROUTES = Object.freeze([
 ]);
 
 export const PRIMARY_NAV = Object.freeze([
-  Object.freeze({ label: "Websites", href: "/custom/" }),
+  Object.freeze({ label: "Websites", href: "/websites/" }),
   Object.freeze({ label: "Calls & follow-up", href: "/hive/" }),
   Object.freeze({ label: "Services", href: "/solutions/" }),
   Object.freeze({ label: "Examples", href: "/work/" }),
   Object.freeze({ label: "About", href: "/about/" }),
-  Object.freeze({ label: "FAQ", href: "/faq/" }),
-  Object.freeze({ label: "Contact", href: "/contact/" }),
-  Object.freeze({ label: "Call Zack: (856) 244-1220", href: "tel:+18562441220" }),
+  Object.freeze({ label: "Get started", href: "/start/" }),
 ]);
 
 export const LEGACY_REDIRECTS = Object.freeze({

@@ -83,18 +83,12 @@ const packageLock = JSON.parse(packageLockSource);
 
 test("browser gate owns the exact customer navigation and route-only current state", () => {
   assert.deepEqual(PRIMARY_NAV_CONTRACT, [
-    { label: "Websites", href: "/custom/", className: "" },
+    { label: "Websites", href: "/websites/", className: "" },
     { label: "Calls & follow-up", href: "/hive/", className: "" },
     { label: "Services", href: "/solutions/", className: "" },
     { label: "Examples", href: "/work/", className: "" },
     { label: "About", href: "/about/", className: "" },
-    { label: "FAQ", href: "/faq/", className: "" },
-    { label: "Contact", href: "/contact/", className: "nav-start" },
-    {
-      label: "Call Zack: (856) 244-1220",
-      href: "tel:+18562441220",
-      className: "nav-call",
-    },
+    { label: "Get started", href: "/start/", className: "nav-start" },
   ]);
   assert.deepEqual(
     ROUTE_PRIMARY_NAV,
@@ -106,9 +100,12 @@ test("browser gate owns the exact customer navigation and route-only current sta
     ariaCurrent: entry.href === route ? "page" : "",
     visible,
   }));
-  assert.deepEqual(primaryNavContractFailures(entries("/custom/"), "/custom/"), []);
+  assert.deepEqual(primaryNavContractFailures(entries("/websites/"), "/websites/"), []);
   assert.deepEqual(
-    primaryNavContractFailures(entries("/custom/scope/"), "/custom/scope/"),
+    primaryNavContractFailures(
+      entries("/websites/made-for-you/"),
+      "/websites/made-for-you/",
+    ),
     [],
     "nested routes must not mark a parent navigation destination as current",
   );
@@ -117,27 +114,26 @@ test("browser gate owns the exact customer navigation and route-only current sta
     [],
   );
   const desktop = entries("/faq/");
-  desktop.at(-1).visible = false;
   assert.deepEqual(
     primaryNavContractFailures(desktop, "/faq/", { visibility: "desktop" }),
     [],
   );
-  const wrongOrder = entries("/custom/");
+  const wrongOrder = entries("/websites/");
   [wrongOrder[0], wrongOrder[1]] = [wrongOrder[1], wrongOrder[0]];
   assert.ok(
-    primaryNavContractFailures(wrongOrder, "/custom/")
+    primaryNavContractFailures(wrongOrder, "/websites/")
       .some((failure) => failure.includes("entry 0 label")),
   );
-  const wrongCurrent = entries("/custom/");
+  const wrongCurrent = entries("/websites/");
   wrongCurrent[0].ariaCurrent = "";
   assert.ok(
-    primaryNavContractFailures(wrongCurrent, "/custom/")
+    primaryNavContractFailures(wrongCurrent, "/websites/")
       .some((failure) => failure.includes("aria-current")),
   );
-  const exposedDesktopCall = desktop.map((entry) => ({ ...entry }));
-  exposedDesktopCall.at(-1).visible = true;
+  const hiddenDesktopStart = desktop.map((entry) => ({ ...entry }));
+  hiddenDesktopStart.at(-1).visible = false;
   assert.ok(
-    primaryNavContractFailures(exposedDesktopCall, "/faq/", { visibility: "desktop" })
+    primaryNavContractFailures(hiddenDesktopStart, "/faq/", { visibility: "desktop" })
       .some((failure) => failure.includes("visibility")),
   );
 });
@@ -720,7 +716,7 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/legal/privacy/": 16,
     "/legal/website-terms/": 17,
   });
-  assert.equal(CANONICAL_ROUTES.length, 17);
+  assert.equal(CANONICAL_ROUTES.length, 19);
 
   const validSnapshot = (scenario) => ({
     belowFold: {

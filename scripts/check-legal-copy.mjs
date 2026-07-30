@@ -57,7 +57,7 @@ const LEGAL_CLAUSE_DIGESTS = Object.freeze({
     "prohibited-uses": "5826a9ec8f03fb7842dd816bfc62cb2ff90b334d51a7e5e00d1fbaf3ae00e41e",
     "safety-holds": "51bc2295d80b5ea94e4f087cfeb4d2e2cd6fa8b0df34cb52e1cd42d39ad320d6",
     "custom-work": "c0dade91da88af7b873af72d4c9e6518b017f97ff4f57dbc43ea2a9594903b49",
-    "assessment": "028d386357a1dcb11f808c4c0f44e7ad35cfa34ef299b1b74b2ecbb96dd95fc9",
+    "assessment": "57c6bc7809dc7be0ef82eda3451e5617e42795c91a74e1c537fac04a0642e590",
     "hive-planner": "989d1641728ebd09d7e91bd3d9936b00d83d25a4d5331e9d7de40ef8206b69f2",
     "care": "fe996c75a6aef7cd599e83e2bd86d09e1d36406c7939286055e741c6ea93fc8f",
     "site-ownership": "a263b5a395522792b4723aa43b89abb61be551d823f00070ed6a77e9da47cfec",

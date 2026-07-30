@@ -87,7 +87,7 @@ async function loadHostedRouteSources(t) {
   );
 }
 
-test("one exact map accounts for all 17 public routes and every remaining unit contract", () => {
+test("one exact map accounts for all 19 public routes and every remaining unit contract", () => {
   assert.deepEqual(Object.keys(PUBLIC_ROUTE_SECTION_LEDGER), CANONICAL_ROUTES);
   assert.deepEqual(
     Object.fromEntries(
@@ -120,7 +120,7 @@ test("one exact map accounts for all 17 public routes and every remaining unit c
     {
       "paid-route-contracts": 4,
       "remaining-section-ledger": 9,
-      "trust-intake-contracts": 4,
+      "trust-intake-contracts": 6,
     },
   );
 
@@ -143,16 +143,16 @@ test("one exact map accounts for all 17 public routes and every remaining unit c
     heldUnits += entry.held.length;
     hostedUnits += entry.hosted.length;
   }
-  assert.equal(heldUnits, 116);
-  assert.equal(hostedUnits, 152);
+  assert.equal(heldUnits, 122);
+  assert.equal(hostedUnits, 135);
 });
 
-test("the checked-in held pages satisfy all 116 ordered customer-unit contracts", async () => {
+test("the checked-in held pages satisfy all 122 ordered customer-unit contracts", async () => {
   const sources = await loadCustomerSectionRouteSources(SITE_ROOT);
   assert.deepEqual(validateCustomerSectionLedger(sources, { variant: "held" }), []);
 });
 
-test("the transformed hosted artifact satisfies all 152 ordered customer-unit contracts", async (t) => {
+test("the transformed hosted artifact satisfies all 135 ordered customer-unit contracts", async (t) => {
   const sources = await loadHostedRouteSources(t);
   assert.deepEqual(validateCustomerSectionLedger(sources, { variant: "hosted" }), []);
   assert.notDeepEqual(
@@ -199,8 +199,8 @@ test("the ledger rejects a second primary, lost evidence, and lost JavaScript-of
   const duplicatePrimary = validateCustomerSectionLedger(
     mutateRoute(sources, "/", (source) =>
       source.replace(
-        'class="button" data-home-door="abracadabra"',
-        'class="button button-primary" data-home-door="abracadabra"',
+        'class="button" href="/contact/"',
+        'class="button button-primary" href="/contact/"',
       )),
   );
   assertFailure(duplicatePrimary, "exposes 2 primary actions; maximum is 1");

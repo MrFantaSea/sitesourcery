@@ -54,7 +54,8 @@ if (isCli) {
     .then(({ routes, units, variant }) => {
       console.log(
         `Customer section ledger passed: ${routes} remaining routes, `
-        + `${units} exact ${variant} customer units, 17 public routes accounted for.`,
+        + `${units} exact ${variant} customer units, `
+        + `${Object.keys(PUBLIC_ROUTE_SECTION_LEDGER).length} public routes accounted for.`,
       );
     })
     .catch((error) => {

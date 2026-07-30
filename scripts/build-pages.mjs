@@ -80,6 +80,8 @@ export const publicFileAllowlist = Object.freeze([
   "the-responder.html",
   "vnext.css",
   "vnext.js",
+  "websites/index.html",
+  "websites/made-for-you/index.html",
   "work/index.html",
   "work/work.css",
 ]);

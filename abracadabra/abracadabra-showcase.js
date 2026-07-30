@@ -15,7 +15,7 @@
     location: "South Jersey",
     hours: "Tuesday–Saturday, 10–6",
     phone: "(856) 555-0142",
-    email: "hello@example.com",
+      email: "sitesourcery@proton.me",
     website: "",
     primaryAction: "email"
   });

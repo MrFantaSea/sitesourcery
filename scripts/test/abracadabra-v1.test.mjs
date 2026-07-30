@@ -383,12 +383,12 @@ test("held maker stays account-free while hosted adoption code can carry a revie
   );
 });
 
-test("held and hosted landing pages keep a truthful generated-example fallback without JavaScript", () => {
+test("the shared held-and-hosted landing keeps a truthful generated-example fallback without JavaScript", () => {
   const fallbackCopy =
     "Static fictional preview shown. JavaScript opens the generated example.";
   const noScriptCopy =
     "The static fictional previews below are placeholders. Turn JavaScript on to open the generated examples or use the page maker.";
-  for (const source of [landingHtml, hostedLandingMarkup]) {
+  for (const source of [landingHtml]) {
     assert.equal(source.split(fallbackCopy).length - 1, 4);
     assert.equal(source.split(noScriptCopy).length - 1, 1);
     assert.match(source, /<noscript>[\s\S]*class="site-shell abracadabra-noscript"/u);
