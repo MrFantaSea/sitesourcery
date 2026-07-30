@@ -877,6 +877,31 @@ test(
       version.version.id,
       { commandId: "version-accept-001" }
     );
+    const reopened = await service.getProject(
+      actor,
+      projectId
+    );
+    const reopenedVersion =
+      reopened.project.versions.find(
+        (candidate) =>
+          candidate.id === version.version.id
+      );
+    assert.equal(
+      reopened.project.serving.currentVersionId,
+      version.version.id
+    );
+    assert.deepEqual(
+      reopenedVersion.rawFacts,
+      rawFacts
+    );
+    assert.equal(
+      reopenedVersion.artifact.digest,
+      compiled.artifactDigest
+    );
+    assert.equal(
+      reopenedVersion.artifact.html,
+      compiled.html
+    );
     await service.createSupportTicket(actor, projectId, {
       subject: "Launch question",
       message: "Please confirm the launch address.",

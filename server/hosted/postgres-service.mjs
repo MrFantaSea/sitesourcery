@@ -273,6 +273,10 @@ function publicSubscription(row) {
 }
 
 function publicVersion(row) {
+  const html =
+    row.html_bytes == null
+      ? null
+      : Buffer.from(row.html_bytes).toString("utf8");
   return {
     id: row.id,
     versionId: row.id,
@@ -283,6 +287,14 @@ function publicVersion(row) {
     contentDigest: row.content_digest,
     artifactDigest: row.artifact_digest,
     previewDigest: row.artifact_digest,
+    rawFacts: row.raw_facts ?? {},
+    artifact:
+      html === null
+        ? null
+        : {
+            digest: row.artifact_digest,
+            html
+          },
     reviewAttested: Boolean(row.attested),
     compilerSchema: row.compiler_schema,
     compilerRevision: row.compiler_revision,
@@ -925,8 +937,10 @@ export function createCanonicalPostgresService({
          version.compiler_schema,
          version.compiler_revision,
          version.created_at,
+         version.raw_facts,
          fact.content_digest,
          artifact.artifact_digest,
+         artifact.html_bytes,
          state.state,
          exists (
            select 1 from ss.version_attestations attestation
@@ -982,6 +996,7 @@ export function createCanonicalPostgresService({
       subscription: publicSubscription(row),
       serving: {
         state: row.serving_state ?? "unpublished",
+        currentVersionId: accepted?.id ?? null,
         currentReleaseId: row.current_release_id,
         previousReleaseId: row.previous_release_id,
         updatedAt: iso(row.updated_at)
