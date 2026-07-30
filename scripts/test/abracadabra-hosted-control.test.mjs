@@ -502,6 +502,16 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
   assert.ok(checkoutAt > quoteAt, "checkout follows a server quote");
   assert.doesNotMatch(source, /control\.checkout\s*\(/u);
   assert.doesNotMatch(source, /priceId|stripePrice/u);
+  assert.match(
+    source,
+    /successMessage\s*&&\s*result !== null\s*&&\s*result !== undefined/u,
+    "a stale or failed null result cannot announce success",
+  );
+  assert.match(
+    source,
+    /control\s*\.signOut\(\)\s*\.then\(function \(\) \{\s*return \{ signedOut: true \};/u,
+    "successful sign-out remains distinguishable from a swallowed failure",
+  );
 });
 
 test("async actions expose pending and safe retry state while reusing the original idempotency key", async () => {

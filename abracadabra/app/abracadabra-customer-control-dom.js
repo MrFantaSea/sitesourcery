@@ -687,7 +687,11 @@
       return Promise.resolve()
         .then(action)
         .then(function (result) {
-          if (successMessage) {
+          if (
+            successMessage
+            && result !== null
+            && result !== undefined
+          ) {
             announce(successMessage, "success");
           }
           return result;
@@ -856,7 +860,11 @@
           event.currentTarget,
           function () {
             pendingGuestCandidate = null;
-            return control.signOut();
+            return control
+              .signOut()
+              .then(function () {
+                return { signedOut: true };
+              });
           },
           "Signed out."
         );
