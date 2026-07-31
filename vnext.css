@@ -7501,3 +7501,21 @@ body.vnext-page::after {
   line-height: 1.5;
   color: rgba(231, 223, 240, 0.78);
 }
+
+/* Contact promised "your topic is highlighted when you arrive from a
+   service page" and no code performed it. :target performs it. */
+li[id^="about-"]:target {
+  border-radius: 0.5rem;
+  outline: 2px solid rgba(242, 206, 131, 0.8);
+  outline-offset: 3px;
+  background: rgba(242, 206, 131, 0.12);
+}
+
+/* The flat price line on the domains page. */
+.domain-price-line {
+  color: #e9dcc2;
+}
+
+.domain-price-line strong {
+  color: #ffd98a;
+}

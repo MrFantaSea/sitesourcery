@@ -25,7 +25,7 @@ quoted no prices at all.
 
 ```
 /                    sort the arrival; sell nothing
-├── /abracadabra/    $5 preview  ─┐
+├── /abracadabra/    $5 download  ─┐
 │                                 ├─▶ /alacazam/ ─▶ /domains/   ← the money spine
 ├── /custom/         from $400   ─┘      (+scope, +process)
 ├── /services/       the discrete jobs, grouped
