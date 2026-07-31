@@ -6066,3 +6066,126 @@ body.vnext-page::after {
   color: #f0cd82;
   text-shadow: 0 1px 10px rgba(8, 7, 12, 0.8);
 }
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, round ten.
+   --------------------------------------------------------------------------- */
+
+/* Nav speaks the fork's language, in caps like everything else that matters. */
+.site-nav a {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+
+/* Eyebrow and tagline abandon gold-on-storm — champagne reads everywhere. */
+.home-hero .eyebrow,
+.hero-tagline {
+  color: #f5e7cb;
+  text-shadow: 0 2px 12px rgba(8, 7, 12, 0.9);
+}
+
+.hero-tagline a {
+  border-bottom-color: rgba(242, 206, 131, 0.75);
+}
+
+/* Champagne turned up: richer golds, brighter whites, a hotter sheen. */
+.home-hero h1 {
+  background-image:
+    linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 1) 50%, transparent 60%),
+    linear-gradient(100deg, #fffdf6 0%, #f6e8c6 26%, #d3ae62 48%, #fff7e2 66%, #e2c48b 88%, #fffdf6 100%);
+}
+
+.home-hero .lede {
+  background-image:
+    linear-gradient(100deg, #fffdf6 0%, #f2e2ba 40%, #d8b56a 60%, #fff5df 85%);
+}
+
+/* Assessment card: refined glass — clearly kin to the fork cards, clearly
+   quieter than the Responder beside it. */
+.choice-grid .card:not(.card-flash) {
+  border: 1px solid rgba(214, 168, 84, 0.4);
+  background:
+    radial-gradient(circle at 50% -30%, rgba(174, 112, 255, 0.14), transparent 20rem),
+    rgba(16, 12, 24, 0.38);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 160, 0.08),
+    0 0.8rem 2.2rem rgba(8, 7, 12, 0.45);
+}
+
+/* Custom, again, harder: a dashed drafting rule inside the frame, and the
+   violet nebula now DRIFTS through the glass while the dust rises. */
+.path-card-product {
+  outline: 1px dashed rgba(242, 206, 131, 0.42);
+  outline-offset: -0.85rem;
+  background-size: auto, auto, 180px 320px, 220px 360px, 170% 170%, auto, auto, auto;
+}
+
+@keyframes atelier-living {
+  0%   { background-position: 0 0, 0 0, 40px 320px, 140px 360px, -10% -10%, 0 0, 0 0, 0 0; }
+  50%  { background-position: 0 0, 0 0, 30px 160px, 120px 180px, 18% 22%, 0 0, 0 0, 0 0; }
+  100% { background-position: 0 0, 0 0, 20px 0, 100px 0, -10% -10%, 0 0, 0 0, 0 0; }
+}
+
+.path-card-product {
+  animation:
+    atelier-ring 9s linear infinite,
+    atelier-aurora 6s ease-in-out infinite,
+    atelier-living 14s ease-in-out infinite;
+}
+
+/* Footer: same bones, richer skin. Twinkling star, drifting motes, a gold
+   fade-line over the copyright, links that grow their underline. */
+.site-footer {
+  background:
+    radial-gradient(1.8px 1.8px at 12% 30%, rgba(255, 236, 190, 0.7), transparent 3px),
+    radial-gradient(1.4px 1.4px at 78% 55%, rgba(214, 170, 255, 0.6), transparent 3px),
+    radial-gradient(1.6px 1.6px at 42% 75%, rgba(255, 226, 160, 0.5), transparent 3px),
+    radial-gradient(ellipse at 50% 0%, rgba(120, 76, 190, 0.2), transparent 62%),
+    transparent;
+}
+
+.footer-stack::before {
+  animation: star-twinkle 3.2s ease-in-out infinite;
+}
+
+.footer-brand {
+  font-size: clamp(1.8rem, 3.4vw, 3rem);
+}
+
+.footer-row a {
+  position: relative;
+  padding-bottom: 3px;
+}
+
+.footer-row a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  transform: scaleX(0);
+  transition: transform 200ms ease;
+}
+
+.footer-row a:hover::after,
+.footer-row a:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.footer-copyright {
+  border-top: 0;
+  background: linear-gradient(90deg, transparent, rgba(242, 206, 131, 0.55), transparent) top / 46% 1px no-repeat;
+  letter-spacing: 0.05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-stack::before,
+  .path-card-product {
+    animation: none;
+  }
+}
