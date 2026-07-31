@@ -6468,3 +6468,282 @@ body.vnext-page::after {
   flex-direction: column;
   justify-content: center;
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: "hard to see the words... the buttons need to be redone...
+   both of those cards need spruced up, and enhanced, more customized. But I
+   like now that I can see through them at least."
+
+   The words get frost POOLS — the hero's trick, scoped to the fork cards:
+   each text block carries a feathered veil on its own pseudo, so legibility
+   returns without re-fogging the glass between the lines. The wizard stays.
+   --------------------------------------------------------------------------- */
+
+.path-card {
+  position: relative;
+}
+
+.path-card h2,
+.path-card > p:not(.card-kicker) {
+  position: relative;
+  z-index: 0;
+}
+
+.path-card h2::before,
+.path-card > p:not(.card-kicker)::before {
+  content: "";
+  position: absolute;
+  inset: -0.55rem -1.3rem;
+  z-index: -1;
+  border-radius: 1.4rem;
+  background: rgba(250, 240, 217, 0.30);
+  backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 52%, transparent 98%);
+  mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 52%, transparent 98%);
+}
+
+.path-card-product h2::before,
+.path-card-product > p:not(.card-kicker)::before {
+  background: rgba(14, 9, 22, 0.46);
+  backdrop-filter: blur(9px) brightness(0.9);
+  -webkit-backdrop-filter: blur(9px) brightness(0.9);
+}
+
+.path-card:not(.path-card-product) h2 {
+  color: #120d1a;
+}
+
+.path-card:not(.path-card-product) p:not(.card-kicker) {
+  color: #1c1526;
+  font-weight: 650;
+}
+
+/* The buttons, redone: gold coins and gold-ringed glass, sized to be pressed. */
+.path-card .button,
+.card-assess .button {
+  border-radius: 999px;
+  padding: 0.95rem 1.75rem;
+  font-size: 0.92rem;
+  letter-spacing: 0.07em;
+}
+
+.path-card .button-primary,
+.card-assess .button-primary {
+  border: 1px solid rgba(255, 246, 220, 0.85);
+  background: linear-gradient(180deg, #fbe7b6 0%, #eec267 55%, #d99f36 100%);
+  color: #221430;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 0 0 1px rgba(140, 96, 26, 0.5),
+    0 0.6rem 1.7rem rgba(212, 156, 56, 0.4),
+    0 0 2.4rem rgba(255, 214, 130, 0.28);
+}
+
+.path-card .button-primary:hover,
+.path-card .button-primary:focus-visible,
+.card-assess .button-primary:hover,
+.card-assess .button-primary:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 1px rgba(140, 96, 26, 0.6),
+    0 0.8rem 2rem rgba(212, 156, 56, 0.52),
+    0 0 3rem rgba(255, 214, 130, 0.42);
+}
+
+.path-card .button:not(.button-primary),
+.card-assess .button:not(.button-primary) {
+  border: 1px solid rgba(242, 206, 131, 0.7);
+  color: #f6dfae;
+  background: rgba(16, 10, 26, 0.46);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 206, 131, 0.14),
+    0 0 1.6rem rgba(122, 79, 192, 0.28);
+}
+
+.path-card .button:not(.button-primary):hover,
+.path-card .button:not(.button-primary):focus-visible,
+.card-assess .button:not(.button-primary):hover,
+.card-assess .button:not(.button-primary):focus-visible {
+  background: linear-gradient(180deg, #fbe7b6 0%, #eec267 100%);
+  color: #221430;
+  text-shadow: none;
+}
+
+/* The $5 wax seal on the premade shop window. */
+.pc-seal {
+  position: absolute;
+  top: -1.1rem;
+  right: 1.6rem;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border: 1px solid rgba(255, 248, 228, 0.9);
+  border-radius: 50%;
+  transform: rotate(8deg);
+  background: radial-gradient(circle at 32% 28%, #ffefc4 0%, #edc267 48%, #c98f2b 100%);
+  color: #2a1a0a;
+  font-size: 1.15rem;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow:
+    0 0 0 4px rgba(201, 143, 43, 0.45),
+    0 0 0 5px rgba(255, 236, 190, 0.5),
+    0 0.5rem 1.4rem rgba(20, 10, 34, 0.5),
+    0 0 1.8rem rgba(255, 214, 130, 0.4);
+}
+
+/* Drafting brackets pinned to the custom card's dashed outline corners. */
+.pc-corners {
+  position: absolute;
+  inset: 0.9rem;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pc-corners::before,
+.pc-corners::after {
+  content: "";
+  position: absolute;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid rgba(242, 206, 131, 0.75);
+}
+
+.pc-corners::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.pc-corners::after {
+  right: 0;
+  bottom: 0;
+  border-top: 0;
+  border-left: 0;
+}
+
+/* "THE RESPONDER" — all caps, gold, per the owner. */
+.card-flash .rd-name {
+  color: #f2ce83;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 18px rgba(242, 206, 131, 0.45),
+    0 2px 10px rgba(8, 7, 12, 0.8);
+}
+
+/* The assessment card, redone in the Responder card's shape: copy on the
+   left, a sample report on the right where the phone would stand. The empty
+   space becomes the product. Selector matches the centering rule's
+   specificity so the grid wins. */
+.choice-grid:has(.card-flash) > .card.card-assess {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.6rem;
+  align-items: center;
+  text-align: center;
+}
+
+.card-assess-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.assess-demo {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.ad-sheet {
+  width: min(16.5rem, 100%);
+  padding: 1.1rem 1.15rem 1rem;
+  transform: rotate(-1.6deg);
+  border: 1px solid rgba(242, 206, 131, 0.5);
+  border-radius: 0.9rem;
+  background: linear-gradient(170deg, #17121f 0%, #0d0a14 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 0 2rem rgba(174, 112, 255, 0.24),
+    0 1rem 2.2rem rgba(8, 7, 12, 0.55);
+  text-align: left;
+}
+
+.ad-head {
+  margin: 0 0 0.7rem;
+  color: rgba(242, 206, 131, 0.9);
+  font-size: 0.66rem;
+  font-weight: 820;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ad-rows {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ad-rows li {
+  position: relative;
+  margin: 0;
+  padding: 0.5rem 0.6rem 0.5rem 1.9rem;
+  border-radius: 0.55rem;
+  background: rgba(122, 100, 160, 0.14);
+  color: #e7dff0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.ad-rows li::before {
+  position: absolute;
+  top: 50%;
+  left: 0.65rem;
+  transform: translateY(-50%);
+  font-weight: 900;
+}
+
+.ad-bad::before { content: "✕"; color: #ff9d9d; }
+.ad-warn::before { content: "!"; color: #ffd27d; }
+.ad-good::before { content: "✓"; color: #9fe6a0; }
+
+.ad-good {
+  background: rgba(242, 206, 131, 0.14);
+}
+
+.ad-foot {
+  margin: 0.8rem 0 0;
+  color: rgba(231, 223, 240, 0.62);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (max-width: 78rem) {
+  .choice-grid:has(.card-flash) > .card.card-assess {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The pools read as chips — hard corners showing. Widen and feather sooner
+   so they dissolve into the glass like the hero's do. */
+.path-card h2::before,
+.path-card > p:not(.card-kicker)::before {
+  inset: -1rem -2.2rem;
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 30%, transparent 82%);
+  mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 30%, transparent 82%);
+}
