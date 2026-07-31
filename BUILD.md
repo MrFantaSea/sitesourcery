@@ -1,0 +1,107 @@
+# Site Sourcery — build v2
+
+Started 2026-07-30 on branch `build/sitesourcery-v2-20260730`, in a **persistent**
+worktree at `~/sitesourcery-build`. The previous lane lived in
+`/private/tmp/sitesourcery-finish-20260730`, one of ~50 worktrees under
+`/private/tmp` that do not survive a reboot. Nothing was deleted to make this;
+every earlier branch and worktree is untouched.
+
+## The product, as the owner settled it
+
+| | |
+|---|---|
+| **Abracadabra** | **$5.** Makes a one-page preview from the customer's business details. **Ends at the preview.** |
+| **Alacazam** | The paid service that follows: customise further, download, or go live. **The $5 is credited toward it.** |
+| **Address, four ways** | buy from Zack (you run it) · buy + looked after · bring your own · rent `you.sitesourcery.me` monthly |
+| **Custom** | Quoted builds. Card $400 · Card+ $650 · Site $1,200 · Site+ $1,800 · Signature $2,800 · Flagship $4,000 |
+| **Hive** | **Custom AI automation apps and workflows**, priced to the workflow. The missed-call responder is one blueprint, starting $300 setup + $250/month. Not a menu. |
+| **Assessment** | $200, credited toward a later build. **Sells today via Stripe.** |
+
+Prices are **public**. The previous build forbade printing any figure except `$5`
+— a rule an agent introduced and no owner approved, and the reason the site
+quoted no prices at all.
+
+## Structure
+
+```
+/                    sort the arrival; sell nothing
+├── /abracadabra/    $5 preview  ─┐
+│                                 ├─▶ /alacazam/ ─▶ /domains/   ← the money spine
+├── /custom/         from $400   ─┘      (+scope, +process)
+├── /services/       the discrete jobs, grouped
+├── /hive/           calls & follow-up
+├── /work/           proof
+└── /about/ /contact/ /faq/ /legal/
+```
+
+Cut: `/websites/` (a hub that re-asked the question the landing page had just
+answered) and `/start/` (a chooser whose payoff was a link already in the nav).
+
+## What carried over, and what did not
+
+**Kept** — `vnext.css` (the aesthetic: `#08070c`, gold/violet, the atelier art),
+`vnext.js`, `assets/`, `server/domain` (the 1,619-line Spaceship adapter),
+`server/commerce` (the tenure model), `abracadabra/app` (the compiler), and
+`data/public-catalog.json`.
+
+**Unwired, not removed** — about 5,400 lines of validators
+(`check-site-vnext.mjs`, `customer-section-ledger.mjs`, `check-routes.mjs`,
+`build-hosted.mjs`, the hosted-truth manifest). They pinned exact marketing
+sentences and section orderings for a product model nobody approved, so the spec
+had to be edited before the site could be. Still on disk, still runnable via
+`npm run check:legacy`.
+
+**Replaced by** `scripts/check-site.mjs` — 202 lines checking only what breaks a
+customer or costs money: routes resolve, one shared nav, no dead links or
+anchors, every printed price is in the catalog, canonical phone and email, no
+forms and no third-party network.
+
+## Payment rails
+
+Site Sourcery bills through `acct_1Tx2eoPi1bfFonRc` (Desiderata Labs LLC). Three
+live Products and Prices were created 2026-07-30; see `server/commerce/rails.mjs`.
+
+| Product | Price | Rail | Live checkout | Wired to a page? |
+|---|---|---|---|---|
+| Website assessment | $200 once | payment link | `…7kc02` | **YES — sells today** |
+| Abracadabra preview | $5 once | payment link | `…7kc00` | no — maker cannot charge yet |
+| Alacazam hosting | $25/month | billing | `…7kc01` | no — cannot provision yet |
+| Domain purchase | quoted per name | invoice | — | quoted by hand |
+| Custom build | $400–$4,000 | invoice | — | quoted by hand |
+
+**No server is required** for any of these. Stripe hosts checkout; the site only
+ever contains a plain `https://buy.stripe.com/…` link.
+
+**Only the assessment is wired on purpose.** All three links exist, but a link is
+only put on a page once the thing behind it can actually be DELIVERED. The
+assessment works end to end with nobody awake: the customer pays, Stripe collects
+the address of their site as a custom field, and the report is written by hand.
+The other two would take money for something that does not yet happen.
+`scripts/check-site.mjs` enforces that any checkout link is on Stripe's own
+origin — a nearly-right domain is the whole attack.
+
+**Two promises are not yet real.** The site says the $5 comes off Alacazam and
+the $200 comes off a build. Those exist only as page copy — they need Stripe
+coupons, or someone has to remember on every sale. `readiness().creditsToHonour`
+lists them so they cannot be quietly forgotten.
+
+**Tax treatment is unreviewed on all five.** Marked `review_required` rather than
+guessed; a monthly hosting service and a one-time design fee are not obviously
+the same thing in New Jersey.
+
+## Known gaps
+
+- `/alacazam/` does not exist yet. The string appears **zero times** in any Site
+  Sourcery tree on this Mac or on the fleet.
+- The commerce layer still sells a **download** (`offerId "spark_download"`,
+  `/projects/{id}/download-quotes`). The paid object must become the preview.
+- `TENURE_IDS` models only three address options; the fourth — buy through Site
+  Sourcery and manage it yourself — has no tenure.
+- The Spaceship middleman is complete but **held on price discovery**:
+  `previewRegistration()` needs an injected price source and what is wired is a
+  stub that always throws. Standard-domain prices are not returned by the public
+  availability endpoint, only premium ones.
+- The legal pages describe a free device-local tool that charges nothing and
+  publishes nothing — a product that no longer exists.
+
+`npm run check` must pass before any part is called done.

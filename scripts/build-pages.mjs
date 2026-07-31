@@ -57,6 +57,7 @@ export const publicFileAllowlist = Object.freeze([
   "custom/index.html",
   "custom/process/index.html",
   "custom/scope/index.html",
+  "domains/index.html",
   "faq.html",
   "faq/index.html",
   "hive/hive-planner.js",

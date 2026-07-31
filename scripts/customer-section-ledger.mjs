@@ -108,35 +108,45 @@ function top({
   });
 }
 
+// The homepage sorts arrivals; it does not sell. Each unit below is one
+// question a visitor might have arrived with, in the order they tend to ask
+// them: what is this, which lane am I in, can I see it first, what about the
+// site I already have, what about my address, is any of this real, what if I
+// only need one thing, and who do I talk to.
 const HOME_UNITS = [
   top({
-    action: primaryHref("/websites/"),
-    copy: "A clearer path for your small business online.",
+    action: primaryHref("#two-paths"),
+    copy: "Get your business online without guessing what it costs.",
     evidence: "current-studio-intake",
     id: "home-orientation",
-    job: "choose-the-clearest-starting-path",
+    job: "understand-what-is-offered",
     ordinal: 1,
   }),
   unit({
-    copy: "Plain choices",
+    copy: "$5 to see it",
     evidence: "public-choice-boundaries",
     id: "home-trust-proof",
-    job: "understand-what-stays-clear",
+    job: "understand-what-stays-true",
     match: topProof(),
   }),
+  // The sort routes straight to the two real destinations and carries the live
+  // Abracadabra showcase, so the visitor sees an actual generated page in the
+  // same breath as the price. A separate "$5 preview" section used to sit below
+  // this one repeating the same offer and the same button; it is gone.
   top({
-    action: primaryHref("/websites/"),
-    copy: "Have it made for you, or build one simple page yourself.",
-    evidence: "made-for-you-versus-self-build-boundary",
+    action: primaryHref("/abracadabra/"),
+    copy: "Make it yourself, or have it made.",
+    evidence: "self-serve-versus-custom-boundary",
     id: "home-website-choice",
     job: "choose-how-to-get-a-website",
     ordinal: 2,
   }),
   top({
-    copy: "Start with the problem that keeps getting in the way.",
-    evidence: "conversation-and-inquiry-boundaries",
-    id: "home-other-help",
-    job: "choose-another-kind-of-help",
+    action: primaryHref("/solutions/#assessment"),
+    copy: "Find out what is actually wrong with it — $200.",
+    evidence: "assessment-catalog",
+    id: "home-existing-site",
+    job: "diagnose-an-existing-site",
     ordinal: 3,
   }),
   top({
@@ -148,12 +158,19 @@ const HOME_UNITS = [
     ordinal: 4,
   }),
   top({
+    copy: "Not every job is a whole website.",
+    evidence: "conversation-and-inquiry-boundaries",
+    id: "home-other-help",
+    job: "choose-another-kind-of-help",
+    ordinal: 5,
+  }),
+  top({
     action: primaryHref("/start/"),
-    copy: "Start with what needs to change.",
+    copy: "Bring the situation, not a product name.",
     evidence: "zero-order-start-chooser",
     id: "home-closing",
     job: "start-with-the-problem",
-    ordinal: 5,
+    ordinal: 6,
   }),
 ];
 

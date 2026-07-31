@@ -18,6 +18,7 @@ export const CANONICAL_ROUTES = Object.freeze([
   "/abracadabra/app/",
   "/hive/",
   "/solutions/",
+  "/domains/",
   "/work/",
   "/about/",
   "/faq/",
@@ -32,10 +33,14 @@ export const FUNCTIONAL_APP_ROUTES = Object.freeze([
   "/abracadabra/site/",
 ]);
 
+// Domains sits second because every arrival needs an address whichever website
+// lane they take, and it was previously reachable only as an anchor inside
+// /solutions/.
 export const PRIMARY_NAV = Object.freeze([
   Object.freeze({ label: "Websites", href: "/websites/" }),
-  Object.freeze({ label: "Calls & follow-up", href: "/hive/" }),
+  Object.freeze({ label: "Domains", href: "/domains/" }),
   Object.freeze({ label: "Services", href: "/solutions/" }),
+  Object.freeze({ label: "Calls & follow-up", href: "/hive/" }),
   Object.freeze({ label: "Examples", href: "/work/" }),
   Object.freeze({ label: "About", href: "/about/" }),
   Object.freeze({ label: "Get started", href: "/start/" }),

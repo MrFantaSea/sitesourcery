@@ -20,13 +20,15 @@
         <i aria-hidden="true"></i>
       </button>
       <nav class="site-nav" id="primary-menu" data-primary-nav data-menu aria-label="Primary">
-        <a href="/websites/">Websites</a>
-        <a href="/hive/">Calls &amp; follow-up</a>
-        <a href="/solutions/">Services</a>
-        <a href="/work/">Examples</a>
+        <a href="/abracadabra/">Make a site</a>
+        <a href="/custom/" aria-current="page">Custom builds</a>
+        <a href="/domains/">Domains</a>
+        <a href="/hive/">Automation</a>
+        <a href="/services/">Services</a>
+        <a href="/work/">Work</a>
         <a href="/about/">About</a>
-        <a class="nav-start" href="/start/">Get started</a>
       </nav>
+      <a class="nav-call" href="tel:+18562441220" aria-label="Call Site Sourcery"><span>(856) 244-1220</span></a>
     </div>
   </header>
 
@@ -112,7 +114,50 @@
       </div>
     </section>
 
-    <section class="section" data-customer-job="assessment-alternative" data-section-action="see-assessment" data-section-evidence="assessment-deliverable">
+    <!-- The ladder, printed. The previous build carried these figures in
+         data/public-catalog.json and rendered none of them, so every visitor had
+         to ask a person what a website costs before they could judge whether it
+         was worth asking. Every number here is checked against that catalog. -->
+    <section class="section" id="what-it-costs" data-customer-job="custom-pricing" data-section-action="compare-tiers" data-section-evidence="catalog-boundaries">
+      <div class="site-shell">
+        <div class="section-head reveal">
+          <div>
+            <p class="overline">What it costs</p>
+            <h2>Where a build starts.</h2>
+          </div>
+          <p>A starting figure for each size. The written quote is the number that counts, and it comes before any work.</p>
+        </div>
+
+        <div class="split">
+          <div class="card reveal">
+            <p class="card-kicker">By how much site there is</p>
+            <ul class="solution-list">
+              <li><strong>Card — $400.</strong> One page that says who you are and how to reach you.</li>
+              <li><strong>Card Plus — $650.</strong> One page with more to say, and room to say it.</li>
+              <li><strong>Site — $1,200.</strong> A handful of pages that work as a set.</li>
+              <li><strong>Site Plus — $1,800.</strong> More pages, more structure, more ways in.</li>
+              <li><strong>Signature — $2,800.</strong> Original art direction throughout.</li>
+              <li><strong>Flagship — $4,000.</strong> The full build, top to bottom.</li>
+            </ul>
+          </div>
+
+          <div class="reveal">
+            <p>Two things move the price beyond size, and both are stated in the quote rather than discovered later:</p>
+            <ul class="solution-list">
+              <li><strong>How far the art direction goes.</strong> The standard level is included. Distinctive adds 25%, Atelier adds 50% — each with a minimum, because original design work has a floor below which it cannot be done properly.</li>
+              <li><strong>Moving off a site you already have.</strong> Carrying over content, links, and an address without losing what the old site earns you is real work, and it is priced as its own line.</li>
+            </ul>
+            <p>Card and Card Plus are paid in full before work starts. Site and above are half before, half on completion.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="/custom/scope/">Compare the sizes in detail</a>
+              <a class="button" href="/contact/">Ask what yours would be</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-dark" data-customer-job="assessment-alternative" data-section-action="see-assessment" data-section-evidence="assessment-deliverable">
       <div class="site-shell contact-panel reveal">
         <div>
           <p class="eyebrow">Start with evidence</p>
@@ -120,7 +165,7 @@
         </div>
         <div>
           <p>Start with an assessment of the public site you already have. You receive written findings, screenshots, and an order of importance. If you later accept a Site Sourcery build, the full assessment amount is credited toward it. Fixes require a separate written scope.</p>
-          <a class="button button-primary" href="/solutions/#assessment">See the website assessment</a>
+          <a class="button button-primary" href="/services/#assessment">See the website assessment</a>
         </div>
       </div>
     </section>
@@ -145,7 +190,8 @@
       </div>
       <nav class="footer-links" aria-label="Footer">
         <strong>Helpful links</strong>
-        <a href="/websites/">Website options</a>
+        <a href="/abracadabra/">Make a site</a>
+        <a href="/custom/">Custom builds</a>
         <a href="/work/">Examples</a>
         <a href="/faq/">FAQ</a>
         <a href="/contact/">Contact</a>

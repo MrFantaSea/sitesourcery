@@ -12,7 +12,7 @@
     {
       "id": "card",
       "label": "Card",
-      "priceCents": 35000,
+      "priceCents": 40000,
       "limits": {
         "craftedPages": 1,
         "sections": 5,
@@ -27,7 +27,7 @@
     {
       "id": "card-plus",
       "label": "Card Plus",
-      "priceCents": 60000,
+      "priceCents": 65000,
       "limits": {
         "craftedPages": 1,
         "sections": 8,
@@ -42,7 +42,7 @@
     {
       "id": "site",
       "label": "Site",
-      "priceCents": 100000,
+      "priceCents": 120000,
       "limits": {
         "craftedPages": 4,
         "sections": 16,
@@ -57,7 +57,7 @@
     {
       "id": "site-plus",
       "label": "Site Plus",
-      "priceCents": 160000,
+      "priceCents": 180000,
       "limits": {
         "craftedPages": 7,
         "sections": 28,
@@ -72,7 +72,7 @@
     {
       "id": "signature",
       "label": "Signature",
-      "priceCents": 240000,
+      "priceCents": 280000,
       "limits": {
         "craftedPages": 10,
         "sections": 40,
@@ -87,7 +87,7 @@
     {
       "id": "flagship",
       "label": "Flagship",
-      "priceCents": 360000,
+      "priceCents": 400000,
       "limits": {
         "craftedPages": 15,
         "sections": 60,
@@ -131,7 +131,7 @@
     "minimumCapacityUnits": 1,
     "maximumCapacityUnits": 15,
     "maximumCraftedPages": 30,
-    "unitPriceCents": 24000,
+    "unitPriceCents": 27000,
     "allowancePerUnit": {
       "craftedPages": 1,
       "sections": 4,
@@ -270,7 +270,7 @@
     {
       "min": 3,
       "max": 5,
-      "priceCents": 35000
+      "priceCents": 20000
     },
     {
       "min": 6,
@@ -285,7 +285,7 @@
   ],
   "migration": {
     "firstRecords": 100,
-    "firstPriceCents": 35000,
+    "firstPriceCents": 20000,
     "nextRecords": 100,
     "nextPriceCents": 20000,
     "maxRecords": 1000
@@ -342,8 +342,8 @@
       "id": "website-assessment",
       "mechanismId": "DL-02",
       "label": "Website assessment",
-      "priceCents": 35000,
-      "deliverable": "A written assessment of the customer’s existing website with screenshot evidence and real findings ranked by severity.",
+      "priceCents": 20000,
+      "deliverable": "A written assessment of the customer\u2019s existing website with screenshot evidence and real findings ranked by severity.",
       "scopeState": "must_be_stated_before_sale",
       "turnaroundState": "must_be_stated_before_sale",
       "buildCredit": {
@@ -359,5 +359,19 @@
       ]
     }
   ],
-  "projectionDigest": "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a"
+  "projectionDigest": "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
+  "automation": {
+    "id": "hive",
+    "label": "Hive",
+    "summary": "Custom AI automation apps and workflows, built for one business and bounded on purpose.",
+    "pricingModel": "quoted-to-scope",
+    "notice": "Automation work is quoted to the workflow being built. The figures below are where the most common blueprint starts, not a package price.",
+    "startingBlueprint": {
+      "id": "missed-call-responder",
+      "label": "Missed-call responder",
+      "setupCents": 30000,
+      "monthlyCents": 25000,
+      "summary": "A missed call gets a text back within seconds, so the job does not go to whoever answers next."
+    }
+  }
 }

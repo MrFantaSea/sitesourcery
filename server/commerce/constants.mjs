@@ -12,6 +12,25 @@ export const BILLING_SHAPES = Object.freeze({
   owned_managed: Object.freeze({ oneTime: true, recurring: true })
 });
 
+/**
+ * How a customer-owned address came to exist.
+ *
+ * The customer-facing offer is FOUR choices — buy it and run it yourself, buy it
+ * and have it looked after, bring your own, or rent a subdomain — but those are
+ * not four billing shapes. "Buy it and run it yourself" and "bring your own" are
+ * both the `own` tenure: one payment, no recurring care.
+ *
+ * What separates them is provenance, and it matters for money rather than
+ * presentation. A purchased domain means Site Sourcery pays a registrar, carries
+ * the cost, and books a margin; a supplied domain means no money moves at all.
+ * Reconciliation, refunds, and the registrar's third-party-agent duties all hang
+ * off this distinction, so it is recorded explicitly instead of inferred.
+ */
+export const ADDRESS_SOURCES = Object.freeze([
+  "customer_supplied",
+  "site_sourcery_purchased"
+]);
+
 export const QUOTE_STATES = Object.freeze({
   QUOTED: "quoted",
   CHECKOUT_DISPATCHING: "checkout_dispatching",

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -45,30 +46,36 @@ export const SOLUTION_ANCHORS = Object.freeze([
 export const START_PATHS = Object.freeze(["website", "system", "service"]);
 export const INTAKE_CATEGORIES = Object.freeze(["website", "system", "service"]);
 export const CUSTOMER_SECTION_CONTRACTS = Object.freeze({
+  // /websites/ used to re-ask the question the homepage had just answered: it
+  // opened on its own "two ways" sort, so an arrival picked a lane twice and the
+  // top of this page repeated the section above it. The homepage now routes
+  // straight to /abracadabra/ and /custom/, and this page opens on what a
+  // visitor genuinely cannot infer — that the self-serve lane is two paid tiers,
+  // and where the finished page ends up living.
   "/websites/": Object.freeze([
     Object.freeze({
-      id: "website-choice-overview",
-      elementId: "website-choice-overview",
-      labelledBy: "website-choice-title",
-      job: "choose-website-path",
-      copy: "Choose how your website gets made.",
-      action: Object.freeze({ id: "see-website-paths", href: "#website-paths" }),
+      id: "make-it-yourself",
+      elementId: "make-it-yourself",
+      labelledBy: "self-serve-title",
+      job: "understand-self-serve-tiers",
+      copy: "Abracadabra, then Alacazam.",
+      action: Object.freeze({ id: "make-a-preview", href: "/abracadabra/" }),
     }),
     Object.freeze({
-      id: "website-paths",
-      elementId: "website-paths",
-      labelledBy: "website-paths-title",
-      job: "compare-website-paths",
-      copy: "Have it made for you, or build one page yourself.",
-      action: null,
+      id: "website-addresses",
+      elementId: "addresses",
+      labelledBy: "addresses-title",
+      job: "choose-an-address",
+      copy: "Four ways to have an address.",
+      action: Object.freeze({ id: "compare-addresses", href: "/domains/" }),
     }),
     Object.freeze({
-      id: "website-proof",
-      elementId: "website-proof",
-      labelledBy: "website-proof-title",
-      job: "inspect-website-proof",
-      copy: "See real and clearly labeled example work.",
-      action: Object.freeze({ id: "see-website-examples", href: "/work/" }),
+      id: "have-it-made",
+      elementId: "have-it-made",
+      labelledBy: "custom-title",
+      job: "understand-custom-work",
+      copy: "A website designed around your business.",
+      action: Object.freeze({ id: "explore-custom-work", href: "/custom/" }),
     }),
     Object.freeze({
       id: "website-help",
@@ -77,6 +84,48 @@ export const CUSTOMER_SECTION_CONTRACTS = Object.freeze({
       job: "ask-about-website-fit",
       copy: "Ask without choosing first.",
       action: Object.freeze({ id: "ask-about-website-fit", href: "/contact/#about-custom-website" }),
+    }),
+  ]),
+  // Domains was only an anchor inside /solutions/. Every arrival needs an
+  // address whichever lane they take, so it gets its own route.
+  //
+  // FOUR options, not three. Buying a domain through Site Sourcery and having
+  // Site Sourcery manage it afterwards are separate choices: the first is a
+  // one-time purchase the customer then runs themselves, the second adds
+  // ongoing care. The commerce tenures (rent / own / owned_managed) currently
+  // model only three, so the standalone purchase has no tenure yet.
+  "/domains/": Object.freeze([
+    Object.freeze({
+      id: "domains-overview",
+      elementId: "domains-overview",
+      labelledBy: "domains-title",
+      job: "understand-address-options",
+      copy: "Four ways to have an address.",
+      action: Object.freeze({ id: "compare-domain-options", href: "#domains-compare" }),
+    }),
+    Object.freeze({
+      id: "domains-compare",
+      elementId: "domains-compare",
+      labelledBy: "domains-compare-title",
+      job: "compare-address-options",
+      copy: "Buy it, have it looked after, bring your own, or rent monthly.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "domains-ownership",
+      elementId: "domains-ownership",
+      labelledBy: "domains-ownership-title",
+      job: "understand-domain-ownership",
+      copy: "You are the owner on record.",
+      action: null,
+    }),
+    Object.freeze({
+      id: "domains-help",
+      elementId: "domains-help",
+      labelledBy: "domains-help-title",
+      job: "ask-about-domains",
+      copy: "Not sure which address fits?",
+      action: Object.freeze({ id: "ask-about-domains", href: "/contact/" }),
     }),
   ]),
   "/websites/made-for-you/": Object.freeze([
@@ -497,9 +546,14 @@ export const HOME_HIVE_COPY = Object.freeze([
 ]);
 export const HOME_EVIDENCE_COPY =
   "one real founder-owned venture and two fictional design studies that are not client work";
+// The self-serve lane is two paid tiers, not one free tool with a paid button.
+// Abracadabra ends at the preview; Alacazam is the service that follows. The $5
+// is an entry price credited forward, the same shape as the website assessment
+// being credited toward an accepted build.
 export const HOME_ABRACADABRA_COPY = Object.freeze([
-  "Build and preview one page for free.",
-  "Download is a one-time $5 unlock for that editor project",
+  "See your own page before you pay for a website.",
+  "Five dollars, no salesperson, no commitment",
+  "comes off the price if you go further",
 ]);
 export const ABRACADABRA_STATE_BADGE = Object.freeze([
   "Local working rehearsal",
@@ -509,12 +563,11 @@ export const ABRACADABRA_STATE_BADGE = Object.freeze([
 export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
   "/abracadabra/": Object.freeze([
     "One-page website maker",
-    "Build and preview one page for free.",
-    "Download is a one-time $5 unlock for each editor project",
-    "Free to build",
-    "Private preview",
-    "$5 Download",
-    "Your downloaded file",
+    "Make your preview for $5.",
+    "Abracadabra ends at the preview.",
+    "Your $5 comes off Alacazam",
+    "Paid preview",
+    "Credited forward",
     "Finish one step, then open the next.",
     "Basics",
     "Details",
@@ -522,26 +575,22 @@ export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
     "Look",
     "Review",
     "Preview",
-    "Preview for free. Download only when you want the file.",
   ]),
   "/abracadabra/how/": Object.freeze([
-    "Build and preview your page in six short steps.",
-    "Building and previewing are free.",
-    "The private preview is free. Download is $5 once per editor project.",
+    "Make your preview in six short steps.",
+    "The preview costs $5, and that $5 comes off Alacazam if you continue.",
     "Basics",
     "Details",
     "Contact",
     "Look",
     "Review",
     "Preview",
-    "Build the first version now.",
+    "Make the first version now.",
   ]),
   "/abracadabra/app/": Object.freeze([
-    "Build and preview one page for free.",
-    "Your free preview stays in this tab.",
+    "Make your preview for $5.",
+    "Your preview stays in this tab.",
     "Refresh or close the tab and you will start over.",
-    "No account to preview",
-    "Choose Download afterward",
     "Basics",
     "Details",
     "Contact",
@@ -550,14 +599,13 @@ export const ABRACADABRA_PRODUCT_COPY = Object.freeze({
     "Preview",
     "Project versions",
     "Choose only after the preview looks right.",
-    "Download is $5 once for this editor project.",
   ]),
 });
 export const PUBLIC_TRUTH_COPY = Object.freeze({
   "/faq/": Object.freeze([
-    "build and preview one page privately for free",
-    "Download is $5 once per editor project",
-    "Build, revise, and test the private preview for free.",
+    "Abracadabra makes a one-page preview for $5",
+    "that $5 is credited toward Alacazam",
+    "Alacazam is the paid service that follows the preview",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "/legal/": Object.freeze([
@@ -664,7 +712,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "scripts",
   "server",
 ]);
-const PUBLIC_ALLOWLIST_COUNT = 68;
+const PUBLIC_ALLOWLIST_COUNT = 69;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 const EXPECTED_ARTIFACT_ROUTE_ERROR =
   "thanks.html: missing legacy redirect to /contact/";
@@ -682,6 +730,36 @@ const CSS_VALUE_ATTRIBUTES = new Set([
   "style",
 ]);
 const PRICE = /(?:[$£€¥]\s*\d[\d,.]*|\b(?:USD|EUR|GBP|CAD|AUD)\s*\d[\d,.]*|\bUS\$\s*\d[\d,.]*|\b\d+(?:\.\d+)?\s*(?:\/\s*(?:mo|month|yr|year)\b|per\s+(?:month|year)\b))/giu;
+
+/**
+ * Every dollar figure the public site is permitted to print, derived from the
+ * catalog rather than restated here — so repricing the catalog reprices the
+ * guard, and a page that keeps an old number fails instead of quietly lying.
+ *
+ * Any field whose name ends in "Cents" is treated as money. $5 is added
+ * explicitly: it is the Abracadabra preview price and belongs to the product
+ * proposition rather than to the build catalog.
+ */
+const CATALOG_PRICES = (() => {
+  const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const catalogPath = path.join(repoRoot, "data", "public-catalog.json");
+  const amounts = new Set([5]);
+  const walk = (value, key) => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, key);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const [childKey, childValue] of Object.entries(value)) walk(childValue, childKey);
+      return;
+    }
+    if (typeof value === "number" && /cents$/iu.test(key ?? "")) {
+      amounts.add(value / 100);
+    }
+  };
+  walk(JSON.parse(readFileSync(catalogPath, "utf8")), null);
+  return amounts;
+})();
 const PRICE_ATTRIBUTE = /(?:\bdata-(?:price|monthly|minimum|premium|rate|amount|cost|fee)[a-z-]*\s*=|"(?:price|lowPrice|highPrice|priceCurrency)"\s*:)/iu;
 const FIVE_DOLLAR_PROPOSITION_FILES = new Set([
   "abracadabra/app/abracadabra-app.js",
@@ -1595,8 +1673,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const hero = firstAction >= 0 ? landing.source.slice(0, firstAction) : "";
     for (const phrase of [
       "One-page website maker",
-      "Build and preview one page for free.",
-      "Download is a one-time $5 unlock for each editor project",
+      "Make your preview for $5.",
+      "Abracadabra ends at the preview.",
+      "your $5 comes off Alacazam",
     ]) {
       if (!hero.includes(phrase)) {
         report(errors, landing.file, `missing above-fold Abracadabra product truth ${JSON.stringify(phrase)}`);
@@ -1606,7 +1685,7 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const heroAndProof = firstContentSection >= 0
       ? landing.source.slice(0, firstContentSection)
       : "";
-    for (const phrase of ["Free to build", "Private preview", "$5 Download", "Your downloaded file"]) {
+    for (const phrase of ["Paid preview", "Credited forward", "No account", "Nothing published"]) {
       if (!heroAndProof.includes(phrase)) {
         report(errors, landing.file, `missing above-fold local-only proof ${JSON.stringify(phrase)}`);
       }
@@ -1614,7 +1693,7 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     if (landing.source.toLocaleLowerCase("en-US").includes("live example")) {
       report(errors, landing.file, "contains retired live-example wording for a generated srcdoc demonstration");
     }
-    const pathCardCopy = "Build and preview privately for free. Choose the $5 Download only when you want the HTML file.";
+    const pathCardCopy = "Make the preview for $5 and see your own page. Continue to Alacazam only if you like it.";
     if (landing.source.split(pathCardCopy).length - 1 !== 1) {
       report(errors, landing.file, "Abracadabra path-card proof paragraph must appear exactly once");
     }
@@ -1626,9 +1705,9 @@ function checkAbracadabraProductCoherence(routeSources, errors) {
     const journeys = markedElements(entry.file, entry.source, "data-abracadabra-journey", errors);
     checkExactValues(
       entry.file,
-      "Abracadabra preview-and-Download journey markers",
+      "Abracadabra preview-then-Alacazam journey markers",
       journeys.map(({ value }) => value),
-      ["free-preview-paid-download"],
+      ["paid-preview-then-alacazam"],
       errors,
     );
   }
@@ -1716,12 +1795,21 @@ function checkPublicSource(file, source, { route = null } = {}, errors) {
     const match = source.match(expression);
     if (match) report(errors, file, `contains ${label}: ${JSON.stringify(match[0])}`);
   }
+  // Public prices are shown, not hidden — the owner's call, reversing an
+  // agent-introduced rule that allowed no figure but $5 anywhere on the site.
+  // The guard still exists, but it now checks the opposite thing: every price a
+  // page prints must be a real price from data/public-catalog.json. That still
+  // catches the failure the original rule was aimed at — a page inventing a
+  // number, or drifting after the catalog is repriced — without forcing the
+  // site to keep its own prices secret.
   for (const price of source.match(PRICE) ?? []) {
-    if (
-      !FIVE_DOLLAR_PROPOSITION_FILES.has(file)
-      || Number(price.replace(/[^\d.]/gu, "")) !== 5
-    ) {
-      report(errors, file, `contains public price outside the $5 Abracadabra project proposition: ${JSON.stringify(price)}`);
+    const amount = Number(price.replace(/[^\d.]/gu, ""));
+    if (!Number.isFinite(amount) || !CATALOG_PRICES.has(amount)) {
+      report(
+        errors,
+        file,
+        `contains a public price that is not in data/public-catalog.json: ${JSON.stringify(price)}`,
+      );
     }
   }
   const priceAttribute = source.match(PRICE_ATTRIBUTE);
