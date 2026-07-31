@@ -6207,3 +6207,264 @@ body.vnext-page::after {
     min-height: 5rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The Responder demo: the product, happening, inside its own card.
+
+   A missed call arrives, the text goes out, the customer replies — on loop.
+   No decoration says "this answers your phone" better than watching it answer
+   the phone. Bubbles share one 14s clock so the scene stays in sync forever.
+   --------------------------------------------------------------------------- */
+
+.card-flash {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.6rem;
+  align-items: center;
+  text-align: center;
+}
+
+.card-flash-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.responder-demo {
+  display: grid;
+  justify-items: center;
+}
+
+.rd-phone {
+  position: relative;
+  width: min(15rem, 100%);
+  padding: 0.55rem;
+  border: 1px solid rgba(242, 206, 131, 0.55);
+  border-radius: 2.4rem;
+  background: linear-gradient(165deg, #171222 0%, #0d0a15 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 2.2rem rgba(174, 112, 255, 0.3),
+    0 1rem 2.4rem rgba(8, 7, 12, 0.6);
+}
+
+.rd-notch {
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  width: 5.5rem;
+  height: 0.85rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #08070c;
+}
+
+.rd-screen {
+  display: flex;
+  min-height: 21rem;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 2.4rem 0.8rem 1rem;
+  border-radius: 1.9rem;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(122, 79, 192, 0.16), transparent 12rem),
+    #0b0912;
+}
+
+.rd-missed {
+  align-self: center;
+  padding: 0.3rem 0.85rem;
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  border-radius: 999px;
+  color: #ff9d9d;
+  background: rgba(255, 100, 100, 0.08);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.rd-bubble {
+  max-width: 88%;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.rd-out {
+  align-self: flex-end;
+  border-bottom-right-radius: 0.3rem;
+  color: #1d1128;
+  background: linear-gradient(180deg, #f8e2ab 0%, #e8b654 100%);
+  font-weight: 640;
+}
+
+.rd-in {
+  align-self: flex-start;
+  border-bottom-left-radius: 0.3rem;
+  color: #e7dff0;
+  background: rgba(122, 100, 160, 0.32);
+}
+
+.rd-caption {
+  margin-top: auto;
+  align-self: center;
+  color: rgba(242, 206, 131, 0.75);
+  font-size: 0.64rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* One shared clock: call at 2%, text out at 20%, reply at 52%, all fade at 94%. */
+@keyframes rd-pop {
+  0%, 100% { opacity: 0; transform: translateY(10px) scale(0.96); }
+}
+
+.rd-missed,
+.rd-out,
+.rd-in {
+  opacity: 0;
+  animation: rd-cycle 14s ease-in-out infinite;
+}
+
+@keyframes rd-cycle {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.96); }
+  4%   { opacity: 1; transform: none; }
+  92%  { opacity: 1; transform: none; }
+  97%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+.rd-out { animation-delay: 2.5s; }
+.rd-in  { animation-delay: 7s; }
+
+/* Delayed items must stay hidden before their clock starts. */
+.rd-out,
+.rd-in {
+  animation-fill-mode: both;
+}
+
+@media (max-width: 78rem) {
+  .card-flash {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-missed,
+  .rd-out,
+  .rd-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   OWNER NOTE, verbatim: "I cannot see through the premade five dollar box and
+   the custom from four hundred dollar box... I would like to see the wizard
+   working on the table in the background... The premade box doesn't need to
+   be as see through as the custom built for you box."
+
+   Diagnosis: alpha was never the blocker — blur(30px) was. A backdrop blur
+   that heavy liquefies the storm into plain color, so no amount of tint-
+   thinning ever let the wizard READ. Shapes survive blur at ~6-10px, so:
+   custom drops to 6px (clearest — the wizard stands on this side), premade to
+   10px (frostier on purpose: it carries dark ink, which needs a milk layer).
+   Same layer stacks, same order, same sizes — atelier-living's 8 background
+   positions still line up.
+   --------------------------------------------------------------------------- */
+
+.path-card:not(.path-card-product) {
+  background-image:
+    linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.38) 50%, transparent 58%),
+    radial-gradient(circle at 50% -20%, rgba(255, 214, 130, 0.14), transparent 24rem),
+    linear-gradient(165deg, rgba(250, 240, 217, 0.18) 0%, rgba(243, 221, 171, 0.14) 100%);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+}
+
+/* Thinner milk under dark ink means the halo does the legibility work now. */
+.path-card:not(.path-card-product) h2,
+.path-card:not(.path-card-product) h3,
+.path-card:not(.path-card-product) p:not(.card-kicker) {
+  text-shadow:
+    0 1px 4px rgba(255, 248, 235, 0.85),
+    0 0 18px rgba(255, 244, 220, 0.6);
+}
+
+.path-card-product {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(2px 2px at 50px 60px, rgba(255, 236, 190, 0.95), transparent 3px),
+    radial-gradient(1.6px 1.6px at 120px 140px, rgba(214, 170, 255, 0.95), transparent 3px),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.14), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.07), transparent 20rem),
+    linear-gradient(165deg, rgba(30, 18, 46, 0.15) 0%, rgba(20, 12, 32, 0.19) 100%),
+    conic-gradient(from var(--atelier-angle),
+      #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg);
+  backdrop-filter: blur(6px) saturate(1.15);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15);
+}
+
+.path-card-product h2,
+.path-card-product h3,
+.path-card-product p:not(.card-kicker) {
+  text-shadow:
+    0 1px 5px rgba(8, 7, 12, 0.9),
+    0 2px 18px rgba(8, 7, 12, 0.7);
+}
+
+/* The demo phone was stretching to the card's full height, leaving a huge
+   empty screen. Center it; the screen keeps its natural 21rem. */
+.responder-demo {
+  align-items: center;
+}
+
+/* The atelier wheel was painted at full alpha and buried under thick tint;
+   with the veil thinned it blasted gold over the wizard. Alpha it down so it
+   tints the storm instead of replacing it. */
+.path-card-product {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(2px 2px at 50px 60px, rgba(255, 236, 190, 0.95), transparent 3px),
+    radial-gradient(1.6px 1.6px at 120px 140px, rgba(214, 170, 255, 0.95), transparent 3px),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.14), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.07), transparent 20rem),
+    linear-gradient(165deg, rgba(30, 18, 46, 0.15) 0%, rgba(20, 12, 32, 0.19) 100%),
+    conic-gradient(from var(--atelier-angle),
+      rgba(255, 233, 189, 0.20) 0deg, rgba(122, 79, 192, 0.16) 80deg,
+      rgba(232, 201, 135, 0.18) 160deg, rgba(138, 95, 208, 0.16) 240deg,
+      rgba(255, 233, 189, 0.20) 360deg);
+}
+
+/* The flash card's light-ink rule outranks the bubbles; restate with the card
+   in the selector so the SMS keeps its own ink. */
+.card-flash .rd-bubble.rd-out {
+  color: #221430;
+  text-shadow: none;
+}
+
+.card-flash .rd-bubble.rd-in {
+  color: #e7dff0;
+  text-shadow: none;
+}
+
+.card-flash .rd-missed,
+.card-flash .rd-caption {
+  text-shadow: none;
+}
+
+/* The assessment card is shorter than the Responder card and was stretching
+   into a long empty bottom. Center its content in the shared row height. */
+.choice-grid:has(.card-flash) > .card:not(.card-flash) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
