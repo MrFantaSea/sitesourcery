@@ -3971,7 +3971,7 @@ h3 {
   }
 }
 
-@media (max-width: 56rem) {
+@media (max-width: 78rem) {
   html {
     scroll-padding-top: 5.25rem;
   }
@@ -4620,7 +4620,7 @@ h3 {
 
 /* Below the drawer breakpoint the call button sits between the wordmark and
    the menu button, and keeps its own auto margin so it is never pushed off. */
-@media (max-width: 56rem) {
+@media (max-width: 78rem) {
   .menu-ready .site-header:has(.menu-button) .site-brand {
     order: 1;
   }
@@ -6187,5 +6187,23 @@ body.vnext-page::after {
   .footer-stack::before,
   .path-card-product {
     animation: none;
+  }
+}
+
+/* With the drawer owning everything below 78rem, the inline row only has to
+   fit above 1248px — but the masthead still must not eat the nav there. */
+.site-brand {
+  font-size: clamp(1.7rem, 3.6vw, 4.1rem) !important;
+}
+
+/* In drawer mode the header is just brand + pill + bars; let the brand breathe
+   but keep the row on one line. */
+@media (max-width: 78rem) {
+  .site-brand {
+    font-size: clamp(1.5rem, 3.4vw, 2.4rem) !important;
+  }
+
+  .header-inner {
+    min-height: 5rem;
   }
 }
