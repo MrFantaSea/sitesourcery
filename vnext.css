@@ -4889,3 +4889,166 @@ body.vnext-page .section-dark {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, homepage.
+
+   1. The storm gets much brighter — the scrim was strangling it.
+   2. Text centers: the owner is not a fan of everything ragging left.
+   3. Both fork cards go light. Premade turns golden-cream with dark type;
+      Custom keeps pearl-cream but stops being plain: gold frame, aurora wash,
+      an ornament on the kicker. Custom should look bespoke, not beige.
+   4. The Responder card is the deliberate odd one out — dark with a gold ring
+      and a storm glow between two light neighbours. Flash by contrast.
+   --------------------------------------------------------------------------- */
+
+body.vnext-page::after {
+  background:
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.04) 0%,
+      rgba(8, 7, 12, 0.30) 55%,
+      rgba(8, 7, 12, 0.55) 100%),
+    url("/assets/site-sourcery-storm-atelier-v4.webp") center top / cover no-repeat,
+    var(--void);
+}
+
+/* Bright storm behind centered text needs a local shadow to keep the headline
+   sovereign over the lightning. */
+.home-hero .hero-copy {
+  margin-inline: auto;
+  text-align: center;
+  text-shadow: 0 2px 28px rgba(8, 7, 12, 0.85), 0 0 60px rgba(8, 7, 12, 0.6);
+}
+
+.home-hero .hero-copy .eyebrow {
+  justify-content: center;
+}
+
+.home-hero .hero h1,
+.home-hero h1 {
+  margin-inline: auto;
+}
+
+.home-hero .lede {
+  margin-inline: auto;
+}
+
+/* ---- fork cards: light, centered ---- */
+
+.path-card {
+  align-items: center;
+  text-align: center;
+  color: #251b2d;
+  border-color: rgba(146, 104, 40, 0.35);
+  background:
+    radial-gradient(circle at 50% -20%, rgba(255, 214, 130, 0.55), transparent 24rem),
+    linear-gradient(165deg, #faf0d9 0%, #f3ddab 100%);
+}
+
+.path-card h2,
+.path-card h3 {
+  color: #251b2d;
+}
+
+.path-card .card-kicker {
+  color: #7a4b12;
+}
+
+.path-card p:not(.card-kicker) {
+  color: #55465c;
+}
+
+.path-card .pill-list {
+  justify-content: center;
+}
+
+.path-card .pill-list li {
+  border-color: rgba(92, 62, 26, 0.3);
+  color: #4a3a52;
+  background: rgba(255, 255, 255, 0.55);
+  font-weight: 760;
+}
+
+.path-card .hero-actions {
+  justify-content: center;
+}
+
+/* Gold button on a golden card would vanish; the primary flips dark. */
+.path-card .button-primary {
+  border-color: #251b2d;
+  color: #f6e7c6 !important;
+  background: #251b2d;
+}
+
+.path-card .button-primary:hover,
+.path-card .button-primary:focus-visible {
+  background: #3a2b47;
+  border-color: #3a2b47;
+}
+
+.path-card .button {
+  border-color: rgba(37, 27, 45, 0.45);
+  color: #251b2d !important;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.path-card .button:hover,
+.path-card .button:focus-visible {
+  border-color: #251b2d;
+  background: #fff;
+}
+
+/* Custom: pearl and arcane, framed in gold, faint aurora — bespoke, not beige. */
+.path-card-product {
+  position: relative;
+  border: 1px solid rgba(176, 132, 52, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65),
+    0 0 0 4px rgba(176, 132, 52, 0.12),
+    0 1.2rem 3rem rgba(88, 52, 140, 0.22);
+  background:
+    radial-gradient(circle at 82% 0%, rgba(122, 182, 255, 0.4), transparent 18rem),
+    radial-gradient(circle at 8% 100%, rgba(206, 148, 255, 0.35), transparent 20rem),
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 200, 0.75), transparent 30rem),
+    linear-gradient(160deg, #fbf4e4 0%, #efe2c4 100%);
+}
+
+.path-card-product .card-kicker::before {
+  content: "✦ ";
+  color: rgba(176, 132, 52, 0.9);
+}
+
+/* ---- third row: centered cards, and the flash treatment ---- */
+
+.choice-grid .card {
+  text-align: center;
+}
+
+.choice-grid .card .hero-actions {
+  justify-content: center;
+}
+
+.card-flash {
+  position: relative;
+  border: 1px solid rgba(242, 206, 131, 0.65);
+  box-shadow:
+    0 0 0 4px rgba(242, 206, 131, 0.1),
+    0 0 2.6rem rgba(174, 112, 255, 0.32),
+    inset 0 0 3rem rgba(242, 206, 131, 0.06);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(174, 112, 255, 0.22), transparent 18rem),
+    radial-gradient(circle at 50% 120%, rgba(242, 206, 131, 0.14), transparent 16rem),
+    rgba(13, 10, 19, 0.9);
+}
+
+.card-flash .card-kicker {
+  color: var(--gold);
+}
+
+.card-flash-price {
+  margin: 0.35rem 0 0;
+  color: var(--gold);
+  font-size: 0.85rem;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+}
