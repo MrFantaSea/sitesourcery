@@ -127,7 +127,8 @@ export const SELLABLE = Object.freeze([
   rail({
     id: "domain.purchase",
     checkoutUrl: "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03",
-    productRef: "prod_Uz9dLpJdKPKbHT",
+    productRef: "prod_UzBKS5kuTkx7WL",
+    priceRef: "price_1TzCxkPi1bfFonRcJ7oVDMS6",
     label: "Domain bought on the customer's behalf",
     rail: "billing",
     amountCents: 4000,
