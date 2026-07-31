@@ -29,7 +29,7 @@ quoted no prices at all.
 │                                 ├─▶ /alacazam/ ─▶ /domains/   ← the money spine
 ├── /custom/         from $400   ─┘      (+scope, +process)
 ├── /services/       the discrete jobs, grouped
-├── /hive/           calls & follow-up
+├── /hive/           custom AI automation
 ├── /work/           proof
 └── /about/ /contact/ /faq/ /legal/
 ```
@@ -89,19 +89,38 @@ lists them so they cannot be quietly forgotten.
 guessed; a monthly hosting service and a one-time design fee are not obviously
 the same thing in New Jersey.
 
-## Known gaps
+## What is actually left
 
-- `/alacazam/` does not exist yet. The string appears **zero times** in any Site
-  Sourcery tree on this Mac or on the fleet.
-- The commerce layer still sells a **download** (`offerId "spark_download"`,
-  `/projects/{id}/download-quotes`). The paid object must become the preview.
-- `TENURE_IDS` models only three address options; the fourth — buy through Site
-  Sourcery and manage it yourself — has no tenure.
-- The Spaceship middleman is complete but **held on price discovery**:
-  `previewRegistration()` needs an injected price source and what is wired is a
-  stub that always throws. Standard-domain prices are not returned by the public
-  availability endpoint, only premium ones.
-- The legal pages describe a free device-local tool that charges nothing and
-  publishes nothing — a product that no longer exists.
+**1. The maker cannot take money.** The commerce layer still sells a *download*
+— `offerId "spark_download"` in `abracadabra-customer-control-dom.js`, and
+`/projects/{id}/download-quotes` in the API. The paid object has to become the
+preview, with download as one of Alacazam's features. This is why the $5 and $25
+Payment Links exist but are not on any page.
 
-`npm run check` must pass before any part is called done.
+**2. The two credits are only words.** The site promises the $5 comes off
+Alacazam and the $200 comes off a build. Neither exists as a Stripe object.
+Recommended: put a −$5.00 credit on the Stripe Customer at payment, so there is
+no code to lose, nothing to type, and nothing to forge. Needs a small webhook.
+
+**3. The domain price book needs real costs.** `server/domain/price-book.mjs`
+computes retail from `cost × multiplier`, a floor, and a handling fee, and it
+refuses to quote a premium name, an unknown ending, a stale cost, or anything at
+or below cost. What it lacks is a live cost feed — Spaceship publishes a price
+only for premium names, so costs must be synced and stamped until a feed exists.
+The markup rule is also unset: multiplier, floor, and handling fee are the
+owner's call.
+
+**4. Deployment ② does not exist yet.** `server/hosted` holds 87 tables —
+accounts, organizations, sessions, quotes, domain registrations, registrar
+debits — behind `PUBLICATION_HOLD`. The public site is static; accounts need a
+server and Postgres. Two deployments, and only the first is built.
+
+**5. Tax treatment is unreviewed** on all five sellable things.
+
+## Standing rules
+
+- `npm run check` must pass before any part is called done.
+- A checkout link goes on a page only once the thing behind it can be delivered.
+- Every printed price must exist in `data/public-catalog.json`.
+- Nothing here has been pushed. `sitesourcery.com` still serves the old atelier
+  build, and replacing it is a founder decision.
