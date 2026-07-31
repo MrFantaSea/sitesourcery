@@ -4808,3 +4808,18 @@ h3 {
 .path-card .hero-actions {
   margin-top: 0.5rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Three-card rows.
+
+   .choice-grid is two columns, so any grid holding exactly three cards wrapped
+   2+1 and left a hole beside the third — the homepage's "Give me a ring" card
+   sat alone next to empty space. Exactly-three grids now take three columns on
+   wide screens; four-card grids keep their intentional 2x2.
+   --------------------------------------------------------------------------- */
+
+@media (min-width: 56.0625rem) {
+  .choice-grid:has(> .card:nth-child(3):last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
