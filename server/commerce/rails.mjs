@@ -159,6 +159,23 @@ export const SELLABLE = Object.freeze([
       + "build, which is a refund-or-coupon decision, not a copy decision."
   }),
   rail({
+    id: "responder",
+    productRef: "prod_UzBnwZbrqPQqjR",
+    label: "The Responder",
+    rail: "billing",
+    amountCents: 25000,
+    interval: "month",
+    taxTreatment: "review_required",
+    note:
+      "NOT SELLABLE YET, ON PURPOSE. A Stripe product exists but has no price "
+      + "reference and no payment link, so sellableNow() refuses it. There is no "
+      + "working responder behind it: missed-call-to-text needs a telephony "
+      + "number, call forwarding, and a no-answer trigger. Twilio Studio can do "
+      + "all three with no server, but the account is the owner's to open. "
+      + "Selling this before it exists is the same failure as charging for a "
+      + "preview the maker cannot make. Setup is a further $300 one-time."
+  }),
+  rail({
     id: "custom.build",
     label: "Custom build",
     rail: "invoice",
