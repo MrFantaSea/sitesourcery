@@ -113,7 +113,7 @@
     } else if (state === "taken") {
       verdict.textContent = "Already taken";
     } else {
-      verdict.textContent = "Could not tell — Zack will check by hand";
+      verdict.textContent = "Could not tell — call me and I check it by hand while you wait";
     }
     li.appendChild(verdict);
 
@@ -123,7 +123,9 @@
         var buy = document.createElement("a");
         buy.className = "button button-primary";
         // The name travels to Stripe so the order says which domain was bought.
-        buy.href = checkout + "?client_reference_id=" + encodeURIComponent(domain);
+        // Stripe silently drops client_reference_id values with dots, so the
+        // domain travels with dashes: joes.com -> joes-com.
+        buy.href = checkout + "?client_reference_id=" + domain.replace(/[^a-zA-Z0-9_-]/g, "-");
         buy.rel = "noopener";
         buy.textContent = "Buy " + domain;
         li.appendChild(buy);
@@ -131,7 +133,7 @@
         // Priced but not yet sellable at that price. Ask rather than undercharge.
         var ask = document.createElement("a");
         ask.className = "button";
-        ask.href = "/contact/#about-domain-help";
+        ask.href = "/contact/#about-customer-domain";
         ask.textContent = "Ask about " + domain;
         li.appendChild(ask);
       }
@@ -166,7 +168,7 @@
       var free = states.filter(function (s) { return s === "free"; }).length;
       say(
         free
-          ? free + " of " + domains.length + " look available. Availability is confirmed with the registrar before you are charged."
+          ? free + " of " + domains.length + " look available. If you buy, I confirm the name with the registrar the same day - and refund in full if it turns out taken."
           : "None of those look available. Try another word, or rent an address at sitesourcery.me."
       );
       button.disabled = false;

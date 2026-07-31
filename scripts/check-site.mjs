@@ -50,6 +50,7 @@ const APP_ROUTES = new Set(["/abracadabra/site/"]);
  */
 const ALLOWED_EXTERNAL = new Set([
   "https://sconesourcery.com/", // real founder-owned venture, cited as proof on /work/
+  "https://daarx.money/", // second founder-owned venture, cited as proof on /work/
 ]);
 
 /**

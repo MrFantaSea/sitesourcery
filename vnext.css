@@ -7464,3 +7464,40 @@ body.vnext-page::after {
   text-transform: uppercase;
   text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85);
 }
+
+/* ---------------------------------------------------------------------------
+   REVIEW FIX (confirmed critical): the late !important masthead clamps kept
+   the wordmark desktop-sized on phones, shoving the menu button off the
+   right edge of every page and forcing sideways scroll. Phone widths get
+   their own final word, and the header may wrap instead of overflowing.
+   --------------------------------------------------------------------------- */
+@media (max-width: 48rem) {
+  .site-brand {
+    font-size: clamp(1.1rem, 5vw, 1.6rem) !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  .header-inner {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+}
+
+/* The DAARX proof shot shows whole, not cropped — the scone stage's cover
+   framing was cutting its left edge. */
+#daarx .proof-stage-main img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  transform: none;
+}
+
+/* Notes that ride under checkout buttons: quiet, honest, unmissable. */
+.checkout-note,
+.spark-fine {
+  margin: 0.6rem auto 0;
+  max-width: 36rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(231, 223, 240, 0.78);
+}
