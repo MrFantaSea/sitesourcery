@@ -3607,9 +3607,11 @@ h3 {
 
 .path-card {
   display: flex;
-  min-height: 28rem;
+  /* Sized by its content. A fixed minimum left a void in the middle of the
+     shorter card, which read as an unfinished layout rather than breathing room. */
   flex-direction: column;
   align-items: flex-start;
+  gap: 1rem;
   padding: clamp(1.5rem, 4vw, 2.5rem);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -3626,6 +3628,7 @@ h3 {
     #f4ead7;
 }
 
+.path-card-product h2,
 .path-card-product h3 {
   color: #251b2d;
 }
@@ -3634,13 +3637,14 @@ h3 {
   color: #633d1f;
 }
 
+.path-card h2,
 .path-card h3 {
-  max-width: 14ch;
+  max-width: 22ch;
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 0.98;
-  letter-spacing: -0.045em;
+  font-size: clamp(1.6rem, 2.5vw, 2.3rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
 }
 
 .path-card p:not(.card-kicker) {
@@ -4482,7 +4486,7 @@ h3 {
   }
 
   .path-card {
-    min-height: 23rem;
+    min-height: 0;
   }
 
   .help-preflight .card {
@@ -4756,4 +4760,30 @@ h3 {
 
 .domain-result .button {
   flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Light path card, remaining contrast.
+
+   The product card sits on cream, so anything inheriting the dark theme's
+   light-on-dark colours disappears. The heading was the visible failure; these
+   are the rest of the same bug.
+   --------------------------------------------------------------------------- */
+
+.path-card-product .pill-list li {
+  border-color: rgba(92, 62, 26, 0.28);
+  color: #4a3a52;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.path-card-product .button {
+  border-color: rgba(37, 27, 45, 0.45);
+  color: #251b2d !important;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.path-card-product .button:hover,
+.path-card-product .button:focus-visible {
+  border-color: #251b2d;
+  background: #fff;
 }
