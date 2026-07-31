@@ -4823,3 +4823,69 @@ h3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The storm as the site's backdrop.
+
+   Owner's call: the wizard graphic becomes the background of the site itself,
+   not a framed figure. Implemented as a fixed layer rather than
+   background-attachment: fixed, which iOS Safari has never honoured.
+
+   The scrim gradient is the whole trick: light enough at the top that the hero
+   headline rides visible lightning, and dense enough below that body text
+   still sits on near-#08070c. Adjust the three stops here and nowhere else.
+
+   body's own background must go transparent for the layer to show — html
+   carries var(--void) beneath it, so nothing flashes white while loading.
+   .section-dark slabs also go translucent so they read as glass over the storm
+   instead of opaque rectangles chopping it into strips.
+   --------------------------------------------------------------------------- */
+
+body.vnext-page {
+  background: transparent;
+}
+
+/* ::after, NOT ::before — the stylesheet already uses body::before for its
+   faint grid texture at opacity .14 with a radial mask. Sharing that pseudo
+   made the storm inherit both, which rendered it as murk inside a fading
+   circle. The storm lives one layer deeper; the grid stays as texture on top. */
+body.vnext-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  opacity: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.18) 0%,
+      rgba(8, 7, 12, 0.55) 55%,
+      rgba(8, 7, 12, 0.78) 100%),
+    url("/assets/site-sourcery-storm-atelier-v4.webp") center top / cover no-repeat,
+    var(--void);
+}
+
+body.vnext-page .section-dark {
+  background:
+    radial-gradient(circle at 86% 30%, rgba(85, 54, 130, 0.13), transparent 28rem),
+    rgba(10, 8, 14, 0.72);
+}
+
+/* The homepage hero rides the storm directly: single column, no framed art. */
+.home-hero .hero-grid {
+  min-height: clamp(38rem, 78vh, 54rem);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-hero .hero-copy {
+  max-width: 46rem;
+}
+
+.hero-tagline {
+  margin: 1.1rem 0 0;
+  color: var(--gold);
+  font-size: 0.9rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
