@@ -104,10 +104,11 @@ export const SELLABLE = Object.freeze([
     creditsForward: "alacazam.hosting",
     taxTreatment: "review_required",
     note:
-      "Charged at step six, on the reveal — not at the door. One-time, one "
-      + "preview. The five dollars is credited against the first Alacazam "
-      + "payment, so the credit must be applied as a Stripe coupon or invoice "
-      + "line rather than promised only in copy."
+      "OWNER PIVOT 2026-07-31: seeing the preview is FREE; the $5 buys the "
+      + "DOWNLOAD. Still one-time, still credited against the first Alacazam "
+      + "payment — a credit that must exist as a Stripe object, not copy. The "
+      + "Stripe product name/description still say 'preview'; rename to "
+      + "'Abracadabra download' in the dashboard."
   }),
   rail({
     id: "alacazam.hosting",

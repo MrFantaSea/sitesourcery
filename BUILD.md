@@ -10,7 +10,7 @@ every earlier branch and worktree is untouched.
 
 | | |
 |---|---|
-| **Abracadabra** | **$5.** Makes a one-page preview from the customer's business details. **Ends at the preview.** |
+| **Abracadabra** | **Free to see, $5 to download** (owner pivot 2026-07-31). Makes a one-page preview from the customer's business details; the $5 unlocks taking it with you. |
 | **Alacazam** | The paid service that follows: customise further, download, or go live. **The $5 is credited toward it.** |
 | **Address, four ways** | buy from Zack (you run it) · buy + looked after · bring your own · rent `you.sitesourcery.me` monthly |
 | **Custom** | Quoted builds. Card $400 · Card+ $650 · Site $1,200 · Site+ $1,800 · Signature $2,800 · Flagship $4,000 |

@@ -5240,3 +5240,180 @@ body.vnext-page::after {
   border-color: #b8862e;
   background: linear-gradient(180deg, #fdeec4 0%, #f2c86e 100%);
 }
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, round three.
+   --------------------------------------------------------------------------- */
+
+/* Hero: gold a smidgen darker, headline bigger and ALL CAPS. */
+.home-hero h1 {
+  color: #e6ba6b;
+  font-size: clamp(3.9rem, 9.4vw, 9rem);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.home-hero .eyebrow,
+.hero-tagline {
+  color: #dcaa55;
+}
+
+/* ---- The fork cards go glass: sprucing plus the see-through he asked for.
+        backdrop-filter lets the storm burn through both without costing the
+        text its footing. ---- */
+
+.path-card {
+  border-color: rgba(214, 168, 84, 0.5);
+  background:
+    radial-gradient(circle at 50% -20%, rgba(255, 214, 130, 0.4), transparent 24rem),
+    linear-gradient(165deg, rgba(250, 240, 217, 0.82) 0%, rgba(243, 221, 171, 0.78) 100%);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 1rem 2.6rem rgba(20, 10, 34, 0.35);
+}
+
+/* Premade's own sparkle: a gold beacon on the kicker. */
+.path-card > .card-kicker::before {
+  content: "✦ ";
+  color: rgba(176, 132, 52, 0.85);
+}
+
+/* Custom, pumped: translucent aubergine glass, foil ring, corner stars, and a
+   slow aurora drifting through the drafting grid. Real magic, still readable. */
+.path-card-product {
+  background:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.34), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.16), transparent 20rem),
+    linear-gradient(165deg, rgba(34, 21, 51, 0.78) 0%, rgba(22, 14, 34, 0.82) 100%);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.path-card-product::before,
+.path-card-product::after {
+  position: absolute;
+  color: rgba(242, 206, 131, 0.9);
+  font-size: 1.15rem;
+  text-shadow: 0 0 1rem rgba(242, 206, 131, 0.6);
+  content: "✦";
+}
+
+.path-card-product::before {
+  top: 1rem;
+  left: 1.2rem;
+}
+
+.path-card-product::after {
+  right: 1.2rem;
+  bottom: 1rem;
+}
+
+@keyframes atelier-aurora {
+  0%, 100% { box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 160, 0.16),
+    0 0 0 4px rgba(214, 168, 84, 0.1),
+    0 0 2.6rem rgba(174, 112, 255, 0.25),
+    0 1.4rem 3.4rem rgba(20, 10, 34, 0.55); }
+  50% { box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 160, 0.28),
+    0 0 0 4px rgba(214, 168, 84, 0.18),
+    0 0 3.8rem rgba(174, 112, 255, 0.45),
+    0 1.4rem 3.4rem rgba(20, 10, 34, 0.55); }
+}
+
+.path-card-product {
+  animation: atelier-aurora 6s ease-in-out infinite;
+}
+
+/* ---- The Responder: the hook gets the headline size. ---- */
+.card-flash .card-kicker {
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  letter-spacing: 0.12em;
+}
+
+.card-flash .pill-list {
+  justify-content: center;
+}
+
+.card-flash .pill-list li {
+  border-color: rgba(242, 206, 131, 0.4);
+  color: #efdfba;
+  background: rgba(242, 206, 131, 0.08);
+}
+
+/* ---- Footer, rebuilt: one centred stack instead of plug-and-play columns. */
+.footer-stack {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  padding-block: clamp(3rem, 6vw, 4.5rem) 2.2rem;
+  text-align: center;
+}
+
+.footer-brand {
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  letter-spacing: -0.02em;
+}
+
+.footer-tag {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.85rem;
+}
+
+.footer-row a {
+  color: var(--gold);
+  font-weight: 780;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.footer-row a:hover,
+.footer-row a:focus-visible {
+  color: #ffe3a1;
+}
+
+.footer-row span {
+  color: rgba(242, 206, 131, 0.4);
+}
+
+.footer-copyright {
+  margin: 0.6rem 0 0;
+  padding-top: 1.4rem;
+  border-top: 1px solid rgba(242, 206, 131, 0.14);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path-card-product {
+    animation: none;
+  }
+}
+
+/* Caps at 9rem set four stacked lines that swallowed the wizard and collided
+   with the eyebrow. Still huge, still caps — but two lines, with air above. */
+.home-hero h1 {
+  max-width: none;
+  font-size: clamp(3.2rem, 6.9vw, 6.4rem);
+  line-height: 0.96;
+}
+
+.home-hero .eyebrow {
+  margin-bottom: 1.4rem;
+}
