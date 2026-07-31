@@ -7077,3 +7077,212 @@ body.vnext-page::after {
   filter: drop-shadow(0 0 8px rgba(174, 112, 255, 0.45));
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: "the frost... too thick, too wide... the font looks very
+   lame... the entire design needs redone in a way that explains the
+   abracadabra and the alacazam — like the boxes below it."
+
+   The premade card is rebuilt on the lower boxes' formula: question kicker,
+   plain-speech headline, price line, and a demo — three answers fill
+   themselves, the magic word flashes, a finished page pops into existence.
+   The milk pools are gone with the dark ink that needed them; the text now
+   sits light on warm gold-smoke glass, same treatment as the cards he
+   praised, and the wizard keeps showing through.
+   --------------------------------------------------------------------------- */
+
+.path-card:not(.path-card-product) {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.4rem;
+  align-items: center;
+  background-image:
+    linear-gradient(115deg, transparent 42%, rgba(255, 236, 190, 0.22) 50%, transparent 58%),
+    radial-gradient(circle at 50% -20%, rgba(255, 214, 130, 0.16), transparent 24rem),
+    linear-gradient(165deg, rgba(58, 40, 16, 0.30) 0%, rgba(40, 26, 10, 0.36) 100%);
+}
+
+.pcm-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* The pools and the dark ink go together. Light type, dark halo — the same
+   voice as the assessment and Responder cards. */
+.path-card:not(.path-card-product) .pc-text::before {
+  content: none;
+}
+
+.path-card:not(.path-card-product) h2 {
+  color: #fdf3dd;
+  text-shadow: 0 2px 6px rgba(8, 7, 12, 0.85), 0 2px 20px rgba(8, 7, 12, 0.6);
+}
+
+.path-card:not(.path-card-product) p:not(.card-kicker) {
+  color: #f0e5cd;
+  font-weight: 570;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.8), 0 2px 16px rgba(8, 7, 12, 0.55);
+}
+
+.path-card:not(.path-card-product) .card-flash-price {
+  color: #ffd98a;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85);
+}
+
+/* The demo: answers fill in, the word lands, the page appears. One 14s
+   clock, same rhythm as the Responder's phone. */
+.abra-demo {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+  width: min(15rem, 100%);
+}
+
+.abd-form {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(242, 206, 131, 0.5);
+  border-radius: 0.8rem;
+  background: linear-gradient(170deg, rgba(26, 17, 7, 0.72) 0%, rgba(16, 10, 4, 0.78) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0.5rem 1.4rem rgba(8, 7, 12, 0.45);
+}
+
+.abd-label {
+  color: rgba(242, 220, 176, 0.85);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.abd-fill {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2ce83 0%, #e8b654 100%);
+  box-shadow: 0 0 8px rgba(242, 206, 131, 0.45);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: abd-fill 14s ease-in-out infinite;
+}
+
+.abd-f2 { width: 78%; animation-name: abd-fill-2; }
+.abd-f3 { width: 56%; animation-name: abd-fill-3; }
+
+@keyframes abd-fill {
+  0%, 4%    { transform: scaleX(0); opacity: 1; }
+  11%, 90%  { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes abd-fill-2 {
+  0%, 11%   { transform: scaleX(0); opacity: 1; }
+  18%, 90%  { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes abd-fill-3 {
+  0%, 18%   { transform: scaleX(0); opacity: 1; }
+  25%, 90%  { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+.abd-zap {
+  font-family: var(--font-display, serif);
+  font-style: italic;
+  font-size: 0.86rem;
+  letter-spacing: 0.06em;
+  color: #ffe9bd;
+  text-shadow: 0 0 14px rgba(255, 226, 160, 0.8);
+  opacity: 0;
+  animation: abd-zap 14s ease-in-out infinite;
+}
+
+@keyframes abd-zap {
+  0%, 26%   { opacity: 0; transform: scale(0.92); }
+  31%, 38%  { opacity: 1; transform: scale(1.04); }
+  46%, 100% { opacity: 0; transform: scale(0.98); }
+}
+
+.abd-page {
+  display: grid;
+  gap: 0.38rem;
+  justify-items: start;
+  width: 100%;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(255, 244, 214, 0.85);
+  border-radius: 0.8rem;
+  background: linear-gradient(170deg, #fdf6e4 0%, #f3ddae 100%);
+  color: #221430;
+  box-shadow:
+    0 0 0 1px rgba(140, 96, 26, 0.4),
+    0 0.6rem 1.6rem rgba(8, 7, 12, 0.5),
+    0 0 2rem rgba(255, 214, 130, 0.35);
+  transform-origin: 50% 30%;
+  opacity: 0;
+  animation: abd-page 14s ease-in-out infinite;
+}
+
+.abd-page b {
+  font-size: 0.82rem;
+  font-weight: 830;
+}
+
+@keyframes abd-page {
+  0%, 36%   { opacity: 0; transform: scale(0.9) translateY(6px); }
+  42%, 90%  { opacity: 1; transform: none; }
+  96%, 100% { opacity: 0; transform: scale(0.97); }
+}
+
+.abd-bar {
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgba(34, 20, 48, 0.25);
+}
+
+.abd-line {
+  width: 86%;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: rgba(34, 20, 48, 0.3);
+}
+
+.abd-short { width: 58%; }
+
+.abd-cta {
+  width: 42%;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eec267 0%, #d99f36 100%);
+  box-shadow: 0 1px 4px rgba(140, 96, 26, 0.5);
+}
+
+@media (max-width: 78rem) {
+  .path-card:not(.path-card-product) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .abd-fill,
+  .abd-zap,
+  .abd-page {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The question kicker hits like LOSING CALLS? does — same scale, same gold. */
+.path-card:not(.path-card-product) .card-kicker {
+  color: #f2ce83;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  letter-spacing: 0.12em;
+  text-shadow:
+    0 1px 6px rgba(8, 7, 12, 0.9),
+    0 0 20px rgba(242, 206, 131, 0.35);
+}
