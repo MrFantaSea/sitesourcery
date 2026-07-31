@@ -126,16 +126,21 @@ export const SELLABLE = Object.freeze([
   }),
   rail({
     id: "domain.purchase",
+    checkoutUrl: "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03",
+    productRef: "prod_Uz9dLpJdKPKbHT",
     label: "Domain bought on the customer's behalf",
-    rail: "invoice",
-    amountCents: null,
+    rail: "billing",
+    amountCents: 4000,
+    interval: "year",
     taxTreatment: "review_required",
     note:
-      "Deliberately null. The price depends on the exact name, and "
-      + "previewRegistration() currently throws rather than guess. Never sell "
-      + "this at an assumed price; quote the confirmed figure per name. Site "
-      + "Sourcery pays the registrar and books the margin, so this is the one "
-      + "line with real cost of goods behind it."
+      "Flat $40/year for common endings, from the price-book rule (cost x2, "
+      + "floor $25, +$15 handling). The checkout collects registrant name, "
+      + "business, address and phone because a registrar requires all four, "
+      + "plus the domain itself as a custom field. Availability is confirmed "
+      + "with the registrar BEFORE the card is charged; if the name has gone, "
+      + "the customer is refunded in full. Unusual endings and premium names "
+      + "are refused by the price book and quoted by hand."
   }),
   rail({
     id: "assessment",

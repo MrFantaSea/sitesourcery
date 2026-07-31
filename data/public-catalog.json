@@ -373,5 +373,24 @@
       "monthlyCents": 25000,
       "summary": "A missed call gets a text back within seconds, so the job does not go to whoever answers next."
     }
+  },
+  "domains": {
+    "id": "domain-registration",
+    "label": "Domain registration",
+    "summary": "A web address bought on your behalf and registered in your name.",
+    "pricingModel": "price-book",
+    "notice": "Common endings are a flat yearly price. Unusual endings and premium names are quoted for the exact name before anything is bought.",
+    "commonEndings": [
+      "com",
+      "net",
+      "org"
+    ],
+    "firstYearCents": 4000,
+    "renewalCents": 4000,
+    "rule": {
+      "multiplier": 2,
+      "floorCents": 2500,
+      "handlingCents": 1500
+    }
   }
 }

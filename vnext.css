@@ -4653,3 +4653,107 @@ h3 {
     white-space: nowrap;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Domain search.
+
+   The site described four ways to have an address and gave the visitor no way
+   to look one up — every path ended in a phone number. This is the control
+   that makes the page do something.
+   --------------------------------------------------------------------------- */
+
+.domain-search {
+  margin: 1.8rem 0 0;
+}
+
+.domain-search-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--gold);
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.domain-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.domain-search-input {
+  min-width: 0;
+  flex: 1 1 14rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.03);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.domain-search-input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.domain-search-input:focus-visible {
+  border-color: var(--gold);
+  outline: 2px solid rgba(242, 206, 131, 0.35);
+  outline-offset: 2px;
+}
+
+.domain-search-status {
+  margin: 0.85rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.domain-results {
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.domain-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  margin-bottom: 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.domain-result strong {
+  flex: 1 1 12rem;
+  font-size: 1.02rem;
+}
+
+.domain-result span {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+/* Available reads as an opportunity; taken reads as closed but not alarming. */
+.domain-result-free {
+  border-color: rgba(242, 206, 131, 0.45);
+  background: rgba(242, 206, 131, 0.05);
+}
+
+.domain-result-free span {
+  color: var(--gold);
+  font-weight: 780;
+}
+
+.domain-result-taken {
+  opacity: 0.62;
+}
+
+.domain-result .button {
+  flex: 0 0 auto;
+}

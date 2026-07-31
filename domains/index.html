@@ -10,6 +10,7 @@
   <link rel="preload" as="image" href="/assets/site-sourcery-main-street-v2.webp" type="image/webp" fetchpriority="high">
   <link rel="stylesheet" href="/vnext.css">
   <script src="/vnext.js" defer></script>
+  <script src="/domains/domain-search.js" defer></script>
 </head>
 <body class="vnext-page">
   <a class="skip-link" href="#main">Skip to the address options</a>
@@ -40,8 +41,19 @@
           <p class="eyebrow">Domains</p>
           <h1 id="domains-title" data-customer-job="understand-address-options">Four ways to have an address.</h1>
           <p class="lede">Your website needs a name people can type. Buy one through Site Sourcery and run it yourself, buy one and have it looked after, bring a name you already own, or rent an address by the month. None of them locks you in.</p>
+          <div class="domain-search" data-domain-search>
+            <label class="domain-search-label" for="domain-name">Your business name</label>
+            <div class="domain-search-row">
+              <input class="domain-search-input" id="domain-name" type="text" inputmode="url"
+                     autocomplete="off" spellcheck="false" placeholder="joes-crab-shack"
+                     aria-describedby="domain-status" data-domain-input>
+              <button class="button button-primary" type="button" data-domain-submit>Check it</button>
+            </div>
+            <p class="domain-search-status" id="domain-status" role="status" aria-live="polite" data-domain-status>Type a name and check whether the address is free. Checking costs nothing and reserves nothing.</p>
+            <ul class="domain-results" data-domain-results></ul>
+          </div>
           <div class="hero-actions">
-            <a class="button button-primary" href="#domains-compare" data-primary-action="compare-domain-options">Compare the four</a>
+            <a class="button" href="#domains-compare" data-primary-action="compare-domain-options">Compare the four ways</a>
           </div>
         </div>
         <figure class="hero-art reveal">
