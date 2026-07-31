@@ -399,10 +399,14 @@
   "responder": {
     "id": "responder",
     "label": "The Responder",
-    "summary": "A missed call gets a text back within seconds, so the job does not go to whoever answers next.",
+    "summary": "A missed call gets a text back within seconds, and an answered call gets a follow-up you dictate. Either way the customer leaves with something in writing.",
     "pricingModel": "fixed",
     "setupCents": 30000,
     "monthlyCents": 25000,
-    "note": "Lead capture, which is why it stays with Site Sourcery. Custom business apps and internal workflow automation belong to System Sourcery, a separate DBA that does not exist yet."
+    "note": "One price, both behaviours. Tiering invites the customer to pick the cheaper option and stalls the close; the marginal cost of the answered-call text is pennies. Sold in person only.",
+    "includes": [
+      "missed-call text-back",
+      "answered-call follow-up"
+    ]
   }
 }
