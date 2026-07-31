@@ -4905,11 +4905,16 @@ body.vnext-page .section-dark {
 body.vnext-page::after {
   background:
     linear-gradient(180deg,
-      rgba(8, 7, 12, 0.04) 0%,
-      rgba(8, 7, 12, 0.30) 55%,
-      rgba(8, 7, 12, 0.55) 100%),
+      rgba(8, 7, 12, 0.02) 0%,
+      rgba(8, 7, 12, 0.26) 55%,
+      rgba(8, 7, 12, 0.50) 100%),
+    radial-gradient(circle at 72% 30%, rgba(255, 216, 150, 0.16), transparent 46rem),
+    radial-gradient(circle at 45% 78%, rgba(214, 170, 255, 0.12), transparent 40rem),
     url("/assets/site-sourcery-storm-atelier-v4.webp") center top / cover no-repeat,
     var(--void);
+  /* The artwork itself is dark; no amount of scrim removal lights the robe or
+     the table. Brightness does. */
+  filter: brightness(1.34) saturate(1.12);
 }
 
 /* Bright storm behind centered text needs a local shadow to keep the headline
@@ -5051,4 +5056,187 @@ body.vnext-page::after {
   font-size: 0.85rem;
   font-weight: 820;
   letter-spacing: 0.06em;
+}
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, round two.
+   --------------------------------------------------------------------------- */
+
+/* The circle-and-X badge is not the brand and never was. If Site Sourcery ever
+   gets a mark it will be a wizard hat; until that exists, the wordmark stands
+   alone. content: none removes the pseudo everywhere, including forced-colors. */
+.site-brand::before,
+.footer-intro strong::before {
+  content: none;
+}
+
+/* Footer links: no heading above them, so they carry the gold themselves. */
+.footer-links a {
+  color: var(--gold);
+  font-weight: 780;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: #ffe3a1;
+}
+
+/* Hero: the name spaced wide, the headline bigger and gold-cream. */
+.home-hero .eyebrow {
+  font-size: 1.02rem;
+  letter-spacing: 0.4em;
+}
+
+.home-hero h1 {
+  color: #f4d9a0;
+  font-size: clamp(3.6rem, 8.6vw, 8.2rem);
+}
+
+/* Buttons stop being square. Pills across the site, and the primary gets a
+   real gold gradient with light behind it instead of a flat swatch. */
+.button {
+  border-radius: 999px;
+  padding: 0.78rem 1.5rem;
+}
+
+.button-primary {
+  border-color: rgba(242, 206, 131, 0.55);
+  background: linear-gradient(180deg, #f8e2ab 0%, #e8b654 100%);
+  box-shadow: 0 0.35rem 1.4rem rgba(242, 206, 131, 0.22);
+}
+
+.button-primary:hover,
+.button-primary:focus-visible {
+  background: linear-gradient(180deg, #fdeec4 0%, #f2c86e 100%);
+  box-shadow: 0 0.45rem 1.8rem rgba(242, 206, 131, 0.32);
+}
+
+.nav-start {
+  border-radius: 999px;
+}
+
+/* ---- Custom goes dark-luxe: an atelier invitation, not a second cream card.
+        Deep aubergine, gold foil frame, faint drafting lines. ---- */
+.path-card-product {
+  color: #efe6f4;
+  border: 1px solid rgba(214, 168, 84, 0.75);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 160, 0.16),
+    0 0 0 4px rgba(214, 168, 84, 0.1),
+    0 1.4rem 3.4rem rgba(20, 10, 34, 0.6);
+  background:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.05) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.05) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.3), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.12), transparent 20rem),
+    linear-gradient(165deg, #221533 0%, #160e22 100%);
+}
+
+.path-card-product h2,
+.path-card-product h3 {
+  color: #f2d9a4;
+}
+
+.path-card-product .card-kicker {
+  color: var(--gold);
+}
+
+.path-card-product p:not(.card-kicker) {
+  color: #cfc2da;
+}
+
+.path-card-product .pill-list li {
+  border-color: rgba(242, 206, 131, 0.35);
+  color: #e9dcc2;
+  background: rgba(242, 206, 131, 0.07);
+}
+
+.path-card-product .button {
+  border-color: rgba(242, 206, 131, 0.6);
+  color: #1d1128 !important;
+  background: linear-gradient(180deg, #f8e2ab 0%, #e8b654 100%);
+}
+
+.path-card-product .button:hover,
+.path-card-product .button:focus-visible {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fdeec4 0%, #f2c86e 100%);
+}
+
+/* ---- The Responder: bigger voice, more magic. ---- */
+.card-flash h3 {
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1.05;
+}
+
+.card-flash p:not(.card-kicker) {
+  font-size: 1.08rem;
+}
+
+.card-flash .card-kicker {
+  font-size: 0.95rem;
+  letter-spacing: 0.22em;
+}
+
+.card-flash-price {
+  font-size: 1.15rem;
+}
+
+.card-flash::before,
+.card-flash::after {
+  position: absolute;
+  color: rgba(242, 206, 131, 0.85);
+  font-size: 1.1rem;
+  content: "✦";
+}
+
+.card-flash::before {
+  top: 0.9rem;
+  left: 1.1rem;
+}
+
+.card-flash::after {
+  right: 1.1rem;
+  bottom: 0.9rem;
+}
+
+@keyframes flash-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px rgba(242, 206, 131, 0.1),
+      0 0 2.4rem rgba(174, 112, 255, 0.28),
+      inset 0 0 3rem rgba(242, 206, 131, 0.06);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(242, 206, 131, 0.18),
+      0 0 3.6rem rgba(174, 112, 255, 0.5),
+      inset 0 0 3.4rem rgba(242, 206, 131, 0.1);
+  }
+}
+
+.card-flash {
+  animation: flash-glow 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-flash {
+    animation: none;
+  }
+}
+
+/* Final word on the premade card's primary: an earlier .path-card .button rule
+   was outranking the primary at equal specificity by file order, leaving it a
+   frosted pill identical to secondaries. Primaries are gold, everywhere. */
+.path-card .button-primary {
+  border-color: rgba(214, 168, 84, 0.8);
+  color: #1d1128 !important;
+  background: linear-gradient(180deg, #f8e2ab 0%, #e8b654 100%);
+  box-shadow: 0 0.35rem 1.3rem rgba(160, 112, 30, 0.3);
+}
+
+.path-card .button-primary:hover,
+.path-card .button-primary:focus-visible {
+  border-color: #b8862e;
+  background: linear-gradient(180deg, #fdeec4 0%, #f2c86e 100%);
 }
