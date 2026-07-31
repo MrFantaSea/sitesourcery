@@ -360,20 +360,6 @@
     }
   ],
   "projectionDigest": "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
-  "automation": {
-    "id": "hive",
-    "label": "Hive",
-    "summary": "Custom AI automation apps and workflows, built for one business and bounded on purpose.",
-    "pricingModel": "quoted-to-scope",
-    "notice": "Automation work is quoted to the workflow being built. The figures below are where the most common blueprint starts, not a package price.",
-    "startingBlueprint": {
-      "id": "missed-call-responder",
-      "label": "Missed-call responder",
-      "setupCents": 30000,
-      "monthlyCents": 25000,
-      "summary": "A missed call gets a text back within seconds, so the job does not go to whoever answers next."
-    }
-  },
   "domains": {
     "id": "domain-registration",
     "label": "Domain registration",
@@ -409,5 +395,14 @@
         "renewalCents": 4500
       }
     ]
+  },
+  "responder": {
+    "id": "responder",
+    "label": "The Responder",
+    "summary": "A missed call gets a text back within seconds, so the job does not go to whoever answers next.",
+    "pricingModel": "fixed",
+    "setupCents": 30000,
+    "monthlyCents": 25000,
+    "note": "Lead capture, which is why it stays with Site Sourcery. Custom business apps and internal workflow automation belong to System Sourcery, a separate DBA that does not exist yet."
   }
 }
