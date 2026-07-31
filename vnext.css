@@ -7421,3 +7421,46 @@ body.vnext-page::after {
 .path-card-product .pc-text h2 {
   text-wrap: balance;
 }
+
+/* OWNER: the masthead breathes — SITE SOURCERY spaced out wider. */
+.site-brand {
+  letter-spacing: 0.2em;
+}
+
+/* OWNER: SITE SOURCERY spaced out more. The tight -0.035em editorial
+   tracking from the big-masthead round loses; the wordmark breathes. */
+.site-brand {
+  letter-spacing: 0.12em !important;
+}
+
+/* OWNER: "a little tiny box... Just want a domain — and make domain a
+   clickable button." The smallest door on the page, under the card rows,
+   above the footer. The dedicated page it opens already works. */
+.domain-mini {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem 1.4rem;
+  width: fit-content;
+  margin: 2.4rem auto 0;
+  padding: 0.85rem 1.5rem;
+  border: 1px solid rgba(242, 206, 131, 0.45);
+  border-radius: 999px;
+  background: rgba(16, 10, 26, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 206, 131, 0.1),
+    0 0 1.8rem rgba(122, 79, 192, 0.22);
+}
+
+.domain-mini p {
+  margin: 0;
+  color: #f2ce83;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85);
+}
