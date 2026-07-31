@@ -7286,3 +7286,138 @@ body.vnext-page::after {
     0 1px 6px rgba(8, 7, 12, 0.9),
     0 0 20px rgba(242, 206, 131, 0.35);
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: the Sorcery box loses its dark frost too, its plaque becomes
+   a big gold kicker like the Abracadabra box's, the price moves to a golden
+   corner chip twinning the $5 seal, and the metal headline gets re-poured so
+   every word carries gold.
+   --------------------------------------------------------------------------- */
+
+.path-card-product .pc-text::before {
+  content: none;
+}
+
+.path-card-product .card-kicker {
+  align-self: auto;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: #f2ce83;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  letter-spacing: 0.12em;
+  text-shadow:
+    0 1px 6px rgba(8, 7, 12, 0.9),
+    0 0 20px rgba(242, 206, 131, 0.35);
+}
+
+.pc-seal-from {
+  display: grid;
+  place-content: center;
+  line-height: 1.05;
+  text-align: center;
+  font-size: 0.92rem;
+}
+
+.pc-seal-from small {
+  display: block;
+  font-size: 0.46rem;
+  font-weight: 830;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* Without the pool, the headline and body hold the glass on their own:
+   denser gold through the whole pour, heavier halos beneath. */
+.path-card-product .pc-text h2 {
+  font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+  background-image: linear-gradient(100deg,
+    #fffdf6 0%, #f6e8c6 30%, #d8b56a 55%, #fff5df 80%, #e8c987 100%);
+  filter:
+    drop-shadow(0 2px 5px rgba(8, 7, 12, 0.95))
+    drop-shadow(0 4px 18px rgba(8, 7, 12, 0.6))
+    drop-shadow(0 0 24px rgba(174, 112, 255, 0.3));
+}
+
+.path-card-product .pc-text p:not(.card-kicker) {
+  color: #f3ecdf;
+  text-shadow:
+    0 1px 5px rgba(8, 7, 12, 0.95),
+    0 2px 18px rgba(8, 7, 12, 0.8);
+}
+
+/* OWNER: "it has two little graphics... it could just have the one." It is
+   one now: the form and the page share the same cell and the form BECOMES
+   the page — fills, flash, transform. The trick, performed by the graphic. */
+.abd-stage {
+  position: relative;
+  display: grid;
+  width: 100%;
+}
+
+.abd-stage > .abd-form,
+.abd-stage > .abd-page {
+  grid-area: 1 / 1;
+}
+
+.abd-page {
+  align-content: center;
+}
+
+.abd-form {
+  animation: abd-form 14s ease-in-out infinite;
+}
+
+@keyframes abd-form {
+  0%, 30%   { opacity: 1; transform: none; }
+  36%, 88%  { opacity: 0; transform: scale(0.96); }
+  94%, 100% { opacity: 1; transform: none; }
+}
+
+.abd-zap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+@keyframes abd-zap {
+  0%, 26%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+  31%, 38%  { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  46%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .abd-form {
+    animation: none;
+    opacity: 0;
+  }
+
+  .abd-zap {
+    animation: none;
+    opacity: 0;
+  }
+
+  .abd-page {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Kicker parity is exact: no ornament the twin lacks. And no widowed word
+   in the metal headline. */
+.path-card-product .card-kicker::before {
+  content: none;
+}
+
+.path-card-product .pc-text h2 {
+  text-wrap: balance;
+}
