@@ -28,8 +28,23 @@
    */
 
   var RESOLVER = "https://cloudflare-dns.com/dns-query";
-  var ENDINGS = ["com", "net", "org"];
-  var CHECKOUT = "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03";
+
+  /**
+   * Endings are NOT all the same price. Registries charge different wholesale
+   * for each, so a single flat retail number is fat margin on one ending and a
+   * loss on another. Prices come from domains/domain-prices.json, which is
+   * derived from data/public-catalog.json — never hand-typed here.
+   *
+   * `checkout` is null for any band that has no Stripe price yet. A band
+   * without a price cannot be sold, so the row offers to get a quote instead of
+   * charging the wrong amount. Undercharging silently is the failure this
+   * avoids.
+   */
+  var PRICES = null;
+  var CHECKOUT_BY_BAND = {
+    standard: "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03",
+    plus: null
+  };
 
   var form = document.querySelector("[data-domain-search]");
   if (!form) return;
@@ -72,7 +87,17 @@
       });
   }
 
+  function money(cents) {
+    return "$" + (cents / 100).toFixed(cents % 100 ? 2 : 0);
+  }
+
+  function priceFor(ending) {
+    return PRICES && PRICES.endings ? PRICES.endings[ending] : null;
+  }
+
   function row(domain, state) {
+    var ending = domain.split(".").slice(1).join(".");
+    var price = priceFor(ending);
     var li = document.createElement("li");
     li.className = "domain-result domain-result-" + state;
 
@@ -82,7 +107,9 @@
 
     var verdict = document.createElement("span");
     if (state === "free") {
-      verdict.textContent = "Looks available · $40 a year";
+      verdict.textContent = price
+        ? "Looks available · " + money(price.firstYearCents) + " a year"
+        : "Looks available · priced for this ending";
     } else if (state === "taken") {
       verdict.textContent = "Already taken";
     } else {
@@ -91,14 +118,23 @@
     li.appendChild(verdict);
 
     if (state === "free") {
-      var buy = document.createElement("a");
-      buy.className = "button button-primary";
-      // The name travels to Stripe so the order says which domain was bought.
-      buy.href = CHECKOUT + "?prefilled_email=&client_reference_id="
-        + encodeURIComponent(domain);
-      buy.rel = "noopener";
-      buy.textContent = "Buy " + domain;
-      li.appendChild(buy);
+      var checkout = price ? CHECKOUT_BY_BAND[price.band] : null;
+      if (checkout) {
+        var buy = document.createElement("a");
+        buy.className = "button button-primary";
+        // The name travels to Stripe so the order says which domain was bought.
+        buy.href = checkout + "?client_reference_id=" + encodeURIComponent(domain);
+        buy.rel = "noopener";
+        buy.textContent = "Buy " + domain;
+        li.appendChild(buy);
+      } else {
+        // Priced but not yet sellable at that price. Ask rather than undercharge.
+        var ask = document.createElement("a");
+        ask.className = "button";
+        ask.href = "/contact/#about-domain-help";
+        ask.textContent = "Ask about " + domain;
+        li.appendChild(ask);
+      }
     } else if (state === "taken") {
       var alt = document.createElement("span");
       alt.className = "domain-result-note";
@@ -118,9 +154,10 @@
 
     results.replaceChildren();
     button.disabled = true;
-    say("Checking " + ENDINGS.length + " endings for “" + name + "”…");
+    say("Checking for “" + name + "”…");
 
-    var domains = ENDINGS.map(function (ending) { return name + "." + ending; });
+    var endings = Object.keys((PRICES && PRICES.endings) || { com: 1 });
+    var domains = endings.map(function (ending) { return name + "." + ending; });
     Promise.all(domains.map(check)).then(function (states) {
       results.replaceChildren.apply(
         results,
@@ -138,6 +175,11 @@
 
   // No <form> element: this site is static and carries none. Enter and the
   // button both run the same search.
+  fetch("/domains/domain-prices.json")
+    .then(function (r) { return r.json(); })
+    .then(function (data) { PRICES = data; })
+    .catch(function () { PRICES = null; });
+
   button.addEventListener("click", run);
   input.addEventListener("keydown", function (event) {
     if (event.key === "Enter") run(event);

@@ -378,19 +378,36 @@
     "id": "domain-registration",
     "label": "Domain registration",
     "summary": "A web address bought on your behalf and registered in your name.",
-    "pricingModel": "price-book",
-    "notice": "Common endings are a flat yearly price. Unusual endings and premium names are quoted for the exact name before anything is bought.",
-    "commonEndings": [
-      "com",
-      "net",
-      "org"
-    ],
-    "firstYearCents": 4000,
-    "renewalCents": 4000,
+    "pricingModel": "price-book-banded",
+    "costsConfirmed": false,
+    "notice": "Endings are priced in bands because registries charge different wholesale for each. Unusual endings and premium names are quoted for the exact name before anything is bought.",
     "rule": {
       "multiplier": 2,
       "floorCents": 2500,
       "handlingCents": 1500
-    }
+    },
+    "bands": [
+      {
+        "id": "standard",
+        "label": "Standard",
+        "endings": [
+          "com"
+        ],
+        "wholesaleCents": 1100,
+        "firstYearCents": 4000,
+        "renewalCents": 4000
+      },
+      {
+        "id": "plus",
+        "label": "Plus",
+        "endings": [
+          "net",
+          "org"
+        ],
+        "wholesaleCents": 1400,
+        "firstYearCents": 4500,
+        "renewalCents": 4500
+      }
+    ]
   }
 }

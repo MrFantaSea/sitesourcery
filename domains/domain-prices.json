@@ -1,0 +1,21 @@
+{
+  "note": "Derived from data/public-catalog.json. Do not hand-edit.",
+  "costsConfirmed": false,
+  "endings": {
+    "com": {
+      "band": "standard",
+      "firstYearCents": 4000,
+      "renewalCents": 4000
+    },
+    "net": {
+      "band": "plus",
+      "firstYearCents": 4500,
+      "renewalCents": 4500
+    },
+    "org": {
+      "band": "plus",
+      "firstYearCents": 4500,
+      "renewalCents": 4500
+    }
+  }
+}
