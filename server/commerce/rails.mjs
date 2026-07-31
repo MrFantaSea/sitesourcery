@@ -106,9 +106,9 @@ export const SELLABLE = Object.freeze([
     note:
       "OWNER PIVOT 2026-07-31: seeing the preview is FREE; the $5 buys the "
       + "DOWNLOAD. Still one-time, still credited against the first Alacazam "
-      + "payment — a credit that must exist as a Stripe object, not copy. The "
-      + "Stripe product name/description still say 'preview'; rename to "
-      + "'Abracadabra download' in the dashboard."
+      + "payment — a credit applied by hand until it exists as a Stripe "
+      + "object. Product renamed to 'Abracadabra download' in the dashboard "
+      + "on 2026-07-31; name, description, and site copy now agree."
   }),
   rail({
     id: "alacazam.hosting",
@@ -143,6 +143,23 @@ export const SELLABLE = Object.freeze([
       + "with the registrar BEFORE the card is charged; if the name has gone, "
       + "the customer is refunded in full. Unusual endings and premium names "
       + "are refused by the price book and quoted by hand."
+  }),
+  rail({
+    id: "domain.purchase.plus",
+    checkoutUrl: "https://buy.stripe.com/cNi7sN8Pegvs7T07s07kc04",
+    productRef: "prod_UzBKS5kuTkx7WL",
+    priceRef: "price_1TzP2pPi1bfFonRcLOug1Xnb",
+    label: "Domain bought on the customer's behalf - .net/.org band",
+    rail: "billing",
+    amountCents: 4500,
+    interval: "year",
+    taxTreatment: "review_required",
+    note:
+      "The plus band (.net/.org retail $45/yr). Same manual middleman "
+      + "fulfilment as domain.purchase: charged today, confirmed with the "
+      + "registrar same day, refunded in full if the name is gone. Wholesale "
+      + "cost still unverified against Spaceship - price book keeps "
+      + "costsConfirmed false until the owner checks."
   }),
   rail({
     id: "assessment",

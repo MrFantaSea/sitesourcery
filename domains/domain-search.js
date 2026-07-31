@@ -43,7 +43,7 @@
   var PRICES = null;
   var CHECKOUT_BY_BAND = {
     standard: "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03",
-    plus: null
+    plus: "https://buy.stripe.com/cNi7sN8Pegvs7T07s07kc04"
   };
 
   var form = document.querySelector("[data-domain-search]");
