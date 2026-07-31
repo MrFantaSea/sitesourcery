@@ -5153,7 +5153,8 @@ body.vnext-page::after {
 
 .path-card-product .button {
   border-color: rgba(242, 206, 131, 0.6);
-  color: #1d1128 !important;
+  /* The !important dark ink that lived here died in the ring-button round:
+     the owner ruled the custom button never wears dark letters. */
   background: linear-gradient(180deg, #f8e2ab 0%, #e8b654 100%);
 }
 
@@ -6746,4 +6747,160 @@ body.vnext-page::after {
   inset: -1rem -2.2rem;
   -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 30%, transparent 82%);
   mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 30%, transparent 82%);
+}
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: the frost pools were overlapping between headline and body on
+   both cards, and the custom card still read as the premade's twin.
+
+   One pool per card now — it lives on the .pc-text wrapper, so headline and
+   body share a single sheet of frost with no seam. Then the custom card gets
+   its own voice: metal-poured headline, a commission plaque, blueprint ruler
+   ticks, dashed drafting tags, and a button wrapped in the card's own
+   rotating ring — champagne letters in every state, never dark.
+   --------------------------------------------------------------------------- */
+
+.path-card h2::before,
+.path-card > p:not(.card-kicker)::before {
+  content: none;
+}
+
+.pc-text {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pc-text::before {
+  content: "";
+  position: absolute;
+  inset: -1.2rem -2rem;
+  z-index: -1;
+  border-radius: 1.6rem;
+  background: rgba(250, 240, 217, 0.30);
+  backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) brightness(1.12);
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 40%, transparent 88%);
+  mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, #000 40%, transparent 88%);
+}
+
+.path-card-product .pc-text::before {
+  background: rgba(14, 9, 22, 0.44);
+  backdrop-filter: blur(9px) brightness(0.9);
+  -webkit-backdrop-filter: blur(9px) brightness(0.9);
+}
+
+/* The custom headline is poured in the hero's metal, not written in ink. */
+.path-card-product .pc-text h2 {
+  background-image: linear-gradient(100deg, #fffdf6 0%, #f2e2ba 40%, #d8b56a 60%, #fff5df 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(0 2px 6px rgba(8, 7, 12, 0.85))
+    drop-shadow(0 0 22px rgba(174, 112, 255, 0.35));
+  text-shadow: none;
+}
+
+/* The kicker becomes a commission plaque. */
+.path-card-product .card-kicker {
+  align-self: center;
+  display: inline-block;
+  padding: 0.42rem 1.1rem;
+  border: 1px solid rgba(242, 206, 131, 0.6);
+  border-radius: 999px;
+  background: rgba(16, 10, 26, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 206, 131, 0.14),
+    0 0 1.4rem rgba(122, 79, 192, 0.3);
+}
+
+/* Drafting tags instead of shop chips. */
+.path-card-product .pill-list li {
+  border: 1px dashed rgba(242, 206, 131, 0.6);
+  background: rgba(16, 10, 26, 0.4);
+  color: #f0e4c8;
+}
+
+/* Ruler ticks along the top and bottom edges, faded at the ends. */
+.pc-ticks {
+  position: absolute;
+  inset: 0.9rem 2.4rem;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pc-ticks::before,
+.pc-ticks::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 0.45rem;
+  background: repeating-linear-gradient(90deg,
+    rgba(242, 206, 131, 0.6) 0 1px, transparent 1px 14px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.pc-ticks::before { top: 0; }
+.pc-ticks::after { bottom: 0; }
+
+/* The custom button: dark glass inside the card's own rotating gold-violet
+   ring (the card animates --atelier-angle; the border just listens). The
+   letters are champagne in every state — never dark. */
+.path-card-product .button:not(.button-primary) {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(rgba(14, 9, 22, 0.7), rgba(14, 9, 22, 0.7)) padding-box,
+    conic-gradient(from var(--atelier-angle),
+      #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg) border-box;
+  color: #f6dfae;
+  text-shadow: 0 1px 8px rgba(8, 7, 12, 0.8);
+  box-shadow:
+    0 0 1.8rem rgba(122, 79, 192, 0.4),
+    inset 0 0 1.1rem rgba(122, 79, 192, 0.2);
+}
+
+.path-card-product .button:not(.button-primary):hover,
+.path-card-product .button:not(.button-primary):focus-visible {
+  background:
+    linear-gradient(rgba(24, 15, 38, 0.78), rgba(24, 15, 38, 0.78)) padding-box,
+    conic-gradient(from var(--atelier-angle),
+      #fff3d6 0deg, #9b6fe0 80deg, #ffe2a4 160deg, #a97fee 240deg, #fff3d6 360deg) border-box;
+  color: #fff2d8;
+  text-shadow: 0 1px 8px rgba(8, 7, 12, 0.85), 0 0 16px rgba(255, 226, 160, 0.5);
+  box-shadow:
+    0 0 2.6rem rgba(146, 99, 224, 0.55),
+    inset 0 0 1.3rem rgba(146, 99, 224, 0.3);
+  transform: translateY(-2px);
+}
+
+/* The ring button's glass was inheriting the secondary button's backdrop
+   blur, so the bright storm bled through and drowned the letters. Solid dark
+   interior, no backdrop, brighter champagne. */
+.path-card-product .button:not(.button-primary) {
+  background:
+    linear-gradient(rgba(12, 8, 20, 0.88), rgba(12, 8, 20, 0.88)) padding-box,
+    conic-gradient(from var(--atelier-angle),
+      #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg) border-box;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: #ffe9bd;
+}
+
+/* Two earlier rounds nailed dark ink onto this button with !important (the
+   eras when it was gold-filled). Owner's rule outranks archaeology: the
+   custom button never wears dark letters. Match force, end the war. */
+.path-card.path-card-product .button:not(.button-primary) {
+  color: #ffe9bd !important;
+}
+
+.path-card.path-card-product .button:not(.button-primary):hover,
+.path-card.path-card-product .button:not(.button-primary):focus-visible {
+  color: #fff2d8 !important;
 }
