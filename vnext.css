@@ -5849,3 +5849,220 @@ body.vnext-page::after {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, round eight.
+   --------------------------------------------------------------------------- */
+
+/* Masthead spaced wider and dipped in the same metal as the headline. */
+.site-brand {
+  letter-spacing: 0.2em;
+  background-image: linear-gradient(100deg, #fff3dd 0%, #e8c987 45%, #fff6e6 65%, #d9bd85 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  filter: drop-shadow(0 1px 6px rgba(8, 7, 12, 0.6));
+}
+
+.site-header {
+  box-shadow: 0 1px 0 rgba(242, 206, 131, 0.22), 0 0.6rem 2rem rgba(8, 7, 12, 0.45);
+}
+
+/* Footer joins the same language: metal caps brand, a star over the stack,
+   a violet breath behind it. */
+.footer-stack {
+  position: relative;
+}
+
+.footer-stack::before {
+  content: "✦";
+  color: rgba(242, 206, 131, 0.8);
+  font-size: 1.1rem;
+  text-shadow: 0 0 1rem rgba(242, 206, 131, 0.5);
+}
+
+.footer-brand {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: clamp(1.7rem, 3.2vw, 2.6rem);
+  background-image: linear-gradient(100deg, #fff3dd 0%, #e8c987 45%, #fff6e6 65%, #d9bd85 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.site-footer {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(120, 76, 190, 0.14), transparent 60%),
+    transparent;
+  border-top: 1px solid rgba(242, 206, 131, 0.18);
+}
+
+/* ---- Hero frost, element by element. The single block halo either sprawled
+        or missed the edges; now every line carries its own tight pill of
+        frost — blur only, no darkening, sized to its words. ---- */
+
+.home-hero .hero-copy::before {
+  content: none;
+}
+
+.home-hero .eyebrow,
+.home-hero h1,
+.home-hero .lede,
+.hero-tagline {
+  width: fit-content;
+  margin-inline: auto;
+  border-radius: 999px;
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+}
+
+.home-hero .eyebrow {
+  padding: 0.35rem 1.4rem;
+}
+
+.home-hero h1 {
+  padding: 0.6rem 2.2rem;
+  border-radius: 3rem;
+}
+
+.home-hero .lede {
+  padding: 0.45rem 1.6rem;
+}
+
+.hero-tagline {
+  padding: 0.4rem 1.4rem;
+}
+
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .site-brand {
+    background: none;
+    color: var(--gold) !important;
+  }
+  .footer-brand {
+    background: none;
+    color: var(--gold);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Round eight, corrections — and the card transparency order.
+   --------------------------------------------------------------------------- */
+
+/* The frost pills rendered with hard edges — the headline's panel cut a seam
+   straight across the wizard. Frost fades; it does not stop. Each pill's blur
+   now feathers to nothing at its rim. */
+.home-hero .eyebrow,
+.home-hero h1,
+.home-hero .lede,
+.hero-tagline {
+  mask-image: radial-gradient(ellipse closest-side, #000 55%, transparent 98%);
+  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 55%, transparent 98%);
+  padding-inline: 3rem;
+}
+
+.home-hero h1 {
+  padding-inline: 4rem;
+}
+
+/* Stardust leaves the premade card — it stays Custom's trick — and BOTH cards
+   thin out to where the wizard genuinely shows through. Dark text gains a
+   faint light breath underneath so it keeps its footing on nearly-nothing. */
+@keyframes premade-sweep-only {
+  0%        { background-position: -170% 0, 0 0, 0 0; }
+  45%, 100% { background-position: 170% 0, 0 0, 0 0; }
+}
+
+.path-card:not(.path-card-product) {
+  background-image:
+    linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.38) 50%, transparent 58%),
+    radial-gradient(circle at 50% -20%, rgba(255, 214, 130, 0.2), transparent 24rem),
+    linear-gradient(165deg, rgba(250, 240, 217, 0.20) 0%, rgba(243, 221, 171, 0.16) 100%);
+  background-size: 260% 100%, auto, auto;
+  background-repeat: no-repeat;
+  backdrop-filter: blur(30px) saturate(1.35);
+  -webkit-backdrop-filter: blur(30px) saturate(1.35);
+  animation: premade-sweep-only 8s linear infinite;
+}
+
+.path-card:not(.path-card-product) h2,
+.path-card:not(.path-card-product) h3,
+.path-card:not(.path-card-product) p:not(.card-kicker) {
+  text-shadow: 0 1px 14px rgba(255, 248, 235, 0.45);
+}
+
+.path-card:not(.path-card-product) h2,
+.path-card:not(.path-card-product) h3 {
+  color: #140f1c;
+}
+
+.path-card:not(.path-card-product) p:not(.card-kicker) {
+  color: #241c2e;
+  font-weight: 600;
+}
+
+.path-card-product {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.07) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.07) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(2px 2px at 50px 60px, rgba(255, 236, 190, 0.95), transparent 3px),
+    radial-gradient(1.6px 1.6px at 120px 140px, rgba(214, 170, 255, 0.95), transparent 3px),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.22), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.1), transparent 20rem),
+    linear-gradient(165deg, rgba(30, 18, 46, 0.26) 0%, rgba(20, 12, 32, 0.32) 100%),
+    conic-gradient(from var(--atelier-angle),
+      #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg);
+  backdrop-filter: blur(30px) saturate(1.4);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+}
+
+.path-card-product h2,
+.path-card-product h3,
+.path-card-product p:not(.card-kicker) {
+  text-shadow: 0 2px 14px rgba(8, 7, 12, 0.75);
+}
+
+/* CORRECTION: masking the element masked the GLYPHS — the headline's edges
+   were fading out with the frost. The frost moves to its own layer beneath
+   each line: a pseudo-element carries the blur and the feathered mask; the
+   words themselves stay untouched and fully opaque. */
+.home-hero .eyebrow,
+.home-hero h1,
+.home-hero .lede,
+.hero-tagline {
+  position: relative;
+  mask-image: none;
+  -webkit-mask-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.home-hero h1::before,
+.home-hero .lede::before,
+.hero-tagline::before,
+.home-hero .eyebrow::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem -1.8rem;
+  z-index: -1;
+  border-radius: 999px;
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
+}
+
+.home-hero h1::before {
+  inset: -1rem -2.6rem;
+  border-radius: 3rem;
+}
+
+/* The eyebrow's ::before is its dash; frost rides ::after instead. */
+
+/* On near-clear glass the premade kicker's dark bronze vanished into the storm
+   behind it. Kickers on glass are gold with a grounding shadow, both cards. */
+.path-card .card-kicker {
+  color: #f0cd82;
+  text-shadow: 0 1px 10px rgba(8, 7, 12, 0.8);
+}
