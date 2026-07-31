@@ -5417,3 +5417,123 @@ body.vnext-page::after {
 .home-hero .eyebrow {
   margin-bottom: 1.4rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Owner design pass, round four.
+   --------------------------------------------------------------------------- */
+
+/* Gold-on-storm lost to the background; the white always read. White caps it
+   is — and the headline leaves the 46rem column so "big" stops meaning "more
+   wrapped lines". Two lines, huge, balanced. */
+.home-hero .hero-copy {
+  max-width: none;
+}
+
+.home-hero h1 {
+  color: var(--ink);
+  font-size: clamp(3.4rem, 8vw, 8.4rem);
+  text-wrap: balance;
+  text-shadow:
+    0 3px 30px rgba(8, 7, 12, 0.92),
+    0 0 90px rgba(8, 7, 12, 0.7);
+}
+
+.home-hero .lede {
+  font-size: 1.18rem;
+}
+
+/* Header gilded to match the footer: gold wordmark, gold-tinted nav, gold
+   hairline underneath. */
+.site-header {
+  border-bottom: 1px solid rgba(242, 206, 131, 0.16);
+}
+
+.site-brand {
+  color: var(--gold) !important;
+}
+
+.site-nav a {
+  color: #cdb98f;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible,
+.site-nav a[aria-current="page"] {
+  color: #ffe3a1;
+}
+
+/* ---- Premade: a frame you can see. Double ring, corner stars, lift. ---- */
+.path-card {
+  position: relative;
+  box-shadow:
+    0 0 0 1px rgba(214, 168, 84, 0.7),
+    0 0 0 5px rgba(214, 168, 84, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 1rem 2.6rem rgba(20, 10, 34, 0.4);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.path-card:hover {
+  transform: translateY(-0.3rem);
+  box-shadow:
+    0 0 0 1px rgba(214, 168, 84, 0.9),
+    0 0 0 5px rgba(214, 168, 84, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 1.6rem 3.2rem rgba(20, 10, 34, 0.5);
+}
+
+.path-card:not(.path-card-product)::before,
+.path-card:not(.path-card-product)::after {
+  position: absolute;
+  color: rgba(160, 116, 34, 0.8);
+  font-size: 1.05rem;
+  content: "✦";
+}
+
+.path-card:not(.path-card-product)::before {
+  top: 1rem;
+  left: 1.2rem;
+}
+
+.path-card:not(.path-card-product)::after {
+  right: 1.2rem;
+  bottom: 1rem;
+}
+
+/* ---- Custom: a slowly turning gold-and-violet ring around the card. The
+        conic gradient paints the border box; the card's own layers sit on the
+        padding box above it. Unmissable, and still calm. ---- */
+@property --atelier-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes atelier-ring {
+  to { --atelier-angle: 360deg; }
+}
+
+.path-card-product {
+  border: 1.5px solid transparent;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.34), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.16), transparent 20rem),
+    linear-gradient(165deg, rgba(34, 21, 51, 0.86) 0%, rgba(22, 14, 34, 0.9) 100%),
+    conic-gradient(from var(--atelier-angle),
+      #e8c987 0deg, #7a4fc0 90deg, #e8c987 180deg, #7a4fc0 270deg, #e8c987 360deg);
+  background-origin: padding-box, padding-box, padding-box, padding-box, padding-box, border-box;
+  background-clip: padding-box, padding-box, padding-box, padding-box, padding-box, border-box;
+  animation: atelier-ring 9s linear infinite, atelier-aurora 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path-card,
+  .path-card:hover {
+    transform: none;
+  }
+  .path-card-product {
+    animation: none;
+  }
+}
