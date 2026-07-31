@@ -6904,3 +6904,176 @@ body.vnext-page::after {
 .path-card.path-card-product .button:not(.button-primary):focus-visible {
   color: #fff2d8 !important;
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: "instead of custom, shouldn't it say sorcery... it still
+   doesn't look cool enough... other things that will make it really shine
+   and pop."
+
+   The custom card becomes the third card that demos itself: a blueprint
+   draws a website in gold strokes on loop, beside the copy — the same move
+   as the Responder's phone and the assessment's report sheet. And the card's
+   own border becomes the rotating ring: the conic that was washing the
+   interior now paints only the rim, bright, alive, clipped to the border.
+   --------------------------------------------------------------------------- */
+
+.path-card-product {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.4rem;
+  align-items: center;
+  border: 2px solid transparent;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(2px 2px at 50px 60px, rgba(255, 236, 190, 0.95), transparent 3px),
+    radial-gradient(1.6px 1.6px at 120px 140px, rgba(214, 170, 255, 0.95), transparent 3px),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.14), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.07), transparent 20rem),
+    linear-gradient(165deg, rgba(30, 18, 46, 0.15) 0%, rgba(20, 12, 32, 0.19) 100%),
+    conic-gradient(from var(--atelier-angle),
+      #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg);
+  background-origin: padding-box, padding-box, padding-box, padding-box,
+    padding-box, padding-box, padding-box, border-box;
+  background-clip: padding-box, padding-box, padding-box, padding-box,
+    padding-box, padding-box, padding-box, border-box;
+  box-shadow:
+    0 0 2.4rem rgba(122, 79, 192, 0.35),
+    0 1.2rem 2.8rem rgba(8, 7, 12, 0.5);
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.path-card-product:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 0 3.4rem rgba(146, 99, 224, 0.5),
+    0 1.6rem 3.4rem rgba(8, 7, 12, 0.55);
+}
+
+.pcp-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pcp-demo {
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+}
+
+/* The blueprint: gold strokes that draw themselves, hold, and fade. Each
+   shape carries its own delay, so the sketch assembles in drafting order and
+   un-draws the same way at the loop's end. */
+.bp {
+  width: min(14.5rem, 100%);
+  overflow: visible;
+}
+
+.bp-s {
+  fill: none;
+  stroke: rgba(246, 223, 174, 0.9);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 6px rgba(242, 206, 131, 0.4));
+  animation: bp-draw 12s ease-in-out infinite both;
+}
+
+.bp-bar  { animation-delay: 0.9s; }
+.bp-hero { animation-delay: 1.7s; }
+.bp-side { animation-delay: 2.3s; }
+.bp-l1   { animation-delay: 2.9s; }
+.bp-l2   { animation-delay: 3.3s; }
+.bp-btn  { animation-delay: 3.8s; }
+
+@keyframes bp-draw {
+  0%        { stroke-dashoffset: 100; opacity: 0; }
+  3%        { opacity: 1; }
+  26%, 82%  { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+.bp-dot {
+  fill: #f2ce83;
+  opacity: 0;
+  filter: drop-shadow(0 0 4px rgba(242, 206, 131, 0.6));
+  animation: bp-dots 12s ease-in-out infinite;
+}
+
+@keyframes bp-dots {
+  0%, 8%    { opacity: 0; }
+  14%, 82%  { opacity: 1; }
+  92%, 100% { opacity: 0; }
+}
+
+.bp-cap {
+  color: rgba(242, 206, 131, 0.8);
+  font-size: 0.64rem;
+  font-weight: 780;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 78rem) {
+  .path-card-product {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path-card-product {
+    transition: none;
+  }
+
+  .path-card-product:hover {
+    transform: none;
+  }
+
+  .bp-s,
+  .bp-dot {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* CORRECTION: background-clip border-box paints the WHOLE box, not a ring —
+   the full-strength conic beamed through the transparent interior again.
+   The interior goes back to the tamed tinted wheel, and the bright rotating
+   rim moves to its own element with a proper ring mask, which respects the
+   card's rounded corners and touches nothing else. */
+.path-card-product {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    repeating-linear-gradient(90deg, rgba(242, 206, 131, 0.055) 0 1px, transparent 1px 3.4rem),
+    radial-gradient(2px 2px at 50px 60px, rgba(255, 236, 190, 0.95), transparent 3px),
+    radial-gradient(1.6px 1.6px at 120px 140px, rgba(214, 170, 255, 0.95), transparent 3px),
+    radial-gradient(circle at 80% -10%, rgba(174, 112, 255, 0.14), transparent 22rem),
+    radial-gradient(circle at 12% 110%, rgba(242, 206, 131, 0.07), transparent 20rem),
+    linear-gradient(165deg, rgba(30, 18, 46, 0.15) 0%, rgba(20, 12, 32, 0.19) 100%),
+    conic-gradient(from var(--atelier-angle),
+      rgba(255, 233, 189, 0.20) 0deg, rgba(122, 79, 192, 0.16) 80deg,
+      rgba(232, 201, 135, 0.18) 160deg, rgba(138, 95, 208, 0.16) 240deg,
+      rgba(255, 233, 189, 0.20) 360deg);
+  background-origin: padding-box;
+  background-clip: border-box;
+}
+
+.pc-rim {
+  position: absolute;
+  inset: -2px;
+  z-index: 1;
+  padding: 2.5px;
+  border-radius: var(--radius);
+  background: conic-gradient(from var(--atelier-angle),
+    #ffe9bd 0deg, #7a4fc0 80deg, #e8c987 160deg, #8a5fd0 240deg, #ffe9bd 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 8px rgba(174, 112, 255, 0.45));
+  pointer-events: none;
+}
