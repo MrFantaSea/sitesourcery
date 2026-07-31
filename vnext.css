@@ -4787,3 +4787,24 @@ h3 {
   border-color: #251b2d;
   background: #fff;
 }
+
+/* ---------------------------------------------------------------------------
+   Fork card rhythm.
+
+   The card is a flex column with its own gap, but the paragraph, pill list and
+   action row each still carried the margins they use elsewhere on the site.
+   Stacked together they compounded into ~100px voids inside the cards. Inside
+   a path-card the flex gap is the rhythm; the legacy margins are zeroed.
+   --------------------------------------------------------------------------- */
+
+.path-card p:not(.card-kicker) {
+  margin: 0;
+}
+
+.path-card .pill-list {
+  margin: 0.25rem 0 0;
+}
+
+.path-card .hero-actions {
+  margin-top: 0.5rem;
+}
