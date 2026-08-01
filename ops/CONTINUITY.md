@@ -39,9 +39,15 @@ these are OWNER RULINGS and open work, not suggestions.
   Live readiness now passes for the exact verified domain, SPF/DKIM, sending
   capability, and disabled open/click tracking. The key is staged in the
   owner's Mac login Keychain until the root-owned production environment
-  exists. No real email, deployment, payment activation, publication, or push
-  has occurred. `ops/RESEND-VERIFICATION-2026-08-01.md` records the non-secret
-  checkpoint; the private live-inbox/PostgreSQL proof remains.
+  exists. Two bounded proof messages were later sent, but both customer action
+  links reached a GitHub Pages 404 because the new hosted app is not deployed.
+  Provider delivery and disposable-PostgreSQL replay fencing passed; customer
+  acceptance did not, so production mail remains HELD and the private proof is
+  not complete. The remaining work is to deploy the hosted page and same-origin
+  API, then complete both real browser actions. No deployment, payment
+  activation, publication, or push has occurred.
+  `ops/RESEND-VERIFICATION-2026-08-01.md` records the non-secret checkpoint and
+  failed customer-link attempt.
 - Claude remains a non-writing reviewer unless Zack or Codex gives one
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.

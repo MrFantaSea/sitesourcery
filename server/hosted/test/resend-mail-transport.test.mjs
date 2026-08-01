@@ -25,6 +25,8 @@ const ENVIRONMENT = Object.freeze({
   SITESOURCERY_RESEND_API_KEY: API_KEY,
   SITESOURCERY_RESEND_DOMAIN_ID: DOMAIN_ID
 });
+const STAGING_APPLICATION =
+  "https://simbiotechzen.tail85d878.ts.net/abracadabra/app/";
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -395,6 +397,59 @@ test("Resend rejects off-site action links before any provider call", async () =
           "https://attacker.example/reset#recovery=private"
       })
     ),
+    (error) => error?.code === "RESEND_DELIVERY_INVALID"
+  );
+  assert.equal(calls, 0);
+});
+
+test("Resend accepts the exact configured staging action page", async () => {
+  const calls = [];
+  const transport = createResendMailTransport({
+    environment: {
+      ...ENVIRONMENT,
+      SITESOURCERY_REGISTRATION_BASE_URL:
+        STAGING_APPLICATION,
+      SITESOURCERY_RECOVERY_BASE_URL:
+        STAGING_APPLICATION
+    },
+    clock: { now: () => NOW },
+    async fetchImpl(url, init) {
+      calls.push({ url, init });
+      return jsonResponse({
+        id: "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794"
+      });
+    }
+  });
+  const input = registrationInput({
+    verificationUrl:
+      `${STAGING_APPLICATION}#verify-registration=private-test-token-abcdefghijklmnopqrstuvwxyz`
+  });
+
+  await transport.sendRegistration(input);
+  assert.equal(calls.length, 1);
+  assert.match(
+    JSON.parse(calls[0].init.body).html,
+    /simbiotechzen\.tail85d878\.ts\.net\/abracadabra\/app\/#verify-registration=/u
+  );
+});
+
+test("Resend rejects a link that differs from the configured action page", async () => {
+  let calls = 0;
+  const transport = createRecoveryTransport({
+    environment: {
+      ...ENVIRONMENT,
+      SITESOURCERY_RECOVERY_BASE_URL:
+        STAGING_APPLICATION
+    },
+    async fetchImpl() {
+      calls += 1;
+      return jsonResponse({
+        id: "aa81316d-9f01-4a15-84ca-3bcd30d0ea40"
+      });
+    }
+  });
+  await assert.rejects(
+    transport.sendRecovery(recoveryInput()),
     (error) => error?.code === "RESEND_DELIVERY_INVALID"
   );
   assert.equal(calls, 0);

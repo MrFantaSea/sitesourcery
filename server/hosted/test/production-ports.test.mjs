@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
   createConfiguredRegistrationMailPort,
   createConfiguredRecoveryMailPort
 } from "../production-ports.mjs";
+
+test("hosted startup creates each configured mail port exactly once", async () => {
+  const source = await readFile(
+    new URL("../bin/server.mjs", import.meta.url),
+    "utf8"
+  );
+  assert.equal(
+    source.match(
+      /await createConfiguredRegistrationMailPort\(\)/gu
+    )?.length,
+    1
+  );
+  assert.equal(
+    source.match(
+      /await createConfiguredRecoveryMailPort\(\)/gu
+    )?.length,
+    1
+  );
+});
 
 test("registration configuration defaults to fail-closed production", async () => {
   const port = await createConfiguredRegistrationMailPort({

@@ -90,6 +90,12 @@ reports the domain and all SPF/DKIM records verified, and reports both open and
 click tracking disabled. Provider errors and response bodies are never copied
 into public errors.
 
+`SITESOURCERY_REGISTRATION_BASE_URL` and
+`SITESOURCERY_RECOVERY_BASE_URL` default to the production Abracadabra page.
+An isolated staging runtime may set both to its exact HTTPS Abracadabra page;
+the adapter then accepts only links on that configured page. Production keeps
+both values at `https://sitesourcery.com/abracadabra/app/`.
+
 Activation remains a separate operator step. Follow `ops/RESEND-SETUP.md`; do
 not change either mail mode from `held` until its DNS and private end-to-end
 proof are complete.

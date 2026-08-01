@@ -3,8 +3,8 @@ import { HostedError, invariant } from "./errors.mjs";
 const PROVIDER = "resend";
 const API_ORIGIN = "https://api.resend.com";
 const EXPECTED_DOMAIN = "sitesourcery.com";
-const APPLICATION_ORIGIN = "https://sitesourcery.com";
-const APPLICATION_PATH = "/abracadabra/app/";
+const DEFAULT_APPLICATION_URL =
+  "https://sitesourcery.com/abracadabra/app/";
 const FROM =
   "Site Sourcery <accounts@sitesourcery.com>";
 const REPLY_TO = "sitesourcery@proton.me";
@@ -118,7 +118,32 @@ function payloadDigest(value) {
   return selected;
 }
 
-function actionUrl(value, expectedHashPrefix) {
+function actionBase(value) {
+  let selected;
+  try {
+    selected = new URL(
+      String(value ?? DEFAULT_APPLICATION_URL)
+    );
+  } catch {
+    selected = null;
+  }
+  if (
+    !selected ||
+    selected.protocol !== "https:" ||
+    selected.pathname !== "/abracadabra/app/" ||
+    selected.username ||
+    selected.password ||
+    selected.search ||
+    selected.hash
+  ) {
+    throw configurationError(
+      "Account action base URLs must name the HTTPS Abracadabra application."
+    );
+  }
+  return selected;
+}
+
+function actionUrl(value, expectedHashPrefix, expectedBase) {
   let selected;
   try {
     selected = new URL(String(value ?? ""));
@@ -127,8 +152,8 @@ function actionUrl(value, expectedHashPrefix) {
   }
   invariant(
     selected &&
-      selected.origin === APPLICATION_ORIGIN &&
-      selected.pathname === APPLICATION_PATH &&
+      selected.origin === expectedBase.origin &&
+      selected.pathname === expectedBase.pathname &&
       !selected.username &&
       !selected.password &&
       !selected.search &&
@@ -185,7 +210,7 @@ function messageText({ heading, introduction, action, url, expiresAt }) {
   ].join("\n");
 }
 
-function normalizeDelivery(input, kind) {
+function normalizeDelivery(input, kind, actionBases) {
   const registration = kind === "registration";
   const schema = registration
     ? "sitesourcery.registration-verification-email/v1"
@@ -216,7 +241,10 @@ function normalizeDelivery(input, kind) {
       : input.recoveryUrl,
     registration
       ? "#verify-registration="
-      : "#recovery="
+      : "#recovery=",
+    registration
+      ? actionBases.registration
+      : actionBases.recovery
   );
   const content = registration
     ? {
@@ -384,6 +412,20 @@ export function createResendMailTransport({
     "SITESOURCERY_RESEND_DOMAIN_ID must be a Resend domain UUID."
   );
   const selectedTimeout = timeout(timeoutMs);
+  const actionBases = Object.freeze({
+    registration: actionBase(
+      environmentValue(
+        environment,
+        "SITESOURCERY_REGISTRATION_BASE_URL"
+      ) ?? DEFAULT_APPLICATION_URL
+    ),
+    recovery: actionBase(
+      environmentValue(
+        environment,
+        "SITESOURCERY_RECOVERY_BASE_URL"
+      ) ?? DEFAULT_APPLICATION_URL
+    )
+  });
   const selectedReadinessCacheMs = Number(
     readinessCacheMs
   );
@@ -492,7 +534,11 @@ export function createResendMailTransport({
   }
 
   async function send(input, kind) {
-    const delivery = normalizeDelivery(input, kind);
+    const delivery = normalizeDelivery(
+      input,
+      kind,
+      actionBases
+    );
     const providerKey =
       `sitesourcery-${kind}/${delivery.idempotencyKey}`;
     invariant(

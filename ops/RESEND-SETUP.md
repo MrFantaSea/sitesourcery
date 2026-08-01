@@ -46,6 +46,10 @@ publication, domain purchasing, or changes to inbound root-domain mail.
 
 ## Private proof — still keep mail held publicly
 
+A provider `delivered` event alone is not end-to-end proof. Complete proof
+requires the deployed account-action page and same-origin API to complete both
+customer actions in an ordinary browser.
+
 1. Configure both transport module paths and the two Resend values in the
    root-owned environment file, with mode still `held` in the public runtime.
 2. Start an isolated private runtime against a disposable PostgreSQL database
@@ -53,7 +57,10 @@ publication, domain purchasing, or changes to inbound root-domain mail.
 3. Confirm readiness reports provider `resend` for registration and recovery.
 4. Send one verification message and one recovery message only to an
    owner-controlled inbox. Confirm From, Reply-To, subjects, links, expiry,
-   and delivery.
+   and delivery. Open each link in the owner's ordinary browser: verification
+   must reach the activation UI and activate the disposable account; recovery
+   must reach the reset UI and complete the disposable password reset. Any
+   HTTP error or unavailable API fails the proof.
 5. Replay each exact command and prove Resend records one provider message,
    not two. Force one ambiguous provider response and prove the database stops
    automatic replay in reconciliation state.

@@ -50,6 +50,29 @@ then passed.
 
 - Registration mail mode remains `held` in the public runtime.
 - Recovery mail mode remains `held` in the public runtime.
-- No real verification or recovery message has been sent.
-- The isolated disposable-PostgreSQL inbox, replay, and ambiguous-response
-  proof in `ops/RESEND-SETUP.md` remains the next mail milestone.
+- The complete customer-click proof in `ops/RESEND-SETUP.md` remains a launch
+  prerequisite.
+
+## Private attempt — provider passed, customer path failed
+
+At `2026-08-01T21:38:55Z`, the exact public action URL returned GitHub Pages
+HTTP `404`. Before that final public-route check existed, one registration and
+one recovery message were sent to the owner-controlled proof inbox. Resend
+recorded both as delivered, and the isolated disposable PostgreSQL proof
+confirmed:
+
+- one registration provider message and no send on exact replay;
+- one recovery provider message and no send on exact replay;
+- durable registration activation and recovery-delivery evidence;
+- a simulated ambiguous recovery response moved to `delivery_unknown`; and
+- a restarted service refused to replay that ambiguous effect.
+
+The owner then opened both real email actions. Both links reached the public
+404 before any account UI or API action. This invalidates the customer-facing
+mail proof even though provider and database checks passed. The account
+activated by the harness existed only inside the disposable proof database; no
+production account was created.
+
+The next proof must run through the deployed hosted app and same-origin API.
+No further real account mail should be treated as end-to-end evidence until
+the owner completes both actions in an ordinary browser.
