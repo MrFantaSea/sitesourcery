@@ -7535,39 +7535,6 @@ li[id^="about-"]:target {
   gap: 2.2rem;
 }
 
-.abracadabra-page .hero-copy {
-  max-width: 46rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.abracadabra-page .hero-copy .eyebrow {
-  color: #f5e7cb;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-}
-
-.abracadabra-page .hero-copy h1 {
-  background-image: linear-gradient(100deg, #fffdf6 0%, #f6e8c6 26%, #d3ae62 48%, #fff7e2 66%, #e2c48b 88%, #fffdf6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter:
-    drop-shadow(0 2px 6px rgba(8, 7, 12, 0.9))
-    drop-shadow(0 0 26px rgba(174, 112, 255, 0.35));
-  font-size: clamp(2.6rem, 6vw, 4.6rem);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  text-wrap: balance;
-}
-
-.abracadabra-page .hero-copy .lede {
-  max-width: 38rem;
-  color: #f0e5cd;
-  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85), 0 2px 16px rgba(8, 7, 12, 0.6);
-}
 
 .abracadabra-page .maker-proof-featured {
   width: min(52rem, 100%);
@@ -7629,12 +7596,6 @@ li[id^="about-"]:target {
   }
 }
 
-/* The abracadabra hero eyebrow inherited the homepage dash pseudo; here the
-   word stands alone. */
-.abracadabra-page .eyebrow::before,
-.abracadabra-page .eyebrow::after {
-  content: none;
-}
 
 /* Center the heads all the way down — the inner wrapper was holding its
    left alignment — and give the hero eyebrow ink that survives lightning. */
@@ -7695,17 +7656,6 @@ li[id^="about-"]:target {
 
 /* A one-word headline never breaks mid-word. Sized to hold one line from
    320px up. */
-.abracadabra-page .hero-copy h1 {
-  /* One word, one line, never clipped: the box may grow to the glyphs
-     (max-width none, overflow visible) and the size is capped so eleven
-     capitals fit the column at every viewport. text-wrap is half of the
-     white-space shorthand, so nothing follows the nowrap. */
-  max-width: none;
-  overflow: visible;
-  font-size: clamp(1.9rem, 4.6vw, 3.9rem);
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
 
 /* The compound Abracadabra · Alacazam label needs its row back: tighter nav
    type, tighter gaps, gentler brand curve. */
@@ -7722,14 +7672,6 @@ li[id^="about-"]:target {
   font-size: clamp(1.6rem, 2.9vw, 2.75rem) !important;
 }
 
-/* The incantation stacks: ABRACADABRA over ALAKAZAM, both metal, the second
-   word a step smaller with wider tracking. Each holds one line. */
-.abracadabra-page .hero-copy h1 .h1-alt {
-  display: block;
-  margin-top: 0.12em;
-  font-size: 0.6em;
-  letter-spacing: 0.16em;
-}
 
 /* ---------------------------------------------------------------------------
    OWNER REDLINE, /abracadabra/:
@@ -7739,15 +7681,6 @@ li[id^="about-"]:target {
      two halves of a single spell, same glass, a gold flow-mark between.
    --------------------------------------------------------------------------- */
 
-.abracadabra-page .hero-copy h1 {
-  font-size: clamp(2.1rem, 5.3vw, 4.7rem);
-}
-
-.abracadabra-page .hero-copy h1 .h1-alt {
-  margin-top: 0.06em;
-  font-size: 1em;
-  letter-spacing: 0.1em;
-}
 
 .abracadabra-page .section-head h2,
 .abracadabra-page .section-head .overline,
@@ -7854,28 +7787,6 @@ li[id^="about-"]:target {
    spell-door, and the vessel's spruce.
    --------------------------------------------------------------------------- */
 
-.abracadabra-page .hero-copy h1,
-.abracadabra-page .hero-copy .lede,
-.abracadabra-page .hero-copy .hero-fact,
-.abracadabra-page .hero-copy .eyebrow {
-  position: relative;
-  z-index: 0;
-}
-
-.abracadabra-page .hero-copy h1::before,
-.abracadabra-page .hero-copy .lede::before,
-.abracadabra-page .hero-copy .hero-fact::before,
-.abracadabra-page .hero-copy .eyebrow::before {
-  content: "";
-  position: absolute;
-  inset: -0.5rem -1.8rem;
-  z-index: -1;
-  border-radius: 999px;
-  backdrop-filter: blur(11px);
-  -webkit-backdrop-filter: blur(11px);
-  mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
-}
 
 /* The footer's copy sits on the same feathered frost, on every page. */
 .footer-stack {
@@ -8135,19 +8046,6 @@ li[id^="about-"]:target {
   }
 }
 
-/* The incantation hovers over the storm's brightest patch - the pools take
-   a dark tint and deeper blur than the homepage's, and spread wider. */
-.abracadabra-page .hero-copy h1::before,
-.abracadabra-page .hero-copy .lede::before,
-.abracadabra-page .hero-copy .hero-fact::before,
-.abracadabra-page .hero-copy .eyebrow::before {
-  inset: -0.8rem -2.6rem;
-  background: rgba(8, 7, 12, 0.34);
-  backdrop-filter: blur(18px) brightness(0.9);
-  -webkit-backdrop-filter: blur(18px) brightness(0.9);
-  mask-image: radial-gradient(ellipse closest-side, #000 62%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 62%, transparent 100%);
-}
 
 /* ---------------------------------------------------------------------------
    OWNER: "the abracadabra alakazam box doesn't look cool enough."
@@ -8235,26 +8133,190 @@ li[id^="about-"]:target {
    dips in the same metal, and the eyebrow gets its dash back.
    --------------------------------------------------------------------------- */
 
-.abracadabra-page .hero-copy h1 {
-  font-size: clamp(2.2rem, 6.5vw, 5.4rem);
+
+/* ---------------------------------------------------------------------------
+   OWNER: the vessel "not enchanted enough, so much empty space." The
+   chambers now perform their own verbs: the left one builds the little page
+   (the homepage's spell, compact), the right one keeps it - live at its own
+   address, pulse and all.
+   --------------------------------------------------------------------------- */
+
+.vessel-demo {
+  width: 13rem;
+  margin-top: 0.4rem;
 }
 
-.abracadabra-page .hero-copy .lede {
-  background-image: linear-gradient(100deg, #fffdf6 0%, #f2e2ba 40%, #d8b56a 60%, #fff5df 85%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 1px 4px rgba(8, 7, 12, 0.9)) drop-shadow(0 2px 14px rgba(8, 7, 12, 0.55));
-  font-weight: 640;
+.vessel-demo .abd-form {
+  padding: 0.65rem 0.75rem;
+  gap: 0.32rem;
 }
 
-.abracadabra-page .eyebrow::before {
-  content: "";
-  display: inline-block;
-  width: 1.5rem;
-  height: 2px;
-  margin-right: 0.6rem;
-  vertical-align: middle;
-  background: linear-gradient(90deg, transparent, #f2ce83);
+.vessel-demo .abd-page {
+  padding: 0.65rem 0.75rem;
+  gap: 0.3rem;
+}
+
+.keep-demo {
+  position: relative;
+  width: 13rem;
+  margin-top: 0.4rem;
+}
+
+.kd-page {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 244, 214, 0.85);
+  border-radius: 0.8rem;
+  background: linear-gradient(170deg, #fdf6e4 0%, #f3ddae 100%);
+  color: #221430;
+  box-shadow:
+    0 0 0 1px rgba(140, 96, 26, 0.4),
+    0 0.6rem 1.6rem rgba(8, 7, 12, 0.5),
+    0 0 2rem rgba(174, 112, 255, 0.3);
+}
+
+.kd-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(34, 20, 48, 0.14);
+  color: #221430;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.kd-lock {
+  font-size: 0.55rem;
+}
+
+.kd-page b {
+  font-size: 0.8rem;
+  font-weight: 830;
+}
+
+.kd-line {
+  width: 84%;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgba(34, 20, 48, 0.3);
+}
+
+.kd-short { width: 56%; }
+
+.kd-cta {
+  width: 40%;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eec267 0%, #d99f36 100%);
+}
+
+.kd-live {
+  position: absolute;
+  top: -0.7rem;
+  right: -0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid rgba(140, 220, 160, 0.7);
+  border-radius: 999px;
+  background: #10241a;
+  color: #a7ecb8;
+  font-size: 0.62rem;
+  font-weight: 830;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 0 1.2rem rgba(120, 220, 150, 0.35);
+}
+
+.kd-live i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #6fe08a;
+  animation: live-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(111, 224, 138, 0.7); }
+  60%      { box-shadow: 0 0 0 7px rgba(111, 224, 138, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-live i {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   OWNER: the vessel stacks - ABRACADABRA above, ALAKAZAM below - each
+   chamber a copy-and-demo row, the current now flowing across the seam
+   between them. Whisper sits snug; the door's underline appears to the hand.
+   --------------------------------------------------------------------------- */
+
+.lane-diptych {
+  grid-template-columns: 1fr;
+  max-width: 56rem;
+}
+
+.lane-diptych .lane-half {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.4rem;
+  align-items: center;
+}
+
+.lane-diptych .lane-half .pcm-copy {
+  align-items: center;
+  text-align: center;
+}
+
+.lane-diptych .vessel-demo,
+.lane-diptych .keep-demo {
+  justify-self: center;
+  margin-top: 0;
+}
+
+.lane-diptych .lane-half + .lane-half {
+  border-top: 0;
+  background-image:
+    linear-gradient(90deg, transparent 0%, rgba(242, 206, 131, 0.75) 45%, rgba(174, 112, 255, 0.75) 55%, transparent 100%),
+    radial-gradient(circle at 72% 12%, rgba(174, 112, 255, 0.12), transparent 20rem);
+  background-repeat: no-repeat, no-repeat;
+  background-position: -220% top, 0 0;
+  background-size: 320% 1.5px, auto;
+  animation: seam-flow-x 4.2s linear infinite;
+}
+
+@keyframes seam-flow-x {
+  0%   { background-position: -220% top, 0 0; }
+  100% { background-position: 120% top, 0 0; }
+}
+
+.spell-whisper {
+  margin-top: 0.1rem;
+}
+
+.spell-door::after {
+  transform: scaleX(0);
+}
+
+@media (max-width: 64rem) {
+  .lane-diptych .lane-half {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lane-diptych .lane-half + .lane-half {
+    animation: none;
+    background-position: left top, 0 0;
+  }
 }
