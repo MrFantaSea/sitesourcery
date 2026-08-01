@@ -57,6 +57,8 @@ function readyRow(overrides = {}) {
     checkout_prices_ready: true,
     runtime_contract_ready: true,
     verified_registration_contract_ready: true,
+    recovery_deliveries_ready: true,
+    recovery_delivery_contract_ready: true,
     commerce_v2_commands_ready: true,
     commerce_v2_quotes_ready: true,
     commerce_v2_preparations_ready: true,
@@ -101,6 +103,19 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   assert.deepEqual((await authority.readiness()).missing, [
     "registration_contract",
     "verified_registration_contract"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        recovery_deliveries_ready: false,
+        recovery_delivery_contract_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "recovery_deliveries",
+    "recovery_delivery_contract"
   ]);
 
   authority = createCanonicalPostgresAuthority({

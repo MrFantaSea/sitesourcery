@@ -1003,6 +1003,194 @@ test(
       emailRecovery
     );
     assert.equal(productionSends.length, 1);
+    const deliveredRecovery = (
+      await pool.query(
+        `select
+           state, delivery_mode, delivery_provider,
+           provider_receipt_id, failure_code
+         from ss.hosted_recovery_delivery_requests
+        where command_id = $1`,
+        ["recovery-request-002"]
+      )
+    ).rows[0];
+    assert.equal(deliveredRecovery.state, "delivered");
+    assert.equal(
+      deliveredRecovery.delivery_mode,
+      "production"
+    );
+    assert.equal(
+      deliveredRecovery.delivery_provider,
+      "integration-mail"
+    );
+    assert.ok(deliveredRecovery.provider_receipt_id);
+    assert.equal(deliveredRecovery.failure_code, null);
+
+    const restartedProductionSends = [];
+    const restartedRecoveryService =
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        recoveryMailPort: createProductionRecoveryMailPort({
+          clock,
+          transport: {
+            async readiness() {
+              return {
+                ready: true,
+                verified: true,
+                provider: "integration-mail"
+              };
+            },
+            async sendRecovery(input) {
+              restartedProductionSends.push(input);
+              assert.fail(
+                "a durable delivered recovery must not be sent again after restart"
+              );
+            }
+          }
+        })
+      });
+    assert.deepEqual(
+      await restartedRecoveryService.requestRecovery({
+        email: registered.user.email,
+        commandId: "recovery-request-002"
+      }),
+      emailRecovery
+    );
+    assert.equal(restartedProductionSends.length, 0);
+
+    let unavailableReadinessCalls = 0;
+    const unavailableReplayService =
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        recoveryMailPort: {
+          async readiness() {
+            unavailableReadinessCalls += 1;
+            return {
+              ready: false,
+              verified: false,
+              mode: "held"
+            };
+          },
+          async deliver() {
+            assert.fail(
+              "a durable replay must not consult an unavailable provider"
+            );
+          }
+        }
+      });
+    assert.deepEqual(
+      await unavailableReplayService.requestRecovery({
+        email: registered.user.email,
+        commandId: "recovery-request-002"
+      }),
+      emailRecovery
+    );
+    assert.equal(unavailableReadinessCalls, 0);
+
+    const ambiguousSends = [];
+    const ambiguousRecoveryService =
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        recoveryMailPort: createProductionRecoveryMailPort({
+          clock,
+          transport: {
+            async readiness() {
+              return {
+                ready: true,
+                verified: true,
+                provider: "integration-mail-ambiguous"
+              };
+            },
+            async sendRecovery(input) {
+              ambiguousSends.push(input);
+              const error = new Error(
+                "The provider may have accepted the message."
+              );
+              error.code = "provider_response_lost";
+              throw error;
+            }
+          }
+        })
+      });
+    await assert.rejects(
+      ambiguousRecoveryService.requestRecovery({
+        email: otherRegistered.user.email,
+        commandId:
+          "recovery-request-ambiguous-001"
+      }),
+      (error) => error?.code === "provider_response_lost"
+    );
+    assert.equal(ambiguousSends.length, 1);
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select state, provider_receipt_id, failure_code
+             from ss.hosted_recovery_delivery_requests
+            where command_id = $1`,
+          ["recovery-request-ambiguous-001"]
+        )
+      ).rows[0],
+      {
+        state: "delivery_unknown",
+        provider_receipt_id: null,
+        failure_code:
+          "RECOVERY_DELIVERY_EFFECT_UNKNOWN"
+      }
+    );
+
+    const forbiddenRetrySends = [];
+    const restartedAmbiguousService =
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        recoveryMailPort: createProductionRecoveryMailPort({
+          clock,
+          transport: {
+            async readiness() {
+              return {
+                ready: true,
+                verified: true,
+                provider: "integration-mail-ambiguous"
+              };
+            },
+            async sendRecovery(input) {
+              forbiddenRetrySends.push(input);
+              assert.fail(
+                "an ambiguous recovery effect must never retry automatically"
+              );
+            }
+          }
+        })
+      });
+    await assert.rejects(
+      restartedAmbiguousService.requestRecovery({
+        email: otherRegistered.user.email,
+        commandId:
+          "recovery-request-ambiguous-001"
+      }),
+      (error) =>
+        error?.code ===
+        "RECOVERY_DELIVERY_RECONCILIATION_REQUIRED"
+    );
+    assert.equal(forbiddenRetrySends.length, 0);
+    await assert.rejects(
+      restartedAmbiguousService.requestRecovery({
+        email: registered.user.email,
+        commandId:
+          "recovery-request-ambiguous-001"
+      }),
+      (error) =>
+        error?.code === "RECOVERY_IDEMPOTENCY_CONFLICT"
+    );
+    assert.equal(forbiddenRetrySends.length, 0);
+    await assert.rejects(
+      pool.query(
+        `update ss.hosted_recovery_delivery_requests
+            set state = 'pending_delivery',
+                failure_code = null
+          where command_id = $1`,
+        ["recovery-request-ambiguous-001"]
+      ),
+      (error) => error?.code === "23514"
+    );
     for (const commandId of [
       "unknown-recovery-001",
       "unknown-recovery-002"

@@ -15,6 +15,7 @@ import {
   addMs,
   digest,
   hashPassword,
+  normalizeEmail,
   normalizeHostname,
   optionalText,
   randomToken,
@@ -89,6 +90,36 @@ function commandId(value) {
     { status: 400 }
   );
   return selected;
+}
+
+function recoveryDeliveryResponse(mode) {
+  return mode === "production"
+    ? {
+        accepted: true,
+        delivery: "email",
+        emailSent: true
+      }
+    : {
+        accepted: true,
+        delivery: "manual_operator",
+        emailSent: false
+      };
+}
+
+function priorRecoveryDelivery(row, requestDigest) {
+  invariant(
+    row.request_digest === requestDigest,
+    "RECOVERY_IDEMPOTENCY_CONFLICT",
+    "That recovery request key was already used for another request.",
+    { status: 409 }
+  );
+  invariant(
+    row.state === "delivered",
+    "RECOVERY_DELIVERY_RECONCILIATION_REQUIRED",
+    "That recovery email may not have completed. Contact Site Sourcery before trying again.",
+    { status: 409 }
+  );
+  return recoveryDeliveryResponse(row.delivery_mode);
 }
 
 function exportWorkerIdentity(value) {
@@ -5406,26 +5437,63 @@ export function createCanonicalPostgresService({
     },
 
     async requestRecovery(input) {
+      const selectedCommandId = commandId(input.commandId);
+      const recipient = normalizeEmail(input.email);
+      const requestDigest = digest({
+        schema: "sitesourcery.recovery-request/v1",
+        commandId: selectedCommandId,
+        recipient
+      });
+      const prior = await authority.service(
+        { readOnly: true },
+        async (client) =>
+          (
+            await client.query(
+              `select request_digest, state, delivery_mode
+                 from ss.hosted_recovery_delivery_requests
+                where command_id = $1
+                limit 1`,
+              [selectedCommandId]
+            )
+          ).rows[0] ?? null
+      );
+      if (prior) {
+        return priorRecoveryDelivery(
+          prior,
+          requestDigest
+        );
+      }
       const recoveryReadiness =
         await recoveryMailPort.readiness();
       if (recoveryReadiness.ready !== true) {
-        return {
-          accepted: true,
-          delivery: "manual_operator",
-          emailSent: false
-        };
+        return recoveryDeliveryResponse("held");
       }
-      const selectedCommandId = commandId(input.commandId);
+      invariant(
+        ["production", "dev-sink"].includes(
+          recoveryReadiness.mode
+        ) &&
+          typeof recoveryReadiness.provider === "string" &&
+          recoveryReadiness.provider.length > 0 &&
+          recoveryReadiness.provider.length <= 120,
+        "RECOVERY_DELIVERY_CONFIGURATION_REQUIRED",
+        "Recovery mail readiness is invalid.",
+        { status: 500 }
+      );
       const issued =
-        await identity.issueRecoveryForDelivery(input.email, {
+        await identity.issueRecoveryForDelivery(recipient, {
           commandId: selectedCommandId
         });
+      invariant(
+        issued.recipient === recipient,
+        "RECOVERY_DELIVERY_INVALID",
+        "Recovery identity returned an invalid recipient.",
+        { status: 500 }
+      );
       const requestedAt =
         issued.delivery?.createdAt ?? now(clock);
       const expiresAt =
         issued.delivery?.expiresAt ??
         addMs(requestedAt, RECOVERY_DELIVERY_TTL_MS);
-      const recipient = issued.recipient;
       const recoveryToken =
         issued.delivery?.token ??
         digest({
@@ -5438,88 +5506,220 @@ export function createCanonicalPostgresService({
           recipient,
           commandId: selectedCommandId
         })}`;
-      const receipt = await recoveryMailPort.deliver({
-        idempotencyKey: deliveryIdempotencyKey,
-        recipient,
-        token: recoveryToken,
-        requestedAt,
-        expiresAt
-      });
-      invariant(
-        receipt?.state === "delivered" &&
-          receipt.mode === recoveryReadiness.mode &&
-          receipt.idempotencyKey ===
-            deliveryIdempotencyKey &&
-          receipt.expiresAt === expiresAt &&
-          /^[a-f0-9]{64}$/u.test(receipt.receiptId) &&
-          /^[a-f0-9]{64}$/u.test(receipt.payloadDigest),
-        "RECOVERY_DELIVERY_RECEIPT_INVALID",
-        "Recovery transport returned an invalid delivery receipt.",
-        { status: 502 }
-      );
-      const receiptFacts = {
-        schema: "sitesourcery.recovery-delivery-evidence/v1",
-        receiptId: receipt.receiptId,
-        mode: receipt.mode,
-        provider: receipt.provider,
-        providerMessageId: receipt.providerMessageId,
-        idempotencyKey: receipt.idempotencyKey,
-        payloadDigest: receipt.payloadDigest,
-        acceptedAt: receipt.acceptedAt,
-        expiresAt: receipt.expiresAt
-      };
-      await authority.service({}, async (client) => {
+      const reservation = await authority.service({}, async (client) => {
         await client.query(
-          `insert into ss.provider_receipts (
-             id, provider_code, receipt_kind,
-             external_object_ref, facts, facts_digest, occurred_at
-           ) values (
-             $1, $2, 'recovery_delivery_accepted',
-             $3, $4::jsonb, $5, $6
-           )
-           on conflict (
-             provider_code, receipt_kind, external_object_ref
-           ) do nothing`,
+          `select pg_advisory_xact_lock(
+             hashtextextended($1, 0)
+           )`,
           [
-            randomUUID(),
-            `mail:${receipt.provider}`,
-            receipt.receiptId,
-            JSON.stringify(receiptFacts),
-            digest(receiptFacts),
-            receipt.acceptedAt
+            `sitesourcery.recovery.command:${selectedCommandId}`
           ]
         );
-        const recorded = await client.query(
-          `select facts_digest
-             from ss.provider_receipts
-            where provider_code = $1
-              and receipt_kind =
-                    'recovery_delivery_accepted'
-              and external_object_ref = $2`,
+        const concurrent = await client.query(
+          `select request_digest, state, delivery_mode
+             from ss.hosted_recovery_delivery_requests
+            where command_id = $1
+            limit 1
+            for update`,
+          [selectedCommandId]
+        );
+        if (concurrent.rows[0]) {
+          return {
+            replayed: true,
+            row: concurrent.rows[0]
+          };
+        }
+        const id = randomUUID();
+        const inserted = await client.query(
+          `insert into ss.hosted_recovery_delivery_requests (
+             id, command_id, request_digest,
+             delivery_idempotency_key, delivery_mode,
+             delivery_provider, state, requested_at,
+             expires_at
+           ) values (
+             $1, $2, $3,
+             $4, $5,
+             $6, 'pending_delivery', $7,
+             $8
+           )`,
           [
-            `mail:${receipt.provider}`,
-            receipt.receiptId
+            id,
+            selectedCommandId,
+            requestDigest,
+            deliveryIdempotencyKey,
+            recoveryReadiness.mode,
+            recoveryReadiness.provider,
+            requestedAt,
+            expiresAt
           ]
         );
         invariant(
-          recorded.rows[0]?.facts_digest ===
-            digest(receiptFacts),
-          "RECOVERY_DELIVERY_RECEIPT_CONFLICT",
-          "Recovery delivery evidence does not match.",
-          { status: 409 }
+          inserted.rowCount === 1,
+          "RECOVERY_DELIVERY_RESERVATION_FAILED",
+          "Recovery delivery could not be reserved.",
+          { status: 500 }
         );
+        return { replayed: false, id };
       });
-      return recoveryReadiness.mode === "production"
-        ? {
-            accepted: true,
-            delivery: "email",
-            emailSent: true
-          }
-        : {
-            accepted: true,
-            delivery: "manual_operator",
-            emailSent: false
-          };
+      if (reservation.replayed) {
+        return priorRecoveryDelivery(
+          reservation.row,
+          requestDigest
+        );
+      }
+
+      async function markDeliveryUnknown() {
+        try {
+          await authority.service({}, async (client) => {
+            await client.query(
+              `update ss.hosted_recovery_delivery_requests
+                  set state = 'delivery_unknown',
+                      failure_code =
+                        'RECOVERY_DELIVERY_EFFECT_UNKNOWN',
+                      updated_at = clock_timestamp()
+                where id = $1
+                  and state = 'pending_delivery'`,
+              [reservation.id]
+            );
+          });
+        } catch {
+          // The original delivery failure remains authoritative. A row left
+          // pending is also terminal for automatic replay.
+        }
+      }
+
+      try {
+        const receipt = await recoveryMailPort.deliver({
+          idempotencyKey: deliveryIdempotencyKey,
+          recipient,
+          token: recoveryToken,
+          requestedAt,
+          expiresAt
+        });
+        invariant(
+          receipt?.state === "delivered" &&
+            receipt.mode === recoveryReadiness.mode &&
+            receipt.provider ===
+              recoveryReadiness.provider &&
+            receipt.idempotencyKey ===
+              deliveryIdempotencyKey &&
+            receipt.expiresAt === expiresAt &&
+            /^[a-f0-9]{64}$/u.test(receipt.receiptId) &&
+            /^[a-f0-9]{64}$/u.test(receipt.payloadDigest),
+          "RECOVERY_DELIVERY_RECEIPT_INVALID",
+          "Recovery transport returned an invalid delivery receipt.",
+          { status: 502 }
+        );
+        const receiptFacts = {
+          schema:
+            "sitesourcery.recovery-delivery-evidence/v1",
+          receiptId: receipt.receiptId,
+          mode: receipt.mode,
+          provider: receipt.provider,
+          providerMessageId: receipt.providerMessageId,
+          idempotencyKey: receipt.idempotencyKey,
+          payloadDigest: receipt.payloadDigest,
+          acceptedAt: receipt.acceptedAt,
+          expiresAt: receipt.expiresAt
+        };
+        const receiptFactsDigest = digest(receiptFacts);
+        await authority.service({}, async (client) => {
+          const locked = await client.query(
+            `select
+               request_digest, delivery_idempotency_key,
+               delivery_mode, delivery_provider, state,
+               requested_at, expires_at
+             from ss.hosted_recovery_delivery_requests
+            where id = $1
+            for update`,
+            [reservation.id]
+          );
+          const row = locked.rows[0];
+          invariant(
+            locked.rowCount === 1 &&
+              row.request_digest === requestDigest &&
+              row.delivery_idempotency_key ===
+                deliveryIdempotencyKey &&
+              row.delivery_mode === receipt.mode &&
+              row.delivery_provider === receipt.provider &&
+              row.state === "pending_delivery" &&
+              iso(row.requested_at) === requestedAt &&
+              iso(row.expires_at) === expiresAt,
+            "RECOVERY_DELIVERY_RECONCILIATION_REQUIRED",
+            "Recovery state changed while email was being delivered.",
+            { status: 409 }
+          );
+          await client.query(
+            `insert into ss.provider_receipts (
+               id, provider_code, receipt_kind,
+               external_object_ref, facts, facts_digest,
+               occurred_at
+             ) values (
+               $1, $2, 'recovery_delivery_accepted',
+               $3, $4::jsonb, $5,
+               $6
+             )
+             on conflict (
+               provider_code, receipt_kind,
+               external_object_ref
+             ) do nothing`,
+            [
+              randomUUID(),
+              `mail:${receipt.provider}`,
+              receipt.receiptId,
+              JSON.stringify(receiptFacts),
+              receiptFactsDigest,
+              receipt.acceptedAt
+            ]
+          );
+          const recorded = await client.query(
+            `select id, facts_digest
+               from ss.provider_receipts
+              where provider_code = $1
+                and receipt_kind =
+                      'recovery_delivery_accepted'
+                and external_object_ref = $2`,
+            [
+              `mail:${receipt.provider}`,
+              receipt.receiptId
+            ]
+          );
+          invariant(
+            recorded.rowCount === 1 &&
+              recorded.rows[0].facts_digest ===
+                receiptFactsDigest,
+            "RECOVERY_DELIVERY_RECEIPT_CONFLICT",
+            "Recovery delivery evidence does not match.",
+            { status: 409 }
+          );
+          const finalized = await client.query(
+            `update ss.hosted_recovery_delivery_requests
+                set state = 'delivered',
+                    provider_receipt_id = $2,
+                    delivered_at = $3,
+                    updated_at = clock_timestamp()
+              where id = $1
+                and state = 'pending_delivery'`,
+            [
+              reservation.id,
+              recorded.rows[0].id,
+              receipt.acceptedAt
+            ]
+          );
+          invariant(
+            finalized.rowCount === 1,
+            "RECOVERY_DELIVERY_RECONCILIATION_REQUIRED",
+            "Recovery delivery could not be finalized.",
+            { status: 409 }
+          );
+        });
+        return recoveryDeliveryResponse(
+          recoveryReadiness.mode
+        );
+      } catch (error) {
+        await markDeliveryUnknown();
+        throw error;
+      }
     },
 
     completeRecovery(input) {

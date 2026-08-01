@@ -4,6 +4,36 @@ Written so no ruling, promise, or open thread is lost when the working
 conversation is condensed. If you are an assistant reading this fresh:
 these are OWNER RULINGS and open work, not suggestions.
 
+## TECHNICAL-LEAD CHECKPOINT (2026-08-01)
+
+- Today remains Site Sourcery only. DAARX, System Sourcery, HQ app
+  weaving, and field-Mac integration are parked until the website and
+  its existing hosted backend are complete.
+- The shipped maker now uses the existing `server/hosted` account and
+  project authority instead of treating the browser bridge as final.
+  Account creation precedes payment, hosted session authority stays in
+  secure cookies, and the release gate proves the shipped account and
+  project journey. Checkpoints: `c4bf090`, `d276753`, `c5c2178`, and
+  `4c14270`.
+- The full local gate at `4c14270` is green: 263 current Node tests,
+  19 self-host tests, 85 hosted tests (plus two expected PostgreSQL-env
+  skips), 21 ops tests, an exact 78-file public artifact, and all 15
+  hosted routes at 320/390/1440 widths. A separate exact-Chrome,
+  disposable-PostgreSQL customer journey also passes 10/10.
+- Recovery delivery is now durably reserved before any mail-provider
+  effect. Delivered requests replay without another send; interrupted or
+  ambiguous sends stop in a terminal reconciliation state. The fence
+  stores no recipient, token, or action URL and has passed a fresh 10/10
+  disposable-PostgreSQL proof plus the full local gate.
+- Production account mail remains HELD. No provider account, sender,
+  DNS record, deployment, payment activation, or push has been changed.
+  The next bounded owner decision is the transactional-mail provider and
+  exact sender address; only then should its existing port adapter be
+  implemented and verified.
+- Claude remains a non-writing reviewer unless Zack or Codex gives one
+  explicit bounded assignment. This prevents parallel edits and duplicate
+  work.
+
 
 ## Owner test keys (no card needed)
 

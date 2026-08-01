@@ -83,6 +83,12 @@ readiness result must be both `ready` and `verified`.
 No registration or recovery token, recipient, or action URL is included in
 public API responses, startup output, or durable provider-receipt facts.
 
+Every ready recovery delivery is reserved in PostgreSQL before the mail
+provider is called. A provider error, invalid receipt, or interrupted
+finalization leaves a terminal reconciliation state; automatic replay never
+risks sending the same security message twice. The reservation stores no
+recipient, token, or action URL.
+
 ## Isolated shipped-page account proof
 
 When `SITESOURCERY_PG_SERVICE_TEST_URL` names a new disposable PostgreSQL

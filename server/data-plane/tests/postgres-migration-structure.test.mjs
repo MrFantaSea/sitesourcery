@@ -414,3 +414,37 @@ test("commerce v2 Download persistence is held, accepted-version-bound, service-
     /\bprovider_(?:id|reference|receipt|url)\b/iu
   );
 });
+
+test("recovery delivery is reserved durably before a provider effect and terminal when ambiguous", async () => {
+  const all = await migrations();
+  const recovery = all.find(
+    ({ name }) =>
+      name ===
+      "202607280020_recovery_delivery_fencing.sql"
+  );
+  assert.ok(recovery);
+  assert.match(
+    recovery.sql,
+    /create table ss\.hosted_recovery_delivery_requests\b/iu
+  );
+  assert.match(
+    recovery.sql,
+    /state in \(\s*'pending_delivery',\s*'delivered',\s*'delivery_unknown'\s*\)/iu
+  );
+  assert.match(
+    recovery.sql,
+    /old\.state <> 'pending_delivery'[\s\S]*recovery delivery state is terminal/iu
+  );
+  assert.match(
+    recovery.sql,
+    /force row level security[\s\S]*revoke all on ss\.hosted_recovery_delivery_requests[\s\S]*from public, anon, authenticated/iu
+  );
+  assert.match(
+    recovery.sql,
+    /create function ss\.hosted_runtime_contract_v20\(\)/iu
+  );
+  assert.doesNotMatch(
+    recovery.sql,
+    /^\s*(?:recipient|recovery_url|token_digest|action_url)\s+[a-z]/imu
+  );
+});
