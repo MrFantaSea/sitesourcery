@@ -131,15 +131,20 @@ function isRedirect(source) {
   return /<meta\s+http-equiv="refresh"/iu.test(source);
 }
 
-function checkRedirect(page, source, routes) {
+function checkRedirect(page, source, routes, idsByRoute) {
   const target = source.match(/http-equiv="refresh"\s+content="0;url=([^"]+)"/iu)?.[1];
   if (!target) return fail(page, "looks like a redirect but has no refresh target");
-  if (!routes.has(target)) fail(page, `redirects to ${JSON.stringify(target)}, which does not exist`);
+  const [route, anchor] = target.split("#");
+  if (!routes.has(route)) fail(page, `redirects to ${JSON.stringify(target)}, which does not exist`);
+  if (anchor && !(idsByRoute.get(route) ?? new Set()).has(anchor)) {
+    fail(page, `redirects to anchor ${JSON.stringify(target)}, which does not exist on the target page`);
+  }
   if (!/name="robots"\s+content="noindex"/iu.test(source)) {
     fail(page, "a redirect must be noindex so it never competes with its target");
   }
-  if (!source.includes(`<link rel="canonical" href="https://sitesourcery.com${target}"`)) {
-    fail(page, "a redirect must declare its target as canonical");
+  // The canonical is the target PAGE - fragments are meaningless to crawlers.
+  if (!source.includes(`<link rel="canonical" href="https://sitesourcery.com${route}"`)) {
+    fail(page, "a redirect must declare its target page as canonical");
   }
 }
 
@@ -371,7 +376,7 @@ for (const page of pages) {
   const source = sources.get(page);
   if (isRedirect(source)) {
     redirectCount += 1;
-    checkRedirect(page, source, routes);
+    checkRedirect(page, source, routes, idsByRoute);
     continue;
   }
   if (!NAV_EXEMPT_FILES.has(page)) {

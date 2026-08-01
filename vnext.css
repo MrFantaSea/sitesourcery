@@ -7683,3 +7683,41 @@ li[id^="about-"]:target {
 .abracadabra-page .abracadabra-looks {
   padding-top: 1.5rem;
 }
+
+/* The Alacazam twin's quiet truth line, and breathing room for the ramp. */
+.twin-quiet {
+  margin: 0.4rem 0 0;
+  color: rgba(242, 220, 176, 0.8);
+  font-size: 0.85rem;
+  font-style: italic;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.8);
+}
+
+/* A one-word headline never breaks mid-word. Sized to hold one line from
+   320px up. */
+.abracadabra-page .hero-copy h1 {
+  /* One word, one line, never clipped: the box may grow to the glyphs
+     (max-width none, overflow visible) and the size is capped so eleven
+     capitals fit the column at every viewport. text-wrap is half of the
+     white-space shorthand, so nothing follows the nowrap. */
+  max-width: none;
+  overflow: visible;
+  font-size: clamp(1.9rem, 4.6vw, 3.9rem);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* The compound Abracadabra · Alacazam label needs its row back: tighter nav
+   type, tighter gaps, gentler brand curve. */
+.site-nav {
+  gap: 1.1rem;
+}
+
+.site-nav a {
+  font-size: 0.66rem;
+  letter-spacing: 0.035em;
+}
+
+.site-brand {
+  font-size: clamp(1.6rem, 2.9vw, 2.75rem) !important;
+}
