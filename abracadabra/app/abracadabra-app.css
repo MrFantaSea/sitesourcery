@@ -522,3 +522,12 @@
   .spark-progress li:nth-child(3){border-left:0}
 }
 .spark-boot{border:1px solid rgba(242,206,131,.4);border-radius:.8rem;background:rgba(14,9,22,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+
+/* ---- post-pay room state (the chip under the title) ---- */
+.spark-state-chip{display:inline-flex;flex-direction:column;align-items:center;gap:.35rem;margin:1.1rem auto 0;padding:.85rem 1.5rem;border:1px solid rgba(242,206,131,.5);border-radius:16px;background:linear-gradient(180deg,rgba(16,11,26,.66),rgba(16,11,26,.5)) padding-box,linear-gradient(180deg,rgba(242,206,131,.13),rgba(242,206,131,.04)) padding-box;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:inset 0 0 26px rgba(242,206,131,.1),0 8px 26px rgba(0,0,0,.35);text-align:center}
+.spark-state-chip strong{font-size:.78rem;letter-spacing:.24em;text-transform:uppercase;color:var(--spark-mint)}
+.spark-state-chip span{font-size:.85rem;line-height:1.55;color:rgba(242,220,176,.85);max-width:34rem}
+.spark-state-chip.is-live{border-color:rgba(242,206,131,.75);box-shadow:inset 0 0 30px rgba(242,206,131,.16),0 0 34px rgba(232,182,84,.22)}
+
+/* the Apply press inside the style kit - lighter than a step-actions bar */
+.spark-apply-row{justify-content:center;margin-top:.5rem;padding-top:.9rem;border-top:1px dashed rgba(242,206,131,.25)}

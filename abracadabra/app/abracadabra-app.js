@@ -337,6 +337,14 @@
     return !hasMeaningfulUnsavedChanges() || window.confirm(message);
   }
 
+  /* The review attests the customer's CLAIMS - words, contact, payment
+     handles. Style garments (accent, type, edges) may change freely after
+     review without re-attesting facts that did not move. */
+  function factsDigest(normalized) {
+    var stripped = Object.assign({}, normalized, { accent: null, fontPair: null, borderStyle: null });
+    return normalizedDigest(stripped);
+  }
+
   function normalizedDigest(normalized) {
     return compiler.sha256(compiler.stableStringify(normalized));
   }
@@ -423,7 +431,7 @@
       }
       truthConfirmed.checked = false;
       reviewedRaw = cloneRaw(raw);
-      reviewedDigest = normalizedDigest(normalized);
+      reviewedDigest = factsDigest(normalized);
       renderTruth(normalized);
     }
     if (settings.focus !== false) {
@@ -649,7 +657,7 @@
     var raw = collectRawFacts();
     var normalized = validate(raw);
     if (!normalized) return;
-    var currentDigest = normalizedDigest(normalized);
+    var currentDigest = factsDigest(normalized);
     if (!reviewedDigest || !reviewedRaw || currentDigest !== reviewedDigest) {
       reviewedRaw = cloneRaw(raw);
       reviewedDigest = currentDigest;
@@ -669,9 +677,15 @@
       return;
     }
     var reviewAttested = truthConfirmed.checked === true;
+    /* Facts compile from the attested review snapshot; the style kit rides
+       the room as it stands - garments are not claims. */
+    var dressed = cloneRaw(reviewedRaw);
+    dressed.accent = raw.accent;
+    dressed.fontPair = raw.fontPair;
+    dressed.borderStyle = raw.borderStyle;
     var result;
     try {
-      result = compiler.compileSite(reviewedRaw);
+      result = compiler.compileSite(dressed);
     } catch (error) {
       showErrors(error && Array.isArray(error.errors)
         ? error.errors
@@ -704,7 +718,7 @@
       }
       return;
     }
-    versions.push({ raw: cloneRaw(reviewedRaw), result: result, platformVersionId: null });
+    versions.push({ raw: cloneRaw(dressed), result: result, platformVersionId: null });
     currentVersionIndex = versions.length - 1;
     markDraftClean();
     renderCurrentVersion("Your page is ready. Open it or edit it below.");
@@ -826,6 +840,8 @@
     renderCurrentVersion("Undone.");
     emitVersionSelected(versions[currentVersionIndex]);
   });
+  var applyStyleButton = maker.querySelector("[data-apply-style]");
+  if (applyStyleButton) applyStyleButton.addEventListener("click", makePreview);
   openButton.addEventListener("click", openCurrentPreview);
   returnButton.addEventListener("click", function () { setStep("preview"); });
   sampleButton.addEventListener("click", loadFictionalSample);

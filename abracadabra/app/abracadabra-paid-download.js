@@ -44,6 +44,9 @@
     live = sessionStorage.getItem(KEY_LIVE) === "1";
   } catch (_e) { paid = false; live = false; }
 
+  if (paid) document.documentElement.classList.add("ss-paid");
+  if (live) document.documentElement.classList.add("ss-live");
+
   /* THE LADDER (owner ruling): free makes and previews; the $5 unlocks the
      download, the style extras, AND the door to Alakazam (it doubles as the
      coupon); Alakazam unlocks the payment-link extras. Honor gates - the
@@ -74,6 +77,30 @@
       }
     }
   }
+  /* The room says what state it is in. Post-pay must not look like the free
+     maker: a chip under the title names the tier, and for Alakazam it states
+     the real mechanism - there are no accounts here, the Stripe receipt email
+     is how the owner reaches the customer to provision by hand. */
+  function dressRoom() {
+    if (!paid) return;
+    var title = document.getElementById("spark-title");
+    if (!title || document.querySelector(".spark-state-chip")) return;
+    var chip = document.createElement("p");
+    chip.className = "spark-state-chip" + (live ? " is-live" : "");
+    var head = document.createElement("strong");
+    var line = document.createElement("span");
+    if (live) {
+      head.textContent = "✦ Alakazam is active ✦";
+      line.textContent = "Your receipt email is where I reach you to set everything up personally — same day when I can. Download your page at step 4 so it outlives this tab.";
+    } else {
+      head.textContent = "✦ The $5 download is yours ✦";
+      line.textContent = "The style kit under the preview is unlocked, and the download button waits at step 4.";
+    }
+    chip.appendChild(head);
+    chip.appendChild(line);
+    title.insertAdjacentElement("afterend", chip);
+  }
+
   function wireIncludesModal() {
     var open = document.querySelector("[data-open-includes]");
     var modal = document.querySelector("[data-includes-modal]");
@@ -88,6 +115,7 @@
 
   function boot() {
     applyEntitlements();
+    dressRoom();
     wireIncludesModal();
   }
   if (document.readyState === "loading") {
@@ -117,6 +145,12 @@
   if (buyLink) buyLink.replaceWith(button);
   if (fine) fine.replaceWith(note);
   if (secondary) secondary.textContent = "See the ways to keep it live";
+  var intro = gate.querySelector("#save-direction-title + p");
+  if (intro) {
+    intro.textContent = live
+      ? "Alakazam is on. Download your page any time — I set up the publishing with you personally."
+      : "The download is paid for this tab. Publishing is a separate service — the Go-live door below is open.";
+  }
 
   button.addEventListener("click", function () {
     var preview = document.getElementById("spark-preview");

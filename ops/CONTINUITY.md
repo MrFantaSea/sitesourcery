@@ -65,6 +65,11 @@ Honor-gates by design; the human provisioning step is the real enforcement.
 4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
 5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
    approved in spirit, executes during the Sorcery walk.
+6. **Accounts do not exist** (owner flagged 2026-08-01: "i did all this
+   without ever making an account... thats not good"). Current truth: the
+   static build CAN'T have accounts; identity for Alakazam = the Stripe
+   receipt email + the personal provisioning call, and the room now says
+   so. Real accounts are a server-era decision (task #13) - his call.
 7. Homepage nits he may or may not want: lede spacing ("$5-Custom"),
    no name/face/proof on page (review nits; homepage is HIS locked design).
 
@@ -88,7 +93,14 @@ NEXT: Sorcery (/custom/) with the same knife, then Responder, Spell book
 (/work/), About, Contact, FAQ, Legal, Domains-page polish. CLOSED since
 first writing: /abracadabra/how/ stubbed; maker phone-swept clean at
 320/390/480 (rail folds 2x2); Open-working-preview verified post-blob;
-Midnight recolored navy. Still open by design: the three base looks'
+Midnight recolored navy; post-pay round done (owner: extras were
+pick-blind on Look, post-pay looked identical to free): style kit moved
+to the Preview room with an Apply-the-style press, attestation digest
+covers claims only (accent/type/edges stripped; payment handles stay),
+makePreview compiles the attested facts DRESSED with current garments
+(was compiling frozen reviewedRaw - style could never change post-review),
+paid/live state chips under the title (frosted), gate intro swaps per
+state, ss-paid/ss-live root classes. Still open by design: the three base looks'
 DEPTH pass ("samples are basic and lame") — coupled to the \$35 tier
 co-design, task #20.
 
@@ -116,3 +128,6 @@ co-design, task #20.
   verify server-side truth before blaming the owner's browser.
 - text-wrap is half of white-space shorthand; !important archaeology bit
   three times — prune, don't stack.
+- A probe hex must be unique to the claim: #275bd6 is BOTH the ocean
+  accent AND Clear's baseline --accent, so the first Apply test passed
+  vacuously. Plum #7a4fc0 exists only in the kit - probe with that.
