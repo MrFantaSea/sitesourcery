@@ -10,7 +10,7 @@
    * alternative (a server) does not exist in this deployment. The flag is
    * remembered so a refresh does not re-lock a page someone paid for.
    *
-   * The compiled page lives in the preview iframe's srcdoc attribute, so the
+   * The compiled page lives in the preview iframe as a blob document, so the
    * download needs no reach into the app's internals at all.
    */
 
@@ -50,23 +50,29 @@
 
   button.addEventListener("click", function () {
     var preview = document.getElementById("spark-preview");
-    var html = preview ? preview.getAttribute("srcdoc") : "";
-    if (!html) {
+    var src = preview ? preview.getAttribute("src") : "";
+    if (!src) {
       note.textContent = "Make your preview first — then this button hands you the file.";
       return;
     }
-    var blob = new Blob([html], { type: "text/html" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "your-page.html";
-    a.hidden = true;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-      a.remove();
-    }, 1000);
-    note.textContent = "Downloaded. The same file is yours to keep, host anywhere, or bring to Alacazam.";
+    // The preview is a blob document; fetching our own blob URL returns the
+    // exact page the customer is looking at.
+    fetch(src).then(function (r) { return r.text(); }).then(function (html) {
+      var blob = new Blob([html], { type: "text/html" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "your-page.html";
+      a.hidden = true;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+        a.remove();
+      }, 1000);
+      note.textContent = "Downloaded. The same file is yours to keep, host anywhere, or bring to Alakazam.";
+    }).catch(function () {
+      note.textContent = "The download hiccuped — remake the preview and press again.";
+    });
   });
 }());

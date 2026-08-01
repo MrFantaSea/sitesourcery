@@ -212,6 +212,7 @@
   var versions = [];
   var currentVersionIndex = -1;
   var currentStep = "vibe";
+  var previewObjectUrl = null;
   var reviewedDigest = "";
   var reviewedRaw = null;
   var cleanDraftFingerprint = "";
@@ -547,6 +548,7 @@
       setStep("preview", { focus: false });
     } else {
       preview.removeAttribute("srcdoc");
+      preview.removeAttribute("src");
       versionList.replaceChildren();
       renderCurrentVersion();
       setStep("vibe", { focus: false });
@@ -576,13 +578,15 @@
       undoButton.disabled = true;
       return;
     }
-    // Reassigning srcdoc on a loaded sandboxed iframe can leave it unpainted
-    // (first make renders, every look-switch after goes white). Clear first,
-    // hand the new document to the next frame.
+    // The preview is a blob document, not srcdoc: about:srcdoc frames repaint
+    // unreliably on reassignment AND mishandle in-page anchor clicks. A blob
+    // URL is a real address - Offerings/About/Contact scroll like normal.
+    if (previewObjectUrl) {
+      try { URL.revokeObjectURL(previewObjectUrl); } catch (_e) { /* gone */ }
+    }
+    previewObjectUrl = URL.createObjectURL(new Blob([current.result.html], { type: "text/html" }));
     preview.removeAttribute("srcdoc");
-    window.requestAnimationFrame(function () {
-      preview.srcdoc = current.result.html;
-    });
+    preview.src = previewObjectUrl;
     versionStatus.textContent = (message ? message + " " : "")
       + "Version " + (currentVersionIndex + 1) + " · "
       + themeLabel(current.result.theme) + " · "
