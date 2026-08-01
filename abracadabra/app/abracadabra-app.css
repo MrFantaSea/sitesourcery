@@ -445,3 +445,71 @@
    five-minute conjuring does not need - the fields keep your words, remaking
    is instant. The engine stays for the Alakazam tier era; the furniture goes. */
 .spark-history,#previous-version{display:none}
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND: the gate ladder's clothes, the centering, the frost, and the
+   spruce.
+   --------------------------------------------------------------------------- */
+
+/* Locked extras: visible, desirable, honest about the key. */
+.spark-extras{margin-top:1.4rem;padding-top:1.1rem;border-top:1px dashed rgba(242,206,131,.28)}
+.spark-extras.is-locked .spark-extra-rows,.spark-extras.is-locked .spark-fields{opacity:.45;filter:saturate(.5);pointer-events:none}
+.spark-lock{margin-left:.5rem;color:rgba(242,220,176,.75);font-size:.68rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase}
+.spark-extra-rows{display:grid;gap:1rem;margin-top:.9rem}
+.spark-extra{display:flex;flex-wrap:wrap;align-items:center;gap:.8rem}
+.spark-extra-name{min-width:7.5rem;color:#f5e7cb;font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.spark-swatches{display:flex;flex-wrap:wrap;gap:.7rem}
+.spark-swatch{display:grid;justify-items:center;gap:.25rem;cursor:pointer}
+.spark-swatch input{position:absolute;opacity:0}
+.spark-swatch i{width:1.7rem;height:1.7rem;border:2px solid rgba(255,255,255,.25);border-radius:50%;background:var(--sw);box-shadow:0 0 .6rem rgba(0,0,0,.4)}
+.spark-swatch small{color:rgba(242,220,176,.7);font-size:.62rem;letter-spacing:.05em;text-transform:uppercase}
+.spark-swatch input:checked+i{border-color:#f2ce83;box-shadow:0 0 0 3px rgba(242,206,131,.35)}
+.spark-pair{display:flex;gap:1.1rem;color:#e9dcc2;font-size:.85rem}
+.spark-pair label{display:flex;align-items:center;gap:.4rem;cursor:pointer}
+.is-locked-link{opacity:.5;filter:saturate(.4);cursor:not-allowed}
+
+/* Centered voices in every box; fields stay ergonomic. */
+.spark-step legend{width:100%;text-align:center}
+.spark-step-intro{text-align:center}
+.spark-quick-start{text-align:center}
+.spark-quick-start>div{justify-content:center}
+.spark-theme-grid{justify-items:center}
+.spark-theme-card{text-align:center}
+.spark-panel-label{text-align:center}
+.spark-extra{justify-content:center}
+.spark-extra-rows{justify-items:center}
+.spark-save-gate{text-align:center}
+.spark-save-gate .spark-fine{margin-inline:auto}
+
+/* The crest wears home's frost pools. */
+.spark-hero .spark-hero-brand,#spark-title{position:relative;z-index:0}
+.spark-hero .spark-hero-brand::after,#spark-title::before{content:"";position:absolute;inset:-.5rem -1.8rem;z-index:-1;border-radius:999px;backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);mask-image:radial-gradient(ellipse closest-side,#000 52%,transparent 100%);-webkit-mask-image:radial-gradient(ellipse closest-side,#000 52%,transparent 100%)}
+
+/* Spruce: the boxes join the vessel's family. */
+.spark-step{border-color:rgba(242,206,131,.42);box-shadow:inset 0 0 0 1px rgba(242,206,131,.08),0 .8rem 2rem rgba(8,7,12,.35)}
+.spark-theme-card{border:1px solid rgba(242,206,131,.3);border-radius:1rem;background:linear-gradient(165deg,rgba(24,15,36,.6),rgba(14,9,22,.7));padding:.8rem}
+.spark-theme-card:has(input:checked){border-color:#f2ce83;box-shadow:0 0 0 2px rgba(242,206,131,.3),0 0 1.6rem rgba(242,206,131,.25)}
+.spark-save-gate{border:1.5px solid rgba(242,206,131,.5);border-radius:1.2rem;background:radial-gradient(circle at 50% -20%,rgba(174,112,255,.12),transparent 22rem),linear-gradient(165deg,rgba(24,15,36,.5),rgba(14,9,22,.62));box-shadow:inset 0 0 0 1px rgba(242,206,131,.1),0 0 2rem rgba(122,79,192,.25)}
+
+/* Locked = one elegant teaser, zero controls. Open = chips and swatches
+   worth paying for. The 90s furniture is gone. */
+.spark-extras.is-locked [data-extra-controls]{display:none}
+.spark-extras:not(.is-locked) .spark-tease{display:none}
+.spark-tease{margin:.2rem 0 0;text-align:center;color:rgba(242,220,176,.85);font-size:.8rem;letter-spacing:.04em}
+.spark-tease b{color:#f2ce83;font-weight:800}
+.spark-extras.is-locked .spark-extra-rows,.spark-extras.is-locked .spark-fields{opacity:1;filter:none}
+.spark-chiprow{display:flex;flex-wrap:wrap;gap:.5rem}
+.spark-chiprow label{position:relative;cursor:pointer}
+.spark-chiprow input{position:absolute;opacity:0}
+.spark-chiprow span{display:inline-flex;align-items:center;padding:.45rem 1rem;border:1px solid rgba(242,206,131,.5);border-radius:999px;color:#e9dcc2;background:rgba(16,10,26,.5);font-size:.8rem;font-weight:750;letter-spacing:.05em;transition:all .2s ease}
+.spark-chiprow input:checked+span{border-color:rgba(255,246,220,.85);color:#221430;background:linear-gradient(180deg,#fbe7b6 0%,#eec267 100%);box-shadow:0 0 .9rem rgba(242,206,131,.35)}
+.spark-chiprow input:focus-visible+span{outline:3px solid #f2ce83;outline-offset:2px}
+.spark-swatch i{width:2rem;height:2rem;transition:transform .2s ease}
+.spark-swatch:hover i{transform:translateY(-2px)}
+
+/* The includes popup: one small scroll of truth, an X, nothing else. */
+.spark-modal{width:min(26rem,90vw);padding:1.6rem 1.5rem 1.4rem;border:1.5px solid rgba(242,206,131,.55);border-radius:1.1rem;color:#e9dcc2;background:linear-gradient(165deg,#1a1128,#0e0916);box-shadow:0 0 3rem rgba(122,79,192,.4),0 1.5rem 3rem rgba(0,0,0,.6)}
+.spark-modal::backdrop{background:rgba(8,7,12,.65);backdrop-filter:blur(4px)}
+.spark-modal-x{position:absolute;top:.6rem;right:.6rem;width:2rem;height:2rem;border:1px solid rgba(242,206,131,.5);border-radius:50%;color:#f2ce83;background:rgba(16,10,26,.6);cursor:pointer}
+.spark-modal-list{margin:.8rem 0 0;padding:0 0 0 1.1rem;display:grid;gap:.55rem;font-size:.88rem;line-height:1.5}
+.spark-modal-list li::marker{content:"\2726  ";color:#f2ce83}

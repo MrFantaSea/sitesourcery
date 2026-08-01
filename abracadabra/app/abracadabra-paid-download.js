@@ -15,18 +15,88 @@
    */
 
   var KEY = "abracadabra.paid";
+  var KEY_LIVE = "abracadabra.alakazam";
 
   var params = new URLSearchParams(location.search);
+  var dirty = false;
   if (params.get("paid") === "1") {
     try { sessionStorage.setItem(KEY, "1"); } catch (_e) { /* private mode */ }
     params.delete("paid");
+    dirty = true;
+  }
+  if (params.get("alakazam") === "1") {
+    try {
+      sessionStorage.setItem(KEY_LIVE, "1");
+      sessionStorage.setItem(KEY, "1"); // the ladder: going live implies the download tier
+    } catch (_e) { /* private mode */ }
+    params.delete("alakazam");
+    dirty = true;
+  }
+  if (dirty) {
     var clean = location.pathname + (params.toString() ? "?" + params.toString() : "") + location.hash;
     history.replaceState(null, "", clean);
   }
 
   var paid = false;
-  try { paid = sessionStorage.getItem(KEY) === "1"; } catch (_e) { paid = params.get("paid") === "1"; }
-  if (!paid) return;
+  var live = false;
+  try {
+    paid = sessionStorage.getItem(KEY) === "1";
+    live = sessionStorage.getItem(KEY_LIVE) === "1";
+  } catch (_e) { paid = false; live = false; }
+
+  /* THE LADDER (owner ruling): free makes and previews; the $5 unlocks the
+     download, the style extras, AND the door to Alakazam (it doubles as the
+     coupon); Alakazam unlocks the payment-link extras. Honor gates - the
+     provisioning human is the real enforcement. */
+  function applyEntitlements() {
+    document.querySelectorAll("[data-tier]").forEach(function (block) {
+      var tier = block.getAttribute("data-tier");
+      var unlocked = tier === "paid" ? paid : (paid && live);
+      block.classList.toggle("is-locked", !unlocked);
+      block.querySelectorAll("input, select, textarea").forEach(function (control) {
+        control.disabled = !unlocked;
+      });
+      var note = block.querySelector("[data-lock-note]");
+      if (note) note.hidden = unlocked;
+    });
+    var golive = document.querySelector("[data-gate-golive]");
+    if (golive) {
+      if (live) {
+        var done = document.createElement("p");
+        done.className = "spark-fine";
+        done.textContent = "Alakazam is active — I set you up personally, and your $5 coupon lands on the first invoice.";
+        golive.replaceWith(done);
+      } else if (!paid) {
+        golive.classList.add("is-locked-link");
+        golive.setAttribute("aria-disabled", "true");
+        golive.removeAttribute("href");
+        golive.textContent = "Go live — unlocks after the $5 download";
+      }
+    }
+  }
+  function wireIncludesModal() {
+    var open = document.querySelector("[data-open-includes]");
+    var modal = document.querySelector("[data-includes-modal]");
+    var close = document.querySelector("[data-close-includes]");
+    if (!open || !modal) return;
+    open.addEventListener("click", function () { modal.showModal(); });
+    if (close) close.addEventListener("click", function () { modal.close(); });
+    modal.addEventListener("click", function (event) {
+      if (event.target === modal) modal.close(); // backdrop click
+    });
+  }
+
+  function boot() {
+    applyEntitlements();
+    wireIncludesModal();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+
+  if (!paid) return; // entitlements above already ran for the free state
 
   var gate = document.querySelector(".spark-save-gate");
   if (!gate) return;

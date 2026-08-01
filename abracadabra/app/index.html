@@ -88,27 +88,59 @@
 
           <fieldset class="spark-step" data-step="vibe">
             <legend>1. Choose a look</legend>
-            <p class="spark-step-intro">The look changes the style, not your words.</p>
 
             <div class="spark-theme-grid">
               <label class="spark-theme-card clear">
                 <input type="radio" name="theme" value="clear" checked>
                 <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Clear</strong>
+                <strong>Crystal</strong>
                 <small>Crisp, restrained, and direct.</small>
               </label>
               <label class="spark-theme-card warm">
                 <input type="radio" name="theme" value="warm">
                 <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Warm</strong>
+                <strong>Hearth</strong>
                 <small>Human, tactile, and welcoming.</small>
               </label>
               <label class="spark-theme-card arcane">
                 <input type="radio" name="theme" value="arcane">
                 <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Arcane</strong>
+                <strong>Midnight</strong>
                 <small>Imaginative, vivid, and high-energy.</small>
               </label>
+            </div>
+
+            <div class="spark-extras" data-tier="paid">
+              <p class="spark-tease" data-lock-note>&#10022; Style extras &mdash; six accents &middot; type pairing &middot; edges &mdash; <b>unlocks with the $5 download</b> &#10022;</p>
+              <div class="spark-extra-rows" data-extra-controls>
+                <div class="spark-extra">
+                  <span class="spark-extra-name">Accent</span>
+                  <span class="spark-swatches">
+                    <label class="spark-swatch" style="--sw:#8a8a96"><input type="radio" name="accent" value="none" checked><i></i><small>Theme</small></label>
+                    <label class="spark-swatch" style="--sw:#a6482d"><input type="radio" name="accent" value="ember"><i></i><small>Ember</small></label>
+                    <label class="spark-swatch" style="--sw:#275bd6"><input type="radio" name="accent" value="ocean"><i></i><small>Ocean</small></label>
+                    <label class="spark-swatch" style="--sw:#2f7a4f"><input type="radio" name="accent" value="forest"><i></i><small>Forest</small></label>
+                    <label class="spark-swatch" style="--sw:#7a4fc0"><input type="radio" name="accent" value="plum"><i></i><small>Plum</small></label>
+                    <label class="spark-swatch" style="--sw:#44506b"><input type="radio" name="accent" value="slate"><i></i><small>Slate</small></label>
+                    <label class="spark-swatch" style="--sw:#b04a6e"><input type="radio" name="accent" value="rose"><i></i><small>Rose</small></label>
+                  </span>
+                </div>
+                <div class="spark-extra">
+                  <span class="spark-extra-name">Type</span>
+                  <span class="spark-chiprow">
+                    <label><input type="radio" name="fontPair" value="standard" checked><span>The look's own</span></label>
+                    <label><input type="radio" name="fontPair" value="alt"><span>The alternate</span></label>
+                  </span>
+                </div>
+                <div class="spark-extra">
+                  <span class="spark-extra-name">Edges</span>
+                  <span class="spark-chiprow">
+                    <label><input type="radio" name="borderStyle" value="soft" checked><span>Soft</span></label>
+                    <label><input type="radio" name="borderStyle" value="sharp"><span>Sharp</span></label>
+                    <label><input type="radio" name="borderStyle" value="ornate"><span>Ornate</span></label>
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div class="spark-step-actions">
@@ -184,6 +216,20 @@
                 <small>Optional. Use the full address, including https://.</small>
               </label>
 
+              <div class="spark-extras" data-tier="alakazam">
+                <p class="spark-tease" data-lock-note>&#10022; Payment links &mdash; Cash App &amp; Venmo buttons on your page &mdash; <b>unlocks with Alakazam</b> &#10022;</p>
+                <div class="spark-fields" data-extra-controls>
+                  <label class="spark-field">
+                    <span>Cash App</span>
+                    <input id="cashapp" name="cashapp" type="text" maxlength="32" autocomplete="off" placeholder="$yourbusiness">
+                  </label>
+                  <label class="spark-field">
+                    <span>Venmo</span>
+                    <input id="venmo" name="venmo" type="text" maxlength="32" autocomplete="off" placeholder="@yourbusiness">
+                  </label>
+                </div>
+              </div>
+
               <label class="spark-field spark-field-wide">
                 <span>Main contact action</span>
                 <select id="primary-action" name="primaryAction" aria-describedby="primary-action-help">
@@ -256,13 +302,25 @@
             <section class="spark-save-gate" aria-labelledby="save-direction-title">
               <div>
                 <p class="spark-kicker">Keep your page</p>
-                <h3 id="save-direction-title">Choose only after the preview looks right.</h3>
+                <h3 id="save-direction-title">Keep your page.</h3>
                 <p>Download is $5 once for this editor project. Publishing is a separate service. No option is selected and nothing is charged from a free preview.</p>
                 <a class="spark-button spark-button-primary" href="https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00" rel="noopener">Download your page — $5</a>
                 <p class="spark-fine">$5 unlocks the download right here — you are sent straight back to this page. Receipt by email.</p>
-                <a class="spark-button" href="https://buy.stripe.com/9B65kF0iIgvseho9A87kc01" rel="noopener">Go live — Alakazam, $25 a month</a>
+                <a class="spark-button" data-gate-golive href="https://buy.stripe.com/9B65kF0iIgvseho9A87kc01" rel="noopener">Go live — Alakazam, $25 a month</a>
                 <p class="spark-fine">I set your page and address up with you personally, same day when I can. Paid the $5? It comes off your first month.</p>
-                <a class="spark-button spark-button-quiet" href="/abracadabra/#plans">What Alakazam includes</a>
+                <button class="spark-button spark-button-quiet" type="button" data-open-includes>What Alakazam includes</button>
+                <dialog class="spark-modal" data-includes-modal>
+                  <button class="spark-modal-x" type="button" data-close-includes aria-label="Close">&#10005;</button>
+                  <p class="spark-panel-label">Alakazam &middot; $25 a month</p>
+                  <ul class="spark-modal-list">
+                    <li>Your page live at your own address &mdash; hosting, certificate, and renewals handled</li>
+                    <li>Still yours to change, whenever</li>
+                    <li>Payment links on your page &mdash; Cash App and Venmo</li>
+                    <li>The full style kit stays unlocked</li>
+                    <li>Your $5 download comes off the first month</li>
+                    <li>Cancel any time &mdash; the files stay yours</li>
+                  </ul>
+                </dialog>
               </div>
             </section>
             <!-- sitesourcery:truth-slot:abracadabra-app-save-gate:end -->

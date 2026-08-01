@@ -12,6 +12,26 @@
 
   var SCHEMA = "abracadabra.spark/v1";
   var THEME_IDS = Object.freeze(["clear", "warm", "arcane"]);
+
+  /* Paid extras vocabulary. Every option here RENDERS - a paywalled option
+     that changed nothing would be a lie behind a lock. */
+  var ACCENTS = Object.freeze({
+    ember: "#a6482d", ocean: "#275bd6", forest: "#2f7a4f",
+    plum: "#7a4fc0", slate: "#44506b", rose: "#b04a6e"
+  });
+  var ACCENT_SET = new Set(Object.keys(ACCENTS).concat(["none"]));
+  var FONT_ALT = Object.freeze({
+    clear: 'body{font-family:Georgia,"Times New Roman",serif}.eyebrow,.action,.facts,.sitebar{font-family:Inter,ui-sans-serif,system-ui,sans-serif}',
+    warm: 'body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}',
+    arcane: 'body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}h1{font-style:normal;letter-spacing:-.03em}'
+  });
+  var BORDER_CSS = Object.freeze({
+    soft: "",
+    sharp: ":root{--radius:4px}.action{border-radius:6px}",
+    ornate: ":root{--radius:18px}.offers li,.facts>div{border-width:3px;border-style:double}"
+  });
+  var BORDER_SET = new Set(["soft", "sharp", "ornate"]);
+  var HANDLE_PATTERN = /^[A-Za-z0-9_.-]{1,30}$/;
   var THEME_SET = new Set(THEME_IDS);
   var ACTION_IDS = Object.freeze(["none", "phone", "email", "website"]);
   var ACTION_SET = new Set(ACTION_IDS);
@@ -212,9 +232,37 @@
         message: "Enter the matching contact detail before emphasizing this action."
       });
     }
+    var accent = oneLine(source.accent || "none").toLowerCase();
+    if (!ACCENT_SET.has(accent)) {
+      errors.push({ field: "accent", message: "Choose one of the offered accent colors." });
+    }
+    var fontPair = oneLine(source.fontPair || "standard").toLowerCase();
+    if (!["standard", "alt"].includes(fontPair)) {
+      errors.push({ field: "fontPair", message: "Choose the standard or the alternate type pairing." });
+    }
+    var borderStyle = oneLine(source.borderStyle || "soft").toLowerCase();
+    if (!BORDER_SET.has(borderStyle)) {
+      errors.push({ field: "borderStyle", message: "Choose soft, sharp, or ornate edges." });
+    }
+    function normalizeHandle(value, field, prefix) {
+      var raw = oneLine(value || "").replace(/^[@$]+/, "");
+      if (!raw) return null;
+      if (!HANDLE_PATTERN.test(raw)) {
+        errors.push({ field: field, message: "Use only letters, numbers, dots, dashes, or underscores (up to 30)." });
+        return null;
+      }
+      return Object.freeze({ display: raw, href: prefix + raw });
+    }
+    var cashapp = normalizeHandle(source.cashapp, "cashapp", "https://cash.app/$");
+    var venmo = normalizeHandle(source.venmo, "venmo", "https://venmo.com/u/");
     var normalized = {
       schema: SCHEMA,
       theme: theme,
+      accent: accent,
+      fontPair: fontPair,
+      borderStyle: borderStyle,
+      cashapp: cashapp,
+      venmo: venmo,
       businessName: boundedText(source.businessName, "businessName", MAXIMUMS.businessName, errors, true),
       summary: boundedText(source.summary, "summary", MAXIMUMS.summary, errors, true),
       about: boundedParagraphText(source.about, "about", MAXIMUMS.about, errors),
@@ -477,6 +525,14 @@
       actions.push(websiteAction);
       if (normalized.primaryAction === "website") primaryHeroAction = websiteAction;
     }
+    if (normalized.cashapp) {
+      actions.push('<a class="action" href="' + escapeHtml(normalized.cashapp.href)
+        + '" target="_blank" rel="noopener noreferrer">Cash App $' + escapeHtml(normalized.cashapp.display) + "</a>");
+    }
+    if (normalized.venmo) {
+      actions.push('<a class="action" href="' + escapeHtml(normalized.venmo.href)
+        + '" target="_blank" rel="noopener noreferrer">Venmo @' + escapeHtml(normalized.venmo.display) + "</a>");
+    }
     if (actions.length) {
       navigation.push({ href: "#contact", label: "Contact" });
       sections.push(section(
@@ -517,6 +573,15 @@
       "@media(forced-colors:active){.offers li,.facts>div,.action{border:1px solid CanvasText}.action.primary{forced-color-adjust:auto}}"
     ].join("");
 
+    var extrasCss = "";
+    if (normalized.accent !== "none") {
+      extrasCss += ":root{--accent:" + ACCENTS[normalized.accent] + "}";
+    }
+    if (normalized.fontPair === "alt") {
+      extrasCss += FONT_ALT[normalized.theme] || "";
+    }
+    extrasCss += BORDER_CSS[normalized.borderStyle] || "";
+
     return [
       "<!DOCTYPE html>",
       '<html lang="en" class="look-' + normalized.theme + '">',
@@ -525,7 +590,7 @@
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
       "<title>" + escapeHtml(normalized.businessName) + "</title>",
       '<meta name="description" content="' + escapeHtml(normalized.summary) + '">',
-      "<style>" + baseCss + theme.css + "</style>",
+      "<style>" + baseCss + theme.css + extrasCss + "</style>",
       "</head>",
       "<body>",
       '<a class="skip" href="#main">Skip to content</a>',

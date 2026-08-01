@@ -261,7 +261,12 @@
       email: value("email"),
       website: value("website"),
       primaryAction: value("primaryAction"),
-      theme: selectedTheme ? selectedTheme.value : ""
+      theme: selectedTheme ? selectedTheme.value : "",
+      accent: (maker.querySelector('input[name="accent"]:checked') || { value: "none" }).value,
+      fontPair: (maker.querySelector('input[name="fontPair"]:checked') || { value: "standard" }).value,
+      borderStyle: (maker.querySelector('input[name="borderStyle"]:checked') || { value: "soft" }).value,
+      cashapp: value("cashapp"),
+      venmo: value("venmo")
     };
   }
 
@@ -459,6 +464,15 @@
       website: "Outside website"
     };
     list.append(reviewRow("Emphasized contact action", actionLabels[normalized.primaryAction]));
+    if (normalized.accent && normalized.accent !== "none") {
+      list.append(reviewRow("Accent color", normalized.accent.charAt(0).toUpperCase() + normalized.accent.slice(1)));
+    }
+    if (normalized.fontPair === "alt") list.append(reviewRow("Type pairing", "The alternate"));
+    if (normalized.borderStyle && normalized.borderStyle !== "soft") {
+      list.append(reviewRow("Edges", normalized.borderStyle.charAt(0).toUpperCase() + normalized.borderStyle.slice(1)));
+    }
+    if (normalized.cashapp) list.append(reviewRow("Cash App", "$" + normalized.cashapp.display));
+    if (normalized.venmo) list.append(reviewRow("Venmo", "@" + normalized.venmo.display));
     truthReview.replaceChildren(list);
   }
 
@@ -480,6 +494,16 @@
     });
     var theme = maker.querySelector('input[name="theme"][value="' + raw.theme + '"]');
     if (theme) theme.checked = true;
+    ["cashapp", "venmo"].forEach(function (name) {
+      var control = element(name);
+      if (control) control.value = raw[name] || "";
+    });
+    var accent = maker.querySelector('input[name="accent"][value="' + (raw.accent || "none") + '"]');
+    if (accent) accent.checked = true;
+    var pair = maker.querySelector('input[name="fontPair"][value="' + (raw.fontPair || "standard") + '"]');
+    if (pair) pair.checked = true;
+    var border = maker.querySelector('input[name="borderStyle"][value="' + (raw.borderStyle || "soft") + '"]');
+    if (border) border.checked = true;
     clearReviewedSnapshot();
     markDraftClean();
   }
@@ -720,7 +744,8 @@
       email: "",
       website: "",
       primaryAction: "phone",
-      theme: "warm"
+      // The sample fills the WORDS. The look you already chose stays yours.
+      theme: (maker.querySelector('input[name="theme"]:checked') || { value: "warm" }).value
     });
     emitDraftChanged();
     bootStatus.hidden = false;
