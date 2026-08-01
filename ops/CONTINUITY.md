@@ -196,4 +196,20 @@ co-design, task #20.
 - sessionStorage.clear() + navigate is NOT a cold-tab test once
   beforeunload resaves - only a genuinely new tab is cold.
 - drive-keeproom.mjs (scratchpad) drives the whole pay journey:
-  build, pay-return, refine, edit door, alakazam, cold tab.
+  build, pay-return, refine, edit door, alakazam, cold tab, account
+  guard/carry/pay-sweep.
+- Chrome fieldset quirk: display:none on the FIRST block after a
+  <legend> zeroes the next sibling's width (toolbar collapsed to 0,
+  status text went vertical). Collapse in flow instead
+  (visibility:hidden;block-size:0). Found by git-bisecting the burst.
+- Author CSS `display` on an element DEFEATS the [hidden] attribute
+  (UA display:none loses) - the no-page panel rendered above a real
+  page. Always pair a panel's display rule with [hidden]{display:none},
+  and assert PAINTED state (computed display), never the attribute.
+- ROOMS RULING (owner, same night): the $5 payer is still in
+  ABRACADABRA's room (gold, PAID coin). Only ?alakazam=1 wears the
+  ALAKAZAM emerald-metal hero + green ACTIVE coin (.ss-keep-room is
+  live-only). Kit applies IN PLACE (styleOnly replaces the current
+  version; no stack, no form refill, no focus jump). Gate has ONE
+  heading (kicker deleted). ops/OPERATOR-BACKEND-SPEC.md = the
+  6-call simulation's draft spec for task #21.

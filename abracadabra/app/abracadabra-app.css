@@ -246,6 +246,7 @@
 .spark-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
 .spark-field{display:grid;align-content:start;justify-items:center;gap:.45rem;min-width:0;text-align:center}
 .spark-field-wide{grid-column:1/-1}
+.spark-fields>.spark-extras{grid-column:1/-1}
 .spark-field>span{font-size:.76rem;font-weight:850;letter-spacing:.1em;text-transform:uppercase;color:var(--spark-mint)}
 .spark-field>span b{color:var(--spark-pink)}
 .spark-field small{color:var(--spark-faint);font-size:.75rem;line-height:1.45}
@@ -526,11 +527,9 @@
 }
 .spark-boot{border:1px solid rgba(242,206,131,.4);border-radius:.8rem;background:rgba(14,9,22,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 
-/* ---- post-pay room state (the chip under the title) ---- */
-.spark-state-chip{display:inline-flex;flex-direction:column;align-items:center;gap:.35rem;margin:1.1rem auto 0;padding:.85rem 1.5rem;border:1px solid rgba(242,206,131,.5);border-radius:16px;background:linear-gradient(180deg,rgba(16,11,26,.66),rgba(16,11,26,.5)) padding-box,linear-gradient(180deg,rgba(242,206,131,.13),rgba(242,206,131,.04)) padding-box;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:inset 0 0 26px rgba(242,206,131,.1),0 8px 26px rgba(0,0,0,.35);text-align:center}
-.spark-state-chip strong{font-size:.78rem;letter-spacing:.24em;text-transform:uppercase;color:var(--spark-mint)}
-.spark-state-chip span{font-size:.85rem;line-height:1.55;color:rgba(242,220,176,.85);max-width:34rem}
-.spark-state-chip.is-live{border-color:rgba(242,206,131,.75);box-shadow:inset 0 0 30px rgba(242,206,131,.16),0 0 34px rgba(232,182,84,.22)}
+/* ---- the state coin under the title: gold PAID, green ACTIVE ---- */
+.spark-state-coin{display:inline-block;margin:1.05rem auto 0;padding:.42rem 1.35rem;border-radius:999px;border:1px solid rgba(255,246,220,.85);background:linear-gradient(180deg,#fbe7b6 0%,#eec267 55%,#d99f36 100%);color:#221430;font-size:.72rem;font-weight:850;letter-spacing:.26em;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 0 0 1px rgba(140,96,26,.5),0 .45rem 1.3rem rgba(212,156,56,.35),0 0 1.8rem rgba(255,214,130,.24)}
+.spark-state-coin.is-live{border-color:rgba(214,255,235,.85);background:linear-gradient(180deg,#c9f5dd 0%,#6fd9a6 55%,#2e9e6b 100%);color:#0c2417;text-shadow:0 1px 0 rgba(255,255,255,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.75),0 0 0 1px rgba(20,90,60,.55),0 .45rem 1.3rem rgba(46,158,107,.35),0 0 1.8rem rgba(110,220,170,.28)}
 
 /* the Apply press inside the style kit - lighter than a step-actions bar */
 .spark-apply-row{justify-content:center;margin-top:.5rem;padding-top:.9rem;border-top:1px dashed rgba(242,206,131,.25)}
@@ -548,6 +547,7 @@
 .spark-address.is-locked{display:none}
 
 /* the empty Alakazam room: paid or live, but no page in this tab yet */
+.spark-empty-room[hidden]{display:none}
 .spark-empty-room{display:grid;justify-items:center;gap:.75rem;margin:.6rem auto 1rem;padding:2.2rem 1.5rem;max-width:36rem;border:1px dashed rgba(242,206,131,.42);border-radius:1.2rem;background:linear-gradient(180deg,rgba(16,11,26,.5),rgba(10,7,16,.6));text-align:center}
 .spark-empty-title{margin:0;font-family:inherit;font-size:1.35rem;font-weight:800;color:var(--spark-ink)}
 .spark-empty-room p{margin:0;color:var(--spark-muted);font-size:.9rem;line-height:1.6}
@@ -557,10 +557,11 @@
 .ss-keep-room .spark-hero{position:relative}
 .ss-keep-room .spark-hero::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 95% at 50% 15%,rgba(63,191,152,.2),transparent 70%),linear-gradient(180deg,rgba(8,26,20,.42),transparent 65%)}
 .ss-keep-room .spark-hero-grid{position:relative;z-index:1}
-.ss-keep-room #spark-title{background:linear-gradient(180deg,#eafff4,#9fe8c8 45%,#e8c876);-webkit-background-clip:text;background-clip:text;color:transparent}
-.ss-keep-room .spark-state-chip{border-color:rgba(131,231,193,.55);box-shadow:inset 0 0 26px rgba(131,231,193,.12),0 8px 26px rgba(0,0,0,.35)}
-.ss-keep-room .spark-state-chip strong{color:#9fe8c8}
-.spark-maker.is-keep.is-empty [data-step="preview"] .spark-step-intro,
+.ss-keep-room #spark-title{background-image:linear-gradient(100deg,#f6fffa 0%,#c4f2da 40%,#5fc492 60%,#ecfff5 85%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px rgba(8,7,12,.9))}
+
+/* display:none here trips a Chrome fieldset quirk (first block after the
+   legend) that zeroes the next sibling's width - collapse in flow instead */
+.spark-maker.is-keep [data-step="preview"]>.spark-step-intro{visibility:hidden;block-size:0;margin:0;padding:0;overflow:hidden}
 .spark-maker.is-keep.is-empty [data-edit-facts],
 .spark-maker.is-keep.is-empty [data-edit-look]{display:none}
 

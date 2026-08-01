@@ -67,7 +67,7 @@
       if (live) {
         var done = document.createElement("p");
         done.className = "spark-fine";
-        done.textContent = "Alakazam is active — your $5 comes off the first invoice.";
+        done.textContent = "Alakazam is active.";
         golive.replaceWith(done);
       } else if (!paid) {
         golive.classList.add("is-locked-link");
@@ -77,28 +77,16 @@
       }
     }
   }
-  /* The room says what state it is in. Post-pay must not look like the free
-     maker: a chip under the title names the tier, and for Alakazam it states
-     the real mechanism - there are no accounts here, the Stripe receipt email
-     is how the owner reaches the customer to provision by hand. */
+  /* One small coin under the title names the tier - gold PAID, green ACTIVE.
+     The room itself carries the rest. */
   function dressRoom() {
     if (!paid) return;
     var title = document.getElementById("spark-title");
-    if (!title || document.querySelector(".spark-state-chip")) return;
-    var chip = document.createElement("p");
-    chip.className = "spark-state-chip" + (live ? " is-live" : "");
-    var head = document.createElement("strong");
-    var line = document.createElement("span");
-    if (live) {
-      head.textContent = "✦ Alakazam is active ✦";
-      line.textContent = "Alakazam keeps your page alive. Your download is open below — and if anything snags, I\u2019m one call away.";
-    } else {
-      head.textContent = "✦ The $5 download is yours ✦";
-      line.textContent = "Your download and the style kit are unlocked under your page.";
-    }
-    chip.appendChild(head);
-    chip.appendChild(line);
-    title.insertAdjacentElement("afterend", chip);
+    if (!title || document.querySelector(".spark-state-coin")) return;
+    var coin = document.createElement("p");
+    coin.className = "spark-state-coin" + (live ? " is-live" : "");
+    coin.textContent = live ? "Active" : "Paid";
+    title.insertAdjacentElement("afterend", coin);
   }
 
   function wireIncludesModal() {

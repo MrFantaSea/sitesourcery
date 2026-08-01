@@ -646,20 +646,20 @@
     var empty = keep && versions.length === 0;
     maker.classList.toggle("is-keep", keep);
     maker.classList.toggle("is-empty", empty);
-    root.classList.toggle("ss-keep-room", keep && currentStep === "preview");
+    /* Owner ruling: the $5 payer is still in ABRACADABRA's world (page +
+       download). Only the $25 service is the hall of Alakazam. */
+    root.classList.toggle("ss-keep-room", live && currentStep === "preview");
     var emptyRoom = maker.querySelector("[data-empty-room]");
     if (emptyRoom) emptyRoom.hidden = !empty;
     if (keep && currentStep === "preview") bootStatus.hidden = true; // the room speaks for itself
     if (previewLegend) {
       if (!keep) previewLegend.textContent = previewLegendDefault;
-      else if (empty) previewLegend.textContent = live ? "Alakazam is on — it needs a page." : "Your download is paid — it needs a page.";
-      else previewLegend.textContent = live ? "Your page — Alakazam keeps it." : "Your page.";
+      else if (empty) previewLegend.textContent = "Your page comes first.";
+      else previewLegend.textContent = "Your page.";
     }
-    /* Owner ruling: the hero names the room you are in. Making = Abracadabra;
-       the kept (or waiting) page = Alakazam. Only the lane page wears both. */
     var heroTitle = document.getElementById("spark-title");
     if (heroTitle) {
-      heroTitle.textContent = keep && currentStep === "preview" ? "Alakazam" : "Abracadabra";
+      heroTitle.textContent = live && currentStep === "preview" ? "Alakazam" : "Abracadabra";
     }
   }
 
@@ -728,7 +728,8 @@
     });
   }
 
-  function makePreview() {
+  function makePreview(options) {
+    var styleOnly = Boolean(options && options.styleOnly);
     clearErrors();
     var raw = collectRawFacts();
     var normalized = validate(raw);
@@ -766,6 +767,19 @@
       showErrors(error && Array.isArray(error.errors)
         ? error.errors
         : [{ field: "facts", message: "Abracadabra could not make this preview." }]);
+      return;
+    }
+
+    if (styleOnly && currentVersionIndex >= 0 && versions[currentVersionIndex]) {
+      /* The kit restyles the page you are looking at. It never mints a
+         stack of near-identical versions and never refills the form. */
+      if (versions[currentVersionIndex].result.artifactDigest === result.artifactDigest) {
+        versionStatus.textContent = "That style is already on. Pick a different one and apply again.";
+        return;
+      }
+      versions[currentVersionIndex] = { raw: cloneRaw(dressed), result: result, platformVersionId: null };
+      renderCurrentVersion("Style applied.");
+      emitVersionMade(versions[currentVersionIndex], reviewAttested);
       return;
     }
 
@@ -917,7 +931,7 @@
     emitVersionSelected(versions[currentVersionIndex]);
   });
   var applyStyleButton = maker.querySelector("[data-apply-style]");
-  if (applyStyleButton) applyStyleButton.addEventListener("click", makePreview);
+  if (applyStyleButton) applyStyleButton.addEventListener("click", function () { makePreview({ styleOnly: true }); });
   openButton.addEventListener("click", openCurrentPreview);
   returnButton.addEventListener("click", function () { setStep("preview"); });
   sampleButton.addEventListener("click", loadFictionalSample);
