@@ -20,7 +20,10 @@ Honor-gates by design; the human provisioning step is the real enforcement.
   lowercase c-aliases; never "correct" the K back.
 - **No account = no persistence.** The maker runs on sessionStorage only.
   Close the tab, everything is gone, and the copy says so. Never add silent
-  cross-visit memory.
+  cross-visit memory. WITHIN the tab, made versions now DO survive
+  navigation (abracadabra.tabwork key) - required so paying at Stripe
+  does not destroy the page being paid for. Same-tab restore is not
+  cross-visit memory; a new tab always starts cold.
 - **The gate ladder**: FREE = make + preview (Crystal/Hearth/Midnight).
   **$5 download** = the file (in-app unlock via Stripe redirect ?paid=1) +
   the style kit (6 accents, type pairing, edges) + it UNLOCKS the Go-live
@@ -100,7 +103,19 @@ covers claims only (accent/type/edges stripped; payment handles stay),
 makePreview compiles the attested facts DRESSED with current garments
 (was compiling frozen reviewedRaw - style could never change post-review),
 paid/live state chips under the title (frosted), gate intro swaps per
-state, ss-paid/ss-live root classes. Still open by design: the three base looks'
+state, ss-paid/ss-live root classes. THEN the KEEP ROOM (owner: "the
+Alakazam should not look like the abracadabra... why would we go back
+through steps 1-4"): made versions persist per-tab and survive the
+Stripe round-trip (they previously did NOT - a payer returned to an
+empty step 1); with work + paid the room drops the wizard rail and
+lands on "Your page." (live: "Your page — Alakazam keeps it."),
+restore re-arms the attestation so the style kit works post-return,
+boot toast yields to the welcome-back status, edit doors bring the
+rail back only inside the ritual, and THE ADDRESS hunt (the /domains/
+checker script + markup, one truth, absolute paths) sits in the gate
+between Go-live and the includes modal, paid-gated with a teaser.
+Entitlement script announces abracadabra:entitlements; the app
+re-dresses on it (script-order race otherwise). Still open by design: the three base looks'
 DEPTH pass ("samples are basic and lame") — coupled to the \$35 tier
 co-design, task #20.
 
@@ -131,3 +146,7 @@ co-design, task #20.
 - A probe hex must be unique to the claim: #275bd6 is BOTH the ocean
   accent AND Clear's baseline --accent, so the first Apply test passed
   vacuously. Plum #7a4fc0 exists only in the kit - probe with that.
+- sessionStorage.clear() + navigate is NOT a cold-tab test once
+  beforeunload resaves - only a genuinely new tab is cold.
+- drive-keeproom.mjs (scratchpad) drives the whole pay journey:
+  build, pay-return, refine, edit door, alakazam, cold tab.

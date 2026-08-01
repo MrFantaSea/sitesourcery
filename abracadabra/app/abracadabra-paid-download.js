@@ -91,10 +91,10 @@
     var line = document.createElement("span");
     if (live) {
       head.textContent = "✦ Alakazam is active ✦";
-      line.textContent = "Your receipt email is where I reach you to set everything up personally — same day when I can. Download your page at step 4 so it outlives this tab.";
+      line.textContent = "Your receipt email is where I reach you to set everything up personally — same day when I can. Download your page below so it outlives this tab.";
     } else {
       head.textContent = "✦ The $5 download is yours ✦";
-      line.textContent = "The style kit under the preview is unlocked, and the download button waits at step 4.";
+      line.textContent = "Your download and the style kit are unlocked under your page.";
     }
     chip.appendChild(head);
     chip.appendChild(line);
@@ -117,6 +117,7 @@
     applyEntitlements();
     dressRoom();
     wireIncludesModal();
+    window.dispatchEvent(new CustomEvent("abracadabra:entitlements"));
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

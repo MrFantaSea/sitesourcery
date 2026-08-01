@@ -415,6 +415,8 @@
   function setStep(name, options) {
     var settings = options || {};
     currentStep = name;
+    maker.setAttribute("data-current-step", name);
+    updateRoomState();
     steps.forEach(function (step) { step.hidden = step.getAttribute("data-step") !== name; });
     progress.forEach(function (item) {
       if (item.getAttribute("data-progress-step") === name) item.setAttribute("aria-current", "step");
@@ -589,6 +591,66 @@
     return true;
   }
 
+  /* ---- The tab keeps your work (owner ruling: this tab only, never longer).
+     Made versions must survive the Stripe round-trip - paying is a navigation
+     away and back. Closing the tab still forgets everything. ---- */
+  var TABWORK_KEY = "abracadabra.tabwork";
+  var previewLegend = maker.querySelector('[data-step="preview"] legend');
+  var previewLegendDefault = previewLegend ? previewLegend.textContent : "";
+
+  function saveTabWork() {
+    if (!versions.length) return false;
+    try {
+      sessionStorage.setItem(TABWORK_KEY, JSON.stringify({
+        v: 1,
+        raws: versions.map(function (version) { return version.raw; }),
+        current: currentVersionIndex
+      }));
+      return true;
+    } catch (_e) { return false; }
+  }
+
+  function restoreTabWork() {
+    var parsed = null;
+    try { parsed = JSON.parse(sessionStorage.getItem(TABWORK_KEY) || "null"); } catch (_e) { parsed = null; }
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.raws) || !parsed.raws.length) return false;
+    var rebuilt = parsed.raws.map(function (raw) {
+      try {
+        return { platformVersionId: null, raw: cloneRaw(raw), result: compiler.compileSite(raw) };
+      } catch (_e) { return null; }
+    }).filter(Boolean);
+    if (!rebuilt.length) return false;
+    versions = rebuilt;
+    currentVersionIndex = Math.min(Math.max(0, parsed.current | 0), versions.length - 1);
+    fillForm(versions[currentVersionIndex].raw);
+    /* These facts were attested before the trip away; the trip does not
+       un-attest them. Rebuild the review state so the style kit keeps working. */
+    var normalized = validate(collectRawFacts());
+    if (normalized) {
+      reviewedRaw = cloneRaw(collectRawFacts());
+      reviewedDigest = factsDigest(normalized);
+      truthConfirmed.checked = true;
+    }
+    markDraftClean();
+    renderCurrentVersion("Welcome back — your work stayed in this tab.");
+    bootStatus.hidden = true; // the version status carries the welcome; no second toast
+    return true;
+  }
+
+  /* The room changes with the tier: with a page made and the download paid,
+     the wizard rail disappears and the preview step becomes the home room. */
+  function updateRoomState() {
+    var root = document.documentElement;
+    var paid = root.classList.contains("ss-paid") || root.classList.contains("ss-live");
+    var keep = paid && versions.length > 0;
+    maker.classList.toggle("is-keep", keep);
+    if (previewLegend) {
+      previewLegend.textContent = keep
+        ? (root.classList.contains("ss-live") ? "Your page — Alakazam keeps it." : "Your page.")
+        : previewLegendDefault;
+    }
+  }
+
   function themeLabel(theme) {
     return String(theme).charAt(0).toUpperCase() + String(theme).slice(1);
   }
@@ -625,6 +687,8 @@
       + current.result.facts.businessName + ".";
     undoButton.disabled = currentVersionIndex <= 0;
     renderHistory();
+    saveTabWork();
+    updateRoomState();
   }
 
   function renderHistory() {
@@ -846,8 +910,14 @@
   returnButton.addEventListener("click", function () { setStep("preview"); });
   sampleButton.addEventListener("click", loadFictionalSample);
   clearDraftButton.addEventListener("click", clearDraft);
+  /* The entitlement script runs after this one and owns the ss-paid/ss-live
+     classes; it announces them so the room can dress itself on arrival. */
+  window.addEventListener("abracadabra:entitlements", function () { updateRoomState(); });
+
   window.addEventListener("beforeunload", function (event) {
-    if (!hasWorkDestroyedByUnload()) return;
+    var kept = saveTabWork();
+    var losing = kept ? hasMeaningfulUnsavedChanges() : hasWorkDestroyedByUnload();
+    if (!losing) return;
     event.preventDefault();
     event.returnValue = "";
   });
@@ -860,7 +930,11 @@
   bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
-  setStep("vibe", { focus: false });
+  if (restoreTabWork()) {
+    setStep("preview", { focus: false });
+  } else {
+    setStep("vibe", { focus: false });
+  }
   window.SiteSourceryAbracadabraMaker = Object.freeze({
     getCurrentVersion: function () {
       return currentVersionIndex >= 0 ? cloneRaw(versions[currentVersionIndex]) : null;

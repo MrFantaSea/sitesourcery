@@ -531,3 +531,12 @@
 
 /* the Apply press inside the style kit - lighter than a step-actions bar */
 .spark-apply-row{justify-content:center;margin-top:.5rem;padding-top:.9rem;border-top:1px dashed rgba(242,206,131,.25)}
+
+/* the keep room: page made + download paid, the rail disappears - the wizard
+   is a door you can walk back into, not the home */
+.spark-maker.is-keep[data-current-step="preview"] .spark-progress{display:none}
+
+/* the address hunt inside the keep room */
+.spark-address{margin:1.6rem auto 0;max-width:34rem;text-align:left}
+.spark-address .spark-panel-label,.spark-address .spark-tease,.spark-address>.spark-fine,.spark-address [data-extra-controls]>.spark-fine{text-align:center}
+.spark-address .domain-search-status{font-size:.8rem}

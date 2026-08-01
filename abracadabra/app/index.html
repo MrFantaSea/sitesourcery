@@ -19,6 +19,7 @@
   <script src="/abracadabra/app/abracadabra-control-mode.js" defer></script>
   <script src="/abracadabra/app/abracadabra-app.js" defer></script>
   <script src="/abracadabra/app/abracadabra-paid-download.js" defer></script>
+  <script src="/domains/domain-search.js" defer></script>
   <!-- sitesourcery:truth-slot:abracadabra-app-scripts:end -->
 </head>
 <body class="vnext-page abracadabra-app-page" data-product="abracadabra">
@@ -312,6 +313,22 @@
                 <p class="spark-fine">$5 unlocks the download right here — you are sent straight back to this page. Receipt by email.</p>
                 <a class="spark-button" data-gate-golive href="https://buy.stripe.com/9B65kF0iIgvseho9A87kc01" rel="noopener">Go live — Alakazam, $25 a month</a>
                 <p class="spark-fine">I set your page and address up with you personally, same day when I can. Paid the $5? It comes off your first month.</p>
+                <div class="spark-extras spark-address" data-tier="paid">
+                  <p class="spark-panel-label">The address</p>
+                  <p class="spark-tease" data-lock-note>&#10022; Hunt your address right here &mdash; <b>unlocks with the $5 download</b> &#10022;</p>
+                  <div data-extra-controls>
+                    <div class="domain-search" data-domain-search>
+                      <label class="domain-search-label" for="app-domain-name">Try the name you want</label>
+                      <div class="domain-search-row">
+                        <input class="domain-search-input" id="app-domain-name" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="yourbusiness" aria-describedby="app-domain-status" data-domain-input>
+                        <button class="spark-button" type="button" data-domain-submit>Check it</button>
+                      </div>
+                      <p class="domain-search-status" id="app-domain-status" role="status" aria-live="polite" data-domain-status>Checking costs nothing and reserves nothing — the registrar confirms before any money moves.</p>
+                      <ul class="domain-results" data-domain-results></ul>
+                    </div>
+                    <p class="spark-fine">Already own a name? Bring it — I point it at your page when Alakazam is on. <a href="/domains/">All the address options</a>.</p>
+                  </div>
+                </div>
                 <button class="spark-button spark-button-quiet" type="button" data-open-includes>What Alakazam includes</button>
                 <dialog class="spark-modal" data-includes-modal>
                   <button class="spark-modal-x" type="button" data-close-includes aria-label="Close">&#10005;</button>
