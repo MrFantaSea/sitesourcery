@@ -423,3 +423,11 @@
 .spark-step legend{font-family:var(--font-display,Georgia,serif);font-weight:600;color:#f5e7cb}
 .spark-progress [aria-current="step"]{color:#f2ce83}
 .spark-progress [aria-current="step"] span{border-color:#f2ce83;color:#221430;background:linear-gradient(180deg,#fbe7b6,#e8b654)}
+
+/* The hero is a family crest now, not a lobby: champagne brand line with the
+   dash, the incantation in metal at a working size, nothing else. */
+.spark-hero{padding-block:2.6rem 1.2rem}
+.spark-hero-brand{color:#f5e7cb;letter-spacing:.34em}
+.spark-hero-brand::before{content:"";display:inline-block;width:1.4rem;height:2px;margin-right:.55rem;vertical-align:middle;background:linear-gradient(90deg,transparent,#f5e7cb)}
+#spark-title{font-size:clamp(1.9rem,3.6vw,3.1rem);letter-spacing:.04em;text-transform:uppercase}
+.spark-tab-note{margin:.2rem 0 1rem;text-align:center;color:rgba(242,220,176,.75);font-size:.78rem;letter-spacing:.05em}

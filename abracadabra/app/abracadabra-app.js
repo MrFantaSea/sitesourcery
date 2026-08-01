@@ -719,7 +719,7 @@
       theme: "warm"
     });
     emitDraftChanged();
-    setStep("facts", { focus: false });
+    setStep("vibe", { focus: false });
     bootStatus.hidden = false;
     bootStatus.textContent = "Fictional sample loaded. Replace any detail before using the result.";
     element("businessName").focus();
@@ -731,7 +731,7 @@
     )) return;
     fillForm({ theme: "clear", primaryAction: "none" });
     emitDraftChanged();
-    setStep("facts", { focus: false });
+    setStep("vibe", { focus: false });
     bootStatus.hidden = false;
     bootStatus.textContent = currentVersionIndex < 0
       ? "Draft cleared."
@@ -814,7 +814,7 @@
   bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
-  setStep("facts", { focus: false });
+  setStep("vibe", { focus: false });
   window.SiteSourceryAbracadabraMaker = Object.freeze({
     getCurrentVersion: function () {
       return currentVersionIndex >= 0 ? cloneRaw(versions[currentVersionIndex]) : null;
