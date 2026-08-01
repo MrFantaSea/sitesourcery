@@ -4,6 +4,7 @@ import {
   randomBytes,
   randomUUID
 } from "node:crypto";
+import { createRequire } from "node:module";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -14,6 +15,7 @@ import pg from "pg";
 import { createFakeApprovedCatalog } from "../../commerce/adapters/fake.mjs";
 import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
+import { createHostedApi } from "../http.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import { createAesGcmContactVault } from "../production-ports.mjs";
@@ -29,6 +31,10 @@ import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs"
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
 
 const { Pool } = pg;
+const require = createRequire(import.meta.url);
+const AbracadabraAPI = require(
+  "../../../abracadabra/app/abracadabra-api.js"
+);
 const DATABASE_URL =
   process.env.SITESOURCERY_PG_SERVICE_TEST_URL ?? null;
 const NOW = "2026-07-28T20:00:00.000Z";
@@ -36,6 +42,47 @@ const MIGRATIONS = new URL(
   "../../data-plane/supabase/migrations/",
   import.meta.url
 );
+
+function createSameOriginBrowserFetch(api, origin) {
+  const cookies = new Map();
+  const setCookieHeaders = [];
+
+  return Object.freeze({
+    cookie(name) {
+      return cookies.get(name) ?? null;
+    },
+    setCookieHeaders,
+    async fetch(resource, init = {}) {
+      const headers = new Headers(init.headers);
+      headers.set("Origin", origin);
+      if (cookies.size > 0) {
+        headers.set(
+          "Cookie",
+          [...cookies]
+            .map(([name, value]) => `${name}=${value}`)
+            .join("; ")
+        );
+      }
+      const response = await api.fetch(
+        new Request(new URL(resource, origin), {
+          ...init,
+          headers
+        })
+      );
+      const setCookie = response.headers.get("set-cookie");
+      if (setCookie) {
+        setCookieHeaders.push(setCookie);
+        const pair = setCookie.split(";", 1)[0];
+        const separator = pair.indexOf("=");
+        const name = pair.slice(0, separator);
+        const value = pair.slice(separator + 1);
+        if (value) cookies.set(name, value);
+        else cookies.delete(name);
+      }
+      return response;
+    }
+  });
+}
 
 function deferred() {
   let resolve;
@@ -2148,6 +2195,159 @@ test(
         }
       );
     assert.equal(ownedDeleted.deleted, true);
+
+    await t.test(
+      "browser API crosses CSRF, secure cookies, HTTP, and PostgreSQL for one account",
+      async () => {
+        const origin = "https://staging.sitesourcery.test";
+        const api = createHostedApi(service, {
+          csrfTokens: () =>
+            "csrf_browser_account_boundary_1234567890"
+        });
+        const browser = createSameOriginBrowserFetch(
+          api,
+          origin
+        );
+        let commandSequence = 0;
+        const client = AbracadabraAPI.createClient({
+          fetch: browser.fetch,
+          idempotencyFactory: () =>
+            `browser-account-command-${++commandSequence}`
+        });
+        const email =
+          `browser-owner-${randomUUID()}@example.test`;
+        const password =
+          "browser account correct horse battery staple";
+
+        const staged = await client.register({
+          name: "Browser Test Owner",
+          organizationName: "Browser Test Organization",
+          email,
+          password
+        });
+        assert.deepEqual(
+          {
+            accepted: staged.accepted,
+            verificationRequired:
+              staged.verificationRequired,
+            delivery: staged.delivery,
+            emailSent: staged.emailSent,
+            replayed: staged.replayed
+          },
+          {
+            accepted: true,
+            verificationRequired: true,
+            delivery: "email",
+            emailSent: true,
+            replayed: false
+          }
+        );
+        assert.ok(browser.cookie("ss_csrf"));
+        assert.equal(browser.cookie("ss_session"), null);
+        const message =
+          registrationSink.readForTest(email)[0];
+        assert.ok(message);
+        const token = decodeURIComponent(
+          new URL(message.verificationUrl).hash.slice(
+            "#verify-registration=".length
+          )
+        );
+
+        const activated =
+          await client.completeRegistration({ token });
+        assert.equal(
+          activated.user.email,
+          email
+        );
+        assert.equal(
+          activated.organization.name,
+          "Browser Test Organization"
+        );
+        assert.equal(
+          Object.hasOwn(activated, "sessionToken"),
+          false
+        );
+        assert.equal(
+          Object.hasOwn(activated, "session"),
+          false
+        );
+        assert.ok(browser.cookie("ss_session"));
+        const sessionCookie =
+          browser.setCookieHeaders.find((header) =>
+            header.startsWith("ss_session=") &&
+            !header.startsWith("ss_session=;")
+          );
+        assert.match(
+          sessionCookie,
+          /; Path=\/api\/v1; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000$/u
+        );
+
+        const account = await client.me();
+        assert.equal(account.user.email, email);
+        assert.deepEqual(
+          account.organizations.map(({ name, role, state }) => ({
+            name,
+            role,
+            state
+          })),
+          [
+            {
+              name: "Browser Test Organization",
+              role: "owner",
+              state: "active"
+            }
+          ]
+        );
+        assert.deepEqual(
+          (
+            await pool.query(
+              `select
+                 (select count(*)::integer
+                    from auth.users
+                   where lower(email) = $1) as users,
+                 (select count(*)::integer
+                    from ss.organizations organization
+                    join auth.users users
+                      on users.id =
+                         organization.created_by_user_id
+                   where lower(users.email) = $1)
+                   as organizations,
+                 (select count(*)::integer
+                    from ss.hosted_sessions session
+                    join auth.users users
+                      on users.id = session.user_id
+                   where lower(users.email) = $1
+                     and session.revoked_at is null)
+                   as active_sessions`,
+              [email]
+            )
+          ).rows[0],
+          {
+            users: 1,
+            organizations: 1,
+            active_sessions: 1
+          }
+        );
+
+        await client.signOut();
+        assert.equal(browser.cookie("ss_session"), null);
+        assert.equal((await client.me()).user, null);
+        const signedIn = await client.signIn({
+          email,
+          password
+        });
+        assert.equal(signedIn.user.email, email);
+        assert.equal(
+          Object.hasOwn(signedIn, "sessionToken"),
+          false
+        );
+        assert.equal(
+          Object.hasOwn(signedIn, "session"),
+          false
+        );
+        assert.equal((await client.me()).user.email, email);
+      }
+    );
     await authority.close();
   }
 );

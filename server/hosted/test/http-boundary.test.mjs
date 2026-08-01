@@ -67,6 +67,10 @@ function createContext({
       return {
         sessionToken:
           "activated_session_token_12345678901234567890",
+        session: {
+          id: "internal_session_1",
+          tokenDigest: "a".repeat(64)
+        },
         user: { userId: ACTOR.userId },
         organization: { id: "organization_1" },
         replayed: false
@@ -309,6 +313,11 @@ test("CSRF bootstrap is same-origin, stable across tabs, and required before wri
     activated.headers.get("set-cookie"),
     /^ss_session=activated_session_token_12345678901234567890;/u
   );
+  assert.deepEqual(await activated.json(), {
+    user: { userId: ACTOR.userId },
+    organization: { id: "organization_1" },
+    replayed: false
+  });
   assert.deepEqual(
     context.calls.completeRegistration,
     [

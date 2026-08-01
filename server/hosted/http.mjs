@@ -27,6 +27,13 @@ function json(payload, status = 200, headers = {}) {
   });
 }
 
+function publicAuthenticationResult(value) {
+  const safe = { ...(value ?? {}) };
+  delete safe.sessionToken;
+  delete safe.session;
+  return safe;
+}
+
 function parseCookies(header) {
   const cookies = {};
   for (const pair of String(header ?? "").split(";")) {
@@ -411,7 +418,7 @@ export function createHostedApi(
         ) {
           const created =
             await service.completeRegistration(write);
-          const { sessionToken, ...safe } = created;
+          const sessionToken = created?.sessionToken;
           invariant(
             typeof sessionToken === "string" &&
               sessionToken.length >= 32,
@@ -419,14 +426,21 @@ export function createHostedApi(
             "Registration activation did not create a valid session.",
             { status: 500 }
           );
-          result = safe;
+          result = publicAuthenticationResult(created);
           status = 201;
           headers["Set-Cookie"] =
             sessionCookie(sessionToken);
         } else if (method === "POST" && pathname === "/api/v1/auth/sessions") {
           const signedIn = await service.signIn(write);
-          const { sessionToken, ...safe } = signedIn;
-          result = safe;
+          const sessionToken = signedIn?.sessionToken;
+          invariant(
+            typeof sessionToken === "string" &&
+              sessionToken.length >= 32,
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Sign-in did not create a valid session.",
+            { status: 500 }
+          );
+          result = publicAuthenticationResult(signedIn);
           status = 201;
           headers["Set-Cookie"] = sessionCookie(sessionToken);
         } else if (
