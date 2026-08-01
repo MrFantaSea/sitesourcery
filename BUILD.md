@@ -11,7 +11,7 @@ every earlier branch and worktree is untouched.
 | | |
 |---|---|
 | **Abracadabra** | **Free to see, $5 to download** (owner pivot 2026-07-31). Makes a one-page preview from the customer's business details; the $5 unlocks taking it with you. |
-| **Alacazam** | The paid service that follows: customise further, download, or go live. **The $5 is credited toward it.** |
+| **Alakazam** | The paid service that follows: customise further, download, or go live. **The $5 is credited toward it.** |
 | **Address, four ways** | buy from Zack (you run it) · buy + looked after · bring your own · rent `you.sitesourcery.me` monthly |
 | **Custom** | Quoted builds. Card $400 · Card+ $650 · Site $1,200 · Site+ $1,800 · Signature $2,800 · Flagship $4,000 |
 | **Hive** | **Custom AI automation apps and workflows**, priced to the workflow. The missed-call responder is one blueprint, starting $300 setup + $250/month. Not a menu. |
@@ -65,7 +65,7 @@ live Products and Prices were created 2026-07-30; see `server/commerce/rails.mjs
 |---|---|---|---|---|
 | Website assessment | $200 once | payment link | `…7kc02` | **YES — sells today** |
 | Abracadabra preview | $5 once | payment link | `…7kc00` | no — maker cannot charge yet |
-| Alacazam hosting | $25/month | billing | `…7kc01` | no — cannot provision yet |
+| Alakazam hosting | $25/month | billing | `…7kc01` | no — cannot provision yet |
 | Domain purchase | quoted per name | invoice | — | quoted by hand |
 | Custom build | $400–$4,000 | invoice | — | quoted by hand |
 
@@ -80,7 +80,7 @@ The other two would take money for something that does not yet happen.
 `scripts/check-site.mjs` enforces that any checkout link is on Stripe's own
 origin — a nearly-right domain is the whole attack.
 
-**Two promises are not yet real.** The site says the $5 comes off Alacazam and
+**Two promises are not yet real.** The site says the $5 comes off Alakazam and
 the $200 comes off a build. Those exist only as page copy — they need Stripe
 coupons, or someone has to remember on every sale. `readiness().creditsToHonour`
 lists them so they cannot be quietly forgotten.
@@ -94,11 +94,11 @@ the same thing in New Jersey.
 **1. The maker cannot take money.** The commerce layer still sells a *download*
 — `offerId "spark_download"` in `abracadabra-customer-control-dom.js`, and
 `/projects/{id}/download-quotes` in the API. The paid object has to become the
-preview, with download as one of Alacazam's features. This is why the $5 and $25
+preview, with download as one of Alakazam's features. This is why the $5 and $25
 Payment Links exist but are not on any page.
 
 **2. The two credits are only words.** The site promises the $5 comes off
-Alacazam and the $200 comes off a build. Neither exists as a Stripe object.
+Alakazam and the $200 comes off a build. Neither exists as a Stripe object.
 Recommended: put a −$5.00 credit on the Stripe Customer at payment, so there is
 no code to lose, nothing to type, and nothing to forge. Needs a small webhook.
 

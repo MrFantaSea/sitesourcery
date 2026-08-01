@@ -7721,3 +7721,12 @@ li[id^="about-"]:target {
 .site-brand {
   font-size: clamp(1.6rem, 2.9vw, 2.75rem) !important;
 }
+
+/* The incantation stacks: ABRACADABRA over ALAKAZAM, both metal, the second
+   word a step smaller with wider tracking. Each holds one line. */
+.abracadabra-page .hero-copy h1 .h1-alt {
+  display: block;
+  margin-top: 0.12em;
+  font-size: 0.6em;
+  letter-spacing: 0.16em;
+}

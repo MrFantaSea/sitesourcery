@@ -14,7 +14,7 @@
  * STATE, 2026-07-30
  *
  * Three live Stripe Products and Prices now exist in that account: the $5
- * preview, $25/month Alacazam hosting, and the $200 assessment. Their Price IDs
+ * preview, $25/month Alakazam hosting, and the $200 assessment. Their Price IDs
  * are recorded below. Price IDs are NOT secrets — Stripe designs them to appear
  * in client-side integrations — so they belong in the repository. Secret keys
  * never do, and none appear here.
@@ -105,7 +105,7 @@ export const SELLABLE = Object.freeze([
     taxTreatment: "review_required",
     note:
       "OWNER PIVOT 2026-07-31: seeing the preview is FREE; the $5 buys the "
-      + "DOWNLOAD. Still one-time, still credited against the first Alacazam "
+      + "DOWNLOAD. Still one-time, still credited against the first Alakazam "
       + "payment — a credit applied by hand until it exists as a Stripe "
       + "object. Product renamed to 'Abracadabra download' in the dashboard "
       + "on 2026-07-31; name, description, and site copy now agree."
@@ -115,7 +115,7 @@ export const SELLABLE = Object.freeze([
     checkoutUrl: "https://buy.stripe.com/9B65kF0iIgvseho9A87kc01",
     productRef: "prod_Uz2wjAIXX2ILS1",
     priceRef: "price_1Tz4qiPi1bfFonRczx5OBDxo",
-    label: "Alacazam hosting",
+    label: "Alakazam hosting",
     rail: "billing",
     amountCents: 2500,
     interval: "month",
