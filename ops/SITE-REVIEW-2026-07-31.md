@@ -92,3 +92,24 @@ Confirmed #5 (Hive ghost): FIXED — every customer-visible Hive renamed; ids/an
 Confirmed #1 (Alacazam live link): OWNER RULED "wire everything to take money correctly" — link stays; honest provisioning + manual-credit copy added beside it. Real credit automation still needs the webhook.
 Nits fixed same day: 404 chrome, contact→/start/ loop, domains charge-order line, Stripe reference sanitizer, contact anchor, unclear-row first person, flyer ladder, work-page third person, rent-vs-own chip, favicons (home pending ok).
 Still open (biggest first): checker blind spots (canonicals, script srcs, non-index HTML), sitemap vs check-routes vs tree disagreement, /abracadabra/how/ orphan, root strays (automation.html, the-responder.html, abracadabra/site/, scripts/private-preview/), design-drift list, credits automation, Stripe product rename + .net/.org price (in progress via dashboard).
+
+## [STATUS] Second wave — same night, owner-approved
+
+The $5 unlock became real: Stripe redirects to /abracadabra/app/?paid=1 and
+abracadabra-paid-download.js hands over the compiled page from the preview
+iframe — no email promise a static site could not keep. Third-person Zack
+died across nine pages. Scale tier removed from payment terms. System
+Sourcery tease removed. /domains/ states $40/$45 flat and links Alacazam.
+Contact's topic highlight is real (:target). The checker grew seven senses
+(root HTML, canonicals, resource resolution, og assets, rails pinned at 5,
+seal verification, sitemap exact) and immediately caught four stale seals,
+a stale sitemap entry, and THREE more forgotten stubs pointing at dead
+anchors (the-difference, the-meter, the-moat) — all fixed. og.png now
+exists. Full 320/390/480 sweep: every route clean, menu button on screen.
+Three buried !important traps pruned, computed ink verified unchanged.
+DAARX proof shot 894KB→214KB. Stripe: $5 product renamed with truthful
+description, $45/yr plus-band price + payment link verified end to end as
+a customer, domain product description tells the true charge order.
+Remaining: full CSS consolidation (after page walks), credits webhook,
+rent-tier price (owner), Spaceship wholesale (owner), deploy allowlist
+before any push, page walks with the owner.
