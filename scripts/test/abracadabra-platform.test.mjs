@@ -24,8 +24,11 @@ const controlSource = readFileSync(
   "utf8",
 );
 
-test("control room boots from the created platform before exposing account access", () => {
-  assert.match(controlSource, /var platform;\s+try \{\s+platform = platformModule\.createPlatform/u);
+test("control room boots from the created platform before exposing local rehearsal account access", () => {
+  assert.match(
+    controlSource,
+    /var platform;[\s\S]{0,500}?try \{[\s\S]{0,500}?platform = platformModule\.createPlatform\(\{ storage: window\.sessionStorage \}\)/u,
+  );
   assert.match(controlSource, /openAccountButton\.disabled = !platform/u);
   assert.match(controlSource, /function resetProjectScopedTransients\(\)/u);
   assert.match(controlSource, /function requireProjectContext\(context\)/u);
@@ -2692,40 +2695,21 @@ test("a spoofed current deletion policy cannot preserve reattached bytes or tick
   assert.equal(repaired.deletion.removed.supportTickets, 1);
 });
 
-test("local platform deletion stays internal while held maker notices reject simulator controls", () => {
+test("local platform deletion stays internal while hosted project deletion is explicit", () => {
   const appMarkup = readFileSync(new URL("../../abracadabra/app/index.html", import.meta.url), "utf8");
   const hostedControlMarkup = readFileSync(
     new URL("../../scripts/hosted-truth/fragments/abracadabra-app-control.html", import.meta.url),
-    "utf8",
-  );
-  const privacy = readFileSync(new URL("../../legal/privacy/index.html", import.meta.url), "utf8");
-  const terms = readFileSync(
-    new URL("../../legal/website-terms/index.html", import.meta.url),
     "utf8",
   );
   assert.match(controlSource, /workroom\.hidden = deleted/u);
   assert.match(controlSource, /maker\.loadProject\(\{ draft: null, versions: \[\], serving:/u);
   assert.match(controlSource, /\[data-create-ticket\]"\)\.hidden = deleted/u);
   assert.match(controlSource, /Proof reference removed/u);
-  assert.doesNotMatch(appMarkup, /delete (?:the )?(?:website )?project|browser-local account/iu);
-  assert.match(
+  assert.doesNotMatch(
     appMarkup,
-    /This build does not create an online account, take payment, register or connect a domain, or publish\./u,
+    /data-delete-project|Delete website project|Project deletion is terminal/iu,
   );
+  assert.match(hostedControlMarkup, /data-delete-project/u);
+  assert.match(hostedControlMarkup, /Delete website project/u);
   assert.match(hostedControlMarkup, /does not delete the separate Site Sourcery account/u);
-  assert.match(
-    privacy,
-    /The current maker has no account, saved project, product database,[^<]+project-deletion control\./u,
-  );
-  assert.match(
-    terms,
-    /The current maker has no saved project or project-deletion control\./u,
-  );
-  for (const heldNotice of [privacy, terms]) {
-    assert.doesNotMatch(heldNotice, /Project deletion is terminal in the current/iu);
-    assert.doesNotMatch(heldNotice, /separate (?:browser-)?local account/iu);
-    assert.doesNotMatch(heldNotice, /acts only on this browser’s local project store/iu);
-  }
-  assert.doesNotMatch(privacy, /reviewed proof reference[^<]*remain/iu);
-  assert.doesNotMatch(terms, /reviewed proof reference[^<]*remain/iu);
 });

@@ -126,6 +126,7 @@ const FIELDS = [
 
 function buildDocument() {
   const byId = Object.create(null);
+  const documentElement = el("html");
 
   const field = (name, tag = "input") => {
     const node = el(tag, { name });
@@ -195,6 +196,7 @@ function buildDocument() {
     querySelector(selector) { return maker.querySelector(selector); },
     querySelectorAll(selector) { return maker.querySelectorAll(selector); },
     createElement(tag) { return el(tag); },
+    documentElement,
     body: el("body"),
   };
 

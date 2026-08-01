@@ -37,11 +37,17 @@ Use exactly Node 24.18.0:
 ```sh
 nvm use
 npm ci
-npm run check
-npm run test:node
-npm run check:selfhost
+npm test
 ```
 
-The broader `npm test` command also builds the reviewed artifact and runs the
-browser release gate. Publication, checkout, registrar, and DNS controls remain
+`npm test` checks the current site, browser and service contracts; builds both
+reviewed artifacts; and opens every hosted route at 320, 390, and 1440 pixels
+in the pinned browser. The browser gate also opens the hosted account room and
+drives Look → Business → Review → Preview without making a write or payment.
+
+`npm run check:legacy`, `npm run audit:browser:legacy`,
+`npm run audit:hosted-domain-browser:legacy`, and
+`npm run test:public-truth:legacy` preserve retired exact-copy, route, and
+six-step contracts for historical inspection. They are not release gates for
+the current product. Publication, checkout, registrar, and DNS effects remain
 separate owner-authorized operations.

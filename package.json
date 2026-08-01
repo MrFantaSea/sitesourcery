@@ -12,8 +12,9 @@
     "runtime:hosted-service": "node server/hosted/assert-runtime.mjs",
     "readiness:spaceship": "node server/domain/spaceship-readiness.mjs",
     "generate:vnext": "node scripts/generate-site-vnext.mjs",
-    "audit:browser": "node --experimental-websocket scripts/browser-audit-vnext.mjs",
-    "audit:hosted-domain-browser": "node --experimental-websocket scripts/browser-hosted-domain-journey.mjs",
+    "audit:browser": "node --experimental-websocket scripts/browser-audit-current.mjs",
+    "audit:browser:legacy": "node --experimental-websocket scripts/browser-audit-vnext.mjs",
+    "audit:hosted-domain-browser:legacy": "node --experimental-websocket scripts/browser-hosted-domain-journey.mjs",
     "check": "npm run check:html && npm run check:site",
     "check:site": "node scripts/check-site.mjs",
     "check:legacy": "npm run check:routes && npm run check:vnext && npm run check:sections && npm run check:copy && npm run check:legal-copy && npm run check:catalog && npm run check:abracadabra && npm run check:hosted",
@@ -27,7 +28,7 @@
     "check:abracadabra": "node scripts/check-abracadabra-v1.mjs",
     "build:hosted": "node scripts/build-hosted.mjs",
     "check:hosted": "node scripts/build-hosted.mjs && html-validate \"_hosted/**/*.html\"",
-    "test:node": "node --test scripts/test/site-vnext.test.mjs scripts/test/customer-section-ledger.test.mjs scripts/test/customer-copy.test.mjs scripts/test/legal-copy.test.mjs scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-unload-guard.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hosted-artifact.test.mjs scripts/test/hive-planner.test.mjs scripts/test/local-deliverable-downloads.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/browser-release-gate.test.mjs scripts/test/domain-orchestration.test.mjs scripts/test/spaceship-provider-adapter.test.mjs server/commerce/test/offer-contract.test.mjs server/commerce/test/stripe-provider.test.mjs",
+    "test:node": "node --test scripts/test/abracadabra-v1.test.mjs scripts/test/abracadabra-unload-guard.test.mjs scripts/test/abracadabra-platform.test.mjs scripts/test/abracadabra-api.test.mjs scripts/test/abracadabra-commercial-control.test.mjs scripts/test/abracadabra-hosted-control.test.mjs scripts/test/hosted-artifact.test.mjs scripts/test/local-deliverable-downloads.test.mjs scripts/test/payment-provider-placeholder.test.mjs scripts/test/domain-orchestration.test.mjs scripts/test/spaceship-provider-adapter.test.mjs server/commerce/test/offer-contract.test.mjs server/commerce/test/stripe-provider.test.mjs",
     "test:domain": "node server/domain/assert-runtime.mjs && node --test scripts/test/domain-orchestration.test.mjs",
     "test:spaceship": "node server/domain/assert-runtime.mjs && node --test scripts/test/spaceship-provider-adapter.test.mjs",
     "test:selfhost": "npm run runtime:selfhost && node --test --test-concurrency=1 server/selfhost/test/*.test.mjs",
@@ -40,10 +41,10 @@
     "ops:backup-retention": "node ops/apply-backup-retention.mjs",
     "ops:restore-verify": "node ops/verify-restore.mjs",
     "ops:monitor-held": "node ops/monitor-held.mjs",
-    "test:public-truth": "node --test scripts/test/public-truth-release.test.mjs",
+    "test:public-truth:legacy": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
-    "check:artifact": "node scripts/check-site-vnext.mjs && node scripts/build-pages.mjs --check",
-    "test": "npm run runtime:check && npm run check && npm run test:node && npm run check:selfhost && npm run check:hosted-service && npm run check:ops && npm run test:public-truth && npm run build:pages && npm run check:artifact && npm run audit:browser && npm run audit:hosted-domain-browser"
+    "check:artifact": "node scripts/build-pages.mjs --check",
+    "test": "npm run runtime:check && npm run check && npm run test:node && npm run check:selfhost && npm run check:hosted-service && npm run check:ops && npm run build:pages && npm run check:artifact && npm run check:hosted && npm run audit:browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"

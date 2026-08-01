@@ -10,33 +10,32 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const compilerPath = path.join(projectRoot, "abracadabra/app/abracadabra-compiler.js");
 const appPath = path.join(projectRoot, "abracadabra/app/abracadabra-app.js");
 const controlPath = path.join(projectRoot, "abracadabra/app/abracadabra-control.js");
+const accountPath = path.join(projectRoot, "abracadabra/app/abracadabra-account.js");
+const paidDownloadPath = path.join(
+  projectRoot,
+  "abracadabra/app/abracadabra-paid-download.js",
+);
 const htmlPath = path.join(projectRoot, "abracadabra/app/index.html");
 const landingPath = path.join(projectRoot, "abracadabra/index.html");
-const howPath = path.join(projectRoot, "abracadabra/how/index.html");
-const showcasePath = path.join(projectRoot, "abracadabra/abracadabra-showcase.js");
 const hostedControlFragmentPath = path.join(
   projectRoot,
-  "scripts/hosted-truth/fragments/abracadabra-app-control.html",
+  "scripts/hosted-truth/fragments/abracadabra-app-customer-control.html",
 );
 const hostedHeroFragmentPath = path.join(
   projectRoot,
   "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
 );
-const hostedHowFragmentPath = path.join(
-  projectRoot,
-  "scripts/hosted-truth/fragments/abracadabra-how-main.html",
-);
-const hostedLandingFragmentPath = path.join(
-  projectRoot,
-  "scripts/hosted-truth/fragments/abracadabra-landing-main.html",
-);
 const hostedReadyFragmentPath = path.join(
   projectRoot,
   "scripts/hosted-truth/fragments/abracadabra-app-ready.js",
 );
+const hostedScriptsFragmentPath = path.join(
+  projectRoot,
+  "scripts/hosted-truth/fragments/abracadabra-app-scripts.html",
+);
 const hostedDomPath = path.join(
   projectRoot,
-  "abracadabra/app/abracadabra-hosted-control-dom.js",
+  "abracadabra/app/abracadabra-customer-control-dom.js",
 );
 const hostedCorePath = path.join(
   projectRoot,
@@ -46,30 +45,28 @@ const [
   compilerSource,
   appSource,
   controlSource,
+  accountSource,
+  paidDownloadSource,
   pageHtml,
   landingHtml,
-  howHtml,
-  showcaseSource,
   hostedControlMarkup,
   hostedHeroMarkup,
-  hostedHowMarkup,
-  hostedLandingMarkup,
   hostedReadySource,
+  hostedScriptsMarkup,
   hostedDomSource,
   hostedCoreSource,
 ] = await Promise.all([
   readFile(compilerPath, "utf8"),
   readFile(appPath, "utf8"),
   readFile(controlPath, "utf8"),
+  readFile(accountPath, "utf8"),
+  readFile(paidDownloadPath, "utf8"),
   readFile(htmlPath, "utf8"),
   readFile(landingPath, "utf8"),
-  readFile(howPath, "utf8"),
-  readFile(showcasePath, "utf8"),
   readFile(hostedControlFragmentPath, "utf8"),
   readFile(hostedHeroFragmentPath, "utf8"),
-  readFile(hostedHowFragmentPath, "utf8"),
-  readFile(hostedLandingFragmentPath, "utf8"),
   readFile(hostedReadyFragmentPath, "utf8"),
+  readFile(hostedScriptsFragmentPath, "utf8"),
   readFile(hostedDomPath, "utf8"),
   readFile(hostedCorePath, "utf8"),
 ]);
@@ -335,12 +332,7 @@ test("application page has zero forms and fails closed before its local compiler
   assert.doesNotMatch(pageHtml, /<iframe\b[^>]*sandbox="[^"]+"/u);
 });
 
-test("held maker stays account-free while hosted adoption code can carry a reviewed version", () => {
-  assert.doesNotMatch(
-    pageHtml,
-    /class="platform-control"|data-open-account|data-save-direction|Save and continue/u,
-    "the held maker must not expose hosted account or save controls",
-  );
+test("maker stays guest-first while account-before-payment bridges remain deployment-specific", () => {
   assert.match(
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\stabindex="-1"[^>]*>/u,
@@ -350,65 +342,43 @@ test("held maker stays account-free while hosted adoption code can carry a revie
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\shidden>/u,
   );
-  for (const marker of [
-    "Your free preview stays in this tab.",
-    "Refresh or close the tab and you will start over.",
-    "No account is required to build and test the first version.",
-    "Download is $5 once for this editor project.",
-  ]) {
-    assert.ok(pageHtml.includes(marker), marker);
-  }
-  assert.doesNotMatch(pageHtml, /id="download-version"|Download this HTML/u);
+  assert.deepEqual(
+    [...pageHtml.matchAll(/data-progress-step="([^"]+)"/gu)].map((match) => match[1]),
+    ["vibe", "facts", "truth", "preview"],
+  );
+  const prototypeScripts = [
+    "abracadabra-account.js",
+    "abracadabra-app.js",
+    "abracadabra-paid-download.js",
+  ].map((name) => pageHtml.indexOf(name));
+  assert.equal(prototypeScripts.every((index) => index >= 0), true);
+  assert.equal(prototypeScripts[0] < prototypeScripts[1], true);
+  assert.equal(prototypeScripts[1] < prototypeScripts[2], true);
+  assert.match(accountSource, /var ACCOUNT_KEY = "abracadabra\.account"/u);
+  assert.match(accountSource, /localStorage\.setItem/u);
+  assert.match(paidDownloadSource, /if \(accountApi && freeGate && !paid\)/u);
+  assert.match(paidDownloadSource, /if \(accountApi\.get\(\)\) return; \/\/ account exists - straight to pay/u);
+  assert.match(paidDownloadSource, /accountApi\.openPanel\(freeGate, payAnchor, "pay"/u);
+  assert.doesNotMatch(hostedScriptsMarkup, /abracadabra-account\.js|abracadabra-paid-download\.js/u);
+  assert.match(hostedScriptsMarkup, /abracadabra-app\.js/u);
+  assert.match(hostedControlMarkup, /<legend>Create your account<\/legend>/u);
+  assert.match(hostedControlMarkup, /name="accountPassword"/u);
   assert.doesNotMatch(appSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
-  assert.match(pageHtml, /abracadabra-control-mode\.js/u);
-  assert.doesNotMatch(
-    pageHtml,
-    /abracadabra-control\.js|abracadabra-platform\.js/u,
-  );
-  for (const marker of [
-    "pendingGuestCandidate",
-    "if (!state.account || !state.project)",
-    "acceptMadeVersion(state.pendingGuestCandidate)",
-    "Project created and the reviewed guest preview was carried into it.",
-    "workroom.after(controlRoom)",
-    "window.matchMedia(\"(prefers-reduced-motion: reduce)\")",
-    "focusAndScroll(one(\"[data-active-project]\"))",
-  ]) {
-    assert.ok(controlSource.includes(marker), marker);
-  }
-  assert.doesNotMatch(
-    controlSource,
-    /scrollIntoView\(\{\s*behavior:\s*"smooth"/u,
-    "journey transitions must not force smooth scrolling when reduced motion is requested",
-  );
 });
 
-test("the shared held-and-hosted landing keeps a truthful generated-example fallback without JavaScript", () => {
-  const fallbackCopy =
-    "Static fictional preview shown. JavaScript opens the generated example.";
-  const noScriptCopy =
-    "The static fictional previews below are placeholders. Turn JavaScript on to open the generated examples or use the page maker.";
-  for (const source of [landingHtml]) {
-    assert.equal(source.split(fallbackCopy).length - 1, 4);
-    assert.equal(source.split(noScriptCopy).length - 1, 1);
-    assert.match(source, /<noscript>[\s\S]*class="site-shell abracadabra-noscript"/u);
-    assert.match(source, /href="#plans">Compare what happens next/u);
-    assert.match(source, /Six short steps/u);
-    assert.doesNotMatch(source, />Opening (?:the example|Clear|Warm|Arcane)…</u);
-  }
-  assert.match(showcaseSource, /data-showcase-state", "loading"/u);
-  assert.equal(showcaseSource.split('data-showcase-state", "failed"').length - 1, 2);
-  assert.match(showcaseSource, /data-showcase-state", "ready"/u);
-  assert.equal(
-    showcaseSource.split(
-      "The generated example did not open. Reload this page to try again.",
-    ).length - 1,
-    2,
+test("the Abracadabra lane has a plain HTML door into the maker", () => {
+  assert.match(
+    landingHtml,
+    /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
+  assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
+  assert.match(landingHtml, /Free to See-\$5 to Download-\$25 a Month Keeps It Live/u);
+  assert.doesNotMatch(landingHtml, /<form\b/iu);
 });
 
 test("guest data-loss truth stays visible in both artifacts and hosted controls boot from complete markup", () => {
-  assert.match(pageHtml, /<strong>Your free preview stays in this tab\.<\/strong>/u);
+  assert.match(pageHtml, /Lives in this tab only — close it and it's gone\./u);
+  assert.match(appSource, /Abracadabra ready\. Your local draft stays in this tab\./u);
   assert.match(
     hostedHeroMarkup,
     /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account and you will start over/u,
@@ -418,32 +388,32 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
     /Guest work stays only in this tab until you save it to your account\./u,
   );
   assert.match(hostedReadySource, /bootStatus\.hidden = false/u);
-  assert.match(hostedControlMarkup, /data-billing-copy role="status" aria-live="polite"/u);
-  assert.match(hostedDomSource, /one\("\[data-billing-copy\]"\)\.textContent/u);
-  assert.doesNotMatch(hostedDomSource, /one\("\[data-billing-copy\]"\)\?\.textContent/u);
-  assert.match(hostedDomSource, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/u);
-  assert.match(hostedDomSource, /firstField\.focus\(\{ preventScroll: true \}\)/u);
-});
-
-test("Abracadabra speaks as one operator instead of an invented team", () => {
-  assert.match(howHtml, /tell Zack which device and browser you used/u);
-  assert.match(hostedHowMarkup, /tell Zack which device and browser you used/u);
-  for (const source of [
-    hostedControlMarkup,
+  assert.match(hostedControlMarkup, /id="platform-status" role="status" aria-live="polite"/u);
+  assert.match(hostedControlMarkup, /data-registration-availability role="status"/u);
+  assert.match(hostedControlMarkup, /data-create-account disabled/u);
+  assert.match(
     hostedDomSource,
-    hostedCoreSource,
-    hostedHowMarkup,
-  ]) {
-    assert.doesNotMatch(source, /\b(?:we|us|our)\b|we[’'](?:ll|re)/iu);
-  }
+    /windowRef[\s\S]{0,100}?\.matchMedia\([\s\S]{0,100}?"\(prefers-reduced-motion: reduce\)"[\s\S]{0,100}?\.matches/u,
+  );
+  assert.match(hostedDomSource, /workroom\.after\(controlRoom\)/u);
 });
 
-test("UI implements memory-only history, undo, and sandbox preview without a free Download path", () => {
+test("account recovery and support stay tied to Site Sourcery instead of an invented team", () => {
+  assert.match(
+    hostedControlMarkup,
+    /Contact Site Sourcery for account recovery/u,
+  );
+  assert.doesNotMatch(
+    `${hostedControlMarkup}\n${hostedDomSource}\n${hostedCoreSource}`,
+    /our (?:team|staff)|contact the team|support team/iu,
+  );
+});
+
+test("UI keeps the free maker local while paid download remains account-gated", () => {
   for (const marker of [
     "var versions = []",
     "currentVersionIndex",
     "renderHistory",
-    "preview.srcdoc",
     "URL.createObjectURL",
     "URL.revokeObjectURL",
     "Previous version",
@@ -451,8 +421,10 @@ test("UI implements memory-only history, undo, and sandbox preview without a fre
   ]) {
     assert.ok(appSource.includes(marker) || pageHtml.includes(marker), marker);
   }
-  assert.doesNotMatch(pageHtml, /id="download-version"|Download this HTML/u);
   assert.doesNotMatch(appSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
+  assert.match(paidDownloadSource, /No account, no download/u);
+  assert.match(paidDownloadSource, /if \(accountApi && !accountApi\.get\(\)\)/u);
+  assert.match(paidDownloadSource, /a\.download = "your-page\.html"/u);
   assert.match(
     appSource,
     /currentStep === "truth" && event\.target !== truthConfirmed/u,
@@ -480,7 +452,7 @@ test("UI implements memory-only history, undo, and sandbox preview without a fre
     /\bsendBeacon\s*\(/u,
     /\bWebSocket\s*\(/u,
     /\bEventSource\s*\(/u,
-    /\b(?:localStorage|sessionStorage|indexedDB|serviceWorker)\b/u,
+    /\b(?:localStorage|indexedDB|serviceWorker)\b/u,
     /\bdocument\.cookie\b/u,
   ]) {
     assert.doesNotMatch(executable, pattern);
@@ -552,65 +524,40 @@ test("the local test adapter stays isolated and captures delayed drafts to their
   }
 });
 
-test("customer-domain proof creates a local owner handoff without claiming reviewer or provider effects", () => {
-  for (const marker of [
-    "Send proof for review",
-    "Ownership must be verified before this domain is connected.",
-    "data-domain-review-status",
-    "data-domain-review-receipt",
-    "requestAddressVerification",
-    "Domain-review handoff ",
-    "No reviewer was contacted and the address remains pending.",
-  ]) {
-    assert.ok(hostedControlMarkup.includes(marker) || controlSource.includes(marker), marker);
-  }
-  assert.doesNotMatch(hostedControlMarkup, /no reviewer is contacted and no provider record changes/iu);
+test("the current hosted customer room keeps domains and publishing outside the $5 Download", () => {
+  assert.match(hostedControlMarkup, /Need publishing or a domain too\?/u);
+  assert.match(hostedControlMarkup, /Those are separate from the \$5 file Download\./u);
   assert.doesNotMatch(
     hostedControlMarkup,
-    /review is rehearsed locally/iu,
+    /data-domain-stage|data-domain-submit|data-publish|Register domain|Publish this version/iu,
   );
-  assert.doesNotMatch(pageHtml, /data-domain-review-status|Send proof for review/u);
-  assert.match(
-    controlSource,
-    /platform\.requestAddressVerification\(\{[\s\S]*method:[\s\S]*reference:/u,
-  );
+  assert.match(hostedDomSource, /domainPurchase: false/u);
+  assert.match(hostedDomSource, /publishing: false/u);
 });
 
-test("project setup unlocks three small accessible steps and keeps internal lifecycle controls out of the customer flow", () => {
+test("hosted account, project, quote, and Download remain four ordered stages", () => {
   assert.deepEqual(
-    [...hostedControlMarkup.matchAll(/data-project-create-step="(\d)"/gu)].map((match) => match[1]),
-    ["1", "2", "3"],
+    [...hostedControlMarkup.matchAll(/data-customer-stage="([^"]+)"/gu)].map((match) => match[1]),
+    ["account", "project", "quote", "download"],
   );
-  for (const step of ["2", "3"]) {
+  assert.deepEqual(
+    [...hostedControlMarkup.matchAll(/data-customer-progress="([^"]+)"/gu)].map((match) => match[1]),
+    ["account", "project", "quote", "download"],
+  );
+  for (const stage of ["project", "quote", "download"]) {
     assert.match(
       hostedControlMarkup,
-      new RegExp(`data-project-create-step="${step}"[^>]*\\shidden\\sinert>`, "u"),
+      new RegExp(`data-customer-stage="${stage}"[^>]*\\shidden>`, "u"),
     );
   }
-  for (const marker of [
-    "Finish one short step to open the next.",
-    "data-project-step-next=\"2\"",
-    "data-project-step-next=\"3\"",
-    "data-project-step-back=\"1\"",
-    "data-project-step-back=\"2\"",
-    "data-project-step-status",
-  ]) {
-    assert.ok(hostedControlMarkup.includes(marker), marker);
-  }
-  for (const marker of [
-    "projectStepError",
-    "validAddressLabel",
-    "validDomain",
-    "data-abracadabra-progressive-ready",
-    "aria-current\", \"step",
-  ]) {
-    assert.ok(controlSource.includes(marker), marker);
-  }
+  assert.match(hostedDomSource, /function setStage\(name\)/u);
+  assert.match(hostedDomSource, /data-customer-progress/u);
+  assert.match(hostedDomSource, /aria-current",\s*"step"/u);
   assert.doesNotMatch(
     hostedControlMarkup,
     /Internal lifecycle test|Test plan state|Test missed payment|Test suspension|Test deletion|data-internal-control/iu,
   );
-  assert.doesNotMatch(pageHtml, /data-project-create-step|data-internal-control/u);
+  assert.doesNotMatch(pageHtml, /data-customer-stage|data-internal-control/u);
   assert.match(
     pageHtml,
     /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
@@ -620,37 +567,30 @@ test("project setup unlocks three small accessible steps and keeps internal life
   assert.doesNotMatch(controlSource, /\{ localRehearsal: true \}/u);
 });
 
-test("hosted domain purchase reveals only the next of four steps and blocks duplicate payment starts", async () => {
-  const hostedDom = await readFile(
-    new URL("../../abracadabra/app/abracadabra-hosted-control-dom.js", import.meta.url),
-    "utf8",
-  );
-  for (const step of ["1", "2", "3", "4"]) {
-    assert.match(hostedDom, new RegExp(`"data-domain-stage": "${step}"`, "u"));
-  }
+test("hosted Download requires the exact server quote and exposes no direct checkout URL", () => {
   for (const marker of [
-    "Buy a domain without leaving Site Sourcery.",
-    "You are the owner.",
-    "Finish one step to open the next.",
-    "Payment is authorized first.",
-    "The name, price, and owner are checked again before the registration is submitted.",
-    "paymentButton.disabled = !consentReady || !state.project || orderReady",
+    'text(quote.offerId) !== "spark_download"',
+    "quote.project && quote.project.projectId",
+    "quote.version && quote.version.versionId",
+    "data-request-download-quote",
+    "data-accept-download-quote",
+    "data-continue-download-payment",
   ]) {
-    assert.ok(hostedDom.includes(marker), marker);
+    assert.ok(hostedDomSource.includes(marker) || hostedControlMarkup.includes(marker), marker);
   }
-  assert.match(
-    hostedDom,
-    /stage\.hidden = !active;[\s\S]*stage\.setAttribute\("inert", ""\)/u,
+  assert.doesNotMatch(
+    `${hostedControlMarkup}\n${hostedDomSource}`,
+    /https:\/\/buy\.stripe\.com\//u,
   );
 });
 
-test("public page keeps current contact, legal identity, and only the accepted $5 amount", () => {
+test("maker prototype keeps canonical contact, legal identity, and catalog amounts", () => {
   assert.match(pageHtml, /tel:\+18562441220/u);
   assert.match(pageHtml, /\(856\) 244-1220/u);
   assert.match(pageHtml, /mailto:sitesourcery@proton\.me/u);
   assert.match(
     pageHtml,
-    /Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY\. Desiderata Labs LLC is the legal seller\./u,
+    /Desiderata Labs LLC · DBA Site Sourcery/u,
   );
   for (const pattern of [
     /\bcoming soon\b/iu,
@@ -658,9 +598,19 @@ test("public page keeps current contact, legal identity, and only the accepted $
     /\bwaitlist\b/iu,
     /\bsubscribe\b/iu,
     /"@type"\s*:\s*"Offer"/iu,
-    /\b(?:checkout|buy now|order now|live in minutes)\b/iu,
+    /\b(?:buy now|order now|live in minutes)\b/iu,
   ]) {
     assert.doesNotMatch(pageHtml, pattern);
   }
-  assert.deepEqual(pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu), ["$5"]);
+  assert.deepEqual(
+    [...new Set(
+      (pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu) ?? [])
+        .map((amount) => Number(amount.replace(/[^\d.]/gu, ""))),
+    )].sort((left, right) => left - right),
+    [5, 25],
+  );
+  assert.equal(
+    pageHtml.split("https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00").length - 1,
+    1,
+  );
 });

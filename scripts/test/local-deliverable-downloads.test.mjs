@@ -3,7 +3,6 @@ import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(
@@ -18,18 +17,10 @@ const makerPath = path.join(
   "abracadabra/app/abracadabra-app.js"
 );
 const viewerPath = path.join(projectRoot, "abracadabra/site/viewer.js");
-const hivePath = path.join(projectRoot, "hive/hive-planner.js");
-const [makerSource, viewerSource, hiveSource] = await Promise.all([
+const [makerSource, viewerSource] = await Promise.all([
   readFile(makerPath, "utf8"),
   readFile(viewerPath, "utf8"),
-  readFile(hivePath, "utf8"),
 ]);
-
-function loadHivePlanner() {
-  const context = vm.createContext({});
-  new vm.Script(hiveSource, { filename: hivePath }).runInContext(context);
-  return context.SiteSourceryHivePlanner;
-}
 
 function deliveryHarness(initialFailure = "") {
   let failure = initialFailure;
@@ -128,7 +119,6 @@ function deliveryHarness(initialFailure = "") {
 
 const makerOpenFailure = "The working page could not open. Nothing was changed. Select Open again to retry.";
 const viewerFailure = "The download could not start. Nothing was downloaded. Select Download again to retry.";
-const hiveFailure = "The plan download could not start. Nothing was downloaded. Select Download again to retry.";
 
 const providers = [
   {
@@ -147,17 +137,6 @@ const providers = [
     },
     name: "local viewer export",
     success: "Download started. Check your Downloads folder.",
-  },
-  {
-    failure: hiveFailure,
-    invoke(environment, button, status) {
-      return loadHivePlanner().downloadBlueprint("booking", environment, {
-        button,
-        status,
-      });
-    },
-    name: "Hive JSON download",
-    success: "Plan download started. No workflow was activated.",
   },
 ];
 
@@ -271,28 +250,7 @@ for (const failure of ["blob", "url", "open", "popup"]) {
   });
 }
 
-test("Hive download contains the selected deterministic JSON blueprint", () => {
-  const harness = deliveryHarness();
-
-  assert.equal(
-    providers[1].invoke(
-      harness.environment,
-      { disabled: false },
-      { textContent: "" }
-    ),
-    true
-  );
-  const payload = JSON.parse(harness.trace.blobs[0].parts.join(""));
-  assert.equal(payload.schema, "sitesourcery.hive-blueprint.v1");
-  assert.equal(payload.cell.id, "booking");
-  assert.equal(payload.liveIntegration, false);
-  assert.equal(
-    harness.trace.links[0].download,
-    "hive-booking-blueprint.json"
-  );
-});
-
-test("free Abracadabra preview has no direct Download handler while paid/local exports stay guarded", () => {
+test("free Abracadabra preview has no direct Download handler while local exports stay guarded", () => {
   assert.doesNotMatch(makerSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
   assert.match(
     makerSource,
@@ -301,9 +259,5 @@ test("free Abracadabra preview has no direct Download handler while paid/local e
   assert.match(
     viewerSource,
     /function downloadExport\(record, button\)[\s\S]*?return deliverLocalFile\(window,[\s\S]*?function showResolutionFailure\(\)/u
-  );
-  assert.match(
-    hiveSource,
-    /fields\.download\.addEventListener\("click", function \(\) \{[\s\S]*?downloadBlueprint\(cellId, global,/u
   );
 });

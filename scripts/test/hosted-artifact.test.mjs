@@ -207,6 +207,13 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     assert.equal(publicFileAllowlist.includes(browserBridgeFile), true);
     assert.equal(hostedFileAllowlist.includes(browserBridgeFile), false);
   }
+  for (const domainSearchDependency of [
+    "domains/domain-prices.json",
+    "domains/domain-search.js",
+  ]) {
+    assert.equal(publicFileAllowlist.includes(domainSearchDependency), true);
+    assert.equal(hostedFileAllowlist.includes(domainSearchDependency), true);
+  }
 
   for (const slot of hostedTruthSlots) {
     const source = await readFile(path.join(ROOT, slot.file), "utf8");

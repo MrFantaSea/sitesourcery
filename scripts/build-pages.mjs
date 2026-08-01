@@ -62,6 +62,7 @@ export const publicFileAllowlist = Object.freeze([
   "custom/index.html",
   "custom/process/index.html",
   "custom/scope/index.html",
+  "domains/domain-prices.json",
   "domains/domain-search.js",
   "domains/index.html",
   "faq.html",
