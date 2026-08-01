@@ -513,3 +513,12 @@
 .spark-modal-x{position:absolute;top:.6rem;right:.6rem;width:2rem;height:2rem;border:1px solid rgba(242,206,131,.5);border-radius:50%;color:#f2ce83;background:rgba(16,10,26,.6);cursor:pointer}
 .spark-modal-list{margin:.8rem 0 0;padding:0 0 0 1.1rem;display:grid;gap:.55rem;font-size:.88rem;line-height:1.5}
 .spark-modal-list li::marker{content:"\2726  ";color:#f2ce83}
+
+/* Phone: the rail folds two-by-two instead of cramming four across, and the
+   boot toast stands on its own glass. */
+@media (max-width:40rem){
+  .spark-progress{grid-template-columns:repeat(2,1fr)}
+  .spark-progress li:nth-child(-n+2){border-bottom:1px solid var(--spark-line)}
+  .spark-progress li:nth-child(3){border-left:0}
+}
+.spark-boot{border:1px solid rgba(242,206,131,.4);border-radius:.8rem;background:rgba(14,9,22,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
