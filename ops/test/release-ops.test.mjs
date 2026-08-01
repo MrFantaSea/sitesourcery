@@ -324,8 +324,24 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
     hostedEnvironment,
     /^SITESOURCERY_RECOVERY_MAIL_MODE=held$/mu
   );
+  assert.match(
+    hostedEnvironment,
+    /^SITESOURCERY_REGISTRATION_TRANSPORT_MODULE=\/opt\/sitesourcery\/current\/server\/hosted\/resend-mail-transport\.mjs$/mu
+  );
+  assert.match(
+    hostedEnvironment,
+    /^SITESOURCERY_RECOVERY_TRANSPORT_MODULE=\/opt\/sitesourcery\/current\/server\/hosted\/resend-mail-transport\.mjs$/mu
+  );
+  assert.match(
+    hostedEnvironment,
+    /^SITESOURCERY_RESEND_API_KEY=replace-with-secret-reference$/mu
+  );
+  assert.match(
+    hostedEnvironment,
+    /^SITESOURCERY_RESEND_DOMAIN_ID=replace-with-resend-domain-uuid$/mu
+  );
   assert.doesNotMatch(
     hostedEnvironment,
-    /sk_(?:live|test)_|whsec_[A-Za-z0-9]/u
+    /sk_(?:live|test)_|whsec_[A-Za-z0-9]|\bre_[A-Za-z0-9_-]{16,}/u
   );
 });

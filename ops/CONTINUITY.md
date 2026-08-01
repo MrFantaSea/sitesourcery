@@ -25,11 +25,15 @@ these are OWNER RULINGS and open work, not suggestions.
   ambiguous sends stop in a terminal reconciliation state. The fence
   stores no recipient, token, or action URL and has passed a fresh 10/10
   disposable-PostgreSQL proof plus the full local gate.
-- Production account mail remains HELD. No provider account, sender,
-  DNS record, deployment, payment activation, or push has been changed.
-  The next bounded owner decision is the transactional-mail provider and
-  exact sender address; only then should its existing port adapter be
-  implemented and verified.
+- Zack approved Resend, `accounts@sitesourcery.com`, and the bounded sending
+  DNS scope. The reviewed local adapter now covers registration and recovery,
+  verifies live domain/SPF/DKIM/tracking state, uses provider idempotency, and
+  rejects off-site action links. Its mocked provider suite and the complete
+  repository gate are green (`100` hosted passes plus two expected PostgreSQL
+  skips). `ops/RESEND-SETUP.md` is the one activation checklist.
+- Production account mail remains HELD. No Resend account, API key, DNS
+  record, real email, deployment, payment activation, or push has been
+  changed. External provider setup and the private live-inbox proof remain.
 - Claude remains a non-writing reviewer unless Zack or Codex gives one
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.

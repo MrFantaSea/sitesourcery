@@ -80,6 +80,20 @@ Production transport code is loaded only from the absolute path in
 by `recovery-mail-port.mjs`. Merely naming a module does not make it ready: its
 readiness result must be both `ready` and `verified`.
 
+The approved production adapter is `resend-mail-transport.mjs`; the same
+absolute module path is used for registration and recovery. It sends from
+`Site Sourcery <accounts@sitesourcery.com>` with replies directed to
+`sitesourcery@proton.me`. It requires `SITESOURCERY_RESEND_API_KEY` and the
+exact `SITESOURCERY_RESEND_DOMAIN_ID`. Readiness fails closed unless Resend's
+live domain response identifies `sitesourcery.com`, reports sending enabled,
+reports the domain and all SPF/DKIM records verified, and reports both open and
+click tracking disabled. Provider errors and response bodies are never copied
+into public errors.
+
+Activation remains a separate operator step. Follow `ops/RESEND-SETUP.md`; do
+not change either mail mode from `held` until its DNS and private end-to-end
+proof are complete.
+
 No registration or recovery token, recipient, or action URL is included in
 public API responses, startup output, or durable provider-receipt facts.
 
