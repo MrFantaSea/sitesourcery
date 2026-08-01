@@ -11,7 +11,9 @@ The paid states are session flags set by Stripe's redirect - the same doors
 can be opened by hand for testing (each applies to that TAB until closed):
 - Simulate the $5 download tier:  /abracadabra/app/?paid=1
 - Simulate Alakazam active:       /abracadabra/app/?alakazam=1
-Honor-gates by design; the human provisioning step is the real enforcement.
+- Forget the browser account:     /abracadabra/app/?account=reset
+Honor-gates by design; the machinery (accounts, then the platform) is the
+real product - the owner is the backstop, not the mechanism.
 
 ## Standing rulings (never drift)
 
@@ -24,6 +26,16 @@ Honor-gates by design; the human provisioning step is the real enforcement.
   navigation (abracadabra.tabwork key) - required so paying at Stripe
   does not destroy the page being paid for. Same-tab restore is not
   cross-visit memory; a new tab always starts cold.
+- **ACCOUNT BEFORE PAY (2026-08-01)**: "you have to make an account right
+  before you pay... or in the same sweep. No way should you be able to
+  download without having an account." The $5 press opens the account
+  panel (email -> Create my account & pay $5, one sweep) and goes on to
+  Stripe; the download button refuses without an account and offers the
+  claim panel. Browser account v1: localStorage abracadabra.account +
+  .account.work - work and unlock ride the account across tabs in this
+  browser; abracadabra-account.js loads BEFORE the app and seeds the tab.
+  Free with no account stays tab-only (the original ruling). Server
+  accounts + operator back end = task #21; the sim workflow feeds it.
 - **The gate ladder**: FREE = make + preview (Crystal/Hearth/Midnight).
   **$5 download** = the file (in-app unlock via Stripe redirect ?paid=1) +
   the style kit (6 accents, type pairing, edges) + it UNLOCKS the Go-live

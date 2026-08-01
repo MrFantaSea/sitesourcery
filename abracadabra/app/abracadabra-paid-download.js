@@ -125,6 +125,22 @@
     boot();
   }
 
+  /* FOUNDER ORDER: the account is made right before you pay - one sweep.
+     A visitor with no account who presses the $5 gets the account panel,
+     then goes straight on to Stripe. An existing account pays directly. */
+  var accountApi = window.SiteSourceryAccount || null;
+  var freeGate = document.querySelector(".spark-save-gate");
+  if (accountApi && freeGate && !paid) {
+    var payAnchor = freeGate.querySelector('a[href="https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00"]');
+    if (payAnchor) {
+      payAnchor.addEventListener("click", function (event) {
+        if (accountApi.get()) return; // account exists - straight to pay
+        event.preventDefault();
+        accountApi.openPanel(freeGate, payAnchor, "pay", payAnchor.getAttribute("href"));
+      });
+    }
+  }
+
   if (!paid) return; // entitlements above already ran for the free state
 
   var gate = document.querySelector(".spark-save-gate");
@@ -154,6 +170,11 @@
   }
 
   button.addEventListener("click", function () {
+    // No account, no download - the file belongs to an account (founder order).
+    if (accountApi && !accountApi.get()) {
+      accountApi.openPanel(gate, button, "claim", null, function () { button.click(); });
+      return;
+    }
     var preview = document.getElementById("spark-preview");
     var src = preview ? preview.getAttribute("src") : "";
     if (!src) {
