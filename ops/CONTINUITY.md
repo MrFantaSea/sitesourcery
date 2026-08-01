@@ -1,4 +1,4 @@
-# CONTINUITY — the session ledger (updated 2026-08-01, pre-compaction)
+# CONTINUITY — the session ledger (updated 2026-08-01, hosted staging proven)
 
 Written so no ruling, promise, or open thread is lost when the working
 conversation is condensed. If you are an assistant reading this fresh:
@@ -9,17 +9,31 @@ these are OWNER RULINGS and open work, not suggestions.
 - Today remains Site Sourcery only. DAARX, System Sourcery, HQ app
   weaving, and field-Mac integration are parked until the website and
   its existing hosted backend are complete.
+- Exact verified application checkpoint: `d7c33c7e4ec7623f63249e0dc5b3d2951e781212`
+  (`Install reviewed hosted legal authority`). The branch is pushed Mac to
+  Dell to GitHub and is deployed as an immutable release on Zen at
+  `https://simbiotechzen.tail85d878.ts.net`. Production
+  `sitesourcery.com` remains on the prior GitHub Pages deployment.
 - The shipped maker now uses the existing `server/hosted` account and
   project authority instead of treating the browser bridge as final.
   Account creation precedes payment, hosted session authority stays in
   secure cookies, and the release gate proves the shipped account and
   project journey. Checkpoints: `c4bf090`, `d276753`, `c5c2178`, and
   `4c14270`.
-- The full local gate at `4c14270` is green: 263 current Node tests,
-  19 self-host tests, 85 hosted tests (plus two expected PostgreSQL-env
-  skips), 21 ops tests, an exact 78-file public artifact, and all 15
-  hosted routes at 320/390/1440 widths. A separate exact-Chrome,
-  disposable-PostgreSQL customer journey also passes 10/10.
+- The current release gate is green: 263 current Node tests, 19 self-host
+  tests, 106 hosted-service passes plus two expected PostgreSQL-env skips,
+  21 ops tests, exact public and hosted artifacts, and all 15 hosted routes
+  at 320/390/1440 widths. Migration 000 through 021 executed and verified on
+  a fresh disposable PostgreSQL database before that database was removed.
+- The real HTTPS staging customer journey is complete. An owner-controlled
+  Proton plus-alias received delivered registration and recovery messages;
+  activation, password reset, secure-cookie sign-in, project creation, draft
+  persistence, two accepted versions, sign-out/sign-in, project reopen, and
+  the exact held `$5.00 USD` quote all passed with zero browser errors and no
+  payment, domain, or publication request. Canonical PostgreSQL contains one
+  user, one organization, one project, two accepted versions, all three exact
+  legal acceptances, one held Download quote, and one active session. See
+  `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md`.
 - Recovery delivery is now durably reserved before any mail-provider
   effect. Delivered requests replay without another send; interrupted or
   ambiguous sends stop in a terminal reconciliation state. The fence
@@ -29,25 +43,22 @@ these are OWNER RULINGS and open work, not suggestions.
   DNS scope. The reviewed local adapter now covers registration and recovery,
   verifies live domain/SPF/DKIM/tracking state, uses provider idempotency, and
   rejects off-site action links. Its mocked provider suite and the complete
-  repository gate are green (`100` hosted passes plus two expected PostgreSQL
+  repository gate are green (`106` hosted passes plus two expected PostgreSQL
   skips). `ops/RESEND-SETUP.md` is the one activation checklist.
-- Production account mail remains HELD. The owner-controlled Resend account,
+- Production account mail remains HELD at `sitesourcery.com`; isolated HTTPS
+  staging account mail is active and proven. The owner-controlled Resend account,
   exact sending DNS, verified domain, and dedicated owner-approved API key now
   exist. The exact domain UUID is
   `b7de4950-b5dc-43d2-8a29-847685dd41d6`; an earlier scratch note omitted its
   final `6`, and the adapter's UUID check stopped before any provider request.
   Live readiness now passes for the exact verified domain, SPF/DKIM, sending
-  capability, and disabled open/click tracking. The key is staged in the
-  owner's Mac login Keychain until the root-owned production environment
-  exists. Two bounded proof messages were later sent, but both customer action
-  links reached a GitHub Pages 404 because the new hosted app is not deployed.
-  Provider delivery and disposable-PostgreSQL replay fencing passed; customer
-  acceptance did not, so production mail remains HELD and the private proof is
-  not complete. The remaining work is to deploy the hosted page and same-origin
-  API, then complete both real browser actions. No deployment, payment
-  activation, publication, or push has occurred.
-  `ops/RESEND-VERIFICATION-2026-08-01.md` records the non-secret checkpoint and
-  failed customer-link attempt.
+  capability, and disabled open/click tracking. The key exists only in Zen's
+  private staging environment file (`0600`); inspection found no corresponding
+  Mac Keychain item, so the earlier Keychain note was inaccurate. The first
+  public-link attempt did hit the old GitHub Pages 404, but the later isolated
+  staging proof completed both customer actions. Production still needs its own
+  exact action base, same-origin runtime, and post-cutover proof before its mail
+  modes move. `ops/RESEND-VERIFICATION-2026-08-01.md` records both attempts.
 - Claude remains a non-writing reviewer unless Zack or Codex gives one
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.
@@ -137,9 +148,12 @@ real product - the owner is the backstop, not the mechanism.
   EMPTY Alakazam room (vessel panel + one door into the ritual), never on
   the wizard.
 - **Push gate**: owner will push only a "real, working, comprehensible,
-  logical" site. NOTHING pushed yet; live sitesourcery.com still runs the
-  old build. A deploy allowlist MUST exclude /server/, /scripts/, /ops/,
-  BUILD.md, node_modules before any push.
+  logical" site. The exact candidate branch is now pushed and its explicit
+  hosted artifact allowlist is proven on isolated HTTPS staging. Live
+  `sitesourcery.com` still runs the old GitHub Pages build; production cutover
+  has not happened. Static deployment must still publish only the generated
+  artifact, never `/server/`, `/scripts/`, `/ops/`, `BUILD.md`, or
+  `node_modules`.
 
 ## Money rails (all live, count pinned at 5 by the checker)
 
@@ -154,8 +168,11 @@ real product - the owner is the backstop, not the mechanism.
 
 ## Open decisions (OWNER's — ask, don't assume)
 
-1. **Deploy target**: which repo/host serves sitesourcery.com? Asked twice,
-   never answered. Blocks the push.
+1. **Production deploy target**: isolated staging is resolved on Zen. The
+   candidate fleet plan points the production app at Dell with HQ recovery,
+   but that durable production runtime, reverse proxy, backup/restore evidence,
+   and DNS cutover are not installed yet. This no longer blocks branch or
+   staging pushes; it blocks replacing GitHub Pages in production.
 2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
    (his design-lock); needs his one-line ok.
 3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the
@@ -164,18 +181,15 @@ real product - the owner is the backstop, not the mechanism.
 4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
 5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
    approved in spirit, executes during the Sorcery walk.
-6. **Accounts: DECIDED, not open** (2026-08-01). Founder order, his words:
+6. **Accounts: DECIDED, staged, not open** (2026-08-01). Founder order, his words:
    "Clients need accounts, and we need a client account back end created
    also because we are the site provider... if they call me for help...
    Accounts are needed." And: "The point is to make the account part
-   real. We're trying to be in business here." => task #21: customer
-   accounts (created at the $5; account gates persistence, exactly his
-   original ruling) + an OPERATOR back end (search by email/phone, see
-   pages/versions/paid state, fix things on a support call) + Stripe
-   webhook flipping entitlements server-side. Bridge first: browser-
-   local account v1 so "$5 download and account creation" (his dictated
-   teaser copy, now live in the kit) is true tonight. Only open piece:
-   WHERE production runs - the same deploy-target question. Lesson
+   real. We're trying to be in business here." The canonical Node/PostgreSQL
+   account, organization, project, draft, version, recovery, and held-quote
+   path is now real and proven on HTTPS staging. Remaining task #21 scope is
+   production operation, payment-backed entitlements, and the operator/HQ
+   client-services view; do not rebuild those as another backend. Lesson
    recorded: when he dictates copy naming something unbuilt, that is a
    BUILD ORDER for the thing, not a wording problem - build the closest
    true version immediately and say what remains, never water down his

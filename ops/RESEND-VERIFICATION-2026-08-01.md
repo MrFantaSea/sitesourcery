@@ -38,22 +38,25 @@ then passed.
   readiness retrieves the configured domain as well as sending account mail.
 - The key value was never printed or pasted into a chat, repository file,
   screenshot, or command output.
-- It is temporarily stored in the owner's Mac login Keychain as service
-  `sitesourcery-resend-production`, account `sitesourcery`; the clipboard was
-  cleared immediately afterward.
-- Before production deployment, it must move through a private channel into
-  `/etc/sitesourcery/hosted.env` on the selected host, owned by root with mode
-  `0600`. The temporary Keychain item can be removed only after the production
-  copy and readiness are proven.
+- It currently exists only in Zen's private staging environment file,
+  `/home/zentech/sitesourcery-staging/run/hosted.env`, with mode `0600`. Its
+  value has not entered Git, this evidence, a screenshot, or command output.
+- Inspection found no corresponding Mac login Keychain item. The earlier note
+  claiming one existed was inaccurate and is superseded by this checkpoint.
+- Production must receive the key through a private channel into the selected
+  host's production-only `0600` environment. Staging is not the production
+  secret store.
 
 ## Still held
 
-- Registration mail mode remains `held` in the public runtime.
-- Recovery mail mode remains `held` in the public runtime.
-- The complete customer-click proof in `ops/RESEND-SETUP.md` remains a launch
-  prerequisite.
+- Registration and recovery use the reviewed production Resend adapter only in
+  the isolated HTTPS staging runtime.
+- Production `sitesourcery.com` still serves GitHub Pages and has no same-origin
+  hosted API, so production registration and recovery remain held.
+- Production cutover must set both action bases to the exact production app and
+  repeat the post-cutover route/readiness proof before public account mail opens.
 
-## Private attempt — provider passed, customer path failed
+## First private attempt — provider passed, customer path failed
 
 At `2026-08-01T21:38:55Z`, the exact public action URL returned GitHub Pages
 HTTP `404`. Before that final public-route check existed, one registration and
@@ -73,6 +76,32 @@ mail proof even though provider and database checks passed. The account
 activated by the harness existed only inside the disposable proof database; no
 production account was created.
 
-The next proof must run through the deployed hosted app and same-origin API.
-No further real account mail should be treated as end-to-end evidence until
-the owner completes both actions in an ordinary browser.
+## Isolated HTTPS staging proof — complete
+
+By `2026-08-01T23:27:00Z`, exact commit
+`d7c33c7e4ec7623f63249e0dc5b3d2951e781212` was serving the hosted app and
+same-origin API at `https://simbiotechzen.tail85d878.ts.net`. Registration and
+activation had completed on the immediately preceding immutable staging
+release; after the upgrade, a reviewed real browser completed recovery and the
+persisted customer path using the same owner-controlled Proton plus-alias:
+
+- Resend reported the registration message delivered, the exact staging action
+  opened, and the canonical account activated.
+- Resend reported a new recovery message delivered; its exact staging action
+  reset the password, and ordinary sign-in succeeded.
+- The resulting session cookie was `Secure`, `HttpOnly`, `SameSite=Strict`, and
+  scoped to `/api/v1`; no session or token appeared in browser storage.
+- The same account created one project, saved an edited draft, accepted two
+  versions, reviewed the exact `$5.00 USD` Download quote, signed out and back
+  in, and reopened the persisted project.
+- Payment, domain purchasing, and publication remained held. The browser made
+  no request to those effect paths and reported zero errors.
+- Canonical PostgreSQL recorded one user, one organization, one project, two
+  accepted versions, three exact reviewed legal acceptances, one held Download
+  quote, and one active session.
+
+The private action-link helper matched the exact recipient, subject, request
+time, HTTPS origin/path/hash, and terminal provider delivery event. Neither
+action token nor password was printed or retained in this evidence. This
+completes the isolated staging proof; it does not claim that production has
+been cut over.

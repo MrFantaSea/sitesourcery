@@ -6,6 +6,14 @@ worktree at `~/sitesourcery-build`. The previous lane lived in
 `/private/tmp` that do not survive a reboot. Nothing was deleted to make this;
 every earlier branch and worktree is untouched.
 
+> Current implementation note (2026-08-01): this build diary predates the
+> hosted integration. Exact commit
+> `d7c33c7e4ec7623f63249e0dc5b3d2951e781212` now passes the real account,
+> recovery, project, version, and held `$5` quote journey on isolated HTTPS
+> staging. See `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md` and
+> `ops/CONTINUITY.md` for current operational truth. Production
+> `sitesourcery.com` remains unchanged.
+
 ## The product, as the owner settled it
 
 | | |
@@ -110,10 +118,11 @@ only for premium names, so costs must be synced and stamped until a feed exists.
 The markup rule is also unset: multiplier, floor, and handling fee are the
 owner's call.
 
-**4. Deployment ② does not exist yet.** `server/hosted` holds 87 tables —
-accounts, organizations, sessions, quotes, domain registrations, registrar
-debits — behind `PUBLICATION_HOLD`. The public site is static; accounts need a
-server and Postgres. Two deployments, and only the first is built.
+**4. Production deployment ② does not exist yet.** `server/hosted` now runs
+with canonical PostgreSQL on isolated HTTPS staging and its account/project
+journey is proven. Production still needs the durable app host, reverse proxy,
+backup/restore evidence, same-origin DNS cutover, and production verification;
+GitHub Pages cannot provide that backend.
 
 **5. Tax treatment is unreviewed** on all five sellable things.
 
@@ -122,5 +131,6 @@ server and Postgres. Two deployments, and only the first is built.
 - `npm run check` must pass before any part is called done.
 - A checkout link goes on a page only once the thing behind it can be delivered.
 - Every printed price must exist in `data/public-catalog.json`.
-- Nothing here has been pushed. `sitesourcery.com` still serves the old atelier
-  build, and replacing it is a founder decision.
+- The exact candidate branch is pushed and deployed to isolated staging.
+  `sitesourcery.com` still serves the old GitHub Pages build; production
+  replacement has not occurred.
