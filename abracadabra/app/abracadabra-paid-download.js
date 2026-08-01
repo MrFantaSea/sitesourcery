@@ -18,14 +18,14 @@
 
   var params = new URLSearchParams(location.search);
   if (params.get("paid") === "1") {
-    try { localStorage.setItem(KEY, "1"); } catch (_e) { /* private mode */ }
+    try { sessionStorage.setItem(KEY, "1"); } catch (_e) { /* private mode */ }
     params.delete("paid");
     var clean = location.pathname + (params.toString() ? "?" + params.toString() : "") + location.hash;
     history.replaceState(null, "", clean);
   }
 
   var paid = false;
-  try { paid = localStorage.getItem(KEY) === "1"; } catch (_e) { paid = params.get("paid") === "1"; }
+  try { paid = sessionStorage.getItem(KEY) === "1"; } catch (_e) { paid = params.get("paid") === "1"; }
   if (!paid) return;
 
   var gate = document.querySelector(".spark-save-gate");

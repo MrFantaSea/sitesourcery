@@ -757,9 +757,11 @@
     button.addEventListener("click", function () {
       var raw = collectRawFacts();
       var progressStep = button.getAttribute("data-validate-step");
+      // A next-button gates only what it names. The full-form gate lives on
+      // the contact step's button; un-named advances (the Look) are free.
       if (progressStep) {
         if (!validateProgressStep(progressStep, raw)) return;
-      } else if (!validate(raw)) return;
+      }
       setStep(button.getAttribute("data-next"));
     });
   });

@@ -23,7 +23,10 @@
 
   var platform;
   try {
-    platform = platformModule.createPlatform({ storage: window.localStorage });
+    // OWNER RULING (2026-08-01): work does not persist without an account.
+    // sessionStorage survives a refresh inside the tab and dies with it -
+    // no silent cross-visit memory of anyone's business details.
+    platform = platformModule.createPlatform({ storage: window.sessionStorage });
   } catch (_error) {
     status.textContent = "Saved projects are blocked in this browser. Allow local site data, then reload.";
     status.classList.add("is-error");
