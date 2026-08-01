@@ -8320,3 +8320,110 @@ li[id^="about-"]:target {
     background-position: left top, 0 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER REDESIGN of the vessel:
+   - The nameplates go big and wide-tracked; the serif verbs die with the
+     empty space they floated in.
+   - The word is no longer the button. The medallion on the seam is:
+     CLICK / TO / CONJURE - and the ENTIRE vessel is clickable around it.
+   --------------------------------------------------------------------------- */
+
+.lane-diptych {
+  cursor: pointer;
+}
+
+.lane-diptych::after {
+  content: none; /* the old ✦ mark - replaced by the medallion element */
+}
+
+.lane-name {
+  font-size: clamp(1.7rem, 3.1vw, 2.7rem);
+  letter-spacing: 0.24em;
+}
+
+.lane-diptych .lane-half .pcm-copy {
+  gap: 0.75rem;
+}
+
+/* The invisible hand: one link stretched across the whole vessel. */
+.vessel-link {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+}
+
+.vessel-link:focus-visible {
+  outline: 3px solid #f2ce83;
+  outline-offset: 4px;
+}
+
+/* The medallion: the vessel's face, riding the seam. */
+.conjure-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 8rem;
+  height: 8rem;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid rgba(242, 206, 131, 0.75);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(122, 79, 192, 0.28), transparent 60%),
+    #120c1e;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 5px rgba(18, 12, 30, 0.7),
+    0 0 2rem rgba(242, 206, 131, 0.35),
+    0 0.6rem 1.8rem rgba(8, 7, 12, 0.6);
+  animation: core-breathe 3.2s ease-in-out infinite;
+  transition: transform 0.25s ease;
+}
+
+.conjure-core span {
+  color: #f2ce83;
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.34em;
+  line-height: 1.35;
+  text-indent: 0.34em; /* recenters tracked caps */
+  text-transform: uppercase;
+}
+
+.conjure-core span:nth-child(2) {
+  font-size: 0.66rem;
+  color: rgba(242, 220, 176, 0.75);
+}
+
+@keyframes core-breathe {
+  0%, 100% { box-shadow: 0 0 0 5px rgba(18, 12, 30, 0.7), 0 0 1.6rem rgba(242, 206, 131, 0.3), 0 0.6rem 1.8rem rgba(8, 7, 12, 0.6); }
+  50%      { box-shadow: 0 0 0 5px rgba(18, 12, 30, 0.7), 0 0 3rem rgba(242, 206, 131, 0.6), 0 0.6rem 1.8rem rgba(8, 7, 12, 0.6); }
+}
+
+/* The whole box answers the hand: rim flares, medallion swells. */
+.vessel-link:hover ~ .conjure-core,
+.vessel-link:focus-visible ~ .conjure-core {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.lane-diptych:hover::before {
+  filter: drop-shadow(0 0 10px rgba(174, 112, 255, 0.4)) brightness(1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conjure-core {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* The quiet Sorcery escape centers under the vessel. */
+.abracadabra-page .closer-quiet {
+  max-width: none;
+  text-align: center;
+}
