@@ -31,9 +31,17 @@ these are OWNER RULINGS and open work, not suggestions.
   rejects off-site action links. Its mocked provider suite and the complete
   repository gate are green (`100` hosted passes plus two expected PostgreSQL
   skips). `ops/RESEND-SETUP.md` is the one activation checklist.
-- Production account mail remains HELD. No Resend account, API key, DNS
-  record, real email, deployment, payment activation, or push has been
-  changed. External provider setup and the private live-inbox proof remain.
+- Production account mail remains HELD. The owner-controlled Resend account,
+  exact sending DNS, verified domain, and dedicated owner-approved API key now
+  exist. The exact domain UUID is
+  `b7de4950-b5dc-43d2-8a29-847685dd41d6`; an earlier scratch note omitted its
+  final `6`, and the adapter's UUID check stopped before any provider request.
+  Live readiness now passes for the exact verified domain, SPF/DKIM, sending
+  capability, and disabled open/click tracking. The key is staged in the
+  owner's Mac login Keychain until the root-owned production environment
+  exists. No real email, deployment, payment activation, publication, or push
+  has occurred. `ops/RESEND-VERIFICATION-2026-08-01.md` records the non-secret
+  checkpoint; the private live-inbox/PostgreSQL proof remains.
 - Claude remains a non-writing reviewer unless Zack or Codex gives one
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.

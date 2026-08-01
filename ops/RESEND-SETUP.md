@@ -36,7 +36,10 @@ publication, domain purchasing, or changes to inbound root-domain mail.
    API key.
 7. Create a dedicated Resend API key for this runtime. The current readiness
    check needs permission to retrieve the configured domain as well as send
-   email. Store the key only in the root-owned production environment file.
+   email. Store it in the root-owned production environment file. Before that
+   environment exists, it may be staged only in the owner's login Keychain;
+   remove that temporary item only after the production copy and readiness are
+   proven.
 8. Record the Resend domain UUID as `SITESOURCERY_RESEND_DOMAIN_ID`. Store no
    recipient, token, action URL, or API key in Git, chat, screenshots, or an
    operator note.
