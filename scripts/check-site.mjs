@@ -22,7 +22,8 @@
  * prices at all. Showing them is the point; showing a stale one is the risk.
  */
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, access } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +43,14 @@ const CANONICAL_MAILBOX = "sitesourcery@proton.me";
  * apply to them.
  */
 const APP_ROUTES = new Set(["/abracadabra/site/"]);
+
+/**
+ * Root-level HTML that is not a route folder: the 404 page, the print flyer,
+ * and legacy single-file redirects. The review proved these rot invisibly
+ * when only index.html files are read.
+ */
+const NAV_EXEMPT_FILES = new Set(["flyer.html"]); // print artifact, no chrome
+const CANONICAL_EXEMPT = new Set(["404.html", "flyer.html"]);
 
 /**
  * The only destinations allowed to leave sitesourcery.com. Kept as an explicit
@@ -78,12 +87,17 @@ async function findPages(dir = ROOT, pages = []) {
       await findPages(path.join(dir, entry.name), pages);
     } else if (entry.name === "index.html") {
       pages.push(path.relative(ROOT, path.join(dir, entry.name)));
+    } else if (dir === ROOT && entry.name.endsWith(".html")) {
+      pages.push(entry.name);
     }
   }
   return pages;
 }
 
-const routeOf = (page) => "/" + page.slice(0, -"index.html".length);
+const routeOf = (page) =>
+  page.endsWith("index.html")
+    ? "/" + page.slice(0, -"index.html".length)
+    : "/" + page;
 
 // ------------------------------------------------------------------ catalog
 
@@ -203,6 +217,137 @@ function checkLinks(page, source, idsByRoute, routes) {
   }
 }
 
+/**
+ * A live page must declare itself as its own canonical home. The Responder
+ * shipped pointing Google at a 404 and nothing noticed; now something does.
+ */
+function checkCanonical(page, source) {
+  if (APP_ROUTES.has(routeOf(page)) || CANONICAL_EXEMPT.has(page)) return;
+  const expected = `<link rel="canonical" href="https://sitesourcery.com${routeOf(page)}">`;
+  if (!source.includes(expected)) {
+    fail(page, `canonical must be ${JSON.stringify(`https://sitesourcery.com${routeOf(page)}`)}`);
+  }
+}
+
+/**
+ * Every site-absolute resource a page loads must exist on disk. The planner
+ * script pointed at /hive/ for days; a checker that reads hrefs but not srcs
+ * is blind in exactly one eye.
+ */
+const RESOURCE = /(?:src|href|srcset)="(\/[^"]+?)"/gu;
+
+async function checkResources(page, source) {
+  for (const [, raw] of source.matchAll(RESOURCE)) {
+    for (const candidate of raw.split(",")) {
+      const clean = candidate.trim().split(/[\s?#]/u)[0];
+      if (!clean || !/\.[a-z0-9]+$/iu.test(clean)) continue; // routes handled elsewhere
+      try {
+        await access(path.join(ROOT, clean.slice(1)));
+      } catch {
+        fail(page, `loads ${JSON.stringify(clean)}, which does not exist on disk`);
+      }
+    }
+  }
+  for (const [, url] of source.matchAll(/content="https:\/\/sitesourcery\.com(\/[^"]+\.[a-z0-9]+)"/gu)) {
+    try {
+      await access(path.join(ROOT, url.slice(1)));
+    } catch {
+      fail(page, `meta points at ${JSON.stringify(url)}, which does not exist on disk`);
+    }
+  }
+}
+
+/**
+ * Money truth: the commerce ledger and the pages must agree exactly. Every
+ * checkout link on a page must be a registered sellable rail, and the rail
+ * count is pinned so a rail can neither vanish nor appear unnoticed.
+ */
+async function checkRails(pagesSources) {
+  const { sellableNow } = await import(path.join(ROOT, "server/commerce/rails.mjs"));
+  const rails = sellableNow();
+  if (rails.length !== 5) {
+    fail("server/commerce/rails.mjs", `expected exactly 5 sellable rails, found ${rails.length}`);
+  }
+  const registered = new Set(rails.map((rail) => rail.checkoutUrl));
+  for (const [page, source] of pagesSources) {
+    for (const [, href] of source.matchAll(HREF)) {
+      if (!href.startsWith(CHECKOUT_ORIGIN)) continue;
+      const bare = href.split("?")[0];
+      if (!registered.has(bare)) {
+        fail(page, `checkout link ${JSON.stringify(bare)} is not a registered sellable rail`);
+      }
+    }
+  }
+}
+
+/**
+ * Truth-slot seals: the bytes between every slot's markers must still match
+ * the reviewed manifest. Edits to sealed copy without a reseal fail loudly
+ * here instead of silently drifting from the hosted counterpart.
+ */
+async function checkSeals() {
+  const MANIFEST = path.join(ROOT, "scripts/hosted-truth/manifest.mjs");
+  let slots;
+  try {
+    ({ hostedTruthSlots: slots } = await import(MANIFEST));
+  } catch {
+    return; // no manifest in this tree shape; nothing to verify
+  }
+  const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+  const markerFor = (id, kind, edge) =>
+    kind === "js"
+      ? `/* sitesourcery:truth-slot:${id}:${edge} */`
+      : `<!-- sitesourcery:truth-slot:${id}:${edge} -->`;
+  for (const slot of slots) {
+    let source;
+    try {
+      source = await readFile(path.join(ROOT, slot.file), "utf8");
+    } catch {
+      fail(slot.file, `sealed file missing for slot ${slot.id}`);
+      continue;
+    }
+    const start = source.indexOf(markerFor(slot.id, slot.kind, "start"));
+    const end = source.indexOf(markerFor(slot.id, slot.kind, "end"));
+    if (start < 0 || end < 0) {
+      fail(slot.file, `slot ${slot.id} markers missing`);
+      continue;
+    }
+    const body = source.slice(start + markerFor(slot.id, slot.kind, "start").length, end);
+    if (sha256(body) !== slot.sourceSha256) {
+      fail(slot.file, `slot ${slot.id} changed without a reseal (run reseal-v2)`);
+    }
+  }
+}
+
+/**
+ * The sitemap is the third route truth and it is not allowed to disagree with
+ * the tree: exactly the live, indexable folder routes, nothing else.
+ */
+async function checkSitemap(pages, sources) {
+  let xml;
+  try {
+    xml = await readFile(path.join(ROOT, "sitemap.xml"), "utf8");
+  } catch {
+    return fail("sitemap.xml", "missing");
+  }
+  const listed = new Set(
+    [...xml.matchAll(/<loc>https:\/\/sitesourcery\.com([^<]*)<\/loc>/gu)].map(([, route]) => route),
+  );
+  const expected = new Set(
+    pages
+      .filter((page) => page.endsWith("index.html"))
+      .filter((page) => !isRedirect(sources.get(page)))
+      .filter((page) => !/name="robots"\s+content="[^"]*noindex/iu.test(sources.get(page)))
+      .map(routeOf),
+  );
+  for (const route of expected) {
+    if (!listed.has(route)) fail("sitemap.xml", `missing live route ${route}`);
+  }
+  for (const route of listed) {
+    if (!expected.has(route)) fail("sitemap.xml", `lists ${route}, which is not a live indexable route`);
+  }
+}
+
 // --------------------------------------------------------------------- main
 
 const pages = (await findPages()).sort();
@@ -229,13 +374,21 @@ for (const page of pages) {
     checkRedirect(page, source, routes);
     continue;
   }
-  const nav = checkNav(page, source, referenceNav);
-  referenceNav ??= nav;
+  if (!NAV_EXEMPT_FILES.has(page)) {
+    const nav = checkNav(page, source, referenceNav);
+    referenceNav ??= nav;
+  }
   checkContact(page, source);
   checkPrices(page, source, allowed);
   checkStatic(page, source);
   checkLinks(page, source, idsByRoute, routes);
+  checkCanonical(page, source);
+  await checkResources(page, source);
 }
+
+await checkRails(sources);
+await checkSeals();
+await checkSitemap(pages, sources);
 
 if (errors.length) {
   console.error(`Site checks failed (${errors.length}):`);
@@ -244,7 +397,8 @@ if (errors.length) {
 }
 
 console.log(
-  `Site checks passed: ${pages.length - redirectCount} live routes `
-  + `+ ${redirectCount} redirects, one shared nav, no dead links, `
-  + `${allowed.size} catalog prices, canonical phone and email.`,
+  `Site checks passed: ${pages.length - redirectCount} live pages `
+  + `+ ${redirectCount} redirects, one shared nav, no dead links or resources, `
+  + `${allowed.size} catalog prices, 5 sellable rails, seals fresh, `
+  + `sitemap exact, canonical phone, email, and rel=canonical.`,
 );
