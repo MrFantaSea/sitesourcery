@@ -25,10 +25,14 @@
     warm: 'body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}',
     arcane: 'body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}h1{font-style:normal;letter-spacing:-.03em}'
   });
+  /* Three edges a customer can tell apart from across the room:
+     soft = the look's own rounding; sharp = square and assertive;
+     ornate = a double frame on the page itself, the cards, and a
+     ringed action. Owner redline 2026-08-01: they were too alike. */
   var BORDER_CSS = Object.freeze({
     soft: "",
-    sharp: ":root{--radius:4px}.action{border-radius:6px}",
-    ornate: ":root{--radius:18px}.offers li,.facts>div{border-width:3px;border-style:double}"
+    sharp: ":root{--radius:0}.action{border-radius:0}.offers li,.facts>div,.section .wrap{border-radius:0}.offers li,.facts>div{border-width:2px}",
+    ornate: ":root{--radius:12px}body{outline:3px double var(--line);outline-offset:-10px}.offers li,.facts>div{border-width:3px;border-style:double;border-color:var(--accent)}.action{box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--accent)}"
   });
   var BORDER_SET = new Set(["soft", "sharp", "ornate"]);
   var HANDLE_PATTERN = /^[A-Za-z0-9_.-]{1,30}$/;
