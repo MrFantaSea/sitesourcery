@@ -4,8 +4,16 @@ import test from "node:test";
 
 import {
   createConfiguredRegistrationMailPort,
-  createConfiguredRecoveryMailPort
+  createConfiguredRecoveryMailPort,
+  createJsonCatalogPort
 } from "../production-ports.mjs";
+
+test("an omitted catalog path selects the explicit held catalog port", async () => {
+  const catalog = await createJsonCatalogPort().current();
+  assert.equal(catalog.state, "hold");
+  assert.equal(catalog.catalogVersion, "unresolved");
+  assert.deepEqual(catalog.offers, []);
+});
 
 test("hosted startup creates each configured mail port exactly once", async () => {
   const source = await readFile(

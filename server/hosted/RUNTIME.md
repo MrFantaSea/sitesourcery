@@ -48,7 +48,9 @@ registrant-contact commands before the customer journey is complete.
 - `SITESOURCERY_IDENTITY_PEPPER`, base64 for at least 32 bytes
 - `SITESOURCERY_CONTACT_VAULT_KEY`, base64 for exactly 32 bytes
 - `SITESOURCERY_SPARK_COMPILER_SHA256`, the reviewed compiler source digest
-- `SITESOURCERY_OFFER_CATALOG_PATH`, the reviewed catalog JSON file
+- `SITESOURCERY_OFFER_CATALOG_PATH`, the reviewed approved catalog JSON file,
+  when commerce is enabled. Leave it unset to keep catalog publication, quotes,
+  and Checkout explicitly held while the account and project runtime operates.
 
 The data, export, port, base-domain, and PostgreSQL TLS environment variables
 have fail-closed defaults in `bin/server.mjs`. Both HTTP ports must be distinct,

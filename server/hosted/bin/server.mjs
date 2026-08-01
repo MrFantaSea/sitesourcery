@@ -266,9 +266,7 @@ async function start() {
     identity,
     compiler,
     catalogPort: createJsonCatalogPort(
-      requiredEnvironment(
-        "SITESOURCERY_OFFER_CATALOG_PATH"
-      )
+      process.env.SITESOURCERY_OFFER_CATALOG_PATH
     ),
     publicationPort,
     exportStore,

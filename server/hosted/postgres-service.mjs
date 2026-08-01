@@ -8606,12 +8606,17 @@ export function createCanonicalPostgresService({
           ]
         };
       } catch (error) {
+        const code =
+          error instanceof HostedError
+            ? error.code
+            : error?.code ?? "CATALOG_UNAVAILABLE";
         catalog = {
           ready: false,
-          code:
-            error instanceof HostedError
-              ? error.code
-              : error?.code ?? "CATALOG_UNAVAILABLE"
+          mode:
+            code === "catalog_unavailable"
+              ? "held"
+              : "unavailable",
+          code
         };
       }
       const publication =
@@ -8656,7 +8661,10 @@ export function createCanonicalPostgresService({
       return {
         ready:
           persistence.ready &&
-          catalog.ready &&
+          (
+            catalog.ready === true ||
+            catalog.mode === "held"
+          ) &&
           publication.ready !== false &&
           (
             recovery.mode !== "production" ||
