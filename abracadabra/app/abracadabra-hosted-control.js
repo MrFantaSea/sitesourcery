@@ -774,14 +774,42 @@
       var expectedSessionEpoch = sessionEpoch;
       var retryCall = function () {
         return task("createProject", async function () {
-          var payload = await api.createProject({
+          var request = {
             organizationId: organizationId,
             name: input && input.name,
-            address: input && input.address,
-            visibility: input && input.visibility,
-            accessPassword: input && input.accessPassword,
             acceptedTerms: input && input.acceptedTerms === true
-          }, { idempotencyKey: key });
+          };
+          if (
+            input &&
+            Object.prototype.hasOwnProperty.call(
+              input,
+              "address"
+            )
+          ) {
+            request.address = input.address;
+          }
+          if (
+            input &&
+            Object.prototype.hasOwnProperty.call(
+              input,
+              "visibility"
+            )
+          ) {
+            request.visibility = input.visibility;
+            if (
+              Object.prototype.hasOwnProperty.call(
+                input,
+                "accessPassword"
+              )
+            ) {
+              request.accessPassword =
+                input.accessPassword;
+            }
+          }
+          var payload = await api.createProject(
+            request,
+            { idempotencyKey: key }
+          );
           if (expectedSessionEpoch !== sessionEpoch) return null;
           var project = entityFrom(payload, "project");
           await refreshProjectsFor(organizationId, expectedSessionEpoch);

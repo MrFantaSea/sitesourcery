@@ -852,6 +852,78 @@ test("project switching commits only after the visible project accepts opening",
   assert.equal(subscriptionCalls, 0);
 });
 
+test("project creation omits absent options and preserves explicit settings", async () => {
+  let received = null;
+  const control = createHostedControl({
+    api: baseApi({
+      createProject: async (input, options) => {
+        received = { input, options };
+        return {
+          project: {
+            id: "project_created",
+            name: input.name,
+            draft: { revision: 1, rawFacts: {} },
+            versions: [],
+          },
+        };
+      },
+    }),
+    idempotencyFactory: () =>
+      "idem_create_project",
+  });
+
+  await control.boot();
+  await control.createProject({
+    name: "Customer preview",
+    acceptedTerms: true,
+  });
+
+  assert.deepEqual(received, {
+    input: {
+      organizationId: "org_1",
+      name: "Customer preview",
+      acceptedTerms: true,
+    },
+    options: {
+      idempotencyKey: "idem_create_project",
+    },
+  });
+  assert.equal(
+    Object.hasOwn(received.input, "address"),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(received.input, "visibility"),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(received.input, "accessPassword"),
+    false,
+  );
+
+  await control.createProject({
+    name: "Private customer preview",
+    acceptedTerms: true,
+    address: {
+      kind: "licensed",
+      label: "customer-preview",
+    },
+    visibility: "private",
+    accessPassword: "long private preview phrase",
+  });
+  assert.deepEqual(received.input, {
+    organizationId: "org_1",
+    name: "Private customer preview",
+    acceptedTerms: true,
+    address: {
+      kind: "licensed",
+      label: "customer-preview",
+    },
+    visibility: "private",
+    accessPassword: "long private preview phrase",
+  });
+});
+
 test("hosted mode never falls back to local authority after its first mutation", async () => {
   const pending = deferred();
   const control = createHostedControl({

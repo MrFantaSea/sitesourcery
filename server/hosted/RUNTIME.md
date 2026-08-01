@@ -83,6 +83,24 @@ readiness result must be both `ready` and `verified`.
 No registration or recovery token, recipient, or action URL is included in
 public API responses, startup output, or durable provider-receipt facts.
 
+## Isolated shipped-page account proof
+
+When `SITESOURCERY_PG_SERVICE_TEST_URL` names a new disposable PostgreSQL
+database, the service integration suite applies the ordered migrations and
+drives the reviewed `_hosted` page in the pinned browser through account
+creation, activation, project/version save, sign-out, and sign-in. It inspects
+the real cookie flags and PostgreSQL rows and refuses any payment, domain,
+publication, or rollback request during that browser journey.
+
+```sh
+SITESOURCERY_PG_SERVICE_TEST_URL=postgresql://test-role@127.0.0.1:5432/disposable_database \
+  node --test --test-concurrency=1 server/hosted/test/postgres-service.integration.test.mjs
+```
+
+The command mutates the supplied database. The caller must prove the database
+is disposable before the run and remove it afterward; the test never creates,
+drops, or substitutes a database on its own.
+
 ## Publication authorization
 
 Serving remains held when any configured hold file exists or when the separate

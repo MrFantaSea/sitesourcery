@@ -4,19 +4,23 @@ import {
   randomBytes,
   randomUUID
 } from "node:crypto";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import pg from "pg";
 
+import { buildHostedArtifact } from "../../../scripts/build-hosted.mjs";
 import { createFakeApprovedCatalog } from "../../commerce/adapters/fake.mjs";
 import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
+import { createNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import { createAesGcmContactVault } from "../production-ports.mjs";
 import {
@@ -29,6 +33,7 @@ import {
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
+import { openReviewedBrowser } from "./reviewed-browser-support.mjs";
 
 const { Pool } = pg;
 const require = createRequire(import.meta.url);
@@ -42,6 +47,25 @@ const MIGRATIONS = new URL(
   "../../data-plane/supabase/migrations/",
   import.meta.url
 );
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../.."
+);
+const HOSTED_ARTIFACT_ROOT = path.join(
+  REPOSITORY_ROOT,
+  "_hosted"
+);
+const HOSTED_CONTENT_TYPES = Object.freeze({
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".xml": "application/xml; charset=utf-8"
+});
 
 function createSameOriginBrowserFetch(api, origin) {
   const cookies = new Map();
@@ -81,6 +105,137 @@ function createSameOriginBrowserFetch(api, origin) {
       }
       return response;
     }
+  });
+}
+
+function hostedArtifactPath(pathname) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = decoded.endsWith("/")
+    ? `${decoded.replace(/^\/+/, "")}index.html`
+    : decoded.replace(/^\/+/, "");
+  if (!relative || relative.includes("\0")) return null;
+  const normalized = path.posix.normalize(relative);
+  if (
+    normalized !== relative ||
+    normalized === ".." ||
+    normalized.startsWith("../")
+  ) {
+    return null;
+  }
+  const resolved = path.resolve(
+    HOSTED_ARTIFACT_ROOT,
+    normalized
+  );
+  const prefix =
+    `${path.resolve(HOSTED_ARTIFACT_ROOT)}${path.sep}`;
+  return resolved.startsWith(prefix) ? resolved : null;
+}
+
+async function startHostedBrowserServer(api) {
+  await buildHostedArtifact({ root: REPOSITORY_ROOT });
+  const apiRequests = [];
+  const missingFiles = [];
+  const apiHandler = createNodeHandler(api);
+  const server = createServer((request, response) => {
+    let url;
+    try {
+      url = new URL(
+        request.url ?? "/",
+        "http://localhost"
+      );
+    } catch {
+      response.writeHead(400, {
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("Bad request");
+      return;
+    }
+    if (
+      url.pathname === "/api" ||
+      url.pathname.startsWith("/api/")
+    ) {
+      apiRequests.push({
+        method: String(request.method ?? "GET")
+          .toUpperCase(),
+        pathname: url.pathname
+      });
+      void apiHandler(request, response);
+      return;
+    }
+
+    void (async () => {
+      const file = hostedArtifactPath(url.pathname);
+      if (!file) {
+        response.writeHead(400, {
+          "Content-Type": "text/plain; charset=utf-8"
+        });
+        response.end("Bad request");
+        return;
+      }
+      try {
+        const bytes = await readFile(file);
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Length": bytes.byteLength,
+          "Content-Type":
+            HOSTED_CONTENT_TYPES[
+              path.extname(file).toLowerCase()
+            ] ?? "application/octet-stream",
+          "Referrer-Policy":
+            "strict-origin-when-cross-origin",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "SAMEORIGIN"
+        });
+        if (request.method === "HEAD") {
+          response.end();
+        } else {
+          response.end(bytes);
+        }
+      } catch {
+        missingFiles.push(url.pathname);
+        response.writeHead(404, {
+          "Content-Type": "text/plain; charset=utf-8"
+        });
+        response.end("Not found");
+      }
+    })().catch(() => {
+      if (!response.headersSent) {
+        response.writeHead(500, {
+          "Content-Type": "text/plain; charset=utf-8"
+        });
+      }
+      response.end("Internal error");
+    });
+  });
+  server.requestTimeout = 15_000;
+  server.headersTimeout = 10_000;
+  server.keepAliveTimeout = 5_000;
+  server.maxHeadersCount = 100;
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  const port =
+    address && typeof address === "object"
+      ? address.port
+      : 0;
+  return Object.freeze({
+    apiRequests,
+    missingFiles,
+    origin: `http://localhost:${port}`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      })
   });
 }
 
@@ -2346,6 +2501,476 @@ test(
           false
         );
         assert.equal((await client.me()).user.email, email);
+      }
+    );
+    await t.test(
+      "shipped hosted page creates, activates, saves, and signs back into one real PostgreSQL account",
+      async () => {
+        const api = createHostedApi(service);
+        const browserServer =
+          await startHostedBrowserServer(api);
+        let reviewedBrowser = null;
+        const email =
+          `shipped-browser-${randomUUID()}@example.test`;
+        const password =
+          "shipped browser correct horse battery staple";
+        const projectName =
+          "Shipped Browser Workshop";
+
+        try {
+          reviewedBrowser = await openReviewedBrowser({
+            origin: browserServer.origin
+          });
+          const {
+            browserErrors,
+            cdp,
+            evaluate,
+            navigate,
+            waitFor
+          } = reviewedBrowser;
+          const appUrl =
+            `${browserServer.origin}/abracadabra/app/`;
+          await navigate(appUrl);
+          await waitFor(
+            `document.documentElement.getAttribute(` +
+              `"data-abracadabra-control-ready") === "hosted" ` +
+              `&& document.getElementById("spark-maker")?.inert === false`
+          );
+
+          const capabilities = await evaluate(
+            `(async () => {
+              const response = await fetch("/api/v1/capabilities", {
+                credentials: "same-origin"
+              });
+              return response.json();
+            })()`,
+            true
+          );
+          assert.equal(
+            capabilities.accountRegistration,
+            true
+          );
+          assert.equal(
+            capabilities.accountRecoveryEmail,
+            true
+          );
+          assert.equal(capabilities.downloadQuote, false);
+          assert.equal(capabilities.downloadPayment, false);
+          assert.equal(capabilities.domainPurchase, false);
+
+          await evaluate(
+            `(() => {
+              const setValue = (name, value) => {
+                const field = document.querySelector(
+                  '[name="' + name + '"]'
+                );
+                const prototype =
+                  field instanceof HTMLTextAreaElement
+                    ? HTMLTextAreaElement.prototype
+                    : field instanceof HTMLSelectElement
+                      ? HTMLSelectElement.prototype
+                      : HTMLInputElement.prototype;
+                Object.getOwnPropertyDescriptor(
+                  prototype,
+                  "value"
+                ).set.call(field, value);
+                field.dispatchEvent(
+                  new Event("input", { bubbles: true })
+                );
+                field.dispatchEvent(
+                  new Event("change", { bubbles: true })
+                );
+              };
+              document.querySelector('[data-next="facts"]').click();
+              setValue(
+                "businessName",
+                "Shipped Browser Workshop"
+              );
+              setValue(
+                "summary",
+                "Repairs practical equipment for nearby small businesses."
+              );
+              setValue(
+                "about",
+                "Owner-operated and available by appointment."
+              );
+              setValue("email", "owner@example.test");
+              document.querySelector('[data-next="truth"]').click();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.querySelector('[data-step="truth"]')` +
+              `.hidden === false`
+          );
+          await evaluate(
+            `(() => {
+              const checkbox =
+                document.getElementById("truth-confirmed");
+              checkbox.checked = true;
+              checkbox.dispatchEvent(
+                new Event("change", { bubbles: true })
+              );
+              document.getElementById("make-preview").click();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.querySelector('[data-step="preview"]')` +
+              `.hidden === false && ` +
+              `document.getElementById("spark-preview")` +
+              `.getAttribute("src")?.startsWith("blob:")`
+          );
+          await evaluate(
+            `document.querySelector("[data-save-direction]").click()`
+          );
+          await waitFor(
+            `document.getElementById("control-room").hidden === false ` +
+              `&& document.querySelector("[data-create-account]")` +
+              `.disabled === false`
+          );
+
+          await evaluate(
+            `(() => {
+              const values = ${JSON.stringify({
+                accountName: "Shipped Browser Owner",
+                organizationName:
+                  "Shipped Browser Organization",
+                accountEmail: email,
+                accountPassword: password
+              })};
+              for (const [name, value] of Object.entries(values)) {
+                const field = document.querySelector(
+                  '[name="' + name + '"]'
+                );
+                Object.getOwnPropertyDescriptor(
+                  HTMLInputElement.prototype,
+                  "value"
+                ).set.call(field, value);
+                field.dispatchEvent(
+                  new Event("input", { bubbles: true })
+                );
+                field.dispatchEvent(
+                  new Event("change", { bubbles: true })
+                );
+              }
+              document.querySelector("[data-create-account]").click();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.getElementById("auth-activate").hidden === false ` +
+              `&& document.getElementById("platform-status")` +
+              `.textContent.includes("activation link")`
+          );
+          const message =
+            registrationSink.readForTest(email)[0];
+          assert.ok(message);
+          const token = decodeURIComponent(
+            new URL(message.verificationUrl).hash.slice(
+              "#verify-registration=".length
+            )
+          );
+
+          await evaluate(
+            `(() => {
+              const field = document.querySelector(
+                '[name="activationToken"]'
+              );
+              Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                "value"
+              ).set.call(field, ${JSON.stringify(token)});
+              field.dispatchEvent(
+                new Event("input", { bubbles: true })
+              );
+              document.querySelector(
+                "[data-complete-registration]"
+              ).click();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.querySelector("[data-session-bar]").hidden === false ` +
+              `&& document.querySelector(` +
+              `"[data-customer-stage=project]").hidden === false ` +
+              `&& globalThis.SiteSourceryAbracadabraHostedSession` +
+              `.getState().account?.email === ${JSON.stringify(email)}`
+          );
+
+          const cookiesAfterActivation =
+            (await cdp.send("Network.getAllCookies"))
+              .cookies;
+          const sessionCookie =
+            cookiesAfterActivation.find(
+              (cookie) => cookie.name === "ss_session"
+            );
+          assert.ok(sessionCookie);
+          assert.equal(sessionCookie.httpOnly, true);
+          assert.equal(sessionCookie.secure, true);
+          assert.equal(sessionCookie.sameSite, "Strict");
+          assert.equal(sessionCookie.path, "/api/v1");
+          const browserStorage = await evaluate(
+            `(() => ({
+              cookie: document.cookie,
+              local: Object.fromEntries(
+                Object.keys(localStorage).map((key) => [
+                  key,
+                  localStorage.getItem(key)
+                ])
+              ),
+              session: Object.fromEntries(
+                Object.keys(sessionStorage).map((key) => [
+                  key,
+                  sessionStorage.getItem(key)
+                ])
+              )
+            }))()`
+          );
+          assert.doesNotMatch(
+            JSON.stringify(browserStorage),
+            new RegExp(token.replace(
+              /[.*+?^${}()|[\]\\]/gu,
+              "\\$&"
+            ), "u")
+          );
+          assert.doesNotMatch(
+            Object.keys(browserStorage.local)
+              .concat(Object.keys(browserStorage.session))
+              .join("\n"),
+            /auth|session|token/iu
+          );
+
+          try {
+            await waitFor(
+              `document.querySelector("[data-create-project]")` +
+                `.disabled === false`,
+              5000
+            );
+          } catch (error) {
+            const diagnosis = await evaluate(
+              `(() => ({
+                status: document.getElementById("platform-status")
+                  .textContent.trim(),
+                projectCopy: document.querySelector(
+                  "[data-project-availability]"
+                ).textContent.trim(),
+                state: globalThis
+                  .SiteSourceryAbracadabraHostedSession
+                  .getState()
+              }))()`
+            );
+            throw new Error(
+              `${error.message}; project readiness ` +
+                JSON.stringify(diagnosis)
+            );
+          }
+          await evaluate(
+            `(() => {
+              const field = document.querySelector(
+                '[name="projectName"]'
+              );
+              Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                "value"
+              ).set.call(field, ${JSON.stringify(projectName)});
+              field.dispatchEvent(
+                new Event("input", { bubbles: true })
+              );
+              const terms = document.querySelector(
+                '[name="acceptedProjectTerms"]'
+              );
+              terms.checked = true;
+              terms.dispatchEvent(
+                new Event("change", { bubbles: true })
+              );
+              document.querySelector("[data-create-project]").click();
+              return true;
+            })()`
+          );
+          try {
+            await waitFor(
+              `globalThis.SiteSourceryAbracadabraHostedSession` +
+                `.getState().project?.name === ` +
+                `${JSON.stringify(projectName)} && ` +
+                `Boolean(globalThis.SiteSourceryAbracadabraHostedSession` +
+                `.getState().selectedVersionId) && ` +
+                `document.querySelector("[data-customer-stage=quote]")` +
+                `.hidden === false`,
+              15000
+            );
+          } catch (error) {
+            const diagnosis = await evaluate(
+              `(() => ({
+                status: document.getElementById("platform-status")
+                  .textContent.trim(),
+                projectCopy: document.querySelector(
+                  "[data-project-availability]"
+                ).textContent.trim(),
+                projectButtonDisabled: document.querySelector(
+                  "[data-create-project]"
+                ).disabled,
+                state: globalThis
+                  .SiteSourceryAbracadabraHostedSession
+                  .getState()
+              }))()`
+            );
+            throw new Error(
+              `${error.message}; browser diagnosis ` +
+                `${JSON.stringify(diagnosis)}; API requests ` +
+                `${JSON.stringify(browserServer.apiRequests)}`
+            );
+          }
+          const savedState = await evaluate(
+            `globalThis.SiteSourceryAbracadabraHostedSession.getState()`
+          );
+          assert.equal(savedState.project.name, projectName);
+          assert.ok(savedState.selectedVersionId);
+          assert.equal(
+            savedState.operations.acceptVersion.status,
+            "success"
+          );
+
+          assert.deepEqual(
+            (
+              await pool.query(
+                `select
+                   (select count(*)::integer
+                      from auth.users users
+                     where lower(users.email) = $1) as users,
+                   (select count(*)::integer
+                      from ss.organizations organization
+                      join auth.users users
+                        on users.id =
+                           organization.created_by_user_id
+                     where lower(users.email) = $1)
+                     as organizations,
+                   (select count(*)::integer
+                      from ss.projects project
+                      join auth.users users
+                        on users.id =
+                           project.created_by_user_id
+                     where lower(users.email) = $1
+                       and project.name = $2)
+                     as projects,
+                   (select count(*)::integer
+                      from ss.site_versions version
+                      join auth.users users
+                        on users.id =
+                           version.created_by_user_id
+                     where lower(users.email) = $1)
+                     as versions,
+                   (select count(*)::integer
+                      from ss.version_state_projection state
+                      join ss.site_versions version
+                        on version.id = state.version_id
+                      join auth.users users
+                        on users.id =
+                           version.created_by_user_id
+                     where lower(users.email) = $1
+                       and state.state = 'accepted_release')
+                     as accepted_versions,
+                   (select count(*)::integer
+                      from ss.hosted_sessions session
+                      join auth.users users
+                        on users.id = session.user_id
+                     where lower(users.email) = $1
+                       and session.revoked_at is null)
+                     as active_sessions`,
+                [email, projectName]
+              )
+            ).rows[0],
+            {
+              users: 1,
+              organizations: 1,
+              projects: 1,
+              versions: 1,
+              accepted_versions: 1,
+              active_sessions: 1
+            }
+          );
+
+          await evaluate(
+            `document.querySelector("[data-sign-out]").click()`
+          );
+          await waitFor(
+            `document.querySelector("[data-session-bar]").hidden === true ` +
+              `&& globalThis.SiteSourceryAbracadabraHostedSession` +
+              `.getState().account === null`
+          );
+          assert.equal(
+            (await cdp.send("Network.getAllCookies"))
+              .cookies.some(
+                (cookie) => cookie.name === "ss_session"
+              ),
+            false
+          );
+
+          await evaluate(
+            `(() => {
+              document.getElementById("auth-sign-in-tab").click();
+              const values = ${JSON.stringify({
+                signInEmail: email,
+                signInPassword: password
+              })};
+              for (const [name, value] of Object.entries(values)) {
+                const field = document.querySelector(
+                  '[name="' + name + '"]'
+                );
+                Object.getOwnPropertyDescriptor(
+                  HTMLInputElement.prototype,
+                  "value"
+                ).set.call(field, value);
+                field.dispatchEvent(
+                  new Event("input", { bubbles: true })
+                );
+              }
+              document.querySelector("[data-sign-in]").click();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.querySelector("[data-session-bar]").hidden === false ` +
+              `&& globalThis.SiteSourceryAbracadabraHostedSession` +
+              `.getState().account?.email === ${JSON.stringify(email)}`
+          );
+          assert.equal(
+            (
+              await pool.query(
+                `select count(*)::integer as active_sessions
+                   from ss.hosted_sessions session
+                   join auth.users users
+                     on users.id = session.user_id
+                  where lower(users.email) = $1
+                    and session.revoked_at is null`,
+                [email]
+              )
+            ).rows[0].active_sessions,
+            1
+          );
+
+          const forbiddenEffects =
+            browserServer.apiRequests.filter(
+              ({ pathname }) =>
+                /download-quotes|checkout|billing|domain|webhooks|publish|rollback/iu
+                  .test(pathname)
+            );
+          assert.deepEqual(forbiddenEffects, []);
+          assert.deepEqual(browserServer.missingFiles, []);
+          await evaluate(
+            `new Promise((resolve) => setTimeout(resolve, 100))`,
+            true
+          );
+          assert.deepEqual(
+            [...new Set(browserErrors)],
+            []
+          );
+        } finally {
+          if (reviewedBrowser) {
+            await reviewedBrowser.close();
+          }
+          await browserServer.close();
+        }
       }
     );
     await authority.close();
