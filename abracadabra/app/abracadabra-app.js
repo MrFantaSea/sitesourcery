@@ -641,16 +641,22 @@
      the wizard rail disappears and the preview step becomes the home room. */
   function updateRoomState() {
     var root = document.documentElement;
-    var paid = root.classList.contains("ss-paid") || root.classList.contains("ss-live");
-    var keep = paid && versions.length > 0;
+    var live = root.classList.contains("ss-live");
+    var keep = live || root.classList.contains("ss-paid");
+    var empty = keep && versions.length === 0;
     maker.classList.toggle("is-keep", keep);
+    maker.classList.toggle("is-empty", empty);
+    root.classList.toggle("ss-keep-room", keep && currentStep === "preview");
+    var emptyRoom = maker.querySelector("[data-empty-room]");
+    if (emptyRoom) emptyRoom.hidden = !empty;
+    if (keep && currentStep === "preview") bootStatus.hidden = true; // the room speaks for itself
     if (previewLegend) {
-      previewLegend.textContent = keep
-        ? (root.classList.contains("ss-live") ? "Your page — Alakazam keeps it." : "Your page.")
-        : previewLegendDefault;
+      if (!keep) previewLegend.textContent = previewLegendDefault;
+      else if (empty) previewLegend.textContent = live ? "Alakazam is on — it needs a page." : "Your download is paid — it needs a page.";
+      else previewLegend.textContent = live ? "Your page — Alakazam keeps it." : "Your page.";
     }
     /* Owner ruling: the hero names the room you are in. Making = Abracadabra;
-       the kept page = Alakazam. Only the lane page wears the combined name. */
+       the kept (or waiting) page = Alakazam. Only the lane page wears both. */
     var heroTitle = document.getElementById("spark-title");
     if (heroTitle) {
       heroTitle.textContent = keep && currentStep === "preview" ? "Alakazam" : "Abracadabra";
@@ -791,7 +797,7 @@
     versions.push({ raw: cloneRaw(dressed), result: result, platformVersionId: null });
     currentVersionIndex = versions.length - 1;
     markDraftClean();
-    renderCurrentVersion("Your page is ready. Open it or edit it below.");
+    renderCurrentVersion("Conjured. Open it or edit it below.");
     setStep("preview");
     emitVersionMade(versions[currentVersionIndex], reviewAttested);
   }
@@ -918,7 +924,19 @@
   clearDraftButton.addEventListener("click", clearDraft);
   /* The entitlement script runs after this one and owns the ss-paid/ss-live
      classes; it announces them so the room can dress itself on arrival. */
-  window.addEventListener("abracadabra:entitlements", function () { updateRoomState(); });
+  window.addEventListener("abracadabra:entitlements", function () {
+    updateRoomState();
+    /* A paid or live tab with no work must land in the (empty) Alakazam room,
+       not on the wizard - the entitlement classes arrive after boot ran. */
+    var paidRoot = document.documentElement.classList.contains("ss-paid")
+      || document.documentElement.classList.contains("ss-live");
+    if (paidRoot && !versions.length && currentStep !== "preview" && !hasMeaningfulUnsavedChanges()) {
+      setStep("preview", { focus: false });
+    }
+  });
+
+  var emptyBegin = maker.querySelector("[data-empty-begin]");
+  if (emptyBegin) emptyBegin.addEventListener("click", function () { setStep("vibe"); });
 
   window.addEventListener("beforeunload", function (event) {
     var kept = saveTabWork();
@@ -936,10 +954,21 @@
   bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
+  /* The app reads the paid flags itself. The landing must never depend on
+     another script's timing - a real-Chrome race left live tabs on the
+     wizard (with the live chip on) while headless probes kept passing. */
+  var bootEntitled = { paid: false, live: false };
+  try {
+    var bootParams = new URLSearchParams(location.search);
+    bootEntitled.live = bootParams.get("alakazam") === "1" || sessionStorage.getItem("abracadabra.alakazam") === "1";
+    bootEntitled.paid = bootEntitled.live || bootParams.get("paid") === "1" || sessionStorage.getItem("abracadabra.paid") === "1";
+  } catch (_e) { /* private mode: land free */ }
+  if (bootEntitled.paid) document.documentElement.classList.add("ss-paid");
+  if (bootEntitled.live) document.documentElement.classList.add("ss-live");
   if (restoreTabWork()) {
     setStep("preview", { focus: false });
   } else {
-    setStep("vibe", { focus: false });
+    setStep(bootEntitled.paid ? "preview" : "vibe", { focus: false });
   }
   window.SiteSourceryAbracadabraMaker = Object.freeze({
     getCurrentVersion: function () {

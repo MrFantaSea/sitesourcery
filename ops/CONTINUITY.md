@@ -40,6 +40,22 @@ Honor-gates by design; the human provisioning step is the real enforcement.
   card demos itself where possible. House style = home-hero frost pools,
   gold coins/rings, glass panels, storm background.
 - **Responder**: $300 + $250/mo, in person only, never a site checkout.
+- **AUTONOMY RULING (2026-08-01, supersedes the personal-setup copy)**:
+  "They're not supposed to have to reach me to set everything up
+  personally... Things are supposed to be done almost autonomously."
+  Abracadabra and Alakazam run themselves: pay -> account -> page live ->
+  address wired. Zack is the one-call-away BACKSTOP for snags, never the
+  stated mechanism. All "I set you up personally" mechanism lines are
+  purged from the app; the lane page, FAQ, and includes-adjacent copy get
+  the same sweep during their walks. The provisioning pipeline (rent
+  subdomain auto-live, buy-domain auto-DNS, bring-your-own wizard) is
+  task #21 scope alongside accounts + operator back end.
+- **The hero names the room**: /abracadabra/app/ shows "Abracadabra"
+  during the ritual and "Alakazam" in the kept room (mint-metal title,
+  mint chamber cast via .ss-keep-room). Only the LANE page (/abracadabra/)
+  wears "Abracadabra Alakazam". A paid/live tab with no work lands in the
+  EMPTY Alakazam room (vessel panel + one door into the ritual), never on
+  the wizard.
 - **Push gate**: owner will push only a "real, working, comprehensible,
   logical" site. NOTHING pushed yet; live sitesourcery.com still runs the
   old build. A deploy allowlist MUST exclude /server/, /scripts/, /ops/,
@@ -152,6 +168,14 @@ co-design, task #20.
   meta content and scripts.
 - "Cache" blamed twice for real bugs (boot setStep, validation trap) —
   verify server-side truth before blaming the owner's browser.
+- Room landing relied on an inter-script event; headless probes won the
+  race every run, the owner's real Chrome lost it (wizard + live chip).
+  Handshakes may re-dress a room, never decide a landing - each script
+  reads durable truth (URL params + sessionStorage) itself.
+- The plain python http.server let Chrome heuristically cache stale JS
+  during walks - the dev server is now serve-nocache.py (scratchpad),
+  Cache-Control: no-store on 127.0.0.1:8899. Restart THAT one, not
+  http.server, after reboots.
 - text-wrap is half of white-space shorthand; !important archaeology bit
   three times — prune, don't stack.
 - A probe hex must be unique to the claim: #275bd6 is BOTH the ocean

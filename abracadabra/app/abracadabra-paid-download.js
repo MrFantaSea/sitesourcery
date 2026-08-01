@@ -67,7 +67,7 @@
       if (live) {
         var done = document.createElement("p");
         done.className = "spark-fine";
-        done.textContent = "Alakazam is active — I set you up personally, and your $5 coupon lands on the first invoice.";
+        done.textContent = "Alakazam is active — your $5 comes off the first invoice.";
         golive.replaceWith(done);
       } else if (!paid) {
         golive.classList.add("is-locked-link");
@@ -91,7 +91,7 @@
     var line = document.createElement("span");
     if (live) {
       head.textContent = "✦ Alakazam is active ✦";
-      line.textContent = "Your receipt email is where I reach you to set everything up personally — same day when I can. Download your page below so it outlives this tab.";
+      line.textContent = "Alakazam keeps your page alive. Your download is open below — and if anything snags, I\u2019m one call away.";
     } else {
       head.textContent = "✦ The $5 download is yours ✦";
       line.textContent = "Your download and the style kit are unlocked under your page.";
@@ -149,7 +149,7 @@
   var intro = gate.querySelector("#save-direction-title + p");
   if (intro) {
     intro.textContent = live
-      ? "Alakazam is on. Download your page any time — I set up the publishing with you personally."
+      ? "Alakazam is on. Download your page any time."
       : "The download is paid for this tab. Publishing is a separate service — the Go-live door below is open.";
   }
 
@@ -175,7 +175,7 @@
         URL.revokeObjectURL(url);
         a.remove();
       }, 1000);
-      note.textContent = "Downloaded. The same file is yours to keep, host anywhere, or bring to Alakazam.";
+      note.textContent = "The scroll is yours. Keep it, host it anywhere, or bring it to Alakazam.";
     }).catch(function () {
       note.textContent = "The download hiccuped — remake the preview and press again.";
     });
