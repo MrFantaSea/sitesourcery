@@ -34,7 +34,7 @@
 
     var firstLink = menu.querySelector("a[href]");
     var pageRegions = Array.prototype.slice.call(doc.querySelectorAll("main, .site-footer, .site-brand"));
-    var wideViewport = window.matchMedia("(min-width: 78.001rem)");
+    var wideViewport = window.matchMedia("(min-width: 88.001rem)");
 
     function setPageInert(inert) {
       pageRegions.forEach(function (region) {

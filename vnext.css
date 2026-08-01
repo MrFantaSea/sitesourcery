@@ -7519,3 +7519,150 @@ li[id^="about-"]:target {
 .domain-price-line strong {
   color: #ffd98a;
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER ROUND, /abracadabra/ walk: "can you see everything how we treated
+   the first page... centered... your rendition."
+
+   The storm rides the page (body.vnext-page), the hero speaks the homepage
+   formula — champagne eyebrow, metal headline, centered column — and the
+   plans section borrows the fork cards wholesale. Section heads center.
+   --------------------------------------------------------------------------- */
+
+.abracadabra-page .hero-grid {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 2.2rem;
+}
+
+.abracadabra-page .hero-copy {
+  max-width: 46rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.abracadabra-page .hero-copy .eyebrow {
+  color: #f5e7cb;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.abracadabra-page .hero-copy h1 {
+  background-image: linear-gradient(100deg, #fffdf6 0%, #f6e8c6 26%, #d3ae62 48%, #fff7e2 66%, #e2c48b 88%, #fffdf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(0 2px 6px rgba(8, 7, 12, 0.9))
+    drop-shadow(0 0 26px rgba(174, 112, 255, 0.35));
+  font-size: clamp(2.6rem, 6vw, 4.6rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.abracadabra-page .hero-copy .lede {
+  max-width: 38rem;
+  color: #f0e5cd;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85), 0 2px 16px rgba(8, 7, 12, 0.6);
+}
+
+.abracadabra-page .maker-proof-featured {
+  width: min(52rem, 100%);
+}
+
+.abracadabra-page .section-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.abracadabra-page .abracadabra-step-grid li {
+  text-align: left; /* numbered cards read as a list; the heads center above */
+}
+
+.abracadabra-page .proof-strip {
+  justify-content: center;
+}
+
+.plans-footnote {
+  max-width: 44rem;
+  margin: 1.6rem auto 0;
+  color: rgba(231, 223, 240, 0.72);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.card-closer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.closer-quiet {
+  margin: 0;
+  color: rgba(231, 223, 240, 0.78);
+  font-size: 0.92rem;
+}
+
+/* The magic-word nav is ~120px wider than the old labels; the viewport-scaled
+   wordmark was already winning the race to the middle. Tame its curve and
+   move the drawer point up so inline nav only exists where both fit. */
+.site-brand {
+  font-size: clamp(1.6rem, 3.1vw, 2.9rem) !important;
+}
+
+@media (max-width: 88rem) {
+  .site-nav:not([data-menu-open]) {
+    display: none;
+  }
+
+  .menu-button {
+    display: inline-flex;
+  }
+}
+
+/* The abracadabra hero eyebrow inherited the homepage dash pseudo; here the
+   word stands alone. */
+.abracadabra-page .eyebrow::before,
+.abracadabra-page .eyebrow::after {
+  content: none;
+}
+
+/* Center the heads all the way down — the inner wrapper was holding its
+   left alignment — and give the hero eyebrow ink that survives lightning. */
+.abracadabra-page .section-head,
+.abracadabra-page .section-head > div {
+  align-items: center;
+  text-align: center;
+}
+
+.abracadabra-page .section-head h2 {
+  text-wrap: balance;
+}
+
+.abracadabra-page .hero-copy .eyebrow {
+  color: #f2ce83;
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(8, 7, 12, 0.95), 0 0 20px rgba(8, 7, 12, 0.7);
+}
+
+/* .section-head is a two-column grid in its home stylesheet; on this page it
+   becomes a centered column, and the subline gets ink that survives storms. */
+.abracadabra-page .section-head {
+  display: flex;
+  flex-direction: column;
+}
+
+.abracadabra-page .section-head > p {
+  max-width: 40rem;
+  color: #f0e5cd;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85), 0 2px 14px rgba(8, 7, 12, 0.6);
+}
