@@ -385,16 +385,10 @@
       if (!String(raw.summary || "").trim()) {
         errors.push({ field: "summary", message: "Add one plain sentence about the business." });
       }
-    } else if (name === "details") {
-      if (![raw.about, raw.offerings, raw.location, raw.hours].some(function (entry) {
-        return String(entry || "").trim();
-      })) {
-        errors.push({
-          field: "pageDetails",
-          message: "Add at least one useful detail, offering, location, or set of hours."
-        });
-      }
-    } else if (name === "contact") {
+    }
+    if (name === "facts") {
+      // Every field lives on this one screen now; gate on the whole truth.
+      if (errors.length) { showErrors(errors); return false; }
       return Boolean(validate(raw));
     }
     if (errors.length) {
@@ -719,7 +713,6 @@
       theme: "warm"
     });
     emitDraftChanged();
-    setStep("vibe", { focus: false });
     bootStatus.hidden = false;
     bootStatus.textContent = "Fictional sample loaded. Replace any detail before using the result.";
     element("businessName").focus();

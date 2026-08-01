@@ -69,14 +69,11 @@
         <div class="spark-boot" id="spark-boot-status" role="status" aria-live="polite">Opening Abracadabra…</div>
 
         <div id="spark-maker" class="spark-maker" aria-disabled="true" inert>
-          <p class="spark-small spark-tab-note">Your work lives only in this tab — close it and it is gone. Nothing is saved, nothing leaves your browser, nothing is charged from a free preview.</p>
           <ol class="spark-progress">
             <li data-progress-step="vibe" aria-current="step"><span>1</span>Look</li>
-            <li data-progress-step="facts"><span>2</span>Basics</li>
-            <li data-progress-step="details"><span>3</span>Details</li>
-            <li data-progress-step="contact"><span>4</span>Contact</li>
-            <li data-progress-step="truth"><span>5</span>Review</li>
-            <li data-progress-step="preview"><span>6</span>Preview</li>
+            <li data-progress-step="facts"><span>2</span>Your business</li>
+            <li data-progress-step="truth"><span>3</span>Review</li>
+            <li data-progress-step="preview"><span>4</span>Preview</li>
           </ol>
 
           <div class="spark-return" data-return-bar hidden>
@@ -115,13 +112,13 @@
             </div>
 
             <div class="spark-step-actions">
-              <button class="spark-button spark-button-primary" type="button" data-next="facts">Add the basics</button>
+              <button class="spark-button spark-button-primary" type="button" data-next="facts">Add your business</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="facts" hidden>
-            <legend>2. Start with the basics</legend>
-            <p class="spark-step-intro">Add the name and one plain sentence about the business.</p>
+            <legend>2. Tell it your business</legend>
+            <p class="spark-step-intro">The name, what you do, and how customers reach you — all on one screen.</p>
 
             <div class="spark-quick-start">
               <p><strong>Want an example?</strong> Load a fictional business, then replace it with your own details.</p>
@@ -143,19 +140,9 @@
                 <textarea id="summary" name="summary" maxlength="180" rows="3" required aria-describedby="summary-help"></textarea>
                 <small id="summary-help">Use one plain sentence.</small>
               </label>
-            </div>
 
-            <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="vibe">Back to the look</button>
-              <button class="spark-button spark-button-primary" type="button" data-next="details" data-validate-step="facts">Add useful details</button>
-            </div>
-          </fieldset>
+              <p class="spark-panel-label spark-group-label">Useful details — add at least one</p>
 
-          <fieldset class="spark-step" data-step="details" hidden>
-            <legend>3. Add useful details</legend>
-            <p class="spark-step-intro">Add at least one detail that helps a visitor decide what to do next.</p>
-
-            <div class="spark-fields">
               <label class="spark-field spark-field-wide">
                 <span>What else should customers know?</span>
                 <textarea id="about" name="about" maxlength="800" rows="5" aria-describedby="about-help"></textarea>
@@ -177,19 +164,10 @@
                 <span>Hours</span>
                 <input id="hours" name="hours" type="text" maxlength="240" autocomplete="off" placeholder="Only if you want them shown">
               </label>
-            </div>
 
-            <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="facts">Back to basics</button>
-              <button class="spark-button spark-button-primary" type="button" data-next="contact" data-validate-step="details">Add contact choices</button>
-            </div>
-          </fieldset>
 
-          <fieldset class="spark-step" data-step="contact" hidden>
-            <legend>4. Add a visitor’s next step</legend>
-            <p class="spark-step-intro">Add at least one real way for a customer to contact you or continue.</p>
+              <p class="spark-panel-label spark-group-label">How visitors reach you</p>
 
-            <div class="spark-fields">
               <label class="spark-field">
                 <span>Phone</span>
                 <input id="phone" name="phone" type="tel" maxlength="32" inputmode="tel" autocomplete="off">
@@ -216,18 +194,24 @@
                 </select>
                 <small id="primary-action-help">Choose an action only if you entered that detail.</small>
               </label>
+
             </div>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="details">Back to details</button>
-              <button class="spark-button spark-button-primary" type="button" data-next="truth" data-validate-step="contact">Review the page</button>
+              <button class="spark-button" type="button" data-back="vibe">Back to the look</button>
+              <small class="spark-tab-hint">Lives in this tab only — close it and it's gone.</small>
+              <button class="spark-button spark-button-primary" type="button" data-next="truth" data-validate-step="facts">Review the page</button>
             </div>
           </fieldset>
 
 
 
+
+
+
+
           <fieldset class="spark-step" data-step="truth" hidden>
-            <legend>5. Review the page details</legend>
+            <legend>3. Review the page details</legend>
             <p class="spark-step-intro">Read the details below. If you change anything, review them again.</p>
 
             <div id="spark-truth-review" class="spark-truth-review" aria-live="polite"></div>
@@ -238,13 +222,13 @@
             </label>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="contact">Back to contact choices</button>
+              <button class="spark-button" type="button" data-back="facts">Back to your business</button>
               <button class="spark-button spark-button-primary" id="make-preview" type="button">Make my preview</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="preview" hidden>
-            <legend>6. Preview</legend>
+            <legend>4. Preview</legend>
             <p class="spark-step-intro">Test the full page in a new tab, or go back and make changes.</p>
 
             <div class="spark-preview-toolbar">
@@ -264,9 +248,7 @@
             </section>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-edit-facts>Edit the basics</button>
-              <button class="spark-button" type="button" data-edit-details>Edit details</button>
-              <button class="spark-button" type="button" data-edit-contact>Edit contact choices</button>
+              <button class="spark-button" type="button" data-edit-facts>Edit your business</button>
               <button class="spark-button" type="button" data-edit-look>Change the look</button>
             </div>
 

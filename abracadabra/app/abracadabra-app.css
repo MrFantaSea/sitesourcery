@@ -431,3 +431,8 @@
 .spark-hero-brand::before{content:"";display:inline-block;width:1.4rem;height:2px;margin-right:.55rem;vertical-align:middle;background:linear-gradient(90deg,transparent,#f5e7cb)}
 #spark-title{font-size:clamp(1.9rem,3.6vw,3.1rem);letter-spacing:.04em;text-transform:uppercase}
 .spark-tab-note{margin:.2rem 0 1rem;text-align:center;color:rgba(242,220,176,.75);font-size:.78rem;letter-spacing:.05em}
+
+/* One-screen business form: gold group labels split the sections; the tab
+   hint whispers where investment begins. */
+.spark-group-label{grid-column:1/-1;margin:1.2rem 0 -0.2rem;padding-top:1.1rem;border-top:1px solid rgba(242,206,131,.18)}
+.spark-tab-hint{flex:1;align-self:center;color:rgba(242,220,176,.6);font-size:.72rem;letter-spacing:.04em}
