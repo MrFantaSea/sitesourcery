@@ -7827,3 +7827,24 @@ li[id^="about-"]:target {
     border-top: 1px dashed rgba(242, 206, 131, 0.4);
   }
 }
+
+/* The vessel stops beheading its own coins (overflow was only guarding
+   corners that no longer paint), and it shrinks to its contents instead of
+   stretching chambers of empty glass around three lines. */
+.lane-diptych {
+  overflow: visible;
+  max-width: 62rem;
+  margin-inline: auto;
+}
+
+.lane-diptych .lane-half {
+  padding: 1.6rem 2rem 1.8rem;
+}
+
+.lane-diptych .pcm-copy {
+  gap: 0.55rem;
+}
+
+.lane-diptych .pc-text p {
+  max-width: 34rem;
+}
