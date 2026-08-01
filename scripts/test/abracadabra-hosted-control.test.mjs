@@ -483,7 +483,8 @@ test("customer account and Download controls progressively enhance the still-usa
   for (const fallback of [
     'name="businessName"',
     'data-load-sample',
-    'data-next="vibe"',
+    'data-next="facts"',
+    'data-step="truth"',
     'data-step="preview"',
     "/abracadabra/app/abracadabra-app.js",
   ]) {

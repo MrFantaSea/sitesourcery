@@ -488,6 +488,7 @@
 /* The crest wears home's frost pools. */
 .spark-hero .spark-hero-brand,#spark-title{position:relative;z-index:0}
 .spark-hero .spark-hero-brand::after,#spark-title::before{content:"";position:absolute;inset:-.5rem -1.8rem;z-index:-1;border-radius:999px;backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);mask-image:radial-gradient(ellipse closest-side,#000 52%,transparent 100%);-webkit-mask-image:radial-gradient(ellipse closest-side,#000 52%,transparent 100%)}
+@media (max-width:40rem){#spark-title::before{inset-inline:0}}
 
 /* Spruce: the boxes join the vessel's family. */
 .spark-step{border-color:rgba(242,206,131,.42);box-shadow:inset 0 0 0 1px rgba(242,206,131,.08),0 .8rem 2rem rgba(8,7,12,.35)}

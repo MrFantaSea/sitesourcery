@@ -21,7 +21,6 @@ import {
   verifyHostedArtifact,
 } from "../build-hosted.mjs";
 import { publicFileAllowlist } from "../build-pages.mjs";
-import { CANONICAL_ROUTE_FILES } from "../check-routes.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldOnlyPhrases,
@@ -201,6 +200,13 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     assert.equal(publicFileAllowlist.includes(heldViewerFile), true);
     assert.equal(hostedFileAllowlist.includes(heldViewerFile), false);
   }
+  for (const browserBridgeFile of [
+    "abracadabra/app/abracadabra-account.js",
+    "abracadabra/app/abracadabra-paid-download.js",
+  ]) {
+    assert.equal(publicFileAllowlist.includes(browserBridgeFile), true);
+    assert.equal(hostedFileAllowlist.includes(browserBridgeFile), false);
+  }
 
   for (const slot of hostedTruthSlots) {
     const source = await readFile(path.join(ROOT, slot.file), "utf8");
@@ -313,8 +319,10 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   const sources = await readTruthFiles(output, hostedTruthRequirements);
   assertRequirements(sources, hostedTruthRequirements);
   assertMissingPhrases(sources, heldOnlyPhrases);
-  for (const file of Object.values(CANONICAL_ROUTE_FILES)) {
+  for (const file of files.filter((candidate) =>
+    candidate === "index.html" || candidate.endsWith("/index.html"))) {
     const source = await readFile(path.join(output, file), "utf8");
+    if (/<meta\s+http-equiv="refresh"/iu.test(source)) continue;
     assert.match(
       source,
       /<main\b[^>]*\bid="main"[^>]*\btabindex="-1"/u,
@@ -329,19 +337,13 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   const allText = await readTextFiles(output, files);
   const dollars = publicDollarValues(allText);
   assert.ok(dollars.length > 0);
-  for (const { file, value } of dollars) {
-    assert.ok(value === "5" || value === "5.00", `${file}: $${value}`);
-  }
+  assert.ok(dollars.some(({ value }) => value === "5" || value === "5.00"));
+  assert.ok(dollars.some(({ value }) => value === "25" || value === "25.00"));
   const emails = publicEmails(allText);
   assert.ok(emails.length > 0);
   for (const { email, file } of emails) {
     assert.equal(email, "sitesourcery@proton.me", file);
   }
-  assert.doesNotMatch(
-    [...allText.values()].join("\n"),
-    /\b(?:Rent|Owned \+ managed|spark\.rent|spark\.own|offer & tenure)\b/iu,
-  );
-
   const app = sources.get("abracadabra/app/index.html");
   assert.ok(
     app.indexOf('id="workroom"') < app.indexOf('id="control-room"'),
@@ -365,8 +367,9 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   }
   assert.doesNotMatch(
     app,
-    /abracadabra-hosted-catalog|abracadabra-control\.js|abracadabra-hosted-control-dom\.js|abracadabra-platform\.js/u,
+    /abracadabra-hosted-catalog|abracadabra-account\.js|abracadabra-paid-download\.js|abracadabra-control\.js|abracadabra-hosted-control-dom\.js|abracadabra-platform\.js/u,
   );
+  assert.doesNotMatch(app, /https:\/\/buy\.stripe\.com\//u);
   assert.doesNotMatch(
     app,
     /data-publish|data-domain-stage|data-save-address|data-save-access/u,
@@ -379,31 +382,29 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     [...app.matchAll(/data-customer-stage="([^"]+)"/gu)].map((match) => match[1]),
     ["account", "project", "quote", "download"],
   );
+  assert.deepEqual(
+    [...app.matchAll(/<fieldset class="spark-step" data-step="([^"]+)"/gu)]
+      .map((match) => match[1]),
+    ["vibe", "facts", "truth", "preview"],
+  );
+  for (const field of [
+    "accountName",
+    "organizationName",
+    "accountEmail",
+    "accountPassword",
+  ]) {
+    assert.equal(count(app, `name="${field}"`), 1, field);
+  }
   assert.match(app, /\$5 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
 
-  const makerSteps = [
-    "<h3>Basics</h3>",
-    "<h3>Details</h3>",
-    "<h3>Contact</h3>",
-    "<h3>Look</h3>",
-    "<h3>Review</h3>",
-    "<h3>Preview</h3>",
-  ];
   const landing = sources.get("abracadabra/index.html");
-  let cursor = -1;
-  for (const step of makerSteps) {
-    const next = landing.indexOf(step);
-    assert.ok(next > cursor, step);
-    cursor = next;
-  }
-  for (const route of ["abracadabra/index.html", "abracadabra/how/index.html"]) {
-    const source = sources.get(route);
-    assert.equal(count(source, 'data-abracadabra-state-model="editor-project"'), 1);
-    assert.equal(
-      count(source, 'data-abracadabra-journey="free-preview-paid-download"'),
-      1,
-    );
-  }
+  assert.match(landing, /Abracadabra Alakazam/u);
+  assert.match(landing, /Free to See-\$5 to Download-\$25 a Month Keeps It Live/u);
+  assert.ok(landing.indexOf("Abracadabra</p>") < landing.indexOf("Alakazam</p>"));
+  assert.match(
+    sources.get("abracadabra/how/index.html"),
+    /http-equiv="refresh" content="0;url=\/abracadabra\/"/u,
+  );
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [
@@ -484,8 +485,8 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      "Build and preview one page for free.",
-      "Build and preview a changed page for free.",
+      '<h1 id="spark-title">Abracadabra Alakazam</h1>',
+      '<h1 id="spark-title">Changed product</h1>',
     ),
     "utf8",
   );
@@ -530,8 +531,8 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      "Choose only after the preview looks right.",
-      "Choose immediately.",
+      "Your page downloads for $5",
+      "Your page downloads for a changed amount",
     ),
     "utf8",
   );

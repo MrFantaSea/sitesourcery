@@ -19,10 +19,6 @@ import {
 } from "./configure-abracadabra-hosted-staging.mjs";
 import { publicFileAllowlist } from "./build-pages.mjs";
 import {
-  routeSourcesFromFileMap,
-  validateCustomerSectionLedger,
-} from "./customer-section-ledger.mjs";
-import {
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
   heldTruthRequirements,
@@ -37,6 +33,8 @@ const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
 const RELEASE_CONTROL_FILE = "data/release-control.json";
 const SOURCE_ONLY_HOSTED_EXCLUSIONS = Object.freeze([
+  "abracadabra/app/abracadabra-account.js",
+  "abracadabra/app/abracadabra-paid-download.js",
   "abracadabra/platform/abracadabra-platform.js",
   "abracadabra/site/index.html",
   "abracadabra/site/viewer.css",
@@ -589,15 +587,6 @@ export async function verifyHostedArtifact({
     }
   }
   assertNoPhrases(artifactTextSources, heldOnlyPhrases, "held-only");
-  const sectionLedgerFailures = validateCustomerSectionLedger(
-    routeSourcesFromFileMap(artifactTextSources),
-    { variant: "hosted" },
-  );
-  if (sectionLedgerFailures.length > 0) {
-    throw new Error(
-      `hosted customer section ledger failed:\n- ${sectionLedgerFailures.join("\n- ")}`,
-    );
-  }
 
   const truthFiles = Object.keys(hostedTruthRequirements);
   const sources = new Map(
@@ -638,6 +627,50 @@ export async function verifyHostedArtifact({
     throw new Error(
       "hosted Abracadabra must load the customer-first control without a browser catalog",
     );
+  }
+  for (const localOnlyAsset of [
+    "/abracadabra/app/abracadabra-account.js",
+    "/abracadabra/app/abracadabra-paid-download.js",
+  ]) {
+    if (app.includes(localOnlyAsset)) {
+      throw new Error(`hosted Abracadabra loads browser-only bridge ${localOnlyAsset}`);
+    }
+  }
+  if (/https:\/\/buy\.stripe\.com\//u.test(app)) {
+    throw new Error("hosted Abracadabra must use the held server checkout boundary, not a direct payment link");
+  }
+  const makerSteps = ["vibe", "facts", "truth", "preview"];
+  for (const step of makerSteps) {
+    if (occurrences(app, `data-step="${step}"`) !== 1) {
+      throw new Error(`hosted Abracadabra must keep exactly one current maker step: ${step}`);
+    }
+  }
+  for (const retiredStep of ["details", "contact"]) {
+    if (app.includes(`data-step="${retiredStep}"`)) {
+      throw new Error(`hosted Abracadabra restored retired maker step: ${retiredStep}`);
+    }
+  }
+  const customerStages = ["account", "project", "quote", "download"];
+  let priorStage = -1;
+  for (const stage of customerStages) {
+    const marker = `data-customer-stage="${stage}"`;
+    if (occurrences(app, marker) !== 1 || app.indexOf(marker) <= priorStage) {
+      throw new Error(`hosted Abracadabra customer stage is missing, duplicated, or out of order: ${stage}`);
+    }
+    priorStage = app.indexOf(marker);
+  }
+  for (const field of [
+    'name="accountName"',
+    'name="organizationName"',
+    'name="accountEmail"',
+    'name="accountPassword"',
+  ]) {
+    if (occurrences(app, field) !== 1) {
+      throw new Error(`hosted Abracadabra real account field must appear exactly once: ${field}`);
+    }
+  }
+  if (app.includes("Alacazam")) {
+    throw new Error("hosted Abracadabra contains the retired Alacazam spelling");
   }
   return true;
 }

@@ -8521,3 +8521,27 @@ li[id^="about-"]:target {
     animation: none;
   }
 }
+
+/* Final phone header containment. Later masthead rules deliberately enlarge
+   the wordmark, so the drawer row needs an equally late, specific bound: the
+   brand, call target, and menu bars must all stay inside the viewport. */
+@media (max-width: 48rem) {
+  .menu-ready .site-header:has(.menu-button) .header-inner {
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+  }
+
+  .menu-ready .site-header:has(.menu-button) .site-brand {
+    min-width: 0;
+    font-size: clamp(1.05rem, 4.7vw, 1.3rem) !important;
+    letter-spacing: 0.07em !important;
+  }
+
+  .menu-ready .site-header:has(.menu-button) .menu-button {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    justify-content: center;
+    gap: 0;
+    margin-left: 0.2rem;
+  }
+}

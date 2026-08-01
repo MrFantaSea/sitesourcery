@@ -50,7 +50,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "39baa2fc1b7e38839762a673a25e8c2fb5eadd12edf13a4c60a3564dc0860fc8",
+    hostedSha256: "3a2cd491b9462251daf7459767bf3a0ff86ca804ff5c16ca490862f0e0dd5c5c",
   }),
   slot({
     id: "abracadabra-app-control",
@@ -141,10 +141,9 @@ export const hostedCodeTransforms = Object.freeze([]);
 
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "A clearer path for your small business online.",
-    "Build and preview one page for free.",
-    "Download is a one-time $5 unlock for that editor project",
-    "Talk through one task that keeps slipping.",
+    "Your source for websites.",
+    "Premade Website Download $5-Custom Sites from $400",
+    "Abracadabra builds it. Alakazam keeps it live.",
   ]),
   "vnext.js": Object.freeze([
     "Build and preview privately for free.",
@@ -152,28 +151,26 @@ export const heldTruthRequirements = Object.freeze({
     "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "abracadabra/index.html": Object.freeze([
-    "Build and preview one page for free.",
-    "Download is a one-time $5 unlock for each editor project",
-    "Preview for free. Download only when you want the file.",
-    "A downloaded file may be modified and self-hosted without another Site Sourcery payment.",
+    "Abracadabra Alakazam",
+    "Free to See-$5 to Download-$25 a Month Keeps It Live",
+    "the $5 comes off your first month",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "Build and preview your page in six short steps.",
-    "The private preview is free. Download is $5 once per editor project.",
-    "You may modify it and host it yourself without another Site Sourcery payment.",
+    "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
+    "This page folded into the lane.",
+    "Continue to Abracadabra · Alakazam.",
   ]),
   "abracadabra/app/index.html": Object.freeze([
-    "Build and preview one page for free.",
-    "Your free preview stays in this tab.",
-    "Choose only after the preview looks right.",
-    "Download is $5 once for this editor project.",
+    "Abracadabra Alakazam",
+    "Lives in this tab only — close it and it's gone.",
+    "$5 download and account creation",
   ]),
   "abracadabra/app/abracadabra-app.js": Object.freeze([
     "Abracadabra ready. Your local draft stays in this tab.",
   ]),
   "faq/index.html": Object.freeze([
-    "Build, revise, and test the private preview for free.",
-    "Download is a one-time $5 unlock for the editor project",
+    "downloading it is $5",
+    "Alakazam is the paid service that follows the preview",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "the page cannot place an order or start work",
   ]),
@@ -183,13 +180,12 @@ export const heldTruthRequirements = Object.freeze({
   "legal/privacy/index.html": Object.freeze([
     "The current Abracadabra maker creates no account or organization record.",
     "Business facts and made versions stay only in this tab.",
-    "The current maker does not ask for payment-card details",
     "processed through Proton Mail",
   ]),
   "legal/website-terms/index.html": Object.freeze([
     "Using the current maker does not create an account, control room, project record, or saved acceptance.",
     "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
-    "This maker has no Publish button or publication state.",
+    "Publishing happens only through Alakazam, and only when you choose it.",
     "exact scope, price, turnaround, and any later credit are stated in writing before purchase.",
   ]),
 });
@@ -211,25 +207,26 @@ export const heldTruthForbiddenPhrases = Object.freeze({
 
 export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "A clearer path for your small business online.",
-    "Build and preview one page for free.",
-    "Talk through one task that keeps slipping.",
+    "Your source for websites.",
+    "Premade Website Download $5-Custom Sites from $400",
+    "Abracadabra builds it. Alakazam keeps it live.",
   ]),
   "vnext.js": Object.freeze([
     "Download is $5 once per editor project, not per click or version.",
     "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "abracadabra/index.html": Object.freeze([
-    "Build and preview one page for free.",
-    "$5 once per editor project",
-    "A downloaded file may be modified and self-hosted without another Site Sourcery payment.",
+    "Abracadabra Alakazam",
+    "Free to See-$5 to Download-$25 a Month Keeps It Live",
+    "the $5 comes off your first month",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "Build and preview your page in six short steps.",
-    "The private preview is free. Download is $5 once per editor project.",
+    "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
+    "This page folded into the lane.",
+    "Continue to Abracadabra · Alakazam.",
   ]),
   "abracadabra/app/index.html": Object.freeze([
-    "Build and preview first. Pay only when it is right.",
+    "Build, preview, and download with Abracadabra",
     "Your guest preview is not saved yet.",
     "Create an account or sign in.",
     "A new project has its own one-time $5 Download unlock.",
@@ -240,7 +237,8 @@ export const hostedTruthRequirements = Object.freeze({
     "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   ]),
   "faq/index.html": Object.freeze([
-    "Download is a one-time $5 unlock for the editor project",
+    "downloading it is $5",
+    "Alakazam is the paid service that follows the preview",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "the page cannot place an order or start work",
   ]),
