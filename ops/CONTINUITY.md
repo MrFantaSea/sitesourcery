@@ -15,6 +15,26 @@ can be opened by hand for testing (each applies to that TAB until closed):
 Honor-gates by design; the machinery (accounts, then the platform) is the
 real product - the owner is the backstop, not the mechanism.
 
+## GOVERNANCE (2026-08-01) — read before touching anything
+
+- **Codex is technical lead; Zack is product owner.** The prior
+  assistant's standing order: do NOT write to this worktree except on
+  one explicit, bounded assignment from Codex or Zack. Clean checkpoint
+  = commit tagged "handoff" + ops/HANDOFF-2026-08-01.md.
+- Corrections that bind: the browser account is a PROTOTYPE BRIDGE, not
+  the real-account requirement; server/hosted holds the real held
+  Node/Postgres platform (accounts/projects/billing/support/domains/
+  publication) - AUDIT AND INTEGRATE it, never build a parallel backend;
+  ops/OPERATOR-BACKEND-SPEC.md is a SIMULATED DRAFT (fictional customers
+  and policies, banner on file); headless/structural checks are not
+  visual proof; nothing is done before Zack's customer walk; never
+  invent prices/cancellation/domain policies/product boundaries; no
+  push, deploy, or payment path for anything unfulfillable; setup is
+  autonomous, Zack is the backstop.
+- Edges redline closed: soft = look's own rounding; sharp = square +
+  2px; ornate = double page frame + 3px double accent card frames +
+  ringed action. Owner has not yet walked them.
+
 ## Standing rulings (never drift)
 
 - **Spellings**: Abracadabra (C). **Alakazam with a K** — the early build's

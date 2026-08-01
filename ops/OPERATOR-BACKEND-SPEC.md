@@ -1,3 +1,14 @@
+> **SIMULATED DRAFT — NOT AUTHORITATIVE.** Every customer, call, invoice,
+> failure, and policy in this document is FICTIONAL, produced by a
+> six-call agent simulation on 2026-08-01. It exists to seed requirements
+> thinking for task #21 and nothing else. No price, cancellation rule,
+> domain policy, or product boundary here is decided unless Zack rules it
+> separately. One decision IS already made and is not this document's:
+> account creation happens immediately before first payment.
+> The real platform to audit and integrate is server/hosted (held
+> Node/Postgres: accounts, projects, billing, support, domains,
+> publication) — do not invent a parallel backend.
+
 # Site Sourcery — Operator Back-End Spec
 
 **Status:** Draft v0.1, 2026-08-01. Built from six simulated support calls. Not audited, not final — needs the HQ/Zen audit pass and the founder's redline.
