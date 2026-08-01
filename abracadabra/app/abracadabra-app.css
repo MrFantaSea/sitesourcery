@@ -436,3 +436,7 @@
    hint whispers where investment begins. */
 .spark-group-label{grid-column:1/-1;margin:1.2rem 0 -0.2rem;padding-top:1.1rem;border-top:1px solid rgba(242,206,131,.18)}
 .spark-tab-hint{flex:1;align-self:center;color:rgba(242,220,176,.6);font-size:.72rem;letter-spacing:.04em}
+
+/* Four steps, four columns - Preview stops absorbing the two ghost cells the
+   six-step era left behind. */
+.spark-progress{grid-template-columns:repeat(4,1fr)}
