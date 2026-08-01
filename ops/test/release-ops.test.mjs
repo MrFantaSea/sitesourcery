@@ -318,6 +318,14 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
   );
   assert.doesNotMatch(
     hostedEnvironment,
+    /^SITESOURCERY_OFFER_CATALOG_PATH=/mu
+  );
+  assert.match(
+    hostedEnvironment,
+    /Leave SITESOURCERY_OFFER_CATALOG_PATH unset while commerce is held/u
+  );
+  assert.doesNotMatch(
+    hostedEnvironment,
     /SITESOURCERY_PAYMENT_MODE/u
   );
   assert.match(
@@ -343,5 +351,93 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
   assert.doesNotMatch(
     hostedEnvironment,
     /sk_(?:live|test)_|whsec_[A-Za-z0-9]|\bre_[A-Za-z0-9_-]{16,}/u
+  );
+});
+
+test("isolated staging units use persistent reboot-safe dependencies", async () => {
+  const stagingRoot = new URL("../staging/", import.meta.url);
+  const [postgres, tunnel, runtime, readme] =
+    await Promise.all([
+      readFile(
+        new URL(
+          "sitesourcery-staging-postgresql.service",
+          stagingRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-staging-db-tunnel.service",
+          stagingRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-staging.service",
+          stagingRoot
+        ),
+        "utf8"
+      ),
+      readFile(new URL("README.md", stagingRoot), "utf8")
+    ]);
+
+  for (const unit of [postgres, tunnel, runtime]) {
+    assert.doesNotMatch(unit, /\/tmp\//u);
+    assert.match(unit, /^UMask=0077$/mu);
+    assert.match(unit, /^WantedBy=default\.target$/mu);
+    assert.doesNotMatch(
+      unit,
+      /sk_(?:live|test)_|whsec_|SITESOURCERY_RESEND_API_KEY=/u
+    );
+  }
+
+  assert.match(
+    postgres,
+    /^Environment=PGDATA=\/home\/mrfantasea\/\.local\/share\/sitesourcery-postgresql-16\.14\/data$/mu
+  );
+  assert.match(
+    postgres,
+    /-k %t\/sitesourcery-postgresql -p 55432 -c listen_addresses=/u
+  );
+  assert.match(
+    postgres,
+    /^RuntimeDirectory=sitesourcery-postgresql$/mu
+  );
+  assert.match(
+    postgres,
+    /^RuntimeDirectoryMode=0700$/mu
+  );
+
+  assert.match(tunnel, /-o BatchMode=yes/u);
+  assert.match(tunnel, /-o ExitOnForwardFailure=yes/u);
+  assert.match(tunnel, /-o ServerAliveInterval=15/u);
+  assert.match(
+    tunnel,
+    /UserKnownHostsFile=\/home\/zentech\/sitesourcery-staging\/run\/hq-known-hosts/u
+  );
+  assert.match(
+    tunnel,
+    /-L 127\.0\.0\.1:55439:\/run\/user\/1000\/sitesourcery-postgresql\/\.s\.PGSQL\.55432 hq/u
+  );
+  assert.doesNotMatch(tunnel, /ClearAllForwardings/u);
+  assert.match(tunnel, /^Restart=always$/mu);
+
+  assert.match(
+    runtime,
+    /^Requires=sitesourcery-staging-db-tunnel\.service$/mu
+  );
+  assert.match(
+    runtime,
+    /^After=network-online\.target sitesourcery-staging-db-tunnel\.service$/mu
+  );
+  assert.match(
+    runtime,
+    /releases\/d7c33c7e4ec7623f63249e0dc5b3d2951e781212/u
+  );
+  assert.match(readme, /No whole-host reboot was performed\./u);
+  assert.match(
+    readme,
+    /not an encrypted\s+off-machine production backup/u
   );
 });

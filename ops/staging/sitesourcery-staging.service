@@ -1,0 +1,22 @@
+[Unit]
+Description=Site Sourcery isolated hosted staging
+After=network-online.target sitesourcery-staging-db-tunnel.service
+Wants=network-online.target
+Requires=sitesourcery-staging-db-tunnel.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/zentech/sitesourcery-staging/releases/d7c33c7e4ec7623f63249e0dc5b3d2951e781212
+Environment=NODE_ENV=production
+EnvironmentFile=/home/zentech/sitesourcery-staging/run/hosted.env
+ExecStart=/home/zentech/sitesourcery-staging/toolchain/node-v24.18.0-linux-x64/bin/node /home/zentech/sitesourcery-staging/releases/d7c33c7e4ec7623f63249e0dc5b3d2951e781212/server/hosted/bin/server.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

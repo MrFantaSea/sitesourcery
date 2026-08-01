@@ -1,0 +1,18 @@
+[Unit]
+Description=Site Sourcery staging database tunnel to HQ
+After=network-online.target
+Wants=network-online.target
+Before=sitesourcery-staging.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o UserKnownHostsFile=/home/zentech/sitesourcery-staging/run/hq-known-hosts -o StrictHostKeyChecking=yes -L 127.0.0.1:55439:/run/user/1000/sitesourcery-postgresql/.s.PGSQL.55432 hq
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -34,6 +34,17 @@ these are OWNER RULINGS and open work, not suggestions.
   user, one organization, one project, two accepted versions, all three exact
   legal acceptances, one held Download quote, and one active session. See
   `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md`.
+- A post-proof infrastructure audit found that staging PostgreSQL and its
+  HQ-to-Zen SSH tunnel were manually running from `/tmp`. That omission is
+  closed: HQ PostgreSQL 16.14, the Zen tunnel, the hosted API, and static
+  artifact are enabled user services with lingering; the API requires the
+  tunnel; persistent paths and the pinned known-hosts file replace temporary
+  paths. A clean logical restore matched the source contract, exact legal
+  hashes, and customer row counts. Controlled PostgreSQL and tunnel restarts
+  preserved the complete journey and returned public readiness `200`. The old
+  processes were stopped, old database files retained, and a private mode-0600
+  rollback dump recorded. Exact units and evidence live in `ops/staging/` and
+  `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md`.
 - Recovery delivery is now durably reserved before any mail-provider
   effect. Delivered requests replay without another send; interrupted or
   ambiguous sends stop in a terminal reconciliation state. The fence
@@ -171,8 +182,12 @@ real product - the owner is the backstop, not the mechanism.
 1. **Production deploy target**: isolated staging is resolved on Zen. The
    candidate fleet plan points the production app at Dell with HQ recovery,
    but that durable production runtime, reverse proxy, backup/restore evidence,
-   and DNS cutover are not installed yet. This no longer blocks branch or
-   staging pushes; it blocks replacing GitHub Pages in production.
+   and DNS cutover are not installed yet. Dell currently lacks the pinned Node
+   and Caddy runtime, and public ingress to it is unproven. HQ and Zen also
+   share the same observed public site/edge, so Zen cannot currently satisfy
+   the documented distinct-failure-domain backup requirement. This no longer
+   blocks branch or staging pushes; it blocks replacing GitHub Pages in
+   production.
 2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
    (his design-lock); needs his one-line ok.
 3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the

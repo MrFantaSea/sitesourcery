@@ -12,7 +12,9 @@ every earlier branch and worktree is untouched.
 > recovery, project, version, and held `$5` quote journey on isolated HTTPS
 > staging. See `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md` and
 > `ops/CONTINUITY.md` for current operational truth. Production
-> `sitesourcery.com` remains unchanged.
+> `sitesourcery.com` remains unchanged. Staging PostgreSQL, its HQ-to-Zen
+> tunnel, the API, and static artifact are now persistent enabled user services;
+> a controlled database/tunnel restart retained the exact saved journey.
 
 ## The product, as the owner settled it
 
@@ -120,9 +122,10 @@ owner's call.
 
 **4. Production deployment ② does not exist yet.** `server/hosted` now runs
 with canonical PostgreSQL on isolated HTTPS staging and its account/project
-journey is proven. Production still needs the durable app host, reverse proxy,
-backup/restore evidence, same-origin DNS cutover, and production verification;
-GitHub Pages cannot provide that backend.
+journey is proven, including a controlled restart of its durable PostgreSQL and
+tunnel services. Production still needs the durable app host, reverse proxy,
+off-machine backup/restore evidence, same-origin DNS cutover, and production
+verification; GitHub Pages cannot provide that backend.
 
 **5. Tax treatment is unreviewed** on all five sellable things.
 

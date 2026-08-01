@@ -93,6 +93,39 @@ The canonical staging database independently reported:
 No action token, password, session value, or Resend key was printed or written
 to this evidence.
 
+## Durable staging authority
+
+The initially proven database and HQ-to-Zen tunnel were then found to be
+manually started from `/tmp`; a reboot would have removed or disconnected
+them. That omission is closed for staging:
+
+- HQ now runs enabled user unit
+  `sitesourcery-staging-postgresql.service` from persistent PostgreSQL 16.14
+  toolchain and data paths under `/home/mrfantasea/.local/`.
+- PostgreSQL has data-page checksums enabled, listens only on the mode-`0700`
+  Unix-socket directory `/run/user/1000/sitesourcery-postgresql`, and contains
+  only the clean staging database plus standard templates.
+- Zen now runs enabled user unit
+  `sitesourcery-staging-db-tunnel.service`; its pinned known-hosts file is
+  persistent and mode `0600`, and only the service-owned SSH process listens on
+  `127.0.0.1:55439`.
+- `sitesourcery-staging.service` now requires and starts after that tunnel.
+- User lingering is enabled on both hosts. The PostgreSQL, tunnel, API, and
+  static staging units were all enabled and active after cutover.
+
+A private mode-`0600` custom-format dump was captured before the cutover. Its
+SHA-256 is
+`bdd80f22e57778aa9673c4f8ccc4338bcb55685e8349cd99a24ad1d6a86a1461`.
+Source and target independently matched the v21 contract, exact legal rows and
+digests, core row counts, and `pgcrypto` availability. A controlled PostgreSQL
+service restart and separate tunnel restart changed both process IDs; the API
+then returned local and public health/readiness `200`, and the complete saved
+customer/project state above matched again. The obsolete processes were
+stopped, while the old database files were retained without deletion for
+rollback. No whole-host reboot was performed.
+
+The exact non-secret installed units are recorded under `ops/staging/`.
+
 ## Deliberate holds and remaining production work
 
 - `$5` quote creation works, but Stripe payment and entitlement effects remain
@@ -105,6 +138,10 @@ to this evidence.
   hosted runtime and PostgreSQL path, reverse proxy/TLS, backup and restore
   evidence, monitoring, generated-artifact deployment, DNS cutover, and a
   post-cutover browser/database proof.
+- HQ and Zen currently share the same observed public site/edge, so Zen is not
+  yet the distinct off-site failure domain required by the production backup
+  design. The staging rollback dump is local and does not close that production
+  requirement.
 
 Staging proves that the current website, account, recovery, project, and held
 quote path is usable. It does not label payment, publication, domains, the
