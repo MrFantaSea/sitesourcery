@@ -576,7 +576,13 @@
       undoButton.disabled = true;
       return;
     }
-    preview.srcdoc = current.result.html;
+    // Reassigning srcdoc on a loaded sandboxed iframe can leave it unpainted
+    // (first make renders, every look-switch after goes white). Clear first,
+    // hand the new document to the next frame.
+    preview.removeAttribute("srcdoc");
+    window.requestAnimationFrame(function () {
+      preview.srcdoc = current.result.html;
+    });
     versionStatus.textContent = (message ? message + " " : "")
       + "Version " + (currentVersionIndex + 1) + " · "
       + themeLabel(current.result.theme) + " · "
