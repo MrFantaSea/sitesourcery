@@ -65,7 +65,6 @@ Honor-gates by design; the human provisioning step is the real enforcement.
 4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
 5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
    approved in spirit, executes during the Sorcery walk.
-6. **/abracadabra/how/** — orphan page, fold + stub pending.
 7. Homepage nits he may or may not want: lede spacing ("$5-Custom"),
    no name/face/proof on page (review nits; homepage is HIS locked design).
 
@@ -86,10 +85,12 @@ vessel; medallion CLICK TO CONJURE; whole box clickable), the maker
 sessions only, Crystal/Hearth/Midnight, includes-modal, versions panel
 hidden — engine kept for tier era).
 NEXT: Sorcery (/custom/) with the same knife, then Responder, Spell book
-(/work/), About, Contact, FAQ, Legal, Domains-page polish. Also pending:
-maker 390px mobile sweep; verify "Open working preview" button still
-works post-blob-change; the three base looks still need their DEPTH pass
-("samples are basic and lame") — task #20.
+(/work/), About, Contact, FAQ, Legal, Domains-page polish. CLOSED since
+first writing: /abracadabra/how/ stubbed; maker phone-swept clean at
+320/390/480 (rail folds 2x2); Open-working-preview verified post-blob;
+Midnight recolored navy. Still open by design: the three base looks'
+DEPTH pass ("samples are basic and lame") — coupled to the \$35 tier
+co-design, task #20.
 
 ## Tooling (all in scratchpad, session-portable patterns)
 
