@@ -4,6 +4,15 @@ Written so no ruling, promise, or open thread is lost when the working
 conversation is condensed. If you are an assistant reading this fresh:
 these are OWNER RULINGS and open work, not suggestions.
 
+
+## Owner test keys (no card needed)
+
+The paid states are session flags set by Stripe's redirect - the same doors
+can be opened by hand for testing (each applies to that TAB until closed):
+- Simulate the $5 download tier:  /abracadabra/app/?paid=1
+- Simulate Alakazam active:       /abracadabra/app/?alakazam=1
+Honor-gates by design; the human provisioning step is the real enforcement.
+
 ## Standing rulings (never drift)
 
 - **Spellings**: Abracadabra (C). **Alakazam with a K** — the early build's

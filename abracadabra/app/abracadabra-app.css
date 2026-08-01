@@ -277,7 +277,7 @@
 .spark-theme-swatch{grid-column:1/-1;height:7.5rem;margin-bottom:.45rem;border-radius:.7rem}
 .spark-theme-card.clear .spark-theme-swatch{background:linear-gradient(145deg,#fff,#dfe8fb 70%,#315fc8)}
 .spark-theme-card.warm .spark-theme-swatch{background:linear-gradient(145deg,#fff8ed,#e8c29b 65%,#a7462c)}
-.spark-theme-card.arcane .spark-theme-swatch{background:radial-gradient(circle at 70% 26%,#d8b4ff,transparent 18%),linear-gradient(145deg,#251137,#0b0710 72%)}
+.spark-theme-card.arcane .spark-theme-swatch{background:radial-gradient(circle at 70% 26%,#9cc0ff,transparent 18%),linear-gradient(145deg,#0f1d38,#070b14 72%)}
 
 .spark-truth-review dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;border:1px solid var(--spark-line);border-radius:1rem;overflow:hidden}
 .spark-truth-review dl>div{min-width:0;padding:1rem;background:rgba(7,4,11,.36)}

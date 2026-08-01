@@ -81,13 +81,13 @@
     arcane: Object.freeze({
       label: "Arcane",
       css: [
-        ":root{--paper:#0d0915;--ink:#fbf5ff;--muted:#c7b7d2;--line:#3b2a4b;--accent:#c29aff;--wash:#1d112b;--panel:#15101f;--radius:20px}",
-        "body{font-family:Georgia,\"Times New Roman\",serif;background-image:radial-gradient(circle at 80% 10%,#2a1640 0,transparent 34rem)}.eyebrow,.action,.facts,.sitebar{font-family:ui-sans-serif,system-ui,sans-serif}",
+        ":root{--paper:#0a0f1c;--ink:#f2f6ff;--muted:#aebad2;--line:#22324e;--accent:#7fa8ff;--wash:#101c34;--panel:#0e1626;--radius:20px}",
+        "body{font-family:Georgia,\"Times New Roman\",serif;background-image:radial-gradient(circle at 80% 10%,#12274a 0,transparent 34rem)}.eyebrow,.action,.facts,.sitebar{font-family:ui-sans-serif,system-ui,sans-serif}",
         "html.look-arcane{color-scheme:dark}",
-        ".look-arcane .hero{align-items:end;min-height:clamp(36rem,78svh,52rem);background:radial-gradient(circle at 78% 22%,#3a1e58 0,transparent 27rem),linear-gradient(145deg,var(--wash),transparent 68%)}",
+        ".look-arcane .hero{align-items:end;min-height:clamp(36rem,78svh,52rem);background:radial-gradient(circle at 78% 22%,#1a3a66 0,transparent 27rem),linear-gradient(145deg,var(--wash),transparent 68%)}",
         ".look-arcane .hero h1{max-width:11ch;font-style:italic;font-weight:500}",
-        ".look-arcane .section:nth-of-type(even){background:rgba(194,154,255,.035)}",
-        ".look-arcane .offers li{min-height:9rem;background:linear-gradient(155deg,var(--panel),rgba(194,154,255,.08))}",
+        ".look-arcane .section:nth-of-type(even){background:rgba(127,168,255,.04)}",
+        ".look-arcane .offers li{min-height:9rem;background:linear-gradient(155deg,var(--panel),rgba(127,168,255,.09))}",
         ".look-arcane .section:nth-of-type(odd) .wrap{padding-left:clamp(0rem,8vw,7rem)}"
       ].join("")
     })
