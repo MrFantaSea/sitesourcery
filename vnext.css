@@ -7666,3 +7666,20 @@ li[id^="about-"]:target {
   color: #f0e5cd;
   text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85), 0 2px 14px rgba(8, 7, 12, 0.6);
 }
+
+/* The quiet fact line under the abracadabra hero button. */
+.hero-fact {
+  margin: 0.4rem 0 0;
+  color: rgba(242, 220, 176, 0.85);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 5px rgba(8, 7, 12, 0.85);
+}
+
+/* With the featured frame gone, the three looks are the show — give them
+   room and let the middle one lead. */
+.abracadabra-page .abracadabra-looks {
+  padding-top: 1.5rem;
+}
