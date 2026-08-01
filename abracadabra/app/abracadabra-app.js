@@ -649,6 +649,12 @@
         ? (root.classList.contains("ss-live") ? "Your page — Alakazam keeps it." : "Your page.")
         : previewLegendDefault;
     }
+    /* Owner ruling: the hero names the room you are in. Making = Abracadabra;
+       the kept page = Alakazam. Only the lane page wears the combined name. */
+    var heroTitle = document.getElementById("spark-title");
+    if (heroTitle) {
+      heroTitle.textContent = keep && currentStep === "preview" ? "Alakazam" : "Abracadabra";
+    }
   }
 
   function themeLabel(theme) {

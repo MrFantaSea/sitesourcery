@@ -72,7 +72,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-app-save-gate",
     file: "abracadabra/app/index.html",
     kind: "html",
-    sourceSha256: "e010d498ad9d29360ecc6a35cbbcfc94c102a11208a7ab06721edea5481818b1",
+    sourceSha256: "4f5b68c532a2d797aa05c7088527e5d561c11558f24880444db5eebda13bac75",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-save-gate.html",
     hostedSha256: "fd6c526a83d6611d270ff8d5396a0c027a4262af2651bfcb3fd8f7ee5d928bbc",
   }),

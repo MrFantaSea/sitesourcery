@@ -495,7 +495,7 @@
    worth paying for. The 90s furniture is gone. */
 .spark-extras.is-locked [data-extra-controls]{display:none}
 .spark-extras:not(.is-locked) .spark-tease{display:none}
-.spark-tease{margin:.2rem 0 0;text-align:center;color:rgba(242,220,176,.85);font-size:.8rem;letter-spacing:.04em}
+.spark-tease{margin:.2rem 0 0;text-align:center;color:var(--spark-mint);font-size:.78rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
 .spark-tease b{color:#f2ce83;font-weight:800}
 .spark-extras.is-locked .spark-extra-rows,.spark-extras.is-locked .spark-fields{opacity:1;filter:none}
 .spark-chiprow{display:flex;flex-wrap:wrap;gap:.5rem}
@@ -540,3 +540,6 @@
 .spark-address{margin:1.6rem auto 0;max-width:34rem;text-align:left}
 .spark-address .spark-panel-label,.spark-address .spark-tease,.spark-address>.spark-fine,.spark-address [data-extra-controls]>.spark-fine{text-align:center}
 .spark-address .domain-search-status{font-size:.8rem}
+
+/* the address hunt exists only once the download is paid - no teaser */
+.spark-address.is-locked{display:none}

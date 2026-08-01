@@ -68,11 +68,22 @@ Honor-gates by design; the human provisioning step is the real enforcement.
 4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
 5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
    approved in spirit, executes during the Sorcery walk.
-6. **Accounts do not exist** (owner flagged 2026-08-01: "i did all this
-   without ever making an account... thats not good"). Current truth: the
-   static build CAN'T have accounts; identity for Alakazam = the Stripe
-   receipt email + the personal provisioning call, and the room now says
-   so. Real accounts are a server-era decision (task #13) - his call.
+6. **Accounts: DECIDED, not open** (2026-08-01). Founder order, his words:
+   "Clients need accounts, and we need a client account back end created
+   also because we are the site provider... if they call me for help...
+   Accounts are needed." And: "The point is to make the account part
+   real. We're trying to be in business here." => task #21: customer
+   accounts (created at the $5; account gates persistence, exactly his
+   original ruling) + an OPERATOR back end (search by email/phone, see
+   pages/versions/paid state, fix things on a support call) + Stripe
+   webhook flipping entitlements server-side. Bridge first: browser-
+   local account v1 so "$5 download and account creation" (his dictated
+   teaser copy, now live in the kit) is true tonight. Only open piece:
+   WHERE production runs - the same deploy-target question. Lesson
+   recorded: when he dictates copy naming something unbuilt, that is a
+   BUILD ORDER for the thing, not a wording problem - build the closest
+   true version immediately and say what remains, never water down his
+   words with disclaimers.
 7. Homepage nits he may or may not want: lede spacing ("$5-Custom"),
    no name/face/proof on page (review nits; homepage is HIS locked design).
 

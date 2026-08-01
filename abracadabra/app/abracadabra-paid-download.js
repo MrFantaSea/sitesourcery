@@ -73,7 +73,7 @@
         golive.classList.add("is-locked-link");
         golive.setAttribute("aria-disabled", "true");
         golive.removeAttribute("href");
-        golive.textContent = "Go live — unlocks after the $5 download";
+        golive.textContent = "Go live — unlocks after the download";
       }
     }
   }
