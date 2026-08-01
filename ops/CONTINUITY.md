@@ -1,0 +1,108 @@
+# CONTINUITY — the session ledger (updated 2026-08-01, pre-compaction)
+
+Written so no ruling, promise, or open thread is lost when the working
+conversation is condensed. If you are an assistant reading this fresh:
+these are OWNER RULINGS and open work, not suggestions.
+
+## Standing rulings (never drift)
+
+- **Spellings**: Abracadabra (C). **Alakazam with a K** — the early build's
+  "Alacazam" is retired everywhere incl. Stripe. Routes/code hooks keep
+  lowercase c-aliases; never "correct" the K back.
+- **No account = no persistence.** The maker runs on sessionStorage only.
+  Close the tab, everything is gone, and the copy says so. Never add silent
+  cross-visit memory.
+- **The gate ladder**: FREE = make + preview (Crystal/Hearth/Midnight).
+  **$5 download** = the file (in-app unlock via Stripe redirect ?paid=1) +
+  the style kit (6 accents, type pairing, edges) + it UNLOCKS the Go-live
+  door and doubles as the $5 coupon (owner applies it by hand on invoice 1).
+  **Alakazam $25/mo** (?alakazam=1 redirect) = payment links (Cash App,
+  Venmo) + everything stays unlocked. Locked options may ONLY be shown as a
+  teaser line — and only if paying makes them genuinely render.
+- **Looks**: labels Crystal / Hearth / Midnight (values clear/warm/arcane
+  stay internal). The sample loader must NEVER override the chosen look.
+- **Nav (all pages)**: ABRACADABRA · ALAKAZAM / SORCERY / THE RESPONDER /
+  SPELL BOOK / ABOUT + phone pill. Menu words are the brand system.
+- **Voice**: first person always (no "Zack does X"), US spelling
+  (customize), centered text, minimalist, nothing explained twice, every
+  card demos itself where possible. House style = home-hero frost pools,
+  gold coins/rings, glass panels, storm background.
+- **Responder**: $300 + $250/mo, in person only, never a site checkout.
+- **Push gate**: owner will push only a "real, working, comprehensible,
+  logical" site. NOTHING pushed yet; live sitesourcery.com still runs the
+  old build. A deploy allowlist MUST exclude /server/, /scripts/, /ops/,
+  BUILD.md, node_modules before any push.
+
+## Money rails (all live, count pinned at 5 by the checker)
+
+- $5 Abracadabra download — buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00 →
+  redirects to /abracadabra/app/?paid=1 (live domain).
+- $25/mo Alakazam hosting — buy.stripe.com/9B65kF0iIgvseho9A87kc01 →
+  redirects to /abracadabra/app/?alakazam=1.
+- $200 assessment — bJe4gB8Pe5QOb5cdQo7kc02.
+- $40/yr .com — dRm9AV0iIfroddk5jS7kc03. $45/yr .net/.org —
+  cNi7sN8Pegvs7T07s07kc04 (price_1TzP2pPi1bfFonRcLOug1Xnb).
+- Credits ($5 and $200) are applied BY HAND — site says so; webhook later.
+
+## Open decisions (OWNER's — ask, don't assume)
+
+1. **Deploy target**: which repo/host serves sitesourcery.com? Asked twice,
+   never answered. Blocks the push.
+2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
+   (his design-lock); needs his one-line ok.
+3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the
+   blank is his. Candidates parked in task #20 (menu section, more fonts,
+   photo header, section toggles). Menu-on-page extra NOT built yet.
+4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
+5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
+   approved in spirit, executes during the Sorcery walk.
+6. **/abracadabra/how/** — orphan page, fold + stub pending.
+7. Homepage nits he may or may not want: lede spacing ("$5-Custom"),
+   no name/face/proof on page (review nits; homepage is HIS locked design).
+
+## Owner's own errands (remind, don't nag)
+
+- Verify Spaceship wholesale costs (price book keeps costsConfirmed:false).
+- Start Twilio A2P 10DLC registration (3–6 week clock; Responder blocked
+  on it).
+- After push: make one real $5 self-purchase as the first production test
+  (self-refund; Stripe keeps ~fixed fee only).
+
+## Walk state (task #17)
+
+DONE and owner-approved: homepage (locked), /abracadabra/ lane page
+(incantation home-hero certified zero-diff by computed-style tool; altar
+vessel; medallion CLICK TO CONJURE; whole box clickable), the maker
+(4 steps Look-first, gate ladder, blob previews so in-page links work,
+sessions only, Crystal/Hearth/Midnight, includes-modal, versions panel
+hidden — engine kept for tier era).
+NEXT: Sorcery (/custom/) with the same knife, then Responder, Spell book
+(/work/), About, Contact, FAQ, Legal, Domains-page polish. Also pending:
+maker 390px mobile sweep; verify "Open working preview" button still
+works post-blob-change; the three base looks still need their DEPTH pass
+("samples are basic and lame") — task #20.
+
+## Tooling (all in scratchpad, session-portable patterns)
+
+- snap.mjs URL W H scrollY — CDP frames (port 9223).
+- hero-diff.mjs — computed-style diff between two pages' heroes; zero
+  output = certified match.
+- sweep-widths.mjs — every route × 320/390/480, overflow + menu button.
+- reseal-v2.mjs — truth-slot manifest reseal; the checker VERIFIES seals,
+  so run it after editing sealed regions (app hero/save-gate, legal).
+- scripts/check-site.mjs — routes, nav, links, anchors, prices vs catalog,
+  canonicals, resource resolution, og assets, rails===5, seals, sitemap.
+- Headless gotchas learned: window.confirm freezes headless (stub it);
+  /json/new?URL + heavy multi-tab probes flake — single tab + race guards;
+  srcdoc iframes mispaint on reassignment and mishandle anchors (hence
+  blob previews).
+
+## Incident ledger (so mistakes stay learned)
+
+- Fabricated Stripe ID (caught, replaced) — never invent identifiers.
+- K-sweep missed metas and .js strings first pass — sweeps must include
+  meta content and scripts.
+- "Cache" blamed twice for real bugs (boot setStep, validation trap) —
+  verify server-side truth before blaming the owner's browser.
+- text-wrap is half of white-space shorthand; !important archaeology bit
+  three times — prune, don't stack.
