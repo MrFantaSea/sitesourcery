@@ -56,6 +56,11 @@ The data, export, port, base-domain, and PostgreSQL TLS environment variables
 have fail-closed defaults in `bin/server.mjs`. Both HTTP ports must be distinct,
 unprivileged loopback ports behind a reviewed reverse proxy.
 
+Migration 021 installs the exact V2 product, privacy, and website document
+authority used by project creation. Readiness verifies those versions and the
+SHA-256 digests of the reviewed hosted legal artifacts before the runtime can
+claim that saved projects are available.
+
 ## Account-email delivery modes
 
 `SITESOURCERY_REGISTRATION_MAIL_MODE` accepts exactly:

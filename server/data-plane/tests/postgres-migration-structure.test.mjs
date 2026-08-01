@@ -448,3 +448,33 @@ test("recovery delivery is reserved durably before a provider effect and termina
     /^\s*(?:recipient|recovery_url|token_digest|action_url)\s+[a-z]/imu
   );
 });
+
+test("hosted legal authority is bound to the exact reviewed V2 artifacts", async () => {
+  const all = await migrations();
+  const legal = all.find(
+    ({ name }) =>
+      name ===
+      "202608010021_hosted_legal_authority.sql"
+  );
+  assert.ok(legal);
+  assert.match(
+    legal.sql,
+    /create function ss\.hosted_runtime_contract_v21\(\)/iu
+  );
+  assert.match(
+    legal.sql,
+    /SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/iu
+  );
+  assert.match(
+    legal.sql,
+    /SS-HOSTED-PRIVACY-2026-07-30-V2/iu
+  );
+  assert.match(
+    legal.sql,
+    /bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196/iu
+  );
+  assert.match(
+    legal.sql,
+    /b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b/iu
+  );
+});

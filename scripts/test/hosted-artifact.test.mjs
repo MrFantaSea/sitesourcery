@@ -402,6 +402,10 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   ]) {
     assert.equal(count(app, `name="${field}"`), 1, field);
   }
+  assert.match(
+    app,
+    /name="acceptedProjectTerms"[\s\S]*I accept the <a href="\/legal\/website-terms\/"[^>]*>website terms<\/a>, including the <a href="\/legal\/website-terms\/#self-service"[^>]*>self-service product terms<\/a>, and acknowledge the <a href="\/legal\/privacy\/"[^>]*>privacy notice<\/a> for this project\./u,
+  );
   assert.match(app, /\$5 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
 
   const landing = sources.get("abracadabra/index.html");
