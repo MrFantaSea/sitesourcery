@@ -7730,3 +7730,100 @@ li[id^="about-"]:target {
   font-size: 0.6em;
   letter-spacing: 0.16em;
 }
+
+/* ---------------------------------------------------------------------------
+   OWNER REDLINE, /abracadabra/:
+   - Both incantation words BIG - Alakazam no longer the little sibling.
+   - White section heads get the homepage's dark halos against the storm.
+   - The deal pair stops mimicking the homepage fork: one joined diptych,
+     two halves of a single spell, same glass, a gold flow-mark between.
+   --------------------------------------------------------------------------- */
+
+.abracadabra-page .hero-copy h1 {
+  font-size: clamp(2.1rem, 5.3vw, 4.7rem);
+}
+
+.abracadabra-page .hero-copy h1 .h1-alt {
+  margin-top: 0.06em;
+  font-size: 1em;
+  letter-spacing: 0.1em;
+}
+
+.abracadabra-page .section-head h2,
+.abracadabra-page .section-head .overline,
+.abracadabra-page .section-head .eyebrow {
+  text-shadow:
+    0 2px 6px rgba(8, 7, 12, 0.9),
+    0 4px 24px rgba(8, 7, 12, 0.65);
+}
+
+/* The diptych: one gold-rimmed vessel, two chambers. */
+.lane-diptych {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+  border: 1.5px solid rgba(242, 206, 131, 0.55);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 50% -20%, rgba(174, 112, 255, 0.14), transparent 26rem),
+    linear-gradient(165deg, rgba(24, 15, 36, 0.34) 0%, rgba(14, 9, 22, 0.4) 100%);
+  backdrop-filter: blur(7px) saturate(1.15);
+  -webkit-backdrop-filter: blur(7px) saturate(1.15);
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 206, 131, 0.1),
+    0 0 2.6rem rgba(122, 79, 192, 0.3),
+    0 1.2rem 2.8rem rgba(8, 7, 12, 0.5);
+}
+
+.lane-diptych .lane-half {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  animation: none;
+}
+
+.lane-diptych .lane-half + .lane-half {
+  border-left: 1px dashed rgba(242, 206, 131, 0.4);
+}
+
+/* The flow-mark: the spell passes from one chamber to the other. */
+.lane-diptych::after {
+  content: "\2726";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(242, 206, 131, 0.6);
+  border-radius: 50%;
+  background: #140e20;
+  color: #f2ce83;
+  font-size: 1.1rem;
+  box-shadow: 0 0 1.4rem rgba(242, 206, 131, 0.35);
+}
+
+.lane-half .card-kicker {
+  color: #f2ce83;
+  font-size: clamp(1.2rem, 1.8vw, 1.6rem);
+  letter-spacing: 0.14em;
+}
+
+@media (max-width: 78rem) {
+  .lane-diptych {
+    grid-template-columns: 1fr;
+  }
+
+  .lane-diptych .lane-half + .lane-half {
+    border-left: 0;
+    border-top: 1px dashed rgba(242, 206, 131, 0.4);
+  }
+}
