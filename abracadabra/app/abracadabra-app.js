@@ -211,7 +211,7 @@
   var clearDraftButton = maker.querySelector("[data-clear-draft]");
   var versions = [];
   var currentVersionIndex = -1;
-  var currentStep = "facts";
+  var currentStep = "vibe";
   var reviewedDigest = "";
   var reviewedRaw = null;
   var cleanDraftFingerprint = "";
@@ -555,7 +555,7 @@
       preview.removeAttribute("srcdoc");
       versionList.replaceChildren();
       renderCurrentVersion();
-      setStep("facts", { focus: false });
+      setStep("vibe", { focus: false });
     }
     markDraftClean();
     return true;

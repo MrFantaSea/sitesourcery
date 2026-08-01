@@ -47,19 +47,12 @@
     <section class="spark-hero" aria-labelledby="spark-title">
       <div class="site-shell spark-hero-grid">
         <div>
-          <p class="spark-kicker">Abracadabra · browser page maker</p>
-          <h1 id="spark-title">See your page free. $5 to download it.</h1>
-          <p class="spark-lede">Add your business details, choose a look, and review the facts before the page is made.</p>
-          <p><strong>Your preview stays in this tab.</strong> Refresh or close the tab and you will start over.</p>
-          <p>This build does not create an online account, take payment, register or connect a domain, or publish.</p>
-          <ul class="spark-trust">
-            <li>No account needed</li>
-            <li>Three distinct looks</li>
-            <li>You approve every detail</li>
-            <li>Your $5 comes off Alakazam</li>
-          </ul>
+          <p class="spark-kicker">Abracadabra · Alakazam</p>
+          <h1 id="spark-title">The workroom.</h1>
+          <p class="spark-lede">Pick a look, add your facts, and your page appears — free to look at. It stays in this tab; refresh and you start over.</p>
+          <p class="spark-small">No account. Nothing published. $5 only to download — credited toward Alakazam.</p>
           <div class="spark-hero-actions">
-            <a class="spark-button spark-button-primary" href="#workroom">Make my page</a>
+            <a class="spark-button spark-button-primary" href="#workroom">Begin</a>
           </div>
         </div>
       </div>
@@ -69,8 +62,8 @@
     <section class="spark-workroom" id="workroom" tabindex="-1" aria-labelledby="workroom-title">
       <div class="site-shell">
         <header class="spark-section-head">
-          <p class="spark-kicker">Website builder</p>
-          <h2 id="workroom-title">Start with the business basics.</h2>
+          <p class="spark-kicker">The six steps</p>
+          <h2 id="workroom-title">Pick a look. Add your facts. Watch it build.</h2>
           <p id="local-privacy-note">No account is required to build and test the first version.</p>
         </header>
 
@@ -86,10 +79,10 @@
 
         <div id="spark-maker" class="spark-maker" aria-disabled="true" inert>
           <ol class="spark-progress">
-            <li data-progress-step="facts" aria-current="step"><span>1</span>Basics</li>
-            <li data-progress-step="details"><span>2</span>Details</li>
-            <li data-progress-step="contact"><span>3</span>Contact</li>
-            <li data-progress-step="vibe"><span>4</span>Look</li>
+            <li data-progress-step="vibe" aria-current="step"><span>1</span>Look</li>
+            <li data-progress-step="facts"><span>2</span>Basics</li>
+            <li data-progress-step="details"><span>3</span>Details</li>
+            <li data-progress-step="contact"><span>4</span>Contact</li>
             <li data-progress-step="truth"><span>5</span>Review</li>
             <li data-progress-step="preview"><span>6</span>Preview</li>
           </ol>
@@ -104,8 +97,38 @@
             <ul></ul>
           </div>
 
-          <fieldset class="spark-step" data-step="facts">
-            <legend>1. Start with the basics</legend>
+          <fieldset class="spark-step" data-step="vibe">
+            <legend>1. Choose a look</legend>
+            <p class="spark-step-intro">The look changes the style, not your words.</p>
+
+            <div class="spark-theme-grid">
+              <label class="spark-theme-card clear">
+                <input type="radio" name="theme" value="clear" checked>
+                <span class="spark-theme-swatch" aria-hidden="true"></span>
+                <strong>Clear</strong>
+                <small>Crisp, restrained, and direct.</small>
+              </label>
+              <label class="spark-theme-card warm">
+                <input type="radio" name="theme" value="warm">
+                <span class="spark-theme-swatch" aria-hidden="true"></span>
+                <strong>Warm</strong>
+                <small>Human, tactile, and welcoming.</small>
+              </label>
+              <label class="spark-theme-card arcane">
+                <input type="radio" name="theme" value="arcane">
+                <span class="spark-theme-swatch" aria-hidden="true"></span>
+                <strong>Arcane</strong>
+                <small>Imaginative, vivid, and high-energy.</small>
+              </label>
+            </div>
+
+            <div class="spark-step-actions">
+              <button class="spark-button spark-button-primary" type="button" data-next="facts">Add the basics</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="spark-step" data-step="facts" hidden>
+            <legend>2. Start with the basics</legend>
             <p class="spark-step-intro">Add the name and one plain sentence about the business.</p>
 
             <div class="spark-quick-start">
@@ -131,12 +154,13 @@
             </div>
 
             <div class="spark-step-actions">
+              <button class="spark-button" type="button" data-back="vibe">Back to the look</button>
               <button class="spark-button spark-button-primary" type="button" data-next="details" data-validate-step="facts">Add useful details</button>
             </div>
           </fieldset>
 
           <fieldset class="spark-step" data-step="details" hidden>
-            <legend>2. Add useful details</legend>
+            <legend>3. Add useful details</legend>
             <p class="spark-step-intro">Add at least one detail that helps a visitor decide what to do next.</p>
 
             <div class="spark-fields">
@@ -170,7 +194,7 @@
           </fieldset>
 
           <fieldset class="spark-step" data-step="contact" hidden>
-            <legend>3. Add a visitor’s next step</legend>
+            <legend>4. Add a visitor’s next step</legend>
             <p class="spark-step-intro">Add at least one real way for a customer to contact you or continue.</p>
 
             <div class="spark-fields">
@@ -204,40 +228,11 @@
 
             <div class="spark-step-actions">
               <button class="spark-button" type="button" data-back="details">Back to details</button>
-              <button class="spark-button spark-button-primary" type="button" data-next="vibe" data-validate-step="contact">Choose the look</button>
+              <button class="spark-button spark-button-primary" type="button" data-next="truth" data-validate-step="contact">Review the page</button>
             </div>
           </fieldset>
 
-          <fieldset class="spark-step" data-step="vibe" hidden>
-            <legend>4. Choose a look</legend>
-            <p class="spark-step-intro">The look changes the style, not your words.</p>
-
-            <div class="spark-theme-grid">
-              <label class="spark-theme-card clear">
-                <input type="radio" name="theme" value="clear" checked>
-                <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Clear</strong>
-                <small>Crisp, restrained, and direct.</small>
-              </label>
-              <label class="spark-theme-card warm">
-                <input type="radio" name="theme" value="warm">
-                <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Warm</strong>
-                <small>Human, tactile, and welcoming.</small>
-              </label>
-              <label class="spark-theme-card arcane">
-                <input type="radio" name="theme" value="arcane">
-                <span class="spark-theme-swatch" aria-hidden="true"></span>
-                <strong>Arcane</strong>
-                <small>Imaginative, vivid, and high-energy.</small>
-              </label>
-            </div>
-
-            <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="contact">Back to contact choices</button>
-              <button class="spark-button spark-button-primary" type="button" data-next="truth">Review the page</button>
-            </div>
-          </fieldset>
+          
 
           <fieldset class="spark-step" data-step="truth" hidden>
             <legend>5. Review the page details</legend>
@@ -251,7 +246,7 @@
             </label>
 
             <div class="spark-step-actions">
-              <button class="spark-button" type="button" data-back="vibe">Back to the look</button>
+              <button class="spark-button" type="button" data-back="contact">Back to contact choices</button>
               <button class="spark-button spark-button-primary" id="make-preview" type="button">Make my preview</button>
             </div>
           </fieldset>
