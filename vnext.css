@@ -7529,12 +7529,6 @@ li[id^="about-"]:target {
    plans section borrows the fork cards wholesale. Section heads center.
    --------------------------------------------------------------------------- */
 
-.abracadabra-page .hero-grid {
-  grid-template-columns: 1fr;
-  justify-items: center;
-  gap: 2.2rem;
-}
-
 
 .abracadabra-page .maker-proof-featured {
   width: min(52rem, 100%);
@@ -7609,11 +7603,6 @@ li[id^="about-"]:target {
   text-wrap: balance;
 }
 
-.abracadabra-page .hero-copy .eyebrow {
-  color: #f2ce83;
-  font-weight: 800;
-  text-shadow: 0 1px 6px rgba(8, 7, 12, 0.95), 0 0 20px rgba(8, 7, 12, 0.7);
-}
 
 /* .section-head is a two-column grid in its home stylesheet; on this page it
    becomes a centered column, and the subline gets ink that survives storms. */
@@ -7908,28 +7897,6 @@ li[id^="about-"]:target {
    spell-door, and the vessel's spruce.
    --------------------------------------------------------------------------- */
 
-.abracadabra-page .hero-copy h1,
-.abracadabra-page .hero-copy .lede,
-.abracadabra-page .hero-copy .hero-fact,
-.abracadabra-page .hero-copy .eyebrow {
-  position: relative;
-  z-index: 0;
-}
-
-.abracadabra-page .hero-copy h1::before,
-.abracadabra-page .hero-copy .lede::before,
-.abracadabra-page .hero-copy .hero-fact::before,
-.abracadabra-page .hero-copy .eyebrow::before {
-  content: "";
-  position: absolute;
-  inset: -0.5rem -1.8rem;
-  z-index: -1;
-  border-radius: 999px;
-  backdrop-filter: blur(11px);
-  -webkit-backdrop-filter: blur(11px);
-  mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 52%, transparent 100%);
-}
 
 /* The footer's copy sits on the same feathered frost, on every page. */
 .footer-stack {
