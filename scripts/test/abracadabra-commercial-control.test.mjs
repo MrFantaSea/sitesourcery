@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { DEFAULT_PLATFORM_BASE_DOMAIN } from "../../server/selfhost/src/hostname.mjs";
+
 const control = JSON.parse(
   await readFile(
     new URL("../../data/abracadabra-commercial-control.json", import.meta.url),
@@ -101,6 +103,14 @@ test("Rent, Own, and Owned + managed remain distinct unresolved tenure choices",
   for (const mode of Object.values(modes)) {
     assert.equal(mode.retentionAndExportDays, 90);
   }
+});
+
+test("the rented customer address and runtime authority stay identical", () => {
+  assert.equal(DEFAULT_PLATFORM_BASE_DOMAIN, "sitesourcery.me");
+  assert.equal(
+    control.sharedProductBoundary.licensedHostnamePattern,
+    `label.${DEFAULT_PLATFORM_BASE_DOMAIN}`,
+  );
 });
 
 test("domain choice, existing build tiers, and Host care cannot invent an Abracadabra price", () => {

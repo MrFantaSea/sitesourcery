@@ -112,12 +112,12 @@ test("TLS ask allows only an exact active approved custom hostname with a verifi
     files: files("platform")
   });
   await runtime.reserveHostname({
-    hostname: "alpha.sites.sitesourcery.me",
+    hostname: "alpha.sitesourcery.me",
     projectId: "platform-project",
     source: "platform",
     tlsState: "approved"
   });
-  let platform = runtime.control.lookup("alpha.sites.sitesourcery.me");
+  let platform = runtime.control.lookup("alpha.sitesourcery.me");
   await runtime.activate({
     hostname: platform.hostname,
     releaseId: "platform-release",
@@ -136,7 +136,7 @@ test("TLS ask allows only an exact active approved custom hostname with a verifi
   assert.equal(allowed.status, 200);
   for (const query of [
     "domain=unknown.example",
-    "domain=alpha.sites.sitesourcery.me",
+    "domain=alpha.sitesourcery.me",
     "domain=customer.example&domain=evil.example",
     "domain=customer.example&extra=1"
   ]) {
@@ -216,7 +216,7 @@ test("restart recovers the committed mapping and ignores an orphan future histor
   const restarted = await SelfHostRuntime.open({
     root,
     publicationHeld: false,
-    platformBaseDomain: "sites.sitesourcery.me"
+    platformBaseDomain: "sitesourcery.me"
   });
   assert.deepEqual(restarted.control.lookup("customer.example"), expected);
   const response = await restarted.fetch(tenantRequest("customer.example"));

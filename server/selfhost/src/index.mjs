@@ -2,6 +2,7 @@ export { canonicalJson, jsonEnvelope, sha256, verifyEnvelope } from "./canonical
 export { CONTROL_SCHEMA, ControlStore } from "./control-store.mjs";
 export { SelfHostError } from "./errors.mjs";
 export {
+  DEFAULT_PLATFORM_BASE_DOMAIN,
   isPlatformHostname,
   normalizeHostname,
   requestHostname

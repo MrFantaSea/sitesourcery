@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   createNodeHandler as createTenantNodeHandler,
+  DEFAULT_PLATFORM_BASE_DOMAIN,
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
 import {
@@ -68,7 +69,7 @@ const dataRoot = path.resolve(
 );
 const licensedBaseDomain =
   process.env.SITESOURCERY_LICENSED_BASE_DOMAIN ??
-  "sites.sitesourcery.me";
+  DEFAULT_PLATFORM_BASE_DOMAIN;
 const approvalPath =
   process.env.SITESOURCERY_PUBLICATION_APPROVAL_PATH ??
   "/etc/sitesourcery/PUBLICATION_APPROVED";

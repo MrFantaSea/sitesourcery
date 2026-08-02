@@ -12,7 +12,7 @@ export async function testRuntime({ held = false, root = null } = {}) {
     root: selectedRoot,
     publicationHeld: held,
     clock: () => NOW,
-    platformBaseDomain: "sites.sitesourcery.me"
+    platformBaseDomain: "sitesourcery.me"
   });
   return { runtime, root: selectedRoot };
 }

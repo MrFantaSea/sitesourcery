@@ -45,6 +45,16 @@ these are OWNER RULINGS and open work, not suggestions.
   processes were stopped, old database files retained, and a private mode-0600
   rollback dump recorded. Exact units and evidence live in `ops/staging/` and
   `ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md`.
+- The production-host review caught a separate address-authority drift before
+  deployment: customer copy and commercial control promise
+  `label.sitesourcery.me`, while three backend defaults still inserted an extra
+  `sites.` label. The self-host runtime and hosted service now share one
+  `DEFAULT_PLATFORM_BASE_DOMAIN = "sitesourcery.me"`; a cross-layer regression
+  pins it to the public commercial contract. The complete Node 24.18.0 gate
+  passed with 264 current Node tests, 19 self-host tests, 106 hosted-service
+  passes plus two expected PostgreSQL-env skips, 22 ops tests, both artifacts,
+  and the 15-route by 3-viewport browser audit. Staging's explicit invalid test
+  domain meant no existing customer/project row required migration.
 - Recovery delivery is now durably reserved before any mail-provider
   effect. Delivered requests replay without another send; interrupted or
   ambiguous sends stop in a terminal reconciliation state. The fence

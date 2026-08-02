@@ -52,6 +52,12 @@ registrant-contact commands before the customer journey is complete.
   when commerce is enabled. Leave it unset to keep catalog publication, quotes,
   and Checkout explicitly held while the account and project runtime operates.
 
+`SITESOURCERY_LICENSED_BASE_DOMAIN` defaults to the owner-approved
+`sitesourcery.me`, so a platform address is exactly
+`label.sitesourcery.me`. The self-host runtime, hosted service, and public
+commercial control import or test the same authority; do not introduce an
+extra subdomain layer that would change the address sold to the customer.
+
 The data, export, port, base-domain, and PostgreSQL TLS environment variables
 have fail-closed defaults in `bin/server.mjs`. Both HTTP ports must be distinct,
 unprivileged loopback ports behind a reviewed reverse proxy.

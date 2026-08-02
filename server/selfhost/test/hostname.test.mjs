@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DEFAULT_PLATFORM_BASE_DOMAIN,
   isPlatformHostname,
   normalizeHostname,
   requestFilePath,
@@ -50,21 +51,22 @@ test("request URL authority and Host must agree", () => {
 });
 
 test("platform hostnames allow one unreserved label only", () => {
+  assert.equal(DEFAULT_PLATFORM_BASE_DOMAIN, "sitesourcery.me");
   assert.equal(
-    isPlatformHostname("alpha.sites.sitesourcery.me", "sites.sitesourcery.me", [
+    isPlatformHostname("alpha.sitesourcery.me", DEFAULT_PLATFORM_BASE_DOMAIN, [
       "app"
     ]),
     true
   );
   assert.equal(
     isPlatformHostname(
-      "nested.alpha.sites.sitesourcery.me",
-      "sites.sitesourcery.me"
+      "nested.alpha.sitesourcery.me",
+      DEFAULT_PLATFORM_BASE_DOMAIN
     ),
     false
   );
   assert.equal(
-    isPlatformHostname("app.sites.sitesourcery.me", "sites.sitesourcery.me", [
+    isPlatformHostname("app.sitesourcery.me", DEFAULT_PLATFORM_BASE_DOMAIN, [
       "app"
     ]),
     false

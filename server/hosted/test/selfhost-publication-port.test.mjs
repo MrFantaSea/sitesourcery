@@ -23,7 +23,7 @@ async function harness(initiallyHeld = false) {
   const runtime = await SelfHostRuntime.open({
     root,
     publicationHeld: () => publicationHeld,
-    platformBaseDomain: "sites.sitesourcery.me",
+    platformBaseDomain: "sitesourcery.me",
     clock: () => NOW
   });
   const port = createSelfHostPublicationPort({
@@ -309,13 +309,13 @@ test("licensed addresses map only to the reserved platform namespace", async () 
   const context = await harness();
   const released = await context.port.request(
     proof({
-      hostname: "cedar.sites.sitesourcery.me",
+      hostname: "cedar.sitesourcery.me",
       addressKind: "licensed"
     })
   );
   assert.equal(released.published, true);
   assert.equal(
-    context.runtime.control.lookup("cedar.sites.sitesourcery.me").source,
+    context.runtime.control.lookup("cedar.sitesourcery.me").source,
     "platform"
   );
 });

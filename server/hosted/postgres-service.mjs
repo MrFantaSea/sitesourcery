@@ -30,6 +30,7 @@ import {
 } from "./payment-provider-port.mjs";
 import { createStoredZip } from "./zip.mjs";
 import { createHeldDomainRuntime } from "./domain-postgres-runtime.mjs";
+import { DEFAULT_PLATFORM_BASE_DOMAIN } from "../selfhost/src/hostname.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -539,7 +540,7 @@ export function createCanonicalPostgresService({
   tokenFactory = randomToken,
   exportWorkerId: suppliedExportWorkerId = null,
   exportLeaseMs = DEFAULT_EXPORT_LEASE_MS,
-  licensedBaseDomain = "sites.sitesourcery.me"
+  licensedBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN
 } = {}) {
   invariant(
     authority?.kind === "canonical-postgres" &&

@@ -2,7 +2,12 @@ import path from "node:path";
 import { canonicalJson, jsonEnvelope } from "./canonical.mjs";
 import { ControlStore, CONTROL_SCHEMA } from "./control-store.mjs";
 import { SelfHostError, invariant } from "./errors.mjs";
-import { normalizeHostname, isPlatformHostname, requestHostname } from "./hostname.mjs";
+import {
+  DEFAULT_PLATFORM_BASE_DOMAIN,
+  normalizeHostname,
+  isPlatformHostname,
+  requestHostname
+} from "./hostname.mjs";
 import { ReleaseStore } from "./release-store.mjs";
 import { requestFilePath } from "./validation.mjs";
 
@@ -39,7 +44,7 @@ export class SelfHostRuntime {
     root,
     publicationHeld = true,
     controlHost = "127.0.0.1",
-    platformBaseDomain = "sites.sitesourcery.me",
+    platformBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN,
     reservedPlatformLabels = ["app", "api", "www", "admin"],
     clock = () => new Date().toISOString(),
     maximumFileBytes,

@@ -769,7 +769,7 @@ test(
     const tenantRuntime = await SelfHostRuntime.open({
       root: path.join(root, "tenant"),
       publicationHeld: false,
-      platformBaseDomain: "sites.sitesourcery.me",
+      platformBaseDomain: "sitesourcery.me",
       clock: () => NOW
     });
     const exportStore = await createPrivateExportObjectStore({
@@ -2473,10 +2473,10 @@ test(
       (
         await tenantRuntime.fetch(
           new Request(
-            "https://cedar-workshop.sites.sitesourcery.me/",
+            "https://cedar-workshop.sitesourcery.me/",
             {
               headers: {
-                host: "cedar-workshop.sites.sitesourcery.me"
+                host: "cedar-workshop.sitesourcery.me"
               }
             }
           )
@@ -2494,9 +2494,9 @@ test(
     );
     assert.equal(released.project.serving.state, "live");
     const tenantResponse = await tenantRuntime.fetch(
-      new Request("https://cedar-workshop.sites.sitesourcery.me/", {
+      new Request("https://cedar-workshop.sitesourcery.me/", {
         headers: {
-          host: "cedar-workshop.sites.sitesourcery.me"
+          host: "cedar-workshop.sitesourcery.me"
         }
       })
     );
@@ -2512,10 +2512,10 @@ test(
       (
         await tenantRuntime.fetch(
           new Request(
-            "https://cedar-workshop.sites.sitesourcery.me/",
+            "https://cedar-workshop.sitesourcery.me/",
             {
               headers: {
-                host: "cedar-workshop.sites.sitesourcery.me"
+                host: "cedar-workshop.sitesourcery.me"
               }
             }
           )

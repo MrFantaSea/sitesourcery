@@ -1,6 +1,8 @@
 const FORBIDDEN_AUTHORITY = /[\u0000-\u0020\u007f/%\\?#@,]/u;
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 
+export const DEFAULT_PLATFORM_BASE_DOMAIN = "sitesourcery.me";
+
 function isIpv4(hostname) {
   const labels = hostname.split(".");
   return (
