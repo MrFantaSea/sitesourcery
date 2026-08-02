@@ -62,7 +62,11 @@ these are OWNER RULINGS and open work, not suggestions.
   official Node 24.18.0 toolchain, immutable built release, enabled database
   tunnel/API/static user services, private independent runtime secrets, and
   only loopback listeners. Independent PostgreSQL/tunnel/runtime restarts
-  passed. Capabilities remain registration-mail false, recovery-mail false,
+  passed. The approved Resend authority was then transferred privately into
+  Dell's mode-0600 production environment; both temporary transfer files were
+  removed, startup readiness passed without a send, and both action bases are
+  exact production URLs. Capabilities are now registration-mail true,
+  recovery-mail true,
   Download quote true, payment false, domain purchase false, publication false.
   The pinned official Caddy 2.11.4 archive/version/format/config validation also
   passed, but Caddy is not installed as a service or running. Exact units and
@@ -78,20 +82,25 @@ these are OWNER RULINGS and open work, not suggestions.
   rejects off-site action links. Its mocked provider suite and the complete
   repository gate are green (`106` hosted passes plus two expected PostgreSQL
   skips). `ops/RESEND-SETUP.md` is the one activation checklist.
-- Production account mail remains HELD at `sitesourcery.com`; isolated HTTPS
-  staging account mail is active and proven. The owner-controlled Resend account,
+- Public production account mail remains operationally held by the uncut public
+  edge; isolated HTTPS staging account mail is active and proven. The
+  owner-controlled Resend account,
   exact sending DNS, verified domain, and dedicated owner-approved API key now
   exist. The exact domain UUID is
   `b7de4950-b5dc-43d2-8a29-847685dd41d6`; an earlier scratch note omitted its
   final `6`, and the adapter's UUID check stopped before any provider request.
   Live readiness now passes for the exact verified domain, SPF/DKIM, sending
-  capability, and disabled open/click tracking. The key exists only in Zen's
-  private staging environment file (`0600`); inspection found no corresponding
-  Mac Keychain item, so the earlier Keychain note was inaccurate. The first
+  capability, and disabled open/click tracking. The key now exists only in
+  Zen's private staging environment and Dell's private production environment,
+  both mode `0600`; it was transferred without output and the temporary copies
+  were removed. Inspection found no corresponding Mac Keychain item, so the
+  earlier Keychain note was inaccurate. The first
   public-link attempt did hit the old GitHub Pages 404, but the later isolated
-  staging proof completed both customer actions. Production still needs its own
-  exact action base, same-origin runtime, and post-cutover proof before its mail
-  modes move. `ops/RESEND-VERIFICATION-2026-08-01.md` records both attempts.
+  staging proof completed both customer actions. Dell's loopback production
+  runtime now independently passes Resend readiness with both exact production
+  action bases and advertises registration/recovery capability; no message was
+  sent. Public same-origin routing and a post-cutover delivery/action proof
+  remain. `ops/RESEND-VERIFICATION-2026-08-01.md` records the sequence.
 - Claude remains a non-writing reviewer unless Zack or Codex gives one
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.

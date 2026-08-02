@@ -38,23 +38,29 @@ then passed.
   readiness retrieves the configured domain as well as sending account mail.
 - The key value was never printed or pasted into a chat, repository file,
   screenshot, or command output.
-- It currently exists only in Zen's private staging environment file,
-  `/home/zentech/sitesourcery-staging/run/hosted.env`, with mode `0600`. Its
-  value has not entered Git, this evidence, a screenshot, or command output.
+- It now exists in Zen's private staging environment and Dell's private
+  production environment, both mode `0600`. It moved through a two-line private
+  transfer file without command output; both temporary copies were removed
+  immediately after Dell readiness passed. Its value has not entered Git, this
+  evidence, a screenshot, or command output.
 - Inspection found no corresponding Mac login Keychain item. The earlier note
   claiming one existed was inaccurate and is superseded by this checkpoint.
-- Production must receive the key through a private channel into the selected
-  host's production-only `0600` environment. Staging is not the production
-  secret store.
+- Dell is now the separate production secret store; the staging environment is
+  not used by the Dell runtime.
 
 ## Still held
 
-- Registration and recovery use the reviewed production Resend adapter only in
-  the isolated HTTPS staging runtime.
+- Registration and recovery use the reviewed production Resend adapter in the
+  isolated HTTPS staging runtime and the loopback-only Dell production
+  rehearsal.
 - Production `sitesourcery.com` still serves GitHub Pages and has no same-origin
-  hosted API, so production registration and recovery remain held.
-- Production cutover must set both action bases to the exact production app and
-  repeat the post-cutover route/readiness proof before public account mail opens.
+  hosted API, so public production registration and recovery remain held by the
+  uncut edge.
+- Dell startup independently reverified the exact Resend authority without a
+  send. Both production action bases are already pinned to the exact production
+  app, and capabilities report registration and recovery email available.
+  Production cutover must still repeat the public route and delivered-action
+  proof before account mail is called publicly complete.
 
 ## First private attempt — provider passed, customer path failed
 

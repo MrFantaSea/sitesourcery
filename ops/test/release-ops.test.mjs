@@ -540,7 +540,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   assert.match(readme, /No Caddy service was installed or started\./u);
   assert.match(
     readme,
-    /"accountRegistration":false[\s\S]*"downloadQuote":true[\s\S]*"publishing":false/u
+    /"accountRegistration":true[\s\S]*"accountRecoveryEmail":true[\s\S]*"downloadQuote":true[\s\S]*"publishing":false/u
   );
   assert.match(
     readme,

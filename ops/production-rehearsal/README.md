@@ -49,14 +49,22 @@ Download quotes. No staging customer row was copied into production.
 All three Dell units and the HQ PostgreSQL unit are enabled and active, and both
 users have lingering enabled. Dell's private environment and pinned known-hosts
 files are mode `0600`. The environment contains independent production pepper
-and contact-vault material, but no Resend, Stripe, registrar, DNS, or catalog
-credential. No secret value was printed or committed.
+and contact-vault material. The already approved Resend key and exact domain ID
+were transferred directly from Zen into Dell's private environment; the two
+temporary transfer files were then removed. It contains no Stripe, registrar,
+DNS, or catalog credential. No secret value was printed or committed.
+
+Registration and recovery now use the reviewed production adapter and exact
+`https://sitesourcery.com/abracadabra/app/` action page. Startup independently
+reverified the Resend domain, SPF/DKIM, sending capability, and disabled click
+and open tracking. No registration, recovery, or other delivery request was
+made during this readiness proof.
 
 Local health and readiness return `200`. The public capability projection is
 exactly:
 
 ```json
-{"accountRegistration":false,"accountRecoveryEmail":false,"downloadQuote":true,"downloadPayment":false,"domainPurchase":false,"publishing":false}
+{"accountRegistration":true,"accountRecoveryEmail":true,"downloadQuote":true,"downloadPayment":false,"domainPurchase":false,"publishing":false}
 ```
 
 Tenant health reports `publicationHeld: true`; tenant readiness therefore
