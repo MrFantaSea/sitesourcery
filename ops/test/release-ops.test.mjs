@@ -647,7 +647,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.doesNotMatch(
     backupMount,
-    /accept-new|allow_other|\/bin\/(?:ba)?sh|PrivateTmp|ProtectSystem|ProtectHome|RestrictAddressFamilies/u
+    /accept-new|allow_other|-o umask=|\/bin\/(?:ba)?sh|PrivateTmp|ProtectSystem|ProtectHome|RestrictAddressFamilies/u
   );
   assert.match(
     backupService,
@@ -696,7 +696,11 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     monitorService,
-    /releases\/1994d7a66bfa6b3e91f32dd637733f2d6911b4be\/ops\/monitor-held\.mjs/u
+    /releases\/d5311424830436ba5b9bd5f499f907ad908690d9\/ops\/monitor-held\.mjs/u
+  );
+  assert.match(
+    monitorService,
+    /^TimeoutStartSec=2m$/mu
   );
   assert.match(
     monitorService,

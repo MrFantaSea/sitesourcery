@@ -9,13 +9,13 @@ ConditionPathExists=/home/simtech/sitesourcery-production/run/operations-state-a
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/simtech/sitesourcery-production/releases/1994d7a66bfa6b3e91f32dd637733f2d6911b4be
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/d5311424830436ba5b9bd5f499f907ad908690d9
 Environment=NODE_ENV=production
 EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
 EnvironmentFile=/home/simtech/sitesourcery-production/run/monitor.env
-ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/1994d7a66bfa6b3e91f32dd637733f2d6911b4be/ops/monitor-held.mjs
+ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/d5311424830436ba5b9bd5f499f907ad908690d9/ops/monitor-held.mjs
 UMask=0077
-TimeoutStartSec=45s
+TimeoutStartSec=2m
 
 NoNewPrivileges=true
 PrivateTmp=true
