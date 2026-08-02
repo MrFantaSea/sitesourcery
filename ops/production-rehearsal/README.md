@@ -24,6 +24,16 @@ See `ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md` for exact artifacts,
 invariants, the preserved failed-restore evidence, RPO/RTO measurements, and
 plaintext cleanup.
 
+Dell now also runs a reboot-safe supervised Zen backup mount and an enabled
+five-minute held-alert monitor from exact release
+`d5311424830436ba5b9bd5f499f907ad908690d9`. Both a manual one-shot and the
+timer's first unattended invocation passed runtime, PostgreSQL, newest-backup,
+disk, certificate-hold, and backlog checks. Outbound alerts remain held and no
+message was sent because the private Site Sourcery Proton inbox has not yet
+been confirmed. See `ops/PRODUCTION-MONITOR-2026-08-02.md` for exact units,
+hashes, timings, corrected failed candidates, identity boundaries, and the
+remaining alert proof.
+
 ## Initial exact release and runtime
 
 - Commit: `be7cc3781c3e9354ecb017c7df7f090afe556f32`.
