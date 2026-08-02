@@ -34,6 +34,14 @@ been confirmed. See `ops/PRODUCTION-MONITOR-2026-08-02.md` for exact units,
 hashes, timings, corrected failed candidates, identity boundaries, and the
 remaining alert proof.
 
+Dell additionally has an enabled persistent `04:17` daily backup timer and an
+enabled startup recovery service. The first supervised live cycle created a new
+immutable encrypted Zen attempt, automatically restored the loopback runtime,
+left no fence or plaintext staging, and was followed by an all-green monitor
+run. See `ops/PRODUCTION-BACKUP-CADENCE-2026-08-02.md` for exact releases,
+unit hashes, failure recovery, live timings, the next timer elapse, and the
+explicitly unclaimed future calendar-trigger proof.
+
 ## Initial exact release and runtime
 
 - Commit: `be7cc3781c3e9354ecb017c7df7f090afe556f32`.

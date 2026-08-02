@@ -120,8 +120,9 @@ and then switch the existing timer from held to reviewed Resend delivery.
 `help@sitesourcery.com` is only a reserved customer-support identity here.
 Inbound receiving or forwarding for it is not configured or claimed.
 
-The current encrypted backup was produced at `2026-08-02T01:49:13Z`. No
-automatic production backup schedule is claimed by this monitor installation;
-the freshness check will correctly turn red after its reviewed 26-hour maximum
-unless a new quiesced backup is made. Scheduling that quiesced backup is the
-next separate continuity task after the alert path is proven.
+At the time of this monitor installation, the current encrypted backup had been
+produced at `2026-08-02T01:49:13Z` and no automatic schedule existed. That gap
+was closed later the same day by the separately tested supervised cycle and
+enabled daily timer recorded in
+`ops/PRODUCTION-BACKUP-CADENCE-2026-08-02.md`. The alert delivery proof remains
+held pending confirmation of the private Proton inbox.
