@@ -20,6 +20,9 @@ import {
   createReviewedOutboundAlertAdapter
 } from "../alert-adapter.mjs";
 import {
+  createPersistentOperationsAlertAdapter
+} from "../alert-state.mjs";
+import {
   BACKUP_SUCCEEDED_SCHEMA,
   OFF_MACHINE_DESTINATION_SCHEMA,
   QUIESCE_SCHEMA,
@@ -47,6 +50,9 @@ import {
 import {
   runOperationsMonitor
 } from "../monitor-runtime.mjs";
+import {
+  createProductionMonitoringProbes
+} from "../monitor-ports.mjs";
 import {
   HELD_PROVIDER_EGRESS_STATE,
   OPERATIONS_STATE_APPROVAL_SCHEMA,
@@ -77,6 +83,11 @@ const LIVE_MAIL_OPERATIONS = Object.freeze({
   registrationMailMode: "production",
   recoveryMailMode: "production"
 });
+const LIVE_EDGE_OPERATIONS = Object.freeze({
+  ...HELDS,
+  publication: "approved",
+  dns: "approved_live"
+});
 function operationsApproval(
   expectedOperationsState =
     LIVE_MAIL_OPERATIONS
@@ -99,6 +110,23 @@ function operationsApproval(
       operationsStateApprovalDigest(
         approval
       )
+  });
+}
+function outboundAlertApproval() {
+  const approval = {
+    schema: ALERT_APPROVAL_SCHEMA,
+    adapterId: "owner-alert-port",
+    state: "approved",
+    reportSchema: OPERATIONS_REPORT_SCHEMA,
+    destinationRef: "owner-primary",
+    approvedAt:
+      "2026-07-29T00:00:00.000Z",
+    expiresAt:
+      "2026-07-30T00:00:00.000Z"
+  };
+  return Object.freeze({
+    ...approval,
+    digest: alertApprovalDigest(approval)
   });
 }
 const HELD_MONITOR_CONTRACT = Object.freeze({
@@ -1479,6 +1507,13 @@ function healthyProbes(
       };
     },
     async certificate() {
+      if (
+        operationsState.publication ===
+          "held" &&
+        operationsState.dns === "held"
+      ) {
+        return { held: true };
+      }
       return {
         valid: true,
         notAfter:
@@ -1528,6 +1563,93 @@ test("held monitor covers every required signal and performs no outbound alert e
     delivered: false,
     mode: "none"
   });
+});
+
+test("certificate monitoring stays explicitly held until the reviewed public edge requires a real certificate", async () => {
+  const heldProduction =
+    createProductionMonitoringProbes({
+      databaseUrl:
+        "postgresql://monitor:private@127.0.0.1:1/sitesourcery",
+      dataRoot: os.tmpdir(),
+      backupDestinationRoot: os.tmpdir(),
+      sourceFailureDomainId: "primary-01",
+      certificateFile: null,
+      certificateHostname: null,
+      expectedOperationsState: HELDS
+    });
+  try {
+    assert.deepEqual(
+      await heldProduction.probes.certificate(),
+      { held: true }
+    );
+  } finally {
+    await heldProduction.close();
+  }
+  assert.throws(
+    () =>
+      createProductionMonitoringProbes({
+        databaseUrl:
+          "postgresql://monitor:private@127.0.0.1:1/sitesourcery",
+        dataRoot: os.tmpdir(),
+        backupDestinationRoot: os.tmpdir(),
+        sourceFailureDomainId: "primary-01",
+        certificateFile: null,
+        certificateHostname: null,
+        expectedOperationsState:
+          LIVE_EDGE_OPERATIONS
+      }),
+    /certificate monitoring configuration is required/u
+  );
+
+  const heldDrift = healthyProbes();
+  heldDrift.certificate = async () => ({
+    valid: true,
+    notAfter: "2026-10-29T12:05:00.000Z"
+  });
+  const heldResult = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes: heldDrift,
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.deepEqual(
+    heldResult.report.alerts.map(
+      ({ code }) => code
+    ),
+    ["CERTIFICATE_HOLD_STATE_DRIFT"]
+  );
+
+  const operationsStateEvidence =
+    resolveOperationsStateEvidence({
+      actualOperationsState:
+        LIVE_EDGE_OPERATIONS,
+      approval: operationsApproval(
+        LIVE_EDGE_OPERATIONS
+      ),
+      sourceFailureDomainId: "primary-01",
+      consumer: "monitor",
+      now: NOW
+    });
+  const liveProbes = healthyProbes(
+    LIVE_EDGE_OPERATIONS
+  );
+  liveProbes.certificate = async () => ({
+    valid: true,
+    notAfter: "2026-08-01T00:00:00.000Z"
+  });
+  const liveResult = await runOperationsMonitor({
+    probes: liveProbes,
+    operationsStateEvidence,
+    providerEgress: "held",
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.deepEqual(
+    liveResult.report.alerts.map(
+      ({ code }) => code
+    ),
+    ["CERTIFICATE_EXPIRING_OR_INVALID"]
+  );
 });
 
 test("monitor accepts an exact reviewed live-mail state while alert egress remains held", async () => {
@@ -1628,7 +1750,7 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
       "BACKUP_STALE_OR_INVALID",
       "CANCELLATION_BACKLOG_HIGH",
       "CANCELLATION_RECONCILIATION_REQUIRED",
-      "CERTIFICATE_EXPIRING_OR_INVALID",
+      "CERTIFICATE_HOLD_STATE_DRIFT",
       "DATABASE_READINESS_OR_DOMAIN_STATE_DRIFT",
       "DISK_CAPACITY_LOW",
       "EXPORT_LEASE_BACKLOG_HIGH",
@@ -1641,19 +1763,7 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
 });
 
 test("reviewed outbound adapter requires exact expiring approval and only invokes an injected interface", async () => {
-  const approval = {
-    schema: ALERT_APPROVAL_SCHEMA,
-    adapterId: "owner-alert-port",
-    state: "approved",
-    reportSchema: OPERATIONS_REPORT_SCHEMA,
-    destinationRef: "owner-primary",
-    approvedAt:
-      "2026-07-29T00:00:00.000Z",
-    expiresAt:
-      "2026-07-30T00:00:00.000Z"
-  };
-  approval.digest =
-    alertApprovalDigest(approval);
+  const approval = outboundAlertApproval();
   const deliveries = [];
   const adapter =
     createReviewedOutboundAlertAdapter({
@@ -1694,6 +1804,216 @@ test("reviewed outbound adapter requires exact expiring approval and only invoke
       }),
     /approval is invalid/u
   );
+});
+
+test("persistent alerts deliver one incident, suppress duplicates, remind after the reviewed interval, and deliver one recovery", async (t) => {
+  const { root } = await setup(t);
+  const stateFile = path.join(
+    root,
+    "alert-state",
+    "current.json"
+  );
+  let current = new Date(NOW);
+  const deliveries = [];
+  const reviewed =
+    createReviewedOutboundAlertAdapter({
+      approval: outboundAlertApproval(),
+      async deliver(envelope) {
+        deliveries.push(envelope);
+        return {
+          provider: "test-provider",
+          providerMessageId:
+            `message-${deliveries.length}`
+        };
+      },
+      now: () => new Date(current)
+    });
+  const persistent =
+    createPersistentOperationsAlertAdapter({
+      adapter: reviewed,
+      stateFile,
+      repeatIntervalMs: 6 * 60 * 60 * 1000,
+      now: () => new Date(current)
+    });
+  const probes = healthyProbes();
+  probes.runtime = async () => {
+    throw new Error("loopback unavailable");
+  };
+
+  const first = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(first.delivery.delivered, true);
+  assert.equal(first.delivery.transition, "incident");
+  assert.equal(deliveries.length, 1);
+  assert.equal(
+    (await stat(stateFile)).mode & 0o777,
+    0o600
+  );
+
+  current = new Date(
+    "2026-07-29T12:06:00.000Z"
+  );
+  const duplicate = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.deepEqual(
+    {
+      attempted: duplicate.delivery.attempted,
+      delivered: duplicate.delivery.delivered,
+      required: duplicate.delivery.required,
+      mode: duplicate.delivery.mode,
+      code: duplicate.delivery.code
+    },
+    {
+      attempted: false,
+      delivered: false,
+      required: false,
+      mode: "suppressed",
+      code: "DUPLICATE_ALERT_SUPPRESSED"
+    }
+  );
+  assert.equal(deliveries.length, 1);
+
+  probes.disk = async () => ({
+    freeBytes: 100,
+    totalBytes: 1000
+  });
+  current = new Date(
+    "2026-07-29T12:07:00.000Z"
+  );
+  const changed = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(changed.delivery.delivered, true);
+  assert.equal(changed.delivery.transition, "changed");
+  assert.equal(deliveries.length, 2);
+
+  current = new Date(
+    "2026-07-29T18:07:00.000Z"
+  );
+  const reminder = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(reminder.delivery.delivered, true);
+  assert.equal(reminder.delivery.transition, "reminder");
+  assert.equal(deliveries.length, 3);
+
+  const restored = healthyProbes();
+  probes.runtime = restored.runtime;
+  probes.disk = restored.disk;
+  current = new Date(
+    "2026-07-29T18:08:00.000Z"
+  );
+  const recovery = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(recovery.report.ok, true);
+  assert.equal(recovery.delivery.delivered, true);
+  assert.equal(recovery.delivery.transition, "recovery");
+  assert.deepEqual(
+    deliveries.map(
+      ({ transition }) => transition.kind
+    ),
+    [
+      "incident",
+      "changed",
+      "reminder",
+      "recovery"
+    ]
+  );
+
+  current = new Date(
+    "2026-07-29T18:09:00.000Z"
+  );
+  const healthy = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(healthy.delivery.mode, "none");
+  assert.equal(deliveries.length, 4);
+});
+
+test("a failed provider response leaves one pending transition and retries it with the same idempotent identity", async (t) => {
+  const { root } = await setup(t);
+  const stateFile = path.join(
+    root,
+    "retry-state",
+    "current.json"
+  );
+  let current = new Date(NOW);
+  let fail = true;
+  const transitionIds = [];
+  const reviewed =
+    createReviewedOutboundAlertAdapter({
+      approval: outboundAlertApproval(),
+      async deliver(envelope) {
+        transitionIds.push(
+          envelope.transition.transitionId
+        );
+        if (fail) {
+          throw new Error(
+            "ambiguous provider response"
+          );
+        }
+        return {
+          provider: "test-provider",
+          providerMessageId: "message-replayed"
+        };
+      },
+      now: () => new Date(current)
+    });
+  const persistent =
+    createPersistentOperationsAlertAdapter({
+      adapter: reviewed,
+      stateFile,
+      repeatIntervalMs: 6 * 60 * 60 * 1000,
+      now: () => new Date(current)
+    });
+  const probes = healthyProbes();
+  probes.runtime = async () => {
+    throw new Error("loopback unavailable");
+  };
+  await assert.rejects(
+    runOperationsMonitor({
+      ...HELD_MONITOR_CONTRACT,
+      probes,
+      alertAdapter: persistent,
+      now: () => new Date(current)
+    }),
+    /ambiguous provider response/u
+  );
+  fail = false;
+  current = new Date(
+    "2026-07-29T12:06:00.000Z"
+  );
+  const retried = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: persistent,
+    now: () => new Date(current)
+  });
+  assert.equal(retried.delivery.delivered, true);
+  assert.equal(retried.delivery.transition, "incident");
+  assert.equal(transitionIds.length, 2);
+  assert.equal(transitionIds[0], transitionIds[1]);
 });
 
 test("operations candidates keep independent approvals and provider egress holds without a publication-hold dependency", async () => {

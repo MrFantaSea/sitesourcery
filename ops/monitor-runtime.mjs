@@ -346,29 +346,42 @@ export async function runOperationsMonitor({
   ) {
     const certificate =
       byName.get("certificate").value;
-    const notAfter = exactDate(
-      certificate?.notAfter
-    );
+    const edgeIsExactlyHeld =
+      expectedOperationsState.publication ===
+        "held" &&
+      expectedOperationsState.dns === "held";
+    const notAfter = edgeIsExactlyHeld
+      ? null
+      : exactDate(certificate?.notAfter);
     const remaining = notAfter
       ? notAfter - observedAt
       : -1;
-    const ok =
-      certificate?.valid === true &&
-      remaining >=
-        limits.certificateMinimumValidityMs;
+    const ok = edgeIsExactlyHeld
+      ? canonicalJson(certificate) ===
+        canonicalJson({ held: true })
+      : certificate?.valid === true &&
+        certificate?.held !== true &&
+        remaining >=
+          limits.certificateMinimumValidityMs;
     checks.push({
       name: "certificate",
       ok,
       code: ok
         ? null
-        : "CERTIFICATE_EXPIRING_OR_INVALID"
+        : edgeIsExactlyHeld
+          ? "CERTIFICATE_HOLD_STATE_DRIFT"
+          : "CERTIFICATE_EXPIRING_OR_INVALID"
     });
     if (!ok) {
       alerts.push(
         alert(
-          "CERTIFICATE_EXPIRING_OR_INVALID",
+          edgeIsExactlyHeld
+            ? "CERTIFICATE_HOLD_STATE_DRIFT"
+            : "CERTIFICATE_EXPIRING_OR_INVALID",
           "critical",
-          "The reviewed certificate is invalid or near expiry."
+          edgeIsExactlyHeld
+            ? "Certificate monitoring drifted from the reviewed held edge state."
+            : "The reviewed certificate is invalid or near expiry."
         )
       );
     }

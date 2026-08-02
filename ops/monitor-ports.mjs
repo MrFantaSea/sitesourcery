@@ -57,6 +57,22 @@ export function createProductionMonitoringProbes({
   timeoutMs = 3000,
   fetchImpl = globalThis.fetch
 }) {
+  const edgeIsExactlyHeld =
+    expectedOperationsState?.publication ===
+      "held" &&
+    expectedOperationsState?.dns === "held";
+  if (
+    !edgeIsExactlyHeld &&
+    (typeof certificateFile !== "string" ||
+      !path.isAbsolute(certificateFile) ||
+      typeof certificateHostname !== "string" ||
+      certificateHostname.length < 1 ||
+      /\s/u.test(certificateHostname))
+  ) {
+    throw new Error(
+      "Live-edge certificate monitoring configuration is required."
+    );
+  }
   const pool = new Pool({
     connectionString: databaseUrl,
     application_name:
@@ -221,6 +237,9 @@ export function createProductionMonitoringProbes({
     },
 
     async certificate() {
+      if (edgeIsExactlyHeld) {
+        return Object.freeze({ held: true });
+      }
       const certificate = new X509Certificate(
         await readFile(certificateFile)
       );

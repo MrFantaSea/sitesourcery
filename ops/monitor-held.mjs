@@ -4,14 +4,22 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  createHeldAlertAdapter
+  createHeldAlertAdapter,
+  createReviewedOutboundAlertAdapter,
+  readAlertApprovalFile
 } from "./alert-adapter.mjs";
+import {
+  createPersistentOperationsAlertAdapter
+} from "./alert-state.mjs";
 import {
   createProductionMonitoringProbes
 } from "./monitor-ports.mjs";
 import {
   runOperationsMonitor
 } from "./monitor-runtime.mjs";
+import {
+  createResendOperationsAlertTransport
+} from "./resend-alert-transport.mjs";
 import {
   assertOperationsProviderEgressHeld,
   operationsStateFromEnvironment,
@@ -55,17 +63,56 @@ function integer(
   return value;
 }
 
+async function alertAdapterFromEnvironment(
+  environment
+) {
+  const mode = required(
+    environment,
+    "SITESOURCERY_ALERT_MODE"
+  );
+  if (mode === "held") {
+    return createHeldAlertAdapter();
+  }
+  if (mode !== "reviewed_resend") {
+    throw new Error(
+      "SITESOURCERY_ALERT_MODE is invalid."
+    );
+  }
+  const approval = await readAlertApprovalFile(
+    absolute(
+      environment,
+      "SITESOURCERY_ALERT_APPROVAL_FILE"
+    )
+  );
+  const transport =
+    createResendOperationsAlertTransport({
+      environment,
+      adapterId: approval.adapterId,
+      destinationRef:
+        approval.destinationRef
+    });
+  const reviewed =
+    createReviewedOutboundAlertAdapter({
+      approval,
+      deliver: transport.deliver
+    });
+  return createPersistentOperationsAlertAdapter({
+    adapter: reviewed,
+    stateFile: absolute(
+      environment,
+      "SITESOURCERY_ALERT_STATE_FILE"
+    ),
+    repeatIntervalMs: integer(
+      environment,
+      "SITESOURCERY_ALERT_REPEAT_INTERVAL_MS",
+      6 * 60 * 60 * 1000
+    )
+  });
+}
+
 export async function monitorFromEnvironment(
   environment = process.env
 ) {
-  if (
-    environment.SITESOURCERY_ALERT_MODE !==
-    "held"
-  ) {
-    throw new Error(
-      "This candidate wires only the held alert adapter."
-    );
-  }
   const sourceFailureDomainId = required(
     environment,
     "SITESOURCERY_SOURCE_FAILURE_DOMAIN"
@@ -92,6 +139,13 @@ export async function monitorFromEnvironment(
       environment
         .SITESOURCERY_OPERATIONS_PROVIDER_EGRESS
     );
+  const edgeIsExactlyHeld =
+    operationsState.publication === "held" &&
+    operationsState.dns === "held";
+  const alertAdapter =
+    await alertAdapterFromEnvironment(
+      environment
+    );
   const production =
     createProductionMonitoringProbes({
       databaseUrl: required(
@@ -107,14 +161,18 @@ export async function monitorFromEnvironment(
         "SITESOURCERY_BACKUP_DESTINATION_ROOT"
       ),
       sourceFailureDomainId,
-      certificateFile: absolute(
-        environment,
-        "SITESOURCERY_MONITOR_CERTIFICATE_FILE"
-      ),
-      certificateHostname: required(
-        environment,
-        "SITESOURCERY_MONITOR_CERTIFICATE_HOSTNAME"
-      ),
+      certificateFile: edgeIsExactlyHeld
+        ? null
+        : absolute(
+            environment,
+            "SITESOURCERY_MONITOR_CERTIFICATE_FILE"
+          ),
+      certificateHostname: edgeIsExactlyHeld
+        ? null
+        : required(
+            environment,
+            "SITESOURCERY_MONITOR_CERTIFICATE_HOSTNAME"
+          ),
       expectedOperationsState:
         operationsState,
       apiPort: integer(
@@ -156,7 +214,7 @@ export async function monitorFromEnvironment(
             21 * 24 * 60 * 60 * 1000
           )
       },
-      alertAdapter: createHeldAlertAdapter()
+      alertAdapter
     });
   } finally {
     await production.close();
@@ -172,6 +230,12 @@ async function main() {
     })}\n`
   );
   if (!result.report.ok) {
+    process.exitCode = 1;
+  }
+  if (
+    result.delivery.required === true &&
+    result.delivery.delivered !== true
+  ) {
     process.exitCode = 1;
   }
 }
