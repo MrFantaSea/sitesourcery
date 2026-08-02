@@ -88,6 +88,20 @@ Completed loopback-only rehearsal evidence is recorded in
 
 ## Monitoring and response
 
+Completed loopback production-rehearsal evidence is recorded in
+`ops/PRODUCTION-MONITOR-2026-08-02.md`:
+
+- [x] The exact release passed database, newest-backup, disk,
+      certificate-hold, runtime/state, and cancellation/export-backlog probes.
+- [x] Outbound delivery failed closed without an exact expiring approval,
+      private destination identity, private state path, and verified Resend
+      domain with tracking disabled.
+- [x] One isolated, visibly labeled test incident and recovery reached the
+      confirmed owner inbox and Resend reported both delivered; test state
+      never entered real incident history.
+- [x] The reviewed five-minute timer completed an unattended all-green run,
+      attempted no healthy-state message, and scheduled its next invocation.
+
 - [ ] Minute probe fails on API, database, catalog, export, or unexpected
       publication-state drift.
 - [ ] Probe failure reaches the reviewed owner alert path.

@@ -97,32 +97,70 @@ corrupt older attempt is not confused with the current recovery point and a
 corrupt newest attempt still fails closed. The final real monitor completed in
 33–34 seconds.
 
-## Outbound status and remaining proof
+## Reviewed outbound alert activation and proof
 
-Outbound operations alerts remain exactly held. Dell's private monitor
-environment reports `SITESOURCERY_ALERT_MODE=held`, no alert state file exists,
-and no alert message was attempted or sent during installation.
+The initial monitor installation above correctly kept outbound alerts held.
+After the owner confirmed the private Site Sourcery Proton inbox, reviewed
+delivery was activated without changing publication, DNS, payments, registrar,
+domain-runtime, registration-mail, or recovery-mail authority.
 
-The approved identity plan is:
+The exact alert release is
+`62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9`. Its complete pinned-Node release
+gate passed: 264 current Node tests, 19 self-host tests, 108 hosted-service
+passes plus two expected PostgreSQL-environment skips, 52 operations tests,
+exact public and hosted artifacts, and all 15 hosted routes at 320, 390, and
+1440 pixel widths. Dell then passed the six focused Linux alert tests from the
+same exact release. The installed monitor unit SHA-256 is
+`0579360758461030d1684988ed237306696d35f5e4eed8360ce55199aae31cf5`.
 
-- `help@sitesourcery.com` for future customer-facing support;
-- `alerts@sitesourcery.com` as the fixed operations sender;
-- `sitesourcery@proton.me` as the private owner operations inbox;
-- the owner's personal mailbox only as a recovery fallback.
+The private monitor environment and approval file are mode `0600`. The
+approval binds adapter `resend-sitesourcery-operations-v1` only to destination
+reference `owner-sitesourcery-proton-v1`; it began at
+`2026-08-02T11:15:40.000Z` and expires at
+`2027-08-02T11:15:40.000Z`. Renewal is required before that expiry. The Resend
+readiness check from Dell proved the exact `sitesourcery.com` domain, enabled
+sending, verified SPF and DKIM, and disabled click and open tracking without
+printing the provider key or recipient.
 
-The private Proton inbox has not yet been confirmed, so no recipient is present
-in Git or the installed monitor environment. After it exists, the remaining
-bounded proof is to install one expiring mode-`0600` alert approval, verify the
-existing Resend sending domain without exposing its key, send one clearly
-labeled incident and one recovery to that inbox, confirm the phone notification,
-and then switch the existing timer from held to reviewed Resend delivery.
+The proof command has a separate explicit approval switch and private state
+file, and rejects the real monitor state path. It does not alter a runtime
+probe or manufacture a production outage. It sent exactly these transitions:
 
-`help@sitesourcery.com` is only a reserved customer-support identity here.
-Inbound receiving or forwarding for it is not configured or claimed.
+- Test incident observed at `2026-08-02T11:20:50.568Z`, subject
+  `[TEST WARNING] Site Sourcery alert delivery`; Resend reported `delivered`.
+- Test recovery observed at `2026-08-02T11:21:09.291Z`, subject
+  `[TEST RECOVERED] Site Sourcery alert delivery`; Resend reported `delivered`.
 
-At the time of this monitor installation, the current encrypted backup had been
-produced at `2026-08-02T01:49:13Z` and no automatic schedule existed. That gap
-was closed later the same day by the separately tested supervised cycle and
-enabled daily timer recorded in
-`ops/PRODUCTION-BACKUP-CADENCE-2026-08-02.md`. The alert delivery proof remains
-held pending confirmation of the private Proton inbox.
+Both message bodies state `TEST ONLY` and that production remained healthy.
+The isolated proof state finished healthy, with no alert codes or pending
+transition, and mode `0600`. Provider delivery is proven; the separate visual
+confirmation that Proton displayed the phone notifications remains an
+owner-device observation.
+
+The real monitor then observed at `2026-08-02T11:21:38.988Z` and passed all six
+checks. It attempted no delivery because the system was healthy. Its real
+persistent incident-state file remains absent, so the test transitions cannot
+be mistaken for a production incident. The five-minute timer is enabled and
+active on the reviewed Resend path.
+
+The first unattended invocation on that final configuration observed at
+`2026-08-02T11:26:45.548Z`, again passed all six checks, attempted no message,
+and exited successfully at `07:27:19` EDT. The timer then scheduled its next
+ordinary run for `07:31:59` EDT. Real incident state remained absent.
+
+This activation did not publish the replacement site. GitHub `main` remains
+`9cdb1e73b2c9d3a7c0b07befd7ea5a24754795cf`; the latest Pages build remains
+the July 22 predecessor at `eff8195640db58390d03eefbe863248220994e37`; and
+the apex still resolves only to GitHub Pages. The alert release was pushed only
+to `build/sitesourcery-v2-20260730`, whose workflow cannot deploy Pages.
+
+The approved identity boundaries are unchanged:
+
+- `help@sitesourcery.com` is reserved for future customer-facing support;
+- `alerts@sitesourcery.com` is the fixed operations sender;
+- the confirmed Site Sourcery Proton inbox is the private owner destination;
+- the owner's personal mailbox is only a recovery fallback.
+
+Inbound receiving or forwarding for `help@sitesourcery.com` is not configured
+or claimed. The separately tested supervised backup cycle and enabled daily
+timer remain recorded in `ops/PRODUCTION-BACKUP-CADENCE-2026-08-02.md`.

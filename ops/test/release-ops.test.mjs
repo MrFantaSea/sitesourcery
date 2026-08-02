@@ -748,7 +748,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     monitorService,
-    /releases\/d5311424830436ba5b9bd5f499f907ad908690d9\/ops\/monitor-held\.mjs/u
+    /releases\/62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9\/ops\/monitor-held\.mjs/u
   );
   assert.match(
     monitorService,

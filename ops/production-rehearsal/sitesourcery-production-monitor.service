@@ -10,11 +10,11 @@ ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/simtech/sitesourcery-production/releases/d5311424830436ba5b9bd5f499f907ad908690d9
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9
 Environment=NODE_ENV=production
 EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
 EnvironmentFile=/home/simtech/sitesourcery-production/run/monitor.env
-ExecStart=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 --no-fork %t/sitesourcery-production-operations.lock /home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/d5311424830436ba5b9bd5f499f907ad908690d9/ops/monitor-held.mjs
+ExecStart=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 --no-fork %t/sitesourcery-production-operations.lock /home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9/ops/monitor-held.mjs
 UMask=0077
 TimeoutStartSec=2m
 

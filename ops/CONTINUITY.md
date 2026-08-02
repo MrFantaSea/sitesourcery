@@ -1,4 +1,4 @@
-# CONTINUITY — the session ledger (updated 2026-08-01, hosted staging proven)
+# CONTINUITY — the session ledger (updated 2026-08-02, production continuity proven)
 
 Written so no ruling, promise, or open thread is lost when the working
 conversation is condensed. If you are an assistant reading this fresh:
@@ -71,6 +71,21 @@ these are OWNER RULINGS and open work, not suggestions.
   The pinned official Caddy 2.11.4 archive/version/format/config validation also
   passed, but Caddy is not installed as a service or running. Exact units and
   evidence: `ops/production-rehearsal/README.md`.
+- The production continuity gap is closed without a public cutover. Dell now
+  has an enabled reboot-safe Zen backup mount, a supervised persistent daily
+  backup timer, startup recovery, and a five-minute operations monitor. A live
+  encrypted backup cycle quiesced and automatically restored the runtime; a
+  distinct-host clean-room restore reproduced the exact database and app-state
+  invariants. The confirmed owner Proton inbox then received one explicitly
+  labeled test warning and recovery through the reviewed Resend adapter, and
+  Resend reported both delivered. The real monitor returned all six checks
+  green and sent nothing. Alert release:
+  `62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9`; approval expires
+  `2027-08-02T11:15:40.000Z`. Public `main`, GitHub Pages, and DNS remain on
+  the July 22 predecessor. Exact evidence:
+  `ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md`,
+  `ops/PRODUCTION-BACKUP-CADENCE-2026-08-02.md`, and
+  `ops/PRODUCTION-MONITOR-2026-08-02.md`.
 - Recovery delivery is now durably reserved before any mail-provider
   effect. Delivered requests replay without another send; interrupted or
   ambiguous sends stop in a terminal reconciliation state. The fence
@@ -217,11 +232,12 @@ real product - the owner is the backstop, not the mechanism.
    active, and an external IPv4/IPv6 probe could not reach an empty high-port
    listener. One reviewed root/network pass must install the Caddy system unit,
    allow 80/443, and establish/prove router IPv4 forwarding plus the IPv6
-   firewall path before any DNS change. Encrypted off-machine backup/restore
-   and monitoring also remain open; HQ and Zen share the same observed public
-   site/edge, so Zen cannot currently satisfy the documented distinct-failure-
-   domain requirement. This blocks replacing GitHub Pages, not branch or
-   rehearsal work.
+   firewall path before any DNS change. Encrypted off-machine backup/restore,
+   daily scheduling, recovery supervision, and reviewed owner alert delivery
+   are now proven and must not be repeated as open work. The remaining
+   production-target blocker is the public ingress/TLS path and its later
+   same-origin customer journey, not continuity. This blocks replacing GitHub
+   Pages, not branch or rehearsal work.
 2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
    (his design-lock); needs his one-line ok.
 3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the

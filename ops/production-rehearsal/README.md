@@ -25,14 +25,15 @@ invariants, the preserved failed-restore evidence, RPO/RTO measurements, and
 plaintext cleanup.
 
 Dell now also runs a reboot-safe supervised Zen backup mount and an enabled
-five-minute held-alert monitor from exact release
-`d5311424830436ba5b9bd5f499f907ad908690d9`. Both a manual one-shot and the
-timer's first unattended invocation passed runtime, PostgreSQL, newest-backup,
-disk, certificate-hold, and backlog checks. Outbound alerts remain held and no
-message was sent because the private Site Sourcery Proton inbox has not yet
-been confirmed. See `ops/PRODUCTION-MONITOR-2026-08-02.md` for exact units,
-hashes, timings, corrected failed candidates, identity boundaries, and the
-remaining alert proof.
+five-minute reviewed-alert monitor from exact release
+`62e0b9ba70301ce7e79bf8e55e2a78e626fa13c9`. Its runtime, PostgreSQL,
+newest-backup, disk, certificate-hold, and backlog checks are all green. The
+confirmed private owner Proton inbox received one explicitly labeled test
+warning and one explicitly labeled test recovery; Resend reported both as
+delivered. The real monitor then completed healthy without sending a message
+and returned to its enabled timer. See
+`ops/PRODUCTION-MONITOR-2026-08-02.md` for exact units, hashes, timings,
+corrected failed candidates, identity boundaries, and delivery proof.
 
 Dell additionally has an enabled persistent `04:17` daily backup timer and an
 enabled startup recovery service. The first supervised live cycle created a new
