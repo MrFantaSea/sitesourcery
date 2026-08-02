@@ -5,6 +5,9 @@ import test from "node:test";
 import pg from "pg";
 
 import {
+  digest as canonicalDigest
+} from "../../commerce-v2/canonical.mjs";
+import {
   createPostgresAlakazamRepository
 } from "../../hosted/alakazam-postgres.mjs";
 
@@ -20,7 +23,7 @@ function digest(value) {
 }
 
 async function insertRow(client, table, row) {
-  assert.match(table, /^[a-z_]+$/u);
+  assert.match(table, /^[a-z0-9_]+$/u);
   const entries = Object.entries(row);
   for (const [column] of entries) {
     assert.match(column, /^[a-z_]+$/u);
@@ -50,7 +53,10 @@ async function expectRejected(client, action, pattern) {
   await client.query("set constraints all deferred");
 }
 
-async function seedAuthority(client) {
+async function seedAuthority(
+  client,
+  { withStripeCustomer = true } = {}
+) {
   const authority = {
     userId: randomUUID(),
     organizationId: randomUUID(),
@@ -91,11 +97,13 @@ async function seedAuthority(client) {
     billing_policy_id: authority.billingPolicyId,
     name: "Alakazam Project"
   });
-  await insertRow(client, "stripe_customers", {
-    id: authority.stripeCustomerRowId,
-    organization_id: authority.organizationId,
-    stripe_customer_id: "cus_alakazam_contract"
-  });
+  if (withStripeCustomer) {
+    await insertRow(client, "stripe_customers", {
+      id: authority.stripeCustomerRowId,
+      organization_id: authority.organizationId,
+      stripe_customer_id: "cus_alakazam_contract"
+    });
+  }
   return authority;
 }
 
@@ -194,6 +202,311 @@ test(
       if (transactionOpen) {
         await client.query("rollback");
       }
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "Alakazam direct start reserves one Customer effect and confirms only with exact durable binding",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client, {
+        withStripeCustomer: false
+      });
+      const quoteId = await insertQuote(client, authority, {
+        changeKind: "start",
+        targetTierId: "alakazam_25",
+        targetAmountMinor: 2500,
+        appliedValueKind: "none",
+        appliedValueMinor: 0,
+        dueNowSubtotalMinor: 2500,
+        effectiveRule:
+          "after_payment_and_provider_confirmation",
+        noMidPeriodRefund: false,
+        issuedAt: "2026-08-02T12:00:00.000Z",
+        expiresAt: "2026-08-02T12:30:00.000Z"
+      });
+      const repository = createPostgresAlakazamRepository({
+        authority: {
+          async service(context, work) {
+            assert.deepEqual(context, {
+              userId: authority.userId,
+              organizationId: authority.organizationId
+            });
+            return work(client);
+          }
+        }
+      });
+      const unusedProvisionId = randomUUID();
+      const unused = await repository.claimCustomerProvision({
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId: unusedProvisionId,
+        claimedAt: "2026-08-02T12:01:00.000Z"
+      });
+      assert.equal(unused.status, "create");
+      assert.deepEqual(
+        await repository.releaseCustomerProvision({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId,
+          provisionId: unusedProvisionId,
+          purposeDigest: unused.provision.purposeDigest
+        }),
+        { status: "released" }
+      );
+
+      const provisionId = randomUUID();
+      const claimed = await repository.claimCustomerProvision({
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId,
+        claimedAt: "2026-08-02T12:02:00.000Z"
+      });
+      assert.equal(claimed.status, "create");
+      assert.equal(
+        claimed.provision.provisionId,
+        provisionId
+      );
+      const purposeDigest =
+        claimed.provision.purposeDigest;
+      const pending = await repository.claimCustomerProvision({
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId: randomUUID(),
+        claimedAt: "2026-08-02T12:02:30.000Z"
+      });
+      assert.equal(pending.status, "pending");
+      assert.equal(pending.provisionId, provisionId);
+      await flushConstraints(client);
+
+      await expectRejected(
+        client,
+        () => insertRow(
+          client,
+          "commerce_v2_download_dispatches",
+          {
+            organization_id: authority.organizationId,
+            preparation_command_id:
+              `blocked-${provisionId}`,
+            quote_id: randomUUID(),
+            customer_user_id: authority.userId,
+            project_id: authority.projectId,
+            version_id: randomUUID(),
+            provider: "stripe",
+            state: "dispatching",
+            purpose_digest: digest("blocked-purpose"),
+            accepted_disclosure_digest:
+              digest("blocked-disclosure"),
+            quote_snapshot_digest:
+              digest("blocked-quote"),
+            lease_expires_at:
+              "2026-08-02T12:03:00.000Z",
+            created_at: "2026-08-02T12:01:00.000Z",
+            updated_at: "2026-08-02T12:01:00.000Z"
+          }
+        ),
+        /Download Checkout waits for Alakazam Customer reconciliation/iu
+      );
+
+      const ambiguous =
+        await repository.markCustomerProvisionAmbiguous({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId,
+          provisionId,
+          purposeDigest,
+          stripeCustomerId:
+            "cus_alakazam_direct_start",
+          errorCode:
+            "stripe_alakazam_customer_readback_unknown"
+        });
+      assert.equal(
+        ambiguous.status,
+        "reconciliation_required"
+      );
+      await flushConstraints(client);
+      await expectRejected(
+        client,
+        () => client.query(
+          `delete from ss.alakazam_customer_provisions
+            where id = $1`,
+          [provisionId]
+        ),
+        /durable Alakazam Customer evidence is immutable/iu
+      );
+
+      const providerCreatedAt =
+        "2026-08-02T12:02:05.000Z";
+      const facts = {
+        schema:
+          "sitesourcery.stripe-alakazam-customer/v1",
+        stripeCustomerId:
+          "cus_alakazam_direct_start",
+        organizationId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId,
+        providerCreatedAt,
+        purposeDigest
+      };
+      const providerFactsDigest = canonicalDigest(facts);
+      const binding =
+        await repository.confirmCustomerProvision({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId,
+          provisionId,
+          purposeDigest,
+          providerFacts: {
+            ...facts,
+            providerFactsDigest
+          },
+          confirmedAt: "2026-08-02T12:02:10.000Z"
+        });
+      assert.deepEqual(binding, {
+        status: "bound",
+        provider: "stripe",
+        stripeCustomerId:
+          "cus_alakazam_direct_start",
+        provisionId
+      });
+      await flushConstraints(client);
+      const confirmed = await client.query(
+        `select provision.state,
+                provision.provider_effect_certainty,
+                provision.stripe_customer_id,
+                customer.organization_id as bound_organization_id
+           from ss.alakazam_customer_provisions provision
+           join ss.stripe_customers customer
+             on customer.organization_id =
+                provision.organization_id
+            and customer.stripe_customer_id =
+                provision.stripe_customer_id
+          where provision.id = $1`,
+        [provisionId]
+      );
+      assert.deepEqual(confirmed.rows[0], {
+        state: "confirmed",
+        provider_effect_certainty: "confirmed",
+        stripe_customer_id:
+          "cus_alakazam_direct_start",
+        bound_organization_id: authority.organizationId
+      });
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "an interrupted Alakazam Customer worker fences the reservation instead of authorizing a second create",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client, {
+        withStripeCustomer: false
+      });
+      const quoteId = await insertQuote(client, authority, {
+        changeKind: "start",
+        targetTierId: "alakazam_35",
+        targetAmountMinor: 3500,
+        appliedValueKind: "none",
+        appliedValueMinor: 0,
+        dueNowSubtotalMinor: 3500,
+        effectiveRule:
+          "after_payment_and_provider_confirmation",
+        noMidPeriodRefund: false,
+        issuedAt: "2026-08-02T12:00:00.000Z",
+        expiresAt: "2026-08-02T12:30:00.000Z"
+      });
+      const repository = createPostgresAlakazamRepository({
+        authority: {
+          async service(_context, work) {
+            return work(client);
+          }
+        }
+      });
+      const firstProvisionId = randomUUID();
+      const first = await repository.claimCustomerProvision({
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId: firstProvisionId,
+        claimedAt: "2026-08-02T12:01:00.000Z"
+      });
+      assert.equal(first.status, "create");
+
+      const interrupted =
+        await repository.claimCustomerProvision({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId,
+          provisionId: randomUUID(),
+          claimedAt: "2026-08-02T12:03:00.000Z"
+        });
+      assert.deepEqual(interrupted, {
+        status: "reconciliation_required",
+        provider: "stripe",
+        provisionId: firstProvisionId,
+        stripeCustomerId: null,
+        code: "alakazam_customer_provision_interrupted"
+      });
+      const replay = await repository.claimCustomerProvision({
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
+        quoteId,
+        provisionId: randomUUID(),
+        claimedAt: "2026-08-02T12:04:00.000Z"
+      });
+      assert.deepEqual(replay, interrupted);
+      const rows = await client.query(
+        `select id, state, provider_effect_certainty
+           from ss.alakazam_customer_provisions
+          where organization_id = $1`,
+        [authority.organizationId]
+      );
+      assert.deepEqual(rows.rows, [
+        {
+          id: firstProvisionId,
+          state: "reconciliation_required",
+          provider_effect_certainty: "ambiguous"
+        }
+      ]);
+    } finally {
+      await client.query("rollback");
       client.release();
       await pool.end();
     }

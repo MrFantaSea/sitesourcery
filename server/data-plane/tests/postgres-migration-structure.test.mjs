@@ -653,3 +653,49 @@ test("Alakazam billing stores exact tier value and evidence-gated transitions", 
     /refund_(?:button|request|offer)|create_refund/iu
   );
 });
+
+test("Alakazam direct-start Customer creation is durably reserved and evidence-bound", async () => {
+  const all = await migrations();
+  const provisioning = all.find(
+    ({ name }) =>
+      name ===
+      "202608020024_alakazam_customer_provisioning.sql"
+  );
+  assert.ok(provisioning);
+  assert.match(
+    provisioning.sql,
+    /create table ss\.alakazam_customer_provisions\b/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /state in \([\s\S]*'reserved'[\s\S]*'confirmed'[\s\S]*'reconciliation_required'/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /create constraint trigger alakazam_customer_provisions_binding[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /old\.state = 'reserved'[\s\S]*new\.state in \([\s\S]*'confirmed'[\s\S]*'reconciliation_required'/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /old\.state = 'reconciliation_required'[\s\S]*new\.state = 'confirmed'/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /lease_expires_at <>[\s\S]*created_at \+ interval '2 minutes'/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /commerce_v2_download_dispatches_alakazam_customer_guard/iu
+  );
+  assert.match(
+    provisioning.sql,
+    /create function ss\.hosted_runtime_contract_v24\(\)/iu
+  );
+  assert.doesNotMatch(
+    provisioning.sql,
+    /\b(?:email|name|phone|address)\b/iu
+  );
+});

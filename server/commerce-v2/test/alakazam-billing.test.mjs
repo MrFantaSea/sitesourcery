@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   createAlakazamBillingRelease,
   createAlakazamBillingService,
+  createAlakazamCustomerProvision,
+  digest,
   quoteAlakazamChange
 } from "../index.mjs";
 
@@ -17,6 +20,8 @@ const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const QUOTE_ID =
   "40000000-0000-4000-8000-000000000001";
+const PROVISION_ID =
+  "50000000-0000-4000-8000-000000000001";
 
 function input(overrides = {}) {
   return {
@@ -29,15 +34,36 @@ function input(overrides = {}) {
   };
 }
 
+function customerInput(overrides = {}) {
+  return {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    provisionId: PROVISION_ID,
+    ...overrides
+  };
+}
+
 function fixture({
   approved = true,
   taxMode = "disabled_by_owner",
   providerStatus = null,
-  repositoryResult = null
+  repositoryResult = null,
+  customerClaimResult = null,
+  customerProviderResult = null,
+  customerProviderError = null,
+  customerConfirmError = null,
+  customerAmbiguousResult = null
 } = {}) {
   const calls = {
     readiness: 0,
-    quotes: []
+    quotes: [],
+    customerClaims: [],
+    customerCreates: [],
+    customerConfirms: [],
+    customerAmbiguities: [],
+    customerReleases: []
   };
   const provider = {
     async readiness() {
@@ -48,6 +74,34 @@ function fixture({
         alakazam: true,
         livemode: false,
         taxMode
+      };
+    },
+    async createAlakazamCustomer(value) {
+      calls.customerCreates.push(
+        structuredClone(value)
+      );
+      if (customerProviderError) {
+        throw customerProviderError;
+      }
+      if (customerProviderResult) {
+        return structuredClone(customerProviderResult);
+      }
+      const purpose = value.purpose;
+      const facts = {
+        schema:
+          ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+        stripeCustomerId: "cus_alakazam_customer_1",
+        organizationId: purpose.organizationId,
+        customerId: purpose.customerId,
+        projectId: purpose.projectId,
+        quoteId: purpose.quoteId,
+        provisionId: purpose.provisionId,
+        providerCreatedAt: NOW,
+        purposeDigest: value.purposeDigest
+      };
+      return {
+        ...facts,
+        providerFactsDigest: digest(facts)
       };
     }
   };
@@ -65,6 +119,64 @@ function fixture({
         providerEffectsAuthorized: true,
         taxMode: value.taxMode
       });
+    },
+    async claimCustomerProvision(value) {
+      calls.customerClaims.push(
+        structuredClone(value)
+      );
+      if (customerClaimResult) {
+        return structuredClone(customerClaimResult);
+      }
+      return {
+        status: "create",
+        provider: "stripe",
+        provision: createAlakazamCustomerProvision({
+          tenantId: value.tenantId,
+          customerId: value.customerId,
+          projectId: value.projectId,
+          quoteId: value.quoteId,
+          provisionId: value.provisionId,
+          acceptedDisclosureDigest: "a".repeat(64),
+          quoteDigest: "b".repeat(64),
+          claimedAt: value.claimedAt
+        })
+      };
+    },
+    async confirmCustomerProvision(value) {
+      calls.customerConfirms.push(
+        structuredClone(value)
+      );
+      if (customerConfirmError) {
+        throw customerConfirmError;
+      }
+      return {
+        status: "bound",
+        provider: "stripe",
+        stripeCustomerId:
+          value.providerFacts.stripeCustomerId,
+        provisionId: value.provisionId
+      };
+    },
+    async markCustomerProvisionAmbiguous(value) {
+      calls.customerAmbiguities.push(
+        structuredClone(value)
+      );
+      return customerAmbiguousResult
+        ? structuredClone(customerAmbiguousResult)
+        : {
+            status: "reconciliation_required",
+            provider: "stripe",
+            provisionId: value.provisionId,
+            stripeCustomerId:
+              value.stripeCustomerId,
+            code: value.errorCode
+          };
+    },
+    async releaseCustomerProvision(value) {
+      calls.customerReleases.push(
+        structuredClone(value)
+      );
+      return { status: "released" };
     }
   };
   const service = createAlakazamBillingService({
@@ -190,4 +302,220 @@ test("Alakazam quote refuses a repository result with changed money or digest", 
     service.createQuote(input()),
     (error) => error.code === "repository_conflict"
   );
+});
+
+test("Alakazam direct start creates and binds one metadata-only Stripe Customer", async () => {
+  const { service, calls } = fixture();
+  assert.equal(
+    (await service.readiness()).customerProvisioning,
+    true
+  );
+  const binding = await service.ensureCheckoutCustomer(
+    customerInput()
+  );
+  assert.deepEqual(binding, {
+    status: "bound",
+    provider: "stripe",
+    stripeCustomerId: "cus_alakazam_customer_1",
+    provisionId: PROVISION_ID
+  });
+  assert.deepEqual(calls.customerClaims, [
+    {
+      ...customerInput(),
+      claimedAt: NOW
+    }
+  ]);
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(
+    calls.customerCreates[0].idempotencyKey,
+    `alakazam:customer:${PROVISION_ID}`
+  );
+  assert.deepEqual(
+    Object.keys(calls.customerCreates[0].purpose).sort(),
+    [
+      "acceptedDisclosureDigest",
+      "catalogVersion",
+      "customerId",
+      "organizationId",
+      "projectId",
+      "provisionId",
+      "quoteDigest",
+      "quoteId",
+      "schema",
+      "termsVersion"
+    ]
+  );
+  assert.doesNotMatch(
+    JSON.stringify(calls.customerCreates[0]),
+    /\b(?:email|name|phone|address)\b/iu
+  );
+  assert.equal(calls.customerConfirms.length, 1);
+  assert.equal(
+    calls.customerConfirms[0]
+      .providerFacts.providerFactsDigest,
+    digest(
+      Object.fromEntries(
+        Object.entries(
+          calls.customerConfirms[0].providerFacts
+        ).filter(
+          ([key]) => key !== "providerFactsDigest"
+        )
+      )
+    )
+  );
+  assert.equal(calls.customerAmbiguities.length, 0);
+  assert.equal(calls.customerReleases.length, 0);
+});
+
+test("an existing Customer binding bypasses every new provider effect", async () => {
+  const { service, calls } = fixture({
+    customerClaimResult: {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_existing_customer",
+      provisionId: null
+    }
+  });
+  assert.deepEqual(
+    await service.ensureCheckoutCustomer(customerInput()),
+    {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_existing_customer",
+      provisionId: null
+    }
+  );
+  assert.equal(calls.customerCreates.length, 0);
+  assert.equal(calls.customerConfirms.length, 0);
+});
+
+test("pending or ambiguous Customer claims never call Stripe again", async () => {
+  for (const [customerClaimResult, code] of [
+    [
+      {
+        status: "pending",
+        provider: "stripe",
+        provisionId: PROVISION_ID,
+        leaseExpiresAt:
+          "2026-08-02T12:02:00.000Z"
+      },
+      "alakazam_customer_provision_pending"
+    ],
+    [
+      {
+        status: "reconciliation_required",
+        provider: "stripe",
+        provisionId: PROVISION_ID,
+        stripeCustomerId: null,
+        code: "customer_effect_unknown"
+      },
+      "alakazam_customer_reconciliation_required"
+    ]
+  ]) {
+    const { service, calls } = fixture({
+      customerClaimResult
+    });
+    await assert.rejects(
+      service.ensureCheckoutCustomer(customerInput()),
+      (error) => error.code === code
+    );
+    assert.equal(calls.customerCreates.length, 0);
+    assert.equal(calls.customerConfirms.length, 0);
+  }
+});
+
+test("ambiguous Stripe Customer creation is fenced and never released for retry", async () => {
+  const providerError = Object.assign(
+    new Error("timeout after create"),
+    {
+      code: "stripe_alakazam_customer_readback_unknown",
+      certainty: "ambiguous",
+      details: {
+        stripeCustomerId: "cus_ambiguous_customer"
+      }
+    }
+  );
+  const { service, calls } = fixture({
+    customerProviderError: providerError
+  });
+  await assert.rejects(
+    service.ensureCheckoutCustomer(customerInput()),
+    (error) =>
+      error.code ===
+      "alakazam_customer_reconciliation_required"
+  );
+  assert.equal(calls.customerCreates.length, 1);
+  assert.deepEqual(calls.customerAmbiguities, [
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      quoteId: QUOTE_ID,
+      provisionId: PROVISION_ID,
+      purposeDigest:
+        calls.customerCreates[0].purposeDigest,
+      errorCode:
+        "stripe_alakazam_customer_readback_unknown",
+      stripeCustomerId: "cus_ambiguous_customer"
+    }
+  ]);
+  assert.equal(calls.customerReleases.length, 0);
+  assert.equal(calls.customerConfirms.length, 0);
+});
+
+test("a pre-effect provider failure releases only the unused reservation", async () => {
+  const providerError = Object.assign(
+    new Error("configuration unavailable"),
+    { code: "stripe_not_ready" }
+  );
+  const { service, calls } = fixture({
+    customerProviderError: providerError
+  });
+  await assert.rejects(
+    service.ensureCheckoutCustomer(customerInput()),
+    (error) => error === providerError
+  );
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(calls.customerReleases.length, 1);
+  assert.equal(calls.customerAmbiguities.length, 0);
+});
+
+test("post-create persistence uncertainty reconciles a concurrently committed binding", async () => {
+  const { service, calls } = fixture({
+    customerConfirmError: new Error("commit response lost"),
+    customerAmbiguousResult: {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_alakazam_customer_1",
+      provisionId: PROVISION_ID
+    }
+  });
+  assert.deepEqual(
+    await service.ensureCheckoutCustomer(customerInput()),
+    {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_alakazam_customer_1",
+      provisionId: PROVISION_ID
+    }
+  );
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(calls.customerConfirms.length, 1);
+  assert.equal(calls.customerAmbiguities.length, 1);
+  assert.equal(
+    calls.customerAmbiguities[0].errorCode,
+    "alakazam_customer_binding_persistence_unknown"
+  );
+});
+
+test("Customer preparation rejects browser money before readiness or persistence", async () => {
+  const { service, calls } = fixture();
+  await assert.rejects(
+    service.ensureCheckoutCustomer(
+      customerInput({ amountMinor: 1 })
+    ),
+    (error) => error.code === "invalid_input"
+  );
+  assert.equal(calls.readiness, 0);
+  assert.equal(calls.customerClaims.length, 0);
 });

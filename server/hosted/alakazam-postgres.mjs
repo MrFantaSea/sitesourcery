@@ -1,6 +1,8 @@
 import {
   ALAKAZAM_CATALOG_VERSION,
+  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
+  createAlakazamCustomerProvision,
   quoteAlakazamChange,
   resolveAlakazamTier
 } from "../commerce-v2/alakazam.mjs";
@@ -24,6 +26,7 @@ const TAX_MODES = new Set([
   "automatic",
   "disabled_by_owner"
 ]);
+const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
 const DATABASE_CONSTRAINT_CODES = new Set([
   "22001",
   "22P02",
@@ -45,7 +48,11 @@ function exactUuid(value, field) {
   return selected;
 }
 
-function exactKeys(value, expected) {
+function exactKeys(
+  value,
+  expected,
+  message = "the Alakazam quote repository input is invalid"
+) {
   invariant(
     value &&
       typeof value === "object" &&
@@ -53,9 +60,78 @@ function exactKeys(value, expected) {
       JSON.stringify(Object.keys(value).sort()) ===
         JSON.stringify([...expected].sort()),
     "invalid_input",
-    "the Alakazam quote repository input is invalid"
+    message
   );
   return value;
+}
+
+function exactCustomerClaimInput(value) {
+  exactKeys(
+    value,
+    [
+      "claimedAt",
+      "customerId",
+      "projectId",
+      "provisionId",
+      "quoteId",
+      "tenantId"
+    ],
+    "the Alakazam Customer claim input is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(
+      value.customerId,
+      "customerId"
+    ),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    provisionId: exactUuid(
+      value.provisionId,
+      "provisionId"
+    ),
+    claimedAt: requiredIso(value.claimedAt, "claimedAt")
+  });
+}
+
+function exactCustomerReference(value, extraFields = []) {
+  exactKeys(
+    value,
+    [
+      "customerId",
+      "projectId",
+      "provisionId",
+      "purposeDigest",
+      "quoteId",
+      "tenantId",
+      ...extraFields
+    ],
+    "the Alakazam Customer evidence input is invalid"
+  );
+  const purposeDigest = requiredText(
+    value.purposeDigest,
+    "purposeDigest",
+    64
+  );
+  invariant(
+    /^[a-f0-9]{64}$/u.test(purposeDigest),
+    "invalid_input",
+    "purposeDigest is invalid"
+  );
+  return {
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(
+      value.customerId,
+      "customerId"
+    ),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    provisionId: exactUuid(
+      value.provisionId,
+      "provisionId"
+    ),
+    purposeDigest
+  };
 }
 
 function exactQuoteInput(value) {
@@ -121,7 +197,7 @@ function databaseError(error) {
   if (DATABASE_CONSTRAINT_CODES.has(error?.code)) {
     return new CommerceV2Error(
       "repository_conflict",
-      "the durable Alakazam repository rejected inconsistent quote evidence",
+      "the durable Alakazam repository rejected inconsistent evidence",
       { status: 500 }
     );
   }
@@ -190,6 +266,162 @@ function jsonObject(value, field) {
     { status: 500 }
   );
   return clone(selected);
+}
+
+function storedCustomerProvision(row) {
+  invariant(
+    row &&
+      row.provider === "stripe" &&
+      [
+        "reserved",
+        "confirmed",
+        "reconciliation_required"
+      ].includes(row.state),
+    "repository_conflict",
+    "the durable Alakazam Customer reservation is invalid",
+    { status: 500 }
+  );
+  const reservation = createAlakazamCustomerProvision({
+    tenantId: row.organization_id,
+    customerId: row.customer_user_id,
+    projectId: row.project_id,
+    quoteId: row.quote_id,
+    provisionId: row.id,
+    acceptedDisclosureDigest:
+      row.accepted_disclosure_digest,
+    quoteDigest: row.quote_digest,
+    claimedAt: exactDatabaseIso(
+      row.created_at,
+      "customerProvision.claimedAt"
+    )
+  });
+  const purpose = jsonObject(
+    row.purpose,
+    "customerProvision.purpose"
+  );
+  invariant(
+    row.provider_idempotency_key ===
+      reservation.idempotencyKey &&
+      row.purpose_digest ===
+        reservation.purposeDigest &&
+      digest(purpose) === reservation.purposeDigest &&
+      exactDatabaseIso(
+        row.lease_expires_at,
+        "customerProvision.leaseExpiresAt"
+      ) === reservation.leaseExpiresAt &&
+      (
+        row.stripe_customer_id === null ||
+        STRIPE_CUSTOMER_ID.test(
+          row.stripe_customer_id
+        )
+      ),
+    "repository_conflict",
+    "the durable Alakazam Customer purpose changed",
+    { status: 500 }
+  );
+  return reservation;
+}
+
+function exactCustomerProviderFacts(value, reference) {
+  exactKeys(
+    value,
+    [
+      "customerId",
+      "organizationId",
+      "projectId",
+      "providerCreatedAt",
+      "providerFactsDigest",
+      "provisionId",
+      "purposeDigest",
+      "quoteId",
+      "schema",
+      "stripeCustomerId"
+    ],
+    "the Alakazam Customer provider evidence is invalid"
+  );
+  const stripeCustomerId = requiredText(
+    value.stripeCustomerId,
+    "providerFacts.stripeCustomerId",
+    255
+  );
+  const providerCreatedAt = requiredIso(
+    value.providerCreatedAt,
+    "providerFacts.providerCreatedAt"
+  );
+  const providerFactsDigest = requiredText(
+    value.providerFactsDigest,
+    "providerFacts.providerFactsDigest",
+    64
+  );
+  const facts = {
+    schema: value.schema,
+    stripeCustomerId,
+    organizationId: value.organizationId,
+    customerId: value.customerId,
+    projectId: value.projectId,
+    quoteId: value.quoteId,
+    provisionId: value.provisionId,
+    providerCreatedAt,
+    purposeDigest: value.purposeDigest
+  };
+  invariant(
+    value.schema ===
+      ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA &&
+      STRIPE_CUSTOMER_ID.test(stripeCustomerId) &&
+      value.organizationId === reference.tenantId &&
+      value.customerId === reference.customerId &&
+      value.projectId === reference.projectId &&
+      value.quoteId === reference.quoteId &&
+      value.provisionId === reference.provisionId &&
+      value.purposeDigest === reference.purposeDigest &&
+      /^[a-f0-9]{64}$/u.test(providerFactsDigest) &&
+      digest(facts) === providerFactsDigest,
+    "repository_conflict",
+    "the Alakazam Customer provider evidence changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    facts: Object.freeze({
+      ...facts,
+      providerFactsDigest
+    }),
+    stripeCustomerId,
+    providerCreatedAt,
+    providerFactsDigest
+  });
+}
+
+function exactProvisionRowIdentity(row, reference) {
+  const reservation = storedCustomerProvision(row);
+  invariant(
+    reservation.tenantId === reference.tenantId &&
+      reservation.customerId === reference.customerId &&
+      reservation.projectId === reference.projectId &&
+      reservation.quoteId === reference.quoteId &&
+      reservation.provisionId ===
+        reference.provisionId &&
+      reservation.purposeDigest ===
+        reference.purposeDigest,
+    "idempotency_conflict",
+    "the Alakazam Customer command was already used for another purpose",
+    { status: 409 }
+  );
+  return reservation;
+}
+
+function customerBinding(stripeCustomerId, provisionId = null) {
+  invariant(
+    STRIPE_CUSTOMER_ID.test(stripeCustomerId),
+    "repository_conflict",
+    "the Stripe Customer binding is invalid",
+    { status: 500 }
+  );
+  return Object.freeze({
+    status: "bound",
+    provider: "stripe",
+    stripeCustomerId,
+    provisionId
+  });
 }
 
 function projectStoredQuote(row, input) {
@@ -660,6 +892,562 @@ export function createPostgresAlakazamRepository({
               inserted.rows[0],
               input
             );
+          }
+        )
+      );
+    },
+
+    async claimCustomerProvision(value) {
+      const input = exactCustomerClaimInput(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: input.customerId,
+            organizationId: input.tenantId
+          },
+          async (client) => {
+            const organization = await client.query(
+              `select organization.id
+                 from ss.organizations organization
+                where organization.id = $1
+                  and organization.state = 'active'
+                for update`,
+              [input.tenantId]
+            );
+            invariant(
+              organization.rowCount === 1,
+              "project_unavailable",
+              "the Alakazam organization is unavailable",
+              { status: 404 }
+            );
+
+            const quote = await client.query(
+              `select quote.*
+                 from ss.alakazam_change_quotes quote
+                 join ss.projects project
+                   on project.organization_id =
+                      quote.organization_id
+                  and project.id = quote.project_id
+                  and project.lifecycle = 'active'
+                 join ss.organization_memberships membership
+                   on membership.organization_id =
+                      quote.organization_id
+                  and membership.user_id =
+                      quote.customer_user_id
+                  and membership.state = 'active'
+                  and membership.role = any($5::text[])
+                where quote.organization_id = $1
+                  and quote.id = $2
+                  and quote.customer_user_id = $3
+                  and quote.project_id = $4
+                for update of quote`,
+              [
+                input.tenantId,
+                input.quoteId,
+                input.customerId,
+                input.projectId,
+                PROJECT_ROLES
+              ]
+            );
+            const quoteRow = quote.rows[0];
+            invariant(
+              quote.rowCount === 1 &&
+                ["start", "upgrade"].includes(
+                  quoteRow.change_kind
+                ) &&
+                quoteRow.state === "quoted" &&
+                quoteRow.provider_effects_authorized ===
+                  true &&
+                exactDatabaseInteger(
+                  quoteRow.due_now_subtotal_minor,
+                  "quote.dueNowSubtotalMinor"
+                ) > 0 &&
+                Date.parse(
+                  exactDatabaseIso(
+                    quoteRow.expires_at,
+                    "quote.expiresAt"
+                  )
+                ) > Date.parse(input.claimedAt),
+              "alakazam_change_unavailable",
+              "the Alakazam payment quote is unavailable",
+              { status: 409 }
+            );
+
+            const binding = await client.query(
+              `select stripe_customer_id
+                 from ss.stripe_customers
+                where organization_id = $1
+                for update`,
+              [input.tenantId]
+            );
+            invariant(
+              binding.rowCount <= 1,
+              "repository_conflict",
+              "the organization has conflicting Stripe Customers",
+              { status: 500 }
+            );
+            if (binding.rowCount === 1) {
+              return customerBinding(
+                binding.rows[0].stripe_customer_id
+              );
+            }
+
+            const existing = await client.query(
+              `select *
+                 from ss.alakazam_customer_provisions
+                where organization_id = $1
+                for update`,
+              [input.tenantId]
+            );
+            invariant(
+              existing.rowCount <= 1,
+              "repository_conflict",
+              "the organization has conflicting Customer reservations",
+              { status: 500 }
+            );
+            if (existing.rowCount === 1) {
+              const row = existing.rows[0];
+              const reservation =
+                storedCustomerProvision(row);
+              if (row.state === "confirmed") {
+                invariant(
+                  false,
+                  "repository_conflict",
+                  "confirmed Customer evidence lacks its durable binding",
+                  { status: 500 }
+                );
+              }
+              if (
+                row.state === "reconciliation_required"
+              ) {
+                return Object.freeze({
+                  status: "reconciliation_required",
+                  provider: "stripe",
+                  provisionId: reservation.provisionId,
+                  stripeCustomerId:
+                    row.stripe_customer_id ?? null,
+                  code: row.provider_error_code
+                });
+              }
+              if (
+                Date.parse(reservation.leaseExpiresAt) <=
+                Date.parse(input.claimedAt)
+              ) {
+                const interrupted = await client.query(
+                  `update ss.alakazam_customer_provisions
+                      set state = 'reconciliation_required',
+                          provider_effect_certainty = 'ambiguous',
+                          provider_error_code =
+                            'alakazam_customer_provision_interrupted'
+                    where organization_id = $1
+                      and id = $2
+                      and state = 'reserved'
+                    returning *`,
+                  [input.tenantId, reservation.provisionId]
+                );
+                invariant(
+                  interrupted.rowCount === 1,
+                  "repository_conflict",
+                  "the interrupted Customer reservation was not fenced",
+                  { status: 500 }
+                );
+                return Object.freeze({
+                  status: "reconciliation_required",
+                  provider: "stripe",
+                  provisionId: reservation.provisionId,
+                  stripeCustomerId: null,
+                  code:
+                    "alakazam_customer_provision_interrupted"
+                });
+              }
+              return Object.freeze({
+                status: "pending",
+                provider: "stripe",
+                provisionId: reservation.provisionId,
+                leaseExpiresAt:
+                  reservation.leaseExpiresAt
+              });
+            }
+
+            invariant(
+              quoteRow.change_kind === "start",
+              "alakazam_change_unavailable",
+              "a missing Stripe Customer can only be created for the first Alakazam subscription",
+              { status: 409 }
+            );
+            const reservation =
+              createAlakazamCustomerProvision({
+                tenantId: input.tenantId,
+                customerId: input.customerId,
+                projectId: input.projectId,
+                quoteId: input.quoteId,
+                provisionId: input.provisionId,
+                acceptedDisclosureDigest:
+                  quoteRow.disclosure_digest,
+                quoteDigest: quoteRow.quote_digest,
+                claimedAt: input.claimedAt
+              });
+            const inserted = await client.query(
+              `insert into ss.alakazam_customer_provisions (
+                 id, organization_id, project_id,
+                 customer_user_id, quote_id, provider,
+                 provider_idempotency_key, purpose,
+                 purpose_digest,
+                 accepted_disclosure_digest,
+                 quote_digest, state,
+                 provider_effect_certainty,
+                 lease_expires_at, created_at, updated_at
+               ) values (
+                 $1, $2, $3, $4, $5, 'stripe',
+                 $6, $7::jsonb, $8, $9, $10,
+                 'reserved', 'not_submitted',
+                 $11, $12, $12
+               )
+               returning *`,
+              [
+                reservation.provisionId,
+                reservation.tenantId,
+                reservation.projectId,
+                reservation.customerId,
+                reservation.quoteId,
+                reservation.idempotencyKey,
+                JSON.stringify(reservation.purpose),
+                reservation.purposeDigest,
+                reservation.purpose
+                  .acceptedDisclosureDigest,
+                reservation.purpose.quoteDigest,
+                reservation.leaseExpiresAt,
+                reservation.claimedAt
+              ]
+            );
+            invariant(
+              inserted.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Customer reservation was not committed",
+              { status: 500 }
+            );
+            const stored = storedCustomerProvision(
+              inserted.rows[0]
+            );
+            invariant(
+              stored.purposeDigest ===
+                reservation.purposeDigest,
+              "repository_conflict",
+              "the Alakazam Customer reservation changed during commit",
+              { status: 500 }
+            );
+            return Object.freeze({
+              status: "create",
+              provider: "stripe",
+              provision: stored
+            });
+          }
+        )
+      );
+    },
+
+    async confirmCustomerProvision(value) {
+      const reference = exactCustomerReference(value, [
+        "confirmedAt",
+        "providerFacts"
+      ]);
+      const confirmedAt = requiredIso(
+        value.confirmedAt,
+        "confirmedAt"
+      );
+      const evidence = exactCustomerProviderFacts(
+        value.providerFacts,
+        reference
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_customer_provisions
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.provisionId]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Customer reservation is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            exactProvisionRowIdentity(row, reference);
+
+            const binding = await client.query(
+              `select stripe_customer_id
+                 from ss.stripe_customers
+                where organization_id = $1
+                for update`,
+              [reference.tenantId]
+            );
+            invariant(
+              binding.rowCount <= 1,
+              "repository_conflict",
+              "the organization has conflicting Stripe Customers",
+              { status: 500 }
+            );
+            if (row.state === "confirmed") {
+              const storedEvidence =
+                exactCustomerProviderFacts(
+                  jsonObject(
+                    row.provider_facts,
+                    "customerProvision.providerFacts"
+                  ),
+                  reference
+                );
+              invariant(
+                storedEvidence.providerFactsDigest ===
+                  evidence.providerFactsDigest &&
+                  binding.rowCount === 1 &&
+                  binding.rows[0].stripe_customer_id ===
+                    evidence.stripeCustomerId,
+                "idempotency_conflict",
+                "the confirmed Customer evidence changed",
+                { status: 409 }
+              );
+              return customerBinding(
+                evidence.stripeCustomerId,
+                reference.provisionId
+              );
+            }
+            invariant(
+              row.state === "reserved" ||
+                row.state ===
+                  "reconciliation_required",
+              "repository_conflict",
+              "the Customer reservation cannot be confirmed",
+              { status: 409 }
+            );
+            if (binding.rowCount === 0) {
+              await client.query(
+                `insert into ss.stripe_customers (
+                   organization_id,
+                   stripe_customer_id,
+                   created_from_receipt_id
+                 ) values ($1, $2, null)`,
+                [
+                  reference.tenantId,
+                  evidence.stripeCustomerId
+                ]
+              );
+            } else {
+              invariant(
+                binding.rows[0].stripe_customer_id ===
+                  evidence.stripeCustomerId,
+                "stripe_customer_binding_invalid",
+                "the Stripe Customer does not match this organization",
+                { status: 409 }
+              );
+            }
+            const updated = await client.query(
+              `update ss.alakazam_customer_provisions
+                  set state = 'confirmed',
+                      stripe_customer_id = $3,
+                      provider_facts = $4::jsonb,
+                      provider_facts_digest = $5,
+                      provider_created_at = $6,
+                      provider_effect_certainty = 'confirmed',
+                      provider_error_code = null,
+                      confirmed_at = $7
+                where organization_id = $1
+                  and id = $2
+                returning *`,
+              [
+                reference.tenantId,
+                reference.provisionId,
+                evidence.stripeCustomerId,
+                JSON.stringify(evidence.facts),
+                evidence.providerFactsDigest,
+                evidence.providerCreatedAt,
+                confirmedAt
+              ]
+            );
+            invariant(
+              updated.rowCount === 1 &&
+                updated.rows[0].state === "confirmed",
+              "repository_conflict",
+              "the Stripe Customer binding was not committed",
+              { status: 500 }
+            );
+            return customerBinding(
+              evidence.stripeCustomerId,
+              reference.provisionId
+            );
+          }
+        )
+      );
+    },
+
+    async markCustomerProvisionAmbiguous(value) {
+      const reference = exactCustomerReference(value, [
+        "errorCode",
+        "stripeCustomerId"
+      ]);
+      const errorCode = requiredText(
+        value.errorCode,
+        "errorCode",
+        200
+      );
+      const stripeCustomerId =
+        value.stripeCustomerId === null
+          ? null
+          : requiredText(
+              value.stripeCustomerId,
+              "stripeCustomerId",
+              255
+            );
+      invariant(
+        stripeCustomerId === null ||
+          STRIPE_CUSTOMER_ID.test(stripeCustomerId),
+        "invalid_input",
+        "stripeCustomerId is invalid"
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_customer_provisions
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.provisionId]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Customer reservation is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            exactProvisionRowIdentity(row, reference);
+            if (row.state === "confirmed") {
+              return customerBinding(
+                row.stripe_customer_id,
+                reference.provisionId
+              );
+            }
+            if (row.state === "reconciliation_required") {
+              invariant(
+                row.stripe_customer_id ===
+                  stripeCustomerId &&
+                  row.provider_error_code === errorCode,
+                "idempotency_conflict",
+                "the ambiguous Customer evidence changed",
+                { status: 409 }
+              );
+              return Object.freeze({
+                status: "reconciliation_required",
+                provider: "stripe",
+                provisionId: reference.provisionId,
+                stripeCustomerId,
+                code: errorCode
+              });
+            }
+            invariant(
+              row.state === "reserved",
+              "repository_conflict",
+              "the Customer reservation cannot be reconciled",
+              { status: 409 }
+            );
+            const updated = await client.query(
+              `update ss.alakazam_customer_provisions
+                  set state = 'reconciliation_required',
+                      stripe_customer_id = $3,
+                      provider_effect_certainty = 'ambiguous',
+                      provider_error_code = $4
+                where organization_id = $1
+                  and id = $2
+                returning *`,
+              [
+                reference.tenantId,
+                reference.provisionId,
+                stripeCustomerId,
+                errorCode
+              ]
+            );
+            invariant(
+              updated.rowCount === 1,
+              "repository_conflict",
+              "the ambiguous Customer effect was not fenced",
+              { status: 500 }
+            );
+            return Object.freeze({
+              status: "reconciliation_required",
+              provider: "stripe",
+              provisionId: reference.provisionId,
+              stripeCustomerId,
+              code: errorCode
+            });
+          }
+        )
+      );
+    },
+
+    async releaseCustomerProvision(value) {
+      const reference = exactCustomerReference(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_customer_provisions
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.provisionId]
+            );
+            if (selected.rowCount === 0) {
+              return Object.freeze({ status: "released" });
+            }
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the organization has conflicting Customer reservations",
+              { status: 500 }
+            );
+            const row = selected.rows[0];
+            exactProvisionRowIdentity(row, reference);
+            invariant(
+              row.state === "reserved" &&
+                row.provider_effect_certainty ===
+                  "not_submitted",
+              "alakazam_customer_reconciliation_required",
+              "the Customer reservation may have reached Stripe",
+              { status: 409 }
+            );
+            const removed = await client.query(
+              `delete from ss.alakazam_customer_provisions
+                where organization_id = $1
+                  and id = $2
+                  and state = 'reserved'`,
+              [reference.tenantId, reference.provisionId]
+            );
+            invariant(
+              removed.rowCount === 1,
+              "repository_conflict",
+              "the unused Customer reservation was not released",
+              { status: 500 }
+            );
+            return Object.freeze({ status: "released" });
           }
         )
       );

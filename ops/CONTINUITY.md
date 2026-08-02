@@ -257,6 +257,40 @@ these are OWNER RULINGS and open work, not suggestions.
   Next is durable Checkout/Schedule reservation and provider-result
   persistence, followed by separately proven event reconciliation.
 
+## ALAKAZAM DIRECT CUSTOMER PROVISIONING CHECKPOINT (2026-08-02)
+
+- A brand-new customer can now enter the internal Alakazam payment flow
+  without first buying the $5 Download. Before any provider call, additive
+  migration 024 commits one organization-scoped, quote-bound Customer
+  reservation with a two-minute worker lease, exact purpose digest, and stable
+  provider idempotency input. It stores no email, name, phone, or address.
+- The existing Stripe adapter creates one metadata-only Customer and requires
+  exact Customer readback before use. A known organization binding bypasses
+  creation. A pre-effect failure may release only the untouched reservation;
+  transport, readback, interrupted-worker, or post-effect persistence
+  uncertainty becomes durable reconciliation-required state and never
+  authorizes an automatic second Customer.
+- The PostgreSQL repository validates the current quote, project, active
+  membership, and billing identity even when a Customer is already bound. On
+  confirmation it inserts the canonical `ss.stripe_customers` binding and the
+  exact provider facts in one transaction. A new $5 Download Checkout cannot
+  open while Customer creation is pending or ambiguous, closing the direct
+  cross-flow duplicate-Customer race.
+- All 24 migrations replay cleanly on a fresh disposable HQ database. The real
+  PostgreSQL contract passes 4/4 for quote replay, direct Customer creation,
+  safe no-effect release, pending replay, ambiguity, exact confirmation,
+  interrupted-worker fencing, and the existing start/upgrade/downgrade
+  journey. Focused gates pass 55/55 Stripe adapter, 26/26 Alakazam
+  pure/service, 10/10 repository/readiness, and 16/16 migration structure.
+  Wider gates pass 346/346 core and 121/121 runnable hosted tests with the same
+  two intentional environment-only skips.
+- This is still an internal held checkpoint. No Alakazam Checkout/Schedule
+  dispatch service, payment-event persistence, HTTP/customer route, UI
+  control, entitlement activation, hosted publication, real provider
+  configuration, or public capability was activated. Production still serves
+  the July 22 predecessor. Next is the separate durable Checkout/Schedule
+  dispatch and provider-result transaction.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

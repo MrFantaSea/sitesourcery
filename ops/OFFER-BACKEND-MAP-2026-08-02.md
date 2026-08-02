@@ -85,6 +85,10 @@ Present as substantial code but not a finished product journey:
   One transaction locks the active project and binds either the current paid
   subscription revision or one unused project Download credit; UUID retries
   replay the first immutable quote and changed purposes fail closed.
+- A durable direct-start Stripe Customer transaction. It reserves one
+  metadata-only effect before the provider call, reuses an existing
+  organization binding, confirms exact provider readback and binding in one
+  transaction, and fences interrupted or ambiguous effects without retry.
 
 Absent today:
 
@@ -92,10 +96,10 @@ Absent today:
   one-invoice $5 Coupon.
 - Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
   restricted Portal configuration, and their reviewed environment bindings.
-- Durable Checkout/Schedule reservation, provider-result persistence, payment
-  and subscription event reconciliation, HTTP/customer boundaries, and hosted
+- Durable Checkout/Schedule dispatch, provider-result persistence, payment and
+  subscription event reconciliation, HTTP/customer boundaries, and hosted
   runtime composition that can safely invoke the provider contract.
-- Alakazam customer subscription/provisioning controls.
+- Alakazam customer subscription controls and public provisioning UI/API.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
 
@@ -108,8 +112,9 @@ Absent today:
    quantities; keep activation held where an owner policy is still required.
    **Pure contract, migration 023, revision/evidence guards, fresh migration,
    focused tier journey, full hosted PostgreSQL regression, the held Stripe
-   provider contract, and the project-locked quote transaction are complete.
-   Checkout/Schedule transactions, webhook routing, customer controls, and
+   provider contract, the project-locked quote transaction, and migration 024's
+   one-call direct Customer provisioning transaction are complete.
+   Checkout/Schedule dispatch, webhook routing, customer controls, and
    fulfillment remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.

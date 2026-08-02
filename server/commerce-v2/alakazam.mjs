@@ -3,6 +3,7 @@ import {
   deepFreeze,
   digest,
   invariant,
+  requiredDigest,
   requiredIso,
   requiredText
 } from "./canonical.mjs";
@@ -13,6 +14,12 @@ export const ALAKAZAM_CHANGE_QUOTE_SCHEMA =
   "sitesourcery.alakazam-tier-change-quote.v1";
 export const ALAKAZAM_ENTITLEMENT_SCHEMA =
   "sitesourcery.alakazam-project-entitlement.v1";
+export const ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
+  "sitesourcery.alakazam-stripe-customer-purpose.v1";
+export const ALAKAZAM_CUSTOMER_PROVISION_SCHEMA =
+  "sitesourcery.alakazam-customer-provision.v1";
+export const ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA =
+  "sitesourcery.stripe-alakazam-customer/v1";
 export const ALAKAZAM_CATALOG_VERSION =
   "alakazam.2026-08-02.v1";
 export const ALAKAZAM_TERMS_VERSION =
@@ -23,6 +30,7 @@ const CURRENCY = "USD";
 const MONTH = "month";
 const ACTIVE_CHANGE_STATUS = "active";
 const CHANGE_QUOTE_TTL_MS = 30 * 60 * 1000;
+const CUSTOMER_PROVISION_LEASE_MS = 2 * 60 * 1000;
 
 const BASE_CAPABILITIES = Object.freeze([
   "download_accepted_project_version",
@@ -331,6 +339,72 @@ export function getBrowserSafeAlakazamCatalog() {
 
 export function resolveAlakazamTier(tierId) {
   return deepFreeze(clone(exactTier(tierId)));
+}
+
+export function createAlakazamCustomerProvision({
+  tenantId,
+  customerId,
+  projectId,
+  quoteId,
+  provisionId,
+  acceptedDisclosureDigest,
+  quoteDigest,
+  claimedAt
+}) {
+  const identity = {
+    tenantId: requiredText(tenantId, "tenantId", 36),
+    customerId: requiredText(
+      customerId,
+      "customerId",
+      36
+    ),
+    projectId: requiredText(projectId, "projectId", 36),
+    quoteId: requiredText(quoteId, "quoteId", 36),
+    provisionId: requiredText(
+      provisionId,
+      "provisionId",
+      36
+    )
+  };
+  requiredDigest(
+    acceptedDisclosureDigest,
+    "acceptedDisclosureDigest"
+  );
+  requiredDigest(
+    quoteDigest,
+    "quoteDigest"
+  );
+  const disclosureDigest = acceptedDisclosureDigest;
+  const selectedQuoteDigest = quoteDigest;
+  const createdAt = requiredIso(claimedAt, "claimedAt");
+  const purpose = {
+    acceptedDisclosureDigest: disclosureDigest,
+    catalogVersion: ALAKAZAM_CATALOG_VERSION,
+    customerId: identity.customerId,
+    organizationId: identity.tenantId,
+    projectId: identity.projectId,
+    provisionId: identity.provisionId,
+    quoteDigest: selectedQuoteDigest,
+    quoteId: identity.quoteId,
+    schema: ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
+    termsVersion: ALAKAZAM_TERMS_VERSION
+  };
+  const purposeDigest = digest(purpose);
+  return deepFreeze({
+    schema: ALAKAZAM_CUSTOMER_PROVISION_SCHEMA,
+    state: "reserved",
+    provider: "stripe",
+    ...identity,
+    idempotencyKey:
+      `alakazam:customer:${identity.provisionId}`,
+    purpose,
+    purposeDigest,
+    claimedAt: createdAt,
+    leaseExpiresAt: new Date(
+      Date.parse(createdAt) +
+        CUSTOMER_PROVISION_LEASE_MS
+    ).toISOString()
+  });
 }
 
 export function quoteAlakazamChange({

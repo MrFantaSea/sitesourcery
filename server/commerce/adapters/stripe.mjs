@@ -10,6 +10,8 @@ import {
 } from "../../domain/errors.mjs";
 import {
   ALAKAZAM_CATALOG_VERSION,
+  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
   ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
   ALAKAZAM_TERMS_VERSION,
   ALAKAZAM_TIER_DEFINITIONS,
@@ -29,6 +31,8 @@ export const STRIPE_ALAKAZAM_CAPABILITIES =
     "checkout:create",
     "checkout:read",
     "coupons:read",
+    "customers:create",
+    "customers:read",
     "prices:read",
     "products:read",
     "subscriptions:read",
@@ -74,8 +78,14 @@ const DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-download-checkout-lifecycle/v2";
 export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
   "sitesourcery.alakazam-stripe-purpose.v1";
+export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
+  ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA;
 const STRIPE_ALAKAZAM_METADATA_SCHEMA =
   "sitesourcery_alakazam_change_v1";
+const STRIPE_ALAKAZAM_CUSTOMER_METADATA_SCHEMA =
+  "sitesourcery_alakazam_customer_v1";
+const STRIPE_ALAKAZAM_CUSTOMER_SCHEMA =
+  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SUBSCRIPTION_SCHEMA =
   "sitesourcery.stripe-alakazam-subscription/v1";
 const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
@@ -1023,6 +1033,155 @@ function validatedAlakazamCurrent(value, config) {
     currentPeriodStartsAt,
     currentPeriodEndsAt,
     providerFactsDigest: value.providerFactsDigest
+  });
+}
+
+function validateAlakazamCustomerPurpose(
+  request,
+  requestFields
+) {
+  invariant(
+    exactObjectKeys(request, requestFields) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "catalogVersion",
+        "customerId",
+        "organizationId",
+        "projectId",
+        "provisionId",
+        "quoteDigest",
+        "quoteId",
+        "schema",
+        "termsVersion"
+      ]),
+    "stripe_alakazam_customer_purpose_invalid",
+    "Alakazam Customer provisioning requires the exact server purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const purposeDigest = digest(purpose);
+  invariant(
+    purpose.schema ===
+      STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA &&
+      purpose.catalogVersion ===
+        ALAKAZAM_CATALOG_VERSION &&
+      purpose.termsVersion === ALAKAZAM_TERMS_VERSION &&
+      SHA256.test(purpose.acceptedDisclosureDigest) &&
+      SHA256.test(purpose.quoteDigest) &&
+      request.purposeDigest === purposeDigest,
+    "stripe_alakazam_customer_purpose_invalid",
+    "Alakazam Customer purpose does not match its authoritative digest",
+    { status: 500 }
+  );
+  const identity = Object.freeze({
+    organizationId: safeMetadataValue(
+      purpose.organizationId,
+      "purpose.organizationId"
+    ),
+    customerId: safeMetadataValue(
+      purpose.customerId,
+      "purpose.customerId"
+    ),
+    projectId: safeMetadataValue(
+      purpose.projectId,
+      "purpose.projectId"
+    ),
+    quoteId: safeMetadataValue(
+      purpose.quoteId,
+      "purpose.quoteId"
+    ),
+    provisionId: safeMetadataValue(
+      purpose.provisionId,
+      "purpose.provisionId"
+    )
+  });
+  return Object.freeze({
+    purpose,
+    purposeDigest,
+    identity,
+    idempotencyKey: requestFields.includes(
+      "idempotencyKey"
+    )
+      ? requiredText(
+          request.idempotencyKey,
+          "idempotencyKey",
+          255
+        )
+      : null,
+    stripeCustomerId: requestFields.includes(
+      "stripeCustomerId"
+    )
+      ? providerId(
+          request.stripeCustomerId,
+          "cus",
+          "stripeCustomerId"
+        )
+      : null
+  });
+}
+
+function alakazamCustomerMetadata(validated) {
+  return {
+    schema: STRIPE_ALAKAZAM_CUSTOMER_METADATA_SCHEMA,
+    organization_id: validated.identity.organizationId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    quote_id: validated.identity.quoteId,
+    provision_id: validated.identity.provisionId,
+    accepted_disclosure_digest:
+      validated.purpose.acceptedDisclosureDigest,
+    quote_digest: validated.purpose.quoteDigest,
+    catalog_version: validated.purpose.catalogVersion,
+    terms_version: validated.purpose.termsVersion,
+    purpose_digest: validated.purposeDigest
+  };
+}
+
+function alakazamCustomerFacts(
+  value,
+  config,
+  validated
+) {
+  const customerId = providerId(
+    value?.id,
+    "cus",
+    "Stripe Alakazam Customer ID"
+  );
+  const expectedMetadata =
+    alakazamCustomerMetadata(validated);
+  invariant(
+    value.object === "customer" &&
+      value.deleted !== true &&
+      value.livemode === config.livemode &&
+      exactObjectKeys(
+        value.metadata,
+        Object.keys(expectedMetadata)
+      ) &&
+      Object.entries(expectedMetadata).every(
+        ([key, expectedValue]) =>
+          value.metadata[key] === expectedValue
+      ),
+    "stripe_alakazam_customer_mismatch",
+    "Stripe did not confirm the exact Site Sourcery Customer binding",
+    { status: 502 }
+  );
+  const facts = {
+    schema: STRIPE_ALAKAZAM_CUSTOMER_SCHEMA,
+    stripeCustomerId: customerId,
+    organizationId: validated.identity.organizationId,
+    customerId: validated.identity.customerId,
+    projectId: validated.identity.projectId,
+    quoteId: validated.identity.quoteId,
+    provisionId: validated.identity.provisionId,
+    providerCreatedAt: exactProviderTime(
+      value.created,
+      "Stripe Alakazam Customer created time"
+    ),
+    purposeDigest: validated.purposeDigest
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
   });
 }
 
@@ -2673,6 +2832,8 @@ function alakazamProviderClient(client) {
     typeof client.checkout?.sessions?.retrieve ===
         "function" &&
       typeof client.coupons?.retrieve === "function" &&
+      typeof client.customers?.create === "function" &&
+      typeof client.customers?.retrieve === "function" &&
       typeof client.products?.retrieve === "function" &&
       typeof client.billingPortal?.configurations
         ?.retrieve === "function" &&
@@ -3111,6 +3272,8 @@ export function createStripeProviderAdapter(options = {}) {
       },
       createCheckout: reject,
       createDownloadCheckout: reject,
+      createAlakazamCustomer: reject,
+      retrieveAlakazamCustomer: reject,
       createAlakazamStartCheckout: reject,
       createAlakazamUpgradeCheckout: reject,
       retrieveAlakazamPayment: reject,
@@ -3542,6 +3705,113 @@ export function createStripeProviderAdapter(options = {}) {
           code: error?.code ?? "stripe_not_ready"
         };
       }
+    },
+
+    async createAlakazamCustomer(request) {
+      requireCapability("customers:create");
+      requireCapability("customers:read");
+      const validated =
+        validateAlakazamCustomerPurpose(request, [
+          "idempotencyKey",
+          "purpose",
+          "purposeDigest"
+        ]);
+      await verifyAlakazamConfiguration();
+      const params = {
+        description: "Site Sourcery Alakazam customer",
+        metadata: alakazamCustomerMetadata(validated)
+      };
+      const idempotencyKey = providerIdempotencyKey(
+        "alakazam_customer",
+        validated.idempotencyKey,
+        validated.purposeDigest
+      );
+      let created;
+      try {
+        created = await client.customers.create(
+          params,
+          { idempotencyKey }
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_alakazam_customer_create_unknown",
+          "Stripe Customer creation must be reconciled before retry",
+          {
+            idempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      let stripeCustomerId;
+      try {
+        stripeCustomerId = providerId(
+          created?.id,
+          "cus",
+          "Stripe Alakazam created Customer ID"
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_alakazam_customer_create_invalid",
+          "Stripe Customer creation returned an unsafe response that requires reconciliation",
+          {
+            idempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      let observed;
+      try {
+        observed = await client.customers.retrieve(
+          stripeCustomerId
+        );
+        return alakazamCustomerFacts(
+          observed,
+          config,
+          validated
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_alakazam_customer_readback_unknown",
+          "Stripe Customer creation requires exact readback before use",
+          {
+            idempotencyKey,
+            stripeCustomerId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+    },
+
+    async retrieveAlakazamCustomer(request) {
+      requireCapability("customers:read");
+      const validated =
+        validateAlakazamCustomerPurpose(request, [
+          "purpose",
+          "purposeDigest",
+          "stripeCustomerId"
+        ]);
+      await verifyAlakazamConfiguration();
+      let observed;
+      try {
+        observed = await client.customers.retrieve(
+          validated.stripeCustomerId
+        );
+      } catch {
+        throw noEffect(
+          "stripe_alakazam_customer_read_unavailable",
+          "The exact Stripe Customer could not be read for reconciliation",
+          {
+            stripeCustomerId:
+              validated.stripeCustomerId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return alakazamCustomerFacts(
+        observed,
+        config,
+        validated
+      );
     },
 
     async createAlakazamStartCheckout(request) {

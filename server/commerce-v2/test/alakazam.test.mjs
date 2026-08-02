@@ -5,6 +5,7 @@ import {
   ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
   ALAKAZAM_TIER_IDS,
   authorizeAlakazamCapability,
+  createAlakazamCustomerProvision,
   getBrowserSafeAlakazamCatalog,
   getPrivateAlakazamCatalog,
   quoteAlakazamChange,
@@ -65,6 +66,51 @@ test("browser catalog publishes benefits and prices but no provider authority", 
   assert.doesNotMatch(serialized, /price_[A-Za-z0-9]/u);
   assert.doesNotMatch(serialized, /coupon_[A-Za-z0-9]/u);
   assert.doesNotMatch(serialized, /sk_(?:live|test)_/u);
+});
+
+test("direct Alakazam start derives one metadata-only Customer reservation from server evidence", () => {
+  const provision = createAlakazamCustomerProvision({
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    quoteId:
+      "40000000-0000-4000-8000-000000000001",
+    provisionId:
+      "50000000-0000-4000-8000-000000000001",
+    acceptedDisclosureDigest: "a".repeat(64),
+    quoteDigest: "b".repeat(64),
+    claimedAt: ISSUED_AT
+  });
+  assert.equal(provision.state, "reserved");
+  assert.equal(provision.provider, "stripe");
+  assert.equal(
+    provision.idempotencyKey,
+    "alakazam:customer:50000000-0000-4000-8000-000000000001"
+  );
+  assert.equal(
+    provision.leaseExpiresAt,
+    "2026-08-02T12:02:00.000Z"
+  );
+  assert.deepEqual(Object.keys(provision.purpose).sort(), [
+    "acceptedDisclosureDigest",
+    "catalogVersion",
+    "customerId",
+    "organizationId",
+    "projectId",
+    "provisionId",
+    "quoteDigest",
+    "quoteId",
+    "schema",
+    "termsVersion"
+  ]);
+  assert.match(provision.purposeDigest, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(
+    JSON.stringify(provision),
+    /\b(?:email|name|phone|address)\b/iu
+  );
 });
 
 test("tier capabilities inherit upward without inventing care quantities", () => {

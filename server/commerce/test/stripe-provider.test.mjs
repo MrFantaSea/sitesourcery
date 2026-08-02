@@ -4,6 +4,7 @@ import test from "node:test";
 import { digest } from "../../domain/canonical.mjs";
 import {
   STRIPE_API_VERSION,
+  STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
   STRIPE_ALAKAZAM_PURPOSE_SCHEMA,
   createOfficialStripeClient,
   createStripeProviderAdapter
@@ -357,6 +358,33 @@ function alakazamRequest(options = {}, overrides = {}) {
   };
 }
 
+function alakazamCustomerRequest(overrides = {}) {
+  const purpose = {
+    schema: STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
+    catalogVersion: "alakazam.2026-08-02.v1",
+    termsVersion:
+      "alakazam-owner-contract.2026-08-02.v1",
+    organizationId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    quoteId:
+      "80000000-0000-4000-8000-000000000001",
+    provisionId:
+      "90000000-0000-4000-8000-000000000001",
+    acceptedDisclosureDigest: "f".repeat(64),
+    quoteDigest: "1".repeat(64)
+  };
+  return {
+    idempotencyKey: "alakazam:customer:command_1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...overrides
+  };
+}
+
 function fakePrice(expectation, overrides = {}) {
   return {
     id: expectation.id,
@@ -401,6 +429,10 @@ function fakeStripe({
   portalConfigurationResponse = null,
   couponError = null,
   couponResponse = null,
+  customerCreateError = null,
+  customerCreateResponse = null,
+  customerRetrieveError = null,
+  customerRetrieveResponse = null,
   cancellationError = null,
   cancellationResponse = null,
   subscriptionRetrieveError = null,
@@ -428,6 +460,8 @@ function fakeStripe({
     portals: [],
     portalConfigurations: [],
     coupons: [],
+    customerCreates: [],
+    customerReads: [],
     cancellations: [],
     subscriptionReads: [],
     subscriptionUpdates: [],
@@ -438,6 +472,7 @@ function fakeStripe({
   };
   let subscriptionReadIndex = 0;
   let scheduleReadIndex = 0;
+  let lastCustomer = null;
   const prices = new Map(
     config.priceExpectations.map((expectation) => [
       expectation.id,
@@ -489,6 +524,38 @@ function fakeStripe({
               products: [ALAKAZAM_PRODUCT_ID]
             }
           }
+        );
+      }
+    },
+    customers: {
+      async create(params, requestOptions) {
+        calls.customerCreates.push({
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (customerCreateError) {
+          throw customerCreateError;
+        }
+        lastCustomer = structuredClone(
+          customerCreateResponse ?? {
+            id: "cus_alakazam_customer_1",
+            object: "customer",
+            created: 1785672000,
+            deleted: false,
+            livemode: false,
+            metadata: params.metadata
+          }
+        );
+        return structuredClone(lastCustomer);
+      },
+      async retrieve(id) {
+        calls.customerReads.push(id);
+        if (customerRetrieveError) {
+          throw customerRetrieveError;
+        }
+        return structuredClone(
+          customerRetrieveResponse ?? lastCustomer
         );
       }
     },
@@ -1260,6 +1327,8 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   });
   for (const operation of [
     "createCheckout",
+    "createAlakazamCustomer",
+    "retrieveAlakazamCustomer",
     "createAlakazamStartCheckout",
     "createAlakazamUpgradeCheckout",
     "retrieveAlakazamPayment",
@@ -1503,6 +1572,103 @@ test("Alakazam Billing Portal sessions are pinned to the restricted configuratio
     return_url: config.portalReturnUrl,
     configuration: ALAKAZAM_PORTAL_CONFIGURATION_ID
   });
+});
+
+test("Alakazam Customer provisioning creates one metadata-only Customer and requires exact readback", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const request = alakazamCustomerRequest();
+  const result =
+    await adapter.createAlakazamCustomer(request);
+  assert.equal(
+    result.schema,
+    "sitesourcery.stripe-alakazam-customer/v1"
+  );
+  assert.equal(
+    result.stripeCustomerId,
+    "cus_alakazam_customer_1"
+  );
+  assert.equal(
+    result.providerCreatedAt,
+    "2026-08-02T12:00:00.000Z"
+  );
+  assert.match(result.providerFactsDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(calls.customerReads.length, 1);
+  const [{ params, requestOptions }] =
+    calls.customerCreates;
+  assert.deepEqual(Object.keys(params).sort(), [
+    "description",
+    "metadata"
+  ]);
+  assert.equal(
+    params.description,
+    "Site Sourcery Alakazam customer"
+  );
+  assert.equal("email" in params, false);
+  assert.equal("name" in params, false);
+  assert.deepEqual(params.metadata, {
+    schema: "sitesourcery_alakazam_customer_v1",
+    organization_id: request.purpose.organizationId,
+    customer_id: request.purpose.customerId,
+    project_id: request.purpose.projectId,
+    quote_id: request.purpose.quoteId,
+    provision_id: request.purpose.provisionId,
+    accepted_disclosure_digest:
+      request.purpose.acceptedDisclosureDigest,
+    quote_digest: request.purpose.quoteDigest,
+    catalog_version: request.purpose.catalogVersion,
+    terms_version: request.purpose.termsVersion,
+    purpose_digest: request.purposeDigest
+  });
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:alakazam_customer:[a-f0-9]{64}$/u
+  );
+
+  assert.deepEqual(
+    await adapter.retrieveAlakazamCustomer({
+      purpose: request.purpose,
+      purposeDigest: request.purposeDigest,
+      stripeCustomerId: result.stripeCustomerId
+    }),
+    result
+  );
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(calls.customerReads.length, 2);
+});
+
+test("Alakazam Customer transport or post-create readback uncertainty never submits a second Customer", async () => {
+  const config = alakazamConfiguration();
+  for (const options of [
+    { customerCreateError: new Error("reset") },
+    { customerRetrieveError: new Error("timeout") }
+  ]) {
+    const fake = fakeStripe({ config, ...options });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    await assert.rejects(
+      adapter.createAlakazamCustomer(
+        alakazamCustomerRequest()
+      ),
+      (error) =>
+        error.certainty === "ambiguous" &&
+        error.code.startsWith(
+          "stripe_alakazam_customer_"
+        )
+    );
+    assert.equal(calls.customerCreates.length, 1);
+    assert.equal(
+      calls.customerReads.length,
+      options.customerCreateError ? 0 : 1
+    );
+  }
 });
 
 test("Alakazam start Checkout uses one monthly Price and only the pinned one-invoice $5 credit", async () => {
