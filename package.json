@@ -39,6 +39,8 @@
     "check:ops": "node --check ops/*.mjs && node --test --test-concurrency=1 ops/test/*.test.mjs",
     "ops:backup": "node ops/run-backup.mjs",
     "ops:backup:production-rehearsal": "node ops/run-production-rehearsal-backup.mjs",
+    "ops:backup-cycle:production-rehearsal": "node ops/run-production-rehearsal-backup-cycle.mjs run",
+    "ops:backup-cycle:recover-production-rehearsal": "node ops/run-production-rehearsal-backup-cycle.mjs recover",
     "ops:backup-retention": "node ops/apply-backup-retention.mjs",
     "ops:restore-verify": "node ops/verify-restore.mjs",
     "ops:monitor-held": "node ops/monitor-held.mjs",
