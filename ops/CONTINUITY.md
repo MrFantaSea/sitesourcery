@@ -183,12 +183,52 @@ these are OWNER RULINGS and open work, not suggestions.
   passed 10/10, including the shipped browser account journey. Current local
   gates also pass 310/310 core and 116/116 runnable hosted tests, with the two
   expected environment-only skips.
-- This checkpoint is not a usable Alakazam launch. Still missing are the pinned
-  Stripe Product/Price/Coupon configuration and readback, provider adapter,
+- This database checkpoint did not make Alakazam usable. The next provider-only
+  checkpoint is recorded directly below. Real provider configuration,
   service/API/webhook composition, customer billing controls, automatic
   `sitesourcery.me` publication, tier-feature enforcement, owner workbench,
   real Stripe test-mode journeys, care/cancellation decisions, owner walk, and
-  cutover. Public production remains the July 22 predecessor.
+  cutover remain. Public production remains the July 22 predecessor.
+
+## ALAKAZAM STRIPE PROVIDER CONTRACT CHECKPOINT (2026-08-02)
+
+- The existing reviewed Stripe adapter now has one optional Alakazam surface;
+  no second Stripe client or payment stack was created. Held mode exposes and
+  refuses every operation. Contract mode requires one exact active Alakazam
+  Product, three distinct Product-bound monthly Prices at $25/$35/$50, a USD
+  $5 duration-once Coupon with no global redemption/expiry limit and only that
+  Product in scope, and a pinned Billing Portal configuration that allows
+  payment-method and invoice history but not customer, subscription, or
+  cancellation changes.
+- A first subscription Checkout contains exactly one selected recurring Price
+  and, only with the project Download credit, the pinned Coupon. Promotion-code
+  entry is never enabled. Direct starts at any tier and the $20/$30/$45 credit
+  results are server-bound. Upgrade Checkout is a one-time Product-bound line
+  for only the fixed difference; it cannot create another subscription.
+- Webhooks remain wake-up signals. Settlement reads Checkout back and requires
+  matching account/project/quote metadata, exact subtotal/discount/tax/total,
+  a succeeded PaymentIntent, for upgrades one exact captured and unrefunded
+  Charge, and for starts one paid Invoice plus one active quantity-one
+  Subscription item on the selected Price. A signed event cannot substitute
+  provider money evidence.
+- After an upgrade payment, the adapter changes the existing Subscription Item
+  to the target Price with quantity one, `proration_behavior=none`, and
+  `billing_cycle_anchor=unchanged`, then reads the Subscription back and proves
+  the same item and paid boundary before returning confirmation. A downgrade
+  attaches one Schedule, preserves the current Price through the exact period
+  end, enters one lower-Price monthly phase with no proration, and releases the
+  continuing lower subscription afterward.
+- Ambiguous effects do not repeat. Checkout submits once; a Price mutation is
+  reconciled before any retry and can never collect another difference; an
+  uncertain Schedule attachment stops before phase mutation; a known attached
+  Schedule is reconciled by exact ID instead of creating a duplicate.
+- Exact Stripe adapter tests pass 53/53 and the wider Node gate passes 330/330.
+  The implementation remains local and unpushed. Production composition still
+  does not accept Alakazam provider identifiers/capabilities, no real $35/$50
+  Prices or Coupon were invented, no HTTP/service/webhook path calls this
+  surface, and no entitlement or public site changed. Next is the separate
+  PostgreSQL service/repository transaction layer, then webhook and customer
+  API composition.
 
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 

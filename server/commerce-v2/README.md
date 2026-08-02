@@ -34,11 +34,22 @@ capabilities after the scheduled downgrade takes effect.
 Assisted Launch is quote/invoice work and is intentionally absent from the
 self-service catalog.
 
-Every offer and checkout preparation remains private and held. The boundary has
-no provider adapter, Stripe identifier, secret, network path, or dispatch
+Every offer and checkout preparation remains private and held. The quote
+boundary itself has no Stripe identifier, secret, network path, or dispatch
 authority. A checkout preparation is only a durable, idempotent statement of
-the exact server purpose that a later separately reviewed dispatcher would
-need.
+the exact server purpose that a separately reviewed dispatcher needs.
+
+The shared reviewed Stripe adapter now has an optional Alakazam provider
+contract, still uncomposed in the hosted customer runtime. It fails closed
+unless one Product, the exact $25/$35/$50 monthly Prices, an unrestricted-count
+but one-invoice $5 Coupon, and a restricted Billing Portal configuration all
+read back exactly. Its contract-test surface proves first-subscription
+Checkout, fixed-difference upgrade Checkout, provider payment readback,
+one-item/no-proration Price replacement with an unchanged billing boundary,
+and renewal-boundary downgrade scheduling. Provider uncertainty never creates
+a second payment or Schedule. Production composition deliberately does not yet
+accept these Alakazam capabilities or provider identifiers, so this checkpoint
+does not open Checkout or grant an entitlement.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,

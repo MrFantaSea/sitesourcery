@@ -4,12 +4,27 @@ import test from "node:test";
 import { digest } from "../../domain/canonical.mjs";
 import {
   STRIPE_API_VERSION,
+  STRIPE_ALAKAZAM_PURPOSE_SCHEMA,
   createOfficialStripeClient,
   createStripeProviderAdapter
 } from "../adapters/stripe.mjs";
 
 const DISCLOSURE_DIGEST = "a".repeat(64);
 const CANCELLATION_DIGEST = "b".repeat(64);
+const ALAKAZAM_PRODUCT_ID = "prod_alakazam";
+const ALAKAZAM_COUPON_ID =
+  "alakazam_download_credit_500";
+const ALAKAZAM_PORTAL_CONFIGURATION_ID =
+  "bpc_alakazam_restricted";
+const ALAKAZAM_PRICE_IDS = Object.freeze({
+  alakazam_25: "price_alakazam_25",
+  alakazam_35: "price_alakazam_35",
+  alakazam_50: "price_alakazam_50"
+});
+const ALAKAZAM_PERIOD_START =
+  "2026-08-01T12:00:00.000Z";
+const ALAKAZAM_PERIOD_END =
+  "2026-09-01T12:00:00.000Z";
 
 function configuration(overrides = {}) {
   return {
@@ -55,6 +70,40 @@ function configuration(overrides = {}) {
     ],
     ...overrides
   };
+}
+
+function alakazamConfiguration(overrides = {}) {
+  const base = configuration();
+  return configuration({
+    priceExpectations: [
+      ...base.priceExpectations,
+      ...Object.entries(ALAKAZAM_PRICE_IDS).map(
+        ([tierId, id]) => ({
+          id,
+          productId: ALAKAZAM_PRODUCT_ID,
+          currency: "usd",
+          unitAmount: {
+            alakazam_25: 2500,
+            alakazam_35: 3500,
+            alakazam_50: 5000
+          }[tierId],
+          livemode: false,
+          recurring: {
+            interval: "month",
+            intervalCount: 1
+          }
+        })
+      )
+    ],
+    alakazam: {
+      productId: ALAKAZAM_PRODUCT_ID,
+      downloadCreditCouponId: ALAKAZAM_COUPON_ID,
+      portalConfigurationId:
+        ALAKAZAM_PORTAL_CONFIGURATION_ID,
+      tierPriceIds: ALAKAZAM_PRICE_IDS
+    },
+    ...overrides
+  });
 }
 
 function checkoutPurpose({
@@ -203,6 +252,111 @@ function downloadMetadata(purpose = downloadPurpose()) {
   };
 }
 
+function alakazamCurrent({
+  tierId = "alakazam_25",
+  stripePriceId = ALAKAZAM_PRICE_IDS[tierId]
+} = {}) {
+  return {
+    localSubscriptionId:
+      "60000000-0000-4000-8000-000000000001",
+    revision: 3,
+    tierId,
+    amountMinor: {
+      alakazam_25: 2500,
+      alakazam_35: 3500,
+      alakazam_50: 5000
+    }[tierId],
+    stripeSubscriptionId:
+      "sub_alakazam_subscription_1",
+    stripeSubscriptionItemId:
+      "si_alakazam_item_1",
+    stripePriceId,
+    currentPeriodStartsAt: ALAKAZAM_PERIOD_START,
+    currentPeriodEndsAt: ALAKAZAM_PERIOD_END,
+    providerFactsDigest: "e".repeat(64)
+  };
+}
+
+function alakazamPurpose({
+  changeKind = "start",
+  targetTierId =
+    changeKind === "downgrade"
+      ? "alakazam_25"
+      : changeKind === "upgrade"
+        ? "alakazam_35"
+        : "alakazam_25",
+  currentSubscription =
+    changeKind === "start"
+      ? null
+      : alakazamCurrent({
+          tierId:
+            changeKind === "downgrade"
+              ? "alakazam_50"
+              : "alakazam_25"
+        }),
+  downloadCredit =
+    changeKind === "start"
+      ? {
+          entitlementId:
+            "70000000-0000-4000-8000-000000000001",
+          amountMinor: 500
+        }
+      : null,
+  overrides = {}
+} = {}) {
+  const targetAmountMinor = {
+    alakazam_25: 2500,
+    alakazam_35: 3500,
+    alakazam_50: 5000
+  }[targetTierId];
+  const dueNowSubtotalMinor =
+    changeKind === "start"
+      ? targetAmountMinor -
+        (downloadCredit?.amountMinor ?? 0)
+      : changeKind === "upgrade"
+        ? targetAmountMinor -
+          currentSubscription.amountMinor
+        : 0;
+  return {
+    schema: STRIPE_ALAKAZAM_PURPOSE_SCHEMA,
+    catalogVersion: "alakazam.2026-08-02.v1",
+    termsVersion:
+      "alakazam-owner-contract.2026-08-02.v1",
+    organizationId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    quoteId:
+      "80000000-0000-4000-8000-000000000001",
+    stripeCustomerId: "cus_alakazam_customer_1",
+    acceptedDisclosureDigest: "f".repeat(64),
+    quoteDigest: "1".repeat(64),
+    changeKind,
+    currentSubscription,
+    targetTierId,
+    targetAmountMinor,
+    dueNowSubtotalMinor,
+    nextRenewalAmountMinor: targetAmountMinor,
+    currency: "USD",
+    taxMode: "disabled_by_owner",
+    downloadCredit,
+    ...overrides
+  };
+}
+
+function alakazamRequest(options = {}, overrides = {}) {
+  const purpose = alakazamPurpose(options);
+  return {
+    idempotencyKey:
+      `alakazam:${purpose.changeKind}:command_1`,
+    purpose,
+    purposeDigest: digest(purpose),
+    ...overrides
+  };
+}
+
 function fakePrice(expectation, overrides = {}) {
   return {
     id: expectation.id,
@@ -216,6 +370,9 @@ function fakePrice(expectation, overrides = {}) {
           interval_count: 1
         }
       : null,
+    ...(expectation.productId
+      ? { product: expectation.productId }
+      : {}),
     ...overrides
   };
 }
@@ -224,6 +381,8 @@ function fakeStripe({
   config = configuration(),
   priceOverrides = {},
   priceError = null,
+  productError = null,
+  productResponse = null,
   checkoutError = null,
   checkoutResponse = null,
   checkoutRetrieveError = null,
@@ -238,13 +397,28 @@ function fakeStripe({
   refundResponse = null,
   portalError = null,
   portalResponse = null,
+  portalConfigurationError = null,
+  portalConfigurationResponse = null,
+  couponError = null,
+  couponResponse = null,
   cancellationError = null,
   cancellationResponse = null,
+  subscriptionRetrieveError = null,
+  subscriptionRetrieveResponses = [],
+  subscriptionUpdateError = null,
+  subscriptionUpdateResponse = null,
+  scheduleCreateError = null,
+  scheduleCreateResponse = null,
+  scheduleRetrieveError = null,
+  scheduleRetrieveResponses = [],
+  scheduleUpdateError = null,
+  scheduleUpdateResponse = null,
   webhookError = null,
   webhookEvent = null
 } = {}) {
   const calls = {
     prices: [],
+    products: [],
     checkouts: [],
     checkoutReads: [],
     paymentIntentReads: [],
@@ -252,9 +426,18 @@ function fakeStripe({
     voids: [],
     refunds: [],
     portals: [],
+    portalConfigurations: [],
+    coupons: [],
     cancellations: [],
+    subscriptionReads: [],
+    subscriptionUpdates: [],
+    scheduleCreates: [],
+    scheduleReads: [],
+    scheduleUpdates: [],
     webhooks: []
   };
+  let subscriptionReadIndex = 0;
+  let scheduleReadIndex = 0;
   const prices = new Map(
     config.priceExpectations.map((expectation) => [
       expectation.id,
@@ -265,11 +448,48 @@ function fakeStripe({
     ])
   );
   const client = {
+    products: {
+      async retrieve(id) {
+        calls.products.push(id);
+        if (productError) throw productError;
+        return structuredClone(
+          productResponse ?? {
+            id,
+            active: true,
+            livemode: false,
+            name: "Alakazam"
+          }
+        );
+      }
+    },
     prices: {
       async retrieve(id) {
         calls.prices.push(id);
         if (priceError) throw priceError;
         return structuredClone(prices.get(id));
+      }
+    },
+    coupons: {
+      async retrieve(id) {
+        calls.coupons.push(id);
+        if (couponError) throw couponError;
+        return structuredClone(
+          couponResponse ?? {
+            id,
+            valid: true,
+            livemode: false,
+            amount_off: 500,
+            currency: "usd",
+            duration: "once",
+            duration_in_months: null,
+            max_redemptions: null,
+            percent_off: null,
+            redeem_by: null,
+            applies_to: {
+              products: [ALAKAZAM_PRODUCT_ID]
+            }
+          }
+        );
       }
     },
     checkout: {
@@ -350,6 +570,36 @@ function fakeStripe({
       }
     },
     billingPortal: {
+      configurations: {
+        async retrieve(id) {
+          calls.portalConfigurations.push(id);
+          if (portalConfigurationError) {
+            throw portalConfigurationError;
+          }
+          return structuredClone(
+            portalConfigurationResponse ?? {
+              id,
+              active: true,
+              livemode: false,
+              default_return_url:
+                config.portalReturnUrl,
+              features: {
+                customer_update: { enabled: false },
+                invoice_history: { enabled: true },
+                payment_method_update: {
+                  enabled: true
+                },
+                subscription_cancel: {
+                  enabled: false
+                },
+                subscription_update: {
+                  enabled: false
+                }
+              }
+            }
+          );
+        }
+      },
       sessions: {
         async create(params, requestOptions) {
           calls.portals.push({
@@ -368,15 +618,44 @@ function fakeStripe({
       }
     },
     subscriptions: {
+      async retrieve(id, params) {
+        calls.subscriptionReads.push({
+          id,
+          params: structuredClone(params)
+        });
+        if (subscriptionRetrieveError) {
+          throw subscriptionRetrieveError;
+        }
+        const response =
+          subscriptionRetrieveResponses[
+            Math.min(
+              subscriptionReadIndex,
+              Math.max(
+                subscriptionRetrieveResponses.length - 1,
+                0
+              )
+            )
+          ];
+        subscriptionReadIndex += 1;
+        return structuredClone(response);
+      },
       async update(id, params, requestOptions) {
-        calls.cancellations.push({
+        const call = {
           id,
           params: structuredClone(params),
           requestOptions:
             structuredClone(requestOptions)
-        });
+        };
+        calls.subscriptionUpdates.push(call);
+        if (params.cancel_at_period_end === true) {
+          calls.cancellations.push(call);
+        }
+        if (subscriptionUpdateError) {
+          throw subscriptionUpdateError;
+        }
         if (cancellationError) throw cancellationError;
         return (
+          subscriptionUpdateResponse ??
           cancellationResponse ?? {
             id,
             cancel_at_period_end: true,
@@ -384,6 +663,52 @@ function fakeStripe({
             status: "active"
           }
         );
+      }
+    },
+    subscriptionSchedules: {
+      async create(params, requestOptions) {
+        calls.scheduleCreates.push({
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (scheduleCreateError) {
+          throw scheduleCreateError;
+        }
+        return structuredClone(scheduleCreateResponse);
+      },
+      async retrieve(id, params) {
+        calls.scheduleReads.push({
+          id,
+          params: structuredClone(params)
+        });
+        if (scheduleRetrieveError) {
+          throw scheduleRetrieveError;
+        }
+        const response =
+          scheduleRetrieveResponses[
+            Math.min(
+              scheduleReadIndex,
+              Math.max(
+                scheduleRetrieveResponses.length - 1,
+                0
+              )
+            )
+          ];
+        scheduleReadIndex += 1;
+        return structuredClone(response);
+      },
+      async update(id, params, requestOptions) {
+        calls.scheduleUpdates.push({
+          id,
+          params: structuredClone(params),
+          requestOptions:
+            structuredClone(requestOptions)
+        });
+        if (scheduleUpdateError) {
+          throw scheduleUpdateError;
+        }
+        return structuredClone(scheduleUpdateResponse);
       }
     },
     webhooks: {
@@ -431,6 +756,309 @@ function adapterFixture({
         now: () => "2026-07-28T12:00:00.000Z"
       }
     })
+  };
+}
+
+function fakeAlakazamSubscription({
+  tierId = "alakazam_25",
+  schedule = null,
+  metadata = {},
+  status = "active",
+  periodStart = ALAKAZAM_PERIOD_START,
+  periodEnd = ALAKAZAM_PERIOD_END
+} = {}) {
+  const amountMinor = {
+    alakazam_25: 2500,
+    alakazam_35: 3500,
+    alakazam_50: 5000
+  }[tierId];
+  return {
+    id: "sub_alakazam_subscription_1",
+    customer: "cus_alakazam_customer_1",
+    livemode: false,
+    status,
+    collection_method: "charge_automatically",
+    cancel_at_period_end: false,
+    automatic_tax: { enabled: false },
+    pending_update: null,
+    pause_collection: null,
+    billing_cycle_anchor:
+      Date.parse(periodStart) / 1000,
+    schedule,
+    metadata,
+    items: {
+      data: [
+        {
+          id: "si_alakazam_item_1",
+          quantity: 1,
+          current_period_start:
+            Date.parse(periodStart) / 1000,
+          current_period_end:
+            Date.parse(periodEnd) / 1000,
+          price: {
+            id: ALAKAZAM_PRICE_IDS[tierId],
+            active: true,
+            livemode: false,
+            currency: "usd",
+            unit_amount: amountMinor,
+            recurring: {
+              interval: "month",
+              interval_count: 1
+            },
+            product: ALAKAZAM_PRODUCT_ID
+          }
+        }
+      ]
+    }
+  };
+}
+
+function fakeAlakazamSchedule(
+  request,
+  {
+    scheduleId = "sub_sched_alakazam_1",
+    targetPeriodEnd =
+      "2026-10-01T12:00:00.000Z"
+  } = {}
+) {
+  const purpose = request.purpose;
+  const current = purpose.currentSubscription;
+  const start =
+    Date.parse(current.currentPeriodStartsAt) / 1000;
+  const effective =
+    Date.parse(current.currentPeriodEndsAt) / 1000;
+  return {
+    id: scheduleId,
+    subscription: current.stripeSubscriptionId,
+    customer: purpose.stripeCustomerId,
+    livemode: false,
+    status: "active",
+    end_behavior: "release",
+    current_phase: {
+      start_date: start,
+      end_date: effective
+    },
+    metadata: {
+      schema: "sitesourcery_alakazam_change_v1",
+      purpose_digest: request.purposeDigest,
+      target_tier_id: purpose.targetTierId
+    },
+    phases: [
+      {
+        start_date: start,
+        end_date: effective,
+        proration_behavior: "none",
+        collection_method: "charge_automatically",
+        automatic_tax: { enabled: false },
+        items: [
+          {
+            price: current.stripePriceId,
+            quantity: 1
+          }
+        ]
+      },
+      {
+        start_date: effective,
+        end_date:
+          Date.parse(targetPeriodEnd) / 1000,
+        proration_behavior: "none",
+        collection_method: "charge_automatically",
+        automatic_tax: { enabled: false },
+        items: [
+          {
+            price:
+              ALAKAZAM_PRICE_IDS[
+                purpose.targetTierId
+              ],
+            quantity: 1
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function alakazamExpectedMetadata(request) {
+  const purpose = request.purpose;
+  return {
+    schema: "sitesourcery_alakazam_change_v1",
+    organization_id: purpose.organizationId,
+    customer_id: purpose.customerId,
+    project_id: purpose.projectId,
+    quote_id: purpose.quoteId,
+    change_kind: purpose.changeKind,
+    target_tier_id: purpose.targetTierId,
+    accepted_disclosure_digest:
+      purpose.acceptedDisclosureDigest,
+    quote_digest: purpose.quoteDigest,
+    catalog_version: purpose.catalogVersion,
+    terms_version: purpose.termsVersion,
+    tax_mode: purpose.taxMode,
+    purpose_digest: request.purposeDigest,
+    ...(purpose.currentSubscription
+      ? {
+          prior_tier_id:
+            purpose.currentSubscription.tierId,
+          local_subscription_id:
+            purpose.currentSubscription
+              .localSubscriptionId,
+          subscription_revision: String(
+            purpose.currentSubscription.revision
+          )
+        }
+      : {}),
+    ...(purpose.downloadCredit
+      ? {
+          download_entitlement_id:
+            purpose.downloadCredit.entitlementId
+        }
+      : {})
+  };
+}
+
+function paidAlakazamCheckout(request) {
+  const purpose = request.purpose;
+  const metadata = alakazamExpectedMetadata(request);
+  const start = purpose.changeKind === "start";
+  const listSubtotalMinor = start
+    ? purpose.targetAmountMinor
+    : purpose.dueNowSubtotalMinor;
+  const discountMinor =
+    purpose.downloadCredit?.amountMinor ?? 0;
+  const totalMinor = listSubtotalMinor - discountMinor;
+  const paymentIntent = {
+    id: start
+      ? "pi_alakazam_start_1"
+      : "pi_alakazam_upgrade_1",
+    customer: purpose.stripeCustomerId,
+    livemode: false,
+    status: "succeeded",
+    currency: "usd",
+    amount: totalMinor,
+    amount_received: totalMinor,
+    amount_capturable: 0,
+    created: 1785672000,
+    metadata: start ? {} : metadata,
+    latest_charge: start
+      ? null
+      : {
+          id: "ch_alakazam_upgrade_1",
+          customer: purpose.stripeCustomerId,
+          payment_intent: "pi_alakazam_upgrade_1",
+          livemode: false,
+          status: "succeeded",
+          paid: true,
+          captured: true,
+          refunded: false,
+          currency: "usd",
+          amount: totalMinor,
+          amount_captured: totalMinor,
+          created: 1785672000
+        }
+  };
+  const subscription = start
+    ? fakeAlakazamSubscription({
+        tierId: purpose.targetTierId,
+        metadata
+      })
+    : null;
+  return {
+    id: "cs_alakazam_paid_1",
+    client_reference_id: purpose.quoteId,
+    mode: start ? "subscription" : "payment",
+    livemode: false,
+    status: "complete",
+    payment_status: "paid",
+    currency: "usd",
+    amount_subtotal: listSubtotalMinor,
+    amount_total: totalMinor,
+    customer: purpose.stripeCustomerId,
+    metadata,
+    automatic_tax: {
+      enabled: false,
+      status: null
+    },
+    total_details: {
+      amount_discount: discountMinor,
+      amount_shipping: 0,
+      amount_tax: 0,
+      breakdown: {
+        discounts: discountMinor
+          ? [
+              {
+                amount: discountMinor,
+                discount: {
+                  coupon: {
+                    id: ALAKAZAM_COUPON_ID
+                  }
+                }
+              }
+            ]
+          : []
+      }
+    },
+    line_items: {
+      has_more: false,
+      data: [
+        {
+          quantity: 1,
+          price: start
+            ? subscription.items.data[0].price
+            : {
+                id: "price_alakazam_upgrade_difference_1",
+                active: true,
+                livemode: false,
+                currency: "usd",
+                unit_amount: listSubtotalMinor,
+                recurring: null,
+                product: ALAKAZAM_PRODUCT_ID
+              }
+        }
+      ]
+    },
+    subscription,
+    invoice: start
+      ? {
+          id: "in_alakazam_start_1",
+          customer: purpose.stripeCustomerId,
+          parent: {
+            type: "subscription_details",
+            subscription_details: {
+              subscription: subscription.id,
+              metadata
+            }
+          },
+          livemode: false,
+          status: "paid",
+          currency: "usd",
+          subtotal: listSubtotalMinor,
+          total_discount_amounts: discountMinor
+            ? [{ amount: discountMinor }]
+            : [],
+          total: totalMinor,
+          amount_paid: totalMinor,
+          amount_remaining: 0,
+          payments: {
+            data: [
+              {
+                status: "paid",
+                livemode: false,
+                currency: "usd",
+                amount_paid: totalMinor,
+                amount_requested: totalMinor,
+                payment: {
+                  type: "payment_intent",
+                  payment_intent: paymentIntent
+                },
+                status_transitions: {
+                  paid_at: 1785672000
+                }
+              }
+            ]
+          }
+        }
+      : null,
+    payment_intent: start ? null : paymentIntent
   };
 }
 
@@ -632,6 +1260,12 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   });
   for (const operation of [
     "createCheckout",
+    "createAlakazamStartCheckout",
+    "createAlakazamUpgradeCheckout",
+    "retrieveAlakazamPayment",
+    "retrieveAlakazamSubscription",
+    "applyAlakazamUpgrade",
+    "scheduleAlakazamDowngrade",
     "createBillingPortal",
     "createDomainAuthorizationCheckout",
     "retrieveDomainAuthorization",
@@ -688,6 +1322,41 @@ test("contract mode requires an injected no-network test client and Stripe test 
   }
 });
 
+test("Alakazam construction requires three distinct exact monthly Prices bound to one Product", () => {
+  const missingProduct = alakazamConfiguration();
+  missingProduct.priceExpectations =
+    missingProduct.priceExpectations.map((expectation) =>
+      expectation.id === ALAKAZAM_PRICE_IDS.alakazam_35
+        ? { ...expectation, productId: null }
+        : expectation
+    );
+  const duplicatePrice = alakazamConfiguration({
+    alakazam: {
+      ...alakazamConfiguration().alakazam,
+      tierPriceIds: {
+        ...ALAKAZAM_PRICE_IDS,
+        alakazam_35: ALAKAZAM_PRICE_IDS.alakazam_25
+      }
+    }
+  });
+  for (const config of [missingProduct, duplicatePrice]) {
+    const fake = fakeStripe({ config });
+    assert.throws(
+      () =>
+        createStripeProviderAdapter({
+          mode: "contract_test",
+          testOnly: true,
+          client: fake.client,
+          config
+        }),
+      (error) =>
+        error.code ===
+        "stripe_alakazam_configuration_invalid"
+    );
+    assert.equal(fake.calls.prices.length, 0);
+  }
+});
+
 test("readiness reads back every exact owner-approved Price", async () => {
   const { adapter, calls } = adapterFixture();
   assert.deepEqual(await adapter.readiness(), {
@@ -726,6 +1395,742 @@ test("readiness fails closed when Stripe Price readback drifts", async () => {
     code: "stripe_price_mismatch"
   });
   assert.equal(fake.calls.checkouts.length, 0);
+});
+
+test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Coupon, and a restricted Portal", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter } = adapterFixture({ config, fake });
+  assert.deepEqual(await adapter.readiness(), {
+    ready: true,
+    provider: "stripe",
+    mode: "contract_test",
+    environment: "contract_test",
+    livemode: false,
+    apiVersion: STRIPE_API_VERSION,
+    priceCount: 5,
+    domainAuthorization: true,
+    webhookVerification: true,
+    taxMode: "disabled_by_owner",
+    alakazam: true
+  });
+  assert.deepEqual(fake.calls.coupons, [
+    ALAKAZAM_COUPON_ID
+  ]);
+  assert.deepEqual(fake.calls.products, [
+    ALAKAZAM_PRODUCT_ID
+  ]);
+  assert.deepEqual(fake.calls.portalConfigurations, [
+    ALAKAZAM_PORTAL_CONFIGURATION_ID
+  ]);
+  assert.deepEqual(
+    fake.calls.prices.slice(-3),
+    Object.values(ALAKAZAM_PRICE_IDS)
+  );
+});
+
+test("Alakazam readiness fails closed when its Product, Coupon, or Portal drifts outside the owner contract", async () => {
+  const config = alakazamConfiguration();
+  for (const fake of [
+    fakeStripe({
+      config,
+      productResponse: {
+        id: ALAKAZAM_PRODUCT_ID,
+        active: true,
+        livemode: false,
+        name: "Unreviewed product"
+      }
+    }),
+    fakeStripe({
+      config,
+      couponResponse: {
+        id: ALAKAZAM_COUPON_ID,
+        valid: true,
+        livemode: false,
+        amount_off: 500,
+        currency: "usd",
+        duration: "forever",
+        duration_in_months: null,
+        percent_off: null,
+        applies_to: {
+          products: [ALAKAZAM_PRODUCT_ID]
+        }
+      }
+    }),
+    fakeStripe({
+      config,
+      portalConfigurationResponse: {
+        id: ALAKAZAM_PORTAL_CONFIGURATION_ID,
+        active: true,
+        livemode: false,
+        default_return_url: config.portalReturnUrl,
+        features: {
+          customer_update: { enabled: false },
+          invoice_history: { enabled: true },
+          payment_method_update: { enabled: true },
+          subscription_cancel: { enabled: false },
+          subscription_update: { enabled: true }
+        }
+      }
+    })
+  ]) {
+    const readiness = await adapterFixture({
+      config,
+      fake
+    }).adapter.readiness();
+    assert.equal(readiness.ready, false);
+    assert.match(
+      readiness.code,
+      /^stripe_alakazam_(?:product|coupon|portal_configuration)_mismatch$/u
+    );
+    assert.equal(fake.calls.checkouts.length, 0);
+  }
+});
+
+test("Alakazam Billing Portal sessions are pinned to the restricted configuration", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  await adapter.createBillingPortal({
+    stripeCustomerId: "cus_alakazam_customer_1",
+    idempotencyKey: "portal:alakazam:command_1"
+  });
+  assert.deepEqual(calls.portals[0].params, {
+    customer: "cus_alakazam_customer_1",
+    return_url: config.portalReturnUrl,
+    configuration: ALAKAZAM_PORTAL_CONFIGURATION_ID
+  });
+});
+
+test("Alakazam start Checkout uses one monthly Price and only the pinned one-invoice $5 credit", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const request = alakazamRequest();
+  assert.deepEqual(
+    await adapter.createAlakazamStartCheckout(request),
+    {
+      checkoutId: "cs_test_checkout_1",
+      url: "https://checkout.stripe.com/c/pay/test_1",
+      expiresAt: "2026-07-28T12:30:00.000Z"
+    }
+  );
+  assert.equal(calls.checkouts.length, 1);
+  const [{ params, requestOptions }] = calls.checkouts;
+  assert.equal(params.mode, "subscription");
+  assert.deepEqual(params.line_items, [
+    {
+      price: ALAKAZAM_PRICE_IDS.alakazam_25,
+      quantity: 1
+    }
+  ]);
+  assert.deepEqual(params.discounts, [
+    { coupon: ALAKAZAM_COUPON_ID }
+  ]);
+  assert.equal(params.customer, "cus_alakazam_customer_1");
+  assert.equal(
+    params.metadata.purpose_digest,
+    request.purposeDigest
+  );
+  assert.equal(
+    params.subscription_data.metadata.purpose_digest,
+    request.purposeDigest
+  );
+  assert.equal("allow_promotion_codes" in params, false);
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:alakazam_start_checkout:[a-f0-9]{64}$/u
+  );
+});
+
+test("Alakazam can start directly at $50 without a Download credit and never exposes promotion entry", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  await adapter.createAlakazamStartCheckout(
+    alakazamRequest({
+      targetTierId: "alakazam_50",
+      downloadCredit: null
+    })
+  );
+  const [{ params }] = calls.checkouts;
+  assert.deepEqual(params.line_items, [
+    {
+      price: ALAKAZAM_PRICE_IDS.alakazam_50,
+      quantity: 1
+    }
+  ]);
+  assert.equal("discounts" in params, false);
+  assert.equal("allow_promotion_codes" in params, false);
+});
+
+test("Alakazam Checkout rejects forged tier money before any Stripe call", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter } = adapterFixture({ config, fake });
+  const purpose = alakazamPurpose({
+    overrides: { dueNowSubtotalMinor: 1 }
+  });
+  await assert.rejects(
+    adapter.createAlakazamStartCheckout({
+      idempotencyKey: "alakazam:start:forged",
+      purpose,
+      purposeDigest: digest(purpose)
+    }),
+    (error) =>
+      error.code === "stripe_alakazam_purpose_invalid"
+  );
+  assert.equal(fake.calls.prices.length, 0);
+  assert.equal(fake.calls.coupons.length, 0);
+  assert.equal(fake.calls.checkouts.length, 0);
+});
+
+test("Alakazam upgrade Checkout collects only the fixed tier difference", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({ config });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  await adapter.createAlakazamUpgradeCheckout(request);
+  const [{ params, requestOptions }] = calls.checkouts;
+  assert.equal(params.mode, "payment");
+  assert.deepEqual(params.line_items, [
+    {
+      price_data: {
+        currency: "usd",
+        unit_amount: 1000,
+        product: ALAKAZAM_PRODUCT_ID
+      },
+      quantity: 1
+    }
+  ]);
+  assert.equal("discounts" in params, false);
+  assert.equal("allow_promotion_codes" in params, false);
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:alakazam_upgrade_checkout:[a-f0-9]{64}$/u
+  );
+});
+
+test("Alakazam start settlement reads back the paid Invoice, PaymentIntent, one-item Subscription, and exact Download credit", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      paidAlakazamCheckout(request)
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result = await adapter.retrieveAlakazamPayment({
+    checkoutSessionId: "cs_alakazam_paid_1",
+    purpose: request.purpose,
+    purposeDigest: request.purposeDigest
+  });
+  assert.equal(result.changeKind, "start");
+  assert.equal(result.targetTierId, "alakazam_25");
+  assert.equal(result.listSubtotalMinor, 2500);
+  assert.equal(result.providerDiscountMinor, 500);
+  assert.equal(result.netSubtotalMinor, 2000);
+  assert.equal(result.totalMinor, 2000);
+  assert.equal(
+    result.stripeInvoiceId,
+    "in_alakazam_start_1"
+  );
+  assert.equal(
+    result.stripePaymentIntentId,
+    "pi_alakazam_start_1"
+  );
+  assert.equal(
+    result.providerPaymentTime,
+    "2026-08-02T12:00:00.000Z"
+  );
+  assert.equal("paidAt" in result, false);
+  assert.equal(result.subscription.tierId, "alakazam_25");
+  assert.match(result.providerFactsDigest, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(calls.checkoutReads, [
+    {
+      id: "cs_alakazam_paid_1",
+      params: {
+        expand: [
+          "invoice.payments.data.payment.payment_intent",
+          "line_items.data.price.product",
+          "payment_intent.latest_charge",
+          "subscription.items.data.price"
+        ]
+      }
+    }
+  ]);
+});
+
+test("Alakazam upgrade settlement proves the one-time difference without creating a second Subscription", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      paidAlakazamCheckout(request)
+  });
+  const { adapter } = adapterFixture({ config, fake });
+  const result = await adapter.retrieveAlakazamPayment({
+    checkoutSessionId: "cs_alakazam_paid_1",
+    purpose: request.purpose,
+    purposeDigest: request.purposeDigest
+  });
+  assert.equal(result.changeKind, "upgrade");
+  assert.equal(result.listSubtotalMinor, 1000);
+  assert.equal(result.providerDiscountMinor, 0);
+  assert.equal(result.totalMinor, 1000);
+  assert.equal(result.stripeInvoiceId, null);
+  assert.equal(
+    result.stripeSubscriptionId,
+    "sub_alakazam_subscription_1"
+  );
+  assert.equal(
+    result.stripePaymentIntentId,
+    "pi_alakazam_upgrade_1"
+  );
+  assert.equal(
+    result.providerPaymentTime,
+    "2026-08-02T12:00:00.000Z"
+  );
+  assert.equal("paidAt" in result, false);
+  assert.equal(result.subscription, null);
+});
+
+test("Alakazam upgrade settlement rejects an under-captured or refunded Charge", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  for (const mutateCharge of [
+    (charge) => {
+      charge.amount_captured = 999;
+    },
+    (charge) => {
+      charge.refunded = true;
+    }
+  ]) {
+    const response = paidAlakazamCheckout(request);
+    mutateCharge(response.payment_intent.latest_charge);
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.retrieveAlakazamPayment({
+          checkoutSessionId: "cs_alakazam_paid_1",
+          purpose: request.purpose,
+          purposeDigest: request.purposeDigest
+        }),
+      (error) =>
+        error.code === "stripe_alakazam_payment_mismatch"
+    );
+    assert.equal(fake.calls.subscriptionUpdates.length, 0);
+    assert.equal(fake.calls.scheduleCreates.length, 0);
+  }
+});
+
+test("Alakazam settlement rejects provider money drift even after a signed webhook wake-up", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest();
+  const response = paidAlakazamCheckout(request);
+  response.amount_total = 1;
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: response
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.retrieveAlakazamPayment({
+        checkoutSessionId: "cs_alakazam_paid_1",
+        purpose: request.purpose,
+        purposeDigest: request.purposeDigest
+      }),
+    (error) =>
+      error.code === "stripe_alakazam_payment_mismatch"
+  );
+  assert.equal(fake.calls.subscriptionUpdates.length, 0);
+  assert.equal(fake.calls.scheduleCreates.length, 0);
+});
+
+test("Alakazam upgrade swaps the existing item with no proration and proves the unchanged billing boundary", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  const paymentEvidence = {
+    receiptId:
+      "90000000-0000-4000-8000-000000000001",
+    providerFactsDigest: "2".repeat(64)
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription(),
+      fakeAlakazamSubscription({
+        tierId: "alakazam_35",
+        metadata: {
+          schema: "sitesourcery_alakazam_change_v1",
+          purpose_digest: request.purposeDigest,
+          payment_facts_digest:
+            paymentEvidence.providerFactsDigest
+        }
+      })
+    ]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result = await adapter.applyAlakazamUpgrade({
+    ...request,
+    paymentEvidence
+  });
+  assert.equal(result.tierId, "alakazam_35");
+  assert.equal(result.reconciliation, "confirmed");
+  assert.equal(calls.subscriptionReads.length, 2);
+  assert.equal(calls.subscriptionUpdates.length, 1);
+  const [{ id, params, requestOptions }] =
+    calls.subscriptionUpdates;
+  assert.equal(id, "sub_alakazam_subscription_1");
+  assert.deepEqual(params.items, [
+    {
+      id: "si_alakazam_item_1",
+      price: ALAKAZAM_PRICE_IDS.alakazam_35,
+      quantity: 1
+    }
+  ]);
+  assert.equal(params.proration_behavior, "none");
+  assert.equal(params.billing_cycle_anchor, "unchanged");
+  assert.equal(
+    params.metadata.payment_facts_digest,
+    paymentEvidence.providerFactsDigest
+  );
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:alakazam_upgrade_apply:[a-f0-9]{64}$/u
+  );
+});
+
+test("a completed Alakazam upgrade replay confirms provider state without another mutation", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  const paymentEvidence = {
+    receiptId:
+      "90000000-0000-4000-8000-000000000001",
+    providerFactsDigest: "2".repeat(64)
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_35",
+        metadata: {
+          schema: "sitesourcery_alakazam_change_v1",
+          purpose_digest: request.purposeDigest,
+          payment_facts_digest:
+            paymentEvidence.providerFactsDigest
+        }
+      })
+    ]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result = await adapter.applyAlakazamUpgrade({
+    ...request,
+    paymentEvidence
+  });
+  assert.equal(
+    result.reconciliation,
+    "confirmed_before_submit"
+  );
+  assert.equal(calls.subscriptionReads.length, 1);
+  assert.equal(calls.subscriptionUpdates.length, 0);
+});
+
+test("Alakazam provider uncertainty never opens a second difference payment or retries a Price mutation", async () => {
+  const config = alakazamConfiguration();
+  {
+    const fake = fakeStripe({
+      config,
+      checkoutError: new Error("timeout")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.createAlakazamUpgradeCheckout(
+          alakazamRequest({ changeKind: "upgrade" })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_alakazam_checkout_effect_unknown" &&
+        error.certainty === "ambiguous"
+    );
+    assert.equal(fake.calls.checkouts.length, 1);
+  }
+  {
+    const request = alakazamRequest({
+      changeKind: "upgrade"
+    });
+    const fake = fakeStripe({
+      config,
+      subscriptionRetrieveResponses: [
+        fakeAlakazamSubscription()
+      ],
+      subscriptionUpdateError: new Error("timeout")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.applyAlakazamUpgrade({
+          ...request,
+          paymentEvidence: {
+            receiptId:
+              "90000000-0000-4000-8000-000000000001",
+            providerFactsDigest: "2".repeat(64)
+          }
+        }),
+      (error) =>
+        error.code ===
+          "stripe_alakazam_upgrade_effect_unknown" &&
+        error.certainty === "ambiguous"
+    );
+    assert.equal(fake.calls.subscriptionUpdates.length, 1);
+    assert.equal(fake.calls.subscriptionReads.length, 2);
+    assert.equal(fake.calls.checkouts.length, 0);
+  }
+});
+
+test("Alakazam downgrade keeps the current Price through renewal and schedules one lower-Price phase with no proration", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const schedule = fakeAlakazamSchedule(request);
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50"
+      })
+    ],
+    scheduleCreateResponse: {
+      id: schedule.id,
+      subscription:
+        request.purpose.currentSubscription
+          .stripeSubscriptionId,
+      livemode: false,
+      status: "active"
+    },
+    scheduleRetrieveResponses: [schedule]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result =
+    await adapter.scheduleAlakazamDowngrade(request);
+  assert.equal(result.targetTierId, "alakazam_25");
+  assert.equal(result.effectiveAt, ALAKAZAM_PERIOD_END);
+  assert.equal(result.providerProration, false);
+  assert.deepEqual(
+    calls.scheduleCreates[0].params,
+    {
+      from_subscription:
+        "sub_alakazam_subscription_1"
+    }
+  );
+  const [{ params, requestOptions }] =
+    calls.scheduleUpdates;
+  assert.equal(params.end_behavior, "release");
+  assert.equal(params.proration_behavior, "none");
+  assert.equal(params.phases.length, 2);
+  assert.deepEqual(params.phases[0].items, [
+    {
+      price: ALAKAZAM_PRICE_IDS.alakazam_50,
+      quantity: 1
+    }
+  ]);
+  assert.equal(
+    params.phases[0].end_date,
+    Date.parse(ALAKAZAM_PERIOD_END) / 1000
+  );
+  assert.deepEqual(params.phases[1].items, [
+    {
+      price: ALAKAZAM_PRICE_IDS.alakazam_25,
+      quantity: 1
+    }
+  ]);
+  assert.deepEqual(params.phases[1].duration, {
+    interval: "month",
+    interval_count: 1
+  });
+  assert.equal(
+    params.phases.every(
+      (phase) => phase.proration_behavior === "none"
+    ),
+    true
+  );
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:alakazam_schedule_update:[a-f0-9]{64}$/u
+  );
+});
+
+test("a completed Alakazam Schedule replay is read back without another provider mutation", async () => {
+  const config = alakazamConfiguration();
+  const seed = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const schedule = fakeAlakazamSchedule(seed);
+  const request = {
+    ...seed,
+    stripeScheduleId: schedule.id
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50",
+        schedule: schedule.id
+      })
+    ],
+    scheduleRetrieveResponses: [schedule]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result =
+    await adapter.scheduleAlakazamDowngrade(request);
+  assert.equal(result.stripeScheduleId, schedule.id);
+  assert.equal(calls.scheduleCreates.length, 0);
+  assert.equal(calls.scheduleUpdates.length, 0);
+  assert.equal(calls.scheduleReads.length, 1);
+});
+
+test("an ambiguous Alakazam phase update reconciles the known Schedule and never creates another", async () => {
+  const config = alakazamConfiguration();
+  const seed = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const schedule = fakeAlakazamSchedule(seed);
+  const partial = {
+    ...schedule,
+    metadata: {}
+  };
+  const request = {
+    ...seed,
+    stripeScheduleId: schedule.id
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50",
+        schedule: schedule.id
+      })
+    ],
+    scheduleUpdateError: new Error("timeout"),
+    scheduleRetrieveResponses: [partial, schedule]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result =
+    await adapter.scheduleAlakazamDowngrade(request);
+  assert.equal(result.stripeScheduleId, schedule.id);
+  assert.equal(calls.scheduleCreates.length, 0);
+  assert.equal(calls.scheduleUpdates.length, 1);
+  assert.equal(calls.scheduleReads.length, 2);
+});
+
+test("an attached Schedule with conflicting provider identity is never rewritten", async () => {
+  const config = alakazamConfiguration();
+  const seed = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const schedule = fakeAlakazamSchedule(seed);
+  const request = {
+    ...seed,
+    stripeScheduleId: schedule.id
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50",
+        schedule: schedule.id
+      })
+    ],
+    scheduleRetrieveResponses: [
+      {
+        ...schedule,
+        customer: "cus_conflicting_customer"
+      }
+    ]
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.scheduleAlakazamDowngrade(request),
+    (error) =>
+      error.code ===
+      "stripe_alakazam_schedule_identity_mismatch"
+  );
+  assert.equal(fake.calls.scheduleUpdates.length, 0);
+});
+
+test("an uncertain Alakazam Schedule attachment stops before phase mutation", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50"
+      })
+    ],
+    scheduleCreateError: new Error("timeout")
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.scheduleAlakazamDowngrade(request),
+    (error) =>
+      error.code ===
+        "stripe_alakazam_schedule_attach_unknown" &&
+      error.certainty === "ambiguous"
+  );
+  assert.equal(fake.calls.scheduleCreates.length, 1);
+  assert.equal(fake.calls.scheduleUpdates.length, 0);
 });
 
 test("mixed website purchase creates exact subscription Checkout parameters", async () => {

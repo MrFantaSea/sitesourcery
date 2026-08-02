@@ -8,6 +8,13 @@ import {
   ExternalEffectError,
   invariant
 } from "../../domain/errors.mjs";
+import {
+  ALAKAZAM_CATALOG_VERSION,
+  ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
+  ALAKAZAM_TERMS_VERSION,
+  ALAKAZAM_TIER_DEFINITIONS,
+  ALAKAZAM_TIER_IDS
+} from "../../commerce-v2/alakazam.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -16,6 +23,19 @@ export const STRIPE_PROVIDER_MODES = Object.freeze([
   "contract_test",
   "approved_live"
 ]);
+export const STRIPE_ALAKAZAM_CAPABILITIES =
+  Object.freeze([
+    "billing_portal_configurations:read",
+    "checkout:create",
+    "checkout:read",
+    "coupons:read",
+    "prices:read",
+    "products:read",
+    "subscriptions:read",
+    "subscriptions:update",
+    "subscription_schedules:read",
+    "subscription_schedules:write"
+  ]);
 
 const LIVE_ENVIRONMENTS = new Set(["staging", "production"]);
 const LIVE_CAPABILITIES = new Set([
@@ -28,7 +48,8 @@ const LIVE_CAPABILITIES = new Set([
   "domain_refunds:create",
   "prices:read",
   "subscriptions:cancel",
-  "webhooks:verify"
+  "webhooks:verify",
+  ...STRIPE_ALAKAZAM_CAPABILITIES
 ]);
 const BILLING_INTERVALS = new Set(["month", "year"]);
 const CANCELLABLE_SUBSCRIPTION_STATUSES = new Set([
@@ -41,7 +62,7 @@ const CANCELLABLE_SUBSCRIPTION_STATUSES = new Set([
 ]);
 const CHECKOUT_HOSTS = new Set(["checkout.stripe.com"]);
 const PORTAL_HOSTS = new Set(["billing.stripe.com"]);
-const PROVIDER_ID = /^(?:bps|ch|cs|cus|pi|price|re|sub|txn)_[A-Za-z0-9_]+$/u;
+const PROVIDER_ID = /^(bpc|bps|ch|cs|cus|in|pi|price|prod|re|si|sub_sched|sub|txn)_[A-Za-z0-9_]+$/u;
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9._:-]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const OFFICIAL_CLIENTS = new WeakSet();
@@ -51,6 +72,16 @@ const DOWNLOAD_CHECKOUT_METADATA_SCHEMA =
   "sitesourcery_download_checkout_v2";
 const DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-download-checkout-lifecycle/v2";
+export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
+  "sitesourcery.alakazam-stripe-purpose.v1";
+const STRIPE_ALAKAZAM_METADATA_SCHEMA =
+  "sitesourcery_alakazam_change_v1";
+const STRIPE_ALAKAZAM_SUBSCRIPTION_SCHEMA =
+  "sitesourcery.stripe-alakazam-subscription/v1";
+const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
+  "sitesourcery.stripe-alakazam-payment/v1";
+const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
+  "sitesourcery.stripe-alakazam-downgrade-schedule/v1";
 
 export function createOfficialStripeClient({
   secretKey,
@@ -126,8 +157,9 @@ function safeMetadataValue(value, field) {
 
 function providerId(value, prefix, field) {
   const selected = requiredText(value, field, 255);
+  const match = PROVIDER_ID.exec(selected);
   invariant(
-    selected.startsWith(`${prefix}_`) && PROVIDER_ID.test(selected),
+    match?.[1] === prefix,
     "stripe_provider_id_invalid",
     `${field} is invalid`,
     { status: 502 }
@@ -336,13 +368,113 @@ function normalizedExpectation(value, index, livemode) {
     `Stripe Price expectation ${id} has the wrong livemode`,
     { status: 500 }
   );
+  const productId =
+    value.productId === null ||
+    value.productId === undefined
+      ? null
+      : providerId(
+          value.productId,
+          "prod",
+          `priceExpectations[${index}].productId`
+        );
   return Object.freeze({
     id,
     active: true,
     currency,
     unitAmount,
     livemode,
-    recurring
+    recurring,
+    productId
+  });
+}
+
+function normalizedAlakazamConfig(
+  value,
+  priceExpectations,
+  livemode
+) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  invariant(
+    exactObjectKeys(value, [
+      "downloadCreditCouponId",
+      "portalConfigurationId",
+      "productId",
+      "tierPriceIds"
+    ]),
+    "stripe_alakazam_configuration_invalid",
+    "Stripe Alakazam configuration requires the exact reviewed fields",
+    { status: 500 }
+  );
+  const productId = providerId(
+    value.productId,
+    "prod",
+    "alakazam.productId"
+  );
+  const portalConfigurationId = providerId(
+    value.portalConfigurationId,
+    "bpc",
+    "alakazam.portalConfigurationId"
+  );
+  const downloadCreditCouponId = requiredText(
+    value.downloadCreditCouponId,
+    "alakazam.downloadCreditCouponId",
+    255
+  );
+  invariant(
+    SAFE_METADATA_VALUE.test(downloadCreditCouponId),
+    "stripe_alakazam_configuration_invalid",
+    "Stripe Alakazam Download credit Coupon ID is invalid",
+    { status: 500 }
+  );
+  invariant(
+    exactObjectKeys(value.tierPriceIds, ALAKAZAM_TIER_IDS),
+    "stripe_alakazam_configuration_invalid",
+    "Stripe Alakazam tier Price bindings are incomplete",
+    { status: 500 }
+  );
+  const expectations = new Map(
+    priceExpectations.map((expectation) => [
+      expectation.id,
+      expectation
+    ])
+  );
+  const tierPriceIds = {};
+  for (const tierId of ALAKAZAM_TIER_IDS) {
+    const priceId = providerId(
+      value.tierPriceIds[tierId],
+      "price",
+      `alakazam.tierPriceIds.${tierId}`
+    );
+    const expected = expectations.get(priceId);
+    const tier = ALAKAZAM_TIER_DEFINITIONS[tierId];
+    invariant(
+      expected &&
+        expected.productId === productId &&
+        expected.unitAmount === tier.price.amountMinor &&
+        expected.currency === "usd" &&
+        expected.livemode === livemode &&
+        expected.recurring?.interval === "month" &&
+        expected.recurring?.intervalCount === 1,
+      "stripe_alakazam_configuration_invalid",
+      `Stripe Alakazam Price ${tierId} does not match the owner contract`,
+      { status: 500 }
+    );
+    tierPriceIds[tierId] = priceId;
+  }
+  invariant(
+    new Set(Object.values(tierPriceIds)).size ===
+      ALAKAZAM_TIER_IDS.length,
+    "stripe_alakazam_configuration_invalid",
+    "Stripe Alakazam tiers require three distinct Prices",
+    { status: 500 }
+  );
+  return Object.freeze({
+    productId,
+    portalConfigurationId,
+    downloadCreditCouponId,
+    tierPriceIds: Object.freeze(tierPriceIds)
   });
 }
 
@@ -479,6 +611,11 @@ function validateConfig(value, mode) {
       )
     });
   }
+  const alakazam = normalizedAlakazamConfig(
+    config.alakazam,
+    priceExpectations,
+    config.livemode
+  );
   return Object.freeze({
     apiVersion: STRIPE_API_VERSION,
     livemode: config.livemode,
@@ -497,7 +634,8 @@ function validateConfig(value, mode) {
       86400
     ),
     priceExpectations: Object.freeze(priceExpectations),
-    domainAuthorization
+    domainAuthorization,
+    alakazam
   });
 }
 
@@ -704,6 +842,10 @@ function validatePurpose(request) {
 }
 
 function priceMatches(price, expected) {
+  const productId =
+    typeof price?.product === "string"
+      ? price.product
+      : price?.product?.id;
   return (
     price &&
     price.id === expected.id &&
@@ -717,6 +859,10 @@ function priceMatches(price, expected) {
         : price.recurring?.interval ===
             expected.recurring.interval &&
           price.recurring?.interval_count === 1
+    ) &&
+    (
+      expected.productId === null ||
+      productId === expected.productId
     )
   );
 }
@@ -767,6 +913,342 @@ function exactObjectKeys(value, fields) {
     !Array.isArray(value) &&
     JSON.stringify(Object.keys(value).sort()) ===
       JSON.stringify([...fields].sort())
+  );
+}
+
+function canonicalIso(value, field) {
+  const selected = requiredText(value, field, 40);
+  invariant(
+    Number.isFinite(Date.parse(selected)) &&
+      new Date(selected).toISOString() === selected,
+    "stripe_alakazam_purpose_invalid",
+    `${field} must be an exact ISO timestamp`,
+    { status: 500 }
+  );
+  return selected;
+}
+
+function isoToProviderSeconds(value, field) {
+  const selected = canonicalIso(value, field);
+  const milliseconds = Date.parse(selected);
+  invariant(
+    milliseconds % 1000 === 0,
+    "stripe_alakazam_purpose_invalid",
+    `${field} must resolve to an exact provider second`,
+    { status: 500 }
+  );
+  return milliseconds / 1000;
+}
+
+function alakazamTier(tierId) {
+  const selected = requiredText(tierId, "targetTierId", 100);
+  const tier = ALAKAZAM_TIER_DEFINITIONS[selected];
+  invariant(
+    Boolean(tier),
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam purpose contains an unavailable tier",
+    { status: 500 }
+  );
+  return tier;
+}
+
+function validatedAlakazamCurrent(value, config) {
+  invariant(
+    exactObjectKeys(value, [
+      "amountMinor",
+      "currentPeriodEndsAt",
+      "currentPeriodStartsAt",
+      "localSubscriptionId",
+      "providerFactsDigest",
+      "revision",
+      "stripePriceId",
+      "stripeSubscriptionId",
+      "stripeSubscriptionItemId",
+      "tierId"
+    ]),
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam current subscription binding is invalid",
+    { status: 500 }
+  );
+  const tier = alakazamTier(value.tierId);
+  const currentPeriodStartsAt = canonicalIso(
+    value.currentPeriodStartsAt,
+    "currentSubscription.currentPeriodStartsAt"
+  );
+  const currentPeriodEndsAt = canonicalIso(
+    value.currentPeriodEndsAt,
+    "currentSubscription.currentPeriodEndsAt"
+  );
+  invariant(
+    Date.parse(currentPeriodEndsAt) >
+      Date.parse(currentPeriodStartsAt) &&
+      value.amountMinor === tier.price.amountMinor &&
+      Number.isSafeInteger(value.revision) &&
+      value.revision > 0 &&
+      SHA256.test(value.providerFactsDigest),
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam current subscription facts do not match the owner contract",
+    { status: 500 }
+  );
+  const stripePriceId = providerId(
+    value.stripePriceId,
+    "price",
+    "currentSubscription.stripePriceId"
+  );
+  invariant(
+    stripePriceId === config.tierPriceIds[tier.tierId],
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam current subscription Price does not match its tier",
+    { status: 500 }
+  );
+  return Object.freeze({
+    localSubscriptionId: safeMetadataValue(
+      value.localSubscriptionId,
+      "currentSubscription.localSubscriptionId"
+    ),
+    revision: value.revision,
+    tier,
+    amountMinor: value.amountMinor,
+    stripeSubscriptionId: providerId(
+      value.stripeSubscriptionId,
+      "sub",
+      "currentSubscription.stripeSubscriptionId"
+    ),
+    stripeSubscriptionItemId: providerId(
+      value.stripeSubscriptionItemId,
+      "si",
+      "currentSubscription.stripeSubscriptionItemId"
+    ),
+    stripePriceId,
+    currentPeriodStartsAt,
+    currentPeriodEndsAt,
+    providerFactsDigest: value.providerFactsDigest
+  });
+}
+
+function validateAlakazamPurpose(
+  request,
+  config,
+  expectedChangeKind,
+  requestFields,
+  taxMode
+) {
+  invariant(
+    config &&
+      exactObjectKeys(request, requestFields) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "catalogVersion",
+        "changeKind",
+        "currency",
+        "currentSubscription",
+        "customerId",
+        "downloadCredit",
+        "dueNowSubtotalMinor",
+        "nextRenewalAmountMinor",
+        "organizationId",
+        "projectId",
+        "quoteDigest",
+        "quoteId",
+        "schema",
+        "stripeCustomerId",
+        "taxMode",
+        "targetAmountMinor",
+        "targetTierId",
+        "termsVersion"
+      ]),
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam operation requires the exact server purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const target = alakazamTier(purpose.targetTierId);
+  const purposeDigest = digest(purpose);
+  invariant(
+    purpose.schema === STRIPE_ALAKAZAM_PURPOSE_SCHEMA &&
+      purpose.catalogVersion ===
+        ALAKAZAM_CATALOG_VERSION &&
+      purpose.termsVersion === ALAKAZAM_TERMS_VERSION &&
+      purpose.changeKind === expectedChangeKind &&
+      purpose.currency === "USD" &&
+      purpose.taxMode === taxMode &&
+      purpose.targetAmountMinor ===
+        target.price.amountMinor &&
+      purpose.nextRenewalAmountMinor ===
+        target.price.amountMinor &&
+      SHA256.test(purpose.acceptedDisclosureDigest) &&
+      SHA256.test(purpose.quoteDigest) &&
+      request.purposeDigest === purposeDigest,
+    "stripe_alakazam_purpose_invalid",
+    "Alakazam purpose does not match its authoritative digest or tier",
+    { status: 500 }
+  );
+  const identity = Object.freeze({
+    organizationId: safeMetadataValue(
+      purpose.organizationId,
+      "purpose.organizationId"
+    ),
+    customerId: safeMetadataValue(
+      purpose.customerId,
+      "purpose.customerId"
+    ),
+    projectId: safeMetadataValue(
+      purpose.projectId,
+      "purpose.projectId"
+    ),
+    quoteId: safeMetadataValue(
+      purpose.quoteId,
+      "purpose.quoteId"
+    ),
+    stripeCustomerId: providerId(
+      purpose.stripeCustomerId,
+      "cus",
+      "purpose.stripeCustomerId"
+    )
+  });
+  let current = null;
+  let downloadCredit = null;
+  if (expectedChangeKind === "start") {
+    invariant(
+      purpose.currentSubscription === null,
+      "stripe_alakazam_purpose_invalid",
+      "An Alakazam start cannot bind an existing subscription",
+      { status: 500 }
+    );
+    if (purpose.downloadCredit !== null) {
+      invariant(
+        exactObjectKeys(purpose.downloadCredit, [
+          "amountMinor",
+          "entitlementId"
+        ]) &&
+          purpose.downloadCredit.amountMinor ===
+            ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
+        "stripe_alakazam_purpose_invalid",
+        "Alakazam Download credit must be exactly $5",
+        { status: 500 }
+      );
+      downloadCredit = Object.freeze({
+        entitlementId: safeMetadataValue(
+          purpose.downloadCredit.entitlementId,
+          "purpose.downloadCredit.entitlementId"
+        ),
+        amountMinor: ALAKAZAM_DOWNLOAD_CREDIT_MINOR
+      });
+    }
+    invariant(
+      purpose.dueNowSubtotalMinor ===
+        target.price.amountMinor -
+          (downloadCredit?.amountMinor ?? 0),
+      "stripe_alakazam_purpose_invalid",
+      "Alakazam start subtotal does not match its tier and Download credit",
+      { status: 500 }
+    );
+  } else {
+    invariant(
+      purpose.downloadCredit === null,
+      "stripe_alakazam_purpose_invalid",
+      "Download credit applies only to the first Alakazam subscription",
+      { status: 500 }
+    );
+    current = validatedAlakazamCurrent(
+      purpose.currentSubscription,
+      config
+    );
+    invariant(
+      expectedChangeKind === "upgrade"
+        ? target.rank > current.tier.rank &&
+            purpose.dueNowSubtotalMinor ===
+              target.price.amountMinor -
+                current.tier.price.amountMinor
+        : target.rank < current.tier.rank &&
+            purpose.dueNowSubtotalMinor === 0,
+      "stripe_alakazam_purpose_invalid",
+      "Alakazam tier change does not match the fixed ladder",
+      { status: 500 }
+    );
+  }
+  const idempotencyKey = requestFields.includes(
+    "idempotencyKey"
+  )
+    ? requiredText(
+        request.idempotencyKey,
+        "idempotencyKey",
+        255
+      )
+    : null;
+  return Object.freeze({
+    purpose,
+    purposeDigest,
+    identity,
+    target,
+    targetPriceId: config.tierPriceIds[target.tierId],
+    current,
+    downloadCredit,
+    idempotencyKey
+  });
+}
+
+function alakazamMetadata(validated) {
+  return {
+    schema: STRIPE_ALAKAZAM_METADATA_SCHEMA,
+    organization_id: validated.identity.organizationId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    quote_id: validated.identity.quoteId,
+    change_kind: validated.purpose.changeKind,
+    target_tier_id: validated.target.tierId,
+    accepted_disclosure_digest:
+      validated.purpose.acceptedDisclosureDigest,
+    quote_digest: validated.purpose.quoteDigest,
+    catalog_version: validated.purpose.catalogVersion,
+    terms_version: validated.purpose.termsVersion,
+    tax_mode: validated.purpose.taxMode,
+    purpose_digest: validated.purposeDigest,
+    ...(validated.current
+      ? {
+          prior_tier_id: validated.current.tier.tierId,
+          local_subscription_id:
+            validated.current.localSubscriptionId,
+          subscription_revision: String(
+            validated.current.revision
+          )
+        }
+      : {}),
+    ...(validated.downloadCredit
+      ? {
+          download_entitlement_id:
+            validated.downloadCredit.entitlementId
+        }
+      : {})
+  };
+}
+
+function alakazamReturnUrl(template, validated) {
+  const parsed = new URL(template);
+  invariant(
+    !parsed.searchParams.has("alakazam_project") &&
+      !parsed.searchParams.has("alakazam_change"),
+    "stripe_redirect_invalid",
+    "Alakazam return URL already contains change identity",
+    { status: 500 }
+  );
+  parsed.searchParams.set(
+    "alakazam_project",
+    validated.identity.projectId
+  );
+  parsed.searchParams.set(
+    "alakazam_change",
+    validated.purpose.changeKind
+  );
+  return exactUrl(
+    parsed
+      .toString()
+      .replace(
+        "%7BCHECKOUT_SESSION_ID%7D",
+        "{CHECKOUT_SESSION_ID}"
+      ),
+    "Alakazam success URL",
+    { checkoutSessionPlaceholder: true }
   );
 }
 
@@ -1015,6 +1497,373 @@ function downloadCheckoutFacts(
     taxMode: config.taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest
+  });
+}
+
+function validateAlakazamMetadata(value, expected) {
+  invariant(
+    exactObjectKeys(value, Object.keys(expected)) &&
+      Object.entries(expected).every(
+        ([key, expectedValue]) =>
+          value[key] === expectedValue
+      ),
+    "stripe_alakazam_payment_mismatch",
+    "Stripe Alakazam payment metadata changed",
+    { status: 502 }
+  );
+}
+
+function expandedAlakazamObject(value, prefix, field) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value),
+    "stripe_alakazam_payment_mismatch",
+    `${field} was not expanded by Stripe`,
+    { status: 502 }
+  );
+  providerId(value.id, prefix, `${field}.id`);
+  return value;
+}
+
+function alakazamPaymentIntentFacts(
+  value,
+  config,
+  validated,
+  expectedTotalMinor
+) {
+  const intent = expandedAlakazamObject(
+    value,
+    "pi",
+    "Stripe Alakazam PaymentIntent"
+  );
+  if (validated.purpose.changeKind === "upgrade") {
+    validateAlakazamMetadata(
+      intent.metadata,
+      alakazamMetadata(validated)
+    );
+  }
+  invariant(
+    intent.livemode === config.livemode &&
+      intent.status === "succeeded" &&
+      intent.currency === "usd" &&
+      intent.amount === expectedTotalMinor &&
+      intent.amount_received === expectedTotalMinor &&
+      intent.amount_capturable === 0 &&
+      providerReferenceId(
+        intent.customer,
+        "cus",
+        "Stripe Alakazam PaymentIntent Customer ID"
+      ) === validated.identity.stripeCustomerId,
+    "stripe_alakazam_payment_mismatch",
+    "Stripe did not confirm the exact Alakazam PaymentIntent",
+    { status: 502 }
+  );
+  return intent;
+}
+
+function alakazamPaymentFacts(
+  value,
+  config,
+  validated,
+  checkoutSessionId,
+  observedAt
+) {
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Alakazam Checkout Session ID"
+  );
+  const expectedMetadata =
+    alakazamMetadata(validated);
+  validateAlakazamMetadata(
+    value.metadata,
+    expectedMetadata
+  );
+  const automaticTax = config.taxMode === "automatic";
+  const discountMinor =
+    validated.downloadCredit?.amountMinor ?? 0;
+  const listSubtotalMinor =
+    validated.purpose.changeKind === "start"
+      ? validated.target.price.amountMinor
+      : validated.purpose.dueNowSubtotalMinor;
+  const netSubtotalMinor =
+    listSubtotalMinor - discountMinor;
+  const taxMinor = automaticTax
+    ? integer(
+        value.total_details?.amount_tax,
+        "Stripe Alakazam tax amount",
+        0,
+        99_999_999
+      )
+    : 0;
+  const totalMinor = netSubtotalMinor + taxMinor;
+  const discounts = Array.isArray(
+    value.total_details?.breakdown?.discounts
+  )
+    ? value.total_details.breakdown.discounts
+    : [];
+  const discountMatches =
+    discountMinor === 0
+      ? discounts.length === 0
+      : discounts.length === 1 &&
+        discounts[0].amount === discountMinor &&
+        (
+          typeof discounts[0].discount?.coupon ===
+          "string"
+            ? discounts[0].discount.coupon
+            : discounts[0].discount?.coupon?.id
+        ) === config.alakazam.downloadCreditCouponId;
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.quoteId &&
+      value.mode ===
+        (validated.purpose.changeKind === "start"
+          ? "subscription"
+          : "payment") &&
+      value.livemode === config.livemode &&
+      value.status === "complete" &&
+      value.payment_status === "paid" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === listSubtotalMinor &&
+      value.amount_total === totalMinor &&
+      value.total_details?.amount_discount ===
+        discountMinor &&
+      value.total_details?.amount_shipping === 0 &&
+      discountMatches &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (
+        automaticTax
+          ? value.automatic_tax?.status === "complete"
+          : value.automatic_tax?.status === null ||
+            value.automatic_tax?.status === undefined
+      ) &&
+      providerReferenceId(
+        value.customer,
+        "cus",
+        "Stripe Alakazam Checkout Customer ID"
+      ) === validated.identity.stripeCustomerId &&
+      Array.isArray(value.line_items?.data) &&
+      value.line_items.data.length === 1 &&
+      value.line_items.has_more === false &&
+      value.line_items.data[0].quantity === 1,
+    "stripe_alakazam_payment_mismatch",
+    "Stripe did not confirm the exact paid Alakazam Checkout",
+    { status: 502 }
+  );
+  const linePrice = expandedAlakazamObject(
+    value.line_items.data[0].price,
+    "price",
+    "Stripe Alakazam Checkout line Price"
+  );
+  if (validated.purpose.changeKind === "start") {
+    const expectedPrice = config.priceExpectations.find(
+      ({ id }) => id === validated.targetPriceId
+    );
+    invariant(
+      expectedPrice &&
+        priceMatches(linePrice, expectedPrice),
+      "stripe_alakazam_payment_mismatch",
+      "Stripe Alakazam start Checkout used the wrong recurring Price",
+      { status: 502 }
+    );
+  } else {
+    invariant(
+      linePrice.active === true &&
+        linePrice.livemode === config.livemode &&
+        linePrice.currency === "usd" &&
+        linePrice.unit_amount === listSubtotalMinor &&
+        linePrice.recurring === null &&
+        providerReferenceId(
+          linePrice.product,
+          "prod",
+          "Stripe Alakazam upgrade Product ID"
+        ) === config.alakazam.productId,
+      "stripe_alakazam_payment_mismatch",
+      "Stripe Alakazam upgrade Checkout used the wrong fixed-difference Price",
+      { status: 502 }
+    );
+  }
+  let invoiceId = null;
+  let subscriptionFacts = null;
+  let intent;
+  let providerPaymentTime;
+  if (validated.purpose.changeKind === "start") {
+    subscriptionFacts = alakazamSubscriptionFacts(
+      expandedAlakazamObject(
+        value.subscription,
+        "sub",
+        "Stripe Alakazam Subscription"
+      ),
+      config,
+      validated.identity.stripeCustomerId,
+      observedAt
+    );
+    invariant(
+      subscriptionFacts.tierId ===
+        validated.target.tierId &&
+        subscriptionFacts.providerStatus === "active" &&
+        subscriptionFacts.cancelAtPeriodEnd === false &&
+        Object.entries(expectedMetadata).every(
+          ([key, expectedValue]) =>
+            subscriptionFacts.metadata[key] === expectedValue
+        ),
+      "stripe_alakazam_payment_mismatch",
+      "Stripe did not confirm the exact active Alakazam start Subscription",
+      { status: 502 }
+    );
+    const invoice = expandedAlakazamObject(
+      value.invoice,
+      "in",
+      "Stripe Alakazam first Invoice"
+    );
+    invoiceId = invoice.id;
+    const invoicePayments = invoice.payments?.data;
+    const invoiceDiscountMinor = Array.isArray(
+      invoice.total_discount_amounts
+    )
+      ? invoice.total_discount_amounts.reduce(
+          (sum, item) =>
+            sum +
+            integer(
+              item?.amount,
+              "Stripe Alakazam Invoice discount amount",
+              0,
+              99_999_999
+            ),
+          0
+        )
+      : 0;
+    invariant(
+      invoice.livemode === config.livemode &&
+        invoice.status === "paid" &&
+        invoice.currency === "usd" &&
+        invoiceDiscountMinor === discountMinor &&
+        invoice.total === totalMinor &&
+        invoice.amount_paid === totalMinor &&
+        invoice.amount_remaining === 0 &&
+        providerReferenceId(
+          invoice.customer,
+          "cus",
+          "Stripe Alakazam Invoice Customer ID"
+        ) === validated.identity.stripeCustomerId &&
+        invoice.parent?.type ===
+          "subscription_details" &&
+        providerReferenceId(
+          invoice.parent.subscription_details
+            ?.subscription,
+          "sub",
+          "Stripe Alakazam Invoice Subscription ID"
+        ) === subscriptionFacts.stripeSubscriptionId &&
+        Object.entries(expectedMetadata).every(
+          ([key, expectedValue]) =>
+            invoice.parent.subscription_details
+              ?.metadata?.[key] === expectedValue
+        ) &&
+        Array.isArray(invoicePayments) &&
+        invoicePayments.length === 1 &&
+        invoicePayments[0].status === "paid" &&
+        invoicePayments[0].livemode === config.livemode &&
+        invoicePayments[0].currency === "usd" &&
+        invoicePayments[0].amount_paid === totalMinor &&
+        invoicePayments[0].amount_requested === totalMinor &&
+        invoicePayments[0].payment?.type ===
+          "payment_intent",
+      "stripe_alakazam_payment_mismatch",
+      "Stripe did not confirm the exact paid first Alakazam Invoice",
+      { status: 502 }
+    );
+    intent = alakazamPaymentIntentFacts(
+      invoicePayments[0].payment.payment_intent,
+      config,
+      validated,
+      totalMinor
+    );
+    providerPaymentTime = exactProviderTime(
+      invoicePayments[0].status_transitions?.paid_at,
+      "Stripe Alakazam Invoice payment time"
+    );
+  } else {
+    invariant(
+      value.subscription === null &&
+        value.invoice === null,
+      "stripe_alakazam_payment_mismatch",
+      "Stripe upgrade difference Checkout cannot create another Subscription or Invoice",
+      { status: 502 }
+    );
+    intent = alakazamPaymentIntentFacts(
+      value.payment_intent,
+      config,
+      validated,
+      totalMinor
+    );
+    const charge = expandedAlakazamObject(
+      intent.latest_charge,
+      "ch",
+      "Stripe Alakazam upgrade Charge"
+    );
+    invariant(
+      charge.livemode === config.livemode &&
+        charge.status === "succeeded" &&
+        charge.paid === true &&
+        charge.captured === true &&
+        charge.refunded === false &&
+        charge.currency === "usd" &&
+        charge.amount === totalMinor &&
+        charge.amount_captured === totalMinor &&
+        providerReferenceId(
+          charge.customer,
+          "cus",
+          "Stripe Alakazam Charge Customer ID"
+        ) === validated.identity.stripeCustomerId &&
+        providerReferenceId(
+          charge.payment_intent,
+          "pi",
+          "Stripe Alakazam Charge PaymentIntent ID"
+        ) === intent.id,
+      "stripe_alakazam_payment_mismatch",
+      "Stripe did not confirm the exact captured Alakazam upgrade Charge",
+      { status: 502 }
+    );
+    providerPaymentTime = exactProviderTime(
+      charge.created,
+      "Stripe Alakazam upgrade payment time"
+    );
+  }
+  const facts = {
+    schema: STRIPE_ALAKAZAM_PAYMENT_SCHEMA,
+    provider: "stripe",
+    changeKind: validated.purpose.changeKind,
+    checkoutSessionId: checkoutId,
+    stripeCustomerId: validated.identity.stripeCustomerId,
+    stripeSubscriptionId:
+      subscriptionFacts?.stripeSubscriptionId ??
+      validated.current?.stripeSubscriptionId ?? null,
+    stripeSubscriptionItemId:
+      subscriptionFacts?.stripeSubscriptionItemId ??
+      validated.current?.stripeSubscriptionItemId ?? null,
+    stripePriceId:
+      subscriptionFacts?.stripePriceId ??
+      validated.targetPriceId,
+    stripeInvoiceId: invoiceId,
+    stripePaymentIntentId: intent.id,
+    targetTierId: validated.target.tierId,
+    listSubtotalMinor,
+    providerDiscountMinor: discountMinor,
+    netSubtotalMinor,
+    taxMinor,
+    totalMinor,
+    taxMode: config.taxMode,
+    currency: "USD",
+    paymentStatus: "paid",
+    purposeDigest: validated.purposeDigest,
+    providerPaymentTime,
+    subscription: subscriptionFacts
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
   });
 }
 
@@ -1819,6 +2668,422 @@ function cancellationResponse(value, subscriptionId) {
   });
 }
 
+function alakazamProviderClient(client) {
+  invariant(
+    typeof client.checkout?.sessions?.retrieve ===
+        "function" &&
+      typeof client.coupons?.retrieve === "function" &&
+      typeof client.products?.retrieve === "function" &&
+      typeof client.billingPortal?.configurations
+        ?.retrieve === "function" &&
+      typeof client.subscriptions?.retrieve ===
+        "function" &&
+      typeof client.subscriptions?.update === "function" &&
+      typeof client.subscriptionSchedules?.create ===
+        "function" &&
+      typeof client.subscriptionSchedules?.retrieve ===
+        "function" &&
+      typeof client.subscriptionSchedules?.update ===
+        "function",
+    "stripe_client_invalid",
+    "The Stripe Alakazam provider contract is incomplete",
+    { status: 500 }
+  );
+  return client;
+}
+
+function productMatchesAlakazam(value, config, livemode) {
+  return (
+    value &&
+    value.id === config.productId &&
+    value.active === true &&
+    value.livemode === livemode &&
+    value.name === "Alakazam"
+  );
+}
+
+function couponMatchesAlakazam(value, config, livemode) {
+  return (
+    value &&
+    value.id === config.downloadCreditCouponId &&
+    value.valid === true &&
+    value.livemode === livemode &&
+    value.amount_off === ALAKAZAM_DOWNLOAD_CREDIT_MINOR &&
+    value.currency === "usd" &&
+    value.duration === "once" &&
+    value.duration_in_months === null &&
+    value.max_redemptions === null &&
+    value.percent_off === null &&
+    value.redeem_by === null &&
+    Array.isArray(value.applies_to?.products) &&
+    value.applies_to.products.length === 1 &&
+    value.applies_to.products[0] === config.productId
+  );
+}
+
+function portalConfigurationMatchesAlakazam(
+  value,
+  config,
+  livemode,
+  portalReturnUrl
+) {
+  return (
+    value &&
+    value.id === config.portalConfigurationId &&
+    value.active === true &&
+    value.livemode === livemode &&
+    value.default_return_url === portalReturnUrl &&
+    value.features?.payment_method_update?.enabled ===
+      true &&
+    value.features?.invoice_history?.enabled === true &&
+    value.features?.customer_update?.enabled === false &&
+    value.features?.subscription_update?.enabled ===
+      false &&
+    value.features?.subscription_cancel?.enabled === false
+  );
+}
+
+function providerReferenceId(value, prefix, field) {
+  return providerId(
+    typeof value === "string" ? value : value?.id,
+    prefix,
+    field
+  );
+}
+
+function alakazamSubscriptionFacts(
+  value,
+  config,
+  expectedCustomerId,
+  observedAt
+) {
+  const subscriptionId = providerId(
+    value?.id,
+    "sub",
+    "Stripe Alakazam Subscription ID"
+  );
+  const stripeCustomerId = providerReferenceId(
+    value.customer,
+    "cus",
+    "Stripe Alakazam Customer ID"
+  );
+  invariant(
+    stripeCustomerId === expectedCustomerId &&
+      value.livemode === config.livemode &&
+      value.collection_method === "charge_automatically" &&
+      value.automatic_tax?.enabled ===
+        (config.taxMode === "automatic") &&
+      value.pending_update === null &&
+      value.pause_collection === null &&
+      [
+        "active",
+        "canceled",
+        "incomplete",
+        "incomplete_expired",
+        "past_due",
+        "paused",
+        "trialing",
+        "unpaid"
+      ].includes(value.status) &&
+      Array.isArray(value.items?.data) &&
+      value.items.data.length === 1,
+    "stripe_alakazam_subscription_mismatch",
+    "Stripe Alakazam Subscription no longer matches its exact account contract",
+    { status: 503 }
+  );
+  const item = value.items.data[0];
+  const stripeSubscriptionItemId = providerId(
+    item?.id,
+    "si",
+    "Stripe Alakazam Subscription Item ID"
+  );
+  const stripePriceId = providerReferenceId(
+    item?.price,
+    "price",
+    "Stripe Alakazam Subscription Price ID"
+  );
+  const tierId = ALAKAZAM_TIER_IDS.find(
+    (candidate) =>
+      config.alakazam.tierPriceIds[candidate] ===
+      stripePriceId
+  );
+  invariant(
+    tierId &&
+      item.quantity === 1 &&
+      Number.isSafeInteger(item.current_period_start) &&
+      Number.isSafeInteger(item.current_period_end) &&
+      item.current_period_start > 0 &&
+      item.current_period_end > item.current_period_start &&
+      Number.isSafeInteger(value.billing_cycle_anchor) &&
+      value.billing_cycle_anchor > 0,
+    "stripe_alakazam_subscription_mismatch",
+    "Stripe Alakazam Subscription has an unexpected item, Price, quantity, or billing period",
+    { status: 503 }
+  );
+  const expectedPrice = config.priceExpectations.find(
+    ({ id }) => id === stripePriceId
+  );
+  invariant(
+    expectedPrice && priceMatches(item.price, expectedPrice),
+    "stripe_alakazam_subscription_mismatch",
+    "Stripe Alakazam Subscription Price readback drifted",
+    { status: 503 }
+  );
+  let stripeScheduleId = null;
+  if (value.schedule !== null && value.schedule !== undefined) {
+    stripeScheduleId = providerReferenceId(
+      value.schedule,
+      "sub_sched",
+      "Stripe Alakazam Subscription Schedule ID"
+    );
+  }
+  const facts = {
+    schema: STRIPE_ALAKAZAM_SUBSCRIPTION_SCHEMA,
+    stripeSubscriptionId: subscriptionId,
+    stripeSubscriptionItemId,
+    stripeCustomerId,
+    stripePriceId,
+    stripeScheduleId,
+    tierId,
+    amountMinor:
+      ALAKAZAM_TIER_DEFINITIONS[tierId].price.amountMinor,
+    currency: "USD",
+    providerStatus: value.status,
+    cancelAtPeriodEnd:
+      value.cancel_at_period_end === true,
+    currentPeriodStartsAt: exactProviderTime(
+      item.current_period_start,
+      "Stripe Alakazam current period start"
+    ),
+    currentPeriodEndsAt: exactProviderTime(
+      item.current_period_end,
+      "Stripe Alakazam current period end"
+    ),
+    billingCycleAnchor: exactProviderTime(
+      value.billing_cycle_anchor,
+      "Stripe Alakazam billing cycle anchor"
+    ),
+    providerObservedAt: canonicalIso(
+      observedAt,
+      "providerObservedAt"
+    ),
+    metadata:
+      value.metadata &&
+      typeof value.metadata === "object" &&
+      !Array.isArray(value.metadata)
+        ? structuredClone(value.metadata)
+        : {}
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
+  });
+}
+
+function schedulePhasePriceId(phase, field) {
+  invariant(
+    Array.isArray(phase?.items) &&
+      phase.items.length === 1 &&
+      phase.items[0].quantity === 1,
+    "stripe_alakazam_schedule_mismatch",
+    `${field} must contain one quantity-one Price`,
+    { status: 503 }
+  );
+  return providerReferenceId(
+    phase.items[0].price,
+    "price",
+    `${field} Price ID`
+  );
+}
+
+function alakazamScheduleFacts(
+  value,
+  config,
+  validated,
+  observedAt
+) {
+  const scheduleId = providerId(
+    value?.id,
+    "sub_sched",
+    "Stripe Alakazam Subscription Schedule ID"
+  );
+  const subscriptionId = providerReferenceId(
+    value.subscription,
+    "sub",
+    "Stripe Alakazam scheduled Subscription ID"
+  );
+  const customerId = providerReferenceId(
+    value.customer,
+    "cus",
+    "Stripe Alakazam scheduled Customer ID"
+  );
+  const phases = value.phases;
+  const currentStart = isoToProviderSeconds(
+    validated.current.currentPeriodStartsAt,
+    "currentSubscription.currentPeriodStartsAt"
+  );
+  const effectiveAt = isoToProviderSeconds(
+    validated.current.currentPeriodEndsAt,
+    "currentSubscription.currentPeriodEndsAt"
+  );
+  invariant(
+    value.livemode === config.livemode &&
+      value.status === "active" &&
+      subscriptionId ===
+        validated.current.stripeSubscriptionId &&
+      customerId === validated.identity.stripeCustomerId,
+    "stripe_alakazam_schedule_identity_mismatch",
+    "Stripe Alakazam Schedule identity no longer matches its Subscription",
+    { status: 503 }
+  );
+  invariant(
+    value.end_behavior === "release" &&
+      Array.isArray(phases) &&
+      phases.length === 2 &&
+      value.current_phase?.start_date === currentStart &&
+      value.current_phase?.end_date === effectiveAt &&
+      phases[0].start_date === currentStart &&
+      phases[0].end_date === effectiveAt &&
+      phases[0].proration_behavior === "none" &&
+      phases[0].collection_method ===
+        "charge_automatically" &&
+      phases[0].automatic_tax?.enabled ===
+        (config.taxMode === "automatic") &&
+      phases[1].start_date === effectiveAt &&
+      Number.isSafeInteger(phases[1].end_date) &&
+      phases[1].end_date > effectiveAt &&
+      phases[1].proration_behavior === "none" &&
+      phases[1].collection_method ===
+        "charge_automatically" &&
+      phases[1].automatic_tax?.enabled ===
+        (config.taxMode === "automatic") &&
+      schedulePhasePriceId(
+        phases[0],
+        "Stripe Alakazam current schedule phase"
+      ) === validated.current.stripePriceId &&
+      schedulePhasePriceId(
+        phases[1],
+        "Stripe Alakazam target schedule phase"
+      ) === validated.targetPriceId &&
+      value.metadata?.schema ===
+        STRIPE_ALAKAZAM_METADATA_SCHEMA &&
+      value.metadata?.purpose_digest ===
+        validated.purposeDigest &&
+      value.metadata?.target_tier_id ===
+        validated.target.tierId,
+    "stripe_alakazam_schedule_mismatch",
+    "Stripe did not confirm the exact renewal-boundary Alakazam downgrade",
+    { status: 503 }
+  );
+  const facts = {
+    schema: STRIPE_ALAKAZAM_SCHEDULE_SCHEMA,
+    stripeScheduleId: scheduleId,
+    stripeSubscriptionId: subscriptionId,
+    stripeCustomerId: customerId,
+    currentTierId: validated.current.tier.tierId,
+    targetTierId: validated.target.tierId,
+    currentPriceId: validated.current.stripePriceId,
+    targetPriceId: validated.targetPriceId,
+    effectiveAt: validated.current.currentPeriodEndsAt,
+    endBehavior: "release",
+    providerProration: false,
+    providerObservedAt: canonicalIso(
+      observedAt,
+      "providerObservedAt"
+    )
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
+  });
+}
+
+function alakazamCurrentMatches(
+  facts,
+  validated,
+  expectedScheduleId = null
+) {
+  return (
+    facts.stripeSubscriptionId ===
+      validated.current.stripeSubscriptionId &&
+    facts.stripeSubscriptionItemId ===
+      validated.current.stripeSubscriptionItemId &&
+    facts.stripeCustomerId ===
+      validated.identity.stripeCustomerId &&
+    facts.stripePriceId ===
+      validated.current.stripePriceId &&
+    facts.tierId === validated.current.tier.tierId &&
+    facts.currentPeriodStartsAt ===
+      validated.current.currentPeriodStartsAt &&
+    facts.currentPeriodEndsAt ===
+      validated.current.currentPeriodEndsAt &&
+    facts.providerStatus === "active" &&
+    facts.cancelAtPeriodEnd === false &&
+    facts.stripeScheduleId === expectedScheduleId
+  );
+}
+
+function alakazamUpgradeMatches(
+  facts,
+  before,
+  validated,
+  paymentEvidence
+) {
+  return (
+    facts.stripeSubscriptionId ===
+      validated.current.stripeSubscriptionId &&
+    facts.stripeSubscriptionItemId ===
+      validated.current.stripeSubscriptionItemId &&
+    facts.stripeCustomerId ===
+      validated.identity.stripeCustomerId &&
+    facts.stripePriceId === validated.targetPriceId &&
+    facts.tierId === validated.target.tierId &&
+    facts.currentPeriodStartsAt ===
+      before.currentPeriodStartsAt &&
+    facts.currentPeriodEndsAt === before.currentPeriodEndsAt &&
+    facts.billingCycleAnchor === before.billingCycleAnchor &&
+    facts.providerStatus === "active" &&
+    facts.cancelAtPeriodEnd === false &&
+    facts.stripeScheduleId === null &&
+    facts.metadata?.schema ===
+      STRIPE_ALAKAZAM_METADATA_SCHEMA &&
+    facts.metadata?.purpose_digest ===
+      validated.purposeDigest &&
+    facts.metadata?.payment_facts_digest ===
+      paymentEvidence.providerFactsDigest
+  );
+}
+
+function alakazamUpgradeAlreadyApplied(
+  facts,
+  validated,
+  paymentEvidence
+) {
+  return (
+    facts.stripeSubscriptionId ===
+      validated.current.stripeSubscriptionId &&
+    facts.stripeSubscriptionItemId ===
+      validated.current.stripeSubscriptionItemId &&
+    facts.stripeCustomerId ===
+      validated.identity.stripeCustomerId &&
+    facts.stripePriceId === validated.targetPriceId &&
+    facts.tierId === validated.target.tierId &&
+    facts.currentPeriodStartsAt ===
+      validated.current.currentPeriodStartsAt &&
+    facts.currentPeriodEndsAt ===
+      validated.current.currentPeriodEndsAt &&
+    facts.providerStatus === "active" &&
+    facts.cancelAtPeriodEnd === false &&
+    facts.stripeScheduleId === null &&
+    facts.metadata?.schema ===
+      STRIPE_ALAKAZAM_METADATA_SCHEMA &&
+    facts.metadata?.purpose_digest ===
+      validated.purposeDigest &&
+    facts.metadata?.payment_facts_digest ===
+      paymentEvidence.providerFactsDigest
+  );
+}
+
 export function createStripeProviderAdapter(options = {}) {
   const mode = options.mode ?? "held";
   invariant(
@@ -1846,6 +3111,12 @@ export function createStripeProviderAdapter(options = {}) {
       },
       createCheckout: reject,
       createDownloadCheckout: reject,
+      createAlakazamStartCheckout: reject,
+      createAlakazamUpgradeCheckout: reject,
+      retrieveAlakazamPayment: reject,
+      retrieveAlakazamSubscription: reject,
+      applyAlakazamUpgrade: reject,
+      scheduleAlakazamDowngrade: reject,
       retrieveDownloadCheckoutLifecycle: reject,
       retrieveDownloadCheckout: reject,
       createBillingPortal: reject,
@@ -1908,6 +3179,18 @@ export function createStripeProviderAdapter(options = {}) {
       { status: 500 }
     );
   }
+  const alakazamCapabilities =
+    STRIPE_ALAKAZAM_CAPABILITIES;
+  if (config.alakazam) {
+    invariant(
+      alakazamCapabilities.every((capability) =>
+        capabilities.has(capability)
+      ),
+      "stripe_alakazam_configuration_invalid",
+      "Stripe Alakazam configuration requires its complete approved capability set",
+      { status: 500 }
+    );
+  }
   const selectedClient =
     mode === "approved_live" && !options.client
       ? createOfficialStripeClient({
@@ -1956,6 +3239,201 @@ export function createStripeProviderAdapter(options = {}) {
         "stripe_price_mismatch",
         "An owner-approved Stripe Price no longer matches the exact catalog",
         { status: 503, details: { priceId: expected.id } }
+      );
+    }
+  }
+
+  async function verifyAlakazamConfiguration() {
+    invariant(
+      config.alakazam,
+      "stripe_alakazam_not_configured",
+      "Stripe Alakazam effects are held",
+      { status: 503 }
+    );
+    for (const capability of alakazamCapabilities) {
+      requireCapability(capability);
+    }
+    alakazamProviderClient(client);
+    await verifyPrices();
+    let product;
+    try {
+      product = await client.products.retrieve(
+        config.alakazam.productId
+      );
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_product_unavailable",
+        "The exact Alakazam Product could not be verified"
+      );
+    }
+    invariant(
+      productMatchesAlakazam(
+        product,
+        config.alakazam,
+        config.livemode
+      ),
+      "stripe_alakazam_product_mismatch",
+      "The Alakazam Product no longer matches the owner contract",
+      { status: 503 }
+    );
+    let coupon;
+    try {
+      coupon = await client.coupons.retrieve(
+        config.alakazam.downloadCreditCouponId
+      );
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_coupon_unavailable",
+        "The exact Alakazam Download credit Coupon could not be verified"
+      );
+    }
+    invariant(
+      couponMatchesAlakazam(
+        coupon,
+        config.alakazam,
+        config.livemode
+      ),
+      "stripe_alakazam_coupon_mismatch",
+      "The Alakazam Download credit Coupon no longer matches the owner contract",
+      { status: 503 }
+    );
+    let portal;
+    try {
+      portal =
+        await client.billingPortal.configurations.retrieve(
+          config.alakazam.portalConfigurationId
+        );
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_portal_configuration_unavailable",
+        "The restricted Alakazam Billing Portal configuration could not be verified"
+      );
+    }
+    invariant(
+      portalConfigurationMatchesAlakazam(
+        portal,
+        config.alakazam,
+        config.livemode,
+        config.portalReturnUrl
+      ),
+      "stripe_alakazam_portal_configuration_mismatch",
+      "The Alakazam Billing Portal can bypass the reviewed account boundary",
+      { status: 503 }
+    );
+  }
+
+  async function retrieveAlakazamSubscriptionInternal({
+    stripeSubscriptionId,
+    stripeCustomerId
+  }) {
+    requireCapability("subscriptions:read");
+    alakazamProviderClient(client);
+    const subscriptionId = providerId(
+      stripeSubscriptionId,
+      "sub",
+      "stripeSubscriptionId"
+    );
+    const customerId = providerId(
+      stripeCustomerId,
+      "cus",
+      "stripeCustomerId"
+    );
+    let response;
+    try {
+      response = await client.subscriptions.retrieve(
+        subscriptionId,
+        {
+          expand: ["items.data.price", "schedule"]
+        }
+      );
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_subscription_read_unavailable",
+        "Stripe Alakazam Subscription could not be read for reconciliation",
+        { stripeSubscriptionId: subscriptionId }
+      );
+    }
+    return alakazamSubscriptionFacts(
+      response,
+      config,
+      customerId,
+      clock.now()
+    );
+  }
+
+  async function retrieveAlakazamScheduleInternal({
+    stripeScheduleId,
+    validated
+  }) {
+    requireCapability("subscription_schedules:read");
+    alakazamProviderClient(client);
+    const scheduleId = providerId(
+      stripeScheduleId,
+      "sub_sched",
+      "stripeScheduleId"
+    );
+    let response;
+    try {
+      response = await client.subscriptionSchedules.retrieve(
+        scheduleId,
+        { expand: ["phases.items.price"] }
+      );
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_schedule_read_unavailable",
+        "Stripe Alakazam downgrade Schedule could not be read for reconciliation",
+        { stripeScheduleId: scheduleId }
+      );
+    }
+    return alakazamScheduleFacts(
+      response,
+      config,
+      validated,
+      clock.now()
+    );
+  }
+
+  async function createAlakazamCheckoutInternal(
+    validated,
+    params,
+    operation
+  ) {
+    const stripeIdempotencyKey =
+      providerIdempotencyKey(
+        operation,
+        validated.idempotencyKey,
+        validated.purposeDigest
+      );
+    let response;
+    try {
+      response = await client.checkout.sessions.create(
+        params,
+        { idempotencyKey: stripeIdempotencyKey }
+      );
+    } catch {
+      throw ambiguous(
+        "stripe_alakazam_checkout_effect_unknown",
+        "Stripe Alakazam Checkout creation must be reconciled by idempotency key",
+        {
+          idempotencyKey: stripeIdempotencyKey,
+          purposeDigest: validated.purposeDigest
+        }
+      );
+    }
+    try {
+      return checkoutResponse(
+        response,
+        config,
+        params.expires_at
+      );
+    } catch {
+      throw ambiguous(
+        "stripe_alakazam_checkout_response_invalid",
+        "Stripe Alakazam Checkout returned an unsafe response that requires reconciliation",
+        {
+          idempotencyKey: stripeIdempotencyKey,
+          purposeDigest: validated.purposeDigest
+        }
       );
     }
   }
@@ -2027,7 +3505,9 @@ export function createStripeProviderAdapter(options = {}) {
   const adapter = {
     async readiness() {
       try {
-        if (capabilities.has("prices:read")) {
+        if (config.alakazam) {
+          await verifyAlakazamConfiguration();
+        } else if (capabilities.has("prices:read")) {
           await verifyPrices();
         }
         if (domainCapabilities.length > 0) {
@@ -2046,7 +3526,10 @@ export function createStripeProviderAdapter(options = {}) {
             domainCapabilities.length > 0 &&
             Boolean(config.domainAuthorization),
           webhookVerification: true,
-          taxMode: config.taxMode
+          taxMode: config.taxMode,
+          ...(config.alakazam
+            ? { alakazam: true }
+            : {})
         };
       } catch (error) {
         return {
@@ -2058,6 +3541,628 @@ export function createStripeProviderAdapter(options = {}) {
           livemode: config.livemode,
           code: error?.code ?? "stripe_not_ready"
         };
+      }
+    },
+
+    async createAlakazamStartCheckout(request) {
+      requireCapability("checkout:create");
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        "start",
+        ["idempotencyKey", "purpose", "purposeDigest"],
+        config.taxMode
+      );
+      await verifyAlakazamConfiguration();
+      const providerMetadata =
+        alakazamMetadata(validated);
+      const expiresAt =
+        Math.floor(Date.parse(clock.now()) / 1000) +
+        config.checkoutTtlSeconds;
+      invariant(
+        Number.isSafeInteger(expiresAt),
+        "stripe_clock_invalid",
+        "Stripe Alakazam Checkout clock is invalid",
+        { status: 500 }
+      );
+      const params = {
+        mode: "subscription",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: validated.targetPriceId,
+            quantity: 1
+          }
+        ],
+        ...(validated.downloadCredit
+          ? {
+              discounts: [
+                {
+                  coupon:
+                    config.alakazam
+                      .downloadCreditCouponId
+                }
+              ]
+            }
+          : {}),
+        success_url: alakazamReturnUrl(
+          config.successUrl,
+          validated
+        ),
+        cancel_url: config.cancelUrl,
+        customer: validated.identity.stripeCustomerId,
+        client_reference_id: validated.identity.quoteId,
+        metadata: providerMetadata,
+        expires_at: expiresAt,
+        automatic_tax: {
+          enabled: config.taxMode === "automatic"
+        },
+        ...(config.taxMode === "automatic"
+          ? {
+              billing_address_collection: "required",
+              customer_update: { address: "auto" }
+            }
+          : {}),
+        subscription_data: {
+          metadata: providerMetadata
+        }
+      };
+      return createAlakazamCheckoutInternal(
+        validated,
+        params,
+        "alakazam_start_checkout"
+      );
+    },
+
+    async createAlakazamUpgradeCheckout(request) {
+      requireCapability("checkout:create");
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        "upgrade",
+        ["idempotencyKey", "purpose", "purposeDigest"],
+        config.taxMode
+      );
+      await verifyAlakazamConfiguration();
+      const providerMetadata =
+        alakazamMetadata(validated);
+      const expiresAt =
+        Math.floor(Date.parse(clock.now()) / 1000) +
+        config.checkoutTtlSeconds;
+      invariant(
+        Number.isSafeInteger(expiresAt),
+        "stripe_clock_invalid",
+        "Stripe Alakazam Checkout clock is invalid",
+        { status: 500 }
+      );
+      const params = {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount:
+                validated.purpose.dueNowSubtotalMinor,
+              ...(config.taxMode === "automatic"
+                ? { tax_behavior: "exclusive" }
+                : {}),
+              product: config.alakazam.productId
+            },
+            quantity: 1
+          }
+        ],
+        success_url: alakazamReturnUrl(
+          config.successUrl,
+          validated
+        ),
+        cancel_url: config.cancelUrl,
+        customer: validated.identity.stripeCustomerId,
+        client_reference_id: validated.identity.quoteId,
+        metadata: providerMetadata,
+        expires_at: expiresAt,
+        automatic_tax: {
+          enabled: config.taxMode === "automatic"
+        },
+        ...(config.taxMode === "automatic"
+          ? {
+              billing_address_collection: "required",
+              customer_update: { address: "auto" }
+            }
+          : {}),
+        payment_intent_data: {
+          metadata: providerMetadata
+        }
+      };
+      return createAlakazamCheckoutInternal(
+        validated,
+        params,
+        "alakazam_upgrade_checkout"
+      );
+    },
+
+    async retrieveAlakazamPayment(request) {
+      requireCapability("checkout:read");
+      const changeKind = request?.purpose?.changeKind;
+      invariant(
+        changeKind === "start" ||
+          changeKind === "upgrade",
+        "stripe_alakazam_payment_read_invalid",
+        "Only an Alakazam start or upgrade Checkout can settle payment",
+        { status: 500 }
+      );
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        changeKind,
+        [
+          "checkoutSessionId",
+          "purpose",
+          "purposeDigest"
+        ],
+        config.taxMode
+      );
+      alakazamProviderClient(client);
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      let response;
+      try {
+        response = await client.checkout.sessions.retrieve(
+          checkoutSessionId,
+          {
+            expand: [
+              "invoice.payments.data.payment.payment_intent",
+              "line_items.data.price.product",
+              "payment_intent.latest_charge",
+              "subscription.items.data.price"
+            ]
+          }
+        );
+      } catch {
+        throw noEffect(
+          "stripe_alakazam_payment_read_unavailable",
+          "Stripe Alakazam payment could not be read for reconciliation",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return alakazamPaymentFacts(
+        response,
+        config,
+        validated,
+        checkoutSessionId,
+        clock.now()
+      );
+    },
+
+    async retrieveAlakazamSubscription(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "stripeCustomerId",
+            "stripeSubscriptionId"
+          ]),
+        "stripe_alakazam_subscription_read_invalid",
+        "Alakazam Subscription readback requires exact provider identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamSubscriptionInternal(
+        request
+      );
+    },
+
+    async applyAlakazamUpgrade(request) {
+      requireCapability("subscriptions:update");
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        "upgrade",
+        [
+          "idempotencyKey",
+          "paymentEvidence",
+          "purpose",
+          "purposeDigest"
+        ],
+        config.taxMode
+      );
+      invariant(
+        exactObjectKeys(request.paymentEvidence, [
+          "providerFactsDigest",
+          "receiptId"
+        ]) &&
+          SHA256.test(
+            request.paymentEvidence.providerFactsDigest
+          ),
+        "stripe_alakazam_upgrade_evidence_invalid",
+        "Alakazam upgrade requires exact settled-payment evidence",
+        { status: 500 }
+      );
+      const paymentEvidence = Object.freeze({
+        receiptId: safeMetadataValue(
+          request.paymentEvidence.receiptId,
+          "paymentEvidence.receiptId"
+        ),
+        providerFactsDigest:
+          request.paymentEvidence.providerFactsDigest
+      });
+      await verifyAlakazamConfiguration();
+      const before =
+        await retrieveAlakazamSubscriptionInternal({
+          stripeSubscriptionId:
+            validated.current.stripeSubscriptionId,
+          stripeCustomerId:
+            validated.identity.stripeCustomerId
+        });
+      if (
+        alakazamUpgradeAlreadyApplied(
+          before,
+          validated,
+          paymentEvidence
+        )
+      ) {
+        return Object.freeze({
+          ...before,
+          reconciliation:
+            "confirmed_before_submit"
+        });
+      }
+      invariant(
+        alakazamCurrentMatches(before, validated),
+        "stripe_alakazam_upgrade_stale",
+        "Stripe Alakazam Subscription changed before the upgrade could be applied",
+        { status: 409 }
+      );
+      const stripeIdempotencyKey =
+        providerIdempotencyKey(
+          "alakazam_upgrade_apply",
+          validated.idempotencyKey,
+          digest({
+            purposeDigest: validated.purposeDigest,
+            paymentFactsDigest:
+              paymentEvidence.providerFactsDigest
+          })
+        );
+      const params = {
+        items: [
+          {
+            id: validated.current
+              .stripeSubscriptionItemId,
+            price: validated.targetPriceId,
+            quantity: 1
+          }
+        ],
+        proration_behavior: "none",
+        billing_cycle_anchor: "unchanged",
+        metadata: {
+          ...alakazamMetadata(validated),
+          payment_receipt_id: paymentEvidence.receiptId,
+          payment_facts_digest:
+            paymentEvidence.providerFactsDigest
+        }
+      };
+      try {
+        await client.subscriptions.update(
+          validated.current.stripeSubscriptionId,
+          params,
+          { idempotencyKey: stripeIdempotencyKey }
+        );
+      } catch {
+        try {
+          const reconciled =
+            await retrieveAlakazamSubscriptionInternal({
+              stripeSubscriptionId:
+                validated.current.stripeSubscriptionId,
+              stripeCustomerId:
+                validated.identity.stripeCustomerId
+            });
+          if (
+            alakazamUpgradeMatches(
+              reconciled,
+              before,
+              validated,
+              paymentEvidence
+            )
+          ) {
+            return Object.freeze({
+              ...reconciled,
+              reconciliation:
+                "confirmed_after_ambiguous_submit"
+            });
+          }
+        } catch {
+          // The original provider write remains ambiguous.
+        }
+        throw ambiguous(
+          "stripe_alakazam_upgrade_effect_unknown",
+          "Stripe Alakazam upgrade must be reconciled without collecting another payment",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            stripeSubscriptionId:
+              validated.current.stripeSubscriptionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      let confirmed;
+      try {
+        confirmed =
+          await retrieveAlakazamSubscriptionInternal({
+            stripeSubscriptionId:
+              validated.current.stripeSubscriptionId,
+            stripeCustomerId:
+              validated.identity.stripeCustomerId
+          });
+      } catch {
+        throw ambiguous(
+          "stripe_alakazam_upgrade_confirmation_unknown",
+          "Stripe accepted the Alakazam upgrade but exact readback is unavailable",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            stripeSubscriptionId:
+              validated.current.stripeSubscriptionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      if (
+        !alakazamUpgradeMatches(
+          confirmed,
+          before,
+          validated,
+          paymentEvidence
+        )
+      ) {
+        throw ambiguous(
+          "stripe_alakazam_upgrade_confirmation_mismatch",
+          "Stripe upgrade readback does not prove the exact target tier and unchanged billing boundary",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            stripeSubscriptionId:
+              validated.current.stripeSubscriptionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return Object.freeze({
+        ...confirmed,
+        reconciliation: "confirmed"
+      });
+    },
+
+    async scheduleAlakazamDowngrade(request) {
+      requireCapability("subscription_schedules:write");
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        "downgrade",
+        [
+          "idempotencyKey",
+          "purpose",
+          "purposeDigest",
+          "stripeScheduleId"
+        ],
+        config.taxMode
+      );
+      const expectedScheduleId =
+        request.stripeScheduleId === null
+          ? null
+          : providerId(
+              request.stripeScheduleId,
+              "sub_sched",
+              "stripeScheduleId"
+            );
+      await verifyAlakazamConfiguration();
+      const before =
+        await retrieveAlakazamSubscriptionInternal({
+          stripeSubscriptionId:
+            validated.current.stripeSubscriptionId,
+          stripeCustomerId:
+            validated.identity.stripeCustomerId
+        });
+      invariant(
+        alakazamCurrentMatches(
+          before,
+          validated,
+          expectedScheduleId
+        ),
+        "stripe_alakazam_downgrade_stale",
+        "Stripe Alakazam Subscription changed before the downgrade could be scheduled",
+        { status: 409 }
+      );
+      if (expectedScheduleId !== null) {
+        try {
+          return await retrieveAlakazamScheduleInternal({
+            stripeScheduleId: expectedScheduleId,
+            validated
+          });
+        } catch (error) {
+          if (
+            error?.code !==
+            "stripe_alakazam_schedule_mismatch"
+          ) {
+            throw error;
+          }
+        }
+      }
+      let scheduleId = expectedScheduleId;
+      if (scheduleId === null) {
+        const attachIdempotencyKey =
+          providerIdempotencyKey(
+            "alakazam_schedule_attach",
+            validated.idempotencyKey,
+            validated.purposeDigest
+          );
+        let attached;
+        try {
+          attached =
+            await client.subscriptionSchedules.create(
+              {
+                from_subscription:
+                  validated.current
+                    .stripeSubscriptionId
+              },
+              {
+                idempotencyKey: attachIdempotencyKey
+              }
+            );
+        } catch {
+          throw ambiguous(
+            "stripe_alakazam_schedule_attach_unknown",
+            "Stripe Alakazam Schedule attachment must be reconciled before retry",
+            {
+              idempotencyKey: attachIdempotencyKey,
+              stripeSubscriptionId:
+                validated.current.stripeSubscriptionId,
+              purposeDigest: validated.purposeDigest
+            }
+          );
+        }
+        try {
+          scheduleId = providerId(
+            attached?.id,
+            "sub_sched",
+            "Stripe Alakazam attached Schedule ID"
+          );
+          invariant(
+            attached.livemode === config.livemode &&
+              ["active", "not_started"].includes(
+                attached.status
+              ) &&
+              providerReferenceId(
+                attached.subscription,
+                "sub",
+                "Stripe Alakazam attached Subscription ID"
+              ) ===
+                validated.current.stripeSubscriptionId,
+            "stripe_alakazam_schedule_attach_invalid",
+            "Stripe attached an unsafe Alakazam Schedule",
+            { status: 502 }
+          );
+        } catch {
+          throw ambiguous(
+            "stripe_alakazam_schedule_attach_invalid",
+            "Stripe Schedule attachment returned an unsafe response that requires reconciliation",
+            {
+              idempotencyKey: attachIdempotencyKey,
+              stripeSubscriptionId:
+                validated.current.stripeSubscriptionId,
+              purposeDigest: validated.purposeDigest
+            }
+          );
+        }
+      }
+      const updateIdempotencyKey =
+        providerIdempotencyKey(
+          "alakazam_schedule_update",
+          validated.idempotencyKey,
+          digest({
+            purposeDigest: validated.purposeDigest,
+            scheduleId
+          })
+        );
+      const currentStart = isoToProviderSeconds(
+        validated.current.currentPeriodStartsAt,
+        "currentSubscription.currentPeriodStartsAt"
+      );
+      const effectiveAt = isoToProviderSeconds(
+        validated.current.currentPeriodEndsAt,
+        "currentSubscription.currentPeriodEndsAt"
+      );
+      const metadata = alakazamMetadata(validated);
+      const params = {
+        end_behavior: "release",
+        proration_behavior: "none",
+        metadata,
+        phases: [
+          {
+            start_date: currentStart,
+            end_date: effectiveAt,
+            automatic_tax: {
+              enabled: config.taxMode === "automatic"
+            },
+            collection_method: "charge_automatically",
+            items: [
+              {
+                price:
+                  validated.current.stripePriceId,
+                quantity: 1
+              }
+            ],
+            proration_behavior: "none",
+            metadata: {
+              ...metadata,
+              active_tier_id:
+                validated.current.tier.tierId
+            }
+          },
+          {
+            duration: {
+              interval: "month",
+              interval_count: 1
+            },
+            automatic_tax: {
+              enabled: config.taxMode === "automatic"
+            },
+            collection_method: "charge_automatically",
+            items: [
+              {
+                price: validated.targetPriceId,
+                quantity: 1
+              }
+            ],
+            proration_behavior: "none",
+            metadata: {
+              ...metadata,
+              active_tier_id:
+                validated.target.tierId
+            }
+          }
+        ]
+      };
+      try {
+        await client.subscriptionSchedules.update(
+          scheduleId,
+          params,
+          { idempotencyKey: updateIdempotencyKey }
+        );
+      } catch {
+        try {
+          return await retrieveAlakazamScheduleInternal({
+            stripeScheduleId: scheduleId,
+            validated
+          });
+        } catch {
+          throw ambiguous(
+            "stripe_alakazam_schedule_effect_unknown",
+            "Stripe Alakazam downgrade Schedule must be reconciled without creating another Schedule",
+            {
+              idempotencyKey: updateIdempotencyKey,
+              stripeScheduleId: scheduleId,
+              purposeDigest: validated.purposeDigest
+            }
+          );
+        }
+      }
+      try {
+        return await retrieveAlakazamScheduleInternal({
+          stripeScheduleId: scheduleId,
+          validated
+        });
+      } catch {
+        throw ambiguous(
+          "stripe_alakazam_schedule_confirmation_unknown",
+          "Stripe accepted the Alakazam downgrade Schedule but exact readback is unavailable",
+          {
+            idempotencyKey: updateIdempotencyKey,
+            stripeScheduleId: scheduleId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
       }
     },
 
@@ -2980,6 +5085,9 @@ export function createStripeProviderAdapter(options = {}) {
       idempotencyKey
     } = {}) {
       requireCapability("billing_portal:create");
+      if (config.alakazam) {
+        await verifyAlakazamConfiguration();
+      }
       const customer = providerId(
         stripeCustomerId,
         "cus",
@@ -2996,7 +5104,10 @@ export function createStripeProviderAdapter(options = {}) {
           key,
           digest({
             customer,
-            returnUrl: config.portalReturnUrl
+            returnUrl: config.portalReturnUrl,
+            configurationId:
+              config.alakazam
+                ?.portalConfigurationId ?? null
           })
         );
       let response;
@@ -3005,7 +5116,14 @@ export function createStripeProviderAdapter(options = {}) {
           await client.billingPortal.sessions.create(
             {
               customer,
-              return_url: config.portalReturnUrl
+              return_url: config.portalReturnUrl,
+              ...(config.alakazam
+                ? {
+                    configuration:
+                      config.alakazam
+                        .portalConfigurationId
+                  }
+                : {})
             },
             { idempotencyKey: stripeIdempotencyKey }
           );
