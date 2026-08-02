@@ -1,5 +1,7 @@
 [Unit]
 Description=One encrypted off-machine Site Sourcery production-rehearsal backup
+After=sitesourcery-production-backup-mount.service
+Requires=sitesourcery-production-backup-mount.service
 ConditionPathIsMountPoint=/home/simtech/sitesourcery-production/off-machine
 ConditionPathExists=/home/simtech/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
 ConditionPathExists=%t/sitesourcery-production/BACKUP_QUIESCE

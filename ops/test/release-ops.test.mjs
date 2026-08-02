@@ -479,7 +479,11 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
     tunnel,
     runtime,
     staticServer,
+    backupMount,
     backupService,
+    monitorService,
+    monitorTimer,
+    monitorEnvironment,
     backupEnvironment,
     readme
   ] =
@@ -514,7 +518,35 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
       ),
       readFile(
         new URL(
+          "sitesourcery-production-backup-mount.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
           "sitesourcery-production-backup.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-monitor.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-monitor.timer",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "monitor.env.example",
           rehearsalRoot
         ),
         "utf8"
@@ -590,8 +622,40 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
     /http\.server 8899 --bind 127\.0\.0\.1/u
   );
   assert.match(
+    backupMount,
+    /^ExecStart=.*sshfs-3\.7\.3\/usr\/bin\/sshfs -f zen:.* -o StrictHostKeyChecking=yes -o UserKnownHostsFile=\/home\/simtech\/\.ssh\/known_hosts/mu
+  );
+  assert.match(
+    backupMount,
+    / -o noexec -o nodev -o nosuid$/mu
+  );
+  assert.match(
+    backupMount,
+    /^ExecStartPost=\/usr\/bin\/test -f .*\.sitesourcery-off-machine\.json$/mu
+  );
+  assert.match(
+    backupMount,
+    /^ExecStop=-\/usr\/bin\/fusermount3 -u /mu
+  );
+  assert.match(
+    backupMount,
+    /^WantedBy=default\.target$/mu
+  );
+  assert.doesNotMatch(
+    backupMount,
+    /accept-new|allow_other|\/bin\/(?:ba)?sh/u
+  );
+  assert.match(
     backupService,
     /^ConditionPathIsMountPoint=\/home\/simtech\/sitesourcery-production\/off-machine$/mu
+  );
+  assert.match(
+    backupService,
+    /^Requires=sitesourcery-production-backup-mount\.service$/mu
+  );
+  assert.match(
+    backupService,
+    /^After=sitesourcery-production-backup-mount\.service$/mu
   );
   assert.match(
     backupService,
@@ -621,6 +685,62 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
     backupEnvironment,
     /SITESOURCERY_DATABASE_URL|sk_(?:live|test)_|whsec_|re_[A-Za-z0-9]/u
   );
+
+  assert.match(
+    monitorService,
+    /^Requires=sitesourcery-production\.service sitesourcery-production-backup-mount\.service$/mu
+  );
+  assert.match(
+    monitorService,
+    /releases\/1994d7a66bfa6b3e91f32dd637733f2d6911b4be\/ops\/monitor-held\.mjs/u
+  );
+  assert.match(
+    monitorService,
+    /^ConditionPathIsMountPoint=\/home\/simtech\/sitesourcery-production\/off-machine$/mu
+  );
+  assert.match(
+    monitorService,
+    /^ReadWritePaths=\/home\/simtech\/sitesourcery-production\/state\/operations-monitor$/mu
+  );
+  assert.doesNotMatch(
+    monitorService,
+    /^\[Install\]$/mu
+  );
+  assert.match(
+    monitorTimer,
+    /^OnUnitActiveSec=5m$/mu
+  );
+  assert.match(
+    monitorTimer,
+    /^Persistent=true$/mu
+  );
+  assert.match(
+    monitorTimer,
+    /^WantedBy=timers\.target$/mu
+  );
+  assert.match(
+    monitorEnvironment,
+    /^SITESOURCERY_ALERT_MODE=held$/mu
+  );
+  assert.match(
+    monitorEnvironment,
+    /^SITESOURCERY_ALERT_REPEAT_INTERVAL_MS=21600000$/mu
+  );
+  assert.doesNotMatch(
+    monitorEnvironment,
+    /^SITESOURCERY_ALERT_RECIPIENT=|^SITESOURCERY_MONITOR_CERTIFICATE_|SITESOURCERY_DATABASE_URL|sk_(?:live|test)_|whsec_|re_[A-Za-z0-9]/mu
+  );
+  for (const candidate of [
+    backupMount,
+    monitorService,
+    monitorTimer,
+    monitorEnvironment
+  ]) {
+    assert.doesNotMatch(
+      candidate,
+      /misterfantasea|@[a-z0-9.-]+\.[a-z]{2,}|SITESOURCERY_RESEND_API_KEY=/iu
+    );
+  }
 
   assert.match(readme, /No Caddy service was installed or started\./u);
   assert.match(

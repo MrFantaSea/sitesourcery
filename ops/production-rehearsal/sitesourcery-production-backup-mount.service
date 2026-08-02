@@ -1,0 +1,31 @@
+[Unit]
+Description=Site Sourcery production off-machine backup mount
+After=network-online.target
+Wants=network-online.target
+Before=sitesourcery-production-backup.service sitesourcery-production-monitor.service
+ConditionPathIsDirectory=/home/simtech/sitesourcery-production/off-machine
+ConditionPathExists=/home/simtech/sitesourcery-production/toolchain/sshfs-3.7.3/usr/bin/sshfs
+ConditionPathExists=/home/simtech/.ssh/id_ed25519_fantasea_mesh
+ConditionPathExists=/home/simtech/.ssh/known_hosts
+
+[Service]
+Type=simple
+ExecStart=/home/simtech/sitesourcery-production/toolchain/sshfs-3.7.3/usr/bin/sshfs -f zen:/home/zentech/.local/state/sitesourcery-backups /home/simtech/sitesourcery-production/off-machine -o ssh_command=/usr/bin/ssh -o IdentityFile=/home/simtech/.ssh/id_ed25519_fantasea_mesh -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/home/simtech/.ssh/known_hosts -o reconnect -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o umask=077 -o default_permissions -o noexec -o nodev -o nosuid
+ExecStartPost=/usr/bin/test -f /home/simtech/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
+ExecStop=-/usr/bin/fusermount3 -u /home/simtech/sitesourcery-production/off-machine
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=45
+TimeoutStopSec=20
+KillSignal=SIGTERM
+UMask=0077
+
+PrivateTmp=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=default.target

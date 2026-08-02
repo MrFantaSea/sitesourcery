@@ -1,0 +1,39 @@
+[Unit]
+Description=Check Site Sourcery production rehearsal and recovery signals
+After=network-online.target sitesourcery-production.service sitesourcery-production-backup-mount.service
+Wants=network-online.target
+Requires=sitesourcery-production.service sitesourcery-production-backup-mount.service
+ConditionPathIsMountPoint=/home/simtech/sitesourcery-production/off-machine
+ConditionPathExists=/home/simtech/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
+ConditionPathExists=/home/simtech/sitesourcery-production/run/operations-state-approved.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/1994d7a66bfa6b3e91f32dd637733f2d6911b4be
+Environment=NODE_ENV=production
+EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
+EnvironmentFile=/home/simtech/sitesourcery-production/run/monitor.env
+ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/1994d7a66bfa6b3e91f32dd637733f2d6911b4be/ops/monitor-held.mjs
+UMask=0077
+TimeoutStartSec=45s
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/home/simtech/sitesourcery-production/state/operations-monitor

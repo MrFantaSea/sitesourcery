@@ -1,0 +1,13 @@
+[Unit]
+Description=Offer the Site Sourcery production monitor every five minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+AccuracySec=10s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=sitesourcery-production-monitor.service
+
+[Install]
+WantedBy=timers.target
