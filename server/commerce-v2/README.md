@@ -8,8 +8,25 @@ The private catalog contains exactly:
 | Offer | Server price | Entitlement |
 | --- | --- | --- |
 | `spark_download` | owner-accepted one-time USD 5 | non-consuming, non-expiring download and self-host use for one editor project |
-| `spark_publish` | provisional USD 15/month | publishing for one editor project while active |
-| `spark_publish_help` | provisional USD 30/month | publishing and the defined help boundary for one editor project while active |
+
+The current owner ruling places Alakazam hosting at USD 25, USD 35, and USD 50
+per month for a `sitesourcery.me` address. The $25 level keeps the three base
+looks; $35 adds a photo header, expanded fonts, section toggles, a three-version
+history, and modest care; $50 adds richer customization including Cash
+App/Venmo links, a menu, further font/border controls, and more care. Exact care
+quantities and several operational policies are still owner-open. Paid value
+carries forward on upgrades: the $5 Download leaves $20 to enter $25, $25 to
+$35 costs the $10 difference, and $35 to $50 costs the $15 difference. None of
+the subscriptions belongs in this private catalog until its complete terms,
+entitlement, difference-only credit, cancellation, and fulfillment contract is
+reviewed; obsolete draft $15/$30 subscription prices have been removed.
+
+The owner-approved tier-change direction is immediate, difference-only paid
+upgrades and renewal-boundary downgrades. A customer requesting a downgrade
+keeps the already-paid higher entitlement through its current period, receives
+no mid-period downgrade refund/proration, and renews at the full lower monthly
+price. Higher-tier configuration is retained without granting higher-tier
+capabilities after the scheduled downgrade takes effect.
 
 Assisted Launch is quote/invoice work and is intentionally absent from the
 self-service catalog.

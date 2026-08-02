@@ -415,6 +415,113 @@ test("commerce v2 Download persistence is held, accepted-version-bound, service-
   );
 });
 
+test("commerce v2 Download settlement fences one exact $5 Stripe effect and project entitlement", async () => {
+  const all = await migrations();
+  const settlement = all.find(
+    ({ name }) =>
+      name ===
+      "202608020022_commerce_v2_download_settlement.sql"
+  );
+  assert.ok(settlement);
+
+  for (const table of [
+    "commerce_v2_download_dispatches",
+    "commerce_v2_download_stripe_events",
+    "commerce_v2_download_payment_receipts",
+    "commerce_v2_project_entitlements",
+    "commerce_v2_download_reversal_events"
+  ]) {
+    assert.match(
+      settlement.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      settlement.sql,
+      new RegExp(
+        `alter table ss\\.${table}\\s+force row level security`,
+        "iu"
+      )
+    );
+  }
+
+  assert.match(
+    settlement.sql,
+    /state in \(\s*'dispatching',[\s\S]*'effect_unknown',[\s\S]*'settled'/iu
+  );
+  assert.match(
+    settlement.sql,
+    /create unique index commerce_v2_download_one_open_payment[\s\S]*organization_id,[\s\S]*project_id[\s\S]*where state in/iu
+  );
+  assert.match(
+    settlement.sql,
+    /lease_expires_at <>[\s\S]*created_at \+ interval '2 minutes'/iu
+  );
+  assert.match(
+    settlement.sql,
+    /quote\.amount_minor = 500[\s\S]*quote\.currency = 'USD'[\s\S]*quote\.billing = 'one_time'/iu
+  );
+  assert.match(
+    settlement.sql,
+    /event_type text not null[\s\S]*checkout\.session\.completed/iu
+  );
+  assert.match(
+    settlement.sql,
+    /Download receipt requires provider readback for one pending verified event/iu
+  );
+  assert.match(
+    settlement.sql,
+    /payment_status text not null[\s\S]*payment_status = 'paid'[\s\S]*amount_minor integer not null[\s\S]*amount_minor = 500[\s\S]*tax_minor integer not null[\s\S]*total_minor = amount_minor \+ tax_minor[\s\S]*currency text not null check \(currency = 'USD'\)/iu
+  );
+  assert.match(
+    settlement.sql,
+    /kind text not null check \(kind = 'spark_download'\)[\s\S]*scope text not null check \(scope = 'editor_project'\)[\s\S]*state in \('active', 'suspended', 'revoked'\)[\s\S]*expires_at timestamptz[\s\S]*expires_at is null/iu
+  );
+  assert.match(
+    settlement.sql,
+    /unique \(organization_id, project_id, kind\)/iu
+  );
+  for (const count of [
+    "commerceV2DownloadDispatches",
+    "commerceV2DownloadStripeEvents",
+    "commerceV2DownloadPaymentReceipts",
+    "commerceV2ProjectEntitlements",
+    "commerceV2DownloadReversalEvents"
+  ]) {
+    assert.match(
+      settlement.sql,
+      new RegExp(`'${count}'`, "u")
+    );
+  }
+  assert.match(
+    settlement.sql,
+    /revoke all on[\s\S]*commerce_v2_download_dispatches,[\s\S]*commerce_v2_project_entitlements[\s\S]*from public, anon, authenticated/iu
+  );
+  assert.match(
+    settlement.sql,
+    /charge\.refunded[\s\S]*charge\.dispute\.created[\s\S]*payment_fully_refunded[\s\S]*payment_dispute_lost/iu
+  );
+  assert.match(
+    settlement.sql,
+    /entitlement\.state = new\.prior_state[\s\S]*entitlement\.state_reason = new\.prior_reason/iu
+  );
+  assert.match(
+    settlement.sql,
+    /when resulting_state = prior_state\s+then prior_reason\s+else reason/iu
+  );
+  assert.doesNotMatch(
+    settlement.sql,
+    /then result ->> 'reason'/iu
+  );
+  assert.match(
+    settlement.sql,
+    /create function ss\.hosted_runtime_contract_v22\(\)/iu
+  );
+  assert.doesNotMatch(
+    settlement.sql,
+    /recurring|monthly/iu
+  );
+});
+
 test("recovery delivery is reserved durably before a provider effect and terminal when ambiguous", async () => {
   const all = await migrations();
   const recovery = all.find(

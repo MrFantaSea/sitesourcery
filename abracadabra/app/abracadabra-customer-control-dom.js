@@ -41,6 +41,61 @@
     }
   }
 
+  function downloadCheckoutReturnFromLocation(
+    locationObject
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      return null;
+    }
+    var checkoutValues =
+      parameters.getAll("checkout");
+    var projectValues =
+      parameters.getAll("download_project");
+    if (
+      checkoutValues.length !== 1
+      || projectValues.length !== 1
+    ) return null;
+    var checkoutSessionId = text(checkoutValues[0]);
+    var projectId = text(projectValues[0]);
+    if (
+      !/^cs_[A-Za-z0-9_]+$/u.test(
+        checkoutSessionId
+      )
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+        .test(projectId)
+    ) return null;
+    return Object.freeze({
+      checkoutSessionId: checkoutSessionId,
+      projectId: projectId
+    });
+  }
+
+  function locationWithoutDownloadCheckoutReturn(
+    locationObject
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      parameters = new URLSearchParams();
+    }
+    parameters.delete("checkout");
+    parameters.delete("download_project");
+    var query = parameters.toString();
+    return (
+      text(locationObject && locationObject.pathname)
+        || "/"
+    ) + (query ? "?" + query : "")
+      + text(locationObject && locationObject.hash);
+  }
+
   function registrationTokenFromLocation(locationObject) {
     return fragmentToken(
       locationObject,
@@ -402,6 +457,11 @@
     var activeQuote = null;
     var activeEntitlement = null;
     var quoteExpiryTimer = null;
+    var checkoutReturn =
+      downloadCheckoutReturnFromLocation(
+        windowRef.location
+      );
+    var checkoutReturnStarted = false;
     var capabilities = Object.freeze({
       accountRegistration: false,
       accountRecoveryEmail: false,
@@ -483,6 +543,135 @@
           )
           .matches
       );
+    }
+
+    function pause(milliseconds) {
+      return new Promise(function (resolve) {
+        windowRef.setTimeout(resolve, milliseconds);
+      });
+    }
+
+    function clearCheckoutReturnLocation() {
+      if (
+        !windowRef.history
+        || typeof windowRef.history.replaceState !==
+          "function"
+      ) return;
+      windowRef.history.replaceState(
+        null,
+        "",
+        locationWithoutDownloadCheckoutReturn(
+          windowRef.location
+        )
+      );
+    }
+
+    function reconcileCheckoutReturn(selectedReturn) {
+      clearCheckoutReturnLocation();
+      announce(
+        "Checking Stripe for your payment and secure Download…"
+      );
+      return control
+        .selectProject(
+          selectedReturn.projectId,
+          function (project) {
+            return maker.loadProject(project);
+          }
+        )
+        .then(function (project) {
+          if (!project) {
+            throw new Error(
+              "The paid project could not be opened in this account."
+            );
+          }
+          var accepted =
+            acceptedProjectVersion(project);
+          if (!accepted) {
+            throw new Error(
+              "The paid project has no accepted version to Download."
+            );
+          }
+          control.selectVersion(idOf(accepted));
+          var delays = [
+            0,
+            500,
+            1000,
+            1500,
+            2500,
+            4000,
+            6000
+          ];
+          var attempt = 0;
+
+          function check() {
+            var current = control.getState();
+            var entitlement = downloadEntitlement(
+              current.project,
+              current.selectedVersionId
+            );
+            if (entitlement) {
+              return Promise.resolve(entitlement);
+            }
+            if (attempt >= delays.length) {
+              return Promise.resolve(null);
+            }
+            var delay = delays[attempt];
+            attempt += 1;
+            return pause(delay)
+              .then(function () {
+                return control
+                  .refreshSelectedProject();
+              })
+              .then(function (refreshed) {
+                var nextAccepted =
+                  acceptedProjectVersion(refreshed);
+                if (nextAccepted) {
+                  control.selectVersion(
+                    idOf(nextAccepted)
+                  );
+                }
+                return check();
+              });
+          }
+
+          return check();
+        })
+        .then(function (entitlement) {
+          if (entitlement) {
+            revealControlRoom();
+            announce(
+              "Payment confirmed. Your Download is ready.",
+              "success"
+            );
+            return entitlement;
+          }
+          announce(
+            "Stripe is still confirming the payment. This page will not start another charge. Reopen this project in a moment to see the Download."
+          );
+          return null;
+        })
+        .catch(function (error) {
+          announce(
+            explain(
+              error,
+              "Payment confirmation could not be loaded. This page will not start another charge. Open your account project again in a moment."
+            ),
+            "error"
+          );
+          return null;
+        });
+    }
+
+    function maybeReconcileCheckoutReturn(state) {
+      if (
+        !checkoutReturn
+        || checkoutReturnStarted
+        || !state.account
+      ) return;
+      checkoutReturnStarted = true;
+      windowRef.setTimeout(function () {
+        reconcileCheckoutReturn(checkoutReturn);
+      }, 0);
     }
 
     function revealControlRoom(mode) {
@@ -834,6 +1023,7 @@
             ).toLowerCase()
             + ".";
       }
+      maybeReconcileCheckoutReturn(state);
     }
 
     function run(
@@ -1353,6 +1543,10 @@
       .then(function () {
         if (control.getState().account) {
           announce("Account ready.", "success");
+        } else if (checkoutReturn) {
+          announce(
+            "Sign in to finish confirming the payment and open your Download."
+          );
         } else if (!activationToken && !recoveryToken) {
           announce(
             "Your free preview is ready. Sign in only when you want to save it."
@@ -1376,8 +1570,12 @@
       acceptedProjectVersion,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
+    downloadCheckoutReturnFromLocation:
+      downloadCheckoutReturnFromLocation,
     downloadEntitlement:
       downloadEntitlement,
+    locationWithoutDownloadCheckoutReturn:
+      locationWithoutDownloadCheckoutReturn,
     recoveryOutcome: recoveryOutcome,
     recoveryTokenFromLocation:
       recoveryTokenFromLocation,

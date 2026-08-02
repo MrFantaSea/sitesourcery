@@ -186,19 +186,19 @@ test("private held catalog defines only the action-based Spark offers", () => {
     catalog.offers.map(
       (offer) => offer.price.amountMinor
     ),
-    [500, 1500, 3000]
+    [500]
   );
   assert.deepEqual(
     catalog.offers.map(
       (offer) => offer.price.billing
     ),
-    ["one_time", "recurring", "recurring"]
+    ["one_time"]
   );
   assert.deepEqual(
     catalog.offers.map(
       (offer) => offer.commercialStatus
     ),
-    ["owner_accepted", "provisional", "provisional"]
+    ["owner_accepted"]
   );
   assert.equal(
     catalog.offers[0].entitlement.acceptanceCadence,
@@ -305,50 +305,6 @@ test("quote snapshot binds exact server money, project, version, disclosure, and
   assert.equal(stored.commands.length, 1);
 });
 
-test("publish quote snapshots retain provisional monthly price and distinct entitlement kinds", async () => {
-  for (const [
-    offerId,
-    amountMinor,
-    entitlementKind
-  ] of [
-    ["spark_publish", 1500, "spark_publish"],
-    [
-      "spark_publish_help",
-      3000,
-      "spark_publish_help"
-    ]
-  ]) {
-    const context = fixture();
-    const quote = await createQuote(context, {
-      offerId,
-      commandId: `quote_${offerId}`
-    });
-    assert.equal(
-      quote.disclosure.offer.commercialStatus,
-      "provisional"
-    );
-    assert.deepEqual(quote.price, {
-      amountMinor,
-      currency: "USD",
-      billing: "recurring",
-      interval: "month"
-    });
-    assert.equal(
-      quote.entitlementKind,
-      entitlementKind
-    );
-    assert.equal(
-      quote.disclosure.release.state,
-      "held"
-    );
-    assert.equal(
-      quote.disclosure.release
-        .providerEffectsAuthorized,
-      false
-    );
-  }
-});
-
 test("quote command replays exactly and conflicts on a changed purpose", async () => {
   const context = fixture();
   const first = await createQuote(context);
@@ -356,7 +312,7 @@ test("quote command replays exactly and conflicts on a changed purpose", async (
   assert.deepEqual(replay, first);
   await assert.rejects(
     createQuote(context, {
-      offerId: "spark_publish"
+      versionId: VERSION_A2
     }),
     (error) => error.code === "idempotency_conflict"
   );

@@ -65,6 +65,12 @@ function readyRow(overrides = {}) {
     commerce_v2_quotes_ready: true,
     commerce_v2_preparations_ready: true,
     commerce_v2_contract_ready: true,
+    commerce_v2_dispatches_ready: true,
+    commerce_v2_download_events_ready: true,
+    commerce_v2_download_receipts_ready: true,
+    commerce_v2_entitlements_ready: true,
+    commerce_v2_reversals_ready: true,
+    commerce_v2_settlement_contract_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -139,15 +145,28 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
         commerce_v2_commands_ready: false,
         commerce_v2_quotes_ready: false,
         commerce_v2_preparations_ready: false,
-        commerce_v2_contract_ready: false
+        commerce_v2_contract_ready: false,
+        commerce_v2_dispatches_ready: false,
+        commerce_v2_download_events_ready: false,
+        commerce_v2_download_receipts_ready: false,
+        commerce_v2_entitlements_ready: false,
+        commerce_v2_reversals_ready: false,
+        commerce_v2_settlement_contract_ready:
+          false
       })
     )
   });
   assert.deepEqual((await authority.readiness()).missing, [
     "commerce_v2_commands",
     "commerce_v2_contract",
+    "commerce_v2_dispatches",
+    "commerce_v2_download_events",
+    "commerce_v2_download_receipts",
+    "commerce_v2_entitlements",
     "commerce_v2_preparations",
-    "commerce_v2_quotes"
+    "commerce_v2_quotes",
+    "commerce_v2_reversals",
+    "commerce_v2_settlement_contract"
   ]);
 
   authority = createCanonicalPostgresAuthority({

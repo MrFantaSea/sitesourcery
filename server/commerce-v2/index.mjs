@@ -14,6 +14,12 @@ export {
   authorizeProjectEntitlement
 } from "./entitlement.mjs";
 export {
+  createDownloadPaymentRelease,
+  createDownloadPaymentService,
+  isDownloadStripeEvent,
+  isPotentialDownloadReversalEvent
+} from "./payment.mjs";
+export {
   createMemoryCommerceV2Repository
 } from "./memory-repository.mjs";
 export {

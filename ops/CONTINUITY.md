@@ -120,6 +120,86 @@ these are OWNER RULINGS and open work, not suggestions.
   explicit bounded assignment. This prevents parallel edits and duplicate
   work.
 
+## $5 DOWNLOAD IMPLEMENTATION CHECKPOINT (2026-08-02)
+
+- The private branch now has the complete account-bound one-time Download
+  implementation: exact server quote, one idempotent Stripe Checkout dispatch,
+  Stripe readback rather than webhook money trust, durable receipt and
+  project-wide non-consuming entitlement, repeated accepted-version HTML
+  downloads, and canonical Stripe Customer binding for the later Alakazam
+  credit ladder.
+- A Checkout return carries only the authenticated project selector. The
+  shipped page removes Checkout identifiers from the address bar, reopens the
+  project, polls bounded authenticated project state, and reveals the Download
+  after settlement. The return query cannot settle money or grant access and
+  cannot initiate another charge.
+- Verified payment-reversal events only tighten access: a partial reversal or
+  open dispute suspends future downloads; a full reversal or lost dispute
+  revokes them. There is no customer refund button, refund offer, or refund
+  creation API in this slice.
+- Exact Node 24 focused gates pass (`47/47` for the final payment
+  state-machine/Stripe-provider set; `32/32` hosted-artifact/customer-control
+  checks). The permanent repository gate now includes both Commerce V2 suites
+  and passes with `298/298` core tests, `19/19` self-host tests, `116/116`
+  runnable hosted-service tests (`2` PostgreSQL-only skips in the generic
+  no-database gate), and `52/52` operations tests, followed by exact artifact
+  checks and the `15`-route x `3`-viewport browser audit. Migration 022 and the
+  complete shipped browser/API/PostgreSQL journey also pass on a fresh
+  disposable database (`10/10`): account, project, accepted version, quote,
+  Checkout, provider-confirmed unpaid expiry replacement, verified
+  webhook/readback, entitlement, return polling, reversal evidence, and exact
+  downloaded HTML bytes.
+- This is an implementation checkpoint, not a public activation. The payment
+  release remains held by default; production still serves the July 22 site.
+  The later release pass still needs the owner tax choice, a real Stripe test
+  payment on private staging, owner walkthrough, and reviewed public cutover.
+
+## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
+
+When dated owner statements conflict, the newest explicit owner statement is
+canonical. Older notes remain useful history, but they do not override a later
+price, tier, or feature ruling.
+
+- **Abracadabra Download — $5 once.** The customer may make and preview for
+  free. An account is required immediately before the first payment. The $5
+  buys a reusable, non-expiring download entitlement for that editor project;
+  it does not activate hosting.
+- **Alakazam — three monthly levels, all hosted.** The base service keeps the
+  customer's site live at `label.sitesourcery.me`. The $5 Download purchase is
+  still credited toward the first Alakazam payment. Each paid rung also credits
+  toward the next rung instead of charging two full tier prices: Download to
+  $25 means $20 remains, $25 to $35 means $10 remains, and $35 to $50 means
+  $15 remains. A normal renewal at the selected level is its full monthly
+  price; the exact mid-cycle timing/proration implementation must preserve this
+  difference-only upgrade rule.
+  - **$25/month:** hosting at the Site Sourcery address and the three base
+    looks (Crystal, Hearth, and Midnight).
+  - **$35/month:** everything in $25, plus a photo header, expanded font
+    choices, section toggles, version history limited to three saved versions,
+    and a modest amount of support/care.
+  - **$50/month:** everything in $35, plus the richer customization bundle,
+    explicitly including Cash App/Venmo links, a menu, further font/border
+    controls, and a larger amount of support/care.
+- **Alakazam tier changes.** Upgrades take effect immediately after the exact
+  difference is paid. A downgrade requested during a paid month is scheduled
+  for the current renewal boundary: the customer keeps the higher tier through
+  the period already paid for, receives no mid-period cash refund or proration,
+  and is charged the full lower monthly price at the next cycle. Premium
+  configuration data is preserved rather than destroyed when the lower tier
+  begins, but premium controls are unavailable unless the matching entitlement
+  is active.
+- The exact support/care quantities, response promise, edit accounting, and
+  final fine-grained font/border boundary are **not decided yet**. Do not invent
+  minutes, edit counts, turnaround times, or cancellation/refund policy. Those
+  details must be redlined before the subscription rails open.
+- There is **no $15 or $30 published tier**. Those were obsolete drafts and
+  have been removed from the private v2 catalog. The prior `$35 gets ____`
+  placeholder is also superseded by the three-level ruling above.
+- Only the old $25 Stripe Payment Link exists today. $35 and $50 provider
+  prices/links have not been created, and none of the three subscriptions may
+  be represented as end-to-end operational until entitlement, billing,
+  publication, support, and cancellation behavior pass their customer walk.
+
 
 ## Owner test keys (no card needed)
 
@@ -173,12 +253,18 @@ real product - the owner is the backstop, not the mechanism.
   Free with no account stays tab-only (the original ruling). Server
   accounts + operator back end = task #21; the sim workflow feeds it.
 - **The gate ladder**: FREE = make + preview (Crystal/Hearth/Midnight).
-  **$5 download** = the file (in-app unlock via Stripe redirect ?paid=1) +
-  the style kit (6 accents, type pairing, edges) + it UNLOCKS the Go-live
-  door and doubles as the $5 coupon (owner applies it by hand on invoice 1).
-  **Alakazam $25/mo** (?alakazam=1 redirect) = payment links (Cash App,
-  Venmo) + everything stays unlocked. Locked options may ONLY be shown as a
-  teaser line — and only if paying makes them genuinely render.
+  **$5 Download** = the file (the browser prototype currently uses
+  `?paid=1`) + the style kit (6 accents, type pairing, edges) + it UNLOCKS the
+  Go-live door and doubles as the $5 credit toward Alakazam. **$25/month** =
+  the hosted `sitesourcery.me` address + three base looks. **$35/month** adds
+  photo header, expanded fonts, section toggles, three-version history, and
+  modest care. **$50/month** adds the richer customization bundle including
+  Cash App/Venmo links, a menu, further font/border controls, and more care.
+  Upgrades are difference-only: $5 -> $25 costs the remaining $20, $25 -> $35
+  costs $10, and $35 -> $50 costs $15; never stack two full tier charges.
+  Locked options may ONLY be shown as a teaser — and only if that exact paid
+  entitlement makes them genuinely render. Browser redirect flags are test
+  bridges, not subscription authority.
 - **Looks**: labels Crystal / Hearth / Midnight (values clear/warm/arcane
   stay internal). The sample loader must NEVER override the chosen look.
 - **Nav (all pages)**: ABRACADABRA · ALAKAZAM / SORCERY / THE RESPONDER /
@@ -218,6 +304,9 @@ real product - the owner is the backstop, not the mechanism.
   redirects to /abracadabra/app/?paid=1 (live domain).
 - $25/mo Alakazam hosting — buy.stripe.com/9B65kF0iIgvseho9A87kc01 →
   redirects to /abracadabra/app/?alakazam=1.
+- $35/mo and $50/mo Alakazam — owner-approved product levels, but no Stripe
+  Price/Payment Link or operational rail exists yet. Keep held until the exact
+  support limits and the complete backend/customer behavior are reviewed.
 - $200 assessment — bJe4gB8Pe5QOb5cdQo7kc02.
 - $40/yr .com — dRm9AV0iIfroddk5jS7kc03. $45/yr .net/.org —
   cNi7sN8Pegvs7T07s07kc04 (price_1TzP2pPi1bfFonRcLOug1Xnb).
@@ -240,10 +329,14 @@ real product - the owner is the backstop, not the mechanism.
    Pages, not branch or rehearsal work.
 2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
    (his design-lock); needs his one-line ok.
-3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the
-   blank is his. Candidates parked in task #20 (menu section, more fonts,
-   photo header, section toggles). Menu-on-page extra NOT built yet.
-4. **Rent-tier price** (your-name.sitesourcery.me) — no number exists.
+3. **Alakazam care boundaries and final control matrix**: prices and the main
+   feature ladder are decided at $25/$35/$50. Still owner-open: exact support
+   minutes or edit counts, response promise, what consumes care, cancellation
+   and refund handling, and the final fine-grained font/border difference.
+4. **Customer-owned/custom-domain treatment in Alakazam**: $25 now resolves
+   the hosted `label.sitesourcery.me` price. Still decide whether bringing or
+   buying a separate domain changes setup price, monthly level, ownership, or
+   care; do not silently treat those as the same product.
 5. **/custom/scope/ + /custom/process/ fold into /custom/** — proposed,
    approved in spirit, executes during the Sorcery walk.
 6. **Accounts: DECIDED, staged, not open** (2026-08-01). Founder order, his words:
@@ -302,8 +395,9 @@ checker script + markup, one truth, absolute paths) sits in the gate
 between Go-live and the includes modal, paid-gated with a teaser.
 Entitlement script announces abracadabra:entitlements; the app
 re-dresses on it (script-order race otherwise). Still open by design: the three base looks'
-DEPTH pass ("samples are basic and lame") — coupled to the \$35 tier
-co-design, task #20.
+DEPTH pass ("samples are basic and lame"). Base-look quality belongs to all
+three Alakazam levels; paid tier controls must not be used to excuse a weak
+base design. The additional $35/$50 controls remain task #20 work.
 
 ## Tooling (all in scratchpad, session-portable patterns)
 

@@ -45,6 +45,12 @@ const PROVIDER_ID = /^(?:bps|ch|cs|cus|pi|price|re|sub|txn)_[A-Za-z0-9_]+$/u;
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9._:-]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const OFFICIAL_CLIENTS = new WeakSet();
+const DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA =
+  "sitesourcery.abracadabra-checkout-purpose.v2";
+const DOWNLOAD_CHECKOUT_METADATA_SCHEMA =
+  "sitesourcery_download_checkout_v2";
+const DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA =
+  "sitesourcery.stripe-download-checkout-lifecycle/v2";
 
 export function createOfficialStripeClient({
   secretKey,
@@ -185,6 +191,30 @@ function exactUrl(value, field, {
 function returnOrigin(url) {
   const parsed = new URL(url);
   return parsed.origin;
+}
+
+function downloadReturnUrl(template, projectId) {
+  const parsed = new URL(template);
+  invariant(
+    !parsed.searchParams.has("download_project"),
+    "stripe_redirect_invalid",
+    "Download return URL already contains project identity",
+    { status: 500 }
+  );
+  parsed.searchParams.set(
+    "download_project",
+    safeMetadataValue(projectId, "projectId")
+  );
+  return exactUrl(
+    parsed
+      .toString()
+      .replace(
+        "%7BCHECKOUT_SESSION_ID%7D",
+        "{CHECKOUT_SESSION_ID}"
+      ),
+    "Download success URL",
+    { checkoutSessionPlaceholder: true }
+  );
 }
 
 function renderDomainReturnUrl(
@@ -728,6 +758,327 @@ function providerIdempotencyKey(
     operatorKey,
     purposeDigest
   })}`;
+}
+
+function exactObjectKeys(value, fields) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([...fields].sort())
+  );
+}
+
+function validateDownloadPurpose(
+  request,
+  { retrieval = false } = {}
+) {
+  const requestFields = retrieval
+    ? [
+        "checkoutSessionId",
+        "purpose",
+        "purposeDigest"
+      ]
+    : [
+        "idempotencyKey",
+        "purpose",
+        "purposeDigest",
+        ...(request?.stripeCustomerId === undefined
+          ? []
+          : ["stripeCustomerId"])
+      ];
+  invariant(
+    exactObjectKeys(
+      request,
+      requestFields
+    ) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "customerId",
+        "entitlementKind",
+        "offerId",
+        "price",
+        "projectId",
+        "quoteId",
+        "quoteSnapshotDigest",
+        "schema",
+        "tenantId",
+        "versionId"
+      ]),
+    "stripe_download_checkout_invalid",
+    "Download Checkout requires the exact server purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const identity = {};
+  for (const field of [
+    "tenantId",
+    "customerId",
+    "projectId",
+    "versionId",
+    "quoteId",
+    "offerId",
+    "entitlementKind"
+  ]) {
+    identity[field] = safeMetadataValue(
+      purpose[field],
+      `purpose.${field}`
+    );
+  }
+  invariant(
+    purpose.schema === DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA &&
+      identity.offerId === "spark_download" &&
+      identity.entitlementKind === "spark_download" &&
+      exactObjectKeys(purpose.price, [
+        "amountMinor",
+        "billing",
+        "currency",
+        "interval"
+      ]) &&
+      purpose.price.amountMinor === 500 &&
+      purpose.price.currency === "USD" &&
+      purpose.price.billing === "one_time" &&
+      purpose.price.interval === null,
+    "stripe_download_checkout_invalid",
+    "Download Checkout permits only the reviewed one-time $5 offer",
+    { status: 500 }
+  );
+  const acceptedDisclosureDigest = safeMetadataValue(
+    purpose.acceptedDisclosureDigest,
+    "purpose.acceptedDisclosureDigest"
+  );
+  const quoteSnapshotDigest = safeMetadataValue(
+    purpose.quoteSnapshotDigest,
+    "purpose.quoteSnapshotDigest"
+  );
+  invariant(
+    SHA256.test(acceptedDisclosureDigest) &&
+      SHA256.test(quoteSnapshotDigest),
+    "stripe_download_checkout_invalid",
+    "Download Checkout disclosure authority is invalid",
+    { status: 500 }
+  );
+  const purposeDigest = digest(purpose);
+  invariant(
+    request.purposeDigest === purposeDigest &&
+      SHA256.test(request.purposeDigest),
+    "stripe_download_checkout_invalid",
+    "Download Checkout purpose digest changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    purpose,
+    identity,
+    acceptedDisclosureDigest,
+    quoteSnapshotDigest,
+    purposeDigest,
+    stripeCustomerId:
+      retrieval ||
+      request.stripeCustomerId === undefined
+        ? null
+        : providerId(
+            request.stripeCustomerId,
+            "cus",
+            "stripeCustomerId"
+          ),
+    idempotencyKey: retrieval
+      ? null
+      : requiredText(
+          request.idempotencyKey,
+          "idempotencyKey",
+          255
+        )
+  });
+}
+
+function downloadMetadata(validated) {
+  return Object.freeze({
+    schema: DOWNLOAD_CHECKOUT_METADATA_SCHEMA,
+    tenant_id: validated.identity.tenantId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    version_id: validated.identity.versionId,
+    quote_id: validated.identity.quoteId,
+    offer_id: "spark_download",
+    entitlement_kind: "spark_download",
+    accepted_disclosure_digest:
+      validated.acceptedDisclosureDigest,
+    quote_snapshot_digest:
+      validated.quoteSnapshotDigest,
+    purpose_digest: validated.purposeDigest
+  });
+}
+
+function validateDownloadMetadata(value, expected) {
+  invariant(
+    exactObjectKeys(value, Object.keys(expected)) &&
+      Object.entries(expected).every(
+        ([key, expectedValue]) =>
+          value[key] === expectedValue
+      ),
+    "stripe_download_checkout_response_invalid",
+    "Stripe Download metadata changed",
+    { status: 502 }
+  );
+}
+
+function downloadCheckoutFacts(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Download Checkout Session ID"
+  );
+  const expectedMetadata =
+    downloadMetadata(validated);
+  validateDownloadMetadata(
+    value.metadata,
+    expectedMetadata
+  );
+  const automaticTax =
+    config.taxMode === "automatic";
+  const taxMinor = automaticTax
+    ? integer(
+        value.total_details?.amount_tax,
+        "Stripe Download tax amount",
+        0,
+        99_999_999
+      )
+    : 0;
+  const totalMinor = 500 + taxMinor;
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.quoteId &&
+      value.mode === "payment" &&
+      value.livemode === config.livemode &&
+      value.status === "complete" &&
+      value.payment_status === "paid" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === 500 &&
+      value.amount_total === totalMinor &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (
+        automaticTax
+          ? value.automatic_tax?.status === "complete" &&
+            value.total_details?.amount_discount === 0 &&
+            value.total_details?.amount_shipping === 0
+          : (
+              value.automatic_tax?.status === null ||
+              value.automatic_tax?.status === undefined
+            )
+      ),
+    "stripe_download_checkout_response_invalid",
+    "Stripe did not confirm the exact paid $5 Download Checkout",
+    { status: 502 }
+  );
+  const intent = expandedProviderObject(
+    value.payment_intent,
+    "pi",
+    "Stripe Download PaymentIntent"
+  );
+  validateDownloadMetadata(
+    intent.metadata,
+    expectedMetadata
+  );
+  invariant(
+    intent.livemode === config.livemode &&
+      intent.status === "succeeded" &&
+      intent.currency === "usd" &&
+      intent.amount === totalMinor &&
+      intent.amount_received === totalMinor &&
+      intent.amount_capturable === 0,
+    "stripe_download_checkout_response_invalid",
+    "Stripe did not confirm the exact succeeded $5 Download payment",
+    { status: 502 }
+  );
+  return Object.freeze({
+    schema:
+      "sitesourcery.stripe-download-payment-facts/v2",
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    paymentIntentId: intent.id,
+    customerId: providerId(
+      value.customer,
+      "cus",
+      "Stripe Download Customer ID"
+    ),
+    paymentStatus: "paid",
+    amountMinor: 500,
+    taxMinor,
+    totalMinor,
+    taxMode: config.taxMode,
+    currency: "USD",
+    purposeDigest: validated.purposeDigest
+  });
+}
+
+function downloadCheckoutLifecycle(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Download Checkout Session ID"
+  );
+  validateDownloadMetadata(
+    value?.metadata,
+    downloadMetadata(validated)
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.quoteId &&
+      value.mode === "payment" &&
+      value.livemode === config.livemode &&
+      value.currency === "usd" &&
+      value.amount_subtotal === 500 &&
+      value.automatic_tax?.enabled ===
+        (config.taxMode === "automatic"),
+    "stripe_download_checkout_response_invalid",
+    "Stripe did not return the exact Download Checkout lifecycle",
+    { status: 502 }
+  );
+  let state;
+  if (
+    value.status === "expired" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "expired_unpaid";
+  } else if (
+    value.status === "open" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "open_unpaid";
+  } else if (
+    value.status === "complete" &&
+    ["paid", "unpaid"].includes(
+      value.payment_status
+    )
+  ) {
+    state = "completion_pending";
+  } else {
+    invariant(
+      false,
+      "stripe_download_checkout_response_invalid",
+      "Stripe returned an unsafe Download Checkout lifecycle",
+      { status: 502 }
+    );
+  }
+  return Object.freeze({
+    schema: DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    state
+  });
 }
 
 function domainProviderClient(client) {
@@ -1494,6 +1845,9 @@ export function createStripeProviderAdapter(options = {}) {
         });
       },
       createCheckout: reject,
+      createDownloadCheckout: reject,
+      retrieveDownloadCheckoutLifecycle: reject,
+      retrieveDownloadCheckout: reject,
       createBillingPortal: reject,
       createDomainAuthorizationCheckout: reject,
       retrieveDomainAuthorization: reject,
@@ -1810,6 +2164,198 @@ export function createStripeProviderAdapter(options = {}) {
           }
         );
       }
+    },
+
+    async createDownloadCheckout(request) {
+      requireCapability("checkout:create");
+      const validated =
+        validateDownloadPurpose(request);
+      const providerMetadata =
+        downloadMetadata(validated);
+      const expiresAt =
+        Math.floor(Date.parse(clock.now()) / 1000) +
+        config.checkoutTtlSeconds;
+      invariant(
+        Number.isSafeInteger(expiresAt),
+        "stripe_clock_invalid",
+        "Stripe checkout clock is invalid",
+        { status: 500 }
+      );
+      const params = {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: 500,
+              ...(config.taxMode === "automatic"
+                ? { tax_behavior: "exclusive" }
+                : {}),
+              product_data: {
+                name: "Abracadabra Download"
+              }
+            },
+            quantity: 1
+          }
+        ],
+        success_url: downloadReturnUrl(
+          config.successUrl,
+          validated.identity.projectId
+        ),
+        cancel_url: config.cancelUrl,
+        client_reference_id:
+          validated.identity.quoteId,
+        metadata: providerMetadata,
+        expires_at: expiresAt,
+        automatic_tax: {
+          enabled: config.taxMode === "automatic"
+        },
+        ...(validated.stripeCustomerId
+          ? { customer: validated.stripeCustomerId }
+          : { customer_creation: "always" }),
+        ...(config.taxMode === "automatic"
+          ? {
+              billing_address_collection: "required",
+              ...(validated.stripeCustomerId
+                ? {
+                    customer_update: {
+                      address: "auto"
+                    }
+                  }
+                : {})
+            }
+          : {}),
+        payment_intent_data: {
+          metadata: providerMetadata
+        }
+      };
+      const stripeIdempotencyKey =
+        providerIdempotencyKey(
+          "download_checkout",
+          validated.idempotencyKey,
+          validated.purposeDigest
+        );
+      let response;
+      try {
+        response = await client.checkout.sessions.create(
+          params,
+          { idempotencyKey: stripeIdempotencyKey }
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_download_checkout_effect_unknown",
+          "Stripe Download Checkout creation must be reconciled by idempotency key",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      try {
+        return checkoutResponse(
+          response,
+          config,
+          expiresAt
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) {
+          throw error;
+        }
+        throw ambiguous(
+          "stripe_download_checkout_response_invalid",
+          "Stripe Download Checkout returned an unsafe response that requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+    },
+
+    async retrieveDownloadCheckout(request) {
+      requireCapability("checkout:create");
+      const validated = validateDownloadPurpose(
+        request,
+        { retrieval: true }
+      );
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Download reconciliation requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId,
+            { expand: ["payment_intent"] }
+          );
+      } catch {
+        throw noEffect(
+          "stripe_download_checkout_read_unavailable",
+          "Stripe Download Checkout could not be read for reconciliation",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return downloadCheckoutFacts(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async retrieveDownloadCheckoutLifecycle(request) {
+      requireCapability("checkout:create");
+      const validated = validateDownloadPurpose(
+        request,
+        { retrieval: true }
+      );
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Download lifecycle reconciliation requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId
+          );
+      } catch {
+        throw noEffect(
+          "stripe_download_checkout_lifecycle_unavailable",
+          "Stripe Download Checkout lifecycle could not be read",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return downloadCheckoutLifecycle(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
     },
 
     async createDomainAuthorizationCheckout(request) {

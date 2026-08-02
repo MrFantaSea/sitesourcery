@@ -81,6 +81,26 @@ function publicPreparation(preparation) {
   });
 }
 
+function publicDispatch(dispatch) {
+  return Object.freeze({
+    schema: dispatch.schema,
+    commandId: dispatch.commandId,
+    quoteId: dispatch.quoteId,
+    projectId: dispatch.projectId,
+    versionId: dispatch.versionId,
+    offerId: dispatch.offerId,
+    entitlementKind: dispatch.entitlementKind,
+    state: dispatch.state,
+    dispatchAuthorized:
+      dispatch.dispatchAuthorized,
+    provider: dispatch.provider,
+    dispatchedAt: dispatch.dispatchedAt,
+    purposeDigest: dispatch.purposeDigest,
+    checkout: clone(dispatch.checkout),
+    checkoutUrl: dispatch.checkoutUrl
+  });
+}
+
 function validateScopedSession(value, actor, projectId) {
   invariant(
     value &&
@@ -124,13 +144,16 @@ export function createHeldHostedDownloadCommerce() {
       };
     },
     createQuote: held,
-    prepareCheckout: held
+    prepareCheckout: held,
+    ingestStripeEvent: held,
+    download: held
   });
 }
 
 export function createHostedDownloadCommerce({
   boundary,
-  resolveSession
+  resolveSession,
+  payment = null
 }) {
   invariant(
     boundary &&
@@ -143,6 +166,19 @@ export function createHostedDownloadCommerce({
     typeof resolveSession === "function",
     "invalid_configuration",
     "commerce v2 project scope resolver is required",
+    { status: 500 }
+  );
+  invariant(
+    payment === null ||
+      (
+        typeof payment?.readiness === "function" &&
+        typeof payment?.dispatch === "function" &&
+        typeof payment?.ingestStripeEvent ===
+          "function" &&
+        typeof payment?.download === "function"
+      ),
+    "invalid_configuration",
+    "commerce v2 Download payment boundary is invalid",
     { status: 500 }
   );
 
@@ -164,10 +200,16 @@ export function createHostedDownloadCommerce({
 
   return Object.freeze({
     async readiness() {
+      const paymentStatus = payment
+        ? await payment.readiness()
+        : null;
       return {
         quote: true,
-        payment: false,
-        state: "quote_only"
+        payment: paymentStatus?.payment === true,
+        state:
+          paymentStatus?.payment === true
+            ? "ready"
+            : "quote_only"
       };
     },
     async createQuote(actor, projectId, input) {
@@ -178,10 +220,10 @@ export function createHostedDownloadCommerce({
               Object.hasOwn(input ?? {}, field)
           ),
           Object.hasOwn(input ?? {}, "offerId")
-            ? "provisional_offer_not_available"
+            ? "offer_not_available"
             : "route_binding_rejected",
           Object.hasOwn(input ?? {}, "offerId")
-            ? "The customer Download route does not accept another offer."
+            ? "The customer Download route does not accept an offer selection."
             : "Project and quote identity come only from the Download route."
         );
         const session = await sessionFor(
@@ -214,10 +256,10 @@ export function createHostedDownloadCommerce({
               Object.hasOwn(input ?? {}, field)
           ),
           Object.hasOwn(input ?? {}, "offerId")
-            ? "provisional_offer_not_available"
+            ? "offer_not_available"
             : "route_binding_rejected",
           Object.hasOwn(input ?? {}, "offerId")
-            ? "The customer Download route does not accept another offer."
+            ? "The customer Download route does not accept an offer selection."
             : "Project and quote identity come only from the Download route."
         );
         const session = await sessionFor(
@@ -233,7 +275,54 @@ export function createHostedDownloadCommerce({
             quoteId
           }
         });
+        if (payment) {
+          const status = await payment.readiness();
+          if (status?.payment === true) {
+            return publicDispatch(
+              await payment.dispatch(preparation)
+            );
+          }
+        }
         return publicPreparation(preparation);
+      });
+    },
+
+    async ingestStripeEvent(event) {
+      return translated(async () => {
+        invariant(
+          payment,
+          "payment_unavailable",
+          "Download payment is not open.",
+          { status: 503 }
+        );
+        return payment.ingestStripeEvent(event);
+      });
+    },
+
+    async download(
+      actor,
+      projectId,
+      versionId
+    ) {
+      return translated(async () => {
+        invariant(
+          payment,
+          "entitlement_unavailable",
+          "The project Download is unavailable",
+          { status: 404 }
+        );
+        const session = await sessionFor(
+          actor,
+          projectId
+        );
+        return payment.download({
+          ...session,
+          projectId,
+          versionId: requiredText(
+            versionId,
+            "versionId"
+          )
+        });
       });
     }
   });

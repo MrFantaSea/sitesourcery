@@ -536,7 +536,7 @@ test("failed accepted-version resolution abandons only its pending durable comma
   assert.equal(harness.preparations.size, 0);
 });
 
-test("production composition injects held Download commerce without a v2 provider or entitlement writer", async () => {
+test("production composition keeps Download separately gated while sharing one Stripe adapter", async () => {
   const adapterSource = await readFile(
     new URL("../commerce-v2-postgres.mjs", import.meta.url),
     "utf8"
@@ -545,22 +545,18 @@ test("production composition injects held Download commerce without a v2 provide
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
   );
+  const paymentRepositorySource = await readFile(
+    new URL("../download-payment-postgres.mjs", import.meta.url),
+    "utf8"
+  );
 
   assert.match(
     serverSource,
-    /createPostgresCommerceV2Adapter\(\{[\s\S]*?createHostedDownloadCommerce\(\{[\s\S]*?createCommerceV2Boundary\([\s\S]*?createCommerceV2Service\(/u
+    /createPostgresCommerceV2Adapter\(\{[\s\S]*?createConfiguredStripeProvider\(\)[\s\S]*?createConfiguredDownloadPaymentRelease\(\)[\s\S]*?createDownloadPaymentService\(\{[\s\S]*?createPostgresDownloadPaymentRepository\(\{[\s\S]*?provider: stripeComposition\.adapter[\s\S]*?createHostedDownloadCommerce\(\{/u
   );
   assert.match(
     serverSource,
-    /createHostedApi\(service, \{\s*downloadCommerce\s*\}\)/u
-  );
-  const v2Composition =
-    serverSource.match(
-      /const commerceV2 =[\s\S]*?(?=\s*const stripeComposition =)/u
-    )?.[0] ?? "";
-  assert.doesNotMatch(
-    v2Composition,
-    /stripe|paymentProvider|entitlement/i
+    /createHostedApi\(service, \{[\s\S]*?downloadCommerce,[\s\S]*?createStripeWebhookRouter\(\{[\s\S]*?provider: stripeComposition\.adapter,[\s\S]*?canonicalService: service,[\s\S]*?downloadCommerce/u
   );
   assert.doesNotMatch(
     adapterSource,
@@ -569,5 +565,13 @@ test("production composition injects held Download commerce without a v2 provide
   assert.doesNotMatch(
     adapterSource,
     /\bfetch\s*\(|https?:|checkout\.stripe/u
+  );
+  assert.match(
+    paymentRepositorySource,
+    /commerce_v2_download_dispatches[\s\S]*commerce_v2_download_payment_receipts[\s\S]*commerce_v2_project_entitlements[\s\S]*commerce_v2_download_reversal_events/u
+  );
+  assert.doesNotMatch(
+    paymentRepositorySource,
+    /\bfetch\s*\(|https?:\/\//u
   );
 });

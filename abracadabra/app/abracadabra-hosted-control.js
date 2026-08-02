@@ -768,6 +768,17 @@
       });
     }
 
+    function refreshSelectedProject() {
+      var projectId = assertProject();
+      var expectedSelectionEpoch = selectionEpoch;
+      return task("projectRefresh", function () {
+        return refreshProject(
+          projectId,
+          expectedSelectionEpoch
+        );
+      });
+    }
+
     function createProject(input) {
       var organizationId = assertOrganization();
       var key = idempotencyFactory();
@@ -2018,6 +2029,8 @@
       completeRecovery: completeRecovery,
       selectOrganization: selectOrganization,
       selectProject: selectProject,
+      refreshSelectedProject:
+        refreshSelectedProject,
       createProject: createProject,
       saveDraft: saveDraft,
       acceptMadeVersion: acceptMadeVersion,

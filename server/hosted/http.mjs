@@ -273,7 +273,8 @@ export function createHostedApi(
   {
     requestIds,
     csrfTokens,
-    downloadCommerce = null
+    downloadCommerce = null,
+    stripeWebhook = null
   } = {}
 ) {
   invariant(service && typeof service.authenticate === "function", "RUNTIME_CONFIGURATION_ERROR", "Hosted service is required.", {
@@ -286,11 +287,14 @@ export function createHostedApi(
     typeof downloadBoundary.createQuote ===
       "function" &&
       typeof downloadBoundary.prepareCheckout ===
-        "function",
+        "function" &&
+      typeof downloadBoundary.download === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Download commerce boundary is invalid.",
     { status: 500 }
   );
+  const stripeWebhookBoundary =
+    stripeWebhook ?? service;
   const nextRequestId =
     requestIds?.next?.bind(requestIds) ??
     (() => `req_${randomToken(12)}`);
@@ -442,14 +446,15 @@ export function createHostedApi(
           pathname === "/api/v1/webhooks/stripe"
         ) {
           invariant(
-            typeof service.ingestStripeWebhook ===
+            typeof stripeWebhookBoundary
+              .ingestStripeWebhook ===
               "function",
             "RUNTIME_CONFIGURATION_ERROR",
             "Stripe webhook ingestion is unavailable.",
             { status: 500 }
           );
           const result =
-            await service.ingestStripeWebhook({
+            await stripeWebhookBoundary.ingestStripeWebhook({
               rawBody: await readRawWebhook(request),
               signature: request.headers.get(
                 "stripe-signature"
@@ -594,6 +599,34 @@ export function createHostedApi(
           ))
         ) {
           result = await service.acceptVersion(actor, route[0], route[1], write);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/versions\/([^/]+)\/download$/u
+          ))
+        ) {
+          const download =
+            await downloadBoundary.download(
+              actor,
+              route[0],
+              route[1]
+            );
+          return new Response(download.bytes, {
+            status: 200,
+            headers: {
+              "Cache-Control": "no-store",
+              "Content-Disposition":
+                `attachment; filename="${download.filename.replace(/[^A-Za-z0-9._-]/gu, "_")}"`,
+              "Content-Type":
+                "text/html; charset=utf-8",
+              "Digest":
+                `sha-256=${Buffer.from(download.sha256, "hex").toString("base64")}`,
+              "Referrer-Policy": "no-referrer",
+              "X-Content-Type-Options": "nosniff",
+              "X-Request-Id": requestId
+            }
+          });
         } else if (
           method === "POST" &&
           (route = match(

@@ -140,6 +140,69 @@ function checkoutRequest(options) {
   };
 }
 
+function downloadPurpose(overrides = {}) {
+  return {
+    schema:
+      "sitesourcery.abracadabra-checkout-purpose.v2",
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    versionId:
+      "40000000-0000-4000-8000-000000000001",
+    quoteId:
+      "50000000-0000-4000-8000-000000000001",
+    quoteSnapshotDigest: "c".repeat(64),
+    acceptedDisclosureDigest: "d".repeat(64),
+    offerId: "spark_download",
+    entitlementKind: "spark_download",
+    price: {
+      amountMinor: 500,
+      currency: "USD",
+      billing: "one_time",
+      interval: null
+    },
+    ...overrides
+  };
+}
+
+function downloadRequest(overrides = {}) {
+  const purpose = downloadPurpose(
+    overrides.purpose
+  );
+  return {
+    idempotencyKey:
+      "download:checkout-command-1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function downloadMetadata(purpose = downloadPurpose()) {
+  return {
+    schema: "sitesourcery_download_checkout_v2",
+    tenant_id: purpose.tenantId,
+    customer_id: purpose.customerId,
+    project_id: purpose.projectId,
+    version_id: purpose.versionId,
+    quote_id: purpose.quoteId,
+    offer_id: "spark_download",
+    entitlement_kind: "spark_download",
+    accepted_disclosure_digest:
+      purpose.acceptedDisclosureDigest,
+    quote_snapshot_digest:
+      purpose.quoteSnapshotDigest,
+    purpose_digest: digest(purpose)
+  };
+}
+
 function fakePrice(expectation, overrides = {}) {
   return {
     id: expectation.id,
@@ -719,6 +782,361 @@ test("one-time website purchase uses payment mode and PaymentIntent metadata", a
   assert.equal(
     params.payment_intent_data.metadata.schema,
     "sitesourcery_checkout_v1"
+  );
+});
+
+test("one-time Download creates only the exact server-priced $5 Checkout", async () => {
+  const { adapter, calls } = adapterFixture();
+  const request = downloadRequest();
+  const result =
+    await adapter.createDownloadCheckout(request);
+  assert.deepEqual(result, {
+    checkoutId: "cs_test_checkout_1",
+    url: "https://checkout.stripe.com/c/pay/test_1",
+    expiresAt: "2026-07-28T12:30:00.000Z"
+  });
+  assert.equal(calls.checkouts.length, 1);
+  assert.equal(calls.prices.length, 0);
+  const [{ params, requestOptions }] =
+    calls.checkouts;
+  assert.equal(params.mode, "payment");
+  assert.deepEqual(params.payment_method_types, [
+    "card"
+  ]);
+  assert.deepEqual(params.line_items, [
+    {
+      price_data: {
+        currency: "usd",
+        unit_amount: 500,
+        product_data: {
+          name: "Abracadabra Download"
+        }
+      },
+      quantity: 1
+    }
+  ]);
+  assert.equal(
+    params.client_reference_id,
+    request.purpose.quoteId
+  );
+  assert.equal(
+    params.success_url,
+    configuration().successUrl
+      + "&download_project="
+      + encodeURIComponent(request.purpose.projectId)
+  );
+  assert.deepEqual(
+    params.metadata,
+    downloadMetadata(request.purpose)
+  );
+  assert.deepEqual(
+    params.payment_intent_data.metadata,
+    params.metadata
+  );
+  assert.equal(params.customer_creation, "always");
+  assert.equal(params.customer, undefined);
+  assert.equal(params.automatic_tax.enabled, false);
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:download_checkout:[a-f0-9]{64}$/u
+  );
+});
+
+test("one-time Download reuses the account's bound Stripe Customer", async () => {
+  const { adapter, calls } = adapterFixture();
+  await adapter.createDownloadCheckout({
+    ...downloadRequest(),
+    stripeCustomerId: "cus_test_account_1"
+  });
+  const [{ params }] = calls.checkouts;
+  assert.equal(params.customer, "cus_test_account_1");
+  assert.equal(params.customer_creation, undefined);
+  assert.equal(
+    params.billing_address_collection,
+    undefined
+  );
+  assert.equal(params.customer_update, undefined);
+});
+
+test("Download Checkout rejects changed money and purpose before Stripe", async () => {
+  const { adapter, calls } = adapterFixture();
+  for (const request of [
+    downloadRequest({
+      purpose: {
+        price: {
+          amountMinor: 501,
+          currency: "USD",
+          billing: "one_time",
+          interval: null
+        }
+      }
+    }),
+    {
+      ...downloadRequest(),
+      purposeDigest: "f".repeat(64)
+    },
+    {
+      ...downloadRequest(),
+      provider: "stripe"
+    }
+  ]) {
+    await assert.rejects(
+      adapter.createDownloadCheckout(request),
+      (error) =>
+        error.code ===
+        "stripe_download_checkout_invalid"
+    );
+  }
+  assert.equal(calls.checkouts.length, 0);
+});
+
+test("Download settlement reads back one exact paid Checkout and expanded PaymentIntent", async () => {
+  const purpose = downloadPurpose();
+  const metadata = downloadMetadata(purpose);
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: {
+      id: "cs_test_download_1",
+      client_reference_id: purpose.quoteId,
+      mode: "payment",
+      livemode: false,
+      status: "complete",
+      payment_status: "paid",
+      currency: "usd",
+      amount_subtotal: 500,
+      amount_total: 500,
+      automatic_tax: {
+        enabled: false,
+        status: null
+      },
+      customer: "cus_test_download_1",
+      metadata,
+      payment_intent: {
+        id: "pi_test_download_1",
+        livemode: false,
+        status: "succeeded",
+        currency: "usd",
+        amount: 500,
+        amount_received: 500,
+        amount_capturable: 0,
+        metadata
+      }
+    }
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const facts =
+    await adapter.retrieveDownloadCheckout({
+      checkoutSessionId: "cs_test_download_1",
+      purpose,
+      purposeDigest: digest(purpose)
+    });
+  assert.deepEqual(facts, {
+    schema:
+      "sitesourcery.stripe-download-payment-facts/v2",
+    provider: "stripe",
+    checkoutSessionId: "cs_test_download_1",
+    paymentIntentId: "pi_test_download_1",
+    customerId: "cus_test_download_1",
+    paymentStatus: "paid",
+    amountMinor: 500,
+    taxMinor: 0,
+    totalMinor: 500,
+    taxMode: "disabled_by_owner",
+    currency: "USD",
+    purposeDigest: digest(purpose)
+  });
+  assert.deepEqual(calls.checkoutReads, [
+    {
+      id: "cs_test_download_1",
+      params: { expand: ["payment_intent"] }
+    }
+  ]);
+});
+
+test("expired Download Checkout readback proves unpaid before another payment can open", async () => {
+  const purpose = downloadPurpose();
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: {
+      id: "cs_test_download_1",
+      client_reference_id: purpose.quoteId,
+      mode: "payment",
+      livemode: false,
+      status: "expired",
+      payment_status: "unpaid",
+      currency: "usd",
+      amount_subtotal: 500,
+      automatic_tax: {
+        enabled: false,
+        status: null
+      },
+      metadata: downloadMetadata(purpose)
+    }
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  assert.deepEqual(
+    await adapter.retrieveDownloadCheckoutLifecycle({
+      checkoutSessionId: "cs_test_download_1",
+      purpose,
+      purposeDigest: digest(purpose)
+    }),
+    {
+      schema:
+        "sitesourcery.stripe-download-checkout-lifecycle/v2",
+      provider: "stripe",
+      checkoutSessionId: "cs_test_download_1",
+      state: "expired_unpaid"
+    }
+  );
+  assert.deepEqual(calls.checkoutReads, [
+    {
+      id: "cs_test_download_1",
+      params: undefined
+    }
+  ]);
+});
+
+test("automatic tax Download collects an address and reconciles item, tax, and total separately", async () => {
+  const purpose = downloadPurpose();
+  const metadata = downloadMetadata(purpose);
+  const config = configuration({ taxMode: "automatic" });
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: {
+      id: "cs_test_download_1",
+      client_reference_id: purpose.quoteId,
+      mode: "payment",
+      livemode: false,
+      status: "complete",
+      payment_status: "paid",
+      currency: "usd",
+      amount_subtotal: 500,
+      amount_total: 533,
+      automatic_tax: {
+        enabled: true,
+        status: "complete"
+      },
+      total_details: {
+        amount_discount: 0,
+        amount_shipping: 0,
+        amount_tax: 33
+      },
+      customer: "cus_test_download_1",
+      metadata,
+      payment_intent: {
+        id: "pi_test_download_1",
+        livemode: false,
+        status: "succeeded",
+        currency: "usd",
+        amount: 533,
+        amount_received: 533,
+        amount_capturable: 0,
+        metadata
+      }
+    }
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  await adapter.createDownloadCheckout({
+    ...downloadRequest(),
+    stripeCustomerId: "cus_test_account_1"
+  });
+  const [{ params }] = calls.checkouts;
+  assert.deepEqual(params.automatic_tax, {
+    enabled: true
+  });
+  assert.equal(
+    params.line_items[0].price_data.tax_behavior,
+    "exclusive"
+  );
+  assert.equal(
+    params.billing_address_collection,
+    "required"
+  );
+  assert.deepEqual(params.customer_update, {
+    address: "auto"
+  });
+  assert.deepEqual(
+    await adapter.retrieveDownloadCheckout({
+      checkoutSessionId: "cs_test_download_1",
+      purpose,
+      purposeDigest: digest(purpose)
+    }),
+    {
+      schema:
+        "sitesourcery.stripe-download-payment-facts/v2",
+      provider: "stripe",
+      checkoutSessionId: "cs_test_download_1",
+      paymentIntentId: "pi_test_download_1",
+      customerId: "cus_test_download_1",
+      paymentStatus: "paid",
+      amountMinor: 500,
+      taxMinor: 33,
+      totalMinor: 533,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: digest(purpose)
+    }
+  );
+});
+
+test("Download settlement rejects signed-event money without matching Stripe readback", async () => {
+  const purpose = downloadPurpose();
+  const metadata = downloadMetadata(purpose);
+  const config = configuration();
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: {
+      id: "cs_test_download_1",
+      client_reference_id: purpose.quoteId,
+      mode: "payment",
+      livemode: false,
+      status: "complete",
+      payment_status: "paid",
+      currency: "usd",
+      amount_subtotal: 500,
+      amount_total: 1,
+      automatic_tax: {
+        enabled: false,
+        status: null
+      },
+      customer: "cus_test_download_1",
+      metadata,
+      payment_intent: {
+        id: "pi_test_download_1",
+        livemode: false,
+        status: "succeeded",
+        currency: "usd",
+        amount: 1,
+        amount_received: 1,
+        amount_capturable: 0,
+        metadata
+      }
+    }
+  });
+  const { adapter } = adapterFixture({
+    config,
+    fake
+  });
+  await assert.rejects(
+    adapter.retrieveDownloadCheckout({
+      checkoutSessionId: "cs_test_download_1",
+      purpose,
+      purposeDigest: digest(purpose)
+    }),
+    (error) =>
+      error.code ===
+      "stripe_download_checkout_response_invalid"
   );
 });
 

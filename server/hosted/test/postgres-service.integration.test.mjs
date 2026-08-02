@@ -16,7 +16,20 @@ import pg from "pg";
 
 import { buildHostedArtifact } from "../../../scripts/build-hosted.mjs";
 import { createFakeApprovedCatalog } from "../../commerce/adapters/fake.mjs";
+import {
+  createCommerceV2Boundary,
+  createCommerceV2Service,
+  createDownloadPaymentRelease,
+  createDownloadPaymentService,
+  createHostedDownloadCommerce
+} from "../../commerce-v2/index.mjs";
 import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
+import {
+  createPostgresCommerceV2Adapter
+} from "../commerce-v2-postgres.mjs";
+import {
+  createPostgresDownloadPaymentRepository
+} from "../download-payment-postgres.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -33,6 +46,7 @@ import {
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
+import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
 import { openReviewedBrowser } from "./reviewed-browser-support.mjs";
 
 const { Pool } = pg;
@@ -254,15 +268,30 @@ function deferred() {
 function createContractPaymentProvider() {
   const calls = {
     checkout: [],
+    downloadCheckout: [],
+    downloadReadback: [],
+    downloadLifecycle: [],
     portal: [],
     cancellation: [],
     webhook: []
   };
   let checkoutSequence = 0;
+  let downloadCheckoutSequence = 0;
   let portalSequence = 0;
   let cancellationFailure = null;
+  let nextDownloadCheckoutExpiresAt =
+    "2099-07-28T20:30:00.000Z";
+  const downloadCheckouts = new Map();
   return {
     calls,
+    setNextDownloadCheckoutExpiry(expiresAt) {
+      nextDownloadCheckoutExpiresAt = expiresAt;
+    },
+    markDownloadCheckoutExpired(checkoutId) {
+      const checkout = downloadCheckouts.get(checkoutId);
+      assert.ok(checkout);
+      checkout.lifecycle = "expired_unpaid";
+    },
     failNextCancellation(error) {
       cancellationFailure = error;
     },
@@ -272,7 +301,8 @@ function createContractPaymentProvider() {
           ready: true,
           provider: "stripe",
           mode: "contract_test",
-          livemode: false
+          livemode: false,
+          taxMode: "disabled_by_owner"
         };
       },
       async createCheckout(input) {
@@ -285,6 +315,93 @@ function createContractPaymentProvider() {
             `https://checkout.stripe.com/c/pay/cs_test_hosted_${checkoutSequence}`,
           expiresAt:
             "2026-07-28T20:30:00.000Z"
+        };
+      },
+      async createDownloadCheckout(input) {
+        calls.downloadCheckout.push(
+          structuredClone(input)
+        );
+        downloadCheckoutSequence += 1;
+        const checkoutId =
+          `cs_test_download_${downloadCheckoutSequence}`;
+        const expiresAt = nextDownloadCheckoutExpiresAt;
+        nextDownloadCheckoutExpiresAt =
+          "2099-07-28T20:30:00.000Z";
+        downloadCheckouts.set(
+          checkoutId,
+          {
+            request: structuredClone(input),
+            lifecycle: "open_unpaid"
+          }
+        );
+        return {
+          checkoutId,
+          url:
+            `https://checkout.stripe.com/c/pay/${checkoutId}`,
+          expiresAt
+        };
+      },
+      async retrieveDownloadCheckout(input) {
+        calls.downloadReadback.push(
+          structuredClone(input)
+        );
+        const created = downloadCheckouts.get(
+          input.checkoutSessionId
+        );
+        assert.ok(created);
+        assert.equal(
+          input.purposeDigest,
+          created.request.purposeDigest
+        );
+        assert.deepEqual(
+          input.purpose,
+          created.request.purpose
+        );
+        const checkoutNumber =
+          input.checkoutSessionId.replace(
+            "cs_test_download_",
+            ""
+          );
+        return {
+          schema:
+            "sitesourcery.stripe-download-payment-facts/v2",
+          provider: "stripe",
+          checkoutSessionId: input.checkoutSessionId,
+          paymentIntentId:
+            `pi_test_download_${checkoutNumber}`,
+          customerId:
+            `cus_test_hosted_customer_${checkoutNumber}`,
+          paymentStatus: "paid",
+          amountMinor: 500,
+          taxMinor: 0,
+          totalMinor: 500,
+          taxMode: "disabled_by_owner",
+          currency: "USD",
+          purposeDigest: input.purposeDigest
+        };
+      },
+      async retrieveDownloadCheckoutLifecycle(input) {
+        calls.downloadLifecycle.push(
+          structuredClone(input)
+        );
+        const created = downloadCheckouts.get(
+          input.checkoutSessionId
+        );
+        assert.ok(created);
+        assert.equal(
+          input.purposeDigest,
+          created.request.purposeDigest
+        );
+        assert.deepEqual(
+          input.purpose,
+          created.request.purpose
+        );
+        return {
+          schema:
+            "sitesourcery.stripe-download-checkout-lifecycle/v2",
+          provider: "stripe",
+          checkoutSessionId: input.checkoutSessionId,
+          state: created.lifecycle
         };
       },
       async createBillingPortal(input) {
@@ -808,6 +925,46 @@ test(
       ...serviceOptions,
       recoveryMailPort: recoverySink
     });
+    let commerceV2ClockNow = NOW;
+    const commerceV2 =
+      createPostgresCommerceV2Adapter({
+        authority,
+        clock: () => new Date(commerceV2ClockNow)
+      });
+    const downloadPaymentRepository =
+      createPostgresDownloadPaymentRepository({
+        authority,
+        clock: () => new Date(commerceV2ClockNow)
+      });
+    const downloadPayment =
+      createDownloadPaymentService({
+        repository: downloadPaymentRepository,
+        provider: payment.port,
+        release: createDownloadPaymentRelease({
+          approved: true
+        }),
+        clock: commerceV2.clock,
+        ids: commerceV2.ids
+      });
+    const downloadCommerce =
+      createHostedDownloadCommerce({
+        boundary: createCommerceV2Boundary(
+          createCommerceV2Service({
+            projects: commerceV2.projects,
+            versions: commerceV2.versions,
+            repository: commerceV2.repository,
+            clock: commerceV2.clock,
+            ids: commerceV2.ids
+          })
+        ),
+        resolveSession: commerceV2.resolveSession,
+        payment: downloadPayment
+      });
+    const stripeWebhook = createStripeWebhookRouter({
+      provider: payment.port,
+      canonicalService: service,
+      downloadCommerce
+    });
 
     const ownerEmail =
       `owner-${randomUUID()}@example.test`;
@@ -1292,6 +1449,483 @@ test(
       reopenedVersion.artifact.html,
       compiled.html
     );
+
+    const downloadQuote =
+      await downloadCommerce.createQuote(
+        actor,
+        projectId,
+        {
+          versionId: version.version.id,
+          commandId: "download-quote-0001"
+        }
+      );
+    assert.equal(downloadQuote.offerId, "spark_download");
+    assert.deepEqual(downloadQuote.price, {
+      amountMinor: 500,
+      currency: "USD",
+      billing: "one_time",
+      interval: null
+    });
+    const downloadCheckoutInput = {
+      acceptedDisclosureDigest:
+        downloadQuote.disclosureDigest,
+      commandId: "download-checkout-0001"
+    };
+    const downloadCheckout =
+      await downloadCommerce.prepareCheckout(
+        actor,
+        projectId,
+        downloadQuote.quoteId,
+        downloadCheckoutInput
+      );
+    assert.equal(downloadCheckout.state, "ready");
+    assert.equal(
+      downloadCheckout.checkoutUrl,
+      "https://checkout.stripe.com/c/pay/cs_test_download_1"
+    );
+    assert.deepEqual(
+      await downloadCommerce.prepareCheckout(
+        actor,
+        projectId,
+        downloadQuote.quoteId,
+        downloadCheckoutInput
+      ),
+      downloadCheckout
+    );
+    assert.equal(payment.calls.downloadCheckout.length, 1);
+    assert.equal(
+      Object.hasOwn(
+        payment.calls.downloadCheckout[0],
+        "stripeCustomerId"
+      ),
+      false
+    );
+    const downloadPurpose =
+      payment.calls.downloadCheckout[0].purpose;
+    const downloadMetadata = {
+      schema: "sitesourcery_download_checkout_v2",
+      tenant_id: downloadPurpose.tenantId,
+      customer_id: downloadPurpose.customerId,
+      project_id: downloadPurpose.projectId,
+      version_id: downloadPurpose.versionId,
+      quote_id: downloadPurpose.quoteId,
+      offer_id: downloadPurpose.offerId,
+      entitlement_kind:
+        downloadPurpose.entitlementKind,
+      accepted_disclosure_digest:
+        downloadPurpose.acceptedDisclosureDigest,
+      quote_snapshot_digest:
+        downloadPurpose.quoteSnapshotDigest,
+      purpose_digest:
+        payment.calls.downloadCheckout[0]
+          .purposeDigest
+    };
+    const downloadPaid = stripeEvent(
+      "evt_test_download_paid_1",
+      "checkout.session.completed",
+      {
+        id: "cs_test_download_1",
+        metadata: downloadMetadata
+      }
+    );
+    const settledDownload =
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(downloadPaid),
+        signature: "contract-signature-valid"
+      });
+    assert.equal(settledDownload.status, "processed");
+    assert.deepEqual(
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(downloadPaid),
+        signature: "contract-signature-valid"
+      }),
+      settledDownload
+    );
+    assert.equal(payment.calls.downloadReadback.length, 1);
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select stripe_customer_id
+             from ss.stripe_customers
+            where organization_id = $1`,
+          [organizationId]
+        )
+      ).rows,
+      [{ stripe_customer_id: "cus_test_hosted_customer_1" }]
+    );
+    const paidProject = await service.getProject(
+      actor,
+      projectId
+    );
+    assert.equal(
+      paidProject.project.entitlements.length,
+      1
+    );
+    assert.deepEqual(
+      paidProject.project.entitlements[0].payment,
+      {
+        status: "paid",
+        provider: "stripe",
+        receiptId:
+          paidProject.project.entitlements[0]
+            .payment.receiptId,
+        amountMinor: 500,
+        taxMinor: 0,
+        totalMinor: 500,
+        taxMode: "disabled_by_owner",
+        currency: "USD",
+        settledAt: NOW
+      }
+    );
+    const resolvedPaidDownload =
+      await downloadPaymentRepository
+        .resolveDownloadArtifact({
+          tenantId: organizationId,
+          customerId: registered.user.id,
+          projectId,
+          versionId: version.version.id
+        });
+    assert.deepEqual(
+      resolvedPaidDownload.entitlement.payment,
+      paidProject.project.entitlements[0].payment
+    );
+    const paidDownload = await downloadCommerce.download(
+      actor,
+      projectId,
+      version.version.id
+    );
+    assert.deepEqual(paidDownload.bytes, compiled.htmlBytes);
+    assert.equal(paidDownload.sha256, compiled.artifactDigest);
+    assert.deepEqual(
+      (
+        await downloadCommerce.download(
+          actor,
+          projectId,
+          version.version.id
+        )
+      ).bytes,
+      compiled.htmlBytes
+    );
+
+    const partialReversal = stripeEvent(
+      "evt_test_download_partial_1",
+      "charge.refunded",
+      {
+        id: "ch_test_download_1",
+        livemode: false,
+        payment_intent: "pi_test_download_1",
+        currency: "usd",
+        amount: 500,
+        amount_refunded: 100,
+        refunded: false
+      }
+    );
+    assert.deepEqual(
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(partialReversal),
+        signature: "contract-signature-valid"
+      }),
+      {
+        status: "processed",
+        projectId,
+        entitlementId:
+          paidProject.project.entitlements[0].id,
+        entitlementState: "suspended",
+        reason: "payment_partially_refunded"
+      }
+    );
+    await assert.rejects(
+      downloadCommerce.download(
+        actor,
+        projectId,
+        version.version.id
+      ),
+      (error) =>
+        error?.code ===
+          "COMMERCE_V2_ENTITLEMENT_UNAVAILABLE" &&
+        error?.status === 404
+    );
+    const fullReversal = stripeEvent(
+      "evt_test_download_full_1",
+      "charge.refunded",
+      {
+        id: "ch_test_download_1",
+        livemode: false,
+        payment_intent: "pi_test_download_1",
+        currency: "usd",
+        amount: 500,
+        amount_refunded: 500,
+        refunded: true
+      }
+    );
+    const revokedDownload =
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(fullReversal),
+        signature: "contract-signature-valid"
+      });
+    assert.equal(
+      revokedDownload.entitlementState,
+      "revoked"
+    );
+    assert.deepEqual(
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(fullReversal),
+        signature: "contract-signature-valid"
+      }),
+      revokedDownload
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select state, state_reason
+             from ss.commerce_v2_project_entitlements
+            where organization_id = $1
+              and project_id = $2`,
+          [organizationId, projectId]
+        )
+      ).rows,
+      [
+        {
+          state: "revoked",
+          state_reason: "payment_fully_refunded"
+        }
+      ]
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select event_type, resulting_state
+             from ss.commerce_v2_download_reversal_events
+            where organization_id = $1
+              and project_id = $2
+            order by id`,
+          [organizationId, projectId]
+        )
+      ).rows,
+      [
+        {
+          event_type: "charge.refunded",
+          resulting_state: "revoked"
+        },
+        {
+          event_type: "charge.refunded",
+          resulting_state: "suspended"
+        }
+      ]
+    );
+    const postRevocationDispute = stripeEvent(
+      "evt_test_download_dispute_after_revoked_1",
+      "charge.dispute.created",
+      {
+        id: "dp_test_download_after_revoked_1",
+        livemode: false,
+        payment_intent: "pi_test_download_1",
+        currency: "usd",
+        amount: 500,
+        status: "needs_response"
+      }
+    );
+    assert.deepEqual(
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(postRevocationDispute),
+        signature: "contract-signature-valid"
+      }),
+      {
+        status: "processed",
+        projectId,
+        entitlementId:
+          paidProject.project.entitlements[0].id,
+        entitlementState: "revoked",
+        reason: "payment_fully_refunded"
+      }
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select prior_state, prior_reason,
+                  resulting_state, reason,
+                  result ->> 'reason' as result_reason
+             from ss.commerce_v2_download_reversal_events
+            where id = $1`,
+          [postRevocationDispute.id]
+        )
+      ).rows,
+      [
+        {
+          prior_state: "revoked",
+          prior_reason: "payment_fully_refunded",
+          resulting_state: "revoked",
+          reason: "payment_dispute_open",
+          result_reason: "payment_fully_refunded"
+        }
+      ]
+    );
+    assert.deepEqual(
+      (
+        await service.getProject(actor, projectId)
+      ).project.entitlements,
+      []
+    );
+
+    const expiryProject = await service.createProject(
+      actor,
+      organizationId,
+      {
+        name: "Checkout Expiry Proof",
+        acceptedTerms: true,
+        visibility: "public",
+        address: {
+          kind: "licensed",
+          label: "checkout-expiry-proof"
+        },
+        commandId: "project-create-expiry-0001"
+      }
+    );
+    const expiryProjectId = expiryProject.project.id;
+    const expiryFacts = {
+      ...rawFacts,
+      businessName: "Checkout Expiry Proof"
+    };
+    await service.saveDraft(actor, expiryProjectId, {
+      rawFacts: expiryFacts,
+      expectedRevision: 1,
+      commandId: "draft-save-expiry-0001"
+    });
+    const expiryCompiled = compiler.compile(expiryFacts);
+    const expiryVersion = await service.createVersion(
+      actor,
+      expiryProjectId,
+      {
+        rawFacts: expiryFacts,
+        previewDigest:
+          expiryCompiled.artifactDigest,
+        reviewAttested: true,
+        commandId: "version-create-expiry-0001"
+      }
+    );
+    await service.markVersionReady(
+      actor,
+      expiryProjectId,
+      expiryVersion.version.id,
+      { commandId: "version-ready-expiry-0001" }
+    );
+    await service.acceptVersion(
+      actor,
+      expiryProjectId,
+      expiryVersion.version.id,
+      { commandId: "version-accept-expiry-0001" }
+    );
+    commerceV2ClockNow =
+      "2026-08-02T12:00:00.000Z";
+    payment.setNextDownloadCheckoutExpiry(
+      "2026-08-02T12:30:00.000Z"
+    );
+    const expiringQuote =
+      await downloadCommerce.createQuote(
+        actor,
+        expiryProjectId,
+        {
+          versionId: expiryVersion.version.id,
+          commandId: "download-quote-expiry-0001"
+        }
+      );
+    const expiringCheckoutInput = {
+      acceptedDisclosureDigest:
+        expiringQuote.disclosureDigest,
+      commandId: "download-checkout-expiry-0001"
+    };
+    const downloadEffectsBeforeExpiry =
+      payment.calls.downloadCheckout.length;
+    const expiringCheckout =
+      await downloadCommerce.prepareCheckout(
+        actor,
+        expiryProjectId,
+        expiringQuote.quoteId,
+        expiringCheckoutInput
+      );
+    payment.markDownloadCheckoutExpired(
+      expiringCheckout.checkout.id
+    );
+    commerceV2ClockNow =
+      "2026-08-02T13:00:00.000Z";
+    await assert.rejects(
+      downloadCommerce.prepareCheckout(
+        actor,
+        expiryProjectId,
+        expiringQuote.quoteId,
+        expiringCheckoutInput
+      ),
+      (error) =>
+        error?.code ===
+          "COMMERCE_V2_QUOTE_EXPIRED" &&
+        error?.status === 409
+    );
+    assert.equal(
+      payment.calls.downloadCheckout.length,
+      downloadEffectsBeforeExpiry + 1
+    );
+    assert.equal(
+      payment.calls.downloadLifecycle.length,
+      0
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select state
+             from ss.commerce_v2_download_dispatches
+            where organization_id = $1
+              and project_id = $2`,
+          [organizationId, expiryProjectId]
+        )
+      ).rows,
+      [{ state: "ready" }]
+    );
+    const replacementQuote =
+      await downloadCommerce.createQuote(
+        actor,
+        expiryProjectId,
+        {
+          versionId: expiryVersion.version.id,
+          commandId:
+            "download-quote-expiry-replacement-0001"
+        }
+      );
+    const replacementCheckout =
+      await downloadCommerce.prepareCheckout(
+        actor,
+        expiryProjectId,
+        replacementQuote.quoteId,
+        {
+          acceptedDisclosureDigest:
+            replacementQuote.disclosureDigest,
+          commandId:
+            "download-checkout-expiry-replacement-0001"
+        }
+      );
+    assert.equal(replacementCheckout.state, "ready");
+    assert.equal(
+      payment.calls.downloadLifecycle.length,
+      1
+    );
+    assert.equal(
+      payment.calls.downloadCheckout.length,
+      downloadEffectsBeforeExpiry + 2
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select state
+             from ss.commerce_v2_download_dispatches
+            where organization_id = $1
+              and project_id = $2
+            order by created_at`,
+          [organizationId, expiryProjectId]
+        )
+      ).rows,
+      [{ state: "expired" }, { state: "ready" }]
+    );
+    commerceV2ClockNow = NOW;
+
     await service.createSupportTicket(actor, projectId, {
       subject: "Launch question",
       message: "Please confirm the launch address.",
@@ -2694,7 +3328,10 @@ test(
     await t.test(
       "shipped hosted page creates, activates, saves, and signs back into one real PostgreSQL account",
       async () => {
-        const api = createHostedApi(service);
+        const api = createHostedApi(service, {
+          downloadCommerce,
+          stripeWebhook
+        });
         const browserServer =
           await startHostedBrowserServer(api);
         let reviewedBrowser = null;
@@ -2742,8 +3379,8 @@ test(
             capabilities.accountRecoveryEmail,
             true
           );
-          assert.equal(capabilities.downloadQuote, false);
-          assert.equal(capabilities.downloadPayment, false);
+          assert.equal(capabilities.downloadQuote, true);
+          assert.equal(capabilities.downloadPayment, true);
           assert.equal(capabilities.domainPurchase, false);
 
           await evaluate(
@@ -3078,6 +3715,168 @@ test(
             }
           );
 
+          commerceV2ClockNow = new Date().toISOString();
+          const browserCheckout = await evaluate(
+            `(async () => {
+              const control = globalThis
+                .SiteSourceryAbracadabraHostedSession;
+              try {
+                await control.quoteDownload();
+                return control.prepareDownloadCheckout();
+              } catch (error) {
+                return {
+                  browserError: {
+                    name: error?.name,
+                    code: error?.code,
+                    message: error?.message,
+                    status: error?.status,
+                    requestId: error?.requestId
+                  },
+                  state: control.getState()
+                };
+              }
+            })()`,
+            true
+          );
+          assert.equal(
+            browserCheckout.browserError,
+            undefined,
+            JSON.stringify(browserCheckout)
+          );
+          assert.equal(browserCheckout.state, "ready");
+          const browserCheckoutId =
+            browserCheckout.checkout.id;
+          const browserDownloadRequest =
+            payment.calls.downloadCheckout.at(-1);
+          assert.equal(
+            browserDownloadRequest.purpose.projectId,
+            savedState.project.id
+          );
+          const browserDownloadPurpose =
+            browserDownloadRequest.purpose;
+          const browserDownloadMetadata = {
+            schema: "sitesourcery_download_checkout_v2",
+            tenant_id:
+              browserDownloadPurpose.tenantId,
+            customer_id:
+              browserDownloadPurpose.customerId,
+            project_id:
+              browserDownloadPurpose.projectId,
+            version_id:
+              browserDownloadPurpose.versionId,
+            quote_id:
+              browserDownloadPurpose.quoteId,
+            offer_id:
+              browserDownloadPurpose.offerId,
+            entitlement_kind:
+              browserDownloadPurpose.entitlementKind,
+            accepted_disclosure_digest:
+              browserDownloadPurpose
+                .acceptedDisclosureDigest,
+            quote_snapshot_digest:
+              browserDownloadPurpose
+                .quoteSnapshotDigest,
+            purpose_digest:
+              browserDownloadRequest.purposeDigest
+          };
+          await navigate(
+            `${appUrl}?checkout=${encodeURIComponent(
+              browserCheckoutId
+            )}&download_project=${encodeURIComponent(
+              savedState.project.id
+            )}`
+          );
+          await waitFor(
+            `document.documentElement.getAttribute(` +
+              `"data-abracadabra-control-ready") === "hosted" ` +
+              `&& document.getElementById("platform-status")` +
+              `.textContent.includes("Checking Stripe")`,
+            10000
+          );
+          assert.equal(
+            await evaluate(`location.search`),
+            ""
+          );
+          const browserDownloadPaid = stripeEvent(
+            "evt_test_browser_download_paid_1",
+            "checkout.session.completed",
+            {
+              id: browserCheckoutId,
+              metadata: browserDownloadMetadata
+            }
+          );
+          browserDownloadPaid.created = Math.floor(
+            Date.parse(commerceV2ClockNow) / 1000
+          );
+          assert.equal(
+            (
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(browserDownloadPaid),
+                signature:
+                  "contract-signature-valid"
+              })
+            ).status,
+            "processed"
+          );
+          await waitFor(
+            `document.querySelector(` +
+              `"[data-customer-stage=download]").hidden === false ` +
+              `&& document.querySelector("[data-download-html]")` +
+              `.disabled === false ` +
+              `&& document.getElementById("platform-status")` +
+              `.textContent.includes("Download is ready")`,
+            10000
+          );
+          const downloadReturnState = await evaluate(
+            `globalThis.SiteSourceryAbracadabraHostedSession.getState()`
+          );
+          assert.equal(
+            downloadReturnState.project.id,
+            savedState.project.id
+          );
+          assert.equal(
+            downloadReturnState.project.entitlements.length,
+            1
+          );
+          assert.equal(
+            downloadReturnState.project.entitlements[0]
+              .payment.totalMinor,
+            500
+          );
+          const downloadedHtml = await evaluate(
+            `(async () => {
+              const entitlement = globalThis
+                .SiteSourceryAbracadabraHostedSession
+                .getState().project.entitlements[0];
+              const response = await fetch(
+                entitlement.downloadUrl,
+                { credentials: "same-origin" }
+              );
+              return {
+                status: response.status,
+                contentType:
+                  response.headers.get("content-type"),
+                disposition:
+                  response.headers.get("content-disposition"),
+                html: await response.text()
+              };
+            })()`,
+            true
+          );
+          assert.equal(downloadedHtml.status, 200);
+          assert.equal(
+            downloadedHtml.contentType,
+            "text/html; charset=utf-8"
+          );
+          assert.match(
+            downloadedHtml.disposition,
+            /^attachment; filename="sitesourcery-/u
+          );
+          assert.match(
+            downloadedHtml.html,
+            /Shipped Browser Workshop/u
+          );
+
           await evaluate(
             `document.querySelector("[data-sign-out]").click()`
           );
@@ -3140,10 +3939,31 @@ test(
           const forbiddenEffects =
             browserServer.apiRequests.filter(
               ({ pathname }) =>
-                /download-quotes|checkout|billing|domain|webhooks|publish|rollback/iu
+                /billing|domain|webhooks|publish|rollback/iu
                   .test(pathname)
             );
           assert.deepEqual(forbiddenEffects, []);
+          assert.ok(
+            browserServer.apiRequests.some(
+              ({ method, pathname }) =>
+                method === "POST" &&
+                pathname.endsWith("/download-quotes")
+            )
+          );
+          assert.ok(
+            browserServer.apiRequests.some(
+              ({ method, pathname }) =>
+                method === "POST" &&
+                pathname.endsWith("/checkout-command")
+            )
+          );
+          assert.ok(
+            browserServer.apiRequests.some(
+              ({ method, pathname }) =>
+                method === "GET" &&
+                pathname.endsWith("/download")
+            )
+          );
           assert.deepEqual(browserServer.missingFiles, []);
           await evaluate(
             `new Promise((resolve) => setTimeout(resolve, 100))`,

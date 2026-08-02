@@ -108,7 +108,10 @@ function createIds() {
   };
 }
 
-function createContext({ held = false } = {}) {
+function createContext({
+  held = false,
+  payment = null
+} = {}) {
   const base = createBaseService();
   let requestId = 0;
   if (held) {
@@ -212,7 +215,8 @@ function createContext({ held = false } = {}) {
           actorId: actor.userId,
           projectId
         };
-      }
+      },
+      ...(payment ? { payment } : {})
     });
   return {
     ...base,
@@ -309,7 +313,145 @@ test("public capabilities enable only actions whose server boundary can succeed"
   });
 });
 
-test("Download quote route exposes the exact held $5 snapshot and no provisional offer", async () => {
+test("ready Download payment returns only a Stripe destination and entitlement-gated HTML", async () => {
+  const paymentCalls = {
+    dispatch: [],
+    download: []
+  };
+  const payment = {
+    async readiness() {
+      return {
+        ready: true,
+        payment: true,
+        state: "ready"
+      };
+    },
+    async dispatch(preparation) {
+      paymentCalls.dispatch.push(
+        structuredClone(preparation)
+      );
+      return {
+        schema:
+          "sitesourcery.abracadabra-checkout-dispatch.v2",
+        commandId: preparation.commandId,
+        quoteId: preparation.quoteId,
+        projectId: preparation.projectId,
+        versionId: preparation.versionId,
+        offerId: "spark_download",
+        entitlementKind: "spark_download",
+        state: "ready",
+        dispatchAuthorized: true,
+        provider: "stripe",
+        dispatchedAt: NOW,
+        purposeDigest: preparation.purposeDigest,
+        checkout: {
+          id: "cs_test_download_http_1",
+          url:
+            "https://checkout.stripe.com/c/pay/http_1",
+          expiresAt:
+            "2026-07-30T17:30:00.000Z"
+        },
+        checkoutUrl:
+          "https://checkout.stripe.com/c/pay/http_1"
+      };
+    },
+    async ingestStripeEvent() {
+      return { status: "processed" };
+    },
+    async download(input) {
+      paymentCalls.download.push(
+        structuredClone(input)
+      );
+      return {
+        bytes: Buffer.from(
+          "<!doctype html><title>Download</title>"
+        ),
+        filename: "sitesourcery-download.html",
+        sha256:
+          "a40fb8b9f7c90d7dd58f215627fb584509f286396229f9160872dc4b4ff19838"
+      };
+    }
+  };
+  const context = createContext({ payment });
+  const capabilities = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(
+    (await capabilities.json()).downloadPayment,
+    true
+  );
+
+  const quote = await (
+    await createDownloadQuote(context)
+  ).json();
+  const checkout = await context.api.fetch(
+    writeRequest(
+      `/api/v1/projects/${PROJECT_A}` +
+        `/download-quotes/${quote.quoteId}` +
+        "/checkout-command",
+      {
+        body: {
+          acceptedDisclosureDigest:
+            quote.disclosureDigest
+        },
+        idempotencyKey:
+          "download-checkout-ready"
+      }
+    )
+  );
+  assert.equal(checkout.status, 201);
+  const dispatched = await checkout.json();
+  assert.equal(dispatched.state, "ready");
+  assert.equal(
+    dispatched.checkoutUrl,
+    "https://checkout.stripe.com/c/pay/http_1"
+  );
+  assert.equal(paymentCalls.dispatch.length, 1);
+  assert.equal(
+    Object.hasOwn(
+      dispatched,
+      "purpose"
+    ),
+    false
+  );
+
+  const download = await context.api.fetch(
+    new Request(
+      `${ORIGIN}/api/v1/projects/${PROJECT_A}` +
+        `/versions/${VERSION_A}/download`,
+      {
+        headers: {
+          Origin: ORIGIN,
+          Cookie: `ss_session=${SESSION_TOKEN}`
+        }
+      }
+    )
+  );
+  assert.equal(download.status, 200);
+  assert.equal(
+    download.headers.get("content-type"),
+    "text/html; charset=utf-8"
+  );
+  assert.match(
+    download.headers.get("content-disposition"),
+    /attachment/u
+  );
+  assert.equal(
+    await download.text(),
+    "<!doctype html><title>Download</title>"
+  );
+  assert.deepEqual(paymentCalls.download, [
+    {
+      tenantId: TENANT_ID,
+      customerId: ACTOR.userId,
+      actorId: ACTOR.userId,
+      projectId: PROJECT_A,
+      versionId: VERSION_A
+    }
+  ]);
+});
+
+test("Download quote route exposes only the exact held $5 snapshot", async () => {
   const context = createContext();
   const response =
     await createDownloadQuote(context);
@@ -347,7 +489,7 @@ test("Download quote route exposes the exact held $5 snapshot and no provisional
   assert.equal(Object.hasOwn(quote, "actorId"), false);
   assert.doesNotMatch(
     JSON.stringify(quote),
-    /spark_publish|"amountMinor":(?:1500|3000)|stripe/iu
+    /stripe/iu
   );
   assert.equal(
     context.repository.inspect().quotes.length,
@@ -410,7 +552,7 @@ test("checkout-command route prepares one exact held command and never dispatche
   );
   assert.doesNotMatch(
     JSON.stringify(preparation),
-    /spark_publish|"amountMinor":(?:1500|3000)|stripe|https?:/iu
+    /stripe|https?:/iu
   );
 
   const replay = await context.api.fetch(
@@ -432,7 +574,7 @@ test("checkout-command route prepares one exact held command and never dispatche
   );
 });
 
-test("Download HTTP boundary rejects client money, entitlement, routes, tenures, and provisional offers", async () => {
+test("Download HTTP boundary rejects client money, entitlement, routes, tenures, and offer selection", async () => {
   for (const [name, body, expectedCode] of [
     [
       "money",
@@ -461,12 +603,12 @@ test("Download HTTP boundary rejects client money, entitlement, routes, tenures,
       "COMMERCE_V2_LEGACY_TENURE_REJECTED"
     ],
     [
-      "publish",
+      "offer",
       {
         versionId: VERSION_A,
-        offerId: "spark_publish"
+        offerId: "not_the_download"
       },
-      "COMMERCE_V2_PROVISIONAL_OFFER_NOT_AVAILABLE"
+      "COMMERCE_V2_OFFER_NOT_AVAILABLE"
     ],
     [
       "route-project",

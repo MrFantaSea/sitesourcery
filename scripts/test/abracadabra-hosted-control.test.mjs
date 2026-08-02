@@ -113,6 +113,48 @@ test("customer control accepts only exact activation fragments, quotes, and Stri
     "",
   );
 
+  const downloadProjectId =
+    "9f5a7527-de1d-45ed-b8fb-5e096cbda860";
+  assert.deepEqual(
+    customerControl.downloadCheckoutReturnFromLocation({
+      search:
+        "?checkout=cs_test_download_1&download_project="
+        + downloadProjectId,
+    }),
+    {
+      checkoutSessionId: "cs_test_download_1",
+      projectId: downloadProjectId,
+    },
+  );
+  for (const search of [
+    "?checkout=cs_test_download_1",
+    "?download_project=" + downloadProjectId,
+    "?checkout=not-stripe&download_project="
+      + downloadProjectId,
+    "?checkout=cs_test_download_1&download_project=project_1",
+    "?checkout=cs_test_download_1&checkout=cs_test_download_2&download_project="
+      + downloadProjectId,
+  ]) {
+    assert.equal(
+      customerControl
+        .downloadCheckoutReturnFromLocation({
+          search,
+        }),
+      null,
+    );
+  }
+  assert.equal(
+    customerControl
+      .locationWithoutDownloadCheckoutReturn({
+        pathname: "/abracadabra/app/",
+        search:
+          "?keep=1&checkout=cs_test_download_1&download_project="
+          + downloadProjectId,
+        hash: "#account",
+      }),
+    "/abracadabra/app/?keep=1#account",
+  );
+
   assert.equal(
     customerControl.safeCheckoutDestination({
       checkoutUrl: "https://checkout.stripe.com/c/pay/test",
@@ -515,6 +557,14 @@ test("customer account and Download controls progressively enhance the still-usa
     enhancerSource,
     /control\.quoteDownload\(\)/u,
   );
+  assert.match(
+    enhancerSource,
+    /downloadCheckoutReturnFromLocation/u,
+  );
+  assert.match(
+    enhancerSource,
+    /control\s*\.refreshSelectedProject\(\)/u,
+  );
 });
 
 test("staging catalog configuration rejects every private price authority field", async () => {
@@ -850,6 +900,64 @@ test("project switching commits only after the visible project accepts opening",
     "project_b"
   );
   assert.equal(subscriptionCalls, 0);
+});
+
+test("selected project refresh exposes a newly settled Download without changing selection", async () => {
+  let reads = 0;
+  const control = createHostedControl({
+    api: baseApi({
+      getProject: async (id) => {
+        reads += 1;
+        return {
+          project: {
+            id,
+            name: "Hosted project",
+            versions: [
+              {
+                id: "version_1",
+                state: "accepted_release"
+              }
+            ],
+            entitlements:
+              reads >= 2
+                ? [
+                    {
+                      id: "entitlement_1",
+                      projectId: id,
+                      kind: "spark_download",
+                      state: "active"
+                    }
+                  ]
+                : []
+          }
+        };
+      }
+    }),
+    idempotencyFactory: () => "idem_refresh"
+  });
+  await control.boot();
+  await control.selectProject("project_1");
+  control.selectVersion("version_1");
+  assert.deepEqual(
+    control.getState().project.entitlements,
+    []
+  );
+
+  const refreshed =
+    await control.refreshSelectedProject();
+  assert.equal(refreshed.id, "project_1");
+  assert.equal(
+    control.getState().selectedVersionId,
+    "version_1"
+  );
+  assert.equal(
+    control.getState().project.entitlements[0].id,
+    "entitlement_1"
+  );
+  assert.equal(
+    control.getState().operations.projectRefresh.status,
+    "success"
+  );
 });
 
 test("project creation omits absent options and preserves explicit settings", async () => {

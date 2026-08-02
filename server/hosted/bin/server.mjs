@@ -14,6 +14,7 @@ import {
 import {
   createCommerceV2Boundary,
   createCommerceV2Service,
+  createDownloadPaymentService,
   createHostedDownloadCommerce
 } from "../../commerce-v2/index.mjs";
 import {
@@ -23,6 +24,13 @@ import {
 import {
   createPostgresCommerceV2Adapter
 } from "../commerce-v2-postgres.mjs";
+import {
+  assertApprovedDownloadPaymentReady,
+  createConfiguredDownloadPaymentRelease
+} from "../download-payment-config.mjs";
+import {
+  createPostgresDownloadPaymentRepository
+} from "../download-payment-postgres.mjs";
 import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
 import {
   createExportWorker,
@@ -50,6 +58,9 @@ import {
   createConfiguredStripeProvider,
   redactStripeReadiness
 } from "../stripe-production-config.mjs";
+import {
+  createStripeWebhookRouter
+} from "../stripe-webhook-router.mjs";
 
 const moduleRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -196,6 +207,21 @@ async function start() {
     createPostgresCommerceV2Adapter({
       authority
     });
+  const stripeComposition =
+    createConfiguredStripeProvider();
+  const downloadPaymentComposition =
+    createConfiguredDownloadPaymentRelease();
+  const downloadPayment =
+    createDownloadPaymentService({
+      repository:
+        createPostgresDownloadPaymentRepository({
+          authority
+        }),
+      provider: stripeComposition.adapter,
+      release: downloadPaymentComposition.release,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
   const downloadCommerce =
     createHostedDownloadCommerce({
       boundary: createCommerceV2Boundary(
@@ -207,10 +233,9 @@ async function start() {
           ids: commerceV2.ids
         })
       ),
-      resolveSession: commerceV2.resolveSession
+      resolveSession: commerceV2.resolveSession,
+      payment: downloadPayment
     });
-  const stripeComposition =
-    createConfiguredStripeProvider();
   const domainRuntime =
     createHeldDomainRuntime();
 
@@ -283,6 +308,10 @@ async function start() {
     stripeComposition,
     readiness.payments
   );
+  assertApprovedDownloadPaymentReady(
+    downloadPaymentComposition,
+    await downloadPayment.readiness()
+  );
   if (!readiness.ready) {
     throw new Error(
       "Hosted runtime is not ready; inspect the private readiness endpoint for exact held dependencies."
@@ -303,7 +332,12 @@ async function start() {
   apiServer = createServer(
     createApiNodeHandler(
       createHostedApi(service, {
-        downloadCommerce
+        downloadCommerce,
+        stripeWebhook: createStripeWebhookRouter({
+          provider: stripeComposition.adapter,
+          canonicalService: service,
+          downloadCommerce
+        })
       })
     )
   );

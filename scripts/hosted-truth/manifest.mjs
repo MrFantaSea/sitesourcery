@@ -132,9 +132,9 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "63a14a9b01a82d81c325ab9a1631265d9b22124bf727d9c0318c194f504e658b",
+    "402bbc8f89daa6c3a480d9db94a688f6cadd343ed79ffc7822b63fa40e4fc9fb",
   "abracadabra/app/abracadabra-hosted-control.js":
-    "6ae8bff53dba71db269bc4b92724c9ac4b3627c041b8641fadf622bc83dc0394",
+    "cd98aa081170bb59c348dfc91a3f34919df258cd912d16c50b147661abc88eb3",
 });
 
 export const hostedCodeTransforms = Object.freeze([]);

@@ -304,6 +304,57 @@ function publicSubscription(row) {
   };
 }
 
+function publicDownloadEntitlements(
+  row,
+  acceptedVersionId
+) {
+  if (
+    !row?.download_entitlement_id ||
+    !acceptedVersionId
+  ) {
+    return [];
+  }
+  return [
+    {
+      id: row.download_entitlement_id,
+      entitlementId:
+        row.download_entitlement_id,
+      projectId: row.id,
+      kind: "spark_download",
+      entitlementKind: "spark_download",
+      scope: "editor_project",
+      state: "active",
+      activatedAt: iso(
+        row.download_entitlement_activated_at
+      ),
+      expiresAt: null,
+      acceptedDisclosureDigest:
+        row.download_accepted_disclosure_digest,
+      downloadUrl:
+        `/api/v1/projects/${encodeURIComponent(row.id)}` +
+        `/versions/${encodeURIComponent(acceptedVersionId)}` +
+        "/download",
+      payment: {
+        status: "paid",
+        provider: "stripe",
+        receiptId: row.download_receipt_id,
+        amountMinor: 500,
+        taxMinor: Number(
+          row.download_tax_minor
+        ),
+        totalMinor: Number(
+          row.download_total_minor
+        ),
+        taxMode: row.download_tax_mode,
+        currency: "USD",
+        settledAt: iso(
+          row.download_payment_settled_at
+        )
+      }
+    }
+  ];
+}
+
 function publicVersion(row) {
   const html =
     row.html_bytes == null
@@ -898,7 +949,21 @@ export function createCanonicalPostgresService({
          ownership.state as ownership_entitlement_state,
          ownership.completed_at as ownership_completed_at,
          ownership_quote.offer_key as ownership_offer_key,
-         ownership_quote.tenure_id as ownership_tenure_id
+         ownership_quote.tenure_id as ownership_tenure_id,
+         download_entitlement.id as download_entitlement_id,
+         download_entitlement.activated_at
+           as download_entitlement_activated_at,
+         download_entitlement.accepted_disclosure_digest
+           as download_accepted_disclosure_digest,
+         download_receipt.id as download_receipt_id,
+         download_receipt.tax_minor
+           as download_tax_minor,
+         download_receipt.total_minor
+           as download_total_minor,
+         download_receipt.tax_mode
+           as download_tax_mode,
+         download_receipt.settled_at
+           as download_payment_settled_at
        from ss.projects project
        join ss.organization_memberships membership
          on membership.organization_id = project.organization_id
@@ -949,6 +1014,20 @@ export function createCanonicalPostgresService({
               ownership_binding.organization_id
         and ownership_quote.id =
               ownership_binding.quote_id
+       left join ss.commerce_v2_project_entitlements
+         download_entitlement
+         on download_entitlement.organization_id =
+              project.organization_id
+        and download_entitlement.project_id = project.id
+        and download_entitlement.kind = 'spark_download'
+        and download_entitlement.scope = 'editor_project'
+        and download_entitlement.state = 'active'
+       left join ss.commerce_v2_download_payment_receipts
+         download_receipt
+         on download_receipt.organization_id =
+              download_entitlement.organization_id
+        and download_receipt.id =
+              download_entitlement.source_receipt_id
       where project.id = $1`,
       [projectId, actor.userId]
     );
@@ -1024,6 +1103,10 @@ export function createCanonicalPostgresService({
       },
       versions: versions.map(publicVersion),
       acceptedVersionId: accepted?.id ?? null,
+      entitlements: publicDownloadEntitlements(
+        row,
+        accepted?.id ?? null
+      ),
       address: publicAddress(row),
       subscription: publicSubscription(row),
       serving: {
@@ -4133,6 +4216,30 @@ export function createCanonicalPostgresService({
     }
   }
 
+  async function ingestVerifiedStripeEvent(event) {
+    invariant(
+      event &&
+        typeof event === "object" &&
+        stripeObjectId(
+          event.id,
+          "evt",
+          "Stripe event ID"
+        ) &&
+        typeof event.type === "string" &&
+        event.type.length > 0 &&
+        event.type.length <= 200 &&
+        typeof event.livemode === "boolean" &&
+        Number.isSafeInteger(event.created) &&
+        event.data?.object &&
+        typeof event.data.object === "object",
+      "STRIPE_WEBHOOK_EVENT_INVALID",
+      "The verified Stripe event is invalid.",
+      { status: 400 }
+    );
+    const persisted = await persistStripeEvent(event);
+    return processStripeEvent(persisted, event);
+  }
+
   async function stagePublication(
     client,
     actor,
@@ -7147,29 +7254,10 @@ export function createCanonicalPostgresService({
           }
         );
       }
-      invariant(
-        event &&
-          typeof event === "object" &&
-          stripeObjectId(
-            event.id,
-            "evt",
-            "Stripe event ID"
-          ) &&
-          typeof event.type === "string" &&
-          event.type.length > 0 &&
-          event.type.length <= 200 &&
-          typeof event.livemode === "boolean" &&
-          Number.isSafeInteger(event.created) &&
-          event.data?.object &&
-          typeof event.data.object === "object",
-        "STRIPE_WEBHOOK_EVENT_INVALID",
-        "The verified Stripe event is invalid.",
-        { status: 400 }
-      );
-      const persisted =
-        await persistStripeEvent(event);
-      return processStripeEvent(persisted, event);
+      return ingestVerifiedStripeEvent(event);
     },
+
+    ingestVerifiedStripeEvent,
 
     async processPaymentOutbox({
       limit = 10,

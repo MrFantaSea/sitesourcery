@@ -91,6 +91,18 @@ const READINESS_QUERY = `
       as commerce_v2_preparations_ready,
     to_regprocedure('ss.hosted_runtime_contract_v19()') is not null
       as commerce_v2_contract_ready,
+    to_regclass('ss.commerce_v2_download_dispatches') is not null
+      as commerce_v2_dispatches_ready,
+    to_regclass('ss.commerce_v2_download_stripe_events') is not null
+      as commerce_v2_download_events_ready,
+    to_regclass('ss.commerce_v2_download_payment_receipts') is not null
+      as commerce_v2_download_receipts_ready,
+    to_regclass('ss.commerce_v2_project_entitlements') is not null
+      as commerce_v2_entitlements_ready,
+    to_regclass('ss.commerce_v2_download_reversal_events') is not null
+      as commerce_v2_reversals_ready,
+    to_regprocedure('ss.hosted_runtime_contract_v22()') is not null
+      as commerce_v2_settlement_contract_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
@@ -218,7 +230,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 021 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 022 are required.",
       { status: 503, details: status }
     );
     return status;
