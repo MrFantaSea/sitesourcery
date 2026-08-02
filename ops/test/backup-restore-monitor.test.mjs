@@ -1254,7 +1254,19 @@ test("safe command boundary rejects secrets in argv and production backup keeps 
   }
   assert.equal(
     calls[0].options.env.PGDATABASE,
-    databaseUrl
+    "sitesourcery"
+  );
+  assert.equal(
+    calls[0].options.env.PGHOST,
+    "db.internal"
+  );
+  assert.equal(
+    calls[0].options.env.PGUSER,
+    "secret-user"
+  );
+  assert.equal(
+    calls[0].options.env.PGPASSWORD,
+    "secret-password"
   );
   assert.equal(
     calls[0].options.env.LD_LIBRARY_PATH,

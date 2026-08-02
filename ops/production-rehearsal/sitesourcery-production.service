@@ -7,10 +7,10 @@ ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
 [Service]
 Type=simple
-WorkingDirectory=/home/simtech/sitesourcery-production/releases/74da288776ab43770a44a9708ee1e0ef590b0371
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66
 Environment=NODE_ENV=production
 EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
-ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/74da288776ab43770a44a9708ee1e0ef590b0371/server/hosted/bin/server.mjs
+ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66/server/hosted/bin/server.mjs
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=20

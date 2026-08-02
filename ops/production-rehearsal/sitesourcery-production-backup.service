@@ -1,0 +1,22 @@
+[Unit]
+Description=One encrypted off-machine Site Sourcery production-rehearsal backup
+ConditionPathIsMountPoint=/home/simtech/sitesourcery-production/off-machine
+ConditionPathExists=/home/simtech/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
+ConditionPathExists=%t/sitesourcery-production/BACKUP_QUIESCE
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66
+Environment=NODE_ENV=production
+EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
+EnvironmentFile=/home/simtech/sitesourcery-production/run/backup.env
+ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66/ops/run-production-rehearsal-backup.mjs
+UMask=0077
+TimeoutStartSec=2h
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

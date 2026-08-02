@@ -474,7 +474,15 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
     "../production-rehearsal/",
     import.meta.url
   );
-  const [postgres, tunnel, runtime, staticServer, readme] =
+  const [
+    postgres,
+    tunnel,
+    runtime,
+    staticServer,
+    backupService,
+    backupEnvironment,
+    readme
+  ] =
     await Promise.all([
       readFile(
         new URL(
@@ -500,6 +508,20 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
       readFile(
         new URL(
           "sitesourcery-production-static.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-backup.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "backup.env.example",
           rehearsalRoot
         ),
         "utf8"
@@ -557,7 +579,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     runtime,
-    /releases\/74da288776ab43770a44a9708ee1e0ef590b0371/u
+    /releases\/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66/u
   );
   assert.match(
     runtime,
@@ -566,6 +588,38 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   assert.match(
     staticServer,
     /http\.server 8899 --bind 127\.0\.0\.1/u
+  );
+  assert.match(
+    backupService,
+    /^ConditionPathIsMountPoint=\/home\/simtech\/sitesourcery-production\/off-machine$/mu
+  );
+  assert.match(
+    backupService,
+    /^ConditionPathExists=%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
+  );
+  assert.match(
+    backupService,
+    /^EnvironmentFile=\/home\/simtech\/sitesourcery-production\/run\/hosted\.env$/mu
+  );
+  assert.match(
+    backupService,
+    /ops\/run-production-rehearsal-backup\.mjs/u
+  );
+  assert.doesNotMatch(
+    backupService,
+    /^\[Install\]$/mu
+  );
+  assert.match(
+    backupEnvironment,
+    /^SITESOURCERY_OPERATIONS_PROVIDER_EGRESS=held$/mu
+  );
+  assert.match(
+    backupEnvironment,
+    /^SITESOURCERY_REGISTRATION_MAIL_MODE=production$/mu
+  );
+  assert.doesNotMatch(
+    backupEnvironment,
+    /SITESOURCERY_DATABASE_URL|sk_(?:live|test)_|whsec_|re_[A-Za-z0-9]/u
   );
 
   assert.match(readme, /No Caddy service was installed or started\./u);

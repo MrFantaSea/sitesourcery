@@ -282,13 +282,109 @@ export async function inspectSourceRoots(
   });
 }
 
+const POSTGRES_URL_PARAMETER_ENVIRONMENT =
+  Object.freeze({
+    host: "PGHOST",
+    hostaddr: "PGHOSTADDR",
+    port: "PGPORT",
+    user: "PGUSER",
+    password: "PGPASSWORD",
+    dbname: "PGDATABASE",
+    sslmode: "PGSSLMODE",
+    sslrootcert: "PGSSLROOTCERT",
+    sslcert: "PGSSLCERT",
+    sslkey: "PGSSLKEY",
+    application_name: "PGAPPNAME",
+    options: "PGOPTIONS",
+    target_session_attrs:
+      "PGTARGETSESSIONATTRS",
+    channel_binding: "PGCHANNELBINDING",
+    gssencmode: "PGGSSENCMODE"
+  });
+
+function databaseUrlEnvironment(databaseUrl) {
+  let parsed;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new BackupFailure(
+      "BACKUP_DATABASE_URL_INVALID",
+      "The backup database URL is invalid."
+    );
+  }
+  if (
+    !["postgres:", "postgresql:"].includes(
+      parsed.protocol
+    ) ||
+    parsed.hash
+  ) {
+    throw new BackupFailure(
+      "BACKUP_DATABASE_URL_INVALID",
+      "The backup database URL must use PostgreSQL without a fragment."
+    );
+  }
+  const selected = {};
+  try {
+    if (parsed.hostname) {
+      selected.PGHOST = parsed.hostname.replace(
+        /^\[|\]$/gu,
+        ""
+      );
+    }
+    if (parsed.port) selected.PGPORT = parsed.port;
+    if (parsed.username) {
+      selected.PGUSER = decodeURIComponent(
+        parsed.username
+      );
+    }
+    if (parsed.password) {
+      selected.PGPASSWORD = decodeURIComponent(
+        parsed.password
+      );
+    }
+    const databaseName = decodeURIComponent(
+      parsed.pathname.replace(/^\//u, "")
+    );
+    if (databaseName) {
+      selected.PGDATABASE = databaseName;
+    }
+  } catch {
+    throw new BackupFailure(
+      "BACKUP_DATABASE_URL_INVALID",
+      "The backup database URL contains invalid encoding."
+    );
+  }
+  const seen = new Set();
+  for (const [name, value] of parsed.searchParams) {
+    const field =
+      POSTGRES_URL_PARAMETER_ENVIRONMENT[name];
+    if (!field || seen.has(name) || !value) {
+      throw new BackupFailure(
+        "BACKUP_DATABASE_URL_INVALID",
+        "The backup database URL contains an unsupported, duplicate, or empty parameter."
+      );
+    }
+    seen.add(name);
+    selected[field] = value;
+  }
+  if (!selected.PGDATABASE) {
+    throw new BackupFailure(
+      "BACKUP_DATABASE_URL_INVALID",
+      "The backup database URL must name a database."
+    );
+  }
+  return selected;
+}
+
 function pgEnvironment(environment, databaseUrl) {
+  const connection =
+    databaseUrlEnvironment(databaseUrl);
   const selected = {
     PATH: environment.PATH,
     LANG: environment.LANG ?? "C",
     LC_ALL: "C",
-    PGDATABASE: databaseUrl,
-    PGCONNECT_TIMEOUT: "10"
+    PGCONNECT_TIMEOUT: "10",
+    ...connection
   };
   for (const field of [
     "LD_LIBRARY_PATH",
@@ -299,7 +395,10 @@ function pgEnvironment(environment, databaseUrl) {
     "PGSSLCERT",
     "PGSSLKEY"
   ]) {
-    if (environment[field]) {
+    if (
+      environment[field] &&
+      selected[field] === undefined
+    ) {
       selected[field] = environment[field];
     }
   }
@@ -354,9 +453,14 @@ function createBackupPorts({
       "The backup runtime boundary is invalid."
     );
   }
+  const postgresEnvironment = pgEnvironment(
+    environment,
+    databaseUrl
+  );
   const secrets = [
     databaseUrl,
-    environment.PGPASSWORD
+    environment.PGPASSWORD,
+    postgresEnvironment.PGPASSWORD
   ];
   let pinnedFenceDigest = null;
 
@@ -414,10 +518,7 @@ function createBackupPorts({
         ].join(" ")
       ],
       {
-        env: pgEnvironment(
-          environment,
-          databaseUrl
-        ),
+        env: postgresEnvironment,
         captureStdout: true,
         secretValues: secrets,
         label: "PostgreSQL invariant probe"
@@ -539,10 +640,7 @@ function createBackupPorts({
         ].join(" ")
       ],
       {
-        env: pgEnvironment(
-          environment,
-          databaseUrl
-        ),
+        env: postgresEnvironment,
         captureStdout: true,
         secretValues: secrets,
         label: "Database writer probe"
@@ -597,10 +695,7 @@ function createBackupPorts({
           `--file=${outputPath}`
         ],
         {
-          env: pgEnvironment(
-            environment,
-            databaseUrl
-          ),
+          env: postgresEnvironment,
           secretValues: secrets,
           label: "PostgreSQL backup"
         }
