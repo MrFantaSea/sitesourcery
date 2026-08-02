@@ -3,6 +3,7 @@ Description=Site Sourcery held production runtime rehearsal
 After=network-online.target sitesourcery-production-db-tunnel.service
 Wants=network-online.target
 Requires=sitesourcery-production-db-tunnel.service
+ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
 [Service]
 Type=simple

@@ -38,6 +38,8 @@ export const BACKUP_FAILED_SCHEMA =
   "sitesourcery.backup-attempt-failed/v2";
 export const QUIESCE_SCHEMA =
   "sitesourcery.backup-quiesce/v1";
+export const PRODUCTION_BACKUP_RUNTIME_UNIT =
+  "sitesourcery-hosted.service";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const AGE_RECIPIENT =
@@ -149,13 +151,18 @@ export function validateQuiesceEvidence(
   {
     now,
     sourceFailureDomainId,
-    expectedFenceDigest = null
+    expectedFenceDigest = null,
+    expectedRuntimeUnit =
+      PRODUCTION_BACKUP_RUNTIME_UNIT
   }
 ) {
+  const runtimeUnit = safeIdentifier(
+    expectedRuntimeUnit,
+    "Quiesced runtime unit"
+  );
   if (
     evidence?.schema !== QUIESCE_SCHEMA ||
-    evidence.runtimeUnit !==
-      "sitesourcery-hosted.service" ||
+    evidence.runtimeUnit !== runtimeUnit ||
     evidence.runtimeState !== "inactive" ||
     evidence.writerFence !== "engaged" ||
     evidence.databaseWriterCount !== 0 ||
@@ -311,6 +318,8 @@ export async function runBackupAttempt({
   operationsStateApproval = null,
   providerEgress,
   ports,
+  quiesceRuntimeUnit =
+    PRODUCTION_BACKUP_RUNTIME_UNIT,
   now = () => new Date(),
   attemptIdFactory = randomUUID
 }) {
@@ -332,6 +341,10 @@ export async function runBackupAttempt({
     sourceFailureDomainId
   );
   const recipient = validateAgeRecipient(ageRecipient);
+  const expectedRuntimeUnit = safeIdentifier(
+    quiesceRuntimeUnit,
+    "Quiesced runtime unit"
+  );
   const providerEgressState =
     assertOperationsProviderEgressHeld(
       providerEgress
@@ -414,15 +427,18 @@ export async function runBackupAttempt({
   );
 
   try {
-    const before = validateQuiesceEvidence(
+    const beforeEvidence =
       await ports.assertQuiesced({
         attemptId,
         phase: "before"
-      }),
+      });
+    const before = validateQuiesceEvidence(
+      beforeEvidence,
       {
-        now: started,
+        now: safeNow(now),
         sourceFailureDomainId:
-          destination.sourceFailureDomainId
+          destination.sourceFailureDomainId,
+        expectedRuntimeUnit
       }
     );
     const beforeAppState =
@@ -464,17 +480,19 @@ export async function runBackupAttempt({
       "app_state"
     );
 
-    const finishedCaptureAt = safeNow(now);
-    const after = validateQuiesceEvidence(
+    const afterEvidence =
       await ports.assertQuiesced({
         attemptId,
         phase: "after"
-      }),
+      });
+    const after = validateQuiesceEvidence(
+      afterEvidence,
       {
-        now: finishedCaptureAt,
+        now: safeNow(now),
         sourceFailureDomainId:
           destination.sourceFailureDomainId,
-        expectedFenceDigest: before.fenceDigest
+        expectedFenceDigest: before.fenceDigest,
+        expectedRuntimeUnit
       }
     );
     const afterAppState =
@@ -581,6 +599,7 @@ export async function runBackupAttempt({
         recipient.fingerprint,
       consistency: {
         schema: QUIESCE_SCHEMA,
+        runtimeUnit: before.runtimeUnit,
         snapshotId: before.snapshotId,
         fenceDigest: before.fenceDigest,
         runtimeState: "inactive",
@@ -710,6 +729,36 @@ export async function loadVerifiedBackupAttempt(
   );
   assertOperationsProviderEgressHeld(
     manifest.providerEgress
+  );
+  if (
+    manifest.consistency?.schema !==
+      QUIESCE_SCHEMA ||
+    manifest.consistency.runtimeState !==
+      "inactive" ||
+    manifest.consistency.databaseWriterCount !==
+      0 ||
+    manifest.consistency
+      .verifiedBeforeAndAfter !== true ||
+    !SHA256.test(
+      manifest.consistency.fenceDigest ?? ""
+    ) ||
+    !SHA256.test(
+      manifest.consistency
+        .filesystemTreeSha256 ?? ""
+    )
+  ) {
+    fail(
+      "BACKUP_MANIFEST_INVALID",
+      "Backup consistency evidence is invalid."
+    );
+  }
+  safeIdentifier(
+    manifest.consistency.runtimeUnit,
+    "Backup runtime unit"
+  );
+  safeIdentifier(
+    manifest.consistency.snapshotId,
+    "Backup snapshot ID"
   );
   const expectedFiles = new Set([
     "attempt.started.json",

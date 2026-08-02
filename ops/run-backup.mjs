@@ -10,10 +10,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  PRODUCTION_BACKUP_RUNTIME_UNIT,
   runBackupAttempt
 } from "./backup-runtime.mjs";
 import {
-  createProductionBackupPorts
+  PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT,
+  createProductionBackupPorts,
+  createProductionRehearsalBackupPorts
 } from "./backup-ports.mjs";
 import {
   parseJsonObject
@@ -58,8 +61,12 @@ function pathsOverlap(left, right) {
   );
 }
 
-export async function backupFromEnvironment(
-  environment = process.env
+async function backupFromEnvironmentWithBoundary(
+  environment,
+  {
+    createPorts,
+    quiesceRuntimeUnit
+  }
 ) {
   const destinationRoot = absolute(
     environment,
@@ -200,7 +207,7 @@ export async function backupFromEnvironment(
       environment
         .SITESOURCERY_OPERATIONS_STATE_APPROVAL_FILE
     );
-  const ports = createProductionBackupPorts({
+  const ports = createPorts({
     sourceRoots: sourceRoots.map(
       (source, index) => ({
         label: source.label,
@@ -232,8 +239,36 @@ export async function backupFromEnvironment(
         environment
           .SITESOURCERY_OPERATIONS_PROVIDER_EGRESS
       ),
+    quiesceRuntimeUnit,
     ports
   });
+}
+
+export function backupFromEnvironment(
+  environment = process.env
+) {
+  return backupFromEnvironmentWithBoundary(
+    environment,
+    {
+      createPorts: createProductionBackupPorts,
+      quiesceRuntimeUnit:
+        PRODUCTION_BACKUP_RUNTIME_UNIT
+    }
+  );
+}
+
+export function backupProductionRehearsalFromEnvironment(
+  environment = process.env
+) {
+  return backupFromEnvironmentWithBoundary(
+    environment,
+    {
+      createPorts:
+        createProductionRehearsalBackupPorts,
+      quiesceRuntimeUnit:
+        PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT
+    }
+  );
 }
 
 async function main() {

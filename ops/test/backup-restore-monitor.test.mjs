@@ -29,7 +29,10 @@ import {
   runBackupAttempt
 } from "../backup-runtime.mjs";
 import {
+  PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT,
   createProductionBackupPorts,
+  createProductionRehearsalBackupPorts,
+  productionRehearsalQuiescePath,
   createSafeCommandRunner
 } from "../backup-ports.mjs";
 import {
@@ -154,12 +157,17 @@ const APP_MANIFEST = Object.freeze({
 
 function quiesce({
   fenceDigest = "c".repeat(64),
-  snapshotId = "snapshot-001"
+  snapshotId = "snapshot-001",
+  runtimeUnit =
+    "sitesourcery-hosted.service",
+  observedAt =
+    "2026-07-29T12:00:00.000Z",
+  expiresAt =
+    "2026-07-29T12:20:00.000Z"
 } = {}) {
   return {
     schema: QUIESCE_SCHEMA,
-    runtimeUnit:
-      "sitesourcery-hosted.service",
+    runtimeUnit,
     runtimeState: "inactive",
     writerFence: "engaged",
     databaseWriterCount: 0,
@@ -167,10 +175,8 @@ function quiesce({
     sourceFailureDomainId: "primary-01",
     snapshotId,
     fenceDigest,
-    observedAt:
-      "2026-07-29T12:00:00.000Z",
-    expiresAt:
-      "2026-07-29T12:20:00.000Z"
+    observedAt,
+    expiresAt
   };
 }
 
@@ -213,16 +219,23 @@ async function setup(t) {
 function fakeBackupPorts({
   afterFenceDigest = "c".repeat(64),
   failDatabase = null,
+  runtimeUnit =
+    "sitesourcery-hosted.service",
+  quiesceForPhase = null,
   calls = []
 } = {}) {
   return {
     async assertQuiesced({ phase }) {
       calls.push(["quiesce", phase]);
+      if (quiesceForPhase) {
+        return quiesceForPhase(phase);
+      }
       return quiesce({
         fenceDigest:
           phase === "after"
             ? afterFenceDigest
-            : "c".repeat(64)
+            : "c".repeat(64),
+        runtimeUnit
       });
     },
     async inspectAppState({ phase }) {
@@ -283,7 +296,9 @@ async function successfulBackup(
   {
     operationsState = HELDS,
     approval = null,
-    attemptId = "attempt-001"
+    attemptId = "attempt-001",
+    quiesceRuntimeUnit =
+      "sitesourcery-hosted.service"
   } = {}
 ) {
   const paths = await setup(t);
@@ -296,7 +311,10 @@ async function successfulBackup(
     sourceOperationsState: operationsState,
     operationsStateApproval: approval,
     providerEgress: "held",
-    ports: fakeBackupPorts(),
+    quiesceRuntimeUnit,
+    ports: fakeBackupPorts({
+      runtimeUnit: quiesceRuntimeUnit
+    }),
     now: () => new Date(NOW),
     attemptIdFactory: () => attemptId
   });
@@ -359,6 +377,65 @@ test("backup writes only age ciphertext and immutable checksummed evidence to an
     ),
     /EEXIST/u
   );
+});
+
+test("backup records the exact reviewed user-service runtime used by the production rehearsal", async (t) => {
+  const { result } = await successfulBackup(t, {
+    attemptId: "user-service-attempt-001",
+    quiesceRuntimeUnit:
+      PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT
+  });
+  const verified = await loadVerifiedBackupAttempt(
+    result.attemptRoot
+  );
+  assert.equal(
+    verified.manifest.consistency.runtimeUnit,
+    PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT
+  );
+});
+
+test("real-time quiesce observations may follow the attempt start clock", async (t) => {
+  const paths = await setup(t);
+  const clock = [
+    "2026-07-29T12:05:00.000Z",
+    "2026-07-29T12:05:00.020Z",
+    "2026-07-29T12:05:00.040Z",
+    "2026-07-29T12:05:00.050Z"
+  ];
+  let clockIndex = 0;
+  const result = await runBackupAttempt({
+    ...paths,
+    destinationMarker: DESTINATION_MARKER,
+    sourceFailureDomainId: "primary-01",
+    ageRecipient:
+      "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    sourceOperationsState: HELDS,
+    providerEgress: "held",
+    ports: fakeBackupPorts({
+      quiesceForPhase(phase) {
+        return quiesce({
+          observedAt:
+            phase === "before"
+              ? "2026-07-29T12:05:00.010Z"
+              : "2026-07-29T12:05:00.030Z",
+          expiresAt:
+            "2026-07-29T12:20:00.000Z"
+        });
+      }
+    }),
+    now: () =>
+      new Date(
+        clock[
+          Math.min(
+            clockIndex++,
+            clock.length - 1
+          )
+        ]
+      ),
+    attemptIdFactory: () =>
+      "advancing-clock-attempt-001"
+  });
+  assert.equal(result.ok, true);
 });
 
 test("reviewed live mail state is captured while backup and clean-room provider egress stay held", async (t) => {
@@ -1135,6 +1212,7 @@ test("safe command boundary rejects secrets in argv and production backup keeps 
       "/etc/sitesourcery/backup.age-recipients",
     environment: {
       PATH: "/usr/bin",
+      LD_LIBRARY_PATH: "/private/postgresql/lib",
       PGPASSWORD: "another-secret"
     },
     commandRunner: {
@@ -1177,6 +1255,73 @@ test("safe command boundary rejects secrets in argv and production backup keeps 
   assert.equal(
     calls[0].options.env.PGDATABASE,
     databaseUrl
+  );
+  assert.equal(
+    calls[0].options.env.LD_LIBRARY_PATH,
+    "/private/postgresql/lib"
+  );
+});
+
+test("production and production-rehearsal backup ports pin distinct exact systemd boundaries", () => {
+  const common = {
+    sourceRoots: [
+      {
+        label: "state",
+        path: "/var/lib/sitesourcery"
+      }
+    ],
+    sourceFailureDomainId: "primary-01",
+    databaseUrl:
+      "postgresql://database.invalid/sitesourcery",
+    ageRecipientFile:
+      "/etc/sitesourcery/backup.age-recipients",
+    environment: { PATH: "/usr/bin" },
+    commandRunner: { async run() {} }
+  };
+  const production = createProductionBackupPorts({
+    ...common,
+    quiescePath:
+      "/run/sitesourcery/BACKUP_QUIESCE"
+  });
+  assert.deepEqual(production.boundary, {
+    runtimeUnit: "sitesourcery-hosted.service",
+    systemctlScope: "system",
+    quiescePath:
+      "/run/sitesourcery/BACKUP_QUIESCE",
+    requiredMarkerUid: 0
+  });
+
+  const uid = process.getuid();
+  const rehearsalPath =
+    productionRehearsalQuiescePath(uid);
+  const rehearsal =
+    createProductionRehearsalBackupPorts({
+      ...common,
+      quiescePath: rehearsalPath
+    });
+  assert.deepEqual(rehearsal.boundary, {
+    runtimeUnit:
+      PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT,
+    systemctlScope: "user",
+    quiescePath: rehearsalPath,
+    requiredMarkerUid: uid
+  });
+  assert.throws(
+    () =>
+      createProductionRehearsalBackupPorts({
+        ...common,
+        quiescePath:
+          "/run/sitesourcery/BACKUP_QUIESCE"
+      }),
+    (error) =>
+      error.code ===
+      "BACKUP_QUIESCE_PATH_INVALID"
+  );
+  assert.throws(
+    () => productionRehearsalQuiescePath(0),
+    (error) =>
+      error.code ===
+      "BACKUP_REHEARSAL_USER_INVALID"
   );
 });
 

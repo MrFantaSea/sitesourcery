@@ -140,6 +140,16 @@ cannot stop the production writer or invent a cross-store snapshot:
    and opt into immutable attempt directories. A successful attempt contains
    only `.age` artifacts plus create-once manifests and SHA-256 evidence.
 
+The loopback-only Dell production rehearsal uses the separate
+`ops:backup:production-rehearsal` entry point. It pins
+`sitesourcery-production.service`, invokes `systemctl --user`, requires the
+calling user's exact
+`/run/user/<uid>/sitesourcery-production/BACKUP_QUIESCE` fence, and records that
+unit in immutable consistency evidence. This boundary is selected by code, not
+an environment switch, so it cannot relax or substitute for the root production
+entry point, `/run/sitesourcery/BACKUP_QUIESCE`, or
+`sitesourcery-hosted.service`.
+
 The configuration, private exports, tenant runtime, and exact release are all
 inside the encrypted app-state archive. The unencrypted attempt manifest
 contains only paths by artifact kind, sizes, hashes, timestamps, source-state

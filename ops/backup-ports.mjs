@@ -13,6 +13,7 @@ import path from "node:path";
 
 import {
   QUIESCE_SCHEMA,
+  PRODUCTION_BACKUP_RUNTIME_UNIT,
   BackupFailure
 } from "./backup-runtime.mjs";
 import {
@@ -24,6 +25,8 @@ import {
 } from "./immutable-evidence.mjs";
 
 const MAX_COMMAND_OUTPUT = 64 * 1024;
+export const PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT =
+  "sitesourcery-production.service";
 
 function commandFailure(label, code) {
   return new BackupFailure(
@@ -288,6 +291,7 @@ function pgEnvironment(environment, databaseUrl) {
     PGCONNECT_TIMEOUT: "10"
   };
   for (const field of [
+    "LD_LIBRARY_PATH",
     "PGPASSFILE",
     "PGPASSWORD",
     "PGSSLMODE",
@@ -302,7 +306,24 @@ function pgEnvironment(environment, databaseUrl) {
   return selected;
 }
 
-export function createProductionBackupPorts({
+function systemctlEnvironment(
+  environment,
+  runtimeDirectory
+) {
+  const selected = {
+    PATH: environment.PATH,
+    LANG: "C",
+    LC_ALL: "C"
+  };
+  if (runtimeDirectory) {
+    selected.XDG_RUNTIME_DIR = runtimeDirectory;
+    selected.DBUS_SESSION_BUS_ADDRESS =
+      `unix:path=${runtimeDirectory}/bus`;
+  }
+  return selected;
+}
+
+function createBackupPorts({
   sourceRoots,
   quiescePath,
   sourceFailureDomainId,
@@ -311,15 +332,26 @@ export function createProductionBackupPorts({
   environment = process.env,
   commandRunner = createSafeCommandRunner(),
   now = () => new Date(),
-  requiredMarkerUid = 0
+  runtimeUnit,
+  systemctlPrefix,
+  systemctlRuntimeDirectory,
+  requiredMarkerUid
 }) {
+  const selectedRuntimeUnit = safeIdentifier(
+    runtimeUnit,
+    "Backup runtime unit"
+  );
   if (
-    quiescePath !==
-    "/run/sitesourcery/BACKUP_QUIESCE"
+    !Array.isArray(systemctlPrefix) ||
+    systemctlPrefix.some(
+      (entry) => typeof entry !== "string"
+    ) ||
+    !Number.isSafeInteger(requiredMarkerUid) ||
+    requiredMarkerUid < 0
   ) {
     throw new BackupFailure(
-      "BACKUP_QUIESCE_PATH_INVALID",
-      "Production backup requires the reviewed systemd writer-fence path."
+      "BACKUP_CONFIGURATION_INVALID",
+      "The backup runtime boundary is invalid."
     );
   }
   const secrets = [
@@ -438,7 +470,7 @@ export function createProductionBackupPorts({
     if (
       marker.schema !== QUIESCE_SCHEMA ||
       marker.runtimeUnit !==
-        "sitesourcery-hosted.service" ||
+        selectedRuntimeUnit ||
       marker.sourceFailureDomainId !==
         sourceFailureDomainId ||
       marker.writerFence !== "engaged"
@@ -468,15 +500,15 @@ export function createProductionBackupPorts({
     const runtime = await commandRunner.run(
       "systemctl",
       [
+        ...systemctlPrefix,
         "is-active",
-        "sitesourcery-hosted.service"
+        selectedRuntimeUnit
       ],
       {
-        env: {
-          PATH: environment.PATH,
-          LANG: "C",
-          LC_ALL: "C"
-        },
+        env: systemctlEnvironment(
+          environment,
+          systemctlRuntimeDirectory
+        ),
         allowedExitCodes: [3],
         captureStdout: true,
         secretValues: secrets,
@@ -524,8 +556,7 @@ export function createProductionBackupPorts({
     }
     return {
       schema: QUIESCE_SCHEMA,
-      runtimeUnit:
-        "sitesourcery-hosted.service",
+      runtimeUnit: selectedRuntimeUnit,
       runtimeState: "inactive",
       writerFence: "engaged",
       databaseWriterCount: 0,
@@ -539,6 +570,15 @@ export function createProductionBackupPorts({
   }
 
   return Object.freeze({
+    boundary: Object.freeze({
+      runtimeUnit: selectedRuntimeUnit,
+      systemctlScope:
+        systemctlPrefix.length === 0
+          ? "system"
+          : "user",
+      quiescePath,
+      requiredMarkerUid
+    }),
     assertQuiesced,
 
     inspectAppState() {
@@ -719,5 +759,64 @@ export function createProductionBackupPorts({
         }
       );
     }
+  });
+}
+
+export function productionRehearsalQuiescePath(
+  uid = process.getuid?.()
+) {
+  if (
+    !Number.isSafeInteger(uid) ||
+    uid <= 0
+  ) {
+    throw new BackupFailure(
+      "BACKUP_REHEARSAL_USER_INVALID",
+      "Production rehearsal backup requires a non-root Unix user."
+    );
+  }
+  return `/run/user/${uid}/sitesourcery-production/BACKUP_QUIESCE`;
+}
+
+export function createProductionBackupPorts(
+  options
+) {
+  if (
+    options?.quiescePath !==
+    "/run/sitesourcery/BACKUP_QUIESCE"
+  ) {
+    throw new BackupFailure(
+      "BACKUP_QUIESCE_PATH_INVALID",
+      "Production backup requires the reviewed systemd writer-fence path."
+    );
+  }
+  return createBackupPorts({
+    ...options,
+    runtimeUnit: PRODUCTION_BACKUP_RUNTIME_UNIT,
+    systemctlPrefix: [],
+    systemctlRuntimeDirectory: null,
+    requiredMarkerUid: 0
+  });
+}
+
+export function createProductionRehearsalBackupPorts(
+  options
+) {
+  const uid = process.getuid?.();
+  const quiescePath =
+    productionRehearsalQuiescePath(uid);
+  if (options?.quiescePath !== quiescePath) {
+    throw new BackupFailure(
+      "BACKUP_QUIESCE_PATH_INVALID",
+      "Production rehearsal backup requires its exact per-user writer-fence path."
+    );
+  }
+  const runtimeDirectory = `/run/user/${uid}`;
+  return createBackupPorts({
+    ...options,
+    runtimeUnit:
+      PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT,
+    systemctlPrefix: ["--user"],
+    systemctlRuntimeDirectory: runtimeDirectory,
+    requiredMarkerUid: uid
   });
 }

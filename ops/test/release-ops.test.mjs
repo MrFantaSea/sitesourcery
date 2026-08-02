@@ -553,6 +553,10 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     runtime,
+    /^ConditionPathExists=!%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
+  );
+  assert.match(
+    runtime,
     /releases\/be7cc3781c3e9354ecb017c7df7f090afe556f32/u
   );
   assert.match(
