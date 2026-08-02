@@ -38,9 +38,9 @@ decisions; implementation must keep those controls held instead of guessing.
 | --- | --- | --- | --- | --- |
 | Free Abracadabra make/preview | Four-step maker and three looks exist | Browser session prototype plus real hosted account/project/version contracts | Partial | One clean unauthenticated preview journey; account handoff preserves the accepted work |
 | $5 Download | Hosted account, exact quote, Stripe destination, automatic return confirmation, and entitlement-gated HTML Download are implemented | V2 Checkout dispatch, provider readback, receipt, Stripe Customer binding, project entitlement, artifact verification, and monotonic reversal handling pass fresh PostgreSQL proof | Implementation checkpoint complete; release held | Owner tax choice; real Stripe test payment on private staging; owner walk; reviewed activation/cutover |
-| Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, evidence schema, fresh-PostgreSQL start proof, and a contract-tested shared Stripe adapter now exist; no real three-Price/Coupon configuration or composed customer journey exists | Contract/database/provider checkpoint complete; end to end missing | Real Stripe test Product/Price/Coupon readback; service and webhook composition; automatic `sitesourcery.me` publication; customer controls; active/cancelled/past-due proof |
-| Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is enforced in PostgreSQL and the provider contract collects only $10, replaces the existing item with no proration, and proves an unchanged billing boundary; service route, retention enforcement, and care ledger are not implemented | Contract/database/provider checkpoint complete; fulfillment missing | Real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
-| Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | The fixed $15 $35-to-$50 calculation exists and the provider contract accepts direct starts, fixed-difference upgrades, and renewal-boundary schedules; no real Price, service route, rendered controls, or care ledger exists | Contract/database/provider checkpoint complete; fulfillment missing | Real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
+| Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, evidence schema, fresh-PostgreSQL start proof, shared Stripe contract, and an exact project-locked quote transaction now exist; no real three-Price/Coupon configuration or composed customer journey exists | Contract/database/provider/quote checkpoint complete; end to end missing | Durable Checkout reservation/result persistence; real Stripe test Product/Price/Coupon readback; webhook/customer composition; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
+| Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is enforced in PostgreSQL, exposed only through a revision-bound server quote, and collected/applied exactly by the held provider contract; no dispatch route, retention enforcement, or care ledger is implemented | Contract/database/provider/quote checkpoint complete; fulfillment missing | Checkout transaction and event reconciliation; real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
+| Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | The $15 $35-to-$50 change and zero-dollar renewal-boundary downgrade are now project-locked quote facts, and the provider contract supports direct starts, fixed-difference upgrades, and schedules; no dispatch route, real Price, rendered controls, or care ledger exists | Contract/database/provider/quote checkpoint complete; fulfillment missing | Checkout/Schedule transactions; real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
 | Customer account | Hosted registration, activation, sign-in, recovery, organization, project, draft, and accepted versions exist | PostgreSQL authority and secure cookies are proven on isolated HTTPS staging; Resend delivery is proven | Real on staging, not public | Public same-origin deployment and post-cutover registration/recovery/project proof |
 | Customer billing controls | A narrow account/project/$5 control fragment exists | Billing portal, cancellation, subscription/webhook primitives exist | Partial | Controls expose the customer's actual tier, payment state, invoices/receipts, immediate difference-only upgrades, renewal-boundary downgrades, change/cancel actions, and consequences |
 | Owner client support | No real owner workbench | Ticket creation and data primitives exist; `ops/OPERATOR-BACKEND-SPEC.md` is explicitly a simulation draft | Missing | Responsive Mac/Pixel owner login; client search; account/project/version/payment/tier/ticket view; audited bounded repair actions |
@@ -81,6 +81,10 @@ Present as substantial code but not a finished product journey:
   change or cancel subscriptions. It creates start/difference Checkouts,
   reconciles provider money, swaps one existing subscription item with no
   proration, and schedules downgrades at renewal without duplicating effects.
+- A held-by-default Alakazam billing service plus PostgreSQL quote repository.
+  One transaction locks the active project and binds either the current paid
+  subscription revision or one unused project Download credit; UUID retries
+  replay the first immutable quote and changed purposes fail closed.
 
 Absent today:
 
@@ -88,9 +92,9 @@ Absent today:
   one-invoice $5 Coupon.
 - Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
   restricted Portal configuration, and their reviewed environment bindings.
-- The database service, webhook reconciliation, HTTP boundary, and hosted
-  runtime composition that can safely invoke the provider contract for the
-  modeled ladder.
+- Durable Checkout/Schedule reservation, provider-result persistence, payment
+  and subscription event reconciliation, HTTP/customer boundaries, and hosted
+  runtime composition that can safely invoke the provider contract.
 - Alakazam customer subscription/provisioning controls.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
@@ -103,9 +107,10 @@ Absent today:
 2. Redline and implement all three Alakazam contracts without invented care
    quantities; keep activation held where an owner policy is still required.
    **Pure contract, migration 023, revision/evidence guards, fresh migration,
-   focused tier journey, full hosted PostgreSQL regression, and the held Stripe
-   provider contract are complete. Service/repository transactions, webhook
-   routing, customer controls, and fulfillment remain.**
+   focused tier journey, full hosted PostgreSQL regression, the held Stripe
+   provider contract, and the project-locked quote transaction are complete.
+   Checkout/Schedule transactions, webhook routing, customer controls, and
+   fulfillment remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.
 5. Reconcile domains, assessment, separate Custom care, and Responder.

@@ -230,6 +230,33 @@ these are OWNER RULINGS and open work, not suggestions.
   PostgreSQL service/repository transaction layer, then webhook and customer
   API composition.
 
+## ALAKAZAM QUOTE TRANSACTION CHECKPOINT (2026-08-02)
+
+- A new held-by-default Alakazam billing service authorizes quote creation only
+  when the reviewed release and the existing Stripe adapter agree on exact
+  Alakazam readiness and tax mode. Customer input contains only authenticated
+  project identity, one of the three tier IDs, and a UUID idempotency key;
+  browser money, credit, subscription, and provider fields are rejected before
+  provider readiness or PostgreSQL access.
+- The PostgreSQL repository locks the active project, replays one immutable
+  quote per UUID, and reads the current subscription revision or one active,
+  unused project Download entitlement inside that transaction. The resulting
+  30-minute disclosure binds $25/$35/$50 server money, the one-time $5 entry
+  credit, fixed upgrade difference, renewal-boundary downgrade, no mid-period
+  refund/proration, and the reviewed tax mode. A pending downgrade, changed
+  billing owner, stale project, changed idempotency purpose, or digest drift
+  fails closed.
+- Focused pure/service/repository tests pass 23/23. All 23 migrations replayed
+  into a fresh disposable database, then the new quote transaction and the
+  existing start/upgrade/downgrade contract passed 2/2 against PostgreSQL; the
+  disposable database was removed. Wider gates pass 336/336 core and 121/121
+  runnable hosted tests with the same two expected environment-only skips.
+- This checkpoint creates no Checkout, charge, subscription, Schedule,
+  entitlement, HTTP route, webhook route, UI control, or public capability.
+  Production composition remains held and the public site remains unchanged.
+  Next is durable Checkout/Schedule reservation and provider-result
+  persistence, followed by separately proven event reconciliation.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

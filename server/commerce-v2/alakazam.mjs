@@ -278,8 +278,10 @@ function quoteDisclosure({
   target,
   dueNowMinor,
   appliedValue,
-  effectiveAt
+  effectiveAt,
+  taxMode
 }) {
+  const fixedTax = taxMode === "disabled_by_owner";
   return {
     schema: "sitesourcery.alakazam-tier-change-disclosure.v1",
     changeKind,
@@ -288,9 +290,9 @@ function quoteDisclosure({
     dueNow: {
       subtotalMinor: dueNowMinor,
       currency: CURRENCY,
-      taxMinor: null,
-      totalMinor: null,
-      taxState: "release_configuration_required"
+      taxMinor: fixedTax ? 0 : null,
+      totalMinor: fixedTax ? dueNowMinor : null,
+      taxState: taxMode
     },
     appliedValue,
     effectiveAt,
@@ -340,8 +342,23 @@ export function quoteAlakazamChange({
   currentSubscription = null,
   downloadCredit = null,
   issuedAt,
-  expiresAt
+  expiresAt,
+  providerEffectsAuthorized = false,
+  taxMode = "release_configuration_required"
 }) {
+  invariant(
+    typeof providerEffectsAuthorized === "boolean" &&
+      (
+        providerEffectsAuthorized
+          ? ["automatic", "disabled_by_owner"].includes(
+              taxMode
+            )
+          : taxMode ===
+              "release_configuration_required"
+      ),
+    "invalid_input",
+    "the Alakazam quote release configuration is invalid"
+  );
   const identity = {
     quoteId: requiredText(quoteId, "quoteId", 200),
     tenantId: requiredText(tenantId, "tenantId", 200),
@@ -429,15 +446,18 @@ export function quoteAlakazamChange({
     target,
     dueNowMinor,
     appliedValue,
-    effectiveAt
+    effectiveAt,
+    taxMode
   });
   const quote = {
     schema: ALAKAZAM_CHANGE_QUOTE_SCHEMA,
     ...identity,
     catalogVersion: ALAKAZAM_CATALOG_VERSION,
     termsVersion: ALAKAZAM_TERMS_VERSION,
-    state: "held",
-    providerEffectsAuthorized: false,
+    state: providerEffectsAuthorized
+      ? "quoted"
+      : "held",
+    providerEffectsAuthorized,
     changeKind,
     currentSubscriptionBinding: current
       ? {

@@ -51,6 +51,16 @@ a second payment or Schedule. Production composition deliberately does not yet
 accept these Alakazam capabilities or provider identifiers, so this checkpoint
 does not open Checkout or grant an entitlement.
 
+The first Alakazam service transaction is also implemented but uncomposed. Its
+held-by-default billing service opens quote creation only when release and
+provider tax/readiness facts match. The PostgreSQL repository locks the active
+project, binds the current subscription revision or one unused project Download
+credit, writes one immutable 30-minute quote per UUID idempotency key, and
+replays that exact snapshot. It rejects browser money and provider authority,
+pending changes, changed billing ownership, stale projects, changed retry
+purposes, and digest drift. Checkout/Schedule reservation, provider-result
+persistence, webhooks, HTTP, customer controls, and fulfillment remain held.
+
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,
 entitlement kind, and full customer disclosure. Both the disclosure and the

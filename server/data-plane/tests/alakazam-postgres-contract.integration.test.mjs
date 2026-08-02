@@ -4,6 +4,10 @@ import test from "node:test";
 
 import pg from "pg";
 
+import {
+  createPostgresAlakazamRepository
+} from "../../hosted/alakazam-postgres.mjs";
+
 const { Pool } = pg;
 const DATABASE_URL =
   process.env.SITESOURCERY_PG_ALAKAZAM_TEST_URL ?? null;
@@ -94,6 +98,107 @@ async function seedAuthority(client) {
   });
   return authority;
 }
+
+test(
+  "Alakazam quote repository commits and replays one exact migration-backed transaction",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    let transactionOpen = false;
+    try {
+      await client.query("begin");
+      transactionOpen = true;
+      await client.query("set constraints all deferred");
+      const seeded = await seedAuthority(client);
+      const repository =
+        createPostgresAlakazamRepository({
+          authority: {
+            async service(context, work) {
+              assert.deepEqual(context, {
+                userId: seeded.userId,
+                organizationId: seeded.organizationId
+              });
+              return work(client);
+            }
+          }
+        });
+      const quoteId = randomUUID();
+      const input = {
+        tenantId: seeded.organizationId,
+        customerId: seeded.userId,
+        projectId: seeded.projectId,
+        quoteId,
+        targetTierId: "alakazam_35",
+        issuedAt: "2026-08-02T12:00:00.000Z",
+        expiresAt: "2026-08-02T12:30:00.000Z",
+        taxMode: "disabled_by_owner"
+      };
+      const quote = await repository.createQuote(input);
+      assert.equal(quote.changeKind, "start");
+      assert.equal(quote.state, "quoted");
+      assert.equal(quote.providerEffectsAuthorized, true);
+      assert.equal(quote.dueNow.subtotalMinor, 3500);
+      assert.equal(quote.dueNow.taxMinor, 0);
+      assert.equal(quote.dueNow.totalMinor, 3500);
+
+      const replay = await repository.createQuote({
+        ...input,
+        issuedAt: "2026-08-02T12:01:00.000Z",
+        expiresAt: "2026-08-02T12:31:00.000Z"
+      });
+      assert.deepEqual(replay, quote);
+      await flushConstraints(client);
+      const stored = await client.query(
+        `select state, provider_effects_authorized,
+                target_tier_id, target_amount_minor,
+                due_now_subtotal_minor, tax_state,
+                disclosure_digest, quote_digest
+           from ss.alakazam_change_quotes
+          where organization_id = $1 and id = $2`,
+        [seeded.organizationId, quoteId]
+      );
+      assert.equal(stored.rowCount, 1);
+      assert.deepEqual(
+        {
+          state: stored.rows[0].state,
+          authorized:
+            stored.rows[0].provider_effects_authorized,
+          targetTierId: stored.rows[0].target_tier_id,
+          targetAmountMinor: Number(
+            stored.rows[0].target_amount_minor
+          ),
+          dueNowSubtotalMinor: Number(
+            stored.rows[0].due_now_subtotal_minor
+          ),
+          taxState: stored.rows[0].tax_state,
+          disclosureDigest:
+            stored.rows[0].disclosure_digest,
+          quoteDigest: stored.rows[0].quote_digest
+        },
+        {
+          state: "quoted",
+          authorized: true,
+          targetTierId: "alakazam_35",
+          targetAmountMinor: 3500,
+          dueNowSubtotalMinor: 3500,
+          taxState: "disabled_by_owner",
+          disclosureDigest: quote.disclosureDigest,
+          quoteDigest: quote.quoteDigest
+        }
+      );
+    } finally {
+      if (transactionOpen) {
+        await client.query("rollback");
+      }
+      client.release();
+      await pool.end();
+    }
+  }
+);
 
 async function insertQuote(client, authority, input) {
   const id = input.id ?? randomUUID();

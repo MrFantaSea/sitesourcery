@@ -248,7 +248,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 022 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 023 are required.",
       { status: 503, details: status }
     );
     return status;

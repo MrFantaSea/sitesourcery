@@ -99,6 +99,42 @@ test("a first subscription without a Download purchase charges the full selected
   }
 });
 
+test("an authorized quote binds the reviewed tax mode without adding provider authority", () => {
+  const automatic = quote({
+    providerEffectsAuthorized: true,
+    taxMode: "automatic"
+  });
+  assert.equal(automatic.state, "quoted");
+  assert.equal(automatic.providerEffectsAuthorized, true);
+  assert.equal(automatic.dueNow.taxState, "automatic");
+  assert.equal(automatic.dueNow.taxMinor, null);
+  assert.equal(automatic.dueNow.totalMinor, null);
+
+  const taxDisabled = quote({
+    providerEffectsAuthorized: true,
+    taxMode: "disabled_by_owner"
+  });
+  assert.equal(
+    taxDisabled.dueNow.taxState,
+    "disabled_by_owner"
+  );
+  assert.equal(taxDisabled.dueNow.taxMinor, 0);
+  assert.equal(taxDisabled.dueNow.totalMinor, 2500);
+  assert.doesNotMatch(
+    JSON.stringify(taxDisabled),
+    /(?:price|coupon|sub|cus)_[A-Za-z0-9_]+/u
+  );
+
+  assert.throws(
+    () =>
+      quote({
+        providerEffectsAuthorized: false,
+        taxMode: "automatic"
+      }),
+    (error) => error.code === "invalid_input"
+  );
+});
+
 test("the project Download purchase applies exactly once to the first subscription invoice", () => {
   for (const [targetTierId, amountMinor] of [
     ["alakazam_25", 2000],
