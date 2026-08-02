@@ -399,6 +399,7 @@ export function createProductionRestorePorts({
           `--file=${archivePath}`,
           "--directory",
           appRestoreRoot,
+          "--same-permissions",
           "--no-same-owner"
         ],
         {

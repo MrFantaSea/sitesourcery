@@ -54,6 +54,7 @@ import {
   resolveOperationsStateEvidence
 } from "../operations-state.mjs";
 import {
+  createProductionRestorePorts,
   restoreLibpqEnvironment
 } from "../restore-ports.mjs";
 import {
@@ -1299,6 +1300,81 @@ test("clean-room restore forwards the private PostgreSQL client library path wit
     PGPASSWORD: "restore-secret",
     LD_LIBRARY_PATH: "/private/postgresql/lib"
   });
+});
+
+test("clean-room app restore preserves the exact archived permission inventory", async (t) => {
+  const { root } = await setup(t);
+  const appRestoreRoot = path.join(
+    root,
+    "restored-app-state"
+  );
+  const calls = [];
+  const ports = createProductionRestorePorts({
+    ageIdentityFile: "/private/age-identity",
+    adminDatabaseUrl:
+      "postgresql://restore@localhost/postgres",
+    targetDatabaseName:
+      "sitesourcery_restore_modes_001",
+    appRestoreRoot,
+    environment: { PATH: "/usr/bin" },
+    commandRunner: {
+      async run(command, args, options) {
+        calls.push({ command, args, options });
+        await mkdir(
+          path.join(appRestoreRoot, "state"),
+          { mode: 0o750 }
+        );
+        await writeFile(
+          path.join(
+            appRestoreRoot,
+            "state",
+            "private.txt"
+          ),
+          "restored\n",
+          { mode: 0o640 }
+        );
+        return { code: 0, stdout: "" };
+      }
+    }
+  });
+  const restored = await ports.restoreFreshAppState({
+    archivePath: "/private/app-state.tar",
+    expected: {
+      schema:
+        "sitesourcery.app-state-inventory/v1",
+      entries: [
+        {
+          root: "state",
+          path: ".",
+          type: "directory",
+          mode: "0750"
+        },
+        {
+          root: "state",
+          path: "private.txt",
+          type: "file",
+          mode: "0640",
+          bytes: 9
+        }
+      ]
+    }
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "tar");
+  assert.equal(
+    calls[0].args.includes("--same-permissions"),
+    true
+  );
+  assert.equal(
+    calls[0].args.includes("--no-same-owner"),
+    true
+  );
+  assert.equal(
+    restored.entries.find(
+      (entry) => entry.path === "private.txt"
+    )?.mode,
+    "0640"
+  );
 });
 
 test("production and production-rehearsal backup ports pin distinct exact systemd boundaries", () => {
