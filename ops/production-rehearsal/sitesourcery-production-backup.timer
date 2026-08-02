@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the supervised Site Sourcery production-rehearsal backup daily
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+AccuracySec=1m
+Persistent=true
+Unit=sitesourcery-production-backup.service
+
+[Install]
+WantedBy=timers.target

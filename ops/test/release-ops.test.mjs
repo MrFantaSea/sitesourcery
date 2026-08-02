@@ -481,6 +481,8 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
     staticServer,
     backupMount,
     backupService,
+    backupTimer,
+    backupRecovery,
     monitorService,
     monitorTimer,
     monitorEnvironment,
@@ -526,6 +528,20 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
       readFile(
         new URL(
           "sitesourcery-production-backup.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-backup.timer",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-backup-recovery.service",
           rehearsalRoot
         ),
         "utf8"
@@ -659,9 +675,9 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     backupService,
-    /^After=sitesourcery-production-backup-mount\.service$/mu
+    /^After=sitesourcery-production\.service sitesourcery-production-backup-mount\.service$/mu
   );
-  assert.match(
+  assert.doesNotMatch(
     backupService,
     /^ConditionPathExists=%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
   );
@@ -671,11 +687,47 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     backupService,
-    /ops\/run-production-rehearsal-backup\.mjs/u
+    /^ExecStart=\/usr\/bin\/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork %t\/sitesourcery-production-operations\.lock .*releases\/70d270fd8ffb242fe80db265d61a74dd4bbdfad2\/ops\/run-production-rehearsal-backup-cycle\.mjs run$/mu
+  );
+  assert.match(
+    backupService,
+    /^ExecStopPost=\/usr\/bin\/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork %t\/sitesourcery-production-operations\.lock .*releases\/70d270fd8ffb242fe80db265d61a74dd4bbdfad2\/ops\/run-production-rehearsal-backup-cycle\.mjs recover$/mu
+  );
+  assert.match(
+    backupService,
+    /^TimeoutStartSec=30m$/mu
   );
   assert.doesNotMatch(
     backupService,
     /^\[Install\]$/mu
+  );
+  assert.match(
+    backupTimer,
+    /^OnCalendar=\*-\*-\* 04:17:00$/mu
+  );
+  assert.match(
+    backupTimer,
+    /^Persistent=true$/mu
+  );
+  assert.match(
+    backupTimer,
+    /^Unit=sitesourcery-production-backup\.service$/mu
+  );
+  assert.match(
+    backupTimer,
+    /^WantedBy=timers\.target$/mu
+  );
+  assert.match(
+    backupRecovery,
+    /^After=sitesourcery-production\.service$/mu
+  );
+  assert.match(
+    backupRecovery,
+    /^ExecStart=\/usr\/bin\/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork %t\/sitesourcery-production-operations\.lock .*releases\/70d270fd8ffb242fe80db265d61a74dd4bbdfad2\/ops\/run-production-rehearsal-backup-cycle\.mjs recover$/mu
+  );
+  assert.match(
+    backupRecovery,
+    /^WantedBy=default\.target$/mu
   );
   assert.match(
     backupEnvironment,
@@ -705,6 +757,14 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   assert.match(
     monitorService,
     /^ConditionPathIsMountPoint=\/home\/simtech\/sitesourcery-production\/off-machine$/mu
+  );
+  assert.match(
+    monitorService,
+    /^ConditionPathExists=!%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
+  );
+  assert.match(
+    monitorService,
+    /^ExecStart=\/usr\/bin\/flock --exclusive --nonblock --conflict-exit-code 0 --no-fork %t\/sitesourcery-production-operations\.lock .*\/ops\/monitor-held\.mjs$/mu
   );
   assert.match(
     monitorService,
@@ -740,6 +800,9 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   for (const candidate of [
     backupMount,
+    backupService,
+    backupTimer,
+    backupRecovery,
     monitorService,
     monitorTimer,
     monitorEnvironment
