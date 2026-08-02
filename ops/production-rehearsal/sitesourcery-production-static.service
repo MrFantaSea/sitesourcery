@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66/_hosted
-ExecStart=/usr/bin/python3 -m http.server 8899 --bind 127.0.0.1 --directory /home/simtech/sitesourcery-production/releases/3ef9e84ba4261bf49d96ef69ad0d25b648f4dc66/_hosted
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/15cab8f4d220f9a5116b89c732daa6dc9fb19a17/_hosted
+ExecStart=/usr/bin/python3 -m http.server 8899 --bind 127.0.0.1 --directory /home/simtech/sitesourcery-production/releases/15cab8f4d220f9a5116b89c732daa6dc9fb19a17/_hosted
 Restart=on-failure
 RestartSec=2
 UMask=0077

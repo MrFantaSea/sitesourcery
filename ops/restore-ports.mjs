@@ -57,7 +57,7 @@ function targetDatabaseUrl(
   return selected;
 }
 
-function libpqEnvironment(
+export function restoreLibpqEnvironment(
   environment,
   url
 ) {
@@ -96,6 +96,7 @@ function libpqEnvironment(
     selected.PGSSLMODE = sslMode;
   }
   for (const field of [
+    "LD_LIBRARY_PATH",
     "PGPASSFILE",
     "PGSSLROOTCERT",
     "PGSSLCERT",
@@ -336,7 +337,7 @@ export function createProductionRestorePorts({
           dumpPath
         ],
         {
-          env: libpqEnvironment(
+          env: restoreLibpqEnvironment(
             environment,
             targetUrl
           ),

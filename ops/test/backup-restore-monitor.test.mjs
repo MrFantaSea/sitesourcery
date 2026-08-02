@@ -54,6 +54,9 @@ import {
   resolveOperationsStateEvidence
 } from "../operations-state.mjs";
 import {
+  restoreLibpqEnvironment
+} from "../restore-ports.mjs";
+import {
   verifyCleanRoomRestore
 } from "../restore-runtime.mjs";
 
@@ -1272,6 +1275,30 @@ test("safe command boundary rejects secrets in argv and production backup keeps 
     calls[0].options.env.LD_LIBRARY_PATH,
     "/private/postgresql/lib"
   );
+});
+
+test("clean-room restore forwards the private PostgreSQL client library path without putting credentials in argv", () => {
+  const selected = restoreLibpqEnvironment(
+    {
+      PATH: "/private/postgresql/bin:/usr/bin",
+      LD_LIBRARY_PATH: "/private/postgresql/lib"
+    },
+    new URL(
+      "postgresql://restore-user:restore-secret@localhost/sitesourcery_restore_001?host=%2Frun%2Fuser%2F1000%2Fpostgresql&port=55443"
+    )
+  );
+  assert.deepEqual(selected, {
+    PATH: "/private/postgresql/bin:/usr/bin",
+    LANG: "C",
+    LC_ALL: "C",
+    PGDATABASE: "sitesourcery_restore_001",
+    PGCONNECT_TIMEOUT: "10",
+    PGHOST: "/run/user/1000/postgresql",
+    PGPORT: "55443",
+    PGUSER: "restore-user",
+    PGPASSWORD: "restore-secret",
+    LD_LIBRARY_PATH: "/private/postgresql/lib"
+  });
 });
 
 test("production and production-rehearsal backup ports pin distinct exact systemd boundaries", () => {
