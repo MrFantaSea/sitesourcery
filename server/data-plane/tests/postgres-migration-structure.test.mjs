@@ -585,3 +585,71 @@ test("hosted legal authority is bound to the exact reviewed V2 artifacts", async
     /b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b/iu
   );
 });
+
+test("Alakazam billing stores exact tier value and evidence-gated transitions", async () => {
+  const all = await migrations();
+  const alakazam = all.find(
+    ({ name }) =>
+      name ===
+      "202608020023_alakazam_subscription_contract.sql"
+  );
+  assert.ok(alakazam);
+
+  for (const table of [
+    "alakazam_subscriptions",
+    "alakazam_change_quotes",
+    "alakazam_checkout_dispatches",
+    "alakazam_stripe_events",
+    "alakazam_payment_receipts",
+    "alakazam_credit_applications",
+    "alakazam_downgrade_schedules",
+    "alakazam_tier_change_events"
+  ]) {
+    assert.match(
+      alakazam.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+
+  assert.match(
+    alakazam.sql,
+    /tables text\[\] := array\[[\s\S]*'alakazam_subscriptions'[\s\S]*'alakazam_tier_change_events'/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on ss\.%I from public, anon, authenticated/iu
+  );
+
+  assert.match(
+    alakazam.sql,
+    /when 'alakazam_25' then 2500::bigint[\s\S]*when 'alakazam_35' then 3500::bigint[\s\S]*when 'alakazam_50' then 5000::bigint/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /due_now_subtotal_minor =\s*target_amount_minor - current_amount_minor/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /change_kind = 'downgrade'[\s\S]*due_now_subtotal_minor = 0[\s\S]*effective_rule = 'current_period_end'[\s\S]*no_mid_period_refund[\s\S]*not provider_proration_enabled/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /create unique index alakazam_one_event_per_revision/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /Alakazam subscription change lacks exact revision evidence/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /Alakazam credit reversal lacks exact defensive evidence/iu
+  );
+  assert.match(
+    alakazam.sql,
+    /create function ss\.hosted_runtime_contract_v23\(\)/iu
+  );
+  assert.doesNotMatch(
+    alakazam.sql,
+    /refund_(?:button|request|offer)|create_refund/iu
+  );
+});

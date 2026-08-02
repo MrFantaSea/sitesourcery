@@ -154,6 +154,42 @@ these are OWNER RULINGS and open work, not suggestions.
   The later release pass still needs the owner tax choice, a real Stripe test
   payment on private staging, owner walkthrough, and reviewed public cutover.
 
+## ALAKAZAM CONTRACT/DATABASE CHECKPOINT (2026-08-02)
+
+- The owner-approved ladder is now one frozen held contract: only $25, $35,
+  and $50 monthly tiers; the exact upward-inherited capabilities; no invented
+  care quantities; $5 Download value applied once on first entry; fixed
+  difference-only upgrades; and renewal-boundary downgrades with no mid-period
+  refund or provider proration. Obsolete $15/$30 values have no path back into
+  the private catalog.
+- Additive migration 023 gives Alakazam its own service-role-only authority
+  instead of reusing the obsolete generic subscription records. It stores one
+  current project subscription, immutable quotes and receipts, fenced Checkout
+  dispatch, verified Stripe events, one-use Download credit evidence, one open
+  downgrade schedule, and immutable tier/status events bound to the exact
+  resulting subscription revision. Browser roles have no direct table access.
+- Subscription identity is immutable. A tier/status/period change must advance
+  the provider observation and match one exact immutable event/revision.
+  Unproved mutation and early downgrade fail closed. A reversed source
+  Download can only tighten Alakazam access with the exact reversal,
+  entitlement, subscription state, and tier-event evidence; there is still no
+  refund button, refund offer, or refund-creation API.
+- Proof completed on disposable HQ PostgreSQL databases that were removed
+  afterward: all migrations 001–023 replayed cleanly; the focused journey
+  passed $25 start, exactly $10 for $25 -> $35, rejection of an unproved tier
+  mutation, retention of $35 through the paid period, rejection of an early
+  downgrade, and $25 activation at the exact renewal boundary for $0 with no
+  proration. The separate full canonical hosted-service PostgreSQL suite then
+  passed 10/10, including the shipped browser account journey. Current local
+  gates also pass 310/310 core and 116/116 runnable hosted tests, with the two
+  expected environment-only skips.
+- This checkpoint is not a usable Alakazam launch. Still missing are the pinned
+  Stripe Product/Price/Coupon configuration and readback, provider adapter,
+  service/API/webhook composition, customer billing controls, automatic
+  `sitesourcery.me` publication, tier-feature enforcement, owner workbench,
+  real Stripe test-mode journeys, care/cancellation decisions, owner walk, and
+  cutover. Public production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

@@ -16,10 +16,13 @@ history, and modest care; $50 adds richer customization including Cash
 App/Venmo links, a menu, further font/border controls, and more care. Exact care
 quantities and several operational policies are still owner-open. Paid value
 carries forward on upgrades: the $5 Download leaves $20 to enter $25, $25 to
-$35 costs the $10 difference, and $35 to $50 costs the $15 difference. None of
-the subscriptions belongs in this private catalog until its complete terms,
-entitlement, difference-only credit, cancellation, and fulfillment contract is
-reviewed; obsolete draft $15/$30 subscription prices have been removed.
+$35 costs the $10 difference, and $35 to $50 costs the $15 difference. The
+three levels now live in a separate private held tier catalog in
+`alakazam.mjs`; obsolete draft $15/$30 subscription prices have been removed.
+The calculation and entitlement contract is proven independently while tax,
+care quantities, cancellation wording, provider effects, and fulfillment
+remain held. The complete provider/database sequence and remaining release
+holds are recorded in `ops/ALAKAZAM-BILLING-CONTRACT-2026-08-02.md`.
 
 The owner-approved tier-change direction is immediate, difference-only paid
 upgrades and renewal-boundary downgrades. A customer requesting a downgrade

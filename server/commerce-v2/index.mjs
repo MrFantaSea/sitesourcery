@@ -31,3 +31,4 @@ export {
   digestQuoteSnapshot
 } from "./service.mjs";
 export * from "./constants.mjs";
+export * from "./alakazam.mjs";
