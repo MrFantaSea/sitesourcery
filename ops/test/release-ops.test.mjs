@@ -631,6 +631,10 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     backupMount,
+    /^ExecStartPost=\/usr\/bin\/mountpoint -q \/home\/simtech\/sitesourcery-production\/off-machine$/mu
+  );
+  assert.match(
+    backupMount,
     /^ExecStartPost=\/usr\/bin\/test -f .*\.sitesourcery-off-machine\.json$/mu
   );
   assert.match(
@@ -643,7 +647,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.doesNotMatch(
     backupMount,
-    /accept-new|allow_other|\/bin\/(?:ba)?sh/u
+    /accept-new|allow_other|\/bin\/(?:ba)?sh|PrivateTmp|ProtectSystem|ProtectHome|RestrictAddressFamilies/u
   );
   assert.match(
     backupService,
