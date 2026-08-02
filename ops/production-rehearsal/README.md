@@ -1,11 +1,30 @@
-# Held production rehearsal — 2026-08-01
+# Held production rehearsal — 2026-08-01, updated 2026-08-02
 
 This records the exact non-secret production rehearsal installed after the
 isolated HTTPS staging journey passed. It is deliberately loopback-only. It
 does not authorize or claim public routing, customer mail, payment, domain
 purchase, tenant publication, DNS change, or production launch.
 
-## Exact release and runtime
+## Current checkpoint — 2026-08-02
+
+The active Dell runtime and static rehearsal now use exact release
+`15cab8f4d220f9a5116b89c732daa6dc9fb19a17`. Registration and recovery mail
+are production-ready while Stripe, publication, domain runtime, and DNS remain
+held. The loopback operations projection validates all six fields exactly; its
+public capability projection keeps payment, domain purchase, and publishing
+disabled.
+
+The rehearsal produced a quiesced encrypted backup on Zen and Zen completed a
+fresh, provider-held, Unix-socket-only restore using exact restore tooling
+`4f889a6410f60eedc5b02f480022107748a8b0e5`. The canonical backup manifest is
+`c06f17b94dadc94e85d32e6640064372368d156592c78f987a2494b2334e344d`;
+the immutable successful restore report is
+`e5cf7001f7b697333f1e72ab9a4ddbff39ec4243a2f28a8ede2b076ada1785eb`.
+See `ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md` for exact artifacts,
+invariants, the preserved failed-restore evidence, RPO/RTO measurements, and
+plaintext cleanup.
+
+## Initial exact release and runtime
 
 - Commit: `be7cc3781c3e9354ecb017c7df7f090afe556f32`.
 - Branch: `build/sitesourcery-v2-20260730`.
@@ -104,6 +123,8 @@ Caddy system service with only `CAP_NET_BIND_SERVICE`, allow inbound TCP 80/443
 in UFW, and establish/prove the corresponding public IPv4 forwarding plus IPv6
 firewall path. Then ACME staging and exact same-origin route tests must pass.
 Only after that proof can the control A/AAAA records and the separately reviewed
-`*.sitesourcery.me` strategy be changed. Production mail activation,
-off-machine encrypted backup/restore, monitoring, payment, domain purchase, and
-publication remain separate work; none is implied by opening the edge.
+`*.sitesourcery.me` strategy be changed. Production mail adapter readiness and
+off-machine encrypted backup/restore are now evidenced above. A successful
+delivered action-link proof, monitoring and its alert path, payment, domain
+purchase, and publication remain separate work; none is implied by opening the
+edge.

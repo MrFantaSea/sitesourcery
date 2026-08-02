@@ -1,7 +1,8 @@
 # Release-candidate acceptance
 
-All boxes intentionally begin unchecked. Code-level proof does not grant
-runtime, provider, DNS, payment, or publication authority.
+Unchecked release boxes require exact production evidence and owner authority.
+Checked rehearsal evidence records completed proof but does not grant runtime,
+provider, DNS, payment, or publication authority.
 
 ## Exact release
 
@@ -43,6 +44,25 @@ runtime, provider, DNS, payment, or publication authority.
 - [ ] Platform-subdomain certificate strategy is separately approved.
 
 ## Data safety
+
+Completed loopback-only rehearsal evidence is recorded in
+`ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md`:
+
+- [x] The reviewed user-service quiesce fence remained byte-identical, the
+      exact runtime stayed inactive, and hosted PostgreSQL writer count stayed
+      zero before and after capture.
+- [x] PostgreSQL and all four app-state roots reached Zen as age ciphertext in
+      a distinct marked failure domain with immutable manifests and digests.
+- [x] Database credentials and recovery secrets stayed out of argv, logs, and
+      immutable evidence.
+- [x] A fresh Unix-socket-only PostgreSQL target reproduced v13/v14/v15, 94
+      tables, role grants, held domain state, and all recorded row counts.
+- [x] A fresh app-state target reproduced all 607 entries and the exact tree
+      hash after archived permissions were restored exactly.
+- [x] Backup capture, recovery-point age, and restore wall time were measured;
+      owner acceptance of the production RPO/RTO remains open.
+- [x] Disposable decrypted database and app-state targets were removed after
+      proof while encrypted backup and immutable restore evidence were kept.
 
 - [ ] **Release blocker closed:** backup and monitoring run under an exact,
       separately approved expected operations state after publication, while

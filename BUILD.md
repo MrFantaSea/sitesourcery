@@ -125,9 +125,11 @@ with canonical PostgreSQL on isolated HTTPS staging and its account/project
 journey is proven. Dell/HQ now also run a held, restart-proven, loopback-only
 production rehearsal from the exact release against a separate clean database;
 the pinned Caddy binary and held config validate but are not active. Production
-still needs root/network ingress, off-machine backup/restore evidence,
-monitoring, same-origin DNS cutover, a delivered production mail/action proof,
-and a public production verification; GitHub Pages cannot provide that backend.
+mail adapters are ready, and an encrypted off-machine backup plus clean-room
+restore are now proven on Zen. Production still needs root/network ingress,
+monitoring and its reviewed alert path, same-origin DNS cutover, a delivered
+production mail/action proof, and a public production verification; GitHub
+Pages cannot provide that backend.
 
 **5. Tax treatment is unreviewed** on all five sellable things.
 

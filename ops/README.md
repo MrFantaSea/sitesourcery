@@ -36,6 +36,11 @@ ingress. It proves the immutable runtime, separate empty production database,
 restart behavior, and pinned Caddy validation, but activates no edge or provider
 effect. See `ops/production-rehearsal/README.md`.
 
+The rehearsal's encrypted off-machine backup and clean-room restore completed
+on 2026-08-02. Exact attempt IDs, hashes, invariants, failure diagnosis,
+RPO/RTO measurements, and plaintext cleanup are in
+`ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md`.
+
 This mapping reuses the three existing machines and adds no hosting
 subscription. It is only deployable if Dell has reviewed public ingress and
 either a stable public IP or an owner-approved dynamic-address update path.
@@ -197,8 +202,10 @@ network exposure to equal `none` before decrypting anything.
 `verify-restore.mjs` accepts one exact successful attempt. It verifies the
 manifest and encrypted hashes before invoking `age`, verifies the decrypted
 hashes before mutation, refuses an existing PostgreSQL target, restores into a
-new database, and refuses a non-empty app-state root. The report succeeds only
-when:
+new database, and refuses a non-empty app-state root. App-state extraction
+preserves the archived permission inventory while refusing archived ownership;
+this is required because modes are part of the canonical tree hash. The report
+succeeds only when:
 
 - `ss.hosted_runtime_contract_v13()`,
   `ss.hosted_runtime_contract_v14()`, and
@@ -265,9 +272,10 @@ no alert destination or credential in these files.
    disposable staging control hostname and a disposable customer hostname.
    Prove static routes, same-origin API, unknown-host denial, the TLS `ask`
    boundary, and ACME staging before any production DNS change.
-6. Complete an encrypted off-machine backup and clean-machine restore drill.
-   Record the backup digest, restore host, PostgreSQL row/table invariants,
-   private-object manifest, tenant-release manifest, RPO, and RTO.
+6. **Completed for the loopback production rehearsal on 2026-08-02.** The
+   encrypted off-machine backup and clean-room restore digest, host, PostgreSQL
+   row/table invariants, app-state manifest, RPO, and RTO are recorded in
+   `ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md`.
 7. Enable the minute probe and prove its failure reaches the owner through the
    reviewed alert path.
 8. Re-run the exact browser and database release matrices against the staged

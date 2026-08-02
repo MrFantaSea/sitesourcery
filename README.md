@@ -30,6 +30,11 @@ or a DNS change.
 - `ops/` contains held service and Caddy candidates; they are not installed by
   repository tests.
 
+The current loopback-only production rehearsal and its independently verified
+encrypted backup/restore are documented in
+`ops/production-rehearsal/README.md` and
+`ops/PRODUCTION-BACKUP-RESTORE-2026-08-02.md`.
+
 ## Local verification
 
 Use exactly Node 24.18.0:
