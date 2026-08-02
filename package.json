@@ -44,6 +44,7 @@
     "ops:backup-retention": "node ops/apply-backup-retention.mjs",
     "ops:restore-verify": "node ops/verify-restore.mjs",
     "ops:monitor-held": "node ops/monitor-held.mjs",
+    "ops:alert-delivery-proof": "node ops/prove-alert-delivery.mjs",
     "test:public-truth:legacy": "node --test scripts/test/public-truth-release.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "check:artifact": "node scripts/build-pages.mjs --check",

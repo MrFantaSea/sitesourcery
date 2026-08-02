@@ -13,6 +13,8 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ALERT_CODE = /^[A-Z][A-Z0-9_]{2,127}$/u;
+const DELIVERY_PROOF_CODE =
+  "ALERT_DELIVERY_PROOF";
 
 function exactKeys(value, expected) {
   return (
@@ -308,6 +310,16 @@ function validateEnvelope(
 }
 
 function subjectFor(report, transition) {
+  const deliveryProof =
+    (transition.kind === "recovery"
+      ? transition.previousAlertCodes
+      : report.alerts.map(({ code }) => code)
+    ).includes(DELIVERY_PROOF_CODE);
+  if (deliveryProof) {
+    return transition.kind === "recovery"
+      ? "[TEST RECOVERED] Site Sourcery alert delivery"
+      : "[TEST WARNING] Site Sourcery alert delivery";
+  }
   if (transition.kind === "recovery") {
     return "[RECOVERED] Site Sourcery operations";
   }
@@ -325,12 +337,23 @@ function subjectFor(report, transition) {
 }
 
 function messageLines(report, transition) {
+  const deliveryProof =
+    (transition.kind === "recovery"
+      ? transition.previousAlertCodes
+      : report.alerts.map(({ code }) => code)
+    ).includes(DELIVERY_PROOF_CODE);
   const heading =
-    transition.kind === "recovery"
+    deliveryProof
+      ? transition.kind === "recovery"
+        ? "Site Sourcery alert test recovered"
+        : "Site Sourcery alert delivery test"
+      : transition.kind === "recovery"
       ? "Site Sourcery recovered"
       : "Site Sourcery needs attention";
   const status =
-    transition.kind === "recovery"
+    deliveryProof
+      ? "TEST ONLY - Production remained healthy during this delivery proof."
+      : transition.kind === "recovery"
       ? "The previously reported operational checks are healthy again."
       : transition.kind === "reminder"
         ? "This incident is still active."

@@ -98,6 +98,43 @@ function incidentEnvelope() {
   };
 }
 
+function proofEnvelope(kind) {
+  const incident = kind === "incident";
+  return {
+    ...incidentEnvelope(),
+    report: {
+      ...incidentEnvelope().report,
+      ok: !incident,
+      alerts: incident
+        ? [
+            {
+              code: "ALERT_DELIVERY_PROOF",
+              severity: "warning",
+              summary:
+                "TEST ONLY - Site Sourcery alert delivery proof. Production remained healthy."
+            }
+          ]
+        : []
+    },
+    transition: {
+      ...incidentEnvelope().transition,
+      kind,
+      incidentFingerprint: incident
+        ? INCIDENT_FINGERPRINT
+        : null,
+      previousIncidentFingerprint: incident
+        ? null
+        : INCIDENT_FINGERPRINT,
+      alertCodes: incident
+        ? ["ALERT_DELIVERY_PROOF"]
+        : [],
+      previousAlertCodes: incident
+        ? []
+        : ["ALERT_DELIVERY_PROOF"]
+    }
+  };
+}
+
 test("Resend operations alerts verify the exact sending domain and deliver only bounded operational facts", async () => {
   const calls = [];
   const transport =
@@ -215,5 +252,42 @@ test("Resend operations alerts fail closed on tracking, domain drift, and destin
         destinationRef: DESTINATION_REF
       }),
     /adapter identity is invalid/u
+  );
+});
+
+test("Resend delivery-proof messages are visibly labeled as tests in incident and recovery subjects", async () => {
+  const requests = [];
+  const transport =
+    createResendOperationsAlertTransport({
+      environment: ENVIRONMENT,
+      adapterId: ADAPTER_ID,
+      destinationRef: DESTINATION_REF,
+      async fetchImpl(url, options) {
+        if (options.method === "POST") {
+          requests.push(
+            JSON.parse(options.body)
+          );
+          return jsonResponse({ id: MESSAGE_ID });
+        }
+        return jsonResponse(verifiedDomain());
+      }
+    });
+  await transport.deliver(
+    proofEnvelope("incident")
+  );
+  await transport.deliver(
+    proofEnvelope("recovery")
+  );
+  assert.deepEqual(
+    requests.map(({ subject }) => subject),
+    [
+      "[TEST WARNING] Site Sourcery alert delivery",
+      "[TEST RECOVERED] Site Sourcery alert delivery"
+    ]
+  );
+  assert.ok(
+    requests.every(({ text }) =>
+      text.includes("TEST ONLY")
+    )
   );
 });

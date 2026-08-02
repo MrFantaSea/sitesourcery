@@ -63,7 +63,7 @@ function integer(
   return value;
 }
 
-async function alertAdapterFromEnvironment(
+export async function alertAdapterFromEnvironment(
   environment
 ) {
   const mode = required(
