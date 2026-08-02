@@ -160,46 +160,43 @@ export function createProductionMonitoringProbes({
         if (!entry.isDirectory()) {
           continue;
         }
-        const attemptRoot = path.join(
-          attemptsRoot,
-          entry.name
-        );
         if (
           !(await present(
             path.join(
-              attemptRoot,
+              attemptsRoot,
+              entry.name,
               "attempt.succeeded.json"
             )
           ))
         ) {
           continue;
         }
-        const verified =
-          await loadVerifiedBackupAttempt(
-            attemptRoot
-          );
-        if (
-          verified.manifest
-            .destinationMarkerSha256 !==
-          destination.markerSha256
-        ) {
-          throw new Error(
-            "Backup destination marker drifted."
-          );
-        }
-        successful.push(verified);
+        successful.push(entry.name);
       }
       successful.sort(
         (left, right) =>
-          new Date(
-            right.manifest.completedAt
-          ) -
-          new Date(left.manifest.completedAt)
+          right.localeCompare(left)
       );
-      const latest = successful[0];
-      if (!latest) {
+      const latestAttemptId = successful[0];
+      if (!latestAttemptId) {
         throw new Error(
           "No successful backup is available."
+        );
+      }
+      const latest =
+        await loadVerifiedBackupAttempt(
+          path.join(
+            attemptsRoot,
+            latestAttemptId
+          )
+        );
+      if (
+        latest.manifest
+          .destinationMarkerSha256 !==
+        destination.markerSha256
+      ) {
+        throw new Error(
+          "Backup destination marker drifted."
         );
       }
       return Object.freeze({

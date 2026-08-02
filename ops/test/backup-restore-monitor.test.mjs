@@ -1468,6 +1468,81 @@ test("production and production-rehearsal backup ports pin distinct exact system
   );
 });
 
+test("production backup monitoring fully verifies only the newest timestamp-bound successful attempt", async (t) => {
+  const older = await successfulBackup(t, {
+    attemptId: "older-attempt-001"
+  });
+  const newerResult = await runBackupAttempt({
+    destinationRoot: older.destinationRoot,
+    stagingRoot: older.stagingRoot,
+    destinationMarker: DESTINATION_MARKER,
+    sourceFailureDomainId: "primary-01",
+    ageRecipient:
+      "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    sourceOperationsState: HELDS,
+    providerEgress: "held",
+    ports: fakeBackupPorts(),
+    now: () =>
+      new Date("2026-07-29T12:10:00.000Z"),
+    attemptIdFactory: () =>
+      "newer-attempt-001"
+  });
+  await writeFile(
+    path.join(
+      older.destinationRoot,
+      ".sitesourcery-off-machine.json"
+    ),
+    `${JSON.stringify(DESTINATION_MARKER)}\n`,
+    { mode: 0o600 }
+  );
+  const olderArtifact = path.join(
+    older.result.attemptRoot,
+    "postgresql.age"
+  );
+  await chmod(olderArtifact, 0o600);
+  await writeFile(olderArtifact, "older-corruption");
+  await chmod(olderArtifact, 0o400);
+
+  const production =
+    createProductionMonitoringProbes({
+      databaseUrl:
+        "postgresql://monitor:private@127.0.0.1:1/sitesourcery",
+      dataRoot: older.root,
+      backupDestinationRoot:
+        older.destinationRoot,
+      sourceFailureDomainId: "primary-01",
+      certificateFile: null,
+      certificateHostname: null,
+      expectedOperationsState: HELDS
+    });
+  try {
+    const latest =
+      await production.probes.backup();
+    assert.equal(
+      latest.attemptId,
+      newerResult.attemptId
+    );
+    const newerArtifact = path.join(
+      newerResult.attemptRoot,
+      "postgresql.age"
+    );
+    await chmod(newerArtifact, 0o600);
+    await writeFile(
+      newerArtifact,
+      "newer-corruption"
+    );
+    await chmod(newerArtifact, 0o400);
+    await assert.rejects(
+      production.probes.backup(),
+      (error) =>
+        error.code ===
+        "BACKUP_ARTIFACT_TAMPERED"
+    );
+  } finally {
+    await production.close();
+  }
+});
+
 function healthyProbes(
   operationsState = HELDS
 ) {

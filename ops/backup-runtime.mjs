@@ -673,7 +673,24 @@ export async function loadVerifiedBackupAttempt(
   const attemptId = path.basename(
     path.resolve(attemptRoot)
   );
+  const expectedAttemptPrefix = `${String(
+    started.startedAt ?? ""
+  )
+    .replaceAll(":", "")
+    .replaceAll(".", "")}-`;
   if (
+    !attemptId.startsWith(
+      expectedAttemptPrefix
+    ) ||
+    safeIdentifier(
+      attemptId.slice(
+        expectedAttemptPrefix.length
+      ),
+      "Backup attempt ID"
+    ) !==
+      attemptId.slice(
+        expectedAttemptPrefix.length
+      ) ||
     started.attemptId !== attemptId ||
     manifest.attemptId !== attemptId ||
     manifest.startedAt !== started.startedAt ||
