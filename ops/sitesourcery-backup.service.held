@@ -1,11 +1,10 @@
-# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+# ACTIVATION_HOLD — template only. Do not copy, enable, or start.
 
 [Unit]
 Description=Create one encrypted off-machine Site Sourcery backup
 After=local-fs.target network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/sitesourcery/BACKUP_APPROVED
-ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
 ConditionPathExists=/run/sitesourcery/BACKUP_QUIESCE
 
 [Service]

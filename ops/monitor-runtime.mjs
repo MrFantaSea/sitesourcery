@@ -3,6 +3,13 @@ import {
   createHeldAlertAdapter,
   dispatchOperationsAlerts
 } from "./alert-adapter.mjs";
+import {
+  canonicalJson
+} from "./immutable-evidence.mjs";
+import {
+  assertOperationsProviderEgressHeld,
+  validateOperationsStateEvidence
+} from "./operations-state.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_THRESHOLDS = Object.freeze({
@@ -101,9 +108,11 @@ function ageFrom(now, value) {
   return now - date;
 }
 
-export async function runHeldOperationsMonitor({
+export async function runOperationsMonitor({
   probes,
   thresholds,
+  operationsStateEvidence,
+  providerEgress,
   alertAdapter = createHeldAlertAdapter(),
   now = () => new Date()
 }) {
@@ -116,6 +125,22 @@ export async function runHeldOperationsMonitor({
       "Monitoring clock must return a valid Date."
     );
   }
+  const sourceOperations =
+    validateOperationsStateEvidence(
+      operationsStateEvidence,
+      {
+        sourceFailureDomainId:
+          operationsStateEvidence
+            ?.sourceFailureDomainId,
+        consumer: "monitor"
+      }
+    );
+  const expectedOperationsState =
+    sourceOperations.operationsState;
+  const providerEgressState =
+    assertOperationsProviderEgressHeld(
+      providerEgress
+    );
   const limits = validateThresholds(thresholds);
   for (const name of [
     "runtime",
@@ -174,26 +199,31 @@ export async function runHeldOperationsMonitor({
     !unavailable(
       "runtime",
       "RUNTIME_PROBE_UNAVAILABLE",
-      "The held runtime probe could not complete."
+      "The runtime state probe could not complete."
     )
   ) {
     const runtime = byName.get("runtime").value;
     const ok =
       runtime?.ok === true &&
-      runtime.publicationHeld === true;
+      canonicalJson(
+        runtime.operationsState
+      ) ===
+        canonicalJson(
+          expectedOperationsState
+        );
     checks.push({
       name: "runtime",
       ok,
       code: ok
         ? null
-        : "RUNTIME_HOLD_OR_READINESS_DRIFT"
+        : "RUNTIME_READINESS_OR_STATE_DRIFT"
     });
     if (!ok) {
       alerts.push(
         alert(
-          "RUNTIME_HOLD_OR_READINESS_DRIFT",
+          "RUNTIME_READINESS_OR_STATE_DRIFT",
           "critical",
-          "Runtime readiness or publication hold drifted."
+          "Runtime readiness or approved operations state drifted."
         )
       );
     }
@@ -208,24 +238,28 @@ export async function runHeldOperationsMonitor({
   ) {
     const database =
       byName.get("database").value;
+    const expectedDomainHeld =
+      expectedOperationsState.domainRuntime ===
+      "held";
     const ok =
       database?.ready === true &&
       database.runtimeContractV13 === true &&
       database.runtimeContractV14 === true &&
       database.runtimeContractV15 === true &&
       database.shadowSchemaAbsent === true &&
-      database.domainHeld === true;
+      database.domainHeld ===
+        expectedDomainHeld;
     checks.push({
       name: "database",
       ok,
       code: ok
         ? null
-        : "DATABASE_READINESS_OR_HOLD_DRIFT"
+        : "DATABASE_READINESS_OR_DOMAIN_STATE_DRIFT"
     });
     if (!ok) {
       alerts.push(
         alert(
-          "DATABASE_READINESS_OR_HOLD_DRIFT",
+          "DATABASE_READINESS_OR_DOMAIN_STATE_DRIFT",
           "critical",
           "PostgreSQL migrations, invariants, or domain hold drifted."
         )
@@ -488,7 +522,8 @@ export async function runHeldOperationsMonitor({
   const report = Object.freeze({
     schema: OPERATIONS_REPORT_SCHEMA,
     observedAt: observedAt.toISOString(),
-    held: true,
+    providerEgress: providerEgressState,
+    sourceOperations,
     ok: alerts.length === 0,
     checks,
     alerts

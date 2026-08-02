@@ -2,10 +2,17 @@
 
 import { pathToFileURL } from "node:url";
 
-const EXPECTED_PUBLICATION = new Set([
-  "approved",
-  "held"
-]);
+import {
+  canonicalJson
+} from "./immutable-evidence.mjs";
+import {
+  DEFAULT_HELD_OPERATIONS_STATE,
+  operationsStateFromEnvironment,
+  validateOperationsState
+} from "./operations-state.mjs";
+
+const HOSTED_OPERATIONS_STATE_SCHEMA =
+  "sitesourcery.hosted-operations-state/v1";
 
 function port(value, field, fallback) {
   const selected = Number(value ?? fallback);
@@ -15,16 +22,6 @@ function port(value, field, fallback) {
     selected > 65535
   ) {
     throw new Error(`${field} must be an unprivileged TCP port.`);
-  }
-  return selected;
-}
-
-function publicationExpectation(value) {
-  const selected = String(value ?? "held");
-  if (!EXPECTED_PUBLICATION.has(selected)) {
-    throw new Error(
-      "SITESOURCERY_EXPECT_PUBLICATION must be held or approved."
-    );
   }
   return selected;
 }
@@ -75,7 +72,8 @@ export async function probeRuntime({
   fetchImpl = globalThis.fetch,
   apiPort = 8788,
   tenantPort = 8080,
-  expectedPublication = "held",
+  expectedOperationsState =
+    DEFAULT_HELD_OPERATIONS_STATE,
   timeoutMs = 3000
 } = {}) {
   if (typeof fetchImpl !== "function") {
@@ -96,9 +94,10 @@ export async function probeRuntime({
       "API and tenant probes must use different ports."
     );
   }
-  const publication = publicationExpectation(
-    expectedPublication
+  const expected = validateOperationsState(
+    expectedOperationsState
   );
+  const publication = expected.publication;
   if (
     !Number.isSafeInteger(timeoutMs) ||
     timeoutMs < 250 ||
@@ -140,6 +139,35 @@ export async function probeRuntime({
           "sitesourcery-hosted-runtime"
     }
   );
+  const observedOperationsEnvelope =
+    await jsonProbe(
+      fetchImpl,
+      new URL(
+        "_sitesourcery/operations-state",
+        apiBase
+      ),
+      {
+        expectedStatus: 200,
+        signal,
+        validate: (body) =>
+          body?.schema ===
+            HOSTED_OPERATIONS_STATE_SCHEMA &&
+          body.operationsState &&
+          typeof body.operationsState === "object"
+      }
+    );
+  const observedOperationsState =
+    validateOperationsState(
+      observedOperationsEnvelope.operationsState
+    );
+  if (
+    canonicalJson(observedOperationsState) !==
+    canonicalJson(expected)
+  ) {
+    throw new Error(
+      "Hosted operations state differs from its reviewed expectation."
+    );
+  }
   const tenantHealth = await jsonProbe(
     fetchImpl,
     new URL(
@@ -178,6 +206,7 @@ export async function probeRuntime({
     service: apiHealth.service,
     publicationHeld:
       tenantHealth.publicationHeld,
+    operationsState: observedOperationsState,
     tenantControlRevision:
       tenantReady.controlRevision ?? null
   });
@@ -189,9 +218,10 @@ async function main() {
       process.env.SITESOURCERY_HOSTED_PORT,
     tenantPort:
       process.env.SITESOURCERY_TENANT_PORT,
-    expectedPublication:
-      process.env
-        .SITESOURCERY_EXPECT_PUBLICATION,
+    expectedOperationsState:
+      operationsStateFromEnvironment(
+        process.env
+      ),
     timeoutMs: Number(
       process.env.SITESOURCERY_PROBE_TIMEOUT_MS ??
         "3000"

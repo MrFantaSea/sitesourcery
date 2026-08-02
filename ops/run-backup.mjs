@@ -18,6 +18,11 @@ import {
 import {
   parseJsonObject
 } from "./immutable-evidence.mjs";
+import {
+  assertOperationsProviderEgressHeld,
+  operationsStateFromEnvironment,
+  readOperationsStateApprovalFile
+} from "./operations-state.mjs";
 
 function required(environment, field) {
   const value = environment[field];
@@ -36,24 +41,6 @@ function absolute(environment, field) {
     throw new Error(`${field} must be absolute.`);
   }
   return path.resolve(value);
-}
-
-function heldState(environment) {
-  return {
-    stripeMode:
-      environment.SITESOURCERY_STRIPE_MODE,
-    recoveryMailMode:
-      environment
-        .SITESOURCERY_RECOVERY_MAIL_MODE,
-    publication:
-      environment
-        .SITESOURCERY_EXPECT_PUBLICATION,
-    domainRuntime:
-      environment
-        .SITESOURCERY_EXPECT_DOMAIN_RUNTIME,
-    dns:
-      environment.SITESOURCERY_EXPECT_DNS
-  };
 }
 
 async function assertDirectory(directory, field) {
@@ -208,6 +195,11 @@ export async function backupFromEnvironment(
     ageRecipientFile,
     "utf8"
   );
+  const operationsStateApproval =
+    await readOperationsStateApprovalFile(
+      environment
+        .SITESOURCERY_OPERATIONS_STATE_APPROVAL_FILE
+    );
   const ports = createProductionBackupPorts({
     sourceRoots: sourceRoots.map(
       (source, index) => ({
@@ -230,7 +222,16 @@ export async function backupFromEnvironment(
     sourceFailureDomainId,
     stagingRoot: resolvedStaging,
     ageRecipient,
-    heldState: heldState(environment),
+    sourceOperationsState:
+      operationsStateFromEnvironment(
+        environment
+      ),
+    operationsStateApproval,
+    providerEgress:
+      assertOperationsProviderEgressHeld(
+        environment
+          .SITESOURCERY_OPERATIONS_PROVIDER_EGRESS
+      ),
     ports
   });
 }

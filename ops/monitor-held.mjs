@@ -7,14 +7,17 @@ import {
   createHeldAlertAdapter
 } from "./alert-adapter.mjs";
 import {
-  assertHeldOperationsState
-} from "./backup-runtime.mjs";
-import {
   createProductionMonitoringProbes
 } from "./monitor-ports.mjs";
 import {
-  runHeldOperationsMonitor
+  runOperationsMonitor
 } from "./monitor-runtime.mjs";
+import {
+  assertOperationsProviderEgressHeld,
+  operationsStateFromEnvironment,
+  readOperationsStateApprovalFile,
+  resolveOperationsStateEvidence
+} from "./operations-state.mjs";
 
 function required(environment, field) {
   const value = environment[field];
@@ -55,21 +58,6 @@ function integer(
 export async function monitorFromEnvironment(
   environment = process.env
 ) {
-  assertHeldOperationsState({
-    stripeMode:
-      environment.SITESOURCERY_STRIPE_MODE,
-    recoveryMailMode:
-      environment
-        .SITESOURCERY_RECOVERY_MAIL_MODE,
-    publication:
-      environment
-        .SITESOURCERY_EXPECT_PUBLICATION,
-    domainRuntime:
-      environment
-        .SITESOURCERY_EXPECT_DOMAIN_RUNTIME,
-    dns:
-      environment.SITESOURCERY_EXPECT_DNS
-  });
   if (
     environment.SITESOURCERY_ALERT_MODE !==
     "held"
@@ -78,6 +66,32 @@ export async function monitorFromEnvironment(
       "This candidate wires only the held alert adapter."
     );
   }
+  const sourceFailureDomainId = required(
+    environment,
+    "SITESOURCERY_SOURCE_FAILURE_DOMAIN"
+  );
+  const operationsState =
+    operationsStateFromEnvironment(
+      environment
+    );
+  const operationsStateApproval =
+    await readOperationsStateApprovalFile(
+      environment
+        .SITESOURCERY_OPERATIONS_STATE_APPROVAL_FILE
+    );
+  const operationsStateEvidence =
+    resolveOperationsStateEvidence({
+      actualOperationsState: operationsState,
+      approval: operationsStateApproval,
+      sourceFailureDomainId,
+      consumer: "monitor",
+      now: new Date()
+    });
+  const providerEgress =
+    assertOperationsProviderEgressHeld(
+      environment
+        .SITESOURCERY_OPERATIONS_PROVIDER_EGRESS
+    );
   const production =
     createProductionMonitoringProbes({
       databaseUrl: required(
@@ -92,10 +106,7 @@ export async function monitorFromEnvironment(
         environment,
         "SITESOURCERY_BACKUP_DESTINATION_ROOT"
       ),
-      sourceFailureDomainId: required(
-        environment,
-        "SITESOURCERY_SOURCE_FAILURE_DOMAIN"
-      ),
+      sourceFailureDomainId,
       certificateFile: absolute(
         environment,
         "SITESOURCERY_MONITOR_CERTIFICATE_FILE"
@@ -104,6 +115,8 @@ export async function monitorFromEnvironment(
         environment,
         "SITESOURCERY_MONITOR_CERTIFICATE_HOSTNAME"
       ),
+      expectedOperationsState:
+        operationsState,
       apiPort: integer(
         environment,
         "SITESOURCERY_HOSTED_PORT",
@@ -121,8 +134,10 @@ export async function monitorFromEnvironment(
       )
     });
   try {
-    return await runHeldOperationsMonitor({
+    return await runOperationsMonitor({
       probes: production.probes,
+      operationsStateEvidence,
+      providerEgress,
       thresholds: {
         backupMaxAgeMs: integer(
           environment,
@@ -170,7 +185,7 @@ if (
     process.stderr.write(
       `${JSON.stringify({
         ok: false,
-        held: true,
+        providerEgress: "held",
         code: "OPERATIONS_MONITOR_FAILED"
       })}\n`
     );

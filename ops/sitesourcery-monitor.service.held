@@ -1,10 +1,9 @@
-# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+# ACTIVATION_HOLD — template only. Do not copy, enable, or start.
 
 [Unit]
-Description=Check held Site Sourcery runtime and recovery signals
+Description=Check approved Site Sourcery operations and recovery signals
 After=sitesourcery-hosted.service
 ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
-ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
 
 [Service]
 Type=oneshot

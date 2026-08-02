@@ -42,8 +42,14 @@ import {
   writeImmutableEvidence
 } from "../immutable-evidence.mjs";
 import {
-  runHeldOperationsMonitor
+  runOperationsMonitor
 } from "../monitor-runtime.mjs";
+import {
+  HELD_PROVIDER_EGRESS_STATE,
+  OPERATIONS_STATE_APPROVAL_SCHEMA,
+  operationsStateApprovalDigest,
+  resolveOperationsStateEvidence
+} from "../operations-state.mjs";
 import {
   verifyCleanRoomRestore
 } from "../restore-runtime.mjs";
@@ -53,10 +59,50 @@ const NOW = new Date(
 );
 const HELDS = Object.freeze({
   stripeMode: "held",
+  registrationMailMode: "held",
   recoveryMailMode: "held",
   publication: "held",
   domainRuntime: "held",
   dns: "held"
+});
+const LIVE_MAIL_OPERATIONS = Object.freeze({
+  ...HELDS,
+  registrationMailMode: "production",
+  recoveryMailMode: "production"
+});
+function operationsApproval(
+  expectedOperationsState =
+    LIVE_MAIL_OPERATIONS
+) {
+  const approval = {
+    schema: OPERATIONS_STATE_APPROVAL_SCHEMA,
+    approvalId: "production-mail-ready-001",
+    state: "approved",
+    sourceFailureDomainId: "primary-01",
+    consumers: ["backup", "monitor"],
+    expectedOperationsState,
+    approvedAt:
+      "2026-07-29T00:00:00.000Z",
+    expiresAt:
+      "2026-07-30T00:00:00.000Z"
+  };
+  return Object.freeze({
+    ...approval,
+    digest:
+      operationsStateApprovalDigest(
+        approval
+      )
+  });
+}
+const HELD_MONITOR_CONTRACT = Object.freeze({
+  operationsStateEvidence:
+    resolveOperationsStateEvidence({
+      actualOperationsState: HELDS,
+      sourceFailureDomainId: "primary-01",
+      consumer: "monitor",
+      now: NOW
+    }),
+  providerEgress: "held"
 });
 const DESTINATION_MARKER = Object.freeze({
   schema: OFF_MACHINE_DESTINATION_SCHEMA,
@@ -232,7 +278,14 @@ function fakeBackupPorts({
   };
 }
 
-async function successfulBackup(t) {
+async function successfulBackup(
+  t,
+  {
+    operationsState = HELDS,
+    approval = null,
+    attemptId = "attempt-001"
+  } = {}
+) {
   const paths = await setup(t);
   const result = await runBackupAttempt({
     ...paths,
@@ -240,10 +293,12 @@ async function successfulBackup(t) {
     sourceFailureDomainId: "primary-01",
     ageRecipient:
       "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
-    heldState: HELDS,
+    sourceOperationsState: operationsState,
+    operationsStateApproval: approval,
+    providerEgress: "held",
     ports: fakeBackupPorts(),
     now: () => new Date(NOW),
-    attemptIdFactory: () => "attempt-001"
+    attemptIdFactory: () => attemptId
   });
   return { ...paths, result };
 }
@@ -306,14 +361,108 @@ test("backup writes only age ciphertext and immutable checksummed evidence to an
   );
 });
 
-test("backup fails closed on local destinations, stale holds, and a changing writer fence", async (t) => {
+test("reviewed live mail state is captured while backup and clean-room provider egress stay held", async (t) => {
+  const {
+    result,
+    stagingRoot,
+    evidenceRoot
+  } = await successfulBackup(t, {
+    operationsState: LIVE_MAIL_OPERATIONS,
+    approval: operationsApproval(),
+    attemptId: "live-mail-attempt-001"
+  });
+  const verified =
+    await loadVerifiedBackupAttempt(
+      result.attemptRoot
+    );
+  assert.equal(
+    verified.manifest.sourceOperations.mode,
+    "reviewed"
+  );
+  assert.deepEqual(
+    verified.manifest.sourceOperations
+      .operationsState,
+    LIVE_MAIL_OPERATIONS
+  );
+  assert.equal(
+    verified.manifest.sourceOperations.approval
+      .digest,
+    operationsApproval().digest
+  );
+  assert.equal(
+    verified.manifest.providerEgress,
+    "held"
+  );
+
+  const restored = await verifyCleanRoomRestore({
+    attemptRoot: result.attemptRoot,
+    stagingRoot,
+    evidenceRoot,
+    providerEgressState:
+      HELD_PROVIDER_EGRESS_STATE,
+    restoreTarget: {
+      databaseName:
+        "sitesourcery_restore_live_mail_001",
+      networkExposure: "none"
+    },
+    ports: {
+      async decrypt({ inputPath, outputPath }) {
+        const encrypted =
+          await readFile(inputPath);
+        await writeFile(
+          outputPath,
+          encrypted.subarray(
+            Buffer.byteLength(
+              "age-encrypted:"
+            )
+          )
+        );
+      },
+      async restoreFreshDatabase({ expected }) {
+        return {
+          freshDatabase: true,
+          databaseName:
+            "sitesourcery_restore_live_mail_001",
+          ...expected
+        };
+      },
+      async restoreFreshAppState({ expected }) {
+        return {
+          freshRoot: true,
+          treeSha256: expected.treeSha256
+        };
+      }
+    },
+    now: () => new Date(NOW),
+    restoreIdFactory: () =>
+      "restore-live-mail-001"
+  });
+  assert.deepEqual(
+    restored.report.sourceOperations
+      .operationsState,
+    LIVE_MAIL_OPERATIONS
+  );
+  assert.deepEqual(
+    restored.report.restoreExecution
+      .providerEgress,
+    HELD_PROVIDER_EGRESS_STATE
+  );
+  assert.equal(
+    restored.report.restoreExecution
+      .networkExposure,
+    "none"
+  );
+});
+
+test("backup fails closed on local destinations, unapproved state, provider egress, and a changing writer fence", async (t) => {
   const paths = await setup(t);
   const base = {
     ...paths,
     sourceFailureDomainId: "primary-01",
     ageRecipient:
       "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
-    heldState: HELDS,
+    sourceOperationsState: HELDS,
+    providerEgress: "held",
     now: () => new Date(NOW),
     attemptIdFactory: () => "attempt-002"
   };
@@ -334,14 +483,37 @@ test("backup fails closed on local destinations, stale holds, and a changing wri
     runBackupAttempt({
       ...base,
       destinationMarker: DESTINATION_MARKER,
-      heldState: {
+      sourceOperationsState: {
         ...HELDS,
         stripeMode: "approved_live"
       },
       ports: fakeBackupPorts()
     }),
     (error) =>
-      error.code === "BACKUP_HOLD_REQUIRED"
+      error.code ===
+      "OPERATIONS_STATE_APPROVAL_REQUIRED"
+  );
+  await assert.rejects(
+    runBackupAttempt({
+      ...base,
+      destinationMarker: DESTINATION_MARKER,
+      operationsStateApproval:
+        operationsApproval(),
+      ports: fakeBackupPorts()
+    }),
+    (error) =>
+      error.code === "OPERATIONS_STATE_DRIFT"
+  );
+  await assert.rejects(
+    runBackupAttempt({
+      ...base,
+      destinationMarker: DESTINATION_MARKER,
+      providerEgress: "approved_live",
+      ports: fakeBackupPorts()
+    }),
+    (error) =>
+      error.code ===
+      "OPERATIONS_PROVIDER_EGRESS_NOT_HELD"
   );
   await assert.rejects(
     runBackupAttempt({
@@ -357,6 +529,66 @@ test("backup fails closed on local destinations, stale holds, and a changing wri
   );
 });
 
+test("operations-state approval rejects tampering, extra authority, and expiry", () => {
+  const valid = operationsApproval();
+  for (const approval of [
+    {
+      ...valid,
+      digest: "0".repeat(64)
+    },
+    {
+      ...valid,
+      unreviewedAuthority: true
+    }
+  ]) {
+    assert.throws(
+      () =>
+        resolveOperationsStateEvidence({
+          actualOperationsState:
+            LIVE_MAIL_OPERATIONS,
+          approval,
+          sourceFailureDomainId:
+            "primary-01",
+          consumer: "backup",
+          now: NOW
+        }),
+      (error) =>
+        error.code ===
+          "OPERATIONS_STATE_APPROVAL_INVALID" ||
+        error.code ===
+          "OPERATIONS_STATE_INVALID"
+    );
+  }
+  const expiredPayload = {
+    ...valid,
+    approvedAt:
+      "2026-07-27T00:00:00.000Z",
+    expiresAt:
+      "2026-07-28T00:00:00.000Z"
+  };
+  const expired = {
+    ...expiredPayload,
+    digest:
+      operationsStateApprovalDigest(
+        expiredPayload
+      )
+  };
+  assert.throws(
+    () =>
+      resolveOperationsStateEvidence({
+        actualOperationsState:
+          LIVE_MAIL_OPERATIONS,
+        approval: expired,
+        sourceFailureDomainId: "primary-01",
+        consumer: "backup",
+        now: NOW
+      }),
+    (error) =>
+      error.code ===
+      "OPERATIONS_STATE_APPROVAL_EXPIRED"
+  );
+});
+
 test("failed backup records only a safe code and removes local plaintext", async (t) => {
   const paths = await setup(t);
   await assert.rejects(
@@ -366,7 +598,8 @@ test("failed backup records only a safe code and removes local plaintext", async
       sourceFailureDomainId: "primary-01",
       ageRecipient:
         "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
-      heldState: HELDS,
+      sourceOperationsState: HELDS,
+      providerEgress: "held",
       ports: fakeBackupPorts({
         failDatabase:
           "postgresql://secret-user:secret-password@db/private"
@@ -471,8 +704,11 @@ test("tampered ciphertext is rejected before restore or retention decisions", as
       attemptRoot: result.attemptRoot,
       stagingRoot,
       evidenceRoot,
-      heldState: HELDS,
-      restoreTarget: {},
+      providerEgressState:
+        HELD_PROVIDER_EGRESS_STATE,
+      restoreTarget: {
+        networkExposure: "none"
+      },
       ports: {
         async decrypt() {
           decryptCalls += 1;
@@ -570,7 +806,8 @@ test("retention deletes only re-verified successful attempts after an explicit a
       sourceFailureDomainId: "primary-01",
       ageRecipient:
         "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
-      heldState: HELDS,
+      sourceOperationsState: HELDS,
+      providerEgress: "held",
       ports: fakeBackupPorts(),
       now: () => new Date(NOW),
       attemptIdFactory: () =>
@@ -669,7 +906,7 @@ test("backup CLI rejects overlapping source, staging, and destination roots befo
   );
 });
 
-test("clean-room restore verifies plaintext, fresh targets, v13 through v15, row counts, app bytes, and holds", async (t) => {
+test("clean-room restore verifies plaintext, fresh targets, v13 through v15, row counts, app bytes, and held egress", async (t) => {
   const {
     result,
     stagingRoot,
@@ -679,10 +916,12 @@ test("clean-room restore verifies plaintext, fresh targets, v13 through v15, row
     attemptRoot: result.attemptRoot,
     stagingRoot,
     evidenceRoot,
-    heldState: HELDS,
+    providerEgressState:
+      HELD_PROVIDER_EGRESS_STATE,
     restoreTarget: {
       databaseName:
-        "sitesourcery_restore_attempt_001"
+        "sitesourcery_restore_attempt_001",
+      networkExposure: "none"
     },
     ports: {
       async decrypt({
@@ -755,7 +994,7 @@ test("clean-room restore verifies plaintext, fresh targets, v13 through v15, row
       ),
       "utf8"
     ),
-    /"schema":"sitesourcery\.clean-room-restore\/v1"/u
+    /"schema":"sitesourcery\.clean-room-restore\/v2"/u
   );
 });
 
@@ -770,8 +1009,11 @@ test("clean-room restore fails if the target is not fresh or an invariant drifts
       attemptRoot: result.attemptRoot,
       stagingRoot,
       evidenceRoot,
-      heldState: HELDS,
-      restoreTarget: {},
+      providerEgressState:
+        HELD_PROVIDER_EGRESS_STATE,
+      restoreTarget: {
+        networkExposure: "none"
+      },
       ports: {
         async decrypt({
           inputPath,
@@ -807,6 +1049,57 @@ test("clean-room restore fails if the target is not fresh or an invariant drifts
       error.code ===
       "RESTORE_DATABASE_INVARIANT_FAILED"
   );
+});
+
+test("clean-room restore rejects provider or network exposure before decrypting", async (t) => {
+  const {
+    result,
+    stagingRoot,
+    evidenceRoot
+  } = await successfulBackup(t);
+  let decryptCalls = 0;
+  const ports = {
+    async decrypt() {
+      decryptCalls += 1;
+    },
+    async restoreFreshDatabase() {},
+    async restoreFreshAppState() {}
+  };
+  await assert.rejects(
+    verifyCleanRoomRestore({
+      attemptRoot: result.attemptRoot,
+      stagingRoot,
+      evidenceRoot,
+      providerEgressState: {
+        ...HELD_PROVIDER_EGRESS_STATE,
+        recoveryEmail: "production"
+      },
+      restoreTarget: {
+        networkExposure: "none"
+      },
+      ports
+    }),
+    (error) =>
+      error.code ===
+      "RESTORE_PROVIDER_EGRESS_NOT_HELD"
+  );
+  await assert.rejects(
+    verifyCleanRoomRestore({
+      attemptRoot: result.attemptRoot,
+      stagingRoot,
+      evidenceRoot,
+      providerEgressState:
+        HELD_PROVIDER_EGRESS_STATE,
+      restoreTarget: {
+        networkExposure: "loopback"
+      },
+      ports
+    }),
+    (error) =>
+      error.code ===
+      "RESTORE_NETWORK_EXPOSURE_FORBIDDEN"
+  );
+  assert.equal(decryptCalls, 0);
 });
 
 test("safe command boundary rejects secrets in argv and production backup keeps the database URL out of every argument", async () => {
@@ -887,12 +1180,17 @@ test("safe command boundary rejects secrets in argv and production backup keeps 
   );
 });
 
-function healthyProbes() {
+function healthyProbes(
+  operationsState = HELDS
+) {
   return {
     async runtime() {
       return {
         ok: true,
-        publicationHeld: true
+        publicationHeld:
+          operationsState.publication ===
+          "held",
+        operationsState
       };
     },
     async database() {
@@ -902,7 +1200,9 @@ function healthyProbes() {
         runtimeContractV14: true,
         runtimeContractV15: true,
         shadowSchemaAbsent: true,
-        domainHeld: true
+        domainHeld:
+          operationsState.domainRuntime ===
+          "held"
       };
     },
     async backup() {
@@ -942,7 +1242,8 @@ function healthyProbes() {
 }
 
 test("held monitor covers every required signal and performs no outbound alert effect", async () => {
-  const result = await runHeldOperationsMonitor({
+  const result = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
     probes: healthyProbes(),
     alertAdapter: createHeldAlertAdapter(),
     now: () => new Date(NOW)
@@ -967,6 +1268,51 @@ test("held monitor covers every required signal and performs no outbound alert e
     delivered: false,
     mode: "none"
   });
+});
+
+test("monitor accepts an exact reviewed live-mail state while alert egress remains held", async () => {
+  const operationsStateEvidence =
+    resolveOperationsStateEvidence({
+      actualOperationsState:
+        LIVE_MAIL_OPERATIONS,
+      approval: operationsApproval(),
+      sourceFailureDomainId: "primary-01",
+      consumer: "monitor",
+      now: NOW
+    });
+  const result = await runOperationsMonitor({
+    probes: healthyProbes(
+      LIVE_MAIL_OPERATIONS
+    ),
+    operationsStateEvidence,
+    providerEgress: "held",
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.equal(result.report.ok, true);
+  assert.equal(
+    result.report.sourceOperations.mode,
+    "reviewed"
+  );
+  assert.equal(
+    result.report.providerEgress,
+    "held"
+  );
+
+  const drifted = healthyProbes(HELDS);
+  const drift = await runOperationsMonitor({
+    probes: drifted,
+    operationsStateEvidence,
+    providerEgress: "held",
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.deepEqual(
+    drift.report.alerts.map(
+      (item) => item.code
+    ),
+    ["RUNTIME_READINESS_OR_STATE_DRIFT"]
+  );
 });
 
 test("monitor emits bounded operator alerts for DB, backup age, disk, certificate, cancellation, and export drift while delivery stays held", async () => {
@@ -1007,7 +1353,8 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
     oldestExportLeaseExpiredAt:
       "2026-07-29T11:00:00.000Z"
   });
-  const result = await runHeldOperationsMonitor({
+  const result = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
     probes,
     alertAdapter: createHeldAlertAdapter(),
     now: () => new Date(NOW)
@@ -1022,7 +1369,7 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
       "CANCELLATION_BACKLOG_HIGH",
       "CANCELLATION_RECONCILIATION_REQUIRED",
       "CERTIFICATE_EXPIRING_OR_INVALID",
-      "DATABASE_READINESS_OR_HOLD_DRIFT",
+      "DATABASE_READINESS_OR_DOMAIN_STATE_DRIFT",
       "DISK_CAPACITY_LOW",
       "EXPORT_LEASE_BACKLOG_HIGH",
       "EXPORT_QUEUE_BACKLOG_HIGH",
@@ -1060,7 +1407,8 @@ test("reviewed outbound adapter requires exact expiring approval and only invoke
   probes.runtime = async () => {
     throw new Error("loopback unavailable");
   };
-  const result = await runHeldOperationsMonitor({
+  const result = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
     probes,
     alertAdapter: adapter,
     now: () => new Date(NOW)
@@ -1088,7 +1436,7 @@ test("reviewed outbound adapter requires exact expiring approval and only invoke
   );
 });
 
-test("held env and systemd candidates preserve every provider hold and activate nothing", async () => {
+test("operations candidates keep independent approvals and provider egress holds without a publication-hold dependency", async () => {
   const opsRoot = new URL("../", import.meta.url);
   const names = [
     "sitesourcery-hosted.service.held",
@@ -1104,10 +1452,22 @@ test("held env and systemd candidates preserve every provider hold and activate 
       readFile(new URL(name, opsRoot), "utf8")
     )
   );
-  for (const [index, contents] of files.entries()) {
+  for (const index of [0, 5, 6]) {
     assert.match(
-      contents,
+      files[index],
       /^# PUBLICATION_HOLD/u,
+      names[index]
+    );
+  }
+  for (const index of [1, 2, 3, 4]) {
+    assert.match(
+      files[index],
+      /^# ACTIVATION_HOLD/u,
+      names[index]
+    );
+    assert.doesNotMatch(
+      files[index],
+      /ConditionPathExists=.*PUBLICATION_HOLD/u,
       names[index]
     );
   }
@@ -1177,6 +1537,10 @@ test("held env and systemd candidates preserve every provider hold and activate 
       environment,
       /^SITESOURCERY_STRIPE_MODE=held$/mu
     );
+    assert.match(
+      environment,
+      /^SITESOURCERY_REGISTRATION_MAIL_MODE=held$/mu
+    );
     assert.doesNotMatch(
       environment,
       /SITESOURCERY_PAYMENT_MODE/u
@@ -1188,6 +1552,16 @@ test("held env and systemd candidates preserve every provider hold and activate 
   }
   assert.match(
     monitor,
+    /^SITESOURCERY_ALERT_MODE=held$/mu
+  );
+  for (const environment of [backup, monitor]) {
+    assert.match(
+      environment,
+      /^SITESOURCERY_OPERATIONS_PROVIDER_EGRESS=held$/mu
+    );
+  }
+  assert.match(
+    restore,
     /^SITESOURCERY_ALERT_MODE=held$/mu
   );
   assert.doesNotMatch(

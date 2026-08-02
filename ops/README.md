@@ -93,6 +93,7 @@ Caddy state and its admin socket in separately owned systemd directories.
 /etc/sitesourcery/
   RUNTIME_APPROVED
   PUBLICATION_HOLD
+  operations-state-approved.json
   hosted.env
   caddy.env
   probe.env
@@ -112,7 +113,8 @@ environment files are mode `0600`; examples contain no usable credential.
 `RUNTIME_APPROVED` permits a loopback-only rehearsal while every publication
 hold stays present. The Caddy gate requires `PUBLICATION_APPROVED` and refuses
 startup while `/etc/sitesourcery/PUBLICATION_HOLD` exists. Provider approvals
-for Stripe, Spaceship, DNS, and recovery delivery remain independent switches.
+for Stripe, registration/recovery delivery, Spaceship, and DNS remain
+independent switches.
 
 ## Backup contract
 
@@ -140,8 +142,9 @@ cannot stop the production writer or invent a cross-store snapshot:
 
 The configuration, private exports, tenant runtime, and exact release are all
 inside the encrypted app-state archive. The unencrypted attempt manifest
-contains only paths by artifact kind, sizes, hashes, timestamps, held-state
-evidence, and opaque failure-domain identifiers.
+contains only paths by artifact kind, sizes, hashes, timestamps, source-state
+approval evidence, the operations-process egress hold, and opaque
+failure-domain identifiers.
 
 Retention is a separate command. `ops:backup-retention` verifies every success
 manifest and ciphertext again, always keeps the configured successful floor,
@@ -153,22 +156,31 @@ quiesce marker and the backup program independently proves the writer is
 inactive. Every service and timer remains a `.held` template and has not been
 installed or enabled.
 
-### Release blocker: live-state operations
+### Live-state operations contract
 
-The backup, monitor, and restore candidates in this commit are deliberately
-held-only. They require the recorded Stripe, recovery-mail, publication,
-domain-runtime, and DNS states to all equal `held`; the backup and monitor unit
-candidates also require `PUBLICATION_HOLD`. Removing that hold would therefore
-stop scheduled backup and monitoring, and a backup recorded from a future live
-state could not pass the current clean-room state-equality check.
+Backup and monitoring share one exact source-state contract covering Stripe,
+registration mail, recovery mail, publication, domain runtime, and DNS. With no
+approval file, all six fields must equal `held`. Any non-held field requires a
+bounded `sitesourcery.operations-state-approval/v1` document. The document
+binds an approval ID, source failure domain, sorted `backup`/`monitor` consumer
+scopes, exact expected state, activation and expiry timestamps, and a canonical
+SHA-256 digest. Unknown fields, source or scope drift, an inactive date, a
+changed digest, or actual-state drift fail closed.
 
-Do not deploy these three candidates as post-publication operations. A follow-up
-release gate must add a default-held, exact expected-state approval document for
-backup and monitoring, keep their provider egress independently held, remove
-the publication-hold scheduling dependency, and allow a live-source backup to
-restore into a clean room whose provider egress remains held. That change needs
-its own negative tests and clean-room proof; renaming a file or loosening the
-existing equality check is not sufficient.
+This approval is observation authority, not provider authority. Backup and
+monitoring separately require
+`SITESOURCERY_OPERATIONS_PROVIDER_EGRESS=held`; the monitor still composes only
+the held alert adapter, and backup composes no payment, mail, publication,
+registrar, or DNS adapter. Their units and timers retain independent activation
+markers but no longer depend on `PUBLICATION_HOLD`, so removing the publication
+hold cannot silently stop post-publication backup or monitoring.
+
+Every v2 backup ledger records the full validated source-state evidence and its
+approval digest. Historical verification rechecks that digest without requiring
+the approval to remain unexpired forever. Restore does not require its execution
+state to equal the captured source state; it preserves the source evidence while
+independently requiring every clean-room provider egress to equal `held` and
+network exposure to equal `none` before decrypting anything.
 
 ## Clean-room restore
 
@@ -187,8 +199,11 @@ when:
 - the domain procurement control is held;
 - the exact recorded table count and key row counts match;
 - the restored app-state inventory has the exact recorded tree hash; and
-- Stripe, recovery mail, publication, domain runtime, and DNS expectations all
-  remain held.
+- the source operations state and approval digest still match the immutable
+  backup ledger; and
+- Stripe, registration mail, recovery mail, publication, registrar, DNS, and
+  outbound-alert egress all remain held in the restore process, with network
+  exposure set to `none`.
 
 The clean-room unit permits only Unix sockets and is explicitly not a
 production unit. A restore failure leaves its isolated target available for
@@ -196,9 +211,12 @@ forensics; it never drops or substitutes an existing database.
 
 ## Monitoring and alerts
 
-`monitor-held.mjs` checks six independent signals:
+`monitor-held.mjs` uses the held alert adapter while checking six independent
+signals under the separately approved source-state contract:
 
-- loopback API and tenant readiness with publication still held;
+- loopback API and tenant readiness with all six observed modes exactly equal
+  to the reviewed expectation; Caddy blocks the internal state path publicly,
+  and its projection contains no credentials;
 - PostgreSQL availability, v13/v14/v15 migrations, shadow-schema absence, and the
   domain purchase hold;
 - age and integrity of the newest off-machine backup;
@@ -228,9 +246,11 @@ no alert destination or credential in these files.
    restore tests.
 3. Create `RUNTIME_APPROVED`, keep every publication/provider hold, and start
    only `sitesourcery-hosted.service`. Both listeners must bind to loopback.
-4. Run `probe-runtime.mjs` with `SITESOURCERY_EXPECT_PUBLICATION=held`. A held
-   tenant readiness response is healthy; API persistence, catalog, compiler,
-   and export readiness must still be true.
+4. Run `probe-runtime.mjs` with all six expected operations fields. With no
+   approval they must all be `held`; a reviewed non-held state must use the
+   same active approval document as backup and monitoring. A held tenant
+   readiness response is healthy; API persistence, catalog, compiler, and
+   export readiness must still be true.
 5. Validate the exact Caddy build with its native `validate` command. Use a
    disposable staging control hostname and a disposable customer hostname.
    Prove static routes, same-origin API, unknown-host denial, the TLS `ask`
@@ -249,7 +269,7 @@ no alert destination or credential in these files.
 ## Rollback
 
 Do not rebuild during rollback. Point `current` to the previous already-audited
-commit, restart the loopback runtime, run the held probe, validate Caddy, and
+commit, restart the loopback runtime, run the exact-state probe, validate Caddy, and
 then reload the dedicated Caddy instance. Database rollback is not an automatic
 down-migration: restore the verified backup into an isolated database, prove it,
 and make a separate authority decision.

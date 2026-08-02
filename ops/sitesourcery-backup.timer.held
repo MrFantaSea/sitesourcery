@@ -1,9 +1,8 @@
-# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+# ACTIVATION_HOLD — template only. Do not copy, enable, or start.
 
 [Unit]
 Description=Offer a daily held Site Sourcery backup attempt
 ConditionPathExists=/etc/sitesourcery/BACKUP_APPROVED
-ConditionPathExists=/etc/sitesourcery/PUBLICATION_HOLD
 
 [Timer]
 OnCalendar=*-*-* 04:17:00

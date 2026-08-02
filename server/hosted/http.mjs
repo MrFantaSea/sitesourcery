@@ -19,6 +19,31 @@ const SESSIONLESS_IDENTITY_WRITES = new Set([
   "/api/v1/auth/recovery",
   "/api/v1/auth/recovery/complete"
 ]);
+const HOSTED_OPERATIONS_STATE_SCHEMA =
+  "sitesourcery.hosted-operations-state/v1";
+
+function operationsStateProjection(readiness) {
+  const domains =
+    readiness?.providers?.domains ?? {};
+  return Object.freeze({
+    stripeMode: readiness?.payments?.mode,
+    registrationMailMode:
+      readiness?.registration?.mode,
+    recoveryMailMode:
+      readiness?.recovery?.mode,
+    publication:
+      readiness?.publication?.held === true
+        ? "held"
+        : readiness?.publication?.held === false
+          ? "approved"
+          : null,
+    domainRuntime: domains.mode,
+    dns:
+      domains.dns === "ready"
+        ? "approved_live"
+        : domains.dns
+  });
+}
 
 function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
@@ -261,6 +286,33 @@ export function createHostedApi(
                 "sitesourcery-hosted-runtime"
             },
             200,
+            { "X-Request-Id": requestId }
+          );
+        }
+
+        if (
+          method === "GET" &&
+          pathname ===
+            "/_sitesourcery/operations-state"
+        ) {
+          invariant(
+            typeof service.readiness === "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Hosted operations state is unavailable.",
+            { status: 500 }
+          );
+          const readiness =
+            await service.readiness();
+          return json(
+            {
+              schema:
+                HOSTED_OPERATIONS_STATE_SCHEMA,
+              operationsState:
+                operationsStateProjection(
+                  readiness
+                )
+            },
+            readiness?.ready === true ? 200 : 503,
             { "X-Request-Id": requestId }
           );
         }

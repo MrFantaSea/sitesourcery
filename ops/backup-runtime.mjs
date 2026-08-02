@@ -22,15 +22,20 @@ import {
   verifyImmutableEvidence,
   writeImmutableEvidence
 } from "./immutable-evidence.mjs";
+import {
+  assertOperationsProviderEgressHeld,
+  resolveOperationsStateEvidence,
+  validateOperationsStateEvidence
+} from "./operations-state.mjs";
 
 export const OFF_MACHINE_DESTINATION_SCHEMA =
   "sitesourcery.off-machine-destination/v1";
 export const BACKUP_STARTED_SCHEMA =
-  "sitesourcery.backup-attempt-started/v1";
+  "sitesourcery.backup-attempt-started/v2";
 export const BACKUP_SUCCEEDED_SCHEMA =
-  "sitesourcery.backup-attempt-succeeded/v1";
+  "sitesourcery.backup-attempt-succeeded/v2";
 export const BACKUP_FAILED_SCHEMA =
-  "sitesourcery.backup-attempt-failed/v1";
+  "sitesourcery.backup-attempt-failed/v2";
 export const QUIESCE_SCHEMA =
   "sitesourcery.backup-quiesce/v1";
 
@@ -77,25 +82,6 @@ function safeNow(now) {
     );
   }
   return value;
-}
-
-export function assertHeldOperationsState(state) {
-  const expected = {
-    stripeMode: "held",
-    recoveryMailMode: "held",
-    publication: "held",
-    domainRuntime: "held",
-    dns: "held"
-  };
-  for (const [field, value] of Object.entries(expected)) {
-    if (state?.[field] !== value) {
-      fail(
-        "BACKUP_HOLD_REQUIRED",
-        `Backup requires ${field} to remain held.`
-      );
-    }
-  }
-  return Object.freeze({ ...expected });
 }
 
 export function validateDestinationMarker(
@@ -321,7 +307,9 @@ export async function runBackupAttempt({
   sourceFailureDomainId,
   stagingRoot,
   ageRecipient,
-  heldState,
+  sourceOperationsState,
+  operationsStateApproval = null,
+  providerEgress,
   ports,
   now = () => new Date(),
   attemptIdFactory = randomUUID
@@ -339,12 +327,15 @@ export async function runBackupAttempt({
       "Backup destination and local staging roots must be distinct absolute paths."
     );
   }
-  const holds = assertHeldOperationsState(heldState);
   const destination = validateDestinationMarker(
     destinationMarker,
     sourceFailureDomainId
   );
   const recipient = validateAgeRecipient(ageRecipient);
+  const providerEgressState =
+    assertOperationsProviderEgressHeld(
+      providerEgress
+    );
   for (const capability of [
     "assertQuiesced",
     "inspectAppState",
@@ -361,6 +352,16 @@ export async function runBackupAttempt({
   }
 
   const started = safeNow(now);
+  const sourceOperations =
+    resolveOperationsStateEvidence({
+      actualOperationsState:
+        sourceOperationsState,
+      approval: operationsStateApproval,
+      sourceFailureDomainId:
+        destination.sourceFailureDomainId,
+      consumer: "backup",
+      now: started
+    });
   const generatedAttemptId = safeIdentifier(
     String(attemptIdFactory()),
     "Backup attempt ID"
@@ -407,7 +408,8 @@ export async function runBackupAttempt({
         destination.markerSha256,
       ageRecipientFingerprint:
         recipient.fingerprint,
-      holds
+      sourceOperations,
+      providerEgress: providerEgressState
     }
   );
 
@@ -587,7 +589,8 @@ export async function runBackupAttempt({
           beforeAppState.treeSha256,
         verifiedBeforeAndAfter: true
       },
-      holds,
+      sourceOperations,
+      providerEgress: providerEgressState,
       artifacts: encryptedArtifacts
     };
     const evidence = await writeEvidenceWithDigest(
@@ -618,7 +621,8 @@ export async function runBackupAttempt({
           destination.sourceFailureDomainId,
         destinationFailureDomainId:
           destination.failureDomainId,
-        holds
+        sourceOperations,
+        providerEgress: providerEgressState
       }
     ).catch(() => {});
     throw error;
@@ -662,8 +666,10 @@ export async function loadVerifiedBackupAttempt(
       started.destinationMarkerSha256 ||
     manifest.ageRecipientFingerprint !==
       started.ageRecipientFingerprint ||
-    canonicalJson(manifest.holds) !==
-      canonicalJson(started.holds) ||
+    canonicalJson(manifest.sourceOperations) !==
+      canonicalJson(started.sourceOperations) ||
+    manifest.providerEgress !==
+      started.providerEgress ||
     !Array.isArray(manifest.artifacts) ||
     manifest.artifacts.length !== 2
   ) {
@@ -694,7 +700,17 @@ export async function loadVerifiedBackupAttempt(
       "Backup success evidence has invalid timing or fingerprints."
     );
   }
-  assertHeldOperationsState(manifest.holds);
+  validateOperationsStateEvidence(
+    manifest.sourceOperations,
+    {
+      sourceFailureDomainId:
+        manifest.sourceFailureDomainId,
+      consumer: "backup"
+    }
+  );
+  assertOperationsProviderEgressHeld(
+    manifest.providerEgress
+  );
   const expectedFiles = new Set([
     "attempt.started.json",
     "attempt.started.digest.json",
@@ -900,8 +916,10 @@ async function loadVerifiedFailedBackupAttempt(
       started.sourceFailureDomainId ||
     failed.destinationFailureDomainId !==
       started.destinationFailureDomainId ||
-    canonicalJson(failed.holds) !==
-      canonicalJson(started.holds) ||
+    canonicalJson(failed.sourceOperations) !==
+      canonicalJson(started.sourceOperations) ||
+    failed.providerEgress !==
+      started.providerEgress ||
     typeof failed.code !== "string" ||
     !/^[A-Z][A-Z0-9_]{2,63}$/u.test(failed.code)
   ) {
@@ -924,7 +942,17 @@ async function loadVerifiedFailedBackupAttempt(
       "Backup failure timing is invalid."
     );
   }
-  assertHeldOperationsState(failed.holds);
+  validateOperationsStateEvidence(
+    failed.sourceOperations,
+    {
+      sourceFailureDomainId:
+        failed.sourceFailureDomainId,
+      consumer: "backup"
+    }
+  );
+  assertOperationsProviderEgressHeld(
+    failed.providerEgress
+  );
   await assertExactAttemptLedger(
     attemptRoot,
     new Set([

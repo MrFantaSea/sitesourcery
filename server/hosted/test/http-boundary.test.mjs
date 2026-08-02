@@ -388,6 +388,60 @@ test("health and readiness probes are sessionless, bounded, and nonsecret", asyn
   assert.deepEqual(held.calls.authenticate, []);
 });
 
+test("loopback operations probe exposes only exact nonsecret modes", async () => {
+  const context = createContext({
+    readiness: {
+      ready: true,
+      payments: {
+        mode: "held",
+        secretKey: "sk_live_never-public"
+      },
+      registration: {
+        mode: "production",
+        apiKey: "re_never-public"
+      },
+      recovery: {
+        mode: "production",
+        apiKey: "re_never-public"
+      },
+      publication: {
+        held: true
+      },
+      providers: {
+        domains: {
+          mode: "held",
+          dns: "held",
+          secret: "spaceship-never-public"
+        }
+      }
+    }
+  });
+  const response = await context.api.fetch(
+    new Request(
+      `${ORIGIN}/_sitesourcery/operations-state`
+    )
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload, {
+    schema:
+      "sitesourcery.hosted-operations-state/v1",
+    operationsState: {
+      stripeMode: "held",
+      registrationMailMode: "production",
+      recoveryMailMode: "production",
+      publication: "held",
+      domainRuntime: "held",
+      dns: "held"
+    }
+  });
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /sk_live|re_never|spaceship-never|apiKey|secret/iu
+  );
+  assert.deepEqual(context.calls.authenticate, []);
+});
+
 test("HTTP boundary routes exact rollback intent and emits a valid export digest", async () => {
   const context = createContext();
   const cookie = `ss_csrf=${CSRF}; ss_session=${SESSION}`;

@@ -51,6 +51,7 @@ export function createProductionMonitoringProbes({
   sourceFailureDomainId,
   certificateFile,
   certificateHostname,
+  expectedOperationsState,
   apiPort = 8788,
   tenantPort = 8080,
   timeoutMs = 3000,
@@ -72,7 +73,7 @@ export function createProductionMonitoringProbes({
         fetchImpl,
         apiPort,
         tenantPort,
-        expectedPublication: "held",
+        expectedOperationsState,
         timeoutMs
       });
     },

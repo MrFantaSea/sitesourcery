@@ -9,7 +9,6 @@ import path from "node:path";
 
 import {
   BackupFailure,
-  assertHeldOperationsState,
   loadVerifiedBackupAttempt
 } from "./backup-runtime.mjs";
 import {
@@ -18,11 +17,14 @@ import {
   sha256File,
   writeImmutableEvidence
 } from "./immutable-evidence.mjs";
+import {
+  assertHeldProviderEgressState
+} from "./operations-state.mjs";
 
 export const RESTORE_VERIFIED_SCHEMA =
-  "sitesourcery.clean-room-restore/v1";
+  "sitesourcery.clean-room-restore/v2";
 export const RESTORE_FAILED_SCHEMA =
-  "sitesourcery.clean-room-restore-failed/v1";
+  "sitesourcery.clean-room-restore-failed/v2";
 
 function restoreFailure(code, message) {
   throw new BackupFailure(code, message);
@@ -106,7 +108,7 @@ export async function verifyCleanRoomRestore({
   attemptRoot,
   stagingRoot,
   evidenceRoot,
-  heldState,
+  providerEgressState,
   restoreTarget,
   ports,
   now = () => new Date(),
@@ -125,9 +127,18 @@ export async function verifyCleanRoomRestore({
       "Restore roots must be absolute paths."
     );
   }
-  const holds = assertHeldOperationsState(
-    heldState
-  );
+  const providerEgress =
+    assertHeldProviderEgressState(
+      providerEgressState
+    );
+  if (
+    restoreTarget?.networkExposure !== "none"
+  ) {
+    restoreFailure(
+      "RESTORE_NETWORK_EXPOSURE_FORBIDDEN",
+      "Clean-room restore requires network exposure to remain none."
+    );
+  }
   for (const capability of [
     "decrypt",
     "restoreFreshDatabase",
@@ -143,15 +154,6 @@ export async function verifyCleanRoomRestore({
   const verified = await loadVerifiedBackupAttempt(
     attemptRoot
   );
-  if (
-    canonicalJson(verified.manifest.holds) !==
-    canonicalJson(holds)
-  ) {
-    restoreFailure(
-      "RESTORE_HOLD_DRIFT",
-      "The backup and restore held-state contracts differ."
-    );
-  }
   const restoreId = safeIdentifier(
     String(restoreIdFactory()),
     "Restore ID"
@@ -256,7 +258,12 @@ export async function verifyCleanRoomRestore({
       startedAt: startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       cleanRoom: true,
-      holds,
+      sourceOperations:
+        verified.manifest.sourceOperations,
+      restoreExecution: {
+        networkExposure: "none",
+        providerEgress
+      },
       database: {
         freshDatabase: true,
         databaseName:
@@ -306,7 +313,12 @@ export async function verifyCleanRoomRestore({
         startedAt: startedAt.toISOString(),
         failedAt: now().toISOString(),
         code: safeFailureCode(error),
-        holds
+        sourceOperations:
+          verified.manifest.sourceOperations,
+        restoreExecution: {
+          networkExposure: "none",
+          providerEgress
+        }
       }
     ).catch(() => {});
     throw error;

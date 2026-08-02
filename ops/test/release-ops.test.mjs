@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { probeRuntime } from "../probe-runtime.mjs";
+import {
+  DEFAULT_HELD_OPERATIONS_STATE
+} from "../operations-state.mjs";
 
 const opsRoot = new URL("../", import.meta.url);
 
@@ -21,7 +24,12 @@ function json(body, status = 200) {
 
 function probeFetch({
   publicationHeld = true,
-  apiReady = true
+  apiReady = true,
+  operationsState = {
+    ...DEFAULT_HELD_OPERATIONS_STATE,
+    publication:
+      publicationHeld ? "held" : "approved"
+  }
 } = {}) {
   const calls = [];
   const fetchImpl = async (value, options) => {
@@ -49,6 +57,16 @@ function probeFetch({
         },
         apiReady ? 200 : 503
       );
+    }
+    if (
+      url.pathname ===
+      "/_sitesourcery/operations-state"
+    ) {
+      return json({
+        schema:
+          "sitesourcery.hosted-operations-state/v1",
+        operationsState
+      });
     }
     if (
       url.pathname ===
@@ -83,17 +101,20 @@ test("runtime probe treats an intentional publication hold as healthy", async ()
   assert.deepEqual(
     await probeRuntime({
       fetchImpl: fake.fetchImpl,
-      expectedPublication: "held"
+      expectedOperationsState:
+        DEFAULT_HELD_OPERATIONS_STATE
     }),
     {
       ok: true,
       service:
         "sitesourcery-hosted-runtime",
       publicationHeld: true,
+      operationsState:
+        DEFAULT_HELD_OPERATIONS_STATE,
       tenantControlRevision: 4
     }
   );
-  assert.equal(fake.calls.length, 4);
+  assert.equal(fake.calls.length, 5);
 });
 
 test("runtime probe requires a ready tenant after publication approval", async () => {
@@ -102,7 +123,10 @@ test("runtime probe requires a ready tenant after publication approval", async (
   });
   const result = await probeRuntime({
     fetchImpl: fake.fetchImpl,
-    expectedPublication: "approved"
+    expectedOperationsState: {
+      ...DEFAULT_HELD_OPERATIONS_STATE,
+      publication: "approved"
+    }
   });
   assert.equal(result.publicationHeld, false);
   assert.equal(
@@ -124,9 +148,12 @@ test("runtime probe fails closed on readiness drift and invalid configuration", 
   await assert.rejects(
     probeRuntime({
       fetchImpl: probeFetch().fetchImpl,
-      expectedPublication: "maybe"
+      expectedOperationsState: {
+        ...DEFAULT_HELD_OPERATIONS_STATE,
+        publication: "maybe"
+      }
     }),
-    /must be held or approved/u
+    /publication is invalid/u
   );
   await assert.rejects(
     probeRuntime({
@@ -173,7 +200,7 @@ test("Caddy routes the exact control API and hosted artifact before tenant domai
   }
   assert.match(
     readme,
-    /Release blocker: live-state operations/u
+    /Live-state operations contract/u
   );
   assert.match(
     acceptance,

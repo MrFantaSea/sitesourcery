@@ -10,6 +10,9 @@ import {
 import {
   verifyCleanRoomRestore
 } from "./restore-runtime.mjs";
+import {
+  providerEgressStateFromEnvironment
+} from "./operations-state.mjs";
 
 function required(environment, field) {
   const value = environment[field];
@@ -28,24 +31,6 @@ function absolute(environment, field) {
     throw new Error(`${field} must be absolute.`);
   }
   return path.resolve(value);
-}
-
-function heldState(environment) {
-  return {
-    stripeMode:
-      environment.SITESOURCERY_STRIPE_MODE,
-    recoveryMailMode:
-      environment
-        .SITESOURCERY_RECOVERY_MAIL_MODE,
-    publication:
-      environment
-        .SITESOURCERY_EXPECT_PUBLICATION,
-    domainRuntime:
-      environment
-        .SITESOURCERY_EXPECT_DOMAIN_RUNTIME,
-    dns:
-      environment.SITESOURCERY_EXPECT_DNS
-  };
 }
 
 export async function restoreFromEnvironment(
@@ -98,7 +83,10 @@ export async function restoreFromEnvironment(
     attemptRoot,
     stagingRoot,
     evidenceRoot,
-    heldState: heldState(environment),
+    providerEgressState:
+      providerEgressStateFromEnvironment(
+        environment
+      ),
     restoreTarget: {
       databaseName: targetDatabaseName,
       appRoot: appRestoreRoot,

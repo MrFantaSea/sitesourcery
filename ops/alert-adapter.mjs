@@ -5,7 +5,7 @@ import {
 } from "./immutable-evidence.mjs";
 
 export const OPERATIONS_REPORT_SCHEMA =
-  "sitesourcery.held-operations-report/v1";
+  "sitesourcery.operations-report/v2";
 export const ALERT_APPROVAL_SCHEMA =
   "sitesourcery.outbound-alert-approval/v1";
 
