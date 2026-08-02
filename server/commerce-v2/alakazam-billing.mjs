@@ -1,10 +1,12 @@
 import {
   ALAKAZAM_CATALOG_VERSION,
+  ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
   ALAKAZAM_CHANGE_QUOTE_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVISION_SCHEMA,
   ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
+  createAlakazamCheckoutDispatch,
   quoteAlakazamChange,
   resolveAlakazamTier
 } from "./alakazam.mjs";
@@ -111,8 +113,12 @@ function validatePorts(repository, provider, clock) {
       repository,
       [
         "claimCustomerProvision",
+        "claimCheckoutDispatch",
+        "confirmCheckoutDispatch",
         "confirmCustomerProvision",
         "createQuote",
+        "failCheckoutDispatch",
+        "markCheckoutDispatchUnknown",
         "markCustomerProvisionAmbiguous",
         "releaseCustomerProvision"
       ]
@@ -120,7 +126,12 @@ function validatePorts(repository, provider, clock) {
     [
       "provider",
       provider,
-      ["createAlakazamCustomer", "readiness"]
+      [
+        "createAlakazamCustomer",
+        "createAlakazamStartCheckout",
+        "createAlakazamUpgradeCheckout",
+        "readiness"
+      ]
     ],
     ["clock", clock, ["now"]]
   ]) {
@@ -194,6 +205,31 @@ function exactCustomerInput(value) {
       value.provisionId,
       "provisionId"
     )
+  });
+}
+
+function exactCheckoutInput(value) {
+  exactKeys(
+    value,
+    [
+      "commandId",
+      "customerId",
+      "projectId",
+      "quoteId",
+      "tenantId"
+    ],
+    "invalid_input",
+    "Alakazam Checkout accepts only quote and idempotency identity"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(
+      value.customerId,
+      "customerId"
+    ),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    commandId: exactUuid(value.commandId, "commandId")
   });
 }
 
@@ -412,6 +448,225 @@ function customerReconciliationError(code) {
   );
 }
 
+function exactCheckoutClaim(
+  value,
+  input,
+  binding,
+  claimedAt
+) {
+  exactKeys(
+    value,
+    ["dispatch", "provider", "status"],
+    "repository_conflict",
+    "the durable Alakazam Checkout claim is invalid"
+  );
+  const dispatch = value.dispatch;
+  exactKeys(
+    dispatch,
+    [
+      "claimedAt",
+      "currency",
+      "customerId",
+      "dispatchId",
+      "expectedCreditMinor",
+      "expectedSubtotalMinor",
+      "idempotencyKey",
+      "leaseExpiresAt",
+      "mode",
+      "projectId",
+      "provider",
+      "purpose",
+      "purposeDigest",
+      "quoteId",
+      "schema",
+      "state",
+      "stripeCustomerId",
+      "tenantId"
+    ],
+    "repository_conflict",
+    "the durable Alakazam Checkout reservation is invalid"
+  );
+  requiredDigest(
+    dispatch.purposeDigest,
+    "checkoutDispatch.purposeDigest"
+  );
+  let expected;
+  try {
+    expected = createAlakazamCheckoutDispatch({
+      dispatchId: input.commandId,
+      tenantId: input.tenantId,
+      customerId: input.customerId,
+      projectId: input.projectId,
+      quoteId: input.quoteId,
+      stripeCustomerId: binding.stripeCustomerId,
+      acceptedDisclosureDigest:
+        dispatch.purpose.acceptedDisclosureDigest,
+      quoteDigest: dispatch.purpose.quoteDigest,
+      changeKind: dispatch.purpose.changeKind,
+      currentSubscription:
+        dispatch.purpose.currentSubscription,
+      targetTierId: dispatch.purpose.targetTierId,
+      dueNowSubtotalMinor:
+        dispatch.purpose.dueNowSubtotalMinor,
+      taxMode: dispatch.purpose.taxMode,
+      downloadCredit: dispatch.purpose.downloadCredit,
+      claimedAt
+    });
+  } catch {
+    invariant(
+      false,
+      "repository_conflict",
+      "the durable Alakazam Checkout purpose is invalid",
+      { status: 500 }
+    );
+  }
+  invariant(
+    value.status === "create" &&
+      value.provider === "stripe" &&
+      dispatch.schema ===
+        ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA &&
+      digest(dispatch) === digest(expected),
+    "repository_conflict",
+    "the durable Alakazam Checkout reservation changed",
+    { status: 500 }
+  );
+  return deepFreeze(clone(dispatch));
+}
+
+function exactCheckoutUrl(value) {
+  const selected = requiredText(
+    value,
+    "checkout.url",
+    4096
+  );
+  let parsed;
+  try {
+    parsed = new URL(selected);
+  } catch {
+    invariant(
+      false,
+      "stripe_alakazam_checkout_response_invalid",
+      "Stripe returned an invalid Checkout destination",
+      { status: 502 }
+    );
+  }
+  invariant(
+    parsed.protocol === "https:" &&
+      parsed.hostname === "checkout.stripe.com" &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.hash,
+    "stripe_alakazam_checkout_response_invalid",
+    "Stripe returned an invalid Checkout destination",
+    { status: 502 }
+  );
+  return parsed.toString();
+}
+
+function exactCheckoutProviderResult(value) {
+  exactKeys(
+    value,
+    ["checkoutId", "expiresAt", "url"],
+    "stripe_alakazam_checkout_response_invalid",
+    "Stripe returned invalid Alakazam Checkout evidence"
+  );
+  const checkoutId = requiredText(
+    value.checkoutId,
+    "checkout.checkoutId",
+    255
+  );
+  invariant(
+    /^cs_[A-Za-z0-9_]+$/u.test(checkoutId),
+    "stripe_alakazam_checkout_response_invalid",
+    "Stripe returned invalid Alakazam Checkout evidence",
+    { status: 502 }
+  );
+  return deepFreeze({
+    checkoutId,
+    url: exactCheckoutUrl(value.url),
+    expiresAt: requiredIso(
+      value.expiresAt,
+      "checkout.expiresAt"
+    )
+  });
+}
+
+function exactCheckoutReady(value, expected = {}) {
+  exactKeys(
+    value,
+    [
+      "checkout",
+      "dispatchId",
+      "projectId",
+      "provider",
+      "purposeDigest",
+      "quoteId",
+      "status"
+    ],
+    "repository_conflict",
+    "the durable Alakazam Checkout result is invalid"
+  );
+  requiredDigest(
+    value.purposeDigest,
+    "checkout.purposeDigest"
+  );
+  const checkout = exactCheckoutProviderResult(value.checkout);
+  invariant(
+    value.status === "ready" &&
+      value.provider === "stripe" &&
+      UUID.test(value.dispatchId) &&
+      UUID.test(value.projectId) &&
+      UUID.test(value.quoteId) &&
+      (
+        expected.dispatchId === undefined ||
+        value.dispatchId === expected.dispatchId
+      ) &&
+      (
+        expected.projectId === undefined ||
+        value.projectId === expected.projectId
+      ) &&
+      (
+        expected.quoteId === undefined ||
+        value.quoteId === expected.quoteId
+      ) &&
+      (
+        expected.purposeDigest === undefined ||
+        value.purposeDigest === expected.purposeDigest
+      ) &&
+      (
+        expected.providerResult === undefined ||
+        digest(checkout) ===
+          digest(expected.providerResult)
+      ),
+    "repository_conflict",
+    "the durable Alakazam Checkout result changed",
+    { status: 500 }
+  );
+  return deepFreeze({
+    ...clone(value),
+    checkout
+  });
+}
+
+function checkoutReference(dispatch) {
+  return Object.freeze({
+    tenantId: dispatch.tenantId,
+    customerId: dispatch.customerId,
+    projectId: dispatch.projectId,
+    quoteId: dispatch.quoteId,
+    dispatchId: dispatch.dispatchId,
+    purposeDigest: dispatch.purposeDigest
+  });
+}
+
+function checkoutReconciliationError() {
+  return new CommerceV2Error(
+    "alakazam_checkout_reconciliation_required",
+    "Alakazam Checkout needs reconciliation before another attempt. Nothing was charged by Site Sourcery.",
+    { status: 409 }
+  );
+}
+
 function quoteWithoutDigest(value) {
   const selected = clone(value);
   delete selected.quoteDigest;
@@ -522,6 +777,7 @@ export function createAlakazamBillingService({
       quote: true,
       payment: false,
       customerProvisioning: true,
+      checkout: true,
       state: "quote_ready",
       provider: "stripe",
       livemode: status.livemode,
@@ -551,7 +807,22 @@ export function createAlakazamBillingService({
     }
   }
 
-  return Object.freeze({
+  async function fenceCheckoutEffect(
+    dispatch,
+    errorCode
+  ) {
+    try {
+      return await ports.repository
+        .markCheckoutDispatchUnknown({
+          ...checkoutReference(dispatch),
+          errorCode
+        });
+    } catch {
+      return null;
+    }
+  }
+
+  const service = {
     readiness,
 
     async ensureCheckoutCustomer(input) {
@@ -668,6 +939,161 @@ export function createAlakazamBillingService({
       }
     },
 
+    async createCheckout(input) {
+      const selected = exactCheckoutInput(input);
+      const binding = await service.ensureCheckoutCustomer({
+        tenantId: selected.tenantId,
+        customerId: selected.customerId,
+        projectId: selected.projectId,
+        quoteId: selected.quoteId,
+        provisionId: selected.commandId
+      });
+      const claimedAt = exactClock(ports.clock);
+      const claim = await ports.repository
+        .claimCheckoutDispatch({
+          tenantId: selected.tenantId,
+          customerId: selected.customerId,
+          projectId: selected.projectId,
+          quoteId: selected.quoteId,
+          dispatchId: selected.commandId,
+          stripeCustomerId: binding.stripeCustomerId,
+          claimedAt
+        });
+      if (claim?.status === "ready") {
+        return exactCheckoutReady(claim, {
+          projectId: selected.projectId,
+          quoteId: selected.quoteId
+        });
+      }
+      if (claim?.status === "settled") {
+        throw new CommerceV2Error(
+          "alakazam_payment_already_settled",
+          "This Alakazam payment is already settled.",
+          { status: 409 }
+        );
+      }
+      if (claim?.status === "pending") {
+        throw new CommerceV2Error(
+          "alakazam_checkout_pending",
+          "Alakazam Checkout setup is already in progress.",
+          { status: 409 }
+        );
+      }
+      if (
+        claim?.status === "reconciliation_required"
+      ) {
+        throw checkoutReconciliationError();
+      }
+      if (claim?.status === "reconcile_expiry") {
+        throw new CommerceV2Error(
+          "alakazam_checkout_expiry_reconciliation_required",
+          "The prior Checkout must be reconciled before another payment can open.",
+          { status: 409 }
+        );
+      }
+      if (
+        claim?.status === "failed" ||
+        claim?.status === "expired"
+      ) {
+        throw new CommerceV2Error(
+          "alakazam_quote_refresh_required",
+          "Request a fresh Alakazam quote before continuing.",
+          { status: 409 }
+        );
+      }
+      const dispatch = exactCheckoutClaim(
+        claim,
+        selected,
+        binding,
+        claimedAt
+      );
+
+      let rawProviderResult;
+      try {
+        const create =
+          dispatch.purpose.changeKind === "start"
+            ? ports.provider
+                .createAlakazamStartCheckout
+            : ports.provider
+                .createAlakazamUpgradeCheckout;
+        rawProviderResult = await create.call(
+          ports.provider,
+          {
+            idempotencyKey: dispatch.idempotencyKey,
+            purpose: clone(dispatch.purpose),
+            purposeDigest: dispatch.purposeDigest
+          }
+        );
+      } catch (error) {
+        if (error?.certainty === "ambiguous") {
+          await fenceCheckoutEffect(
+            dispatch,
+            error.code ??
+              "stripe_alakazam_checkout_effect_unknown"
+          );
+          throw checkoutReconciliationError();
+        }
+        const failed =
+          await ports.repository.failCheckoutDispatch({
+            ...checkoutReference(dispatch),
+            errorCode:
+              error?.code ??
+              "stripe_alakazam_checkout_not_submitted"
+          });
+        if (failed?.status === "ready") {
+          return exactCheckoutReady(failed, {
+            projectId: dispatch.projectId,
+            quoteId: dispatch.quoteId
+          });
+        }
+        throw error;
+      }
+
+      let providerResult;
+      try {
+        providerResult = exactCheckoutProviderResult(
+          rawProviderResult
+        );
+      } catch {
+        await fenceCheckoutEffect(
+          dispatch,
+          "stripe_alakazam_checkout_response_invalid"
+        );
+        throw checkoutReconciliationError();
+      }
+
+      try {
+        const ready =
+          await ports.repository.confirmCheckoutDispatch({
+            ...checkoutReference(dispatch),
+            providerResult,
+            dispatchedAt: exactClock(ports.clock)
+          });
+        return exactCheckoutReady(ready, {
+          dispatchId: dispatch.dispatchId,
+          projectId: dispatch.projectId,
+          quoteId: dispatch.quoteId,
+          purposeDigest: dispatch.purposeDigest,
+          providerResult
+        });
+      } catch {
+        const fenced = await fenceCheckoutEffect(
+          dispatch,
+          "alakazam_checkout_persistence_unknown"
+        );
+        if (fenced?.status === "ready") {
+          return exactCheckoutReady(fenced, {
+            dispatchId: dispatch.dispatchId,
+            projectId: dispatch.projectId,
+            quoteId: dispatch.quoteId,
+            purposeDigest: dispatch.purposeDigest,
+            providerResult
+          });
+        }
+        throw checkoutReconciliationError();
+      }
+    },
+
     async createQuote(input) {
       const selected = exactQuoteInput(input);
       const status = await readiness();
@@ -694,5 +1120,6 @@ export function createAlakazamBillingService({
         issuedAt
       );
     }
-  });
+  };
+  return Object.freeze(service);
 }

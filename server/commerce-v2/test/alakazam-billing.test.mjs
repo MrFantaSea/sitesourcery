@@ -5,6 +5,7 @@ import {
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   createAlakazamBillingRelease,
   createAlakazamBillingService,
+  createAlakazamCheckoutDispatch,
   createAlakazamCustomerProvision,
   digest,
   quoteAlakazamChange
@@ -45,6 +46,17 @@ function customerInput(overrides = {}) {
   };
 }
 
+function checkoutInput(overrides = {}) {
+  return {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    commandId: PROVISION_ID,
+    ...overrides
+  };
+}
+
 function fixture({
   approved = true,
   taxMode = "disabled_by_owner",
@@ -54,7 +66,13 @@ function fixture({
   customerProviderResult = null,
   customerProviderError = null,
   customerConfirmError = null,
-  customerAmbiguousResult = null
+  customerAmbiguousResult = null,
+  checkoutClaimResult = null,
+  checkoutProviderResult = null,
+  checkoutProviderError = null,
+  checkoutConfirmError = null,
+  checkoutUnknownResult = null,
+  checkoutFailResult = null
 } = {}) {
   const calls = {
     readiness: 0,
@@ -63,8 +81,33 @@ function fixture({
     customerCreates: [],
     customerConfirms: [],
     customerAmbiguities: [],
-    customerReleases: []
+    customerReleases: [],
+    checkoutClaims: [],
+    checkoutCreates: [],
+    checkoutConfirms: [],
+    checkoutUnknown: [],
+    checkoutFailures: []
   };
+  async function createProviderCheckout(
+    changeKind,
+    value
+  ) {
+    calls.checkoutCreates.push({
+      changeKind,
+      value: structuredClone(value)
+    });
+    if (checkoutProviderError) {
+      throw checkoutProviderError;
+    }
+    return checkoutProviderResult
+      ? structuredClone(checkoutProviderResult)
+      : {
+          checkoutId: "cs_alakazam_checkout_1",
+          url:
+            "https://checkout.stripe.com/c/pay/alakazam_checkout_1",
+          expiresAt: EXPIRES_AT
+        };
+  }
   const provider = {
     async readiness() {
       calls.readiness += 1;
@@ -103,6 +146,12 @@ function fixture({
         ...facts,
         providerFactsDigest: digest(facts)
       };
+    },
+    async createAlakazamStartCheckout(value) {
+      return createProviderCheckout("start", value);
+    },
+    async createAlakazamUpgradeCheckout(value) {
+      return createProviderCheckout("upgrade", value);
     }
   };
   const repository = {
@@ -177,6 +226,78 @@ function fixture({
         structuredClone(value)
       );
       return { status: "released" };
+    },
+    async claimCheckoutDispatch(value) {
+      calls.checkoutClaims.push(
+        structuredClone(value)
+      );
+      if (checkoutClaimResult) {
+        return structuredClone(checkoutClaimResult);
+      }
+      return {
+        status: "create",
+        provider: "stripe",
+        dispatch: createAlakazamCheckoutDispatch({
+          dispatchId: value.dispatchId,
+          tenantId: value.tenantId,
+          customerId: value.customerId,
+          projectId: value.projectId,
+          quoteId: value.quoteId,
+          stripeCustomerId: value.stripeCustomerId,
+          acceptedDisclosureDigest: "a".repeat(64),
+          quoteDigest: "b".repeat(64),
+          changeKind: "start",
+          targetTierId: "alakazam_25",
+          dueNowSubtotalMinor: 2500,
+          taxMode,
+          claimedAt: value.claimedAt
+        })
+      };
+    },
+    async confirmCheckoutDispatch(value) {
+      calls.checkoutConfirms.push(
+        structuredClone(value)
+      );
+      if (checkoutConfirmError) {
+        throw checkoutConfirmError;
+      }
+      return {
+        status: "ready",
+        provider: "stripe",
+        dispatchId: value.dispatchId,
+        quoteId: value.quoteId,
+        projectId: value.projectId,
+        purposeDigest: value.purposeDigest,
+        checkout: structuredClone(value.providerResult)
+      };
+    },
+    async markCheckoutDispatchUnknown(value) {
+      calls.checkoutUnknown.push(
+        structuredClone(value)
+      );
+      return checkoutUnknownResult
+        ? structuredClone(checkoutUnknownResult)
+        : {
+            status: "reconciliation_required",
+            provider: "stripe",
+            dispatchId: value.dispatchId,
+            purposeDigest: value.purposeDigest,
+            code: value.errorCode
+          };
+    },
+    async failCheckoutDispatch(value) {
+      calls.checkoutFailures.push(
+        structuredClone(value)
+      );
+      return checkoutFailResult
+        ? structuredClone(checkoutFailResult)
+        : {
+            status: "failed",
+            provider: "stripe",
+            dispatchId: value.dispatchId,
+            purposeDigest: value.purposeDigest,
+            code: value.errorCode
+          };
     }
   };
   const service = createAlakazamBillingService({
@@ -518,4 +639,256 @@ test("Customer preparation rejects browser money before readiness or persistence
   );
   assert.equal(calls.readiness, 0);
   assert.equal(calls.customerClaims.length, 0);
+});
+
+test("Alakazam start Checkout binds one Customer, one durable claim, and one Stripe effect", async () => {
+  const { service, calls } = fixture();
+  const ready = await service.createCheckout(
+    checkoutInput()
+  );
+  assert.equal(ready.status, "ready");
+  assert.equal(ready.dispatchId, PROVISION_ID);
+  assert.equal(ready.quoteId, QUOTE_ID);
+  assert.equal(
+    ready.checkout.checkoutId,
+    "cs_alakazam_checkout_1"
+  );
+  assert.equal(calls.customerCreates.length, 1);
+  assert.equal(calls.checkoutClaims.length, 1);
+  assert.deepEqual(calls.checkoutClaims[0], {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    dispatchId: PROVISION_ID,
+    stripeCustomerId: "cus_alakazam_customer_1",
+    claimedAt: NOW
+  });
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(calls.checkoutCreates[0].changeKind, "start");
+  assert.equal(
+    calls.checkoutCreates[0].value.purpose
+      .dueNowSubtotalMinor,
+    2500
+  );
+  assert.equal(calls.checkoutConfirms.length, 1);
+  assert.equal(calls.checkoutUnknown.length, 0);
+  assert.equal(calls.checkoutFailures.length, 0);
+});
+
+test("Alakazam upgrade Checkout selects only the fixed-difference provider operation", async () => {
+  const dispatch = createAlakazamCheckoutDispatch({
+    dispatchId: PROVISION_ID,
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    stripeCustomerId: "cus_existing_customer",
+    acceptedDisclosureDigest: "a".repeat(64),
+    quoteDigest: "b".repeat(64),
+    changeKind: "upgrade",
+    currentSubscription: {
+      localSubscriptionId:
+        "60000000-0000-4000-8000-000000000001",
+      revision: 3,
+      tierId: "alakazam_25",
+      amountMinor: 2500,
+      stripeSubscriptionId: "sub_alakazam_1",
+      stripeSubscriptionItemId: "si_alakazam_1",
+      stripePriceId: "price_alakazam_25",
+      currentPeriodStartsAt: NOW,
+      currentPeriodEndsAt:
+        "2026-09-02T12:00:00.000Z",
+      providerFactsDigest: "c".repeat(64)
+    },
+    targetTierId: "alakazam_35",
+    dueNowSubtotalMinor: 1000,
+    taxMode: "disabled_by_owner",
+    claimedAt: NOW
+  });
+  const { service, calls } = fixture({
+    customerClaimResult: {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_existing_customer",
+      provisionId: null
+    },
+    checkoutClaimResult: {
+      status: "create",
+      provider: "stripe",
+      dispatch
+    }
+  });
+  const ready = await service.createCheckout(
+    checkoutInput()
+  );
+  assert.equal(ready.status, "ready");
+  assert.equal(calls.customerCreates.length, 0);
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(
+    calls.checkoutCreates[0].changeKind,
+    "upgrade"
+  );
+  assert.equal(
+    calls.checkoutCreates[0].value.purpose
+      .dueNowSubtotalMinor,
+    1000
+  );
+  assert.equal(
+    calls.checkoutCreates[0].value.purpose
+      .currentSubscription.revision,
+    3
+  );
+});
+
+test("a ready Checkout replay returns its durable destination without another Stripe effect", async () => {
+  const checkout = {
+    checkoutId: "cs_existing_checkout",
+    url:
+      "https://checkout.stripe.com/c/pay/existing_checkout",
+    expiresAt: EXPIRES_AT
+  };
+  const { service, calls } = fixture({
+    customerClaimResult: {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_existing_customer",
+      provisionId: null
+    },
+    checkoutClaimResult: {
+      status: "ready",
+      provider: "stripe",
+      dispatchId: PROVISION_ID,
+      quoteId: QUOTE_ID,
+      projectId: PROJECT_ID,
+      purposeDigest: "d".repeat(64),
+      checkout
+    }
+  });
+  assert.equal(
+    (
+      await service.createCheckout(checkoutInput())
+    ).checkout.checkoutId,
+    "cs_existing_checkout"
+  );
+  assert.equal(calls.checkoutCreates.length, 0);
+  assert.equal(calls.checkoutConfirms.length, 0);
+});
+
+test("ambiguous Stripe Checkout creation is fenced and never failed as no-effect", async () => {
+  const providerError = Object.assign(
+    new Error("timeout"),
+    {
+      code: "stripe_alakazam_checkout_effect_unknown",
+      certainty: "ambiguous"
+    }
+  );
+  const { service, calls } = fixture({
+    checkoutProviderError: providerError
+  });
+  await assert.rejects(
+    service.createCheckout(checkoutInput()),
+    (error) =>
+      error.code ===
+      "alakazam_checkout_reconciliation_required"
+  );
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(calls.checkoutUnknown.length, 1);
+  assert.equal(
+    calls.checkoutUnknown[0].errorCode,
+    "stripe_alakazam_checkout_effect_unknown"
+  );
+  assert.equal(calls.checkoutFailures.length, 0);
+  assert.equal(calls.checkoutConfirms.length, 0);
+});
+
+test("a pre-effect Checkout failure closes the quote without retrying Stripe", async () => {
+  const providerError = Object.assign(
+    new Error("configuration unavailable"),
+    { code: "stripe_not_ready" }
+  );
+  const { service, calls } = fixture({
+    checkoutProviderError: providerError
+  });
+  await assert.rejects(
+    service.createCheckout(checkoutInput()),
+    (error) => error === providerError
+  );
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(calls.checkoutFailures.length, 1);
+  assert.equal(calls.checkoutUnknown.length, 0);
+});
+
+test("post-create Checkout persistence uncertainty recovers a concurrently committed destination", async () => {
+  const dispatch = createAlakazamCheckoutDispatch({
+    dispatchId: PROVISION_ID,
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    stripeCustomerId: "cus_existing_customer",
+    acceptedDisclosureDigest: "a".repeat(64),
+    quoteDigest: "b".repeat(64),
+    changeKind: "start",
+    targetTierId: "alakazam_25",
+    dueNowSubtotalMinor: 2500,
+    taxMode: "disabled_by_owner",
+    claimedAt: NOW
+  });
+  const providerResult = {
+    checkoutId: "cs_alakazam_checkout_1",
+    url:
+      "https://checkout.stripe.com/c/pay/alakazam_checkout_1",
+    expiresAt: EXPIRES_AT
+  };
+  const { service, calls } = fixture({
+    customerClaimResult: {
+      status: "bound",
+      provider: "stripe",
+      stripeCustomerId: "cus_existing_customer",
+      provisionId: null
+    },
+    checkoutClaimResult: {
+      status: "create",
+      provider: "stripe",
+      dispatch
+    },
+    checkoutConfirmError: new Error("commit response lost"),
+    checkoutUnknownResult: {
+      status: "ready",
+      provider: "stripe",
+      dispatchId: PROVISION_ID,
+      quoteId: QUOTE_ID,
+      projectId: PROJECT_ID,
+      purposeDigest: dispatch.purposeDigest,
+      checkout: providerResult
+    }
+  });
+  assert.equal(
+    (
+      await service.createCheckout(checkoutInput())
+    ).checkout.checkoutId,
+    "cs_alakazam_checkout_1"
+  );
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(calls.checkoutConfirms.length, 1);
+  assert.equal(calls.checkoutUnknown.length, 1);
+  assert.equal(
+    calls.checkoutUnknown[0].errorCode,
+    "alakazam_checkout_persistence_unknown"
+  );
+});
+
+test("Alakazam Checkout rejects browser money before Customer or provider work", async () => {
+  const { service, calls } = fixture();
+  await assert.rejects(
+    service.createCheckout(
+      checkoutInput({ amountMinor: 1 })
+    ),
+    (error) => error.code === "invalid_input"
+  );
+  assert.equal(calls.readiness, 0);
+  assert.equal(calls.customerClaims.length, 0);
+  assert.equal(calls.checkoutClaims.length, 0);
+  assert.equal(calls.checkoutCreates.length, 0);
 });

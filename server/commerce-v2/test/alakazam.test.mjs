@@ -5,6 +5,7 @@ import {
   ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
   ALAKAZAM_TIER_IDS,
   authorizeAlakazamCapability,
+  createAlakazamCheckoutDispatch,
   createAlakazamCustomerProvision,
   getBrowserSafeAlakazamCatalog,
   getPrivateAlakazamCatalog,
@@ -110,6 +111,95 @@ test("direct Alakazam start derives one metadata-only Customer reservation from 
   assert.doesNotMatch(
     JSON.stringify(provision),
     /\b(?:email|name|phone|address)\b/iu
+  );
+});
+
+test("Alakazam Checkout dispatch derives exact start credit and fixed upgrade purposes", () => {
+  const base = {
+    dispatchId:
+      "50000000-0000-4000-8000-000000000001",
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    quoteId:
+      "40000000-0000-4000-8000-000000000001",
+    stripeCustomerId: "cus_alakazam_customer_1",
+    acceptedDisclosureDigest: "a".repeat(64),
+    quoteDigest: "b".repeat(64),
+    taxMode: "disabled_by_owner",
+    claimedAt: ISSUED_AT
+  };
+  const start = createAlakazamCheckoutDispatch({
+    ...base,
+    changeKind: "start",
+    targetTierId: "alakazam_25",
+    dueNowSubtotalMinor: 2000,
+    downloadCredit: {
+      entitlementId:
+        "60000000-0000-4000-8000-000000000001",
+      amountMinor: 500
+    }
+  });
+  assert.equal(start.mode, "subscription_start");
+  assert.equal(start.expectedSubtotalMinor, 2000);
+  assert.equal(start.expectedCreditMinor, 500);
+  assert.equal(start.purpose.targetAmountMinor, 2500);
+  assert.equal(start.purpose.currentSubscription, null);
+  assert.equal(
+    start.idempotencyKey,
+    "alakazam:start:checkout:50000000-0000-4000-8000-000000000001"
+  );
+  assert.equal(
+    start.leaseExpiresAt,
+    "2026-08-02T12:02:00.000Z"
+  );
+
+  const upgrade = createAlakazamCheckoutDispatch({
+    ...base,
+    dispatchId:
+      "50000000-0000-4000-8000-000000000002",
+    changeKind: "upgrade",
+    targetTierId: "alakazam_35",
+    dueNowSubtotalMinor: 1000,
+    currentSubscription: {
+      localSubscriptionId:
+        "70000000-0000-4000-8000-000000000001",
+      revision: 3,
+      tierId: "alakazam_25",
+      amountMinor: 2500,
+      stripeSubscriptionId:
+        "sub_alakazam_subscription_1",
+      stripeSubscriptionItemId: "si_alakazam_item_1",
+      stripePriceId: "price_alakazam_25",
+      currentPeriodStartsAt:
+        "2026-08-02T11:00:00.000Z",
+      currentPeriodEndsAt:
+        "2026-09-02T11:00:00.000Z",
+      providerFactsDigest: "c".repeat(64)
+    }
+  });
+  assert.equal(upgrade.mode, "upgrade_difference");
+  assert.equal(upgrade.expectedSubtotalMinor, 1000);
+  assert.equal(upgrade.expectedCreditMinor, 0);
+  assert.equal(
+    upgrade.purpose.currentSubscription.revision,
+    3
+  );
+  assert.equal(upgrade.purpose.downloadCredit, null);
+  assert.match(upgrade.purposeDigest, /^[a-f0-9]{64}$/u);
+
+  assert.throws(
+    () =>
+      createAlakazamCheckoutDispatch({
+        ...base,
+        changeKind: "start",
+        targetTierId: "alakazam_25",
+        dueNowSubtotalMinor: 1
+      }),
+    (error) => error.code === "invalid_input"
   );
 });
 

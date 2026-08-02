@@ -699,3 +699,37 @@ test("Alakazam direct-start Customer creation is durably reserved and evidence-b
     /\b(?:email|name|phone|address)\b/iu
   );
 });
+
+test("Alakazam Checkout dispatch is leased, exact-purpose-bound, and no-retry", async () => {
+  const all = await migrations();
+  const dispatch = all.find(
+    ({ name }) =>
+      name ===
+      "202608020025_alakazam_checkout_dispatch.sql"
+  );
+  assert.ok(dispatch);
+  assert.match(
+    dispatch.sql,
+    /add column lease_expires_at timestamptz/iu
+  );
+  assert.match(
+    dispatch.sql,
+    /create unique index alakazam_one_open_checkout_per_project[\s\S]*'reserved'[\s\S]*'ready'[\s\S]*'persistence_unknown'/iu
+  );
+  assert.match(
+    dispatch.sql,
+    /new\.purpose <> expected_purpose/iu
+  );
+  assert.match(
+    dispatch.sql,
+    /old\.state = 'reserved'[\s\S]*'ready', 'failed', 'persistence_unknown'/iu
+  );
+  assert.match(
+    dispatch.sql,
+    /durable Alakazam Checkout evidence is immutable/iu
+  );
+  assert.match(
+    dispatch.sql,
+    /create function ss\.hosted_runtime_contract_v25\(\)/iu
+  );
+});

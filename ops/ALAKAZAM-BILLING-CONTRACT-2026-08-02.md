@@ -52,10 +52,11 @@ does not revoke the Download entitlement.
 1. Create an immutable server quote bound to account, organization, project,
    selected tier, accepted disclosure, tax mode, and any active unused Download
    credit.
-2. Create Stripe subscription Checkout for exactly one approved monthly Price
-   and the project's canonical Stripe Customer. If the quote includes the $5
-   credit, apply one pinned USD 5, `duration=once` Coupon restricted to the
-   Alakazam Product. Do not expose a customer-entered promotion-code field.
+2. Commit one exact quote-bound Checkout reservation before the provider call,
+   then create Stripe subscription Checkout for exactly one approved monthly
+   Price and the project's canonical Stripe Customer. If the quote includes
+   the $5 credit, apply one pinned USD 5, `duration=once` Coupon restricted to
+   the Alakazam Product. Do not expose a customer-entered promotion-code field.
 3. Treat the webhook as a wake-up signal. Retrieve Checkout, its first Invoice,
    PaymentIntent, Subscription, Subscription Item, Price, Customer, discount,
    tax, subtotal, and total from Stripe.
@@ -90,6 +91,24 @@ does not revoke the Download entitlement.
    the boundary. At and after the boundary, capability checks fail closed to
    the lower tier even if webhook delivery is late; provider reconciliation
    must still confirm the recurring Price.
+
+## Current implementation checkpoint
+
+The internal start/upgrade Checkout dispatch boundary is complete and remains
+uncomposed. Additive migration 025 gives every dispatch a two-minute lease and
+reconstructs its exact purpose from the durable quote, current subscription,
+and canonical Stripe Customer binding. One project can have only one open
+dispatch. A ready destination replays without another provider effect; an
+expired ready destination requires reconciliation; interrupted or ambiguous
+creation becomes persistence-unknown and is never automatically retried; and a
+proved pre-effect failure closes the quote safely. The held billing service
+selects only subscription-start or fixed-difference upgrade Checkout and
+rejects browser money before readiness, Customer work, or provider access.
+
+This checkpoint does not settle a payment, create or mutate a local
+subscription, apply a tier, schedule a downgrade, expose an HTTP route, or open
+production Checkout. Those are separate evidence-gated slices below the same
+release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

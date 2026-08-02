@@ -1,7 +1,9 @@
 import {
   ALAKAZAM_CATALOG_VERSION,
+  ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
+  createAlakazamCheckoutDispatch,
   createAlakazamCustomerProvision,
   quoteAlakazamChange,
   resolveAlakazamTier
@@ -27,6 +29,7 @@ const TAX_MODES = new Set([
   "disabled_by_owner"
 ]);
 const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
+const STRIPE_CHECKOUT_ID = /^cs_[A-Za-z0-9_]+$/u;
 const DATABASE_CONSTRAINT_CODES = new Set([
   "22001",
   "22P02",
@@ -132,6 +135,87 @@ function exactCustomerReference(value, extraFields = []) {
     ),
     purposeDigest
   };
+}
+
+function exactCheckoutClaimInput(value) {
+  exactKeys(
+    value,
+    [
+      "claimedAt",
+      "customerId",
+      "dispatchId",
+      "projectId",
+      "quoteId",
+      "stripeCustomerId",
+      "tenantId"
+    ],
+    "the Alakazam Checkout claim input is invalid"
+  );
+  const stripeCustomerId = requiredText(
+    value.stripeCustomerId,
+    "stripeCustomerId",
+    255
+  );
+  invariant(
+    STRIPE_CUSTOMER_ID.test(stripeCustomerId),
+    "invalid_input",
+    "stripeCustomerId is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(
+      value.customerId,
+      "customerId"
+    ),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    dispatchId: exactUuid(
+      value.dispatchId,
+      "dispatchId"
+    ),
+    stripeCustomerId,
+    claimedAt: requiredIso(value.claimedAt, "claimedAt")
+  });
+}
+
+function exactCheckoutReference(value, extraFields = []) {
+  exactKeys(
+    value,
+    [
+      "customerId",
+      "dispatchId",
+      "projectId",
+      "purposeDigest",
+      "quoteId",
+      "tenantId",
+      ...extraFields
+    ],
+    "the Alakazam Checkout evidence input is invalid"
+  );
+  const purposeDigest = requiredText(
+    value.purposeDigest,
+    "purposeDigest",
+    64
+  );
+  invariant(
+    /^[a-f0-9]{64}$/u.test(purposeDigest),
+    "invalid_input",
+    "purposeDigest is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(
+      value.customerId,
+      "customerId"
+    ),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    dispatchId: exactUuid(
+      value.dispatchId,
+      "dispatchId"
+    ),
+    purposeDigest
+  });
 }
 
 function exactQuoteInput(value) {
@@ -421,6 +505,187 @@ function customerBinding(stripeCustomerId, provisionId = null) {
     provider: "stripe",
     stripeCustomerId,
     provisionId
+  });
+}
+
+function exactStripeCheckoutUrl(value) {
+  const selected = requiredText(
+    value,
+    "checkout.url",
+    4096
+  );
+  let parsed;
+  try {
+    parsed = new URL(selected);
+  } catch {
+    invariant(
+      false,
+      "repository_conflict",
+      "the Stripe Checkout URL is invalid",
+      { status: 500 }
+    );
+  }
+  invariant(
+    parsed.protocol === "https:" &&
+      parsed.hostname === "checkout.stripe.com" &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.hash,
+    "repository_conflict",
+    "the Stripe Checkout URL is invalid",
+    { status: 500 }
+  );
+  return parsed.toString();
+}
+
+function storedCheckoutDispatch(row) {
+  invariant(
+    row &&
+      row.provider === "stripe" &&
+      [
+        "reserved",
+        "ready",
+        "settled",
+        "expired",
+        "failed",
+        "persistence_unknown"
+      ].includes(row.state),
+    "repository_conflict",
+    "the durable Alakazam Checkout reservation is invalid",
+    { status: 500 }
+  );
+  const purpose = jsonObject(
+    row.purpose,
+    "checkoutDispatch.purpose"
+  );
+  let reservation;
+  try {
+    reservation = createAlakazamCheckoutDispatch({
+      dispatchId: row.id,
+      tenantId: row.organization_id,
+      customerId: row.customer_user_id,
+      projectId: row.project_id,
+      quoteId: row.quote_id,
+      stripeCustomerId: row.stripe_customer_id,
+      acceptedDisclosureDigest:
+        purpose.acceptedDisclosureDigest,
+      quoteDigest: purpose.quoteDigest,
+      changeKind: purpose.changeKind,
+      currentSubscription: purpose.currentSubscription,
+      targetTierId: purpose.targetTierId,
+      dueNowSubtotalMinor: purpose.dueNowSubtotalMinor,
+      taxMode: purpose.taxMode,
+      downloadCredit: purpose.downloadCredit,
+      claimedAt: exactDatabaseIso(
+        row.created_at,
+        "checkoutDispatch.claimedAt"
+      )
+    });
+  } catch {
+    invariant(
+      false,
+      "repository_conflict",
+      "the durable Alakazam Checkout purpose is invalid",
+      { status: 500 }
+    );
+  }
+  invariant(
+    reservation.schema ===
+      ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA &&
+      row.mode === reservation.mode &&
+      row.provider_idempotency_key ===
+        reservation.idempotencyKey &&
+      row.purpose_digest ===
+        reservation.purposeDigest &&
+      digest(purpose) === reservation.purposeDigest &&
+      exactDatabaseInteger(
+        row.expected_subtotal_minor,
+        "checkoutDispatch.expectedSubtotalMinor"
+      ) === reservation.expectedSubtotalMinor &&
+      exactDatabaseInteger(
+        row.expected_credit_minor,
+        "checkoutDispatch.expectedCreditMinor"
+      ) === reservation.expectedCreditMinor &&
+      row.currency === reservation.currency &&
+      exactDatabaseIso(
+        row.lease_expires_at,
+        "checkoutDispatch.leaseExpiresAt"
+      ) === reservation.leaseExpiresAt,
+    "repository_conflict",
+    "the durable Alakazam Checkout purpose changed",
+    { status: 500 }
+  );
+  return reservation;
+}
+
+function exactCheckoutRowIdentity(row, reference) {
+  const reservation = storedCheckoutDispatch(row);
+  invariant(
+    reservation.tenantId === reference.tenantId &&
+      reservation.customerId === reference.customerId &&
+      reservation.projectId === reference.projectId &&
+      reservation.quoteId === reference.quoteId &&
+      reservation.dispatchId === reference.dispatchId &&
+      reservation.purposeDigest ===
+        reference.purposeDigest,
+    "idempotency_conflict",
+    "the Alakazam Checkout command was already used for another purpose",
+    { status: 409 }
+  );
+  return reservation;
+}
+
+function exactCheckoutProviderResult(value) {
+  exactKeys(
+    value,
+    ["checkoutId", "expiresAt", "url"],
+    "the Stripe Checkout provider result is invalid"
+  );
+  const checkoutId = requiredText(
+    value.checkoutId,
+    "checkout.checkoutId",
+    255
+  );
+  invariant(
+    STRIPE_CHECKOUT_ID.test(checkoutId),
+    "repository_conflict",
+    "the Stripe Checkout Session ID is invalid",
+    { status: 500 }
+  );
+  return Object.freeze({
+    checkoutId,
+    url: exactStripeCheckoutUrl(value.url),
+    expiresAt: requiredIso(
+      value.expiresAt,
+      "checkout.expiresAt"
+    )
+  });
+}
+
+function checkoutReady(row, reservation = null) {
+  const selected = reservation ?? storedCheckoutDispatch(row);
+  invariant(
+    row.state === "ready" || row.state === "settled",
+    "repository_conflict",
+    "the Alakazam Checkout is not ready",
+    { status: 500 }
+  );
+  const checkout = exactCheckoutProviderResult({
+    checkoutId: row.stripe_checkout_session_id,
+    url: row.provider_checkout_url,
+    expiresAt: exactDatabaseIso(
+      row.provider_expires_at,
+      "checkout.providerExpiresAt"
+    )
+  });
+  return Object.freeze({
+    status: row.state === "settled" ? "settled" : "ready",
+    provider: "stripe",
+    dispatchId: selected.dispatchId,
+    quoteId: selected.quoteId,
+    projectId: selected.projectId,
+    purposeDigest: selected.purposeDigest,
+    checkout
   });
 }
 
@@ -1448,6 +1713,774 @@ export function createPostgresAlakazamRepository({
               { status: 500 }
             );
             return Object.freeze({ status: "released" });
+          }
+        )
+      );
+    },
+
+    async claimCheckoutDispatch(value) {
+      const input = exactCheckoutClaimInput(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: input.customerId,
+            organizationId: input.tenantId
+          },
+          async (client) => {
+            const quote = await client.query(
+              `select quote.*
+                 from ss.alakazam_change_quotes quote
+                 join ss.projects project
+                   on project.organization_id =
+                      quote.organization_id
+                  and project.id = quote.project_id
+                  and project.lifecycle = 'active'
+                 join ss.organization_memberships membership
+                   on membership.organization_id =
+                      quote.organization_id
+                  and membership.user_id =
+                      quote.customer_user_id
+                  and membership.state = 'active'
+                  and membership.role = any($5::text[])
+                where quote.organization_id = $1
+                  and quote.id = $2
+                  and quote.customer_user_id = $3
+                  and quote.project_id = $4
+                for update of project, quote`,
+              [
+                input.tenantId,
+                input.quoteId,
+                input.customerId,
+                input.projectId,
+                PROJECT_ROLES
+              ]
+            );
+            invariant(
+              quote.rowCount === 1,
+              "alakazam_change_unavailable",
+              "the Alakazam payment quote is unavailable",
+              { status: 409 }
+            );
+            const quoteRow = quote.rows[0];
+
+            const binding = await client.query(
+              `select stripe_customer_id
+                 from ss.stripe_customers
+                where organization_id = $1
+                for update`,
+              [input.tenantId]
+            );
+            invariant(
+              binding.rowCount === 1 &&
+                binding.rows[0].stripe_customer_id ===
+                  input.stripeCustomerId,
+              "stripe_customer_binding_invalid",
+              "the Stripe Customer does not match this organization",
+              { status: 409 }
+            );
+
+            const existing = await client.query(
+              `select *
+                 from ss.alakazam_checkout_dispatches
+                where organization_id = $1
+                  and (id = $2 or quote_id = $3)
+                for update`,
+              [
+                input.tenantId,
+                input.dispatchId,
+                input.quoteId
+              ]
+            );
+            invariant(
+              existing.rowCount <= 1,
+              "idempotency_conflict",
+              "the Alakazam Checkout identity conflicts",
+              { status: 409 }
+            );
+            if (existing.rowCount === 1) {
+              const row = existing.rows[0];
+              const reservation = storedCheckoutDispatch(row);
+              invariant(
+                reservation.tenantId === input.tenantId &&
+                  reservation.customerId ===
+                    input.customerId &&
+                  reservation.projectId === input.projectId &&
+                  reservation.quoteId === input.quoteId &&
+                  reservation.stripeCustomerId ===
+                    input.stripeCustomerId,
+                "idempotency_conflict",
+                "the Alakazam Checkout identity changed",
+                { status: 409 }
+              );
+              if (row.state === "ready") {
+                const ready = checkoutReady(row, reservation);
+                if (
+                  Date.parse(ready.checkout.expiresAt) <=
+                  Date.parse(input.claimedAt)
+                ) {
+                  return Object.freeze({
+                    status: "reconcile_expiry",
+                    provider: "stripe",
+                    dispatchId: reservation.dispatchId,
+                    quoteId: reservation.quoteId,
+                    projectId: reservation.projectId,
+                    purposeDigest:
+                      reservation.purposeDigest,
+                    checkout: ready.checkout
+                  });
+                }
+                return ready;
+              }
+              if (row.state === "settled") {
+                return checkoutReady(row, reservation);
+              }
+              if (row.state === "reserved") {
+                if (
+                  Date.parse(reservation.leaseExpiresAt) >
+                  Date.parse(input.claimedAt)
+                ) {
+                  return Object.freeze({
+                    status: "pending",
+                    provider: "stripe",
+                    dispatchId: reservation.dispatchId,
+                    leaseExpiresAt:
+                      reservation.leaseExpiresAt
+                  });
+                }
+                const interrupted = await client.query(
+                  `update ss.alakazam_checkout_dispatches
+                      set state = 'persistence_unknown',
+                          provider_effect_certainty = 'ambiguous',
+                          provider_error_code =
+                            'alakazam_checkout_dispatch_interrupted'
+                    where organization_id = $1
+                      and id = $2
+                      and state = 'reserved'
+                    returning *`,
+                  [input.tenantId, reservation.dispatchId]
+                );
+                invariant(
+                  interrupted.rowCount === 1,
+                  "repository_conflict",
+                  "the interrupted Checkout was not fenced",
+                  { status: 500 }
+                );
+                const quoteUpdate = await client.query(
+                  `update ss.alakazam_change_quotes
+                      set state = 'reconciliation_required'
+                    where organization_id = $1
+                      and id = $2
+                      and state = 'checkout_dispatching'`,
+                  [input.tenantId, reservation.quoteId]
+                );
+                invariant(
+                  quoteUpdate.rowCount === 1,
+                  "repository_conflict",
+                  "the interrupted Checkout quote was not fenced",
+                  { status: 500 }
+                );
+                return Object.freeze({
+                  status: "reconciliation_required",
+                  provider: "stripe",
+                  dispatchId: reservation.dispatchId,
+                  purposeDigest: reservation.purposeDigest,
+                  code:
+                    "alakazam_checkout_dispatch_interrupted"
+                });
+              }
+              if (row.state === "persistence_unknown") {
+                return Object.freeze({
+                  status: "reconciliation_required",
+                  provider: "stripe",
+                  dispatchId: reservation.dispatchId,
+                  purposeDigest: reservation.purposeDigest,
+                  code: row.provider_error_code
+                });
+              }
+              return Object.freeze({
+                status: row.state,
+                provider: "stripe",
+                dispatchId: reservation.dispatchId,
+                purposeDigest: reservation.purposeDigest
+              });
+            }
+
+            const open = await client.query(
+              `select id, state
+                 from ss.alakazam_checkout_dispatches
+                where organization_id = $1
+                  and project_id = $2
+                  and state in (
+                    'reserved',
+                    'ready',
+                    'persistence_unknown'
+                  )
+                for update`,
+              [input.tenantId, input.projectId]
+            );
+            invariant(
+              open.rowCount === 0,
+              "alakazam_change_pending",
+              "finish or reconcile the existing Alakazam Checkout first",
+              { status: 409 }
+            );
+            invariant(
+              ["start", "upgrade"].includes(
+                quoteRow.change_kind
+              ) &&
+                quoteRow.state === "quoted" &&
+                quoteRow.provider_effects_authorized ===
+                  true &&
+                exactDatabaseInteger(
+                  quoteRow.due_now_subtotal_minor,
+                  "quote.dueNowSubtotalMinor"
+                ) > 0 &&
+                Date.parse(
+                  exactDatabaseIso(
+                    quoteRow.expires_at,
+                    "quote.expiresAt"
+                  )
+                ) > Date.parse(input.claimedAt),
+              "alakazam_change_unavailable",
+              "the Alakazam payment quote is unavailable",
+              { status: 409 }
+            );
+
+            let currentSubscription = null;
+            let downloadCredit = null;
+            if (quoteRow.change_kind === "upgrade") {
+              const current = await client.query(
+                `select *
+                   from ss.alakazam_subscriptions
+                  where organization_id = $1
+                    and id = $2
+                  for update`,
+                [
+                  input.tenantId,
+                  quoteRow.current_subscription_id
+                ]
+              );
+              const row = current.rows[0];
+              invariant(
+                current.rowCount === 1 &&
+                  row.project_id === input.projectId &&
+                  row.customer_user_id === input.customerId &&
+                  row.status === "active" &&
+                  Number(row.revision) ===
+                    Number(
+                      quoteRow.current_subscription_revision
+                    ) &&
+                  row.tier_id === quoteRow.current_tier_id &&
+                  Number(row.amount_minor) ===
+                    Number(quoteRow.current_amount_minor) &&
+                  exactDatabaseIso(
+                    row.current_period_ends_at,
+                    "subscription.currentPeriodEndsAt"
+                  ) ===
+                    exactDatabaseIso(
+                      quoteRow.current_period_ends_at,
+                      "quote.currentPeriodEndsAt"
+                    ) &&
+                  row.cancel_at_period_end === false,
+                "alakazam_change_unavailable",
+                "the Alakazam upgrade subscription is stale",
+                { status: 409 }
+              );
+              currentSubscription = {
+                localSubscriptionId: row.id,
+                revision: exactDatabaseInteger(
+                  row.revision,
+                  "subscription.revision"
+                ),
+                tierId: row.tier_id,
+                amountMinor: exactDatabaseInteger(
+                  row.amount_minor,
+                  "subscription.amountMinor"
+                ),
+                stripeSubscriptionId:
+                  row.stripe_subscription_id,
+                stripeSubscriptionItemId:
+                  row.stripe_subscription_item_id,
+                stripePriceId: row.stripe_price_id,
+                currentPeriodStartsAt: exactDatabaseIso(
+                  row.current_period_starts_at,
+                  "subscription.currentPeriodStartsAt"
+                ),
+                currentPeriodEndsAt: exactDatabaseIso(
+                  row.current_period_ends_at,
+                  "subscription.currentPeriodEndsAt"
+                ),
+                providerFactsDigest:
+                  row.provider_facts_digest
+              };
+            } else if (
+              quoteRow.applied_value_kind ===
+                "download_purchase"
+            ) {
+              downloadCredit = {
+                entitlementId:
+                  quoteRow.download_entitlement_id,
+                amountMinor: 500
+              };
+            }
+
+            const reservation =
+              createAlakazamCheckoutDispatch({
+                dispatchId: input.dispatchId,
+                tenantId: input.tenantId,
+                customerId: input.customerId,
+                projectId: input.projectId,
+                quoteId: input.quoteId,
+                stripeCustomerId:
+                  input.stripeCustomerId,
+                acceptedDisclosureDigest:
+                  quoteRow.disclosure_digest,
+                quoteDigest: quoteRow.quote_digest,
+                changeKind: quoteRow.change_kind,
+                currentSubscription,
+                targetTierId: quoteRow.target_tier_id,
+                dueNowSubtotalMinor:
+                  exactDatabaseInteger(
+                    quoteRow.due_now_subtotal_minor,
+                    "quote.dueNowSubtotalMinor"
+                  ),
+                taxMode: quoteRow.tax_state,
+                downloadCredit,
+                claimedAt: input.claimedAt
+              });
+            const moved = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'checkout_dispatching'
+                where organization_id = $1
+                  and id = $2
+                  and state = 'quoted'`,
+              [input.tenantId, input.quoteId]
+            );
+            invariant(
+              moved.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam quote was not reserved for Checkout",
+              { status: 500 }
+            );
+            const inserted = await client.query(
+              `insert into ss.alakazam_checkout_dispatches (
+                 id, organization_id, project_id,
+                 customer_user_id, quote_id, mode,
+                 provider, stripe_customer_id,
+                 provider_idempotency_key,
+                 purpose_digest, purpose,
+                 expected_subtotal_minor,
+                 expected_credit_minor, currency,
+                 state, provider_effect_certainty,
+                 lease_expires_at, created_at, updated_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6,
+                 'stripe', $7, $8, $9, $10::jsonb,
+                 $11, $12, 'USD',
+                 'reserved', 'not_submitted',
+                 $13, $14, $14
+               )
+               returning *`,
+              [
+                reservation.dispatchId,
+                reservation.tenantId,
+                reservation.projectId,
+                reservation.customerId,
+                reservation.quoteId,
+                reservation.mode,
+                reservation.stripeCustomerId,
+                reservation.idempotencyKey,
+                reservation.purposeDigest,
+                JSON.stringify(reservation.purpose),
+                reservation.expectedSubtotalMinor,
+                reservation.expectedCreditMinor,
+                reservation.leaseExpiresAt,
+                reservation.claimedAt
+              ]
+            );
+            invariant(
+              inserted.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout reservation was not committed",
+              { status: 500 }
+            );
+            return Object.freeze({
+              status: "create",
+              provider: "stripe",
+              dispatch: storedCheckoutDispatch(
+                inserted.rows[0]
+              )
+            });
+          }
+        )
+      );
+    },
+
+    async confirmCheckoutDispatch(value) {
+      const reference = exactCheckoutReference(value, [
+        "dispatchedAt",
+        "providerResult"
+      ]);
+      const dispatchedAt = requiredIso(
+        value.dispatchedAt,
+        "dispatchedAt"
+      );
+      const providerResult = exactCheckoutProviderResult(
+        value.providerResult
+      );
+      invariant(
+        Date.parse(providerResult.expiresAt) >
+          Date.parse(dispatchedAt),
+        "repository_conflict",
+        "the Stripe Checkout expiry is invalid",
+        { status: 500 }
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const quote = await client.query(
+              `select state
+                 from ss.alakazam_change_quotes
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              quote.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout quote is unavailable",
+              { status: 409 }
+            );
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_checkout_dispatches
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.dispatchId]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout reservation is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            const reservation = exactCheckoutRowIdentity(
+              row,
+              reference
+            );
+            if (
+              row.state === "ready" ||
+              row.state === "settled"
+            ) {
+              const ready = checkoutReady(row, reservation);
+              invariant(
+                ready.checkout.checkoutId ===
+                  providerResult.checkoutId &&
+                  ready.checkout.url === providerResult.url &&
+                  ready.checkout.expiresAt ===
+                    providerResult.expiresAt,
+                "idempotency_conflict",
+                "the confirmed Checkout provider result changed",
+                { status: 409 }
+              );
+              return ready;
+            }
+            invariant(
+              row.state === "reserved" ||
+                row.state === "persistence_unknown",
+              "repository_conflict",
+              "the Alakazam Checkout cannot be confirmed",
+              { status: 409 }
+            );
+            const updated = await client.query(
+              `update ss.alakazam_checkout_dispatches
+                  set state = 'ready',
+                      stripe_checkout_session_id = $3,
+                      provider_checkout_url = $4,
+                      provider_expires_at = $5,
+                      dispatched_at = $6,
+                      provider_effect_certainty = 'confirmed',
+                      provider_error_code = null
+                where organization_id = $1
+                  and id = $2
+                returning *`,
+              [
+                reference.tenantId,
+                reference.dispatchId,
+                providerResult.checkoutId,
+                providerResult.url,
+                providerResult.expiresAt,
+                dispatchedAt
+              ]
+            );
+            invariant(
+              updated.rowCount === 1,
+              "repository_conflict",
+              "the Stripe Checkout result was not committed",
+              { status: 500 }
+            );
+            const moved = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'checkout_ready'
+                where organization_id = $1
+                  and id = $2
+                  and state in (
+                    'checkout_dispatching',
+                    'reconciliation_required'
+                  )`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              moved.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam quote did not confirm Checkout",
+              { status: 500 }
+            );
+            return checkoutReady(
+              updated.rows[0],
+              reservation
+            );
+          }
+        )
+      );
+    },
+
+    async markCheckoutDispatchUnknown(value) {
+      const reference = exactCheckoutReference(value, [
+        "errorCode"
+      ]);
+      const errorCode = requiredText(
+        value.errorCode,
+        "errorCode",
+        200
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const quote = await client.query(
+              `select state
+                 from ss.alakazam_change_quotes
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              quote.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout quote is unavailable",
+              { status: 409 }
+            );
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_checkout_dispatches
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.dispatchId]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout reservation is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            const reservation = exactCheckoutRowIdentity(
+              row,
+              reference
+            );
+            if (
+              row.state === "ready" ||
+              row.state === "settled"
+            ) {
+              return checkoutReady(row, reservation);
+            }
+            if (row.state === "persistence_unknown") {
+              return Object.freeze({
+                status: "reconciliation_required",
+                provider: "stripe",
+                dispatchId: reservation.dispatchId,
+                purposeDigest: reservation.purposeDigest,
+                code: row.provider_error_code
+              });
+            }
+            invariant(
+              row.state === "reserved",
+              "repository_conflict",
+              "the Alakazam Checkout cannot enter reconciliation",
+              { status: 409 }
+            );
+            const updated = await client.query(
+              `update ss.alakazam_checkout_dispatches
+                  set state = 'persistence_unknown',
+                      provider_effect_certainty = 'ambiguous',
+                      provider_error_code = $3
+                where organization_id = $1
+                  and id = $2
+                returning id`,
+              [
+                reference.tenantId,
+                reference.dispatchId,
+                errorCode
+              ]
+            );
+            invariant(
+              updated.rowCount === 1,
+              "repository_conflict",
+              "the ambiguous Checkout effect was not fenced",
+              { status: 500 }
+            );
+            const moved = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'reconciliation_required'
+                where organization_id = $1
+                  and id = $2
+                  and state = 'checkout_dispatching'`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              moved.rowCount === 1,
+              "repository_conflict",
+              "the ambiguous Checkout quote was not fenced",
+              { status: 500 }
+            );
+            return Object.freeze({
+              status: "reconciliation_required",
+              provider: "stripe",
+              dispatchId: reservation.dispatchId,
+              purposeDigest: reservation.purposeDigest,
+              code: errorCode
+            });
+          }
+        )
+      );
+    },
+
+    async failCheckoutDispatch(value) {
+      const reference = exactCheckoutReference(value, [
+        "errorCode"
+      ]);
+      const errorCode = requiredText(
+        value.errorCode,
+        "errorCode",
+        200
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: reference.customerId,
+            organizationId: reference.tenantId
+          },
+          async (client) => {
+            const quote = await client.query(
+              `select state
+                 from ss.alakazam_change_quotes
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              quote.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout quote is unavailable",
+              { status: 409 }
+            );
+            const selected = await client.query(
+              `select *
+                 from ss.alakazam_checkout_dispatches
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reference.tenantId, reference.dispatchId]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Checkout reservation is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            const reservation = exactCheckoutRowIdentity(
+              row,
+              reference
+            );
+            if (
+              row.state === "ready" ||
+              row.state === "settled"
+            ) {
+              return checkoutReady(row, reservation);
+            }
+            if (row.state === "failed") {
+              return Object.freeze({
+                status: "failed",
+                provider: "stripe",
+                dispatchId: reservation.dispatchId,
+                purposeDigest: reservation.purposeDigest,
+                code: row.provider_error_code
+              });
+            }
+            invariant(
+              row.state === "reserved" &&
+                row.provider_effect_certainty ===
+                  "not_submitted",
+              "alakazam_checkout_reconciliation_required",
+              "the Checkout reservation may have reached Stripe",
+              { status: 409 }
+            );
+            const updated = await client.query(
+              `update ss.alakazam_checkout_dispatches
+                  set state = 'failed',
+                      provider_effect_certainty = 'not_submitted',
+                      provider_error_code = $3
+                where organization_id = $1
+                  and id = $2
+                returning id`,
+              [
+                reference.tenantId,
+                reference.dispatchId,
+                errorCode
+              ]
+            );
+            invariant(
+              updated.rowCount === 1,
+              "repository_conflict",
+              "the unused Checkout reservation was not failed",
+              { status: 500 }
+            );
+            const moved = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'failed'
+                where organization_id = $1
+                  and id = $2
+                  and state = 'checkout_dispatching'`,
+              [reference.tenantId, reference.quoteId]
+            );
+            invariant(
+              moved.rowCount === 1,
+              "repository_conflict",
+              "the unused Checkout quote was not failed",
+              { status: 500 }
+            );
+            return Object.freeze({
+              status: "failed",
+              provider: "stripe",
+              dispatchId: reservation.dispatchId,
+              purposeDigest: reservation.purposeDigest,
+              code: errorCode
+            });
           }
         )
       );

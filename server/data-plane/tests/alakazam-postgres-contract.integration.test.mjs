@@ -55,14 +55,18 @@ async function expectRejected(client, action, pattern) {
 
 async function seedAuthority(
   client,
-  { withStripeCustomer = true } = {}
+  {
+    withStripeCustomer = true,
+    stripeCustomerId = "cus_alakazam_contract"
+  } = {}
 ) {
   const authority = {
     userId: randomUUID(),
     organizationId: randomUUID(),
     billingPolicyId: randomUUID(),
     projectId: randomUUID(),
-    stripeCustomerRowId: randomUUID()
+    stripeCustomerRowId: randomUUID(),
+    stripeCustomerId
   };
   await client.query(
     "insert into auth.users (id, email) values ($1, $2)",
@@ -101,7 +105,7 @@ async function seedAuthority(
     await insertRow(client, "stripe_customers", {
       id: authority.stripeCustomerRowId,
       organization_id: authority.organizationId,
-      stripe_customer_id: "cus_alakazam_contract"
+      stripe_customer_id: authority.stripeCustomerId
     });
   }
   return authority;
@@ -513,6 +517,227 @@ test(
   }
 );
 
+test(
+  "Alakazam Checkout dispatch replays, fences ambiguity, fails pre-effect, and stops an interrupted worker",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+
+      const ambiguousAuthority = await seedAuthority(client, {
+        stripeCustomerId: "cus_alakazam_ambiguous"
+      });
+      const ambiguousQuoteId = await insertQuote(
+        client,
+        ambiguousAuthority,
+        {
+          changeKind: "start",
+          targetTierId: "alakazam_25",
+          targetAmountMinor: 2500,
+          appliedValueKind: "none",
+          appliedValueMinor: 0,
+          dueNowSubtotalMinor: 2500,
+          effectiveRule:
+            "after_payment_and_provider_confirmation",
+          noMidPeriodRefund: false,
+          issuedAt: "2026-08-02T12:00:00.000Z",
+          expiresAt: "2026-08-02T12:30:00.000Z"
+        }
+      );
+      const ambiguousRepository =
+        createPostgresAlakazamRepository({
+          authority: {
+            async service(_context, work) {
+              return work(client);
+            }
+          }
+        });
+      const ambiguousDispatchId = randomUUID();
+      const ambiguousClaim =
+        await ambiguousRepository.claimCheckoutDispatch({
+          tenantId: ambiguousAuthority.organizationId,
+          customerId: ambiguousAuthority.userId,
+          projectId: ambiguousAuthority.projectId,
+          quoteId: ambiguousQuoteId,
+          dispatchId: ambiguousDispatchId,
+          stripeCustomerId:
+            ambiguousAuthority.stripeCustomerId,
+          claimedAt: "2026-08-02T12:01:00.000Z"
+        });
+      assert.equal(ambiguousClaim.status, "create");
+      const pending =
+        await ambiguousRepository.claimCheckoutDispatch({
+          tenantId: ambiguousAuthority.organizationId,
+          customerId: ambiguousAuthority.userId,
+          projectId: ambiguousAuthority.projectId,
+          quoteId: ambiguousQuoteId,
+          dispatchId: randomUUID(),
+          stripeCustomerId:
+            ambiguousAuthority.stripeCustomerId,
+          claimedAt: "2026-08-02T12:01:30.000Z"
+        });
+      assert.equal(pending.status, "pending");
+      assert.equal(
+        pending.dispatchId,
+        ambiguousDispatchId
+      );
+      const ambiguousReference = {
+        tenantId: ambiguousAuthority.organizationId,
+        customerId: ambiguousAuthority.userId,
+        projectId: ambiguousAuthority.projectId,
+        quoteId: ambiguousQuoteId,
+        dispatchId: ambiguousDispatchId,
+        purposeDigest:
+          ambiguousClaim.dispatch.purposeDigest
+      };
+      assert.equal(
+        (
+          await ambiguousRepository
+            .markCheckoutDispatchUnknown({
+              ...ambiguousReference,
+              errorCode:
+                "stripe_alakazam_checkout_effect_unknown"
+            })
+        ).status,
+        "reconciliation_required"
+      );
+      const reconciled =
+        await ambiguousRepository.confirmCheckoutDispatch({
+          ...ambiguousReference,
+          providerResult: {
+            checkoutId: "cs_alakazam_reconciled",
+            url:
+              "https://checkout.stripe.com/c/pay/alakazam_reconciled",
+            expiresAt: "2026-08-02T13:00:00.000Z"
+          },
+          dispatchedAt: "2026-08-02T12:02:00.000Z"
+        });
+      assert.equal(reconciled.status, "ready");
+      assert.deepEqual(
+        await ambiguousRepository.confirmCheckoutDispatch({
+          ...ambiguousReference,
+          providerResult: {
+            checkoutId: "cs_alakazam_reconciled",
+            url:
+              "https://checkout.stripe.com/c/pay/alakazam_reconciled",
+            expiresAt: "2026-08-02T13:00:00.000Z"
+          },
+          dispatchedAt: "2026-08-02T12:02:00.000Z"
+        }),
+        reconciled
+      );
+
+      const failedAuthority = await seedAuthority(client, {
+        stripeCustomerId: "cus_alakazam_failed"
+      });
+      const failedQuoteId = await insertQuote(
+        client,
+        failedAuthority,
+        {
+          changeKind: "start",
+          targetTierId: "alakazam_35",
+          targetAmountMinor: 3500,
+          appliedValueKind: "none",
+          appliedValueMinor: 0,
+          dueNowSubtotalMinor: 3500,
+          effectiveRule:
+            "after_payment_and_provider_confirmation",
+          noMidPeriodRefund: false,
+          issuedAt: "2026-08-02T12:00:00.000Z",
+          expiresAt: "2026-08-02T12:30:00.000Z"
+        }
+      );
+      const failedDispatchId = randomUUID();
+      const failedClaim =
+        await ambiguousRepository.claimCheckoutDispatch({
+          tenantId: failedAuthority.organizationId,
+          customerId: failedAuthority.userId,
+          projectId: failedAuthority.projectId,
+          quoteId: failedQuoteId,
+          dispatchId: failedDispatchId,
+          stripeCustomerId:
+            failedAuthority.stripeCustomerId,
+          claimedAt: "2026-08-02T12:01:00.000Z"
+        });
+      const failed =
+        await ambiguousRepository.failCheckoutDispatch({
+          tenantId: failedAuthority.organizationId,
+          customerId: failedAuthority.userId,
+          projectId: failedAuthority.projectId,
+          quoteId: failedQuoteId,
+          dispatchId: failedDispatchId,
+          purposeDigest: failedClaim.dispatch.purposeDigest,
+          errorCode: "stripe_configuration_unavailable"
+        });
+      assert.equal(failed.status, "failed");
+
+      const staleAuthority = await seedAuthority(client, {
+        stripeCustomerId: "cus_alakazam_stale"
+      });
+      const staleQuoteId = await insertQuote(
+        client,
+        staleAuthority,
+        {
+          changeKind: "start",
+          targetTierId: "alakazam_50",
+          targetAmountMinor: 5000,
+          appliedValueKind: "none",
+          appliedValueMinor: 0,
+          dueNowSubtotalMinor: 5000,
+          effectiveRule:
+            "after_payment_and_provider_confirmation",
+          noMidPeriodRefund: false,
+          issuedAt: "2026-08-02T12:00:00.000Z",
+          expiresAt: "2026-08-02T12:30:00.000Z"
+        }
+      );
+      const staleDispatchId = randomUUID();
+      await ambiguousRepository.claimCheckoutDispatch({
+        tenantId: staleAuthority.organizationId,
+        customerId: staleAuthority.userId,
+        projectId: staleAuthority.projectId,
+        quoteId: staleQuoteId,
+        dispatchId: staleDispatchId,
+        stripeCustomerId: staleAuthority.stripeCustomerId,
+        claimedAt: "2026-08-02T12:01:00.000Z"
+      });
+      const interrupted =
+        await ambiguousRepository.claimCheckoutDispatch({
+          tenantId: staleAuthority.organizationId,
+          customerId: staleAuthority.userId,
+          projectId: staleAuthority.projectId,
+          quoteId: staleQuoteId,
+          dispatchId: randomUUID(),
+          stripeCustomerId:
+            staleAuthority.stripeCustomerId,
+          claimedAt: "2026-08-02T12:03:00.000Z"
+        });
+      assert.deepEqual(
+        {
+          status: interrupted.status,
+          dispatchId: interrupted.dispatchId,
+          code: interrupted.code
+        },
+        {
+          status: "reconciliation_required",
+          dispatchId: staleDispatchId,
+          code: "alakazam_checkout_dispatch_interrupted"
+        }
+      );
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
 async function insertQuote(client, authority, input) {
   const id = input.id ?? randomUUID();
   await insertRow(client, "alakazam_change_quotes", {
@@ -562,56 +787,58 @@ async function insertQuote(client, authority, input) {
 async function openCheckout(
   client,
   authority,
-  { quoteId, mode, subtotalMinor, creditMinor, suffix }
-) {
-  await client.query(
-    `update ss.alakazam_change_quotes
-        set state = 'checkout_dispatching'
-      where id = $1`,
-    [quoteId]
-  );
-  const dispatchId = randomUUID();
-  await insertRow(client, "alakazam_checkout_dispatches", {
-    id: dispatchId,
-    organization_id: authority.organizationId,
-    project_id: authority.projectId,
-    customer_user_id: authority.userId,
-    quote_id: quoteId,
+  {
+    quoteId,
     mode,
-    provider: "stripe",
-    stripe_customer_id: "cus_alakazam_contract",
-    provider_idempotency_key: `alakazam-${suffix}-checkout`,
-    purpose_digest: digest(`purpose:${suffix}`),
-    purpose: { test: true, suffix },
-    expected_subtotal_minor: subtotalMinor,
-    expected_credit_minor: creditMinor,
-    currency: "USD",
-    state: "reserved",
-    provider_effect_certainty: "not_submitted"
+    subtotalMinor,
+    creditMinor,
+    suffix,
+    claimedAt,
+    dispatchedAt
+  }
+) {
+  const repository = createPostgresAlakazamRepository({
+    authority: {
+      async service(_context, work) {
+        return work(client);
+      }
+    }
   });
-  await client.query(
-    `update ss.alakazam_checkout_dispatches
-        set state = 'ready',
-            stripe_checkout_session_id = $2,
-            provider_checkout_url = $3,
-            provider_expires_at = $4,
-            dispatched_at = $5,
-            provider_effect_certainty = 'confirmed'
-      where id = $1`,
-    [
-      dispatchId,
-      `cs_${suffix}`,
-      `https://checkout.stripe.test/${suffix}`,
-      "2026-08-02T13:00:00.000Z",
-      "2026-08-02T12:01:00.000Z"
-    ]
+  const dispatchId = randomUUID();
+  const claim = await repository.claimCheckoutDispatch({
+    tenantId: authority.organizationId,
+    customerId: authority.userId,
+    projectId: authority.projectId,
+    quoteId,
+    dispatchId,
+    stripeCustomerId: authority.stripeCustomerId,
+    claimedAt
+  });
+  assert.equal(claim.status, "create");
+  assert.equal(claim.dispatch.mode, mode);
+  assert.equal(
+    claim.dispatch.expectedSubtotalMinor,
+    subtotalMinor
   );
-  await client.query(
-    `update ss.alakazam_change_quotes
-        set state = 'checkout_ready'
-      where id = $1`,
-    [quoteId]
+  assert.equal(
+    claim.dispatch.expectedCreditMinor,
+    creditMinor
   );
+  const ready = await repository.confirmCheckoutDispatch({
+    tenantId: authority.organizationId,
+    customerId: authority.userId,
+    projectId: authority.projectId,
+    quoteId,
+    dispatchId,
+    purposeDigest: claim.dispatch.purposeDigest,
+    providerResult: {
+      checkoutId: `cs_${suffix}`,
+      url: `https://checkout.stripe.com/c/pay/${suffix}`,
+      expiresAt: "2026-08-02T13:00:00.000Z"
+    },
+    dispatchedAt
+  });
+  assert.equal(ready.status, "ready");
   return dispatchId;
 }
 
@@ -764,7 +991,9 @@ test(
           mode: "subscription_start",
           subtotalMinor: 2500,
           creditMinor: 0,
-          suffix: "alakazam_start"
+          suffix: "alakazam_start",
+          claimedAt: "2026-08-02T12:01:00.000Z",
+          dispatchedAt: "2026-08-02T12:01:05.000Z"
         }
       );
       await insertRow(client, "alakazam_subscriptions", {
@@ -914,7 +1143,9 @@ test(
           mode: "upgrade_difference",
           subtotalMinor: 1000,
           creditMinor: 0,
-          suffix: "alakazam_upgrade_25_35"
+          suffix: "alakazam_upgrade_25_35",
+          claimedAt: "2026-08-02T12:11:00.000Z",
+          dispatchedAt: "2026-08-02T12:11:05.000Z"
         }
       );
       const upgradePaymentEventId = await insertStripeEvent(

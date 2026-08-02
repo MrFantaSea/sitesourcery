@@ -20,6 +20,10 @@ export const ALAKAZAM_CUSTOMER_PROVISION_SCHEMA =
   "sitesourcery.alakazam-customer-provision.v1";
 export const ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA =
   "sitesourcery.stripe-alakazam-customer/v1";
+export const ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA =
+  "sitesourcery.alakazam-stripe-purpose.v1";
+export const ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA =
+  "sitesourcery.alakazam-checkout-dispatch.v1";
 export const ALAKAZAM_CATALOG_VERSION =
   "alakazam.2026-08-02.v1";
 export const ALAKAZAM_TERMS_VERSION =
@@ -31,6 +35,13 @@ const MONTH = "month";
 const ACTIVE_CHANGE_STATUS = "active";
 const CHANGE_QUOTE_TTL_MS = 30 * 60 * 1000;
 const CUSTOMER_PROVISION_LEASE_MS = 2 * 60 * 1000;
+const CHECKOUT_DISPATCH_LEASE_MS = 2 * 60 * 1000;
+const STRIPE_IDS = Object.freeze({
+  customer: /^cus_[A-Za-z0-9_]+$/u,
+  price: /^price_[A-Za-z0-9_]+$/u,
+  subscription: /^sub_[A-Za-z0-9_]+$/u,
+  subscriptionItem: /^si_[A-Za-z0-9_]+$/u
+});
 
 const BASE_CAPABILITIES = Object.freeze([
   "download_accepted_project_version",
@@ -403,6 +414,218 @@ export function createAlakazamCustomerProvision({
     leaseExpiresAt: new Date(
       Date.parse(createdAt) +
         CUSTOMER_PROVISION_LEASE_MS
+    ).toISOString()
+  });
+}
+
+export function createAlakazamCheckoutDispatch({
+  dispatchId,
+  tenantId,
+  customerId,
+  projectId,
+  quoteId,
+  stripeCustomerId,
+  acceptedDisclosureDigest,
+  quoteDigest,
+  changeKind,
+  currentSubscription = null,
+  targetTierId,
+  dueNowSubtotalMinor,
+  taxMode,
+  downloadCredit = null,
+  claimedAt
+}) {
+  const identity = {
+    dispatchId: requiredText(
+      dispatchId,
+      "dispatchId",
+      36
+    ),
+    tenantId: requiredText(tenantId, "tenantId", 36),
+    customerId: requiredText(
+      customerId,
+      "customerId",
+      36
+    ),
+    projectId: requiredText(projectId, "projectId", 36),
+    quoteId: requiredText(quoteId, "quoteId", 36),
+    stripeCustomerId: requiredText(
+      stripeCustomerId,
+      "stripeCustomerId",
+      255
+    )
+  };
+  invariant(
+    STRIPE_IDS.customer.test(identity.stripeCustomerId),
+    "invalid_input",
+    "stripeCustomerId is invalid"
+  );
+  requiredDigest(
+    acceptedDisclosureDigest,
+    "acceptedDisclosureDigest"
+  );
+  requiredDigest(quoteDigest, "quoteDigest");
+  invariant(
+    changeKind === "start" || changeKind === "upgrade",
+    "invalid_input",
+    "Alakazam Checkout supports only start or upgrade"
+  );
+  invariant(
+    taxMode === "automatic" ||
+      taxMode === "disabled_by_owner",
+    "invalid_input",
+    "taxMode is invalid"
+  );
+  const target = exactTier(targetTierId);
+  positiveInteger(
+    dueNowSubtotalMinor,
+    "dueNowSubtotalMinor"
+  );
+  let current = null;
+  let credit = null;
+
+  if (changeKind === "start") {
+    invariant(
+      currentSubscription === null,
+      "invalid_input",
+      "an Alakazam start cannot bind a subscription"
+    );
+    if (downloadCredit !== null) {
+      invariant(
+        downloadCredit &&
+          typeof downloadCredit === "object" &&
+          downloadCredit.amountMinor ===
+            ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
+        "invalid_input",
+        "Alakazam Download credit must be exactly $5"
+      );
+      credit = {
+        entitlementId: requiredText(
+          downloadCredit.entitlementId,
+          "downloadCredit.entitlementId",
+          200
+        ),
+        amountMinor: ALAKAZAM_DOWNLOAD_CREDIT_MINOR
+      };
+    }
+    invariant(
+      dueNowSubtotalMinor ===
+        target.price.amountMinor -
+          (credit?.amountMinor ?? 0),
+      "invalid_input",
+      "Alakazam start subtotal is invalid"
+    );
+  } else {
+    invariant(
+      downloadCredit === null &&
+        currentSubscription &&
+        typeof currentSubscription === "object",
+      "invalid_input",
+      "an Alakazam upgrade requires one current subscription"
+    );
+    const currentTier = exactTier(
+      currentSubscription.tierId
+    );
+    const startsAt = requiredIso(
+      currentSubscription.currentPeriodStartsAt,
+      "currentSubscription.currentPeriodStartsAt"
+    );
+    const endsAt = requiredIso(
+      currentSubscription.currentPeriodEndsAt,
+      "currentSubscription.currentPeriodEndsAt"
+    );
+    requiredDigest(
+      currentSubscription.providerFactsDigest,
+      "currentSubscription.providerFactsDigest"
+    );
+    invariant(
+      currentSubscription.amountMinor ===
+        currentTier.price.amountMinor &&
+        positiveInteger(
+          currentSubscription.revision,
+          "currentSubscription.revision"
+        ) > 0 &&
+        STRIPE_IDS.subscription.test(
+          currentSubscription.stripeSubscriptionId
+        ) &&
+        STRIPE_IDS.subscriptionItem.test(
+          currentSubscription.stripeSubscriptionItemId
+        ) &&
+        STRIPE_IDS.price.test(
+          currentSubscription.stripePriceId
+        ) &&
+        Date.parse(endsAt) > Date.parse(startsAt) &&
+        target.rank > currentTier.rank &&
+        dueNowSubtotalMinor ===
+          target.price.amountMinor -
+            currentTier.price.amountMinor,
+      "invalid_input",
+      "Alakazam upgrade subscription evidence is invalid"
+    );
+    current = {
+      localSubscriptionId: requiredText(
+        currentSubscription.localSubscriptionId,
+        "currentSubscription.localSubscriptionId",
+        200
+      ),
+      revision: currentSubscription.revision,
+      tierId: currentTier.tierId,
+      amountMinor: currentTier.price.amountMinor,
+      stripeSubscriptionId:
+        currentSubscription.stripeSubscriptionId,
+      stripeSubscriptionItemId:
+        currentSubscription.stripeSubscriptionItemId,
+      stripePriceId: currentSubscription.stripePriceId,
+      currentPeriodStartsAt: startsAt,
+      currentPeriodEndsAt: endsAt,
+      providerFactsDigest:
+        currentSubscription.providerFactsDigest
+    };
+  }
+
+  const createdAt = requiredIso(claimedAt, "claimedAt");
+  const purpose = {
+    schema: ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA,
+    catalogVersion: ALAKAZAM_CATALOG_VERSION,
+    termsVersion: ALAKAZAM_TERMS_VERSION,
+    organizationId: identity.tenantId,
+    customerId: identity.customerId,
+    projectId: identity.projectId,
+    quoteId: identity.quoteId,
+    stripeCustomerId: identity.stripeCustomerId,
+    acceptedDisclosureDigest,
+    quoteDigest,
+    changeKind,
+    currentSubscription: current,
+    targetTierId: target.tierId,
+    targetAmountMinor: target.price.amountMinor,
+    dueNowSubtotalMinor,
+    nextRenewalAmountMinor: target.price.amountMinor,
+    currency: CURRENCY,
+    taxMode,
+    downloadCredit: credit
+  };
+  const purposeDigest = digest(purpose);
+  return deepFreeze({
+    schema: ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
+    state: "reserved",
+    provider: "stripe",
+    mode:
+      changeKind === "start"
+        ? "subscription_start"
+        : "upgrade_difference",
+    ...identity,
+    idempotencyKey:
+      `alakazam:${changeKind}:checkout:${identity.dispatchId}`,
+    purpose,
+    purposeDigest,
+    expectedSubtotalMinor: dueNowSubtotalMinor,
+    expectedCreditMinor: credit?.amountMinor ?? 0,
+    currency: CURRENCY,
+    claimedAt: createdAt,
+    leaseExpiresAt: new Date(
+      Date.parse(createdAt) +
+        CHECKOUT_DISPATCH_LEASE_MS
     ).toISOString()
   });
 }

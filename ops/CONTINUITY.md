@@ -291,6 +291,35 @@ these are OWNER RULINGS and open work, not suggestions.
   the July 22 predecessor. Next is the separate durable Checkout/Schedule
   dispatch and provider-result transaction.
 
+## ALAKAZAM CHECKOUT DISPATCH CHECKPOINT (2026-08-02)
+
+- Start and fixed-difference upgrade Checkout now have one internal durable
+  transaction boundary. Additive migration 025 leases a quote-bound dispatch
+  for exactly two minutes before Stripe, reconstructs its purpose from the
+  immutable quote, canonical organization Customer, and current subscription,
+  and permits only one open dispatch for the project.
+- The held billing service first ensures the same canonical Customer, claims
+  the dispatch, and selects exactly one provider operation: subscription start
+  or fixed-difference upgrade. It sends no browser money or provider authority.
+  A ready Checkout URL replays without another effect; expired ready work,
+  interrupted workers, and ambiguous provider/persistence results enter
+  reconciliation and cannot automatically call Stripe again. A proved
+  pre-effect failure alone closes the quote safely.
+- All 25 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL Alakazam contract passes 5/5, including pending replay,
+  ambiguity fencing, reconciliation to a committed destination, safe
+  pre-effect failure, stale-worker fencing, and the full start/upgrade/
+  downgrade evidence journey. Focused gates pass 55/55 Stripe adapter, 34/34
+  Alakazam pure/service, 10/10 repository/readiness, and 17/17 migration
+  structure. Wider gates pass 354/354 core and 121/121 runnable hosted tests
+  with the same two intentional environment-only skips.
+- This remains internal and uncomposed. No payment was settled, subscription
+  activated or changed, downgrade Schedule dispatched, HTTP/customer route
+  opened, feature granted, site published, provider configuration invented, or
+  production surface changed. Next is payment/webhook settlement and exact
+  subscription activation for start/upgrade; Schedule dispatch remains a later
+  separate slice. Public production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is
