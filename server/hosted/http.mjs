@@ -21,11 +21,32 @@ const SESSIONLESS_IDENTITY_WRITES = new Set([
 ]);
 const HOSTED_OPERATIONS_STATE_SCHEMA =
   "sitesourcery.hosted-operations-state/v1";
+const HOSTED_OPERATIONS_STATE_VALUES =
+  Object.freeze({
+    stripeMode: new Set([
+      "held",
+      "approved_live"
+    ]),
+    registrationMailMode: new Set([
+      "held",
+      "production"
+    ]),
+    recoveryMailMode: new Set([
+      "held",
+      "production"
+    ]),
+    publication: new Set(["held", "approved"]),
+    domainRuntime: new Set([
+      "held",
+      "approved_live"
+    ]),
+    dns: new Set(["held", "approved_live"])
+  });
 
 function operationsStateProjection(readiness) {
   const domains =
     readiness?.providers?.domains ?? {};
-  return Object.freeze({
+  const state = {
     stripeMode: readiness?.payments?.mode,
     registrationMailMode:
       readiness?.registration?.mode,
@@ -42,7 +63,18 @@ function operationsStateProjection(readiness) {
       domains.dns === "ready"
         ? "approved_live"
         : domains.dns
-  });
+  };
+  invariant(
+    Object.entries(
+      HOSTED_OPERATIONS_STATE_VALUES
+    ).every(([field, values]) =>
+      values.has(state[field])
+    ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted operations state is incomplete or invalid.",
+    { status: 500 }
+  );
+  return Object.freeze(state);
 }
 
 function json(payload, status = 200, headers = {}) {

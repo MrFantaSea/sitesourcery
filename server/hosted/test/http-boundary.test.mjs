@@ -442,6 +442,43 @@ test("loopback operations probe exposes only exact nonsecret modes", async () =>
   assert.deepEqual(context.calls.authenticate, []);
 });
 
+test("loopback operations probe fails closed instead of omitting an unknown mode", async () => {
+  const context = createContext({
+    readiness: {
+      ready: true,
+      payments: {
+        ready: false
+      },
+      registration: {
+        mode: "production"
+      },
+      recovery: {
+        mode: "production"
+      },
+      publication: {
+        held: true
+      },
+      providers: {
+        domains: {
+          mode: "held",
+          dns: "held"
+        }
+      }
+    }
+  });
+  const response = await context.api.fetch(
+    new Request(
+      `${ORIGIN}/_sitesourcery/operations-state`
+    )
+  );
+  assert.equal(response.status, 500);
+  assert.equal(
+    (await response.json()).error.code,
+    "RUNTIME_CONFIGURATION_ERROR"
+  );
+  assert.deepEqual(context.calls.authenticate, []);
+});
+
 test("HTTP boundary routes exact rollback intent and emits a valid export digest", async () => {
   const context = createContext();
   const cookie = `ss_csrf=${CSRF}; ss_session=${SESSION}`;

@@ -1486,6 +1486,13 @@ export function createStripeProviderAdapter(options = {}) {
     };
     return Object.freeze({
       ...held,
+      async readiness() {
+        return Object.freeze({
+          ...(await held.readiness()),
+          provider: "stripe",
+          mode: "held"
+        });
+      },
       createCheckout: reject,
       createBillingPortal: reject,
       createDomainAuthorizationCheckout: reject,

@@ -563,7 +563,9 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   const adapter = createStripeProviderAdapter();
   assert.deepEqual(await adapter.readiness(), {
     ready: false,
-    reason: "stripe_not_configured"
+    reason: "stripe_not_configured",
+    provider: "stripe",
+    mode: "held"
   });
   for (const operation of [
     "createCheckout",

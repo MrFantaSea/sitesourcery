@@ -557,7 +557,7 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   );
   assert.match(
     runtime,
-    /releases\/be7cc3781c3e9354ecb017c7df7f090afe556f32/u
+    /releases\/74da288776ab43770a44a9708ee1e0ef590b0371/u
   );
   assert.match(
     runtime,
