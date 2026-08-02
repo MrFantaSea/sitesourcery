@@ -1,0 +1,22 @@
+[Unit]
+Description=Site Sourcery held production runtime rehearsal
+After=network-online.target sitesourcery-production-db-tunnel.service
+Wants=network-online.target
+Requires=sitesourcery-production-db-tunnel.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/be7cc3781c3e9354ecb017c7df7f090afe556f32
+Environment=NODE_ENV=production
+EnvironmentFile=/home/simtech/sitesourcery-production/run/hosted.env
+ExecStart=/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node /home/simtech/sitesourcery-production/releases/be7cc3781c3e9354ecb017c7df7f090afe556f32/server/hosted/bin/server.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

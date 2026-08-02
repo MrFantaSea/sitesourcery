@@ -1,0 +1,23 @@
+[Unit]
+Description=Site Sourcery immutable held production artifact rehearsal
+After=network-online.target sitesourcery-production.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/simtech/sitesourcery-production/releases/be7cc3781c3e9354ecb017c7df7f090afe556f32/_hosted
+ExecStart=/usr/bin/python3 -m http.server 8899 --bind 127.0.0.1 --directory /home/simtech/sitesourcery-production/releases/be7cc3781c3e9354ecb017c7df7f090afe556f32/_hosted
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=default.target

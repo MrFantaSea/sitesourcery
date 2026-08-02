@@ -441,3 +441,113 @@ test("isolated staging units use persistent reboot-safe dependencies", async () 
     /not an encrypted\s+off-machine production backup/u
   );
 });
+
+test("held production rehearsal is separate, persistent, and loopback-only", async () => {
+  const rehearsalRoot = new URL(
+    "../production-rehearsal/",
+    import.meta.url
+  );
+  const [postgres, tunnel, runtime, staticServer, readme] =
+    await Promise.all([
+      readFile(
+        new URL(
+          "sitesourcery-production-postgresql.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-db-tunnel.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(
+        new URL(
+          "sitesourcery-production-static.service",
+          rehearsalRoot
+        ),
+        "utf8"
+      ),
+      readFile(new URL("README.md", rehearsalRoot), "utf8")
+    ]);
+
+  for (const unit of [
+    postgres,
+    tunnel,
+    runtime,
+    staticServer
+  ]) {
+    assert.doesNotMatch(unit, /\/tmp\//u);
+    assert.doesNotMatch(unit, /0\.0\.0\.0|\[::\]/u);
+    assert.match(unit, /^UMask=0077$/mu);
+    assert.match(unit, /^WantedBy=default\.target$/mu);
+    assert.doesNotMatch(
+      unit,
+      /sk_(?:live|test)_|whsec_|SITESOURCERY_RESEND_API_KEY=/u
+    );
+  }
+
+  assert.match(
+    postgres,
+    /^Environment=PGDATA=\/home\/mrfantasea\/\.local\/share\/sitesourcery-production-postgresql-16\.14\/data$/mu
+  );
+  assert.match(
+    postgres,
+    /-k %t\/sitesourcery-production-postgresql -p 55433 -c listen_addresses=/u
+  );
+  assert.match(
+    postgres,
+    /^RuntimeDirectory=sitesourcery-production-postgresql$/mu
+  );
+
+  assert.match(tunnel, /-o ExitOnForwardFailure=yes/u);
+  assert.match(
+    tunnel,
+    /-L 127\.0\.0\.1:55439:\/run\/user\/1000\/sitesourcery-production-postgresql\/\.s\.PGSQL\.55433 hq/u
+  );
+  assert.match(
+    tunnel,
+    /UserKnownHostsFile=\/home\/simtech\/sitesourcery-production\/run\/hq-known-hosts/u
+  );
+  assert.match(tunnel, /^Restart=always$/mu);
+
+  assert.match(
+    runtime,
+    /^Requires=sitesourcery-production-db-tunnel\.service$/mu
+  );
+  assert.match(
+    runtime,
+    /releases\/be7cc3781c3e9354ecb017c7df7f090afe556f32/u
+  );
+  assert.match(
+    runtime,
+    /node-v24\.18\.0-linux-x64\/bin\/node/u
+  );
+  assert.match(
+    staticServer,
+    /http\.server 8899 --bind 127\.0\.0\.1/u
+  );
+
+  assert.match(readme, /No Caddy service was installed or started\./u);
+  assert.match(
+    readme,
+    /"accountRegistration":false[\s\S]*"downloadQuote":true[\s\S]*"publishing":false/u
+  );
+  assert.match(
+    readme,
+    /No staging customer row was copied into production\./u
+  );
+  assert.match(
+    readme,
+    /Before DNS can change, one reviewed root\/network pass/u
+  );
+});

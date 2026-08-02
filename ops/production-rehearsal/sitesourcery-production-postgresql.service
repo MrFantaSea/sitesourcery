@@ -1,0 +1,23 @@
+[Unit]
+Description=Site Sourcery production PostgreSQL 16.14
+After=local-fs.target
+
+[Service]
+Type=simple
+Environment=PGDATA=/home/mrfantasea/.local/share/sitesourcery-production-postgresql-16.14/data
+Environment=LD_LIBRARY_PATH=/home/mrfantasea/.local/opt/sitesourcery-postgresql-16.14/usr/lib/x86_64-linux-gnu
+ExecStartPre=/usr/bin/test -f /home/mrfantasea/.local/share/sitesourcery-production-postgresql-16.14/data/PG_VERSION
+ExecStart=/home/mrfantasea/.local/opt/sitesourcery-postgresql-16.14/usr/lib/postgresql/16/bin/postgres -D /home/mrfantasea/.local/share/sitesourcery-production-postgresql-16.14/data -k %t/sitesourcery-production-postgresql -p 55433 -c listen_addresses= -c unix_socket_permissions=0700 -c timezone=America/New_York
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+KillSignal=SIGINT
+KillMode=mixed
+RuntimeDirectory=sitesourcery-production-postgresql
+RuntimeDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

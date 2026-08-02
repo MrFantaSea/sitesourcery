@@ -120,12 +120,14 @@ only for premium names, so costs must be synced and stamped until a feed exists.
 The markup rule is also unset: multiplier, floor, and handling fee are the
 owner's call.
 
-**4. Production deployment ② does not exist yet.** `server/hosted` now runs
+**4. Production is rehearsed but not publicly routed.** `server/hosted` runs
 with canonical PostgreSQL on isolated HTTPS staging and its account/project
-journey is proven, including a controlled restart of its durable PostgreSQL and
-tunnel services. Production still needs the durable app host, reverse proxy,
-off-machine backup/restore evidence, same-origin DNS cutover, and production
-verification; GitHub Pages cannot provide that backend.
+journey is proven. Dell/HQ now also run a held, restart-proven, loopback-only
+production rehearsal from the exact release against a separate clean database;
+the pinned Caddy binary and held config validate but are not active. Production
+still needs root/network ingress, off-machine backup/restore evidence,
+monitoring, same-origin DNS cutover, production mail activation, and a public
+production verification; GitHub Pages cannot provide that backend.
 
 **5. Tax treatment is unreviewed** on all five sellable things.
 

@@ -31,6 +31,11 @@ owner-authorized operations step, not a build step.
 | HQ | PostgreSQL system of record; only the reviewed application and least-privilege operations identities may connect. |
 | Zen | Encrypted off-machine backup destination, clean-room restore host, and independent recovery/monitoring authority. |
 
+An exact held Dell/HQ rehearsal now exists under user services without public
+ingress. It proves the immutable runtime, separate empty production database,
+restart behavior, and pinned Caddy validation, but activates no edge or provider
+effect. See `ops/production-rehearsal/README.md`.
+
 This mapping reuses the three existing machines and adds no hosting
 subscription. It is only deployable if Dell has reviewed public ingress and
 either a stable public IP or an owner-approved dynamic-address update path.

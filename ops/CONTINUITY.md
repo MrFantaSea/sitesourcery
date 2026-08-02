@@ -55,6 +55,18 @@ these are OWNER RULINGS and open work, not suggestions.
   passes plus two expected PostgreSQL-env skips, 22 ops tests, both artifacts,
   and the 15-route by 3-viewport browser audit. Staging's explicit invalid test
   domain meant no existing customer/project row required migration.
+- Held production rehearsal is now installed from exact commit
+  `be7cc3781c3e9354ecb017c7df7f090afe556f32`. HQ has a separate persistent,
+  checksummed PostgreSQL 16.14 cluster and empty `sitesourcery_production`
+  database with all 21 migrations, v21, and exact legal authority. Dell has the
+  official Node 24.18.0 toolchain, immutable built release, enabled database
+  tunnel/API/static user services, private independent runtime secrets, and
+  only loopback listeners. Independent PostgreSQL/tunnel/runtime restarts
+  passed. Capabilities remain registration-mail false, recovery-mail false,
+  Download quote true, payment false, domain purchase false, publication false.
+  The pinned official Caddy 2.11.4 archive/version/format/config validation also
+  passed, but Caddy is not installed as a service or running. Exact units and
+  evidence: `ops/production-rehearsal/README.md`.
 - Recovery delivery is now durably reserved before any mail-provider
   effect. Delivered requests replay without another send; interrupted or
   ambiguous sends stop in a terminal reconciliation state. The fence
@@ -190,14 +202,17 @@ real product - the owner is the backstop, not the mechanism.
 ## Open decisions (OWNER's — ask, don't assume)
 
 1. **Production deploy target**: isolated staging is resolved on Zen. The
-   candidate fleet plan points the production app at Dell with HQ recovery,
-   but that durable production runtime, reverse proxy, backup/restore evidence,
-   and DNS cutover are not installed yet. Dell currently lacks the pinned Node
-   and Caddy runtime, and public ingress to it is unproven. HQ and Zen also
-   share the same observed public site/edge, so Zen cannot currently satisfy
-   the documented distinct-failure-domain backup requirement. This no longer
-   blocks branch or staging pushes; it blocks replacing GitHub Pages in
-   production.
+   Dell/HQ now hold the exact immutable production rehearsal, separate clean
+   database, restart-proof services, and validated pinned Caddy binary/config.
+   Public ingress remains blocked: Dell's ordinary user cannot bind 443, UFW is
+   active, and an external IPv4/IPv6 probe could not reach an empty high-port
+   listener. One reviewed root/network pass must install the Caddy system unit,
+   allow 80/443, and establish/prove router IPv4 forwarding plus the IPv6
+   firewall path before any DNS change. Encrypted off-machine backup/restore
+   and monitoring also remain open; HQ and Zen share the same observed public
+   site/edge, so Zen cannot currently satisfy the documented distinct-failure-
+   domain requirement. This blocks replacing GitHub Pages, not branch or
+   rehearsal work.
 2. **Homepage favicon**: every page has the gold-star favicon EXCEPT home
    (his design-lock); needs his one-line ok.
 3. **$35 Alakazam tier**: "$25 keeps the three looks; $35 gets ____" — the
