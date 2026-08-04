@@ -10,6 +10,12 @@ import {
   createAlakazamProviderMetadata
 } from "../../commerce-v2/alakazam.mjs";
 import {
+  createAlakazamBillingRelease
+} from "../../commerce-v2/alakazam-billing.mjs";
+import {
+  createAlakazamUpgradeService
+} from "../../commerce-v2/alakazam-upgrade.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -855,7 +861,8 @@ function subscriptionPaymentFacts(
     stripePriceId,
     currentPeriodStartsAt,
     currentPeriodEndsAt,
-    providerObservedAt
+    providerObservedAt,
+    metadata = null
   }
 ) {
   const facts = {
@@ -874,10 +881,12 @@ function subscriptionPaymentFacts(
     currentPeriodEndsAt,
     billingCycleAnchor: currentPeriodStartsAt,
     providerObservedAt,
-    metadata: createAlakazamProviderMetadata({
-      purpose: reservation.purpose,
-      purposeDigest: reservation.purposeDigest
-    })
+    metadata:
+      metadata ??
+      createAlakazamProviderMetadata({
+        purpose: reservation.purpose,
+        purposeDigest: reservation.purposeDigest
+      })
   };
   return {
     ...facts,
@@ -1454,6 +1463,194 @@ test(
         upgradeReplay.settlement,
         upgradeSettlement
       );
+      assert.equal(
+        await settlementRepository.findUpgradeApplication({
+          settlement: upgradeSettlement,
+          observedAt: "2026-08-02T12:12:10.000Z"
+        }),
+        null
+      );
+      const upgradeApplicationId = randomUUID();
+      const claimedUpgrade =
+        await settlementRepository.claimUpgradeApplication({
+          settlement: upgradeSettlement,
+          applicationId: upgradeApplicationId,
+          claimedAt: "2026-08-02T12:13:00.000Z"
+        });
+      assert.equal(claimedUpgrade.status, "claimed");
+      assert.equal(
+        claimedUpgrade.application.applicationId,
+        upgradeApplicationId
+      );
+      const interruptedUpgrade =
+        await settlementRepository.findUpgradeApplication({
+          settlement: upgradeSettlement,
+          observedAt: "2026-08-02T12:15:00.000Z"
+        });
+      assert.equal(
+        interruptedUpgrade.status,
+        "reconciliation_required"
+      );
+      assert.equal(
+        interruptedUpgrade.application.applicationId,
+        upgradeApplicationId
+      );
+      const upgradeProviderFacts =
+        subscriptionPaymentFacts(
+          claimedUpgrade.reservation,
+          {
+            stripeSubscriptionId:
+              "sub_alakazam_contract",
+            stripeSubscriptionItemId:
+              "si_alakazam_contract",
+            stripePriceId: "price_alakazam_35",
+            currentPeriodStartsAt:
+              "2026-08-02T12:03:00.000Z",
+            currentPeriodEndsAt:
+              "2026-09-02T12:03:00.000Z",
+            providerObservedAt:
+              "2026-08-02T12:15:02.000Z",
+            metadata: {
+              ...createAlakazamProviderMetadata({
+                purpose:
+                  claimedUpgrade.reservation.purpose,
+                purposeDigest:
+                  claimedUpgrade.reservation
+                    .purposeDigest
+              }),
+              payment_receipt_id: upgradeReceiptId,
+              payment_facts_digest:
+                upgradePayment.providerFactsDigest
+            }
+          }
+        );
+      const upgradeProviderCalls = {
+        applies: 0,
+        reads: 0,
+        ids: 0
+      };
+      let upgradeClockCalls = 0;
+      const upgradeService = createAlakazamUpgradeService({
+        repository: settlementRepository,
+        provider: {
+          async readiness() {
+            return {
+              ready: true,
+              provider: "stripe",
+              alakazam: true,
+              taxMode: "disabled_by_owner",
+              livemode: false
+            };
+          },
+          async applyAlakazamUpgrade() {
+            upgradeProviderCalls.applies += 1;
+            throw new Error(
+              "an interrupted mutation must not be submitted again"
+            );
+          },
+          async retrieveAlakazamSubscription() {
+            upgradeProviderCalls.reads += 1;
+            return structuredClone(upgradeProviderFacts);
+          }
+        },
+        clock: {
+          now() {
+            upgradeClockCalls += 1;
+            return upgradeClockCalls === 1
+              ? "2026-08-02T12:15:03.000Z"
+              : "2026-08-02T12:15:04.000Z";
+          }
+        },
+        ids: {
+          next() {
+            upgradeProviderCalls.ids += 1;
+            throw new Error(
+              "durable reconciliation cannot allocate another application"
+            );
+          }
+        },
+        release: createAlakazamBillingRelease({
+          approved: true,
+          taxMode: "disabled_by_owner"
+        })
+      });
+      const providerConfirmedUpgrade =
+        await upgradeService.applyPaidUpgrade(
+          upgradeSettlement
+        );
+      assert.deepEqual(upgradeProviderCalls, {
+        applies: 0,
+        reads: 1,
+        ids: 0
+      });
+      assert.deepEqual(providerConfirmedUpgrade, {
+        status: "provider_confirmed",
+        provider: "stripe",
+        changeKind: "upgrade",
+        applicationId: upgradeApplicationId,
+        projectId: authority.projectId,
+        quoteId: upgradeQuoteId,
+        subscriptionId,
+        receiptId: upgradeReceiptId,
+        priorTierId: "alakazam_25",
+        targetTierId: "alakazam_35",
+        currentRevision: 2,
+        currentPeriodStartsAt:
+          "2026-08-02T12:03:00.000Z",
+        currentPeriodEndsAt:
+          "2026-09-02T12:03:00.000Z",
+        paymentProviderFactsDigest:
+          upgradePayment.providerFactsDigest,
+        subscriptionProviderFactsDigest:
+          upgradeProviderFacts.providerFactsDigest,
+        reconciliation: "readback_after_ambiguity",
+        next: "subscription_event_confirmation"
+      });
+      const providerStagedUpgrade = await client.query(
+        `select application.state as application_state,
+                quote.state as quote_state,
+                subscription.tier_id,
+                subscription.revision
+           from ss.alakazam_upgrade_applications application
+           join ss.alakazam_change_quotes quote
+             on quote.id = application.quote_id
+           join ss.alakazam_subscriptions subscription
+             on subscription.id = application.subscription_id
+          where application.id = $1`,
+        [upgradeApplicationId]
+      );
+      assert.deepEqual(
+        {
+          applicationState:
+            providerStagedUpgrade.rows[0]
+              .application_state,
+          quoteState:
+            providerStagedUpgrade.rows[0].quote_state,
+          tierId: providerStagedUpgrade.rows[0].tier_id,
+          revision: Number(
+            providerStagedUpgrade.rows[0].revision
+          )
+        },
+        {
+          applicationState: "provider_confirmed",
+          quoteState: "provider_change_pending",
+          tierId: "alakazam_25",
+          revision: 2
+        }
+      );
+      const providerConfirmationReplay =
+        await settlementRepository.findUpgradeApplication({
+          settlement: upgradeSettlement,
+          observedAt: "2026-08-02T12:15:04.000Z"
+        });
+      assert.equal(
+        providerConfirmationReplay.status,
+        "provider_confirmed"
+      );
+      assert.deepEqual(
+        providerConfirmationReplay.confirmation,
+        providerConfirmedUpgrade
+      );
       const upgradeProviderEventId = await insertStripeEvent(
         client,
         authority,
@@ -1463,8 +1660,8 @@ test(
           suffix: "alakazam_upgrade_provider",
           eventType: "customer.subscription.updated",
           providerObjectId: "sub_alakazam_contract",
-          occurredAt: "2026-08-02T12:13:00.000Z",
-          processedAt: "2026-08-02T12:13:05.000Z"
+          occurredAt: "2026-08-02T12:16:00.000Z",
+          processedAt: "2026-08-02T12:16:05.000Z"
         }
       );
       await insertTierEvent(client, authority, {
@@ -1476,7 +1673,7 @@ test(
         eventKind: "upgrade_applied",
         priorTierId: "alakazam_25",
         resultTierId: "alakazam_35",
-        occurredAt: "2026-08-02T12:13:00.000Z"
+        occurredAt: "2026-08-02T12:16:00.000Z"
       });
       await client.query(
         `update ss.alakazam_subscriptions
@@ -1488,13 +1685,19 @@ test(
           where id = $1`,
         [
           subscriptionId,
-          "2026-08-02T12:14:00.000Z",
+          "2026-08-02T12:17:00.000Z",
           digest("subscription:active-35")
         ]
       );
       await client.query(
         "update ss.alakazam_change_quotes set state = 'applied' where id = $1",
         [upgradeQuoteId]
+      );
+      await client.query(
+        `update ss.alakazam_upgrade_applications
+            set state = 'applied', applied_at = $2
+          where id = $1`,
+        [upgradeApplicationId, "2026-08-02T12:17:00.000Z"]
       );
       await flushConstraints(client);
 

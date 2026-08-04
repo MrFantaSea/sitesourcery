@@ -131,6 +131,8 @@ const READINESS_QUERY = `
       as alakazam_payment_contract_ready,
     to_regprocedure('ss.hosted_runtime_contract_v27()') is not null
       as alakazam_activation_contract_ready,
+    to_regprocedure('ss.hosted_runtime_contract_v28()') is not null
+      as alakazam_upgrade_contract_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
@@ -258,7 +260,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 027 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 028 are required.",
       { status: 503, details: status }
     );
     return status;

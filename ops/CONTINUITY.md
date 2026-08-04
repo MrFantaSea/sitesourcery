@@ -378,6 +378,34 @@ these are OWNER RULINGS and open work, not suggestions.
   fenced paid-upgrade provider mutation and local confirmation. Public
   production remains the July 22 predecessor.
 
+## ALAKAZAM UPGRADE PROVIDER CHECKPOINT (2026-08-04)
+
+- The already-paid upgrade now enters one service-role-only, migration-backed
+  application before Stripe can change the recurring Price. It binds the exact
+  quote, settled receipt, current subscription revision, existing Subscription
+  Item, paid period, target tier, and one durable provider idempotency key.
+- The held upgrade service replaces only the existing item at quantity 1, with
+  no proration and an unchanged billing anchor. It clears stale first-start
+  Download-credit metadata and requires exact target Price, Customer, item,
+  period, status, schedule absence, paid receipt metadata, and provider digest
+  readback. The old local tier remains active after provider confirmation.
+- An interrupted or ambiguous worker moves both application and quote to
+  reconciliation. Recovery is read-only: exact target readback may confirm the
+  durable application, but no automatic second Price mutation or difference
+  Checkout is permitted.
+- All 28 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL journey passes 5/5, including expired-worker fencing and
+  service-plus-repository read-only recovery. Focused gates pass 9/9 upgrade
+  service, 56/56 Stripe adapter, 20/20 migration structure, and 5/5 repository
+  readiness. Wider gates pass 379/379 core and 121/121 runnable hosted tests
+  with the same two intentional environment-only skips.
+- This remains internal, held, local, and unpushed. No verified Subscription
+  event has committed the local upgrade revision, no downgrade Schedule was
+  dispatched, and no HTTP/customer route, feature grant, publication effect,
+  real provider configuration, or production capability opened. Next is the
+  separately atomic verified-event local tier confirmation. Public production
+  remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

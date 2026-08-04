@@ -3187,6 +3187,8 @@ function alakazamUpgradeMatches(
       STRIPE_ALAKAZAM_METADATA_SCHEMA &&
     facts.metadata?.purpose_digest ===
       validated.purposeDigest &&
+    facts.metadata?.payment_receipt_id ===
+      paymentEvidence.receiptId &&
     facts.metadata?.payment_facts_digest ===
       paymentEvidence.providerFactsDigest
   );
@@ -3217,6 +3219,8 @@ function alakazamUpgradeAlreadyApplied(
       STRIPE_ALAKAZAM_METADATA_SCHEMA &&
     facts.metadata?.purpose_digest ===
       validated.purposeDigest &&
+    facts.metadata?.payment_receipt_id ===
+      paymentEvidence.receiptId &&
     facts.metadata?.payment_facts_digest ===
       paymentEvidence.providerFactsDigest
   );
@@ -4087,6 +4091,7 @@ export function createStripeProviderAdapter(options = {}) {
         billing_cycle_anchor: "unchanged",
         metadata: {
           ...alakazamMetadata(validated),
+          download_entitlement_id: "",
           payment_receipt_id: paymentEvidence.receiptId,
           payment_facts_digest:
             paymentEvidence.providerFactsDigest

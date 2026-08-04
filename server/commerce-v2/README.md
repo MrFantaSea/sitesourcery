@@ -52,9 +52,10 @@ accept these Alakazam capabilities or provider identifiers, so this checkpoint
 does not open Checkout or grant an entitlement.
 
 The internal Alakazam quote, direct Customer-provisioning, start/upgrade
-Checkout, payment-settlement, and start-activation transactions are now
-implemented but uncomposed. The held-by-default services open them only when
-release and provider tax/readiness facts match. The PostgreSQL repository locks
+Checkout, payment-settlement, start-activation, and paid-upgrade provider
+application transactions are now implemented but uncomposed. The
+held-by-default services open them only when release and provider tax/readiness
+facts match. The PostgreSQL repository locks
 the active project, binds the current subscription revision or one unused
 project Download credit, writes one immutable 30-minute quote per UUID
 idempotency key, and replays that exact snapshot. A direct start reserves and
@@ -75,8 +76,17 @@ Stripe readback must match the paid pending start before one atomic transaction
 records the event and revision evidence, activates the local period, and
 applies the quote. Active replay performs no Stripe read. Browser money and
 provider authority, pending changes, changed billing ownership, stale projects,
-changed retry purposes, and digest drift all fail closed. Upgrade provider
-mutation, downgrade Schedule dispatch, webhook/HTTP composition, customer
+changed retry purposes, and digest drift all fail closed.
+
+After an upgrade difference settles, migration 028 commits one exact
+application before the existing Subscription Item can change Price. The held
+upgrade service uses one durable idempotency key, quantity 1, no proration, an
+unchanged billing anchor, and exact receipt-bound target readback. It explicitly
+clears stale first-subscription credit metadata. A crashed or ambiguous worker
+is fenced; later recovery reads the Subscription only and never submits another
+mutation. The provider-confirmed application deliberately leaves the old local
+tier active for the separate verified-event revision transaction. That local
+activation, downgrade Schedule dispatch, webhook/HTTP composition, customer
 controls, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,

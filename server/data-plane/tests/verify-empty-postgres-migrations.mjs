@@ -63,7 +63,11 @@ async function verifyAlakazamSchema(pool) {
       to_regprocedure('ss.hosted_runtime_contract_v26()') is not null
         as payment_runtime_contract,
       to_regprocedure('ss.hosted_runtime_contract_v27()') is not null
-        as activation_runtime_contract
+        as activation_runtime_contract,
+      to_regclass('ss.alakazam_upgrade_applications') is not null
+        as upgrade_applications,
+      to_regprocedure('ss.hosted_runtime_contract_v28()') is not null
+        as upgrade_runtime_contract
   `);
   for (const [name, exists] of Object.entries(result.rows[0])) {
     assert.equal(exists, true, `missing Alakazam schema object: ${name}`);

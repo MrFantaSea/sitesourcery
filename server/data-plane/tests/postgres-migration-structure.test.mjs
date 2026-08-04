@@ -777,3 +777,29 @@ test("Alakazam start activation is one exact subscription transition", async () 
     /create function ss\.hosted_runtime_contract_v27\(\)/iu
   );
 });
+
+test("Alakazam paid upgrade application is fenced before provider mutation", async () => {
+  const all = await migrations();
+  const upgrade = all.find(
+    ({ name }) =>
+      name ===
+      "202608040028_alakazam_upgrade_application.sql"
+  );
+  assert.ok(upgrade);
+  assert.match(
+    upgrade.sql,
+    /create table ss\.alakazam_upgrade_applications/iu
+  );
+  assert.match(
+    upgrade.sql,
+    /create unique index alakazam_one_open_upgrade_application[\s\S]*where state in/iu
+  );
+  assert.match(
+    upgrade.sql,
+    /provider_idempotency_key =[\s\S]*'alakazam:upgrade:apply:'/iu
+  );
+  assert.match(
+    upgrade.sql,
+    /create function ss\.hosted_runtime_contract_v28\(\)/iu
+  );
+});

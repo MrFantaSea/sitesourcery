@@ -126,10 +126,21 @@ revision-bound tier event, activates the paid local Subscription with its exact
 period and provider facts, and applies the start quote. An active replay uses
 durable state without another Stripe read or new identity.
 
-This checkpoint does not mutate Stripe or the local tier for an upgrade,
-dispatch a downgrade Schedule, expose an HTTP/webhook route, grant rendered
-tier features, publish a site, or open production Checkout. Those remain
-separate evidence-gated slices below the same release holds.
+Additive migration 028 fences the already-paid upgrade Price mutation in one
+service-role-only application row before Stripe is called. The held upgrade
+service binds the exact settled receipt and current subscription revision,
+uses one durable provider idempotency key, replaces only the existing item,
+clears stale first-subscription credit metadata, disables proration, preserves
+the billing anchor, and stores only exact target readback. An interrupted or
+ambiguous worker moves the application and quote to reconciliation; recovery
+is read-only and never submits another Price mutation. Provider confirmation
+still leaves the old local tier active until the separate verified
+Subscription-event transaction commits the revision change.
+
+This checkpoint does not commit the local tier for an upgrade, dispatch a
+downgrade Schedule, expose an HTTP/webhook route, grant rendered tier features,
+publish a site, or open production Checkout. Those remain separate
+evidence-gated slices below the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

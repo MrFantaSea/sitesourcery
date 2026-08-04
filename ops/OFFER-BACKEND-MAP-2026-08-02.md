@@ -39,8 +39,8 @@ decisions; implementation must keep those controls held instead of guessing.
 | Free Abracadabra make/preview | Four-step maker and three looks exist | Browser session prototype plus real hosted account/project/version contracts | Partial | One clean unauthenticated preview journey; account handoff preserves the accepted work |
 | $5 Download | Hosted account, exact quote, Stripe destination, automatic return confirmation, and entitlement-gated HTML Download are implemented | V2 Checkout dispatch, provider readback, receipt, Stripe Customer binding, project entitlement, artifact verification, and monotonic reversal handling pass fresh PostgreSQL proof | Implementation checkpoint complete; release held | Owner tax choice; real Stripe test payment on private staging; owner walk; reviewed activation/cutover |
 | Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, direct Stripe Customer reservation, project-locked quote, no-retry Checkout dispatch, exact payment readback/receipt, and exact Subscription-confirmed local activation now exist; no real three-Price/Coupon configuration or composed customer journey exists | Internal start activation complete; customer fulfillment missing | Real Stripe test Product/Price/Coupon readback; customer composition; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
-| Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, and staged as `provider_change_pending` while the old tier remains active; provider Price mutation, local activation, retention enforcement, and care ledger are not composed | Payment-settlement checkpoint complete; provider change and fulfillment missing | Provider-mutation/reconciliation transaction; real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
-| Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | Direct start and fixed-difference upgrade payment settlement are fenced; the $15 $35-to-$50 change and zero-dollar renewal-boundary downgrade remain exact project-locked facts, and the provider contract supports schedules; no Schedule dispatch, real Price, rendered controls, or care ledger exists | Start/upgrade settlement complete internally; downgrade/fulfillment missing | Schedule transaction; provider-change activation; real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
+| Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, and now has a durable no-retry existing-item Price mutation/readback application; the old local tier remains active pending the separate verified-event commit | Provider mutation checkpoint complete; local activation and fulfillment missing | Verified-event local tier transaction; real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
+| Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | Direct start, fixed-difference payment, and the same fenced existing-item upgrade mutation are implemented; the $15 $35-to-$50 change remains exact while zero-dollar renewal-boundary downgrade is still only a provider contract | Upgrade provider checkpoint complete internally; downgrade/fulfillment missing | Local upgrade activation; Schedule transaction; real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
 | Customer account | Hosted registration, activation, sign-in, recovery, organization, project, draft, and accepted versions exist | PostgreSQL authority and secure cookies are proven on isolated HTTPS staging; Resend delivery is proven | Real on staging, not public | Public same-origin deployment and post-cutover registration/recovery/project proof |
 | Customer billing controls | A narrow account/project/$5 control fragment exists | Billing portal, cancellation, subscription/webhook primitives exist | Partial | Controls expose the customer's actual tier, payment state, invoices/receipts, immediate difference-only upgrades, renewal-boundary downgrades, change/cancel actions, and consequences |
 | Owner client support | No real owner workbench | Ticket creation and data primitives exist; `ops/OPERATOR-BACKEND-SPEC.md` is explicitly a simulation draft | Missing | Responsive Mac/Pixel owner login; client search; account/project/version/payment/tier/ticket view; audited bounded repair actions |
@@ -61,9 +61,11 @@ Real and staging-proven today:
 - Persistent PostgreSQL services, encrypted backup/restore, monitoring, and
   owner alert delivery for the held production rehearsal.
 - The held Alakazam $25/$35/$50 calculation and PostgreSQL evidence contract:
-  all 27 migrations replay on a fresh database; one verified Checkout event
+  all 28 migrations replay on a fresh database; one verified Checkout event
   atomically settles a receipt and pending start or provider-change handoff;
   one exact Subscription readback then atomically activates the pending start;
+  one paid upgrade application then fences the existing-item Price mutation
+  and exact readback without changing the old local tier;
   $25 start, exact $10 $25-to-$35 upgrade, rejection of an unproved mutation,
   paid-period retention, rejection of an early downgrade, and $0/no-proration
   renewal-boundary downgrade pass one focused transaction proof. This is
@@ -106,6 +108,11 @@ Present as substantial code but not a finished product journey:
   paid start before one processed provider event, one revision event, the
   active local period, and the applied quote commit together. Active replay
   performs no provider read.
+- A held paid-upgrade service and migration-backed provider application. It
+  commits one durable idempotency key before mutation, binds the settled
+  receipt, existing item, current revision, target tier, and paid period, then
+  stores exact target readback. Interrupted or ambiguous work can perform only
+  read-only reconciliation; it cannot submit a second Price change.
 
 Absent today:
 
@@ -113,9 +120,9 @@ Absent today:
   one-invoice $5 Coupon.
 - Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
   restricted Portal configuration, and their reviewed environment bindings.
-- Upgrade Price-mutation confirmation, downgrade Schedule dispatch, renewal
-  and status-event reconciliation, HTTP/customer boundaries, and hosted
-  runtime composition that can safely invoke the provider contract.
+- Verified-event local upgrade activation, downgrade Schedule dispatch,
+  renewal and status-event reconciliation, HTTP/customer boundaries, and
+  hosted runtime composition that can safely invoke the provider contract.
 - Alakazam customer subscription controls and public provisioning UI/API.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
@@ -132,9 +139,10 @@ Absent today:
    provider contract, the project-locked quote transaction, migration 024's
    one-call direct Customer provisioning transaction, migration 025's
    no-retry start/upgrade Checkout dispatch, and migration 026's verified-event
-   payment settlement, and migration 027's exact start activation are
-   complete. Upgrade provider mutation, downgrade Schedule dispatch, customer
-   controls, and fulfillment remain.**
+   payment settlement, migration 027's exact start activation, and migration
+   028's no-retry paid-upgrade provider application are complete. Local upgrade
+   activation, downgrade Schedule dispatch, customer controls, and fulfillment
+   remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.
 5. Reconcile domains, assessment, separate Custom care, and Responder.

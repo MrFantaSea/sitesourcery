@@ -1957,6 +1957,7 @@ test("Alakazam upgrade swaps the existing item with no proration and proves the 
         metadata: {
           schema: "sitesourcery_alakazam_change_v1",
           purpose_digest: request.purposeDigest,
+          payment_receipt_id: paymentEvidence.receiptId,
           payment_facts_digest:
             paymentEvidence.providerFactsDigest
         }
@@ -1991,6 +1992,10 @@ test("Alakazam upgrade swaps the existing item with no proration and proves the 
     params.metadata.payment_facts_digest,
     paymentEvidence.providerFactsDigest
   );
+  assert.equal(
+    params.metadata.download_entitlement_id,
+    ""
+  );
   assert.match(
     requestOptions.idempotencyKey,
     /^ss:alakazam_upgrade_apply:[a-f0-9]{64}$/u
@@ -2015,6 +2020,7 @@ test("a completed Alakazam upgrade replay confirms provider state without anothe
         metadata: {
           schema: "sitesourcery_alakazam_change_v1",
           purpose_digest: request.purposeDigest,
+          payment_receipt_id: paymentEvidence.receiptId,
           payment_facts_digest:
             paymentEvidence.providerFactsDigest
         }
@@ -2032,6 +2038,49 @@ test("a completed Alakazam upgrade replay confirms provider state without anothe
   assert.equal(
     result.reconciliation,
     "confirmed_before_submit"
+  );
+  assert.equal(calls.subscriptionReads.length, 1);
+  assert.equal(calls.subscriptionUpdates.length, 0);
+});
+
+test("an applied Alakazam upgrade cannot replay across its paid receipt", async () => {
+  const config = alakazamConfiguration();
+  const request = alakazamRequest({
+    changeKind: "upgrade"
+  });
+  const paymentEvidence = {
+    receiptId:
+      "90000000-0000-4000-8000-000000000001",
+    providerFactsDigest: "2".repeat(64)
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_35",
+        metadata: {
+          schema: "sitesourcery_alakazam_change_v1",
+          purpose_digest: request.purposeDigest,
+          payment_receipt_id:
+            "90000000-0000-4000-8000-000000000099",
+          payment_facts_digest:
+            paymentEvidence.providerFactsDigest
+        }
+      })
+    ]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  await assert.rejects(
+    adapter.applyAlakazamUpgrade({
+      ...request,
+      paymentEvidence
+    }),
+    (error) =>
+      error.code === "stripe_alakazam_upgrade_stale" &&
+      error.status === 409
   );
   assert.equal(calls.subscriptionReads.length, 1);
   assert.equal(calls.subscriptionUpdates.length, 0);

@@ -35,3 +35,4 @@ export * from "./alakazam.mjs";
 export * from "./alakazam-billing.mjs";
 export * from "./alakazam-payment.mjs";
 export * from "./alakazam-activation.mjs";
+export * from "./alakazam-upgrade.mjs";
