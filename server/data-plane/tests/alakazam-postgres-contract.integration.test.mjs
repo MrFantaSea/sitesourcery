@@ -968,6 +968,31 @@ function checkoutPaymentEvent(
   };
 }
 
+function subscriptionActivationEvent(
+  reservation,
+  {
+    stripeSubscriptionId,
+    suffix,
+    occurredAt,
+    signatureVerifiedAt
+  }
+) {
+  return {
+    stripeEventId: `evt_${suffix}`,
+    eventType: "customer.subscription.created",
+    livemode: false,
+    apiVersion: "2026-06-24.dahlia",
+    stripeSubscriptionId,
+    metadata: createAlakazamProviderMetadata({
+      purpose: reservation.purpose,
+      purposeDigest: reservation.purposeDigest
+    }),
+    payloadDigest: digest(`payload:${suffix}`),
+    signatureVerifiedAt,
+    occurredAt
+  };
+}
+
 async function insertStripeEvent(client, authority, input) {
   const id = randomUUID();
   await insertRow(client, "alakazam_stripe_events", {
@@ -1185,52 +1210,87 @@ test(
         startSettlement
       );
 
-      const startProviderEventId = await insertStripeEvent(
-        client,
-        authority,
-        {
-          quoteId: startQuoteId,
-          subscriptionId,
-          suffix: "alakazam_start_provider",
-          eventType: "customer.subscription.created",
-          providerObjectId: "sub_alakazam_contract",
-          occurredAt: "2026-08-02T12:03:00.000Z",
-          processedAt: "2026-08-02T12:03:05.000Z"
-        }
+      const pendingActivation =
+        await settlementRepository
+          .findStartActivationBySubscription({
+            stripeSubscriptionId:
+              "sub_alakazam_contract"
+          });
+      assert.equal(pendingActivation.status, "pending");
+      assert.equal(
+        pendingActivation.pending.subscriptionId,
+        subscriptionId
       );
-      await insertTierEvent(client, authority, {
-        subscriptionId,
+      assert.equal(
+        pendingActivation.pending.receiptId,
+        startReceiptId
+      );
+      const startActivationFacts =
+        subscriptionPaymentFacts(
+          startResolved.reservation,
+          {
+            stripeSubscriptionId:
+              "sub_alakazam_contract",
+            stripeSubscriptionItemId:
+              "si_alakazam_contract",
+            stripePriceId: "price_alakazam_25",
+            currentPeriodStartsAt:
+              "2026-08-02T12:03:00.000Z",
+            currentPeriodEndsAt:
+              "2026-09-02T12:03:00.000Z",
+            providerObservedAt:
+              "2026-08-02T12:04:00.000Z"
+          }
+        );
+      const startActivation =
+        await settlementRepository.activateStartSubscription({
+          reservation: pendingActivation.reservation,
+          subscriptionId,
+          receiptId: startReceiptId,
+          event: subscriptionActivationEvent(
+            pendingActivation.reservation,
+            {
+              stripeSubscriptionId:
+                "sub_alakazam_contract",
+              suffix: "alakazam_start_provider",
+              occurredAt: "2026-08-02T12:03:00.000Z",
+              signatureVerifiedAt:
+                "2026-08-02T12:03:05.000Z"
+            }
+          ),
+          subscription: startActivationFacts,
+          eventRowId: randomUUID(),
+          tierEventId: randomUUID()
+        });
+      assert.deepEqual(startActivation, {
+        status: "active",
+        provider: "stripe",
+        changeKind: "start",
+        projectId: authority.projectId,
         quoteId: startQuoteId,
-        stripeEventRowId: startProviderEventId,
-        paymentReceiptId: startReceiptId,
-        resultSubscriptionRevision: 2,
-        eventKind: "start_applied",
-        resultTierId: "alakazam_25",
-        occurredAt: "2026-08-02T12:03:00.000Z"
-      });
-      await client.query(
-        `update ss.alakazam_subscriptions
-            set activation_receipt_id = $2,
-                status = 'active',
-                current_period_starts_at = $3,
-                current_period_ends_at = $4,
-                provider_observed_at = $5,
-                provider_facts_digest = $6
-          where id = $1`,
-        [
-          subscriptionId,
-          startReceiptId,
+        subscriptionId,
+        receiptId: startReceiptId,
+        tierId: "alakazam_25",
+        revision: 2,
+        currentPeriodStartsAt:
           "2026-08-02T12:03:00.000Z",
+        currentPeriodEndsAt:
           "2026-09-02T12:03:00.000Z",
-          "2026-08-02T12:04:00.000Z",
-          digest("subscription:active-25")
-        ]
-      );
-      await client.query(
-        "update ss.alakazam_change_quotes set state = 'applied' where id = $1",
-        [startQuoteId]
-      );
+        subscriptionProviderFactsDigest:
+          startActivationFacts.providerFactsDigest
+      });
       await flushConstraints(client);
+      const activeReplay =
+        await settlementRepository
+          .findStartActivationBySubscription({
+            stripeSubscriptionId:
+              "sub_alakazam_contract"
+          });
+      assert.equal(activeReplay.status, "active");
+      assert.deepEqual(
+        activeReplay.activation,
+        startActivation
+      );
 
       await expectRejected(
         client,

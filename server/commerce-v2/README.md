@@ -52,17 +52,17 @@ accept these Alakazam capabilities or provider identifiers, so this checkpoint
 does not open Checkout or grant an entitlement.
 
 The internal Alakazam quote, direct Customer-provisioning, start/upgrade
-Checkout, and payment-settlement transactions are now implemented but
-uncomposed. The held-by-default services open them only when release and
-provider tax/readiness facts match. The PostgreSQL repository locks the active
-project, binds the current subscription revision or one unused project
-Download credit, writes one immutable 30-minute quote per UUID idempotency key,
-and replays that exact snapshot. A direct start reserves and confirms one
-metadata-only organization Stripe Customer. Checkout then reserves one exact
-quote-bound effect under a two-minute lease before the provider call, persists
-only exact provider result evidence, replays a durable destination, and fences
-ambiguous, expired, or interrupted work without submitting a second payment
-effect.
+Checkout, payment-settlement, and start-activation transactions are now
+implemented but uncomposed. The held-by-default services open them only when
+release and provider tax/readiness facts match. The PostgreSQL repository locks
+the active project, binds the current subscription revision or one unused
+project Download credit, writes one immutable 30-minute quote per UUID
+idempotency key, and replays that exact snapshot. A direct start reserves and
+confirms one metadata-only organization Stripe Customer. Checkout then
+reserves one exact quote-bound effect under a two-minute lease before the
+provider call, persists only exact provider result evidence, replays a durable
+destination, and fences ambiguous, expired, or interrupted work without
+submitting a second payment effect.
 
 A verified `checkout.session.completed` event is only a wake-up signal. The
 payment service resolves the durable Session, requires exact read-only Stripe
@@ -70,11 +70,14 @@ payment evidence, and commits one event, receipt, and optional Download-credit
 application atomically. Start creates only a pending local subscription;
 upgrade records one `provider_change_pending` handoff while preserving the
 current tier. Durable settlement replays without another provider read or new
-IDs. Browser money and provider authority, pending changes, changed billing
-ownership, stale projects, changed retry purposes, and digest drift all fail
-closed. Start activation, upgrade provider mutation, downgrade Schedule
-dispatch, webhook/HTTP composition, customer controls, and fulfillment remain
-held.
+IDs. A later verified Subscription event is also only a wake-up signal: exact
+Stripe readback must match the paid pending start before one atomic transaction
+records the event and revision evidence, activates the local period, and
+applies the quote. Active replay performs no Stripe read. Browser money and
+provider authority, pending changes, changed billing ownership, stale projects,
+changed retry purposes, and digest drift all fail closed. Upgrade provider
+mutation, downgrade Schedule dispatch, webhook/HTTP composition, customer
+controls, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,

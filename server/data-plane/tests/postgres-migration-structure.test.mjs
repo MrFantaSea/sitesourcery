@@ -759,3 +759,21 @@ test("Alakazam payment settlement permits one event, quote receipt, and PaymentI
     /create function ss\.hosted_runtime_contract_v26\(\)/iu
   );
 });
+
+test("Alakazam start activation is one exact subscription transition", async () => {
+  const all = await migrations();
+  const activation = all.find(
+    ({ name }) =>
+      name ===
+      "202608040027_alakazam_start_activation.sql"
+  );
+  assert.ok(activation);
+  assert.match(
+    activation.sql,
+    /create unique index alakazam_one_start_activation[\s\S]*alakazam_tier_change_events\(subscription_id\)[\s\S]*where event_kind = 'start_applied'/iu
+  );
+  assert.match(
+    activation.sql,
+    /create function ss\.hosted_runtime_contract_v27\(\)/iu
+  );
+});

@@ -117,10 +117,19 @@ application without granting the tier. An upgrade records an immutable
 unchanged. A settled replay returns durable receipt identity without another
 Stripe read or new database identity.
 
-This checkpoint does not activate a start, mutate Stripe or the local tier for
-an upgrade, dispatch a downgrade Schedule, expose an HTTP/webhook route, or
-open production Checkout. Those remain separate evidence-gated slices below
-the same release holds.
+Additive migration 027 permits one `start_applied` transition per
+Subscription. The held start-activation service treats verified
+`customer.subscription.created` or `.updated` only as a wake-up signal,
+resolves the durable pending start, and requires exact read-only Stripe
+Subscription evidence. One atomic transaction records the processed event and
+revision-bound tier event, activates the paid local Subscription with its exact
+period and provider facts, and applies the start quote. An active replay uses
+durable state without another Stripe read or new identity.
+
+This checkpoint does not mutate Stripe or the local tier for an upgrade,
+dispatch a downgrade Schedule, expose an HTTP/webhook route, grant rendered
+tier features, publish a site, or open production Checkout. Those remain
+separate evidence-gated slices below the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

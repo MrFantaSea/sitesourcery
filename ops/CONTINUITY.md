@@ -351,6 +351,33 @@ these are OWNER RULINGS and open work, not suggestions.
   upgrade provider-mutation confirmation; Schedule dispatch remains a later
   separate slice. Public production remains the July 22 predecessor.
 
+## ALAKAZAM START ACTIVATION CHECKPOINT (2026-08-04)
+
+- A verified `customer.subscription.created` or `.updated` event can now wake
+  one internal held start-activation service. It resolves the exact durable
+  pending start and performs read-only Stripe Subscription reconciliation.
+  Customer, Subscription, item, Price, tier, status, cancellation flag,
+  schedule absence, period, metadata, and provider digest must all match; stale
+  or changed evidence activates nothing.
+- Additive migration 027 permits one `start_applied` transition per local
+  Subscription. One PostgreSQL transaction records and processes the verified
+  provider event, writes the revision-2 tier event, binds the exact paid
+  receipt, activates the local Subscription and period, and moves the start
+  quote to `applied`. An already-active replay returns the durable activation
+  without another Stripe read or new IDs.
+- All 27 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL Alakazam contract passes 5/5 and the old manual start
+  activation shortcut is gone. Focused gates pass 8/8 activation service,
+  19/19 migration structure, and 5/5 repository readiness. Wider gates pass
+  369/369 core and 121/121 runnable hosted tests with the same two intentional
+  environment-only skips.
+- This remains internal, held, local, and unpushed. No upgrade Price or local
+  tier was changed, no downgrade Schedule was dispatched, and no HTTP/customer
+  webhook composition, feature grant, publication effect, real provider
+  configuration, or production capability opened. Next is the separately
+  fenced paid-upgrade provider mutation and local confirmation. Public
+  production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

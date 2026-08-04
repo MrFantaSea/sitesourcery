@@ -38,7 +38,7 @@ decisions; implementation must keep those controls held instead of guessing.
 | --- | --- | --- | --- | --- |
 | Free Abracadabra make/preview | Four-step maker and three looks exist | Browser session prototype plus real hosted account/project/version contracts | Partial | One clean unauthenticated preview journey; account handoff preserves the accepted work |
 | $5 Download | Hosted account, exact quote, Stripe destination, automatic return confirmation, and entitlement-gated HTML Download are implemented | V2 Checkout dispatch, provider readback, receipt, Stripe Customer binding, project entitlement, artifact verification, and monotonic reversal handling pass fresh PostgreSQL proof | Implementation checkpoint complete; release held | Owner tax choice; real Stripe test payment on private staging; owner walk; reviewed activation/cutover |
-| Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, direct Stripe Customer reservation, project-locked quote, no-retry Checkout dispatch, exact Stripe payment readback, receipt, and pending local start projection now exist; no real three-Price/Coupon configuration or composed customer journey exists | Payment-settlement checkpoint complete; activation and fulfillment missing | Real Stripe test Product/Price/Coupon readback; subscription-confirmation activation and customer composition; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
+| Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, direct Stripe Customer reservation, project-locked quote, no-retry Checkout dispatch, exact payment readback/receipt, and exact Subscription-confirmed local activation now exist; no real three-Price/Coupon configuration or composed customer journey exists | Internal start activation complete; customer fulfillment missing | Real Stripe test Product/Price/Coupon readback; customer composition; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
 | Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, and staged as `provider_change_pending` while the old tier remains active; provider Price mutation, local activation, retention enforcement, and care ledger are not composed | Payment-settlement checkpoint complete; provider change and fulfillment missing | Provider-mutation/reconciliation transaction; real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
 | Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | Direct start and fixed-difference upgrade payment settlement are fenced; the $15 $35-to-$50 change and zero-dollar renewal-boundary downgrade remain exact project-locked facts, and the provider contract supports schedules; no Schedule dispatch, real Price, rendered controls, or care ledger exists | Start/upgrade settlement complete internally; downgrade/fulfillment missing | Schedule transaction; provider-change activation; real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
 | Customer account | Hosted registration, activation, sign-in, recovery, organization, project, draft, and accepted versions exist | PostgreSQL authority and secure cookies are proven on isolated HTTPS staging; Resend delivery is proven | Real on staging, not public | Public same-origin deployment and post-cutover registration/recovery/project proof |
@@ -61,12 +61,13 @@ Real and staging-proven today:
 - Persistent PostgreSQL services, encrypted backup/restore, monitoring, and
   owner alert delivery for the held production rehearsal.
 - The held Alakazam $25/$35/$50 calculation and PostgreSQL evidence contract:
-  all 26 migrations replay on a fresh database; one verified Checkout event
+  all 27 migrations replay on a fresh database; one verified Checkout event
   atomically settles a receipt and pending start or provider-change handoff;
+  one exact Subscription readback then atomically activates the pending start;
   $25 start, exact $10 $25-to-$35 upgrade, rejection of an unproved mutation,
-  paid-period retention, rejection of an early downgrade, and
-  $0/no-proration renewal-boundary downgrade pass one focused transaction
-  proof. This is local/HQ test proof, not a live provider journey.
+  paid-period retention, rejection of an early downgrade, and $0/no-proration
+  renewal-boundary downgrade pass one focused transaction proof. This is
+  local/HQ test proof, not a live provider journey.
 
 Present as substantial code but not a finished product journey:
 
@@ -100,6 +101,11 @@ Present as substantial code but not a finished product journey:
   Session, PaymentIntent, receipt, and optional Download credit. Start remains
   pending for subscription confirmation; upgrade records one immutable paid
   handoff and leaves the old tier active for the separate provider mutation.
+- A held start-activation service and atomic PostgreSQL transaction. A
+  Subscription webhook is only a wake-up signal; exact readback must match the
+  paid start before one processed provider event, one revision event, the
+  active local period, and the applied quote commit together. Active replay
+  performs no provider read.
 
 Absent today:
 
@@ -107,9 +113,9 @@ Absent today:
   one-invoice $5 Coupon.
 - Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
   restricted Portal configuration, and their reviewed environment bindings.
-- Start activation, upgrade Price-mutation confirmation, downgrade Schedule
-  dispatch, subscription event reconciliation, HTTP/customer boundaries, and
-  hosted runtime composition that can safely invoke the provider contract.
+- Upgrade Price-mutation confirmation, downgrade Schedule dispatch, renewal
+  and status-event reconciliation, HTTP/customer boundaries, and hosted
+  runtime composition that can safely invoke the provider contract.
 - Alakazam customer subscription controls and public provisioning UI/API.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
@@ -126,8 +132,9 @@ Absent today:
    provider contract, the project-locked quote transaction, migration 024's
    one-call direct Customer provisioning transaction, migration 025's
    no-retry start/upgrade Checkout dispatch, and migration 026's verified-event
-   payment settlement are complete. Start/upgrade provider activation,
-   downgrade Schedule dispatch, customer controls, and fulfillment remain.**
+   payment settlement, and migration 027's exact start activation are
+   complete. Upgrade provider mutation, downgrade Schedule dispatch, customer
+   controls, and fulfillment remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.
 5. Reconcile domains, assessment, separate Custom care, and Responder.
