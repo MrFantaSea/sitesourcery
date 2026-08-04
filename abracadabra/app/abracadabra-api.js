@@ -121,7 +121,9 @@
           message: "Payment, domain, plan, and publishing results are confirmed by Site Sourcery."
         });
       }
-      if (isObject(source[key])) rejectClaimedAuthority(source[key]);
+      if (isObject(source[key]) || Array.isArray(source[key])) {
+        rejectClaimedAuthority(source[key]);
+      }
     });
   }
 
@@ -643,6 +645,42 @@
       );
     }
 
+    function createAlakazamQuote(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID") + "/alakazam-quotes",
+        {
+          body: {
+            targetTierId: requiredText(source.targetTierId, "Target tier ID", 100)
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function createAlakazamCheckout(projectId, quoteId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam-quotes/" + segment(quoteId, "Alakazam quote ID")
+          + "/checkout-command",
+        {
+          body: {
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted Alakazam disclosure digest",
+              100
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function billingPortal(projectId, requestOptions) {
       return request(
         "POST",
@@ -1042,6 +1080,8 @@
       createCommerceCheckout: createCommerceCheckout,
       createDownloadQuote: createDownloadQuote,
       prepareDownloadCheckout: prepareDownloadCheckout,
+      createAlakazamQuote: createAlakazamQuote,
+      createAlakazamCheckout: createAlakazamCheckout,
       billingPortal: billingPortal,
       subscription: subscription,
       cancellationPreview: cancellationPreview,

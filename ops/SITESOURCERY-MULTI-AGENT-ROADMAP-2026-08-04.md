@@ -207,7 +207,7 @@ Lane I launch-critical domain truth only ─┘
 | 1 | Customer account surface | UI worker | `abracadabra/app` client/DOM/tests only | receipt/credit drift corrected; final browser runtime green |
 | 1 | Stripe configuration boundary | Provider worker | hosted Stripe configuration/tests only | reviewed; 12/12 focused green; release held |
 | 1 | Public truth audit | Audit worker | read-only report to lead | accepted; launch gates recorded below |
-| 2 | Billing commands | Lead plus bounded workers | acceptance fence proven; hosted route in progress |
+| 2 | Billing commands | Lead plus bounded workers | start backend and customer flow reviewed; browser and broad regressions green; release held |
 | 2 | Fulfillment feature matrix | Fulfillment mapper | inventory complete; implementation held behind billing route slice |
 | 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
 
@@ -233,8 +233,9 @@ containing this roadmap is its sealed local integration checkpoint.
 - Forbidden fields: Stripe Customer, Subscription, item, Price, Checkout,
   PaymentIntent, Invoice, event, and Schedule IDs; raw provider facts; owner
   repair state; credentials.
-- Every customer write action remains `false` with reason
-  `customer_commands_not_composed` until Lane E supplies its exact command.
+- At the sealed Batch 1 checkpoint every customer write action remained
+  `false`. Batch 2B supersedes only `actions.start` for a project with no
+  subscription or pending change; every other action remains false.
 - Proof: 11/11 focused account/HTTP tests and 5/5 real PostgreSQL lifecycle
   tests after a fresh replay of all 31 migrations. The named disposable test
   database was idle, dropped, and verified absent after proof.
@@ -271,6 +272,50 @@ containing this roadmap is its sealed local integration checkpoint.
   7/7 account/HTTP tests, 424/424 broad core tests, and 139 hosted tests with
   2 intentional environment skips and no failures. Provider and public release
   effects remain held.
+
+## Frozen Batch 2B customer start-flow contract
+
+- Account truth exposes `actions.start: true` only for an available project
+  with no subscription or pending change. Upgrade, downgrade, Portal, and
+  cancellation actions remain false. Runtime capability truth separately
+  exposes `alakazamQuote` and `alakazamCheckout` from the hosted billing
+  boundary readiness projection.
+- Browser API methods send only canonical `targetTierId` or the accepted
+  `disclosureDigest`, plus route IDs and a stable UUID idempotency header. No
+  browser amount, credit, tax, renewal, customer, subscription, or provider
+  authority is accepted.
+- The customer panel enables start controls only when both account eligibility
+  and quote capability are true. Held mode still shows all three canonical
+  tiers but clearly says subscription checkout is not open and nothing can be
+  charged.
+- A quote is usable only when its exact schema/keys, project, unexpired window,
+  catalog/terms versions, `start` change kind, canonical target tier, due-now
+  arithmetic, `$5` credit result, renewal, disclosure, and digests agree with
+  the latest verified account snapshot. Project/tier/account changes invalidate
+  it. No quote or command authority is stored in browser persistence.
+- Review shows the selected tier, standard monthly price, applied `$5` credit
+  or no credit, amount due now, tax state, next monthly renewal, effective
+  timing, and expiry. Checkout requires a fresh explicit acceptance control;
+  viewing a quote is not acceptance.
+- Checkout reuses one stable command ID across safe retries, must return an
+  exact customer-safe result bound to the same project/quote/command, and may
+  redirect only to uncredentialed HTTPS `checkout.stripe.com`. Provider IDs and
+  raw purpose/evidence never render or persist.
+- The first slice accepts only `start` quotes. Upgrade/downgrade responses fail
+  closed in this UI until their distinct controls and proofs land. Return,
+  settlement, and activation truth comes from refreshed account state, never
+  from a success URL alone.
+- Completion proof: 24/24 focused browser/API tests and 19/19 focused
+  account/HTTP tests pass; the reviewed hosted artifact builds and validates.
+  Isolated Chrome 149 passes at 1440×1000 and 320×720 with exact
+  `$35 - $5 = $30` first-payment display, `$35` renewal, explicit
+  acceptance, stable quote/Checkout retries, malicious-destination rejection,
+  quote-expiry rejection before Checkout, safe Stripe redirect interception,
+  held-capability zero-write behavior, accessibility semantics, and zero
+  overflow. Post-browser regressions are
+  427/427 core and 140 hosted pass with 2 intentional environment skips.
+  Evidence is preserved in
+  `/private/tmp/sitesourcery-alakazam-start-browser.pJSraR/`.
 
 ## Accepted launch-truth gates from Batch 1 audit
 

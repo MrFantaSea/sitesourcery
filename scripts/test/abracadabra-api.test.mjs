@@ -304,6 +304,119 @@ test("Download commerce sends only the accepted version and the reviewed server 
   }
 });
 
+test("Alakazam start commerce sends only the tier or accepted disclosure through the protected browser boundary", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_alakazam" });
+      }
+      return response(201, url.endsWith("/alakazam-quotes")
+        ? {
+            quoteId: "alakazam_quote_1",
+            disclosureDigest: "a".repeat(64),
+          }
+        : {
+            quoteId: "alakazam_quote_1",
+            state: "ready",
+            checkoutUrl: "https://checkout.stripe.com/c/pay/test",
+          });
+    },
+    idempotencyFactory: () => {
+      assert.fail("caller-supplied Alakazam idempotency keys must be preserved");
+    },
+  });
+
+  await client.createAlakazamQuote(
+    "project_1",
+    {
+      targetTierId: "alakazam_25",
+      ignoredPresentation: { label: "Hosted" },
+    },
+    { idempotencyKey: "alakazam-quote-command-1" },
+  );
+  await client.createAlakazamCheckout(
+    "project_1",
+    "alakazam_quote_1",
+    {
+      acceptedDisclosureDigest: "a".repeat(64),
+      ignoredPresentation: { buttonLabel: "Continue" },
+    },
+    { idempotencyKey: "alakazam-checkout-command-1" },
+  );
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, "/api/v1/csrf");
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.credentials, "include");
+
+  const quote = calls[1];
+  assert.equal(quote.url, "/api/v1/projects/project_1/alakazam-quotes");
+  assert.equal(quote.options.method, "POST");
+  assert.equal(quote.options.credentials, "include");
+  assert.equal(quote.options.headers["X-CSRF-Token"], "csrf_alakazam");
+  assert.equal(
+    quote.options.headers["Idempotency-Key"],
+    "alakazam-quote-command-1",
+  );
+  assert.deepEqual(JSON.parse(quote.options.body), {
+    targetTierId: "alakazam_25",
+  });
+
+  const checkout = calls[2];
+  assert.equal(
+    checkout.url,
+    "/api/v1/projects/project_1/alakazam-quotes/alakazam_quote_1/checkout-command",
+  );
+  assert.equal(checkout.options.method, "POST");
+  assert.equal(checkout.options.credentials, "include");
+  assert.equal(checkout.options.headers["X-CSRF-Token"], "csrf_alakazam");
+  assert.equal(
+    checkout.options.headers["Idempotency-Key"],
+    "alakazam-checkout-command-1",
+  );
+  assert.deepEqual(JSON.parse(checkout.options.body), {
+    acceptedDisclosureDigest: "a".repeat(64),
+  });
+});
+
+test("Alakazam start commerce recursively rejects claimed authority before fetch", () => {
+  let fetchCalls = 0;
+  const client = createClient({
+    fetch: async () => {
+      fetchCalls += 1;
+      return response(200, { csrfToken: "must_not_be_requested" });
+    },
+    idempotencyFactory: () => "must-not-be-generated",
+  });
+
+  assert.throws(
+    () => client.createAlakazamQuote(
+      "project_1",
+      {
+        targetTierId: "alakazam_25",
+        forged: { billing: [{ amountMinor: 2000 }] },
+      },
+      { idempotencyKey: "forged-quote-command" },
+    ),
+    (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
+  );
+  assert.throws(
+    () => client.createAlakazamCheckout(
+      "project_1",
+      "alakazam_quote_1",
+      {
+        acceptedDisclosureDigest: "a".repeat(64),
+        forged: [{ nested: { providerReference: "checkout_provider_1" } }],
+      },
+      { idempotencyKey: "forged-checkout-command" },
+    ),
+    (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
+  );
+  assert.equal(fetchCalls, 0);
+});
+
 test("cancellation requires a server preview and submits only its accepted disclosure", async () => {
   const calls = [];
   const digest = "c".repeat(64);

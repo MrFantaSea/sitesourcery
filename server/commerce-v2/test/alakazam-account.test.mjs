@@ -99,11 +99,11 @@ test("an account without Alakazam exposes only the held catalog and available Do
   assert.equal(result.subscription, null);
   assert.equal(result.nextRenewal, null);
   assert.deepEqual(result.actions, {
-    start: false,
+    start: true,
     changeTier: false,
     manageBilling: false,
     cancel: false,
-    reason: "customer_commands_not_composed"
+    reason: "only_start_composed"
   });
   assert.deepEqual(context.calls, [scope()]);
 });

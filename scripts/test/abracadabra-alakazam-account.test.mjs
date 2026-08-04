@@ -123,12 +123,106 @@ function account(overrides = {}) {
     nextRenewal: null,
     receipts: [],
     actions: {
-      start: false,
+      start: !hasSubscription,
       changeTier: false,
       manageBilling: false,
       cancel: false,
-      reason: "customer_commands_not_composed",
+      reason: hasSubscription
+        ? "customer_commands_not_composed"
+        : "only_start_composed",
     },
+    ...overrides,
+  };
+}
+
+function startQuote(
+  snapshot,
+  targetTierId = "alakazam_25",
+  overrides = {}
+) {
+  const targetTier = snapshot.catalog.tiers.find(
+    (candidate) => candidate.tierId === targetTierId
+  );
+  const appliedValue = snapshot.downloadCredit.available
+    ? { kind: "download_purchase", amountMinor: 500 }
+    : { kind: "none", amountMinor: 0 };
+  const dueNow = {
+    subtotalMinor:
+      targetTier.price.amountMinor -
+      appliedValue.amountMinor,
+    currency: "USD",
+    taxMinor: 0,
+    totalMinor:
+      targetTier.price.amountMinor -
+      appliedValue.amountMinor,
+    taxState: "disabled_by_owner",
+  };
+  const renewal = {
+    tierId: targetTierId,
+    amountMinor: targetTier.price.amountMinor,
+    currency: "USD",
+    interval: "month",
+  };
+  return {
+    schema:
+      "sitesourcery.alakazam-tier-change-quote.v1",
+    quoteId:
+      "40000000-0000-4000-8000-000000000010",
+    projectId: PROJECT_ID,
+    catalogVersion: snapshot.catalog.catalogVersion,
+    termsVersion: snapshot.catalog.termsVersion,
+    state: "quoted",
+    changeKind: "start",
+    targetTier: structuredClone(targetTier),
+    dueNow,
+    appliedValue,
+    effectiveAt:
+      "after_payment_and_provider_confirmation",
+    nextRenewal: renewal,
+    noMidPeriodRefundOrProration: false,
+    premiumConfiguration: "preserved_when_inactive",
+    issuedAt: "2026-08-04T18:00:00.000Z",
+    expiresAt: "2026-08-04T18:30:00.000Z",
+    disclosure: {
+      schema:
+        "sitesourcery.alakazam-tier-change-disclosure.v1",
+      changeKind: "start",
+      currentTierId: null,
+      targetTierId,
+      dueNow: structuredClone(dueNow),
+      appliedValue: structuredClone(appliedValue),
+      effectiveAt:
+        "after_payment_and_provider_confirmation",
+      renewal: structuredClone(renewal),
+      downgrade: {
+        cashRefundMinor: 0,
+        providerProration: false,
+        currentTierKeptThroughPeriod: false,
+      },
+      premiumConfiguration:
+        "preserved_when_inactive",
+      cancellationPolicy:
+        "owner_review_required_before_release",
+    },
+    disclosureDigest: "a".repeat(64),
+    quoteDigest: "b".repeat(64),
+    ...overrides,
+  };
+}
+
+function checkout(quote, overrides = {}) {
+  return {
+    schema:
+      "sitesourcery.alakazam-checkout-ready/v1",
+    commandId:
+      "50000000-0000-4000-8000-000000000010",
+    projectId: PROJECT_ID,
+    quoteId: quote.quoteId,
+    state: "ready",
+    purposeDigest: "c".repeat(64),
+    checkoutUrl:
+      "https://checkout.stripe.com/c/pay/alakazam-safe",
+    expiresAt: "2026-08-04T19:00:00.000Z",
     ...overrides,
   };
 }
@@ -168,6 +262,139 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
     calls[0].options.headers["X-CSRF-Token"],
     undefined
   );
+});
+
+test("start quotes and Checkout destinations are exact, credit-aware, and project-bound", () => {
+  const snapshot = account();
+  const observedAt = "2026-08-04T18:10:00.000Z";
+  for (const [tierId, dueNowMinor] of [
+    ["alakazam_25", 2000],
+    ["alakazam_35", 3000],
+    ["alakazam_50", 4500],
+  ]) {
+    const quote = startQuote(snapshot, tierId);
+    const verified =
+      customerControl.verifiedAlakazamQuote(
+        quote,
+        PROJECT_ID,
+        snapshot,
+        tierId,
+        observedAt
+      );
+    assert.equal(verified.targetTier.tierId, tierId);
+    assert.equal(
+      verified.appliedValue.amountMinor,
+      500
+    );
+    assert.equal(
+      verified.dueNow.subtotalMinor,
+      dueNowMinor
+    );
+  }
+
+  const noCredit = account({
+    downloadCredit: {
+      available: false,
+      amountMinor: 0,
+      currency: "USD",
+    },
+  });
+  const fullPrice = startQuote(noCredit);
+  assert.equal(
+    customerControl.verifiedAlakazamQuote(
+      fullPrice,
+      PROJECT_ID,
+      noCredit,
+      "alakazam_25",
+      observedAt
+    ).dueNow.subtotalMinor,
+    2500
+  );
+
+  const quote = startQuote(snapshot);
+  const commandId =
+    "50000000-0000-4000-8000-000000000010";
+  const checkoutResult = checkout(quote);
+  assert.deepEqual(
+    customerControl.verifiedAlakazamCheckout(
+      checkoutResult,
+      PROJECT_ID,
+      quote.quoteId,
+      commandId,
+      observedAt
+    ),
+    checkoutResult
+  );
+  assert.equal(
+    customerControl.safeCheckoutDestination(
+      checkoutResult
+    ),
+    checkoutResult.checkoutUrl
+  );
+
+  function changed(source, mutate) {
+    const copy = structuredClone(source);
+    mutate(copy);
+    return copy;
+  }
+
+  for (const invalid of [
+    changed(quote, (value) => {
+      value.projectId = OTHER_PROJECT_ID;
+    }),
+    changed(quote, (value) => {
+      value.changeKind = "upgrade";
+    }),
+    changed(quote, (value) => {
+      value.dueNow.subtotalMinor = 1;
+      value.dueNow.totalMinor = 1;
+    }),
+    changed(quote, (value) => {
+      value.appliedValue.sourceId = "private-credit";
+    }),
+    changed(quote, (value) => {
+      value.disclosureDigest = "not-a-digest";
+    }),
+    changed(quote, (value) => {
+      value.expiresAt = observedAt;
+    }),
+    changed(quote, (value) => {
+      value.provider = "stripe";
+    }),
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamQuote(
+        invalid,
+        PROJECT_ID,
+        snapshot,
+        "alakazam_25",
+        observedAt
+      ),
+      null
+    );
+  }
+
+  for (const invalid of [
+    checkout(quote, { projectId: OTHER_PROJECT_ID }),
+    checkout(quote, { commandId: OTHER_PROJECT_ID }),
+    checkout(quote, {
+      checkoutUrl:
+        "https://checkout.stripe.com/c/pay/safe#leak",
+    }),
+    checkout(quote, { expiresAt: observedAt }),
+    checkout(quote, { checkoutId: "cs_private" }),
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamCheckout(
+        invalid,
+        PROJECT_ID,
+        quote.quoteId,
+        commandId,
+        observedAt
+      ),
+      null
+    );
+  }
 });
 
 test("the customer projection preserves active, pending, attention, ended, renewal, credit, and receipt facts", () => {
@@ -320,7 +547,7 @@ test("the customer projection fails closed on cross-project, schema, action, mon
     { ...source, schema: "sitesourcery.alakazam-account/v2" },
     {
       ...source,
-      actions: { ...source.actions, start: true },
+      actions: { ...source.actions, start: false },
     },
     {
       ...source,
@@ -406,7 +633,7 @@ test("the customer projection fails closed on cross-project, schema, action, mon
   }
 });
 
-test("the panel source declares the responsive, accessible, read-only, and retry-safe contract", async () => {
+test("the panel source declares the responsive, accessible, retry-safe quote acceptance contract", async () => {
   const source = await readFile(
     new URL(
       "../../abracadabra/app/abracadabra-customer-control-dom.js",
@@ -422,7 +649,7 @@ test("the panel source declares the responsive, accessible, read-only, and retry
     "utf8"
   );
   const panelStart = source.indexOf(
-    "function createAlakazamAccountPanel"
+    "function renderAlakazamQuoteReview"
   );
   const panelEnd = source.indexOf(
     "function fragmentToken",
@@ -433,21 +660,32 @@ test("the panel source declares the responsive, accessible, read-only, and retry
   assert.ok(panelStart >= 0 && panelEnd > panelStart);
   assert.match(source, /client\s*\.getAlakazamAccount\(selectedProjectId\)/u);
   assert.match(source, /sequence === alakazamReadSequence/u);
+  assert.match(source, /sequence === alakazamCommandSequence/u);
   assert.match(source, /idOf\(lastState\.project\) === projectId/u);
+  assert.match(source, /client\.createAlakazamQuote\(/u);
+  assert.match(source, /client\.createAlakazamCheckout\(/u);
+  assert.match(source, /acceptedDisclosureDigest:\s*quote\.disclosureDigest/u);
+  assert.match(source, /idempotencyKey:\s*commandId/u);
   assert.match(panelSource, /aria-labelledby/u);
   assert.match(panelSource, /aria-live/u);
   assert.match(panelSource, /aria-busy/u);
   assert.match(panelSource, /data-alakazam-retry/u);
+  assert.match(panelSource, /data-alakazam-quote-tier/u);
+  assert.match(panelSource, /data-alakazam-quote-review/u);
+  assert.match(panelSource, /data-alakazam-accept/u);
+  assert.match(panelSource, /data-alakazam-checkout/u);
+  assert.match(panelSource, /checkbox\.checked === true/u);
   assert.match(panelSource, /No account, payment, or plan data was changed/u);
-  assert.match(source, /Plan changes and billing management are not available/u);
+  assert.match(source, /Tier changes and billing management are not available/u);
+  assert.match(source, /Subscription checkout is not open yet\. Nothing can be charged/u);
+  assert.match(source, /windowRef\.location\.assign\(destination\)/u);
+  assert.match(
+    source,
+    /subscription quote expired[\s\S]*Request a fresh quote/iu
+  );
   assert.doesNotMatch(
     panelSource,
     /billingPortal|cancelSubscription|createCommerceCheckout|prepareDownloadCheckout/u
-  );
-  assert.equal(
-    panelSource.match(/accountElement\(\s*documentRef,\s*"button"/gu)?.length,
-    1,
-    "the only Alakazam panel button is the safe GET retry"
   );
   assert.doesNotMatch(
     source,
@@ -458,4 +696,6 @@ test("the panel source declares the responsive, accessible, read-only, and retry
     css,
     /customer-alakazam-facts[^}]*grid-template-columns:1fr/u
   );
+  assert.match(css, /customer-alakazam-quote-review/u);
+  assert.match(css, /customer-alakazam-acceptance/u);
 });

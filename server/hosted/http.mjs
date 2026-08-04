@@ -317,7 +317,9 @@ export function createHostedApi(
     alakazamBilling ??
     createHeldHostedAlakazamBilling();
   invariant(
-    typeof alakazamBillingBoundary.createQuote ===
+    typeof alakazamBillingBoundary.readiness ===
+      "function" &&
+      typeof alakazamBillingBoundary.createQuote ===
       "function" &&
       typeof alakazamBillingBoundary.createCheckout ===
         "function",
@@ -427,6 +429,8 @@ export function createHostedApi(
                   quote: false,
                   payment: false
                 };
+          const alakazam =
+            await alakazamBillingBoundary.readiness();
           const registration =
             readiness?.registration ?? {};
           const recovery =
@@ -445,6 +449,10 @@ export function createHostedApi(
                 download.quote === true,
               downloadPayment:
                 download.payment === true,
+              alakazamQuote:
+                alakazam.quote === true,
+              alakazamCheckout:
+                alakazam.checkout === true,
               domainPurchase:
                 domains.ready === true &&
                 domains.registrar === "ready",

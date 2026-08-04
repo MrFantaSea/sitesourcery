@@ -19,6 +19,9 @@ const DISCLOSURE_DIGEST = "d".repeat(64);
 
 function service() {
   return {
+    async readiness() {
+      return {};
+    },
     async authenticate(token) {
       return token === SESSION_TOKEN
         ? { userId: CUSTOMER_ID }
@@ -58,6 +61,14 @@ test("Alakazam quote and Checkout routes preserve route and idempotency identity
   const calls = { quotes: [], checkouts: [] };
   const api = createHostedApi(service(), {
     alakazamBilling: {
+      async readiness() {
+        return {
+          ready: true,
+          quote: true,
+          checkout: true,
+          state: "quote_ready"
+        };
+      },
       async createQuote(actor, projectId, input) {
         calls.quotes.push({
           actor: structuredClone(actor),
@@ -151,6 +162,14 @@ test("Alakazam quote and Checkout routes preserve route and idempotency identity
 test("Alakazam writes retain the global CSRF and idempotency fences", async () => {
   let calls = 0;
   const boundary = {
+    async readiness() {
+      return {
+        ready: true,
+        quote: true,
+        checkout: true,
+        state: "quote_ready"
+      };
+    },
     async createQuote() {
       calls += 1;
       return {};
@@ -190,6 +209,47 @@ test("Alakazam writes retain the global CSRF and idempotency fences", async () =
     "IDEMPOTENCY_KEY_REQUIRED"
   );
   assert.equal(calls, 0);
+});
+
+test("Alakazam capabilities reflect only the billing boundary readiness", async () => {
+  const api = createHostedApi(service(), {
+    alakazamBilling: {
+      async readiness() {
+        return {
+          ready: true,
+          quote: true,
+          checkout: true,
+          state: "quote_ready"
+        };
+      },
+      async createQuote() {
+        throw new Error("unused");
+      },
+      async createCheckout() {
+        throw new Error("unused");
+      }
+    }
+  });
+  const ready = await api.fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(ready.status, 200);
+  const readyCapabilities = await ready.json();
+  assert.equal(readyCapabilities.alakazamQuote, true);
+  assert.equal(readyCapabilities.alakazamCheckout, true);
+
+  const held = await createHostedApi(service()).fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(held.status, 200);
+  const heldCapabilities = await held.json();
+  assert.deepEqual(
+    {
+      quote: heldCapabilities.alakazamQuote,
+      checkout: heldCapabilities.alakazamCheckout
+    },
+    { quote: false, checkout: false }
+  );
 });
 
 test("the default Alakazam billing route authenticates and remains explicitly held", async () => {

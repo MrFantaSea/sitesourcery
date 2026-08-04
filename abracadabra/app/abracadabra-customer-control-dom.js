@@ -32,6 +32,12 @@
 
   var ALAKAZAM_ACCOUNT_SCHEMA =
     "sitesourcery.alakazam-account/v1";
+  var ALAKAZAM_QUOTE_SCHEMA =
+    "sitesourcery.alakazam-tier-change-quote.v1";
+  var ALAKAZAM_DISCLOSURE_SCHEMA =
+    "sitesourcery.alakazam-tier-change-disclosure.v1";
+  var ALAKAZAM_CHECKOUT_SCHEMA =
+    "sitesourcery.alakazam-checkout-ready/v1";
   var ALAKAZAM_ACCOUNT_STATES = [
     "available",
     "activation_pending",
@@ -41,6 +47,7 @@
   ];
   var UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+  var SHA256 = /^[a-f0-9]{64}$/u;
   var ALAKAZAM_PAYMENT_STATES = {
     pending: "pending",
     active: "paid",
@@ -446,12 +453,17 @@
           "start"
         ]
       )
-      || value.actions.start !== false
+      || value.actions.start !== (
+        value.subscription === null
+      )
       || value.actions.changeTier !== false
       || value.actions.manageBilling !== false
       || value.actions.cancel !== false
-      || value.actions.reason !==
-        "customer_commands_not_composed"
+      || value.actions.reason !== (
+        value.subscription === null
+          ? "only_start_composed"
+          : "customer_commands_not_composed"
+      )
       || !verifiedAlakazamRelationships(value)
     ) return null;
     var status = value.subscription
@@ -505,6 +517,226 @@
       heading: copy.heading,
       summary: copy.summary
     });
+  }
+
+  function verifiedAlakazamDueNow(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "currency",
+          "subtotalMinor",
+          "taxMinor",
+          "taxState",
+          "totalMinor"
+        ]
+      )
+      || !safeMinor(value.subtotalMinor)
+      || value.currency !== "USD"
+      || ![
+        "automatic",
+        "disabled_by_owner"
+      ].includes(value.taxState)
+    ) return false;
+    return value.taxState === "disabled_by_owner"
+      ? value.taxMinor === 0
+        && value.totalMinor === value.subtotalMinor
+      : value.taxMinor === null
+        && value.totalMinor === null;
+  }
+
+  function verifiedAlakazamAppliedValue(
+    value,
+    account
+  ) {
+    if (
+      !exactKeys(value, ["amountMinor", "kind"])
+      || !safeMinor(value.amountMinor)
+    ) return false;
+    return account.downloadCredit.available
+      ? value.kind === "download_purchase"
+        && value.amountMinor ===
+          account.catalog.ladder.downloadCreditMinor
+      : value.kind === "none"
+        && value.amountMinor === 0;
+  }
+
+  function verifiedAlakazamQuote(
+    value,
+    projectId,
+    accountValue,
+    targetTierId,
+    observedAt
+  ) {
+    var account = verifiedAlakazamAccount(
+      accountValue,
+      projectId
+    );
+    var observed = safeIso(observedAt)
+      ? Date.parse(observedAt)
+      : Date.now();
+    if (
+      !account
+      || account.actions.start !== true
+      || !exactKeys(
+        value,
+        [
+          "appliedValue",
+          "catalogVersion",
+          "changeKind",
+          "disclosure",
+          "disclosureDigest",
+          "dueNow",
+          "effectiveAt",
+          "expiresAt",
+          "issuedAt",
+          "nextRenewal",
+          "noMidPeriodRefundOrProration",
+          "premiumConfiguration",
+          "projectId",
+          "quoteDigest",
+          "quoteId",
+          "schema",
+          "state",
+          "targetTier",
+          "termsVersion"
+        ]
+      )
+      || value.schema !== ALAKAZAM_QUOTE_SCHEMA
+      || !UUID.test(text(value.quoteId))
+      || text(value.projectId) !== text(projectId)
+      || value.catalogVersion !==
+        account.catalog.catalogVersion
+      || value.termsVersion !==
+        account.catalog.termsVersion
+      || value.state !== "quoted"
+      || value.changeKind !== "start"
+      || !matchingCatalogTier(
+        account.catalog,
+        value.targetTier
+      )
+      || value.targetTier.tierId !==
+        text(targetTierId)
+      || !verifiedAlakazamDueNow(value.dueNow)
+      || !verifiedAlakazamAppliedValue(
+        value.appliedValue,
+        account
+      )
+      || value.dueNow.subtotalMinor !==
+        value.targetTier.price.amountMinor
+          - value.appliedValue.amountMinor
+      || value.effectiveAt !==
+        "after_payment_and_provider_confirmation"
+      || !exactKeys(
+        value.nextRenewal,
+        ["amountMinor", "currency", "interval", "tierId"]
+      )
+      || value.nextRenewal.tierId !==
+        value.targetTier.tierId
+      || value.nextRenewal.amountMinor !==
+        value.targetTier.price.amountMinor
+      || value.nextRenewal.currency !== "USD"
+      || value.nextRenewal.interval !== "month"
+      || value.noMidPeriodRefundOrProration !== false
+      || value.premiumConfiguration !==
+        "preserved_when_inactive"
+      || !safeIso(value.issuedAt)
+      || !safeIso(value.expiresAt)
+      || Date.parse(value.expiresAt) <= observed
+      || Date.parse(value.expiresAt) <=
+        Date.parse(value.issuedAt)
+      || Date.parse(value.expiresAt)
+        - Date.parse(value.issuedAt) > 30 * 60 * 1000
+      || !SHA256.test(text(value.disclosureDigest))
+      || !SHA256.test(text(value.quoteDigest))
+      || !exactKeys(
+        value.disclosure,
+        [
+          "appliedValue",
+          "cancellationPolicy",
+          "changeKind",
+          "currentTierId",
+          "downgrade",
+          "dueNow",
+          "effectiveAt",
+          "premiumConfiguration",
+          "renewal",
+          "schema",
+          "targetTierId"
+        ]
+      )
+      || value.disclosure.schema !==
+        ALAKAZAM_DISCLOSURE_SCHEMA
+      || value.disclosure.changeKind !== "start"
+      || value.disclosure.currentTierId !== null
+      || value.disclosure.targetTierId !==
+        value.targetTier.tierId
+      || JSON.stringify(value.disclosure.dueNow) !==
+        JSON.stringify(value.dueNow)
+      || JSON.stringify(
+        value.disclosure.appliedValue
+      ) !== JSON.stringify(value.appliedValue)
+      || value.disclosure.effectiveAt !==
+        value.effectiveAt
+      || JSON.stringify(value.disclosure.renewal) !==
+        JSON.stringify(value.nextRenewal)
+      || !exactKeys(
+        value.disclosure.downgrade,
+        [
+          "cashRefundMinor",
+          "currentTierKeptThroughPeriod",
+          "providerProration"
+        ]
+      )
+      || value.disclosure.downgrade.cashRefundMinor !== 0
+      || value.disclosure.downgrade.providerProration !== false
+      || value.disclosure.downgrade
+        .currentTierKeptThroughPeriod !== false
+      || value.disclosure.premiumConfiguration !==
+        value.premiumConfiguration
+      || value.disclosure.cancellationPolicy !==
+        "owner_review_required_before_release"
+    ) return null;
+    return clone(value);
+  }
+
+  function verifiedAlakazamCheckout(
+    value,
+    projectId,
+    quoteId,
+    commandId,
+    observedAt
+  ) {
+    var observed = safeIso(observedAt)
+      ? Date.parse(observedAt)
+      : Date.now();
+    if (
+      !exactKeys(
+        value,
+        [
+          "checkoutUrl",
+          "commandId",
+          "expiresAt",
+          "projectId",
+          "purposeDigest",
+          "quoteId",
+          "schema",
+          "state"
+        ]
+      )
+      || value.schema !== ALAKAZAM_CHECKOUT_SCHEMA
+      || text(value.commandId) !== text(commandId)
+      || !UUID.test(text(value.commandId))
+      || text(value.projectId) !== text(projectId)
+      || text(value.quoteId) !== text(quoteId)
+      || !UUID.test(text(value.quoteId))
+      || value.state !== "ready"
+      || !SHA256.test(text(value.purposeDigest))
+      || !safeIso(value.expiresAt)
+      || Date.parse(value.expiresAt) <= observed
+      || !safeCheckoutDestination(value)
+    ) return null;
+    return clone(value);
   }
 
   function accountElement(
@@ -579,10 +811,186 @@
     return tier ? tier.name : text(tierId);
   }
 
+  function renderAlakazamQuoteReview(
+    documentRef,
+    body,
+    command,
+    capabilities,
+    actions
+  ) {
+    var selected = command || {};
+    if (selected.error) {
+      var error = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-command-error",
+        selected.error
+      );
+      error.setAttribute("role", "alert");
+      body.appendChild(error);
+    }
+    if (!selected.quote) {
+      if (selected.phase === "quoting") {
+        var pending = accountElement(
+          documentRef,
+          "p",
+          "customer-alakazam-command-state",
+          "Requesting the exact server quote…"
+        );
+        pending.setAttribute("role", "status");
+        body.appendChild(pending);
+      }
+      return;
+    }
+
+    var quote = selected.quote;
+    var review = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-quote-review"
+    );
+    review.setAttribute("data-alakazam-quote-review", "");
+    review.setAttribute(
+      "aria-labelledby",
+      "customer-alakazam-quote-title"
+    );
+    var heading = accountElement(
+      documentRef,
+      "h4",
+      "",
+      "Review the exact subscription quote"
+    );
+    heading.id = "customer-alakazam-quote-title";
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-alakazam-quote-facts"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Selected tier",
+      quote.targetTier.name + " · "
+        + accountMoney(quote.targetTier.price)
+        + " a month"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Download credit",
+      quote.appliedValue.amountMinor > 0
+        ? "−" + accountMoney({
+          amountMinor: quote.appliedValue.amountMinor,
+          currency: "USD"
+        }) + " applied once"
+        : "No credit applied"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Due now",
+      quote.dueNow.taxState === "automatic"
+        ? accountMoney({
+          amountMinor: quote.dueNow.subtotalMinor,
+          currency: quote.dueNow.currency
+        }) + " plus tax calculated at secure checkout"
+        : accountMoney({
+          amountMinor: quote.dueNow.totalMinor,
+          currency: quote.dueNow.currency
+        })
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Next renewal",
+      accountMoney({
+        amountMinor: quote.nextRenewal.amountMinor,
+        currency: quote.nextRenewal.currency
+      }) + " each month"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Starts",
+      "After payment and subscription confirmation"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Quote expires",
+      accountDate(quote.expiresAt)
+    );
+
+    var acceptance = accountElement(
+      documentRef,
+      "label",
+      "customer-alakazam-acceptance"
+    );
+    var checkbox = accountElement(
+      documentRef,
+      "input",
+      ""
+    );
+    checkbox.type = "checkbox";
+    checkbox.setAttribute("data-alakazam-accept", "");
+    var acceptanceCopy = accountElement(
+      documentRef,
+      "span",
+      "",
+      "I reviewed and accept the amount due now and monthly renewal shown above."
+    );
+    acceptance.append(checkbox, acceptanceCopy);
+
+    var continueButton = accountElement(
+      documentRef,
+      "button",
+      "spark-button spark-button-primary",
+      selected.phase === "checkout"
+        ? "Opening secure payment…"
+        : "Continue to secure payment"
+    );
+    continueButton.type = "button";
+    continueButton.setAttribute(
+      "data-alakazam-checkout",
+      ""
+    );
+    function syncContinue() {
+      continueButton.disabled =
+        checkbox.checked !== true
+        || capabilities.alakazamCheckout !== true
+        || selected.phase === "checkout";
+    }
+    checkbox.addEventListener("change", syncContinue);
+    continueButton.addEventListener("click", function () {
+      if (
+        checkbox.checked === true
+        && typeof actions.checkout === "function"
+      ) actions.checkout();
+    });
+    syncContinue();
+
+    review.append(heading, facts, acceptance);
+    if (capabilities.alakazamCheckout !== true) {
+      review.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-alakazam-command-state",
+          "The exact quote is available for review, but secure subscription payment is not open yet."
+        )
+      );
+    }
+    review.appendChild(continueButton);
+    body.appendChild(review);
+  }
+
   function renderAlakazamAccountBody(
     documentRef,
     body,
-    presentation
+    presentation,
+    command,
+    capabilities,
+    actions
   ) {
     var account = presentation.account;
     body.replaceChildren();
@@ -767,6 +1175,42 @@
           "li",
           "customer-alakazam-tier"
         );
+        var tierDetails = accountElement(
+          documentRef,
+          "span",
+          "",
+          accountMoney(tier.price) + " a month"
+        );
+        tierDetails.id =
+          "customer-alakazam-tier-" + tier.tierId;
+        var quoteButton = accountElement(
+          documentRef,
+          "button",
+          "spark-button",
+          command.phase === "quoting"
+            && command.selectedTierId === tier.tierId
+            ? "Requesting exact quote…"
+            : "Review exact quote"
+        );
+        quoteButton.type = "button";
+        quoteButton.setAttribute(
+          "data-alakazam-quote-tier",
+          tier.tierId
+        );
+        quoteButton.setAttribute(
+          "aria-describedby",
+          tierDetails.id
+        );
+        quoteButton.disabled =
+          account.actions.start !== true
+          || capabilities.alakazamQuote !== true
+          || command.phase === "quoting"
+          || command.phase === "checkout";
+        quoteButton.addEventListener("click", function () {
+          if (typeof actions.quote === "function") {
+            actions.quote(tier.tierId);
+          }
+        });
         item.append(
           accountElement(
             documentRef,
@@ -774,17 +1218,20 @@
             "",
             tier.name
           ),
-          accountElement(
-            documentRef,
-            "span",
-            "",
-            accountMoney(tier.price) + " a month"
-          )
+          tierDetails,
+          quoteButton
         );
         tierList.appendChild(item);
       });
       tiers.append(tierHeading, tierList);
       body.appendChild(tiers);
+      renderAlakazamQuoteReview(
+        documentRef,
+        body,
+        command,
+        capabilities,
+        actions
+      );
     }
 
     var receipts = accountElement(
@@ -849,15 +1296,20 @@
         documentRef,
         "p",
         "customer-alakazam-actions-note",
-        "Plan changes and billing management are not available in this panel yet."
+        account.subscription
+          ? "Tier changes and billing management are not available in this panel yet."
+          : capabilities.alakazamQuote === true
+            ? "Choose a tier, review the exact quote, and accept it before secure payment."
+            : "Subscription checkout is not open yet. Nothing can be charged."
       )
     );
   }
 
   function createAlakazamAccountPanel(
     documentRef,
-    retry
+    actions
   ) {
+    actions = actions || {};
     var panel = accountElement(
       documentRef,
       "section",
@@ -907,7 +1359,9 @@
     retryButton.hidden = true;
     retryButton.setAttribute("data-alakazam-retry", "");
     retryButton.addEventListener("click", function () {
-      if (typeof retry === "function") retry();
+      if (typeof actions.retry === "function") {
+        actions.retry();
+      }
     });
     panel.append(
       eyebrow,
@@ -973,7 +1427,10 @@
         renderAlakazamAccountBody(
           documentRef,
           body,
-          readState.presentation
+          readState.presentation,
+          readState.command || {},
+          readState.capabilities || {},
+          actions
         );
       }
     });
@@ -1124,6 +1581,7 @@
         || parsed.port
         || parsed.username
         || parsed.password
+        || parsed.hash
       ) return "";
       return parsed.href;
     } catch (_error) {
@@ -1412,6 +1870,16 @@
       phase: "idle",
       presentation: null
     };
+    var alakazamCommandSequence = 0;
+    var alakazamCommand = {
+      projectId: "",
+      selectedTierId: "",
+      phase: "idle",
+      quote: null,
+      quoteCommandId: "",
+      checkoutCommandId: "",
+      error: ""
+    };
     var checkoutReturn =
       downloadCheckoutReturnFromLocation(
         windowRef.location
@@ -1422,6 +1890,8 @@
       accountRecoveryEmail: false,
       downloadQuote: false,
       downloadPayment: false,
+      alakazamQuote: false,
+      alakazamCheckout: false,
       domainPurchase: false,
       publishing: false
     });
@@ -1462,12 +1932,20 @@
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
-        function () {
-          var projectId = idOf(
-            lastState && lastState.project
-          );
-          if (lastState.account && projectId) {
-            requestAlakazamAccount(projectId);
+        {
+          retry: function () {
+            var projectId = idOf(
+              lastState && lastState.project
+            );
+            if (lastState.account && projectId) {
+              requestAlakazamAccount(projectId);
+            }
+          },
+          quote: function (tierId) {
+            requestAlakazamQuote(tierId);
+          },
+          checkout: function () {
+            requestAlakazamCheckout();
           }
         }
       );
@@ -1523,6 +2001,66 @@
       return message + requestId;
     }
 
+    function freshAlakazamCommandId() {
+      var cryptoObject = windowRef.crypto;
+      var commandId = cryptoObject
+        && typeof cryptoObject.randomUUID === "function"
+        ? cryptoObject.randomUUID()
+        : "";
+      if (!UUID.test(text(commandId))) {
+        throw new Error(
+          "This browser cannot safely identify the subscription request. Update it and try again."
+        );
+      }
+      return commandId;
+    }
+
+    function renderAlakazamPanel() {
+      alakazamPanel.render({
+        projectId: alakazamRead.projectId,
+        phase: alakazamRead.phase,
+        presentation: alakazamRead.presentation,
+        command: alakazamCommand,
+        capabilities: capabilities
+      });
+    }
+
+    function resetAlakazamCommand(projectId) {
+      alakazamCommandSequence += 1;
+      alakazamCommand = {
+        projectId: text(projectId),
+        selectedTierId: "",
+        phase: "idle",
+        quote: null,
+        quoteCommandId: "",
+        checkoutCommandId: "",
+        error: ""
+      };
+    }
+
+    function currentAlakazamAccount(projectId) {
+      return alakazamRead.presentation
+        && alakazamRead.projectId === projectId
+        ? alakazamRead.presentation.account
+        : null;
+    }
+
+    function alakazamCommandIsCurrent(
+      sequence,
+      projectId,
+      tierId
+    ) {
+      return sequence === alakazamCommandSequence
+        && Boolean(lastState.account)
+        && idOf(lastState.project) === projectId
+        && alakazamRead.phase === "ready"
+        && Boolean(currentAlakazamAccount(projectId))
+        && (
+          tierId === undefined
+          || alakazamCommand.selectedTierId === tierId
+        );
+    }
+
     function alakazamReadIsCurrent(
       sequence,
       projectId
@@ -1535,12 +2073,13 @@
     function requestAlakazamAccount(projectId) {
       var selectedProjectId = text(projectId);
       var sequence = ++alakazamReadSequence;
+      resetAlakazamCommand(selectedProjectId);
       alakazamRead = {
         projectId: selectedProjectId,
         phase: "loading",
         presentation: null
       };
-      alakazamPanel.render(alakazamRead);
+      renderAlakazamPanel();
       if (
         !client
         || typeof client.getAlakazamAccount !==
@@ -1551,7 +2090,7 @@
           phase: "error",
           presentation: null
         };
-        alakazamPanel.render(alakazamRead);
+        renderAlakazamPanel();
         return Promise.resolve(null);
       }
       return client
@@ -1578,7 +2117,7 @@
             phase: "ready",
             presentation: presentation
           };
-          alakazamPanel.render(alakazamRead);
+          renderAlakazamPanel();
           return presentation.account;
         })
         .catch(function () {
@@ -1593,9 +2132,248 @@
             phase: "error",
             presentation: null
           };
-          alakazamPanel.render(alakazamRead);
+          renderAlakazamPanel();
           return null;
         });
+    }
+
+    function requestAlakazamQuote(tierIdInput) {
+      var projectId = idOf(lastState.project);
+      var account = currentAlakazamAccount(projectId);
+      var tierId = text(tierIdInput);
+      var tier = account
+        && account.catalog.tiers.find(function (candidate) {
+          return candidate.tierId === tierId;
+        });
+      if (
+        !projectId
+        || !account
+        || account.actions.start !== true
+        || capabilities.alakazamQuote !== true
+        || !tier
+        || !client
+        || typeof client.createAlakazamQuote !== "function"
+      ) return Promise.resolve(null);
+
+      var canReuse =
+        alakazamCommand.projectId === projectId
+        && alakazamCommand.selectedTierId === tierId
+        && !alakazamCommand.quote
+        && UUID.test(alakazamCommand.quoteCommandId);
+      var commandId;
+      try {
+        commandId = canReuse
+          ? alakazamCommand.quoteCommandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: tierId,
+          phase: "idle",
+          quote: null,
+          quoteCommandId: "",
+          checkoutCommandId: "",
+          error: explain(
+            error,
+            "The subscription quote could not start."
+          )
+        };
+        renderAlakazamPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = ++alakazamCommandSequence;
+      alakazamCommand = {
+        projectId: projectId,
+        selectedTierId: tierId,
+        phase: "quoting",
+        quote: null,
+        quoteCommandId: commandId,
+        checkoutCommandId: "",
+        error: ""
+      };
+      renderAlakazamPanel();
+      return client.createAlakazamQuote(
+        projectId,
+        { targetTierId: tierId },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (
+          !alakazamCommandIsCurrent(
+            sequence,
+            projectId,
+            tierId
+          )
+          || capabilities.alakazamQuote !== true
+        ) return null;
+        var quote = verifiedAlakazamQuote(
+          result,
+          projectId,
+          currentAlakazamAccount(projectId),
+          tierId,
+          new Date().toISOString()
+        );
+        if (!quote) {
+          alakazamCommand = {
+            projectId: projectId,
+            selectedTierId: tierId,
+            phase: "idle",
+            quote: null,
+            quoteCommandId: "",
+            checkoutCommandId: "",
+            error:
+              "The subscription quote expired or could not be verified. Request a fresh quote."
+          };
+          renderAlakazamPanel();
+          return null;
+        }
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: tierId,
+          phase: "quoted",
+          quote: quote,
+          quoteCommandId: commandId,
+          checkoutCommandId: "",
+          error: ""
+        };
+        renderAlakazamPanel();
+        return quote;
+      }).catch(function (error) {
+        if (!alakazamCommandIsCurrent(
+          sequence,
+          projectId,
+          tierId
+        )) return null;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: tierId,
+          phase: "idle",
+          quote: null,
+          quoteCommandId: commandId,
+          checkoutCommandId: "",
+          error: explain(
+            error,
+            "The subscription quote could not be loaded. Nothing was charged."
+          )
+        };
+        renderAlakazamPanel();
+        return null;
+      });
+    }
+
+    function requestAlakazamCheckout() {
+      var projectId = idOf(lastState.project);
+      var account = currentAlakazamAccount(projectId);
+      var selected = alakazamCommand;
+      var quote = verifiedAlakazamQuote(
+        selected.quote,
+        projectId,
+        account,
+        selected.selectedTierId,
+        new Date().toISOString()
+      );
+      if (!quote && selected.quote) {
+        alakazamCommandSequence += 1;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: selected.selectedTierId,
+          phase: "idle",
+          quote: null,
+          quoteCommandId: "",
+          checkoutCommandId: "",
+          error:
+            "This subscription quote expired. Request a fresh quote before continuing."
+        };
+        renderAlakazamPanel();
+        return Promise.resolve(null);
+      }
+      if (
+        !quote
+        || selected.phase !== "quoted"
+        || capabilities.alakazamCheckout !== true
+        || !client
+        || typeof client.createAlakazamCheckout !==
+          "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = UUID.test(
+          selected.checkoutCommandId
+        )
+          ? selected.checkoutCommandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamCommand.error = explain(
+          error,
+          "Secure payment could not start."
+        );
+        renderAlakazamPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = ++alakazamCommandSequence;
+      alakazamCommand = {
+        projectId: projectId,
+        selectedTierId: selected.selectedTierId,
+        phase: "checkout",
+        quote: quote,
+        quoteCommandId: selected.quoteCommandId,
+        checkoutCommandId: commandId,
+        error: ""
+      };
+      renderAlakazamPanel();
+      return client.createAlakazamCheckout(
+        projectId,
+        quote.quoteId,
+        {
+          acceptedDisclosureDigest:
+            quote.disclosureDigest
+        },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (
+          !alakazamCommandIsCurrent(
+            sequence,
+            projectId,
+            selected.selectedTierId
+          )
+          || capabilities.alakazamCheckout !== true
+        ) return null;
+        var checkout = verifiedAlakazamCheckout(
+          result,
+          projectId,
+          quote.quoteId,
+          commandId,
+          new Date().toISOString()
+        );
+        var destination =
+          safeCheckoutDestination(checkout);
+        if (!checkout || !destination) {
+          throw new Error(
+            "The secure payment destination could not be verified."
+          );
+        }
+        windowRef.location.assign(destination);
+        return checkout;
+      }).catch(function (error) {
+        if (!alakazamCommandIsCurrent(
+          sequence,
+          projectId,
+          selected.selectedTierId
+        )) return null;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: selected.selectedTierId,
+          phase: "quoted",
+          quote: quote,
+          quoteCommandId: selected.quoteCommandId,
+          checkoutCommandId: commandId,
+          error: explain(
+            error,
+            "Secure payment could not open. The same request can be tried safely."
+          )
+        };
+        renderAlakazamPanel();
+        return null;
+      });
     }
 
     function renderAlakazamAccount(state) {
@@ -1611,14 +2389,17 @@
             presentation: null
           };
         }
-        alakazamPanel.render(alakazamRead);
+        if (alakazamCommand.projectId) {
+          resetAlakazamCommand("");
+        }
+        renderAlakazamPanel();
         return;
       }
       if (alakazamRead.projectId !== projectId) {
         requestAlakazamAccount(projectId);
         return;
       }
-      alakazamPanel.render(alakazamRead);
+      renderAlakazamPanel();
     }
 
     function reducedMotion() {
@@ -2611,6 +3392,10 @@
                   source.downloadQuote === true,
                 downloadPayment:
                   source.downloadPayment === true,
+                alakazamQuote:
+                  source.alakazamQuote === true,
+                alakazamCheckout:
+                  source.alakazamCheckout === true,
                 domainPurchase:
                   source.domainPurchase === true,
                 publishing:
@@ -2679,6 +3464,10 @@
       safeCheckoutDestination,
     verifiedAlakazamAccount:
       verifiedAlakazamAccount,
+    verifiedAlakazamCheckout:
+      verifiedAlakazamCheckout,
+    verifiedAlakazamQuote:
+      verifiedAlakazamQuote,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote

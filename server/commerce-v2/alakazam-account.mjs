@@ -479,6 +479,8 @@ export function createAlakazamAccountService({
       const downloadCreditAvailable =
         stored.downloadCreditAvailable &&
         subscription === null;
+      const startAvailable =
+        subscription === null && pendingChange === null;
       return deepFreeze({
         schema: ALAKAZAM_ACCOUNT_SCHEMA,
         projectId: scope.projectId,
@@ -499,11 +501,13 @@ export function createAlakazamAccountService({
         ),
         receipts: exactReceipts(stored.receipts),
         actions: {
-          start: false,
+          start: startAvailable,
           changeTier: false,
           manageBilling: false,
           cancel: false,
-          reason: "customer_commands_not_composed"
+          reason: startAvailable
+            ? "only_start_composed"
+            : "customer_commands_not_composed"
         }
       });
     }
