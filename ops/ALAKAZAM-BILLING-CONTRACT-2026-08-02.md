@@ -160,10 +160,23 @@ known Schedule ID permits only exact read-only recovery, while an unknown ID
 requires owner reconciliation. A deferred database trigger proves the
 Schedule facts, current entitlement, quote, and tier event agree at commit.
 
-This checkpoint does not yet process the renewal-boundary Subscription event,
-expose an HTTP/customer route, grant rendered tier features, publish a site, or
-open production Checkout. Those remain separate evidence-gated slices below
-the same release holds.
+Additive migration 031 completes the separate renewal-boundary local
+transaction. The held downgrade-activation service accepts only an exactly
+bound verified `customer.subscription.updated` event at or after the scheduled
+instant. It performs one read-only Subscription check and requires the same
+Subscription, item, Customer, attached Schedule, lower Price, active state, and
+new provider period. One serializable repository transaction records and
+processes the provider event, writes one `downgrade_applied` revision event,
+advances the existing local subscription to the lower tier and new period, and
+applies both Schedule and quote. A deferred database trigger proves the exact
+scheduled purpose, event, provider readback, boundary, and revision agree at
+commit. Applied replay performs no Stripe read and allocates no identity.
+
+This checkpoint does not yet compose the boundary service into the hosted
+webhook/HTTP runtime, expose customer controls, reconcile the broader renewal
+and status event set, grant rendered tier features, publish a site, or open
+production Checkout. Those remain separate evidence-gated slices below the
+same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

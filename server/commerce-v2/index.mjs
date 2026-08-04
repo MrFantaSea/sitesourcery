@@ -37,3 +37,4 @@ export * from "./alakazam-payment.mjs";
 export * from "./alakazam-activation.mjs";
 export * from "./alakazam-upgrade.mjs";
 export * from "./alakazam-downgrade.mjs";
+export * from "./alakazam-downgrade-activation.mjs";

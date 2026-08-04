@@ -851,3 +851,25 @@ test("Alakazam downgrade Schedule dispatch is durable and atomic", async () => {
     /create function ss\.hosted_runtime_contract_v30\(\)/iu
   );
 });
+
+test("Alakazam downgrade activation is one atomic boundary revision", async () => {
+  const all = await migrations();
+  const activation = all.find(
+    ({ name }) =>
+      name ===
+      "202608040031_alakazam_downgrade_activation.sql"
+  );
+  assert.ok(activation);
+  assert.match(
+    activation.sql,
+    /create unique index alakazam_one_downgrade_activation[\s\S]*where event_kind = 'downgrade_applied'/iu
+  );
+  assert.match(
+    activation.sql,
+    /create constraint trigger alakazam_downgrade_activations_validate[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    activation.sql,
+    /create function ss\.hosted_runtime_contract_v31\(\)/iu
+  );
+});

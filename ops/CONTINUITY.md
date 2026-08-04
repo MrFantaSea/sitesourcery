@@ -466,6 +466,33 @@ these are OWNER RULINGS and open work, not suggestions.
   production capability remain closed. Public production remains the July 22
   predecessor.
 
+## ALAKAZAM DOWNGRADE ACTIVATION CHECKPOINT (2026-08-04)
+
+- A verified `customer.subscription.updated` event can now wake the internal
+  held downgrade-activation boundary only at or after the scheduled renewal
+  instant. It reconstructs the immutable downgrade purpose and requires
+  read-only Stripe confirmation of the same Subscription, item, Customer,
+  attached Schedule, lower Price, active status, and exact new billing period.
+  The event metadata, mode, timing, and provider digest must all agree.
+- Additive migration 031 makes the processed Stripe event, one
+  `downgrade_applied` tier event, the lower local tier revision, applied
+  Schedule, and applied quote one transaction. Its deferred database trigger
+  proves the exact scheduled purpose, provider readback, boundary, and new
+  period agree at commit. An applied replay uses immutable evidence without
+  another Stripe read or new IDs, including after a later local revision.
+- All 31 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL journey passes 5/5 with service-driven boundary activation
+  and a negative proof that the Schedule cannot be marked applied alone.
+  Focused gates pass 7/7 downgrade-activation service, 23/23 migration
+  structure, and 5/5 repository readiness. Wider gates pass 404/404 core,
+  121/121 runnable hosted tests with the same two intentional environment-only
+  skips, and 52/52 operations tests.
+- This remains internal, held, local, and unpushed. No HTTP/customer/webhook
+  runtime composition, tier feature rendering, publication effect, real
+  provider configuration, or production capability opened. Next is the
+  customer/runtime composition and broader renewal/status reconciliation.
+  Public production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

@@ -52,10 +52,10 @@ accept these Alakazam capabilities or provider identifiers, so this checkpoint
 does not open Checkout or grant an entitlement.
 
 The internal Alakazam quote, direct Customer-provisioning, start/upgrade
-Checkout, payment-settlement, start-activation, and paid-upgrade provider
-application transactions are now implemented but uncomposed. The
-held-by-default services open them only when release and provider tax/readiness
-facts match. The PostgreSQL repository locks
+Checkout, payment-settlement, start activation, paid-upgrade provider
+application and activation, and downgrade Schedule and activation transactions
+are now implemented but uncomposed. The held-by-default services open them only
+when release and provider tax/readiness facts match. The PostgreSQL repository locks
 the active project, binds the current subscription revision or one unused
 project Download credit, writes one immutable 30-minute quote per UUID
 idempotency key, and replays that exact snapshot. A direct start reserves and
@@ -104,8 +104,18 @@ the lower Price afterward with no proration, and atomically stores exact
 provider facts, the scheduled quote, and one pending tier event without
 changing current access. Provider uncertainty is no-retry: a known Schedule
 can only be retrieved and confirmed read-only; an unknown Schedule identity
-requires owner reconciliation. Renewal-boundary activation, webhook/HTTP
-composition, customer controls, and fulfillment remain held.
+requires owner reconciliation.
+
+Migration 031 adds the separate renewal-boundary activation transaction. One
+exactly bound verified `customer.subscription.updated` event at or after the
+scheduled instant causes a read-only Subscription check. The same Subscription,
+item, Customer, attached Schedule, lower Price, active state, and new period
+must agree before one atomic repository transaction records the processed
+event and `downgrade_applied` revision evidence, advances the local tier and
+period, and applies the Schedule and quote together. A deferred database
+trigger proves that binding at commit. Applied replay performs no Stripe read
+or identity allocation. Webhook/HTTP runtime composition, broader renewal and
+status reconciliation, customer controls, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,
