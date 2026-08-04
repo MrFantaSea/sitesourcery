@@ -406,6 +406,33 @@ these are OWNER RULINGS and open work, not suggestions.
   separately atomic verified-event local tier confirmation. Public production
   remains the July 22 predecessor.
 
+## ALAKAZAM UPGRADE ACTIVATION CHECKPOINT (2026-08-04)
+
+- A verified `customer.subscription.updated` event can now wake the internal
+  held upgrade-activation boundary only when its Subscription, local
+  subscription, quote, paid receipt, purpose, and complete provider metadata
+  identify one provider-confirmed application. It performs read-only Stripe
+  reconciliation and never repeats the Price mutation or difference payment.
+- Additive migration 029 permits one `upgrade_applied` event per quote and adds
+  a deferred database proof tying the applied application, processed Stripe
+  event, exact paid receipt, target Price facts, tier event, quote, and new
+  local revision together. One transaction records those facts, advances the
+  existing subscription from revision 2 to 3, and leaves the paid billing
+  period unchanged. Replays use immutable activation evidence without another
+  Stripe read or new IDs, including after a later downgrade revision.
+- All 29 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL journey passes 5/5 with service-driven activation replacing
+  the old manual test edits. Focused gates pass 15/15 upgrade service, 21/21
+  migration structure, and 5/5 repository readiness. Wider gates pass 385/385
+  core and 121/121 runnable hosted tests with the same two intentional
+  environment-only skips.
+- This remains internal, held, local, and unpushed. No downgrade Schedule was
+  dispatched through the customer runtime, and no HTTP/customer route, tier
+  feature grant, publication effect, real provider configuration, or
+  production capability opened. Next is the separately fenced
+  renewal-boundary downgrade transaction and customer tier controls. Public
+  production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

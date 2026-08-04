@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
+
 import {
   ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
+  ALAKAZAM_PROVIDER_METADATA_SCHEMA,
   ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   createAlakazamCheckoutDispatch,
   createAlakazamProviderMetadata,
@@ -28,11 +31,14 @@ const CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
 const SUBSCRIPTION_ID = /^sub_[A-Za-z0-9_]+$/u;
 const SUBSCRIPTION_ITEM_ID = /^si_[A-Za-z0-9_]+$/u;
 const PRICE_ID = /^price_[A-Za-z0-9_]+$/u;
+const EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
+const UPGRADE_EVENT_TYPE = "customer.subscription.updated";
 const PROVIDER_RECONCILIATIONS = new Set([
   "confirmed",
   "confirmed_after_ambiguous_submit",
   "confirmed_before_submit",
-  "readback_after_ambiguity"
+  "readback_after_ambiguity",
+  "subscription_event_readback"
 ]);
 
 function exactKeys(value, expected, code, message) {
@@ -102,7 +108,9 @@ function validatePorts(repository, provider, clock, ids) {
       repository,
       [
         "claimUpgradeApplication",
+        "activateUpgradeSubscription",
         "confirmUpgradeProvider",
+        "findUpgradeActivationBySubscription",
         "findUpgradeApplication",
         "markUpgradeReconciliationRequired"
       ]
@@ -177,6 +185,80 @@ function exactSettlement(value) {
     "the paid Alakazam upgrade handoff is invalid"
   );
   return deepFreeze(selected);
+}
+
+export function isAlakazamUpgradeActivationEvent(event) {
+  return (
+    event?.type === UPGRADE_EVENT_TYPE &&
+    event?.data?.object?.metadata?.schema ===
+      ALAKAZAM_PROVIDER_METADATA_SCHEMA &&
+    event.data.object.metadata.change_kind === "upgrade"
+  );
+}
+
+function exactUpgradeEvent(value, verifiedAt) {
+  invariant(
+    value &&
+      EVENT_ID.test(value.id) &&
+      value.type === UPGRADE_EVENT_TYPE &&
+      typeof value.livemode === "boolean" &&
+      typeof value.api_version === "string" &&
+      value.api_version.length >= 3 &&
+      value.api_version.length <= 100 &&
+      Number.isSafeInteger(value.created) &&
+      value.created > 0 &&
+      value.data?.object &&
+      typeof value.data.object === "object" &&
+      !Array.isArray(value.data.object),
+    "stripe_event_invalid",
+    "The verified Alakazam upgrade event is invalid",
+    { status: 400 }
+  );
+  const stripeSubscriptionId = requiredText(
+    value.data.object.id,
+    "event.data.object.id",
+    255
+  );
+  invariant(
+    SUBSCRIPTION_ID.test(stripeSubscriptionId),
+    "stripe_event_invalid",
+    "The verified Alakazam upgrade event has no Subscription",
+    { status: 400 }
+  );
+  return deepFreeze({
+    stripeEventId: value.id,
+    eventType: value.type,
+    livemode: value.livemode,
+    apiVersion: value.api_version,
+    stripeSubscriptionId,
+    metadata: clone(value.data.object.metadata),
+    payloadDigest: createHash("sha256")
+      .update(JSON.stringify(value), "utf8")
+      .digest("hex"),
+    signatureVerifiedAt: verifiedAt,
+    occurredAt: new Date(value.created * 1000).toISOString()
+  });
+}
+
+function exactUpgradeEventReference(event) {
+  const metadata = event.metadata;
+  invariant(
+    metadata &&
+      typeof metadata === "object" &&
+      !Array.isArray(metadata) &&
+      UUID.test(metadata.local_subscription_id) &&
+      UUID.test(metadata.quote_id) &&
+      UUID.test(metadata.payment_receipt_id),
+    "stripe_event_binding_invalid",
+    "The verified Alakazam upgrade event has invalid local references",
+    { status: 400 }
+  );
+  return Object.freeze({
+    stripeSubscriptionId: event.stripeSubscriptionId,
+    subscriptionId: metadata.local_subscription_id,
+    quoteId: metadata.quote_id,
+    receiptId: metadata.payment_receipt_id
+  });
 }
 
 function exactReservation(value, settlement) {
@@ -538,6 +620,146 @@ function exactResolved(value, settlement) {
   });
 }
 
+function exactUpgradeActivationResult(
+  value,
+  settlement,
+  reservation,
+  application,
+  expected = {}
+) {
+  exactKeys(
+    value,
+    [
+      "applicationId",
+      "changeKind",
+      "currentPeriodEndsAt",
+      "currentPeriodStartsAt",
+      "next",
+      "paymentProviderFactsDigest",
+      "priorTierId",
+      "projectId",
+      "provider",
+      "quoteId",
+      "receiptId",
+      "revision",
+      "status",
+      "subscriptionId",
+      "subscriptionProviderFactsDigest",
+      "targetTierId"
+    ],
+    "repository_conflict",
+    "the durable Alakazam upgrade activation is invalid"
+  );
+  const current = reservation.purpose.currentSubscription;
+  requiredDigest(
+    value.subscriptionProviderFactsDigest,
+    "subscriptionProviderFactsDigest"
+  );
+  invariant(
+    value.status === "active" &&
+      value.provider === "stripe" &&
+      value.changeKind === "upgrade" &&
+      value.applicationId === application.applicationId &&
+      value.projectId === settlement.projectId &&
+      value.quoteId === settlement.quoteId &&
+      value.subscriptionId === settlement.subscriptionId &&
+      value.receiptId === settlement.receiptId &&
+      value.priorTierId === current.tierId &&
+      value.targetTierId ===
+        reservation.purpose.targetTierId &&
+      value.revision === current.revision + 1 &&
+      value.currentPeriodStartsAt ===
+        current.currentPeriodStartsAt &&
+      value.currentPeriodEndsAt ===
+        current.currentPeriodEndsAt &&
+      value.paymentProviderFactsDigest ===
+        settlement.paymentProviderFactsDigest &&
+      value.next === "complete" &&
+      Object.entries(expected).every(
+        ([field, selected]) => value[field] === selected
+      ),
+    "repository_conflict",
+    "the durable Alakazam upgrade activation changed",
+    { status: 500 }
+  );
+  return deepFreeze(clone(value));
+}
+
+function exactUpgradeActivationResolved(
+  value,
+  stripeSubscriptionId
+) {
+  exactKeys(
+    value,
+    [
+      "application",
+      "confirmation",
+      "provider",
+      "reservation",
+      "settlement",
+      "status",
+      "stripeSubscriptionId"
+    ].concat(value?.status === "applied" ? ["activation"] : []),
+    "repository_conflict",
+    "the Alakazam upgrade activation binding is invalid"
+  );
+  const settlement = exactSettlement(value.settlement);
+  const base = exactResolved(
+    {
+      status: value.status,
+      provider: value.provider,
+      reservation: value.reservation,
+      application: value.application,
+      confirmation: value.confirmation
+    },
+    settlement
+  );
+  const current =
+    base.reservation.purpose.currentSubscription;
+  invariant(
+    ["provider_confirmed", "applied"].includes(
+      base.status
+    ) &&
+      value.stripeSubscriptionId === stripeSubscriptionId &&
+      value.stripeSubscriptionId ===
+        current.stripeSubscriptionId,
+    "stripe_event_binding_invalid",
+    "The Stripe event does not identify the paid Alakazam upgrade",
+    { status: 400 }
+  );
+  return Object.freeze({
+    ...base,
+    settlement,
+    activation:
+      base.status === "applied"
+        ? exactUpgradeActivationResult(
+            value.activation,
+            settlement,
+            base.reservation,
+            base.application
+          )
+        : null
+  });
+}
+
+function exactUpgradeEventMetadata(
+  value,
+  reservation,
+  application
+) {
+  const expected = exactProviderMetadata(
+    reservation,
+    application
+  );
+  invariant(
+    sameExactObject(value, expected),
+    "stripe_event_binding_invalid",
+    "The verified Stripe event does not match the paid Alakazam upgrade",
+    { status: 400 }
+  );
+  return expected;
+}
+
 function nextUuid(ids, label) {
   return exactUuid(ids.next(label), label);
 }
@@ -673,6 +895,94 @@ export function createAlakazamUpgradeService({
 
   return Object.freeze({
     readiness,
+
+    async ingestStripeEvent(input) {
+      if (!isAlakazamUpgradeActivationEvent(input)) {
+        return deepFreeze({
+          status: "not_alakazam_upgrade_activation"
+        });
+      }
+      const status = await readiness();
+      invariant(
+        status.ready === true && status.upgrade === true,
+        "alakazam_upgrade_activation_reconciliation_unavailable",
+        "Alakazam upgrade activation confirmation is temporarily unavailable.",
+        { status: 503 }
+      );
+      const event = exactUpgradeEvent(
+        input,
+        exactClock(ports.clock)
+      );
+      invariant(
+        event.livemode === status.livemode,
+        "stripe_event_invalid",
+        "The Alakazam upgrade event mode is invalid",
+        { status: 400 }
+      );
+      const resolved = exactUpgradeActivationResolved(
+        await ports.repository
+          .findUpgradeActivationBySubscription(
+            exactUpgradeEventReference(event)
+          ),
+        event.stripeSubscriptionId
+      );
+      exactUpgradeEventMetadata(
+        event.metadata,
+        resolved.reservation,
+        resolved.application
+      );
+      if (resolved.status === "applied") {
+        return resolved.activation;
+      }
+
+      let selected;
+      try {
+        selected = exactTargetSubscription(
+          await ports.provider
+            .retrieveAlakazamSubscription({
+              stripeCustomerId:
+                resolved.reservation.stripeCustomerId,
+              stripeSubscriptionId:
+                event.stripeSubscriptionId
+            }),
+          resolved.reservation,
+          resolved.application,
+          "subscription_event_readback"
+        );
+      } catch {
+        invariant(
+          false,
+          "alakazam_upgrade_activation_reconciliation_unavailable",
+          "Alakazam upgrade activation confirmation is temporarily unavailable.",
+          { status: 503 }
+        );
+      }
+      const result =
+        await ports.repository.activateUpgradeSubscription({
+          reservation: clone(resolved.reservation),
+          application: clone(resolved.application),
+          event,
+          subscription: clone(selected.subscription),
+          eventRowId: nextUuid(
+            ports.ids,
+            "alakazam_upgrade_subscription_event"
+          ),
+          tierEventId: nextUuid(
+            ports.ids,
+            "alakazam_upgrade_tier_event"
+          )
+        });
+      return exactUpgradeActivationResult(
+        result,
+        resolved.settlement,
+        resolved.reservation,
+        resolved.application,
+        {
+          subscriptionProviderFactsDigest:
+            selected.subscription.providerFactsDigest
+        }
+      );
+    },
 
     async applyPaidUpgrade(input) {
       const status = await readiness();

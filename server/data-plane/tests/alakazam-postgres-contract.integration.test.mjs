@@ -1002,6 +1002,38 @@ function subscriptionActivationEvent(
   };
 }
 
+function upgradeActivationWebhookEvent(
+  reservation,
+  application,
+  {
+    stripeSubscriptionId,
+    suffix,
+    occurredAt
+  }
+) {
+  return {
+    id: `evt_${suffix}`,
+    type: "customer.subscription.updated",
+    livemode: false,
+    api_version: "2026-06-24.dahlia",
+    created: Date.parse(occurredAt) / 1000,
+    data: {
+      object: {
+        id: stripeSubscriptionId,
+        metadata: {
+          ...createAlakazamProviderMetadata({
+            purpose: reservation.purpose,
+            purposeDigest: reservation.purposeDigest
+          }),
+          payment_receipt_id: application.receiptId,
+          payment_facts_digest:
+            application.paymentProviderFactsDigest
+        }
+      }
+    }
+  };
+}
+
 async function insertStripeEvent(client, authority, input) {
   const id = randomUUID();
   await insertRow(client, "alakazam_stripe_events", {
@@ -1524,12 +1556,45 @@ test(
             }
           }
         );
+      const upgradeActivationFacts =
+        subscriptionPaymentFacts(
+          claimedUpgrade.reservation,
+          {
+            stripeSubscriptionId:
+              "sub_alakazam_contract",
+            stripeSubscriptionItemId:
+              "si_alakazam_contract",
+            stripePriceId: "price_alakazam_35",
+            currentPeriodStartsAt:
+              "2026-08-02T12:03:00.000Z",
+            currentPeriodEndsAt:
+              "2026-09-02T12:03:00.000Z",
+            providerObservedAt:
+              "2026-08-02T12:16:06.000Z",
+            metadata: {
+              ...createAlakazamProviderMetadata({
+                purpose:
+                  claimedUpgrade.reservation.purpose,
+                purposeDigest:
+                  claimedUpgrade.reservation
+                    .purposeDigest
+              }),
+              payment_receipt_id: upgradeReceiptId,
+              payment_facts_digest:
+                upgradePayment.providerFactsDigest
+            }
+          }
+        );
       const upgradeProviderCalls = {
         applies: 0,
         reads: 0,
         ids: 0
       };
       let upgradeClockCalls = 0;
+      const upgradeActivationIds = [
+        randomUUID(),
+        randomUUID()
+      ];
       const upgradeService = createAlakazamUpgradeService({
         repository: settlementRepository,
         provider: {
@@ -1550,23 +1615,35 @@ test(
           },
           async retrieveAlakazamSubscription() {
             upgradeProviderCalls.reads += 1;
-            return structuredClone(upgradeProviderFacts);
+            return structuredClone(
+              upgradeProviderCalls.reads === 1
+                ? upgradeProviderFacts
+                : upgradeActivationFacts
+            );
           }
         },
         clock: {
           now() {
             upgradeClockCalls += 1;
-            return upgradeClockCalls === 1
-              ? "2026-08-02T12:15:03.000Z"
-              : "2026-08-02T12:15:04.000Z";
+            return [
+              "2026-08-02T12:15:03.000Z",
+              "2026-08-02T12:15:04.000Z",
+              "2026-08-02T12:16:05.000Z",
+              "2026-08-02T12:16:06.000Z",
+              "2026-09-02T12:05:00.000Z"
+            ][upgradeClockCalls - 1];
           }
         },
         ids: {
-          next() {
+          next(label) {
             upgradeProviderCalls.ids += 1;
-            throw new Error(
-              "durable reconciliation cannot allocate another application"
+            assert.ok(
+              [
+                "alakazam_upgrade_subscription_event",
+                "alakazam_upgrade_tier_event"
+              ].includes(label)
             );
+            return upgradeActivationIds.shift();
           }
         },
         release: createAlakazamBillingRelease({
@@ -1638,6 +1715,19 @@ test(
           revision: 2
         }
       );
+      await expectRejected(
+        client,
+        () => client.query(
+          `update ss.alakazam_upgrade_applications
+              set state = 'applied', applied_at = $2
+            where id = $1`,
+          [
+            upgradeApplicationId,
+            "2026-08-02T12:15:05.000Z"
+          ]
+        ),
+        /lacks exact atomic activation evidence/iu
+      );
       const providerConfirmationReplay =
         await settlementRepository.findUpgradeApplication({
           settlement: upgradeSettlement,
@@ -1651,54 +1741,59 @@ test(
         providerConfirmationReplay.confirmation,
         providerConfirmedUpgrade
       );
-      const upgradeProviderEventId = await insertStripeEvent(
-        client,
-        authority,
-        {
-          quoteId: upgradeQuoteId,
-          subscriptionId,
-          suffix: "alakazam_upgrade_provider",
-          eventType: "customer.subscription.updated",
-          providerObjectId: "sub_alakazam_contract",
-          occurredAt: "2026-08-02T12:16:00.000Z",
-          processedAt: "2026-08-02T12:16:05.000Z"
-        }
-      );
-      await insertTierEvent(client, authority, {
-        subscriptionId,
+      const upgradeActivationEvent =
+        upgradeActivationWebhookEvent(
+          claimedUpgrade.reservation,
+          claimedUpgrade.application,
+          {
+            stripeSubscriptionId:
+              "sub_alakazam_contract",
+            suffix: "alakazam_upgrade_provider",
+            occurredAt: "2026-08-02T12:16:00.000Z"
+          }
+        );
+      const activatedUpgrade =
+        await upgradeService.ingestStripeEvent(
+          upgradeActivationEvent
+        );
+      assert.deepEqual(activatedUpgrade, {
+        status: "active",
+        provider: "stripe",
+        changeKind: "upgrade",
+        applicationId: upgradeApplicationId,
+        projectId: authority.projectId,
         quoteId: upgradeQuoteId,
-        stripeEventRowId: upgradeProviderEventId,
-        paymentReceiptId: upgradeReceiptId,
-        resultSubscriptionRevision: 3,
-        eventKind: "upgrade_applied",
+        subscriptionId,
+        receiptId: upgradeReceiptId,
         priorTierId: "alakazam_25",
-        resultTierId: "alakazam_35",
-        occurredAt: "2026-08-02T12:16:00.000Z"
+        targetTierId: "alakazam_35",
+        revision: 3,
+        currentPeriodStartsAt:
+          "2026-08-02T12:03:00.000Z",
+        currentPeriodEndsAt:
+          "2026-09-02T12:03:00.000Z",
+        paymentProviderFactsDigest:
+          upgradePayment.providerFactsDigest,
+        subscriptionProviderFactsDigest:
+          upgradeActivationFacts.providerFactsDigest,
+        next: "complete"
       });
-      await client.query(
-        `update ss.alakazam_subscriptions
-            set tier_id = 'alakazam_35',
-                amount_minor = 3500,
-                stripe_price_id = 'price_alakazam_35',
-                provider_observed_at = $2,
-                provider_facts_digest = $3
-          where id = $1`,
-        [
-          subscriptionId,
-          "2026-08-02T12:17:00.000Z",
-          digest("subscription:active-35")
-        ]
+      assert.deepEqual(upgradeProviderCalls, {
+        applies: 0,
+        reads: 2,
+        ids: 2
+      });
+      assert.deepEqual(
+        await upgradeService.ingestStripeEvent(
+          upgradeActivationEvent
+        ),
+        activatedUpgrade
       );
-      await client.query(
-        "update ss.alakazam_change_quotes set state = 'applied' where id = $1",
-        [upgradeQuoteId]
-      );
-      await client.query(
-        `update ss.alakazam_upgrade_applications
-            set state = 'applied', applied_at = $2
-          where id = $1`,
-        [upgradeApplicationId, "2026-08-02T12:17:00.000Z"]
-      );
+      assert.deepEqual(upgradeProviderCalls, {
+        applies: 0,
+        reads: 2,
+        ids: 2
+      });
       await flushConstraints(client);
 
       const downgradeQuoteId = await insertQuote(client, authority, {
@@ -1843,6 +1938,18 @@ test(
         [downgradeQuoteId]
       );
       await flushConstraints(client);
+
+      assert.deepEqual(
+        await upgradeService.ingestStripeEvent(
+          upgradeActivationEvent
+        ),
+        activatedUpgrade
+      );
+      assert.deepEqual(upgradeProviderCalls, {
+        applies: 0,
+        reads: 2,
+        ids: 2
+      });
 
       const proof = await client.query(
         `select

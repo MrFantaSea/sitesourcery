@@ -50,6 +50,8 @@ const ALAKAZAM_START_EVENT_TYPES = new Set([
   "customer.subscription.created",
   "customer.subscription.updated"
 ]);
+const ALAKAZAM_UPGRADE_EVENT_TYPE =
+  "customer.subscription.updated";
 const ALAKAZAM_EVENT_FACTS_SCHEMA =
   "sitesourcery.alakazam-stripe-event/v1";
 const ALAKAZAM_TIER_EVENT_FACTS_SCHEMA =
@@ -778,6 +780,38 @@ function exactStripeSubscriptionLookupInput(value) {
     "stripeSubscriptionId is invalid"
   );
   return Object.freeze({ stripeSubscriptionId });
+}
+
+function exactUpgradeActivationLookupInput(value) {
+  exactKeys(
+    value,
+    [
+      "quoteId",
+      "receiptId",
+      "stripeSubscriptionId",
+      "subscriptionId"
+    ],
+    "the Alakazam upgrade activation lookup is invalid"
+  );
+  const stripeSubscriptionId = requiredText(
+    value.stripeSubscriptionId,
+    "stripeSubscriptionId",
+    255
+  );
+  invariant(
+    STRIPE_SUBSCRIPTION_ID.test(stripeSubscriptionId),
+    "invalid_input",
+    "stripeSubscriptionId is invalid"
+  );
+  return Object.freeze({
+    stripeSubscriptionId,
+    subscriptionId: exactUuid(
+      value.subscriptionId,
+      "subscriptionId"
+    ),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    receiptId: exactUuid(value.receiptId, "receiptId")
+  });
 }
 
 function exactUpgradeSettlementValue(value) {
@@ -1713,6 +1747,230 @@ async function selectPaidUpgrade(
   );
 }
 
+async function selectUpgradeActivation(client, input) {
+  return client.query(
+    `select dispatch.*,
+            quote.state as upgrade_quote_state,
+            quote.current_subscription_revision
+              as upgrade_quote_subscription_revision,
+            quote.current_tier_id
+              as upgrade_quote_current_tier_id,
+            quote.target_tier_id
+              as upgrade_quote_target_tier_id,
+            local_subscription.id
+              as upgrade_subscription_id,
+            local_subscription.project_id
+              as upgrade_subscription_project_id,
+            local_subscription.customer_user_id
+              as upgrade_subscription_customer_id,
+            local_subscription.revision
+              as upgrade_subscription_revision,
+            local_subscription.tier_id
+              as upgrade_subscription_tier_id,
+            local_subscription.status
+              as upgrade_subscription_status,
+            local_subscription.amount_minor
+              as upgrade_subscription_amount_minor,
+            local_subscription.stripe_subscription_id
+              as upgrade_stripe_subscription_id,
+            local_subscription.stripe_subscription_item_id
+              as upgrade_stripe_subscription_item_id,
+            local_subscription.stripe_price_id
+              as upgrade_stripe_price_id,
+            local_subscription.current_period_starts_at
+              as upgrade_period_starts_at,
+            local_subscription.current_period_ends_at
+              as upgrade_period_ends_at,
+            local_subscription.cancel_at_period_end
+              as upgrade_cancel_at_period_end,
+            local_subscription.provider_observed_at
+              as upgrade_provider_observed_at,
+            local_subscription.provider_facts_digest
+              as upgrade_subscription_provider_facts_digest,
+            receipt.id as upgrade_receipt_id,
+            receipt.receipt_kind as upgrade_receipt_kind,
+            receipt.provider_facts_digest
+              as upgrade_payment_provider_facts_digest,
+            receipt.stripe_event_row_id
+              as upgrade_payment_event_row_id,
+            payment_event.state
+              as upgrade_payment_event_state,
+            payment_event.livemode
+              as upgrade_payment_livemode,
+            payment_tier_event.id
+              as upgrade_payment_tier_event_id,
+            payment_tier_event.prior_tier_id
+              as upgrade_payment_prior_tier_id,
+            payment_tier_event.result_tier_id
+              as upgrade_payment_target_tier_id,
+            payment_tier_event.stripe_event_row_id
+              as upgrade_tier_payment_event_row_id,
+            customer.stripe_customer_id
+              as upgrade_stripe_customer_id,
+            exists (
+              select 1
+              from ss.alakazam_downgrade_schedules schedule
+              where schedule.organization_id =
+                      local_subscription.organization_id
+                and schedule.subscription_id =
+                      local_subscription.id
+                and schedule.state in (
+                  'dispatching',
+                  'scheduled',
+                  'reconciliation_required'
+                )
+            ) as upgrade_has_open_downgrade,
+            upgrade_application.id
+              as upgrade_application_id,
+            upgrade_application.organization_id
+              as upgrade_application_organization_id,
+            upgrade_application.project_id
+              as upgrade_application_project_id,
+            upgrade_application.customer_user_id
+              as upgrade_application_customer_id,
+            upgrade_application.subscription_id
+              as upgrade_application_subscription_id,
+            upgrade_application.quote_id
+              as upgrade_application_quote_id,
+            upgrade_application.checkout_dispatch_id
+              as upgrade_application_dispatch_id,
+            upgrade_application.payment_receipt_id
+              as upgrade_application_receipt_id,
+            upgrade_application.provider
+              as upgrade_application_provider,
+            upgrade_application.provider_idempotency_key
+              as upgrade_application_idempotency_key,
+            upgrade_application.purpose
+              as upgrade_application_purpose,
+            upgrade_application.purpose_digest
+              as upgrade_application_purpose_digest,
+            upgrade_application.payment_provider_facts_digest
+              as upgrade_application_payment_facts_digest,
+            upgrade_application.state
+              as upgrade_application_state,
+            upgrade_application.provider_effect_certainty
+              as upgrade_application_effect_certainty,
+            upgrade_application.provider_facts
+              as upgrade_application_provider_facts,
+            upgrade_application.provider_facts_digest
+              as upgrade_application_provider_facts_digest,
+            upgrade_application.provider_reconciliation
+              as upgrade_application_reconciliation,
+            upgrade_application.provider_error_code
+              as upgrade_application_error_code,
+            upgrade_application.lease_expires_at
+              as upgrade_application_lease_expires_at,
+            upgrade_application.provider_confirmed_at
+              as upgrade_application_confirmed_at,
+            upgrade_application.applied_at
+              as upgrade_application_applied_at,
+            upgrade_application.created_at
+              as upgrade_application_created_at,
+            activation_tier_event.id
+              as upgrade_activation_tier_event_id,
+            activation_tier_event.stripe_event_row_id
+              as upgrade_activation_event_row_id,
+            activation_tier_event.payment_receipt_id
+              as upgrade_activation_receipt_id,
+            activation_tier_event.result_subscription_revision
+              as upgrade_activation_revision,
+            activation_tier_event.prior_tier_id
+              as upgrade_activation_prior_tier_id,
+            activation_tier_event.result_tier_id
+              as upgrade_activation_target_tier_id,
+            activation_tier_event.occurred_at
+              as upgrade_activation_occurred_at,
+            activation_tier_event.facts
+              as upgrade_activation_facts,
+            activation_tier_event.facts_digest
+              as upgrade_activation_facts_digest,
+            activation_event.stripe_event_id
+              as upgrade_activation_stripe_event_id,
+            activation_event.event_type
+              as upgrade_activation_event_type,
+            activation_event.provider_object_id
+              as upgrade_activation_provider_object_id,
+            activation_event.state
+              as upgrade_activation_event_state,
+            activation_event.livemode
+              as upgrade_activation_livemode,
+            activation_event.payload_digest
+              as upgrade_activation_payload_digest,
+            activation_event.facts
+              as upgrade_activation_event_facts
+       from ss.alakazam_upgrade_applications upgrade_application
+       join ss.alakazam_change_quotes quote
+         on quote.organization_id =
+            upgrade_application.organization_id
+        and quote.id = upgrade_application.quote_id
+       join ss.alakazam_checkout_dispatches dispatch
+         on dispatch.organization_id =
+            upgrade_application.organization_id
+        and dispatch.id =
+            upgrade_application.checkout_dispatch_id
+       join ss.alakazam_subscriptions local_subscription
+         on local_subscription.organization_id =
+            upgrade_application.organization_id
+        and local_subscription.id =
+            upgrade_application.subscription_id
+       join ss.alakazam_payment_receipts receipt
+         on receipt.organization_id =
+            upgrade_application.organization_id
+        and receipt.id =
+            upgrade_application.payment_receipt_id
+       join ss.alakazam_stripe_events payment_event
+         on payment_event.organization_id =
+            receipt.organization_id
+        and payment_event.id = receipt.stripe_event_row_id
+       join ss.alakazam_tier_change_events payment_tier_event
+         on payment_tier_event.organization_id =
+            upgrade_application.organization_id
+        and payment_tier_event.subscription_id =
+            upgrade_application.subscription_id
+        and payment_tier_event.quote_id =
+            upgrade_application.quote_id
+        and payment_tier_event.payment_receipt_id =
+            upgrade_application.payment_receipt_id
+        and payment_tier_event.event_kind =
+            'upgrade_payment_settled'
+       join ss.stripe_customers customer
+         on customer.organization_id =
+            local_subscription.organization_id
+        and customer.id =
+            local_subscription.stripe_customer_row_id
+       left join ss.alakazam_tier_change_events
+            activation_tier_event
+         on activation_tier_event.organization_id =
+            upgrade_application.organization_id
+        and activation_tier_event.subscription_id =
+            upgrade_application.subscription_id
+        and activation_tier_event.quote_id =
+            upgrade_application.quote_id
+        and activation_tier_event.payment_receipt_id =
+            upgrade_application.payment_receipt_id
+        and activation_tier_event.event_kind =
+            'upgrade_applied'
+       left join ss.alakazam_stripe_events activation_event
+         on activation_event.organization_id =
+            activation_tier_event.organization_id
+        and activation_event.id =
+            activation_tier_event.stripe_event_row_id
+      where local_subscription.stripe_subscription_id = $1
+        and upgrade_application.subscription_id = $2
+        and upgrade_application.quote_id = $3
+        and upgrade_application.payment_receipt_id = $4
+      for update of upgrade_application, quote, dispatch,
+                    local_subscription, receipt, payment_event,
+                    payment_tier_event, customer`,
+    [
+      input.stripeSubscriptionId,
+      input.subscriptionId,
+      input.quoteId,
+      input.receiptId
+    ]
+  );
+}
+
 function paidUpgradeReservation(selected, settlement) {
   invariant(
     selected.rowCount === 1,
@@ -2042,6 +2300,395 @@ function upgradeApplicationResolution(
   });
 }
 
+function upgradeApplicationFromActivationRow(row) {
+  return {
+    id: row.upgrade_application_id,
+    organization_id:
+      row.upgrade_application_organization_id,
+    project_id: row.upgrade_application_project_id,
+    customer_user_id:
+      row.upgrade_application_customer_id,
+    subscription_id:
+      row.upgrade_application_subscription_id,
+    quote_id: row.upgrade_application_quote_id,
+    checkout_dispatch_id:
+      row.upgrade_application_dispatch_id,
+    payment_receipt_id:
+      row.upgrade_application_receipt_id,
+    provider: row.upgrade_application_provider,
+    provider_idempotency_key:
+      row.upgrade_application_idempotency_key,
+    purpose: row.upgrade_application_purpose,
+    purpose_digest:
+      row.upgrade_application_purpose_digest,
+    payment_provider_facts_digest:
+      row.upgrade_application_payment_facts_digest,
+    state: row.upgrade_application_state,
+    provider_effect_certainty:
+      row.upgrade_application_effect_certainty,
+    provider_facts:
+      row.upgrade_application_provider_facts,
+    provider_facts_digest:
+      row.upgrade_application_provider_facts_digest,
+    provider_reconciliation:
+      row.upgrade_application_reconciliation,
+    provider_error_code:
+      row.upgrade_application_error_code,
+    lease_expires_at:
+      row.upgrade_application_lease_expires_at,
+    provider_confirmed_at:
+      row.upgrade_application_confirmed_at,
+    applied_at: row.upgrade_application_applied_at,
+    created_at: row.upgrade_application_created_at
+  };
+}
+
+function upgradeActivationSettlement(row, reservation) {
+  return exactUpgradeSettlementValue({
+    status: "payment_settled",
+    provider: "stripe",
+    changeKind: "upgrade",
+    dispatchId: reservation.dispatchId,
+    projectId: reservation.projectId,
+    quoteId: reservation.quoteId,
+    subscriptionId:
+      row.upgrade_application_subscription_id,
+    receiptId: row.upgrade_application_receipt_id,
+    paymentProviderFactsDigest:
+      row.upgrade_application_payment_facts_digest,
+    next: "provider_change"
+  });
+}
+
+function upgradeActivationEventFacts({
+  event,
+  reservation,
+  application,
+  subscription
+}) {
+  return {
+    schema: ALAKAZAM_EVENT_FACTS_SCHEMA,
+    provider: "stripe",
+    stripeEventId: event.stripeEventId,
+    eventType: event.eventType,
+    stripeSubscriptionId: event.stripeSubscriptionId,
+    purposeDigest: reservation.purposeDigest,
+    payloadDigest: event.payloadDigest,
+    metadata: event.metadata,
+    applicationId: application.applicationId,
+    paymentReceiptId: application.receiptId,
+    subscription,
+    subscriptionProviderFactsDigest:
+      subscription.providerFactsDigest
+  };
+}
+
+function upgradeActivationTierFacts({
+  reservation,
+  application,
+  subscription
+}) {
+  const current = reservation.purpose.currentSubscription;
+  return {
+    schema: ALAKAZAM_TIER_EVENT_FACTS_SCHEMA,
+    changeKind: "upgrade",
+    purposeDigest: reservation.purposeDigest,
+    applicationId: application.applicationId,
+    receiptId: application.receiptId,
+    paymentProviderFactsDigest:
+      application.paymentProviderFactsDigest,
+    subscriptionProviderFactsDigest:
+      subscription.providerFactsDigest,
+    priorTierId: current.tierId,
+    targetTierId: reservation.purpose.targetTierId,
+    resultRevision: current.revision + 1
+  };
+}
+
+function upgradeActivationResult({
+  reservation,
+  application,
+  subscription
+}) {
+  const current = reservation.purpose.currentSubscription;
+  return Object.freeze({
+    status: "active",
+    provider: "stripe",
+    changeKind: "upgrade",
+    applicationId: application.applicationId,
+    projectId: reservation.projectId,
+    quoteId: reservation.quoteId,
+    subscriptionId: application.subscriptionId,
+    receiptId: application.receiptId,
+    priorTierId: current.tierId,
+    targetTierId: reservation.purpose.targetTierId,
+    revision: current.revision + 1,
+    currentPeriodStartsAt: current.currentPeriodStartsAt,
+    currentPeriodEndsAt: current.currentPeriodEndsAt,
+    paymentProviderFactsDigest:
+      application.paymentProviderFactsDigest,
+    subscriptionProviderFactsDigest:
+      subscription.providerFactsDigest,
+    next: "complete"
+  });
+}
+
+function storedUpgradeActivation(
+  row,
+  reservation,
+  application,
+  applicationRow
+) {
+  const current = reservation.purpose.currentSubscription;
+  exactUpgradeProviderFacts(
+    jsonObject(
+      applicationRow.provider_facts,
+      "upgradeActivation.confirmedProviderFacts"
+    ),
+    reservation,
+    application,
+    exactDatabaseIso(
+      applicationRow.provider_confirmed_at,
+      "upgradeActivation.providerConfirmedAt"
+    )
+  );
+  const storedEventFacts = jsonObject(
+    row.upgrade_activation_event_facts,
+    "upgradeActivation.eventFacts"
+  );
+  const storedSubscription = jsonObject(
+    storedEventFacts.subscription,
+    "upgradeActivation.eventSubscription"
+  );
+  const subscription = exactUpgradeProviderFacts(
+    storedSubscription,
+    reservation,
+    application,
+    requiredIso(
+      storedSubscription.providerObservedAt,
+      "upgradeActivation.eventProviderObservedAt"
+    )
+  );
+  const event = {
+    stripeEventId: row.upgrade_activation_stripe_event_id,
+    eventType: row.upgrade_activation_event_type,
+    stripeSubscriptionId:
+      row.upgrade_activation_provider_object_id,
+    payloadDigest: row.upgrade_activation_payload_digest,
+    metadata: subscription.metadata
+  };
+  const expectedEventFacts = upgradeActivationEventFacts({
+    event,
+    reservation,
+    application,
+    subscription
+  });
+  const expectedTierFacts = upgradeActivationTierFacts({
+    reservation,
+    application,
+    subscription
+  });
+  const currentRevision = exactDatabaseInteger(
+    row.upgrade_subscription_revision,
+    "upgradeActivation.currentSubscriptionRevision"
+  );
+  const activationRevision = exactDatabaseInteger(
+    row.upgrade_activation_revision,
+    "upgradeActivation.revision"
+  );
+  invariant(
+    applicationRow.state === "applied" &&
+      row.upgrade_quote_state === "applied" &&
+      row.state === "settled" &&
+      row.provider_effect_certainty === "confirmed" &&
+      row.upgrade_subscription_id ===
+        application.subscriptionId &&
+      row.upgrade_subscription_project_id ===
+        reservation.projectId &&
+      row.upgrade_subscription_customer_id ===
+        reservation.customerId &&
+      row.upgrade_stripe_subscription_id ===
+        current.stripeSubscriptionId &&
+      row.upgrade_stripe_customer_id ===
+        reservation.stripeCustomerId &&
+      currentRevision >= current.revision + 1 &&
+      exactDatabaseInteger(
+        row.upgrade_quote_subscription_revision,
+        "upgradeActivation.quoteSubscriptionRevision"
+      ) === current.revision &&
+      row.upgrade_quote_current_tier_id === current.tierId &&
+      row.upgrade_quote_target_tier_id ===
+        reservation.purpose.targetTierId &&
+      row.upgrade_receipt_id === application.receiptId &&
+      row.upgrade_receipt_kind === "upgrade_difference" &&
+      row.upgrade_payment_provider_facts_digest ===
+        application.paymentProviderFactsDigest &&
+      row.upgrade_payment_event_state === "processed" &&
+      typeof row.upgrade_payment_livemode === "boolean" &&
+      UUID.test(row.upgrade_payment_event_row_id) &&
+      UUID.test(row.upgrade_payment_tier_event_id) &&
+      row.upgrade_payment_prior_tier_id === current.tierId &&
+      row.upgrade_payment_target_tier_id ===
+        reservation.purpose.targetTierId &&
+      row.upgrade_tier_payment_event_row_id ===
+        row.upgrade_payment_event_row_id &&
+      UUID.test(row.upgrade_activation_tier_event_id) &&
+      UUID.test(row.upgrade_activation_event_row_id) &&
+      row.upgrade_activation_receipt_id ===
+        application.receiptId &&
+      activationRevision === current.revision + 1 &&
+      row.upgrade_activation_prior_tier_id === current.tierId &&
+      row.upgrade_activation_target_tier_id ===
+        reservation.purpose.targetTierId &&
+      row.upgrade_activation_event_type ===
+        ALAKAZAM_UPGRADE_EVENT_TYPE &&
+      row.upgrade_activation_provider_object_id ===
+        current.stripeSubscriptionId &&
+      row.upgrade_activation_event_state === "processed" &&
+      row.upgrade_activation_livemode ===
+        row.upgrade_payment_livemode &&
+      exactSha(
+        row.upgrade_activation_payload_digest,
+        "upgradeActivation.payloadDigest"
+      ) === event.payloadDigest &&
+      digest(
+        storedEventFacts
+      ) === digest(expectedEventFacts) &&
+      digest(
+        jsonObject(
+          row.upgrade_activation_facts,
+          "upgradeActivation.tierFacts"
+        )
+      ) === digest(expectedTierFacts) &&
+      exactSha(
+        row.upgrade_activation_facts_digest,
+        "upgradeActivation.tierFactsDigest"
+      ) === digest(expectedTierFacts) &&
+      Date.parse(
+        exactDatabaseIso(
+          row.upgrade_activation_occurred_at,
+          "upgradeActivation.occurredAt"
+        )
+      ) <= Date.parse(subscription.providerObservedAt),
+    "repository_conflict",
+    "the durable Alakazam upgrade activation changed",
+    { status: 500 }
+  );
+  if (currentRevision === activationRevision) {
+    invariant(
+      row.upgrade_subscription_status === "active" &&
+        row.upgrade_subscription_tier_id ===
+          reservation.purpose.targetTierId &&
+        exactDatabaseInteger(
+          row.upgrade_subscription_amount_minor,
+          "upgradeActivation.amountMinor"
+        ) === subscription.amountMinor &&
+        row.upgrade_stripe_subscription_item_id ===
+          subscription.stripeSubscriptionItemId &&
+        row.upgrade_stripe_price_id ===
+          subscription.stripePriceId &&
+        exactDatabaseIso(
+          row.upgrade_period_starts_at,
+          "upgradeActivation.currentPeriodStartsAt"
+        ) === subscription.currentPeriodStartsAt &&
+        exactDatabaseIso(
+          row.upgrade_period_ends_at,
+          "upgradeActivation.currentPeriodEndsAt"
+        ) === subscription.currentPeriodEndsAt &&
+        row.upgrade_cancel_at_period_end === false &&
+        row.upgrade_subscription_provider_facts_digest ===
+          subscription.providerFactsDigest,
+      "repository_conflict",
+      "the current Alakazam upgrade activation changed",
+      { status: 500 }
+    );
+  }
+  return upgradeActivationResult({
+    reservation,
+    application,
+    subscription
+  });
+}
+
+function upgradeActivationResolution(selected, input) {
+  invariant(
+    selected.rowCount === 1,
+    "stripe_event_binding_invalid",
+    "the Stripe event has no durable paid Alakazam upgrade",
+    { status: 400 }
+  );
+  const row = selected.rows[0];
+  const reservation = storedCheckoutDispatch(row);
+  const settlement = upgradeActivationSettlement(
+    row,
+    reservation
+  );
+  const applicationRow =
+    upgradeApplicationFromActivationRow(row);
+  const application = storedUpgradeApplication(
+    applicationRow,
+    reservation,
+    settlement
+  );
+  invariant(
+    reservation.purpose.changeKind === "upgrade" &&
+      reservation.mode === "upgrade_difference" &&
+      settlement.subscriptionId === input.subscriptionId &&
+      settlement.quoteId === input.quoteId &&
+      settlement.receiptId === input.receiptId &&
+      reservation.purpose.currentSubscription
+        .stripeSubscriptionId === input.stripeSubscriptionId &&
+      applicationRow.state ===
+        row.upgrade_application_state &&
+      ["provider_confirmed", "applied"].includes(
+        applicationRow.state
+      ),
+    "stripe_event_binding_invalid",
+    "the Stripe event does not identify the paid Alakazam upgrade",
+    { status: 400 }
+  );
+  exactUpgradeApplicationQuoteState(
+    applicationRow,
+    row.upgrade_quote_state
+  );
+  if (applicationRow.state === "provider_confirmed") {
+    paidUpgradeReservation(selected, settlement);
+    invariant(
+      row.upgrade_activation_tier_event_id === null &&
+        row.upgrade_activation_event_row_id === null,
+      "repository_conflict",
+      "the pending Alakazam upgrade has conflicting activation evidence",
+      { status: 500 }
+    );
+  }
+  const confirmation = upgradeProviderConfirmation(
+    applicationRow,
+    reservation,
+    application
+  );
+  const base = {
+    status: applicationRow.state,
+    provider: "stripe",
+    settlement,
+    reservation,
+    application,
+    confirmation,
+    stripeSubscriptionId: input.stripeSubscriptionId
+  };
+  if (applicationRow.state === "provider_confirmed") {
+    return Object.freeze(base);
+  }
+  return Object.freeze({
+    ...base,
+    activation: storedUpgradeActivation(
+      row,
+      reservation,
+      application,
+      applicationRow
+    )
+  });
+}
+
 function exactUpgradeProviderFacts(
   value,
   reservation,
@@ -2218,6 +2865,131 @@ function exactUpgradeReconciliationInput(value) {
     ),
     errorCode,
     markedAt: requiredIso(value.markedAt, "markedAt")
+  });
+}
+
+function exactUpgradeActivationEventValue(
+  value,
+  reservation,
+  application,
+  stripeSubscriptionId
+) {
+  exactKeys(
+    value,
+    [
+      "apiVersion",
+      "eventType",
+      "livemode",
+      "metadata",
+      "occurredAt",
+      "payloadDigest",
+      "signatureVerifiedAt",
+      "stripeEventId",
+      "stripeSubscriptionId"
+    ],
+    "the Alakazam upgrade Subscription event input is invalid"
+  );
+  const expectedMetadata = {
+    ...createAlakazamProviderMetadata({
+      purpose: reservation.purpose,
+      purposeDigest: reservation.purposeDigest
+    }),
+    payment_receipt_id: application.receiptId,
+    payment_facts_digest:
+      application.paymentProviderFactsDigest
+  };
+  invariant(
+    STRIPE_EVENT_ID.test(value.stripeEventId) &&
+      value.eventType === ALAKAZAM_UPGRADE_EVENT_TYPE &&
+      typeof value.livemode === "boolean" &&
+      typeof value.apiVersion === "string" &&
+      value.apiVersion.length >= 3 &&
+      value.apiVersion.length <= 100 &&
+      value.stripeSubscriptionId === stripeSubscriptionId &&
+      sameExactObject(value.metadata, expectedMetadata),
+    "invalid_input",
+    "the Alakazam upgrade Subscription event changed"
+  );
+  return Object.freeze({
+    stripeEventId: value.stripeEventId,
+    eventType: value.eventType,
+    livemode: value.livemode,
+    apiVersion: value.apiVersion,
+    stripeSubscriptionId,
+    metadata: expectedMetadata,
+    payloadDigest: exactSha(
+      value.payloadDigest,
+      "event.payloadDigest"
+    ),
+    signatureVerifiedAt: requiredIso(
+      value.signatureVerifiedAt,
+      "event.signatureVerifiedAt"
+    ),
+    occurredAt: requiredIso(
+      value.occurredAt,
+      "event.occurredAt"
+    )
+  });
+}
+
+function exactUpgradeActivationInput(value) {
+  exactKeys(
+    value,
+    [
+      "application",
+      "event",
+      "eventRowId",
+      "reservation",
+      "subscription",
+      "tierEventId"
+    ],
+    "the Alakazam upgrade activation input is invalid"
+  );
+  const reservation = exactCheckoutReservationValue(
+    value.reservation
+  );
+  invariant(
+    reservation.purpose.changeKind === "upgrade",
+    "invalid_input",
+    "only an Alakazam upgrade can activate here"
+  );
+  const application = exactUpgradeApplicationValue(
+    value.application,
+    reservation
+  );
+  const subscription = exactUpgradeProviderFacts(
+    value.subscription,
+    reservation,
+    application,
+    requiredIso(
+      value.subscription?.providerObservedAt,
+      "subscription.providerObservedAt"
+    )
+  );
+  const event = exactUpgradeActivationEventValue(
+    value.event,
+    reservation,
+    application,
+    subscription.stripeSubscriptionId
+  );
+  invariant(
+    Date.parse(event.occurredAt) <=
+        Date.parse(event.signatureVerifiedAt) &&
+      Date.parse(subscription.providerObservedAt) >=
+        Date.parse(event.signatureVerifiedAt),
+    "invalid_input",
+    "the Alakazam upgrade Subscription confirmation is stale"
+  );
+  return Object.freeze({
+    reservation,
+    application,
+    subscription,
+    event,
+    eventRowId: exactUuid(value.eventRowId, "eventRowId"),
+    tierEventId: exactUuid(
+      value.tierEventId,
+      "tierEventId"
+    )
   });
 }
 
@@ -3459,6 +4231,18 @@ export function createPostgresAlakazamRepository({
       );
     },
 
+    async findUpgradeActivationBySubscription(value) {
+      const input = exactUpgradeActivationLookupInput(value);
+      return translated(() =>
+        database.service({}, async (client) =>
+          upgradeActivationResolution(
+            await selectUpgradeActivation(client, input),
+            input
+          )
+        )
+      );
+    },
+
     async findUpgradeApplication(value) {
       const input = exactUpgradeFindInput(value);
       return translated(() =>
@@ -3786,6 +4570,351 @@ export function createPostgresAlakazamRepository({
             reservation,
             storedApplication
           );
+        })
+      );
+    },
+
+    async activateUpgradeSubscription(value) {
+      const input = exactUpgradeActivationInput(value);
+      const lookup = Object.freeze({
+        stripeSubscriptionId:
+          input.subscription.stripeSubscriptionId,
+        subscriptionId: input.application.subscriptionId,
+        quoteId: input.reservation.quoteId,
+        receiptId: input.application.receiptId
+      });
+      return translated(() =>
+        database.service({}, async (client) => {
+          let selected = await selectUpgradeActivation(
+            client,
+            lookup
+          );
+          let resolved = upgradeActivationResolution(
+            selected,
+            lookup
+          );
+          invariant(
+            digest(resolved.reservation) ===
+                digest(input.reservation) &&
+              digest(resolved.application) ===
+                digest(input.application),
+            "repository_conflict",
+            "the paid Alakazam upgrade activation purpose changed",
+            { status: 500 }
+          );
+          if (resolved.status === "applied") {
+            return resolved.activation;
+          }
+
+          const row = selected.rows[0];
+          const applicationRow =
+            upgradeApplicationFromActivationRow(row);
+          const confirmedSubscription =
+            exactUpgradeProviderFacts(
+              jsonObject(
+                applicationRow.provider_facts,
+                "upgradeActivation.confirmedProviderFacts"
+              ),
+              resolved.reservation,
+              resolved.application,
+              exactDatabaseIso(
+                applicationRow.provider_confirmed_at,
+                "upgradeActivation.providerConfirmedAt"
+              )
+            );
+          const stableConfirmed = clone(
+            confirmedSubscription
+          );
+          const stableLatest = clone(input.subscription);
+          for (const facts of [stableConfirmed, stableLatest]) {
+            delete facts.providerObservedAt;
+            delete facts.providerFactsDigest;
+          }
+          invariant(
+            resolved.status === "provider_confirmed" &&
+              digest(stableLatest) ===
+                digest(stableConfirmed) &&
+              input.event.livemode ===
+                row.upgrade_payment_livemode &&
+              Date.parse(input.event.signatureVerifiedAt) >=
+                Date.parse(
+                  exactDatabaseIso(
+                    applicationRow.provider_confirmed_at,
+                    "upgradeActivation.providerConfirmedAt"
+                  )
+                ) &&
+              Date.parse(
+                input.subscription.providerObservedAt
+              ) > Date.parse(
+                exactDatabaseIso(
+                  row.upgrade_provider_observed_at,
+                  "upgradeActivation.currentProviderObservedAt"
+                )
+              ),
+            "alakazam_upgrade_activation_reconciliation_unavailable",
+            "the Alakazam upgrade Subscription confirmation is stale",
+            { status: 409 }
+          );
+
+          const existingEvent = await client.query(
+            `select id
+               from ss.alakazam_stripe_events
+              where stripe_event_id = $1
+              for update`,
+            [input.event.stripeEventId]
+          );
+          invariant(
+            existingEvent.rowCount === 0,
+            "stripe_event_conflict",
+            "the Alakazam upgrade Subscription event was already used for different evidence",
+            { status: 409 }
+          );
+
+          const eventFacts = upgradeActivationEventFacts({
+            event: input.event,
+            reservation: resolved.reservation,
+            application: resolved.application,
+            subscription: input.subscription
+          });
+          const insertedEvent = await client.query(
+            `insert into ss.alakazam_stripe_events (
+               id, organization_id, project_id,
+               quote_id, subscription_id,
+               stripe_event_id, event_type,
+               livemode, api_version,
+               provider_object_id, payload_digest,
+               facts, state, attempt_count,
+               signature_verified_at, occurred_at
+             ) values (
+               $1, $2, $3, $4, $5,
+               $6, $7, $8, $9, $10, $11,
+               $12::jsonb, 'received', 0, $13, $14
+             )
+             returning id`,
+            [
+              input.eventRowId,
+              resolved.reservation.tenantId,
+              resolved.reservation.projectId,
+              resolved.reservation.quoteId,
+              resolved.application.subscriptionId,
+              input.event.stripeEventId,
+              input.event.eventType,
+              input.event.livemode,
+              input.event.apiVersion,
+              input.event.stripeSubscriptionId,
+              input.event.payloadDigest,
+              JSON.stringify(eventFacts),
+              input.event.signatureVerifiedAt,
+              input.event.occurredAt
+            ]
+          );
+          invariant(
+            insertedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam upgrade Subscription event was not recorded",
+            { status: 500 }
+          );
+          const claimedEvent = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processing',
+                    attempt_count = attempt_count + 1
+              where organization_id = $1
+                and id = $2
+                and state = 'received'
+              returning id`,
+            [resolved.reservation.tenantId, input.eventRowId]
+          );
+          invariant(
+            claimedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam upgrade Subscription event was not claimed",
+            { status: 500 }
+          );
+          const processedEvent = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processed',
+                    processed_at = $3
+              where organization_id = $1
+                and id = $2
+                and state = 'processing'
+              returning id`,
+            [
+              resolved.reservation.tenantId,
+              input.eventRowId,
+              input.event.signatureVerifiedAt
+            ]
+          );
+          invariant(
+            processedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam upgrade Subscription event was not completed",
+            { status: 500 }
+          );
+
+          const tierFacts = upgradeActivationTierFacts({
+            reservation: resolved.reservation,
+            application: resolved.application,
+            subscription: input.subscription
+          });
+          const current =
+            resolved.reservation.purpose.currentSubscription;
+          const resultRevision = current.revision + 1;
+          const tierEvent = await client.query(
+            `insert into ss.alakazam_tier_change_events (
+               id, organization_id, project_id,
+               subscription_id, quote_id,
+               stripe_event_row_id, payment_receipt_id,
+               downgrade_schedule_id,
+               download_reversal_event_id,
+               result_subscription_revision,
+               event_kind, prior_tier_id,
+               result_tier_id, occurred_at,
+               facts, facts_digest
+             ) values (
+               $1, $2, $3, $4, $5, $6, $7,
+               null, null, $8,
+               'upgrade_applied', $9, $10, $11,
+               $12::jsonb, $13
+             )
+             returning id`,
+            [
+              input.tierEventId,
+              resolved.reservation.tenantId,
+              resolved.reservation.projectId,
+              resolved.application.subscriptionId,
+              resolved.reservation.quoteId,
+              input.eventRowId,
+              resolved.application.receiptId,
+              resultRevision,
+              current.tierId,
+              resolved.reservation.purpose.targetTierId,
+              input.event.occurredAt,
+              JSON.stringify(tierFacts),
+              digest(tierFacts)
+            ]
+          );
+          invariant(
+            tierEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam upgrade tier event was not recorded",
+            { status: 500 }
+          );
+
+          const activated = await client.query(
+            `update ss.alakazam_subscriptions
+                set tier_id = $3,
+                    amount_minor = $4,
+                    stripe_price_id = $5,
+                    provider_observed_at = $6,
+                    provider_facts_digest = $7
+              where organization_id = $1
+                and id = $2
+                and status = 'active'
+                and revision = $8
+                and tier_id = $9
+                and stripe_subscription_id = $10
+                and stripe_subscription_item_id = $11
+                and stripe_price_id = $12
+                and current_period_starts_at = $13
+                and current_period_ends_at = $14
+                and cancel_at_period_end = false
+              returning id, tier_id, amount_minor,
+                        stripe_price_id, revision,
+                        current_period_starts_at,
+                        current_period_ends_at,
+                        provider_facts_digest`,
+            [
+              resolved.reservation.tenantId,
+              resolved.application.subscriptionId,
+              input.subscription.tierId,
+              input.subscription.amountMinor,
+              input.subscription.stripePriceId,
+              input.subscription.providerObservedAt,
+              input.subscription.providerFactsDigest,
+              current.revision,
+              current.tierId,
+              current.stripeSubscriptionId,
+              current.stripeSubscriptionItemId,
+              current.stripePriceId,
+              current.currentPeriodStartsAt,
+              current.currentPeriodEndsAt
+            ]
+          );
+          invariant(
+            activated.rowCount === 1 &&
+              activated.rows[0].tier_id ===
+                resolved.reservation.purpose.targetTierId &&
+              exactDatabaseInteger(
+                activated.rows[0].amount_minor,
+                "upgradeActivation.amountMinor"
+              ) === input.subscription.amountMinor &&
+              activated.rows[0].stripe_price_id ===
+                input.subscription.stripePriceId &&
+              exactDatabaseInteger(
+                activated.rows[0].revision,
+                "upgradeActivation.revision"
+              ) === resultRevision &&
+              exactSha(
+                activated.rows[0].provider_facts_digest,
+                "upgradeActivation.providerFactsDigest"
+              ) === input.subscription.providerFactsDigest,
+            "repository_conflict",
+            "the paid Alakazam subscription was not upgraded",
+            { status: 500 }
+          );
+
+          const appliedQuote = await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'applied'
+              where organization_id = $1
+                and id = $2
+                and state = 'provider_change_pending'
+              returning id`,
+            [
+              resolved.reservation.tenantId,
+              resolved.reservation.quoteId
+            ]
+          );
+          invariant(
+            appliedQuote.rowCount === 1,
+            "repository_conflict",
+            "the activated Alakazam upgrade quote was not applied",
+            { status: 500 }
+          );
+          const appliedApplication = await client.query(
+            `update ss.alakazam_upgrade_applications
+                set state = 'applied',
+                    applied_at = $2
+              where id = $1
+                and state = 'provider_confirmed'
+              returning id`,
+            [
+              resolved.application.applicationId,
+              input.event.signatureVerifiedAt
+            ]
+          );
+          invariant(
+            appliedApplication.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam upgrade application was not applied",
+            { status: 500 }
+          );
+
+          selected = await selectUpgradeActivation(
+            client,
+            lookup
+          );
+          resolved = upgradeActivationResolution(
+            selected,
+            lookup
+          );
+          invariant(
+            resolved.status === "applied",
+            "repository_conflict",
+            "the Alakazam upgrade activation was not committed",
+            { status: 500 }
+          );
+          return resolved.activation;
         })
       );
     },

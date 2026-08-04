@@ -137,10 +137,22 @@ is read-only and never submits another Price mutation. Provider confirmation
 still leaves the old local tier active until the separate verified
 Subscription-event transaction commits the revision change.
 
-This checkpoint does not commit the local tier for an upgrade, dispatch a
-downgrade Schedule, expose an HTTP/webhook route, grant rendered tier features,
-publish a site, or open production Checkout. Those remain separate
-evidence-gated slices below the same release holds.
+Additive migration 029 completes that separate local transaction. The held
+upgrade service accepts only an exactly bound verified
+`customer.subscription.updated` event, reads the existing Subscription without
+mutating it, and requires the same target item, Price, Customer, period,
+receipt metadata, and provider facts already confirmed by the application.
+One serializable repository transaction records and processes the provider
+event, writes one `upgrade_applied` revision event, advances the existing local
+subscription to the paid target tier without changing its billing period, and
+applies both quote and provider application. A deferred database trigger proves
+those facts agree at commit. An applied replay, including after a later tier
+revision, performs no Stripe read and allocates no identity.
+
+This checkpoint does not dispatch a downgrade Schedule through the customer
+runtime, expose an HTTP/webhook route, grant rendered tier features, publish a
+site, or open production Checkout. Those remain separate evidence-gated slices
+below the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

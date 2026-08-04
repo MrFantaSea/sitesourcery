@@ -25,6 +25,10 @@ const SUBSCRIPTION_ID =
 const RECEIPT_ID = "10000000-0000-4000-8000-000000000007";
 const APPLICATION_ID =
   "20000000-0000-4000-8000-000000000001";
+const EVENT_ROW_ID =
+  "20000000-0000-4000-8000-000000000002";
+const TIER_EVENT_ID =
+  "20000000-0000-4000-8000-000000000003";
 const CLAIMED_AT = "2026-08-04T12:10:00.000Z";
 const LEASE_EXPIRES_AT = "2026-08-04T12:12:00.000Z";
 const CONFIRMED_AT = "2026-08-04T12:11:00.000Z";
@@ -174,6 +178,52 @@ function resolved(status, selected, facts) {
   };
 }
 
+function activation(selected, facts) {
+  return {
+    status: "active",
+    provider: "stripe",
+    changeKind: "upgrade",
+    applicationId: APPLICATION_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    subscriptionId: SUBSCRIPTION_ID,
+    receiptId: RECEIPT_ID,
+    priorTierId: "alakazam_25",
+    targetTierId: "alakazam_35",
+    revision: 3,
+    currentPeriodStartsAt: PERIOD_START,
+    currentPeriodEndsAt: PERIOD_END,
+    paymentProviderFactsDigest: PAYMENT_DIGEST,
+    subscriptionProviderFactsDigest:
+      facts.providerFactsDigest,
+    next: "complete"
+  };
+}
+
+function upgradeEvent(selected, overrides = {}) {
+  return {
+    id: "evt_alakazam_upgrade_activation_1",
+    type: "customer.subscription.updated",
+    livemode: false,
+    api_version: "2026-07-29.preview",
+    created: Date.parse("2026-08-04T12:09:00.000Z") / 1000,
+    data: {
+      object: {
+        id: "sub_alakazam_upgrade_1",
+        metadata: {
+          ...createAlakazamProviderMetadata({
+            purpose: selected.purpose,
+            purposeDigest: selected.purposeDigest
+          }),
+          payment_receipt_id: RECEIPT_ID,
+          payment_facts_digest: PAYMENT_DIGEST,
+          ...overrides
+        }
+      }
+    }
+  };
+}
+
 function fixture({
   releaseApproved = true,
   existingStatus = null,
@@ -181,7 +231,8 @@ function fixture({
   applyError = null,
   readFacts = undefined,
   applyFacts = undefined,
-  confirmError = null
+  confirmError = null,
+  activationStatus = "provider_confirmed"
 } = {}) {
   const selected = reservation();
   const facts = applyFacts ?? subscriptionFacts(selected);
@@ -195,6 +246,8 @@ function fixture({
     reads: [],
     confirms: [],
     marks: [],
+    activationFinds: [],
+    activations: [],
     ids: []
   };
   let clockCalls = 0;
@@ -227,6 +280,24 @@ function fixture({
       async markUpgradeReconciliationRequired(input) {
         calls.marks.push(structuredClone(input));
         return { status: "reconciliation_required" };
+      },
+      async findUpgradeActivationBySubscription(input) {
+        calls.activationFinds.push(structuredClone(input));
+        return structuredClone({
+          ...resolved(activationStatus, selected, facts),
+          settlement: settlement(),
+          stripeSubscriptionId:
+            "sub_alakazam_upgrade_1",
+          ...(activationStatus === "applied"
+            ? { activation: activation(selected, readback) }
+            : {})
+        });
+      },
+      async activateUpgradeSubscription(input) {
+        calls.activations.push(structuredClone(input));
+        return structuredClone(
+          activation(selected, input.subscription)
+        );
       }
     },
     provider: {
@@ -264,7 +335,12 @@ function fixture({
     ids: {
       next(label) {
         calls.ids.push(label);
-        return APPLICATION_ID;
+        return {
+          alakazam_upgrade_application: APPLICATION_ID,
+          alakazam_upgrade_subscription_event:
+            EVENT_ROW_ID,
+          alakazam_upgrade_tier_event: TIER_EVENT_ID
+        }[label];
       }
     },
     release: createAlakazamBillingRelease({
@@ -308,8 +384,125 @@ test("Alakazam paid upgrade remains held before repository or provider work", as
     reads: [],
     confirms: [],
     marks: [],
+    activationFinds: [],
+    activations: [],
     ids: []
   });
+});
+
+test("Alakazam upgrade activation remains held before repository or provider work", async () => {
+  const { calls, selected, service } = fixture({
+    releaseApproved: false
+  });
+  await assert.rejects(
+    service.ingestStripeEvent(upgradeEvent(selected)),
+    (error) =>
+      error.code ===
+        "alakazam_upgrade_activation_reconciliation_unavailable" &&
+      error.status === 503
+  );
+  assert.equal(calls.readiness, 0);
+  assert.deepEqual(calls.activationFinds, []);
+  assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.ids, []);
+});
+
+test("a verified upgrade event performs one read-only check and one local activation", async () => {
+  const { calls, selected, service } = fixture();
+  const event = upgradeEvent(selected);
+  const result = await service.ingestStripeEvent(event);
+  assert.equal(result.status, "active");
+  assert.equal(result.revision, 3);
+  assert.deepEqual(calls.activationFinds, [
+    {
+      stripeSubscriptionId: "sub_alakazam_upgrade_1",
+      subscriptionId: SUBSCRIPTION_ID,
+      quoteId: QUOTE_ID,
+      receiptId: RECEIPT_ID
+    }
+  ]);
+  assert.deepEqual(calls.reads, [
+    {
+      stripeCustomerId: "cus_alakazam_upgrade_1",
+      stripeSubscriptionId: "sub_alakazam_upgrade_1"
+    }
+  ]);
+  assert.deepEqual(calls.applies, []);
+  assert.equal(calls.activations.length, 1);
+  assert.deepEqual(calls.ids, [
+    "alakazam_upgrade_subscription_event",
+    "alakazam_upgrade_tier_event"
+  ]);
+  assert.equal(
+    calls.activations[0].event.stripeEventId,
+    event.id
+  );
+});
+
+test("an applied upgrade event replay performs no provider work and allocates no ID", async () => {
+  const { calls, selected, service } = fixture({
+    activationStatus: "applied"
+  });
+  const result = await service.ingestStripeEvent(
+    upgradeEvent(selected)
+  );
+  assert.equal(result.status, "active");
+  assert.equal(result.revision, 3);
+  assert.equal(calls.activationFinds.length, 1);
+  assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.ids, []);
+});
+
+test("an unrelated Stripe event performs no Alakazam upgrade work", async () => {
+  const { calls, selected, service } = fixture();
+  const event = upgradeEvent(selected);
+  event.type = "invoice.paid";
+  assert.deepEqual(await service.ingestStripeEvent(event), {
+    status: "not_alakazam_upgrade_activation"
+  });
+  assert.equal(calls.readiness, 0);
+  assert.deepEqual(calls.activationFinds, []);
+  assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.ids, []);
+});
+
+test("changed upgrade receipt metadata stops before Stripe readback", async () => {
+  const { calls, selected, service } = fixture();
+  await assert.rejects(
+    service.ingestStripeEvent(
+      upgradeEvent(selected, {
+        payment_receipt_id:
+          "20000000-0000-4000-8000-000000000099"
+      })
+    ),
+    (error) =>
+      error.code === "stripe_event_binding_invalid" &&
+      error.status === 400
+  );
+  assert.equal(calls.activationFinds.length, 1);
+  assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.ids, []);
+});
+
+test("changed upgrade provider readback grants no new tier", async () => {
+  const selected = reservation();
+  const changed = subscriptionFacts(selected, {
+    providerStatus: "past_due"
+  });
+  const { calls, service } = fixture({ readFacts: changed });
+  await assert.rejects(
+    service.ingestStripeEvent(upgradeEvent(selected)),
+    (error) =>
+      error.code ===
+        "alakazam_upgrade_activation_reconciliation_unavailable" &&
+      error.status === 503
+  );
+  assert.equal(calls.reads.length, 1);
+  assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.ids, []);
 });
 
 test("a paid Alakazam upgrade claims once, swaps once, and stores exact provider confirmation", async () => {

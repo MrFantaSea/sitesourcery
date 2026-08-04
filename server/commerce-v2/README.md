@@ -85,9 +85,18 @@ unchanged billing anchor, and exact receipt-bound target readback. It explicitly
 clears stale first-subscription credit metadata. A crashed or ambiguous worker
 is fenced; later recovery reads the Subscription only and never submits another
 mutation. The provider-confirmed application deliberately leaves the old local
-tier active for the separate verified-event revision transaction. That local
-activation, downgrade Schedule dispatch, webhook/HTTP composition, customer
-controls, and fulfillment remain held.
+tier active for the separate verified-event revision transaction.
+
+Migration 029 completes that local transaction without widening provider
+authority. One exactly bound verified `customer.subscription.updated` event
+causes a read-only Subscription check; then one atomic repository transaction
+records the processed event and `upgrade_applied` revision evidence, advances
+the existing local subscription to the paid target tier without changing its
+period, and applies the quote and provider application together. A deferred
+database trigger proves the complete binding at commit. Applied replay uses
+durable activation evidence without another Stripe read or new identity, even
+after a later tier revision. Downgrade Schedule dispatch, webhook/HTTP
+composition, customer controls, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,

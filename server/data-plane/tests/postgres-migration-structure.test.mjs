@@ -803,3 +803,25 @@ test("Alakazam paid upgrade application is fenced before provider mutation", asy
     /create function ss\.hosted_runtime_contract_v28\(\)/iu
   );
 });
+
+test("Alakazam paid upgrade activation is one atomic local revision", async () => {
+  const all = await migrations();
+  const activation = all.find(
+    ({ name }) =>
+      name ===
+      "202608040029_alakazam_upgrade_activation.sql"
+  );
+  assert.ok(activation);
+  assert.match(
+    activation.sql,
+    /create unique index alakazam_one_upgrade_activation[\s\S]*alakazam_tier_change_events\(quote_id\)[\s\S]*where event_kind = 'upgrade_applied'/iu
+  );
+  assert.match(
+    activation.sql,
+    /create constraint trigger alakazam_upgrade_activations_validate[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    activation.sql,
+    /create function ss\.hosted_runtime_contract_v29\(\)/iu
+  );
+});
