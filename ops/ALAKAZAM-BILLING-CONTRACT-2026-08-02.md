@@ -60,10 +60,13 @@ does not revoke the Download entitlement.
 3. Treat the webhook as a wake-up signal. Retrieve Checkout, its first Invoice,
    PaymentIntent, Subscription, Subscription Item, Price, Customer, discount,
    tax, subtotal, and total from Stripe.
-4. In one database transaction, record provider evidence, consume the credit
-   application exactly once, create the local subscription projection, and
-   activate the exact tier. An incomplete or ambiguous provider result grants
-   no entitlement and permits no second Checkout.
+4. In one database transaction, record the verified event and exact provider
+   payment evidence, consume the credit application exactly once, settle the
+   Checkout, and create a pending local subscription projection. Keep that
+   projection pending until the separate subscription-confirmation transaction
+   records exact activation evidence; only then activate the tier. An
+   incomplete or ambiguous result grants no entitlement and permits no second
+   Checkout.
 
 ### Upgrade
 
@@ -76,8 +79,9 @@ does not revoke the Download entitlement.
    the unchanged monthly billing anchor.
 4. Read the Subscription back. Only then activate the target tier. If payment
    succeeded but the provider price swap or local commit is uncertain, retain
-   the old entitlement in `paid_change_pending`; retry only the price swap and
-   never create another difference Checkout.
+   the old entitlement while the quote remains `provider_change_pending`;
+   reconcile only the price swap and never create another difference
+   Checkout.
 
 ### Downgrade
 
@@ -94,21 +98,29 @@ does not revoke the Download entitlement.
 
 ## Current implementation checkpoint
 
-The internal start/upgrade Checkout dispatch boundary is complete and remains
-uncomposed. Additive migration 025 gives every dispatch a two-minute lease and
-reconstructs its exact purpose from the durable quote, current subscription,
-and canonical Stripe Customer binding. One project can have only one open
-dispatch. A ready destination replays without another provider effect; an
-expired ready destination requires reconciliation; interrupted or ambiguous
-creation becomes persistence-unknown and is never automatically retried; and a
-proved pre-effect failure closes the quote safely. The held billing service
-selects only subscription-start or fixed-difference upgrade Checkout and
-rejects browser money before readiness, Customer work, or provider access.
+The internal start/upgrade Checkout dispatch and payment-settlement boundaries
+are complete and remain uncomposed. Additive migration 025 gives every
+dispatch a two-minute lease and reconstructs its exact purpose from the durable
+quote, current subscription, and canonical Stripe Customer binding. A ready
+destination replays without another provider effect; interrupted or ambiguous
+creation is never automatically retried.
 
-This checkpoint does not settle a payment, create or mutate a local
-subscription, apply a tier, schedule a downgrade, expose an HTTP route, or open
-production Checkout. Those are separate evidence-gated slices below the same
-release holds.
+Additive migration 026 permits only one logical Checkout-completion event,
+one quote receipt, and one PaymentIntent receipt. The held payment service
+treats a verified `checkout.session.completed` event only as a wake-up signal,
+resolves the durable Session, and requires exact read-only Stripe payment and
+Subscription evidence before one atomic settlement transaction. A start
+creates a pending local subscription and optional one-use Download-credit
+application without granting the tier. An upgrade records an immutable
+`upgrade_payment_settled` handoff, moves the quote to
+`provider_change_pending`, and leaves the current subscription and tier
+unchanged. A settled replay returns durable receipt identity without another
+Stripe read or new database identity.
+
+This checkpoint does not activate a start, mutate Stripe or the local tier for
+an upgrade, dispatch a downgrade Schedule, expose an HTTP/webhook route, or
+open production Checkout. Those remain separate evidence-gated slices below
+the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

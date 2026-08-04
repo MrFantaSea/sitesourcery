@@ -83,6 +83,7 @@ function readyRow(overrides = {}) {
     alakazam_customer_provisions_ready: true,
     alakazam_customer_contract_ready: true,
     alakazam_checkout_contract_ready: true,
+    alakazam_payment_contract_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -203,6 +204,17 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   });
   assert.deepEqual((await authority.readiness()).missing, [
     "alakazam_checkout_contract"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        alakazam_payment_contract_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "alakazam_payment_contract"
   ]);
 
   authority = createCanonicalPostgresAuthority({

@@ -320,6 +320,37 @@ these are OWNER RULINGS and open work, not suggestions.
   subscription activation for start/upgrade; Schedule dispatch remains a later
   separate slice. Public production remains the July 22 predecessor.
 
+## ALAKAZAM PAYMENT SETTLEMENT CHECKPOINT (2026-08-02)
+
+- A verified Stripe `checkout.session.completed` event can now wake one
+  internal held payment service. It resolves the exact durable Checkout and
+  requires read-only Stripe confirmation of Customer, Subscription identity,
+  Price, Invoice/PaymentIntent, money, tax, discount, status, and bound purpose
+  before it can write payment state. Event metadata or provider-money drift
+  writes nothing.
+- Additive migration 026 and one PostgreSQL transaction permit only one
+  logical Checkout-completion event, one quote receipt, and one PaymentIntent
+  receipt. A start records the receipt, applies the project Download credit if
+  present, and creates a `pending` local subscription without activating it.
+  An upgrade records one immutable `upgrade_payment_settled` tier event, moves
+  the quote to `provider_change_pending`, and leaves the current local tier and
+  Stripe Subscription unchanged. A settled replay returns the durable receipt
+  without another Stripe read or new IDs.
+- All 26 migrations replayed cleanly on the disposable HQ database. The real
+  PostgreSQL Alakazam contract passes 5/5 and now proves pending start,
+  difference-only upgrade handoff, durable settlement replay, later exact
+  activation/application evidence, and renewal-boundary downgrade. Focused
+  gates pass 7/7 payment service, 15/15 pure Alakazam, 55/55 Stripe adapter,
+  18/18 migration structure, and 5/5 repository readiness. Wider gates pass
+  361/361 core and 121/121 runnable hosted tests with the same two intentional
+  environment-only skips.
+- This remains internal, held, local, and unpushed. No start was activated by
+  payment alone, no upgrade Price or local tier was changed by payment alone,
+  no downgrade Schedule was dispatched, and no HTTP/customer/webhook runtime
+  route or production capability opened. Next is exact start activation and
+  upgrade provider-mutation confirmation; Schedule dispatch remains a later
+  separate slice. Public production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

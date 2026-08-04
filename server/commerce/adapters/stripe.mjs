@@ -14,9 +14,13 @@ import {
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
   ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
+  ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+  ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
   ALAKAZAM_TIER_DEFINITIONS,
-  ALAKAZAM_TIER_IDS
+  ALAKAZAM_TIER_IDS,
+  createAlakazamProviderMetadata
 } from "../../commerce-v2/alakazam.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
 
@@ -82,15 +86,15 @@ export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
 export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
   ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA;
 const STRIPE_ALAKAZAM_METADATA_SCHEMA =
-  "sitesourcery_alakazam_change_v1";
+  ALAKAZAM_PROVIDER_METADATA_SCHEMA;
 const STRIPE_ALAKAZAM_CUSTOMER_METADATA_SCHEMA =
   "sitesourcery_alakazam_customer_v1";
 const STRIPE_ALAKAZAM_CUSTOMER_SCHEMA =
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SUBSCRIPTION_SCHEMA =
-  "sitesourcery.stripe-alakazam-subscription/v1";
+  ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
-  "sitesourcery.stripe-alakazam-payment/v1";
+  ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
   "sitesourcery.stripe-alakazam-downgrade-schedule/v1";
 
@@ -1349,38 +1353,10 @@ function validateAlakazamPurpose(
 }
 
 function alakazamMetadata(validated) {
-  return {
-    schema: STRIPE_ALAKAZAM_METADATA_SCHEMA,
-    organization_id: validated.identity.organizationId,
-    customer_id: validated.identity.customerId,
-    project_id: validated.identity.projectId,
-    quote_id: validated.identity.quoteId,
-    change_kind: validated.purpose.changeKind,
-    target_tier_id: validated.target.tierId,
-    accepted_disclosure_digest:
-      validated.purpose.acceptedDisclosureDigest,
-    quote_digest: validated.purpose.quoteDigest,
-    catalog_version: validated.purpose.catalogVersion,
-    terms_version: validated.purpose.termsVersion,
-    tax_mode: validated.purpose.taxMode,
-    purpose_digest: validated.purposeDigest,
-    ...(validated.current
-      ? {
-          prior_tier_id: validated.current.tier.tierId,
-          local_subscription_id:
-            validated.current.localSubscriptionId,
-          subscription_revision: String(
-            validated.current.revision
-          )
-        }
-      : {}),
-    ...(validated.downloadCredit
-      ? {
-          download_entitlement_id:
-            validated.downloadCredit.entitlementId
-        }
-      : {})
-  };
+  return createAlakazamProviderMetadata({
+    purpose: validated.purpose,
+    purposeDigest: validated.purposeDigest
+  });
 }
 
 function alakazamReturnUrl(template, validated) {

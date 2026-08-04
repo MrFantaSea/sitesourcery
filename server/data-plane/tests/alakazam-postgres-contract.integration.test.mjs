@@ -5,6 +5,11 @@ import test from "node:test";
 import pg from "pg";
 
 import {
+  ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
+  createAlakazamProviderMetadata
+} from "../../commerce-v2/alakazam.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -842,19 +847,125 @@ async function openCheckout(
   return dispatchId;
 }
 
-async function settleCheckout(client, quoteId, dispatchId, settledAt) {
-  await client.query(
-    `update ss.alakazam_checkout_dispatches
-        set state = 'settled', settled_at = $2
-      where id = $1`,
-    [dispatchId, settledAt]
-  );
-  await client.query(
-    `update ss.alakazam_change_quotes
-        set state = 'payment_settled'
-      where id = $1`,
-    [quoteId]
-  );
+function subscriptionPaymentFacts(
+  reservation,
+  {
+    stripeSubscriptionId,
+    stripeSubscriptionItemId,
+    stripePriceId,
+    currentPeriodStartsAt,
+    currentPeriodEndsAt,
+    providerObservedAt
+  }
+) {
+  const facts = {
+    schema: ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
+    stripeSubscriptionId,
+    stripeSubscriptionItemId,
+    stripeCustomerId: reservation.stripeCustomerId,
+    stripePriceId,
+    stripeScheduleId: null,
+    tierId: reservation.purpose.targetTierId,
+    amountMinor: reservation.purpose.targetAmountMinor,
+    currency: "USD",
+    providerStatus: "active",
+    cancelAtPeriodEnd: false,
+    currentPeriodStartsAt,
+    currentPeriodEndsAt,
+    billingCycleAnchor: currentPeriodStartsAt,
+    providerObservedAt,
+    metadata: createAlakazamProviderMetadata({
+      purpose: reservation.purpose,
+      purposeDigest: reservation.purposeDigest
+    })
+  };
+  return {
+    ...facts,
+    providerFactsDigest: canonicalDigest(facts)
+  };
+}
+
+function checkoutPaymentFacts(
+  reservation,
+  {
+    checkoutSessionId,
+    stripeSubscriptionId,
+    stripeSubscriptionItemId,
+    stripePriceId,
+    stripeInvoiceId = null,
+    stripePaymentIntentId,
+    providerPaymentTime,
+    currentPeriodStartsAt = null,
+    currentPeriodEndsAt = null
+  }
+) {
+  const start = reservation.purpose.changeKind === "start";
+  const subscription = start
+    ? subscriptionPaymentFacts(reservation, {
+        stripeSubscriptionId,
+        stripeSubscriptionItemId,
+        stripePriceId,
+        currentPeriodStartsAt,
+        currentPeriodEndsAt,
+        providerObservedAt: providerPaymentTime
+      })
+    : null;
+  const facts = {
+    schema: ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
+    provider: "stripe",
+    changeKind: reservation.purpose.changeKind,
+    checkoutSessionId,
+    stripeCustomerId: reservation.stripeCustomerId,
+    stripeSubscriptionId,
+    stripeSubscriptionItemId,
+    stripePriceId,
+    stripeInvoiceId: start ? stripeInvoiceId : null,
+    stripePaymentIntentId,
+    targetTierId: reservation.purpose.targetTierId,
+    listSubtotalMinor: start
+      ? reservation.purpose.targetAmountMinor
+      : reservation.purpose.dueNowSubtotalMinor,
+    providerDiscountMinor:
+      reservation.purpose.downloadCredit?.amountMinor ?? 0,
+    netSubtotalMinor: reservation.purpose.dueNowSubtotalMinor,
+    taxMinor: 0,
+    totalMinor: reservation.purpose.dueNowSubtotalMinor,
+    taxMode: "disabled_by_owner",
+    currency: "USD",
+    paymentStatus: "paid",
+    purposeDigest: reservation.purposeDigest,
+    providerPaymentTime,
+    subscription
+  };
+  return {
+    ...facts,
+    providerFactsDigest: canonicalDigest(facts)
+  };
+}
+
+function checkoutPaymentEvent(
+  reservation,
+  {
+    checkoutSessionId,
+    suffix,
+    occurredAt,
+    signatureVerifiedAt
+  }
+) {
+  return {
+    stripeEventId: `evt_${suffix}`,
+    eventType: "checkout.session.completed",
+    livemode: false,
+    apiVersion: "2026-06-24.dahlia",
+    checkoutSessionId,
+    metadata: createAlakazamProviderMetadata({
+      purpose: reservation.purpose,
+      purposeDigest: reservation.purposeDigest
+    }),
+    payloadDigest: digest(`payload:${suffix}`),
+    signatureVerifiedAt,
+    occurredAt
+  };
 }
 
 async function insertStripeEvent(client, authority, input) {
@@ -887,33 +998,6 @@ async function insertStripeEvent(client, authority, input) {
       where id = $1`,
     [id, input.processedAt]
   );
-  return id;
-}
-
-async function insertReceipt(client, authority, input) {
-  const id = randomUUID();
-  await insertRow(client, "alakazam_payment_receipts", {
-    id,
-    organization_id: authority.organizationId,
-    project_id: authority.projectId,
-    customer_user_id: authority.userId,
-    subscription_id: input.subscriptionId,
-    quote_id: input.quoteId ?? null,
-    stripe_event_row_id: input.stripeEventRowId,
-    receipt_kind: input.receiptKind,
-    stripe_invoice_id: input.stripeInvoiceId ?? null,
-    stripe_payment_intent_id: input.stripePaymentIntentId,
-    list_subtotal_minor: input.listSubtotalMinor,
-    provider_discount_minor: input.providerDiscountMinor ?? 0,
-    net_subtotal_minor: input.netSubtotalMinor,
-    tax_minor: 0,
-    total_minor: input.netSubtotalMinor,
-    tax_mode: "disabled_by_owner",
-    currency: "USD",
-    settled_at: input.settledAt,
-    provider_facts: { test: true, receiptKind: input.receiptKind },
-    provider_facts_digest: digest(`receipt:${id}`)
-  });
   return id;
 }
 
@@ -952,6 +1036,14 @@ test(
       await client.query("set constraints all deferred");
       const authority = await seedAuthority(client);
       const subscriptionId = randomUUID();
+      const settlementRepository =
+        createPostgresAlakazamRepository({
+          authority: {
+            async service(_context, work) {
+              return work(client);
+            }
+          }
+        });
 
       await expectRejected(
         client,
@@ -996,60 +1088,102 @@ test(
           dispatchedAt: "2026-08-02T12:01:05.000Z"
         }
       );
-      await insertRow(client, "alakazam_subscriptions", {
-        id: subscriptionId,
-        organization_id: authority.organizationId,
-        project_id: authority.projectId,
-        customer_user_id: authority.userId,
-        stripe_customer_row_id: authority.stripeCustomerRowId,
-        stripe_subscription_id: "sub_alakazam_contract",
-        stripe_subscription_item_id: "si_alakazam_contract",
-        stripe_price_id: "price_alakazam_25",
-        initial_quote_id: startQuoteId,
-        tier_id: "alakazam_25",
-        status: "pending",
-        currency: "USD",
-        amount_minor: 2500,
-        provider_observed_at: "2026-08-02T12:01:00.000Z",
-        provider_facts_digest: digest("subscription:pending")
-      });
-      await flushConstraints(client);
-
-      const startPaymentEventId = await insertStripeEvent(
-        client,
-        authority,
-        {
-          quoteId: startQuoteId,
-          subscriptionId,
-          suffix: "alakazam_start_payment",
-          eventType: "invoice.payment_succeeded",
-          providerObjectId: "in_alakazam_start",
-          occurredAt: "2026-08-02T12:02:00.000Z",
-          processedAt: "2026-08-02T12:02:05.000Z"
-        }
+      const startResolved =
+        await settlementRepository
+          .findCheckoutDispatchBySession({
+            checkoutSessionId: "cs_alakazam_start"
+          });
+      assert.equal(startResolved.status, "ready");
+      assert.equal(
+        startResolved.reservation.dispatchId,
+        startDispatchId
       );
-      await settleCheckout(
-        client,
-        startQuoteId,
-        startDispatchId,
-        "2026-08-02T12:02:05.000Z"
-      );
-      const startReceiptId = await insertReceipt(
-        client,
-        authority,
+      const startPayment = checkoutPaymentFacts(
+        startResolved.reservation,
         {
-          subscriptionId,
-          quoteId: startQuoteId,
-          stripeEventRowId: startPaymentEventId,
-          receiptKind: "start_payment",
+          checkoutSessionId: "cs_alakazam_start",
+          stripeSubscriptionId: "sub_alakazam_contract",
+          stripeSubscriptionItemId: "si_alakazam_contract",
+          stripePriceId: "price_alakazam_25",
           stripeInvoiceId: "in_alakazam_start",
           stripePaymentIntentId: "pi_alakazam_start",
-          listSubtotalMinor: 2500,
-          netSubtotalMinor: 2500,
-          settledAt: "2026-08-02T12:02:00.000Z"
+          providerPaymentTime: "2026-08-02T12:02:00.000Z",
+          currentPeriodStartsAt:
+            "2026-08-02T12:02:00.000Z",
+          currentPeriodEndsAt:
+            "2026-09-02T12:02:00.000Z"
         }
       );
+      const startPaymentEventId = randomUUID();
+      const startReceiptId = randomUUID();
+      const startSettlement =
+        await settlementRepository.settleCheckoutPayment({
+          reservation: startResolved.reservation,
+          checkout: startResolved.checkout,
+          event: checkoutPaymentEvent(
+            startResolved.reservation,
+            {
+              checkoutSessionId: "cs_alakazam_start",
+              suffix: "alakazam_start_payment",
+              occurredAt: "2026-08-02T12:02:00.000Z",
+              signatureVerifiedAt:
+                "2026-08-02T12:02:05.000Z"
+            }
+          ),
+          payment: startPayment,
+          eventRowId: startPaymentEventId,
+          receiptId: startReceiptId,
+          subscriptionId,
+          creditApplicationId: null,
+          tierEventId: null
+        });
+      assert.deepEqual(startSettlement, {
+        status: "payment_settled",
+        provider: "stripe",
+        changeKind: "start",
+        dispatchId: startDispatchId,
+        projectId: authority.projectId,
+        quoteId: startQuoteId,
+        subscriptionId,
+        receiptId: startReceiptId,
+        paymentProviderFactsDigest:
+          startPayment.providerFactsDigest,
+        next: "subscription_confirmation"
+      });
       await flushConstraints(client);
+      const stagedStart = await client.query(
+        `select subscription.status,
+                subscription.activation_receipt_id,
+                subscription.current_period_starts_at,
+                subscription.current_period_ends_at,
+                quote.state as quote_state,
+                dispatch.state as dispatch_state
+           from ss.alakazam_subscriptions subscription
+           join ss.alakazam_change_quotes quote
+             on quote.id = subscription.initial_quote_id
+           join ss.alakazam_checkout_dispatches dispatch
+             on dispatch.quote_id = quote.id
+          where subscription.id = $1`,
+        [subscriptionId]
+      );
+      assert.deepEqual(stagedStart.rows[0], {
+        status: "pending",
+        activation_receipt_id: null,
+        current_period_starts_at: null,
+        current_period_ends_at: null,
+        quote_state: "payment_settled",
+        dispatch_state: "settled"
+      });
+      const startReplay =
+        await settlementRepository
+          .findCheckoutDispatchBySession({
+            checkoutSessionId: "cs_alakazam_start"
+          });
+      assert.equal(startReplay.status, "settled");
+      assert.deepEqual(
+        startReplay.settlement,
+        startSettlement
+      );
 
       const startProviderEventId = await insertStripeEvent(
         client,
@@ -1148,56 +1282,117 @@ test(
           dispatchedAt: "2026-08-02T12:11:05.000Z"
         }
       );
-      const upgradePaymentEventId = await insertStripeEvent(
-        client,
-        authority,
-        {
-          quoteId: upgradeQuoteId,
-          subscriptionId,
-          suffix: "alakazam_upgrade_payment",
-          eventType: "checkout.session.completed",
-          providerObjectId: "pi_alakazam_upgrade",
-          occurredAt: "2026-08-02T12:12:00.000Z",
-          processedAt: "2026-08-02T12:12:05.000Z"
-        }
+      const upgradeResolved =
+        await settlementRepository
+          .findCheckoutDispatchBySession({
+            checkoutSessionId:
+              "cs_alakazam_upgrade_25_35"
+          });
+      assert.equal(upgradeResolved.status, "ready");
+      assert.equal(
+        upgradeResolved.reservation.dispatchId,
+        upgradeDispatchId
       );
-      await settleCheckout(
-        client,
-        upgradeQuoteId,
-        upgradeDispatchId,
-        "2026-08-02T12:12:05.000Z"
-      );
-      const upgradeReceiptId = await insertReceipt(
-        client,
-        authority,
+      const upgradePayment = checkoutPaymentFacts(
+        upgradeResolved.reservation,
         {
-          subscriptionId,
-          quoteId: upgradeQuoteId,
-          stripeEventRowId: upgradePaymentEventId,
-          receiptKind: "upgrade_difference",
+          checkoutSessionId:
+            "cs_alakazam_upgrade_25_35",
+          stripeSubscriptionId: "sub_alakazam_contract",
+          stripeSubscriptionItemId: "si_alakazam_contract",
+          stripePriceId: "price_alakazam_35",
           stripePaymentIntentId: "pi_alakazam_upgrade",
-          listSubtotalMinor: 1000,
-          netSubtotalMinor: 1000,
-          settledAt: "2026-08-02T12:12:00.000Z"
+          providerPaymentTime:
+            "2026-08-02T12:12:00.000Z"
         }
       );
-      await insertTierEvent(client, authority, {
-        subscriptionId,
+      const upgradePaymentEventId = randomUUID();
+      const upgradeReceiptId = randomUUID();
+      const upgradePaymentTierEventId = randomUUID();
+      const upgradeSettlement =
+        await settlementRepository.settleCheckoutPayment({
+          reservation: upgradeResolved.reservation,
+          checkout: upgradeResolved.checkout,
+          event: checkoutPaymentEvent(
+            upgradeResolved.reservation,
+            {
+              checkoutSessionId:
+                "cs_alakazam_upgrade_25_35",
+              suffix: "alakazam_upgrade_payment",
+              occurredAt: "2026-08-02T12:12:00.000Z",
+              signatureVerifiedAt:
+                "2026-08-02T12:12:05.000Z"
+            }
+          ),
+          payment: upgradePayment,
+          eventRowId: upgradePaymentEventId,
+          receiptId: upgradeReceiptId,
+          subscriptionId,
+          creditApplicationId: null,
+          tierEventId: upgradePaymentTierEventId
+        });
+      assert.deepEqual(upgradeSettlement, {
+        status: "payment_settled",
+        provider: "stripe",
+        changeKind: "upgrade",
+        dispatchId: upgradeDispatchId,
+        projectId: authority.projectId,
         quoteId: upgradeQuoteId,
-        stripeEventRowId: upgradePaymentEventId,
-        paymentReceiptId: upgradeReceiptId,
-        eventKind: "upgrade_payment_settled",
-        priorTierId: "alakazam_25",
-        resultTierId: "alakazam_35",
-        occurredAt: "2026-08-02T12:12:00.000Z"
+        subscriptionId,
+        receiptId: upgradeReceiptId,
+        paymentProviderFactsDigest:
+          upgradePayment.providerFactsDigest,
+        next: "provider_change"
       });
       await flushConstraints(client);
-
-      await client.query(
-        `update ss.alakazam_change_quotes
-            set state = 'provider_change_pending'
-          where id = $1`,
-        [upgradeQuoteId]
+      const stagedUpgrade = await client.query(
+        `select subscription.tier_id,
+                subscription.amount_minor,
+                subscription.revision,
+                quote.state as quote_state,
+                tier.event_kind
+           from ss.alakazam_subscriptions subscription
+           join ss.alakazam_change_quotes quote
+             on quote.current_subscription_id = subscription.id
+           join ss.alakazam_tier_change_events tier
+             on tier.quote_id = quote.id
+          where subscription.id = $1
+            and quote.id = $2
+            and tier.id = $3`,
+        [
+          subscriptionId,
+          upgradeQuoteId,
+          upgradePaymentTierEventId
+        ]
+      );
+      assert.deepEqual(
+        {
+          tierId: stagedUpgrade.rows[0].tier_id,
+          amountMinor: Number(
+            stagedUpgrade.rows[0].amount_minor
+          ),
+          revision: Number(stagedUpgrade.rows[0].revision),
+          quoteState: stagedUpgrade.rows[0].quote_state,
+          eventKind: stagedUpgrade.rows[0].event_kind
+        },
+        {
+          tierId: "alakazam_25",
+          amountMinor: 2500,
+          revision: 2,
+          quoteState: "provider_change_pending",
+          eventKind: "upgrade_payment_settled"
+        }
+      );
+      const upgradeReplay =
+        await settlementRepository
+          .findCheckoutDispatchBySession({
+            checkoutSessionId:
+              "cs_alakazam_upgrade_25_35"
+          });
+      assert.equal(upgradeReplay.status, "settled");
+      assert.deepEqual(
+        upgradeReplay.settlement,
+        upgradeSettlement
       );
       const upgradeProviderEventId = await insertStripeEvent(
         client,

@@ -2,15 +2,20 @@ import {
   ALAKAZAM_CATALOG_VERSION,
   ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+  ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
   createAlakazamCheckoutDispatch,
   createAlakazamCustomerProvision,
+  createAlakazamProviderMetadata,
   quoteAlakazamChange,
   resolveAlakazamTier
 } from "../commerce-v2/alakazam.mjs";
 import {
   CommerceV2Error,
   clone,
+  deepFreeze,
   digest,
   invariant,
   requiredIso,
@@ -30,6 +35,18 @@ const TAX_MODES = new Set([
 ]);
 const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
 const STRIPE_CHECKOUT_ID = /^cs_[A-Za-z0-9_]+$/u;
+const STRIPE_EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
+const STRIPE_SUBSCRIPTION_ID = /^sub_[A-Za-z0-9_]+$/u;
+const STRIPE_SUBSCRIPTION_ITEM_ID = /^si_[A-Za-z0-9_]+$/u;
+const STRIPE_PRICE_ID = /^price_[A-Za-z0-9_]+$/u;
+const STRIPE_INVOICE_ID = /^in_[A-Za-z0-9_]+$/u;
+const STRIPE_PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9_]+$/u;
+const ALAKAZAM_PAYMENT_EVENT_TYPE =
+  "checkout.session.completed";
+const ALAKAZAM_EVENT_FACTS_SCHEMA =
+  "sitesourcery.alakazam-stripe-event/v1";
+const ALAKAZAM_TIER_EVENT_FACTS_SCHEMA =
+  "sitesourcery.alakazam-tier-event/v1";
 const DATABASE_CONSTRAINT_CODES = new Set([
   "22001",
   "22P02",
@@ -686,6 +703,515 @@ function checkoutReady(row, reservation = null) {
     projectId: selected.projectId,
     purposeDigest: selected.purposeDigest,
     checkout
+  });
+}
+
+function sameExactObject(value, expected) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify(Object.keys(expected).sort()) &&
+    Object.entries(expected).every(
+      ([key, selected]) => value[key] === selected
+    )
+  );
+}
+
+function exactSha(value, field) {
+  const selected = requiredText(value, field, 64);
+  invariant(
+    /^[a-f0-9]{64}$/u.test(selected),
+    "invalid_input",
+    `${field} is invalid`
+  );
+  return selected;
+}
+
+function exactCheckoutSessionInput(value) {
+  exactKeys(
+    value,
+    ["checkoutSessionId"],
+    "the Alakazam Checkout settlement lookup is invalid"
+  );
+  const checkoutSessionId = requiredText(
+    value.checkoutSessionId,
+    "checkoutSessionId",
+    255
+  );
+  invariant(
+    STRIPE_CHECKOUT_ID.test(checkoutSessionId),
+    "invalid_input",
+    "checkoutSessionId is invalid"
+  );
+  return Object.freeze({ checkoutSessionId });
+}
+
+function exactCheckoutReservationValue(value) {
+  exactKeys(
+    value,
+    [
+      "claimedAt",
+      "currency",
+      "customerId",
+      "dispatchId",
+      "expectedCreditMinor",
+      "expectedSubtotalMinor",
+      "idempotencyKey",
+      "leaseExpiresAt",
+      "mode",
+      "projectId",
+      "provider",
+      "purpose",
+      "purposeDigest",
+      "quoteId",
+      "schema",
+      "state",
+      "stripeCustomerId",
+      "tenantId"
+    ],
+    "the Alakazam Checkout reservation input is invalid"
+  );
+  let expected;
+  try {
+    expected = createAlakazamCheckoutDispatch({
+      dispatchId: value.dispatchId,
+      tenantId: value.tenantId,
+      customerId: value.customerId,
+      projectId: value.projectId,
+      quoteId: value.quoteId,
+      stripeCustomerId: value.stripeCustomerId,
+      acceptedDisclosureDigest:
+        value.purpose.acceptedDisclosureDigest,
+      quoteDigest: value.purpose.quoteDigest,
+      changeKind: value.purpose.changeKind,
+      currentSubscription:
+        value.purpose.currentSubscription,
+      targetTierId: value.purpose.targetTierId,
+      dueNowSubtotalMinor:
+        value.purpose.dueNowSubtotalMinor,
+      taxMode: value.purpose.taxMode,
+      downloadCredit: value.purpose.downloadCredit,
+      claimedAt: value.claimedAt
+    });
+  } catch {
+    invariant(
+      false,
+      "invalid_input",
+      "the Alakazam Checkout purpose input is invalid"
+    );
+  }
+  invariant(
+    value.schema === ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA &&
+      digest(value) === digest(expected),
+    "invalid_input",
+    "the Alakazam Checkout reservation input changed"
+  );
+  return expected;
+}
+
+function exactCheckoutEvidence(value, reservation) {
+  exactKeys(
+    value,
+    ["checkoutId", "expiresAt", "url"],
+    "the Alakazam Checkout provider evidence is invalid"
+  );
+  const checkoutId = requiredText(
+    value.checkoutId,
+    "checkout.checkoutId",
+    255
+  );
+  invariant(
+    STRIPE_CHECKOUT_ID.test(checkoutId),
+    "invalid_input",
+    "checkout.checkoutId is invalid"
+  );
+  return Object.freeze({
+    checkoutId,
+    url: exactStripeCheckoutUrl(value.url),
+    expiresAt: requiredIso(
+      value.expiresAt,
+      "checkout.expiresAt"
+    ),
+    dispatchId: reservation.dispatchId
+  });
+}
+
+function exactPaymentEventValue(value, reservation, checkout) {
+  exactKeys(
+    value,
+    [
+      "apiVersion",
+      "checkoutSessionId",
+      "eventType",
+      "livemode",
+      "metadata",
+      "occurredAt",
+      "payloadDigest",
+      "signatureVerifiedAt",
+      "stripeEventId"
+    ],
+    "the Alakazam Stripe event input is invalid"
+  );
+  const metadata = createAlakazamProviderMetadata({
+    purpose: reservation.purpose,
+    purposeDigest: reservation.purposeDigest
+  });
+  invariant(
+    STRIPE_EVENT_ID.test(value.stripeEventId) &&
+      value.eventType === ALAKAZAM_PAYMENT_EVENT_TYPE &&
+      typeof value.livemode === "boolean" &&
+      typeof value.apiVersion === "string" &&
+      value.apiVersion.length >= 3 &&
+      value.apiVersion.length <= 100 &&
+      value.checkoutSessionId === checkout.checkoutId &&
+      sameExactObject(value.metadata, metadata),
+    "invalid_input",
+    "the Alakazam Stripe event changed"
+  );
+  return Object.freeze({
+    stripeEventId: value.stripeEventId,
+    eventType: value.eventType,
+    livemode: value.livemode,
+    apiVersion: value.apiVersion,
+    checkoutSessionId: value.checkoutSessionId,
+    metadata,
+    payloadDigest: exactSha(
+      value.payloadDigest,
+      "event.payloadDigest"
+    ),
+    signatureVerifiedAt: requiredIso(
+      value.signatureVerifiedAt,
+      "event.signatureVerifiedAt"
+    ),
+    occurredAt: requiredIso(
+      value.occurredAt,
+      "event.occurredAt"
+    )
+  });
+}
+
+function exactSubscriptionPaymentFacts(value, reservation) {
+  exactKeys(
+    value,
+    [
+      "amountMinor",
+      "billingCycleAnchor",
+      "cancelAtPeriodEnd",
+      "currency",
+      "currentPeriodEndsAt",
+      "currentPeriodStartsAt",
+      "metadata",
+      "providerFactsDigest",
+      "providerObservedAt",
+      "providerStatus",
+      "schema",
+      "stripeCustomerId",
+      "stripePriceId",
+      "stripeScheduleId",
+      "stripeSubscriptionId",
+      "stripeSubscriptionItemId",
+      "tierId"
+    ],
+    "the Alakazam Subscription payment evidence is invalid"
+  );
+  const target = resolveAlakazamTier(
+    reservation.purpose.targetTierId
+  );
+  const facts = clone(value);
+  delete facts.providerFactsDigest;
+  const startsAt = requiredIso(
+    value.currentPeriodStartsAt,
+    "payment.subscription.currentPeriodStartsAt"
+  );
+  const endsAt = requiredIso(
+    value.currentPeriodEndsAt,
+    "payment.subscription.currentPeriodEndsAt"
+  );
+  requiredIso(
+    value.billingCycleAnchor,
+    "payment.subscription.billingCycleAnchor"
+  );
+  requiredIso(
+    value.providerObservedAt,
+    "payment.subscription.providerObservedAt"
+  );
+  invariant(
+    value.schema ===
+        ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA &&
+      STRIPE_SUBSCRIPTION_ID.test(
+        value.stripeSubscriptionId
+      ) &&
+      STRIPE_SUBSCRIPTION_ITEM_ID.test(
+        value.stripeSubscriptionItemId
+      ) &&
+      STRIPE_CUSTOMER_ID.test(value.stripeCustomerId) &&
+      STRIPE_PRICE_ID.test(value.stripePriceId) &&
+      value.stripeScheduleId === null &&
+      value.stripeCustomerId ===
+        reservation.stripeCustomerId &&
+      value.tierId === target.tierId &&
+      value.amountMinor === target.price.amountMinor &&
+      value.currency === "USD" &&
+      value.providerStatus === "active" &&
+      value.cancelAtPeriodEnd === false &&
+      Date.parse(endsAt) > Date.parse(startsAt) &&
+      sameExactObject(
+        value.metadata,
+        createAlakazamProviderMetadata({
+          purpose: reservation.purpose,
+          purposeDigest: reservation.purposeDigest
+        })
+      ) &&
+      exactSha(
+        value.providerFactsDigest,
+        "payment.subscription.providerFactsDigest"
+      ) === digest(facts),
+    "invalid_input",
+    "the Alakazam Subscription payment evidence changed"
+  );
+  return deepFreeze(clone(value));
+}
+
+function exactCheckoutPaymentFacts(value, reservation, checkout) {
+  exactKeys(
+    value,
+    [
+      "changeKind",
+      "checkoutSessionId",
+      "currency",
+      "listSubtotalMinor",
+      "netSubtotalMinor",
+      "paymentStatus",
+      "provider",
+      "providerDiscountMinor",
+      "providerFactsDigest",
+      "providerPaymentTime",
+      "purposeDigest",
+      "schema",
+      "stripeCustomerId",
+      "stripeInvoiceId",
+      "stripePaymentIntentId",
+      "stripePriceId",
+      "stripeSubscriptionId",
+      "stripeSubscriptionItemId",
+      "subscription",
+      "targetTierId",
+      "taxMinor",
+      "taxMode",
+      "totalMinor"
+    ],
+    "the Alakazam Checkout payment evidence is invalid"
+  );
+  const purpose = reservation.purpose;
+  const facts = clone(value);
+  delete facts.providerFactsDigest;
+  invariant(
+    value.schema === ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA &&
+      value.provider === "stripe" &&
+      value.changeKind === purpose.changeKind &&
+      value.checkoutSessionId === checkout.checkoutId &&
+      value.stripeCustomerId === reservation.stripeCustomerId &&
+      STRIPE_SUBSCRIPTION_ID.test(
+        value.stripeSubscriptionId
+      ) &&
+      STRIPE_SUBSCRIPTION_ITEM_ID.test(
+        value.stripeSubscriptionItemId
+      ) &&
+      STRIPE_PRICE_ID.test(value.stripePriceId) &&
+      STRIPE_PAYMENT_INTENT_ID.test(
+        value.stripePaymentIntentId
+      ) &&
+      value.targetTierId === purpose.targetTierId &&
+      value.listSubtotalMinor ===
+        (purpose.changeKind === "start"
+          ? purpose.targetAmountMinor
+          : purpose.dueNowSubtotalMinor) &&
+      value.providerDiscountMinor ===
+        (purpose.downloadCredit?.amountMinor ?? 0) &&
+      value.netSubtotalMinor === purpose.dueNowSubtotalMinor &&
+      Number.isSafeInteger(value.taxMinor) &&
+      value.taxMinor >= 0 &&
+      value.totalMinor ===
+        value.netSubtotalMinor + value.taxMinor &&
+      value.taxMode === purpose.taxMode &&
+      (value.taxMode === "automatic" || value.taxMinor === 0) &&
+      value.currency === "USD" &&
+      value.paymentStatus === "paid" &&
+      value.purposeDigest === reservation.purposeDigest &&
+      exactSha(
+        value.providerFactsDigest,
+        "payment.providerFactsDigest"
+      ) === digest(facts),
+    "invalid_input",
+    "the Alakazam Checkout payment evidence changed"
+  );
+  requiredIso(
+    value.providerPaymentTime,
+    "payment.providerPaymentTime"
+  );
+  if (purpose.changeKind === "start") {
+    const subscription = exactSubscriptionPaymentFacts(
+      value.subscription,
+      reservation
+    );
+    invariant(
+      STRIPE_INVOICE_ID.test(value.stripeInvoiceId) &&
+        value.stripeSubscriptionId ===
+          subscription.stripeSubscriptionId &&
+        value.stripeSubscriptionItemId ===
+          subscription.stripeSubscriptionItemId &&
+        value.stripePriceId === subscription.stripePriceId,
+      "invalid_input",
+      "the Alakazam start payment evidence disagrees"
+    );
+  } else {
+    invariant(
+      value.stripeInvoiceId === null &&
+        value.subscription === null &&
+        value.stripeSubscriptionId ===
+          purpose.currentSubscription.stripeSubscriptionId &&
+        value.stripeSubscriptionItemId ===
+          purpose.currentSubscription.stripeSubscriptionItemId,
+      "invalid_input",
+      "the Alakazam upgrade payment evidence disagrees"
+    );
+  }
+  return deepFreeze(clone(value));
+}
+
+function exactSettlementIds(value, reservation) {
+  exactKeys(
+    value,
+    [
+      "checkout",
+      "creditApplicationId",
+      "event",
+      "eventRowId",
+      "payment",
+      "receiptId",
+      "reservation",
+      "subscriptionId",
+      "tierEventId"
+    ],
+    "the Alakazam payment settlement input is invalid"
+  );
+  const checkout = exactCheckoutEvidence(
+    value.checkout,
+    reservation
+  );
+  const event = exactPaymentEventValue(
+    value.event,
+    reservation,
+    checkout
+  );
+  const payment = exactCheckoutPaymentFacts(
+    value.payment,
+    reservation,
+    checkout
+  );
+  const start = reservation.purpose.changeKind === "start";
+  const subscriptionId = exactUuid(
+    value.subscriptionId,
+    "subscriptionId"
+  );
+  invariant(
+    (start &&
+      subscriptionId !==
+        reservation.purpose.currentSubscription
+          ?.localSubscriptionId &&
+      value.tierEventId === null) ||
+      (!start &&
+        subscriptionId ===
+          reservation.purpose.currentSubscription
+            .localSubscriptionId &&
+        UUID.test(value.tierEventId)),
+    "invalid_input",
+    "the Alakazam payment subscription identity is invalid"
+  );
+  invariant(
+    (reservation.purpose.downloadCredit &&
+      UUID.test(value.creditApplicationId)) ||
+      (!reservation.purpose.downloadCredit &&
+        value.creditApplicationId === null),
+    "invalid_input",
+    "the Alakazam credit application identity is invalid"
+  );
+  return Object.freeze({
+    reservation,
+    checkout,
+    event,
+    payment,
+    eventRowId: exactUuid(value.eventRowId, "eventRowId"),
+    receiptId: exactUuid(value.receiptId, "receiptId"),
+    subscriptionId,
+    creditApplicationId: value.creditApplicationId,
+    tierEventId: value.tierEventId
+  });
+}
+
+function paymentSettlementResult({
+  reservation,
+  subscriptionId,
+  receiptId,
+  providerFactsDigest
+}) {
+  return Object.freeze({
+    status: "payment_settled",
+    provider: "stripe",
+    changeKind: reservation.purpose.changeKind,
+    dispatchId: reservation.dispatchId,
+    projectId: reservation.projectId,
+    quoteId: reservation.quoteId,
+    subscriptionId,
+    receiptId,
+    paymentProviderFactsDigest: providerFactsDigest,
+    next:
+      reservation.purpose.changeKind === "start"
+        ? "subscription_confirmation"
+        : "provider_change"
+  });
+}
+
+async function storedPaymentSettlement(
+  client,
+  reservation,
+  expectedProviderFactsDigest = null
+) {
+  const receipts = await client.query(
+    `select receipt.id, receipt.subscription_id,
+            receipt.provider_facts_digest
+       from ss.alakazam_payment_receipts receipt
+      where receipt.organization_id = $1
+        and receipt.quote_id = $2
+        and receipt.receipt_kind = $3
+      for update`,
+    [
+      reservation.tenantId,
+      reservation.quoteId,
+      reservation.purpose.changeKind === "start"
+        ? "start_payment"
+        : "upgrade_difference"
+    ]
+  );
+  invariant(
+    receipts.rowCount === 1 &&
+      (
+        expectedProviderFactsDigest === null ||
+        receipts.rows[0].provider_facts_digest ===
+          expectedProviderFactsDigest
+      ),
+    "repository_conflict",
+    "the durable Alakazam payment receipt changed",
+    { status: 500 }
+  );
+  return paymentSettlementResult({
+    reservation,
+    subscriptionId: receipts.rows[0].subscription_id,
+    receiptId: receipts.rows[0].id,
+    providerFactsDigest:
+      receipts.rows[0].provider_facts_digest
   });
 }
 
@@ -1718,6 +2244,46 @@ export function createPostgresAlakazamRepository({
       );
     },
 
+    async findCheckoutDispatchBySession(value) {
+      const input = exactCheckoutSessionInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select *
+               from ss.alakazam_checkout_dispatches
+              where stripe_checkout_session_id = $1
+                and state in ('ready', 'settled')
+              for update`,
+            [input.checkoutSessionId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "stripe_event_binding_invalid",
+            "the Stripe event has no durable Alakazam Checkout",
+            { status: 400 }
+          );
+          const row = selected.rows[0];
+          const reservation = storedCheckoutDispatch(row);
+          const ready = checkoutReady(row, reservation);
+          return Object.freeze({
+            status: row.state,
+            provider: "stripe",
+            reservation,
+            checkout: ready.checkout,
+            ...(row.state === "settled"
+              ? {
+                  settlement:
+                    await storedPaymentSettlement(
+                      client,
+                      reservation
+                    )
+                }
+              : {})
+          });
+        })
+      );
+    },
+
     async claimCheckoutDispatch(value) {
       const input = exactCheckoutClaimInput(value);
       return translated(() =>
@@ -2483,6 +3049,498 @@ export function createPostgresAlakazamRepository({
             });
           }
         )
+      );
+    },
+
+    async settleCheckoutPayment(value) {
+      const reservation =
+        exactCheckoutReservationValue(
+          value?.reservation
+        );
+      const input = exactSettlementIds(
+        value,
+        reservation
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select dispatch.*,
+                    quote.state as quote_state,
+                    quote.change_kind as quote_change_kind
+               from ss.alakazam_checkout_dispatches dispatch
+               join ss.alakazam_change_quotes quote
+                 on quote.organization_id =
+                    dispatch.organization_id
+                and quote.id = dispatch.quote_id
+              where dispatch.organization_id = $1
+                and dispatch.id = $2
+              for update of dispatch, quote`,
+            [reservation.tenantId, reservation.dispatchId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "stripe_event_binding_invalid",
+            "the Alakazam Checkout is unavailable for settlement",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          const storedReservation =
+            exactCheckoutRowIdentity(row, {
+              tenantId: reservation.tenantId,
+              customerId: reservation.customerId,
+              projectId: reservation.projectId,
+              quoteId: reservation.quoteId,
+              dispatchId: reservation.dispatchId,
+              purposeDigest: reservation.purposeDigest
+            });
+          invariant(
+            digest(storedReservation) ===
+              digest(reservation) &&
+              row.stripe_checkout_session_id ===
+                input.checkout.checkoutId &&
+              exactDatabaseIso(
+                row.provider_expires_at,
+                "checkout.providerExpiresAt"
+              ) === input.checkout.expiresAt &&
+              exactStripeCheckoutUrl(
+                row.provider_checkout_url
+              ) === input.checkout.url &&
+              row.quote_change_kind ===
+                reservation.purpose.changeKind,
+            "stripe_event_binding_invalid",
+            "the Alakazam Checkout payment binding changed",
+            { status: 409 }
+          );
+          if (row.state === "settled") {
+            return storedPaymentSettlement(
+              client,
+              reservation,
+              input.payment.providerFactsDigest
+            );
+          }
+          invariant(
+            row.state === "ready" &&
+              row.quote_state === "checkout_ready",
+            "stripe_event_binding_invalid",
+            "the Alakazam Checkout is not ready to settle",
+            { status: 409 }
+          );
+
+          const existingEvent = await client.query(
+            `select *
+               from ss.alakazam_stripe_events
+              where stripe_event_id = $1
+                 or (
+                   provider_object_id = $2
+                   and event_type = $3
+                 )
+              for update`,
+            [
+              input.event.stripeEventId,
+              input.checkout.checkoutId,
+              input.event.eventType
+            ]
+          );
+          invariant(
+            existingEvent.rowCount === 0,
+            "stripe_event_conflict",
+            "the Alakazam payment event was already used for different evidence",
+            { status: 409 }
+          );
+
+          const customer = await client.query(
+            `select id, stripe_customer_id
+               from ss.stripe_customers
+              where organization_id = $1
+              for update`,
+            [reservation.tenantId]
+          );
+          invariant(
+            customer.rowCount === 1 &&
+              customer.rows[0].stripe_customer_id ===
+                reservation.stripeCustomerId,
+            "stripe_customer_binding_invalid",
+            "the Alakazam payment Customer binding changed",
+            { status: 409 }
+          );
+
+          if (reservation.purpose.changeKind === "start") {
+            const subscription = input.payment.subscription;
+            const insertedSubscription = await client.query(
+              `insert into ss.alakazam_subscriptions (
+                 id, organization_id, project_id,
+                 customer_user_id, stripe_customer_row_id,
+                 stripe_subscription_id,
+                 stripe_subscription_item_id,
+                 stripe_price_id, initial_quote_id,
+                 activation_receipt_id, tier_id, status,
+                 currency, amount_minor,
+                 current_period_starts_at,
+                 current_period_ends_at,
+                 cancel_at_period_end,
+                 provider_observed_at,
+                 provider_facts_digest
+               ) values (
+                 $1, $2, $3, $4, $5,
+                 $6, $7, $8, $9,
+                 null, $10, 'pending', 'USD', $11,
+                 null, null, false, $12, $13
+               )
+               returning id`,
+              [
+                input.subscriptionId,
+                reservation.tenantId,
+                reservation.projectId,
+                reservation.customerId,
+                customer.rows[0].id,
+                subscription.stripeSubscriptionId,
+                subscription.stripeSubscriptionItemId,
+                subscription.stripePriceId,
+                reservation.quoteId,
+                subscription.tierId,
+                subscription.amountMinor,
+                subscription.providerObservedAt,
+                subscription.providerFactsDigest
+              ]
+            );
+            invariant(
+              insertedSubscription.rowCount === 1,
+              "repository_conflict",
+              "the pending Alakazam subscription was not created",
+              { status: 500 }
+            );
+          } else {
+            const current =
+              reservation.purpose.currentSubscription;
+            const subscription = await client.query(
+              `select *
+                 from ss.alakazam_subscriptions
+                where organization_id = $1
+                  and id = $2
+                for update`,
+              [reservation.tenantId, input.subscriptionId]
+            );
+            const currentRow = subscription.rows[0];
+            invariant(
+              subscription.rowCount === 1 &&
+                currentRow.project_id ===
+                  reservation.projectId &&
+                currentRow.customer_user_id ===
+                  reservation.customerId &&
+                currentRow.stripe_customer_row_id ===
+                  customer.rows[0].id &&
+                currentRow.status === "active" &&
+                exactDatabaseInteger(
+                  currentRow.revision,
+                  "subscription.revision"
+                ) === current.revision &&
+                currentRow.tier_id === current.tierId &&
+                exactDatabaseInteger(
+                  currentRow.amount_minor,
+                  "subscription.amountMinor"
+                ) === current.amountMinor &&
+                currentRow.stripe_subscription_id ===
+                  current.stripeSubscriptionId &&
+                currentRow.stripe_subscription_item_id ===
+                  current.stripeSubscriptionItemId &&
+                currentRow.stripe_price_id ===
+                  current.stripePriceId &&
+                exactDatabaseIso(
+                  currentRow.current_period_starts_at,
+                  "subscription.currentPeriodStartsAt"
+                ) === current.currentPeriodStartsAt &&
+                exactDatabaseIso(
+                  currentRow.current_period_ends_at,
+                  "subscription.currentPeriodEndsAt"
+                ) === current.currentPeriodEndsAt &&
+                currentRow.provider_facts_digest ===
+                  current.providerFactsDigest &&
+                currentRow.cancel_at_period_end === false,
+              "alakazam_change_unavailable",
+              "the Alakazam upgrade subscription changed before settlement",
+              { status: 409 }
+            );
+          }
+
+          const eventFacts = {
+            schema: ALAKAZAM_EVENT_FACTS_SCHEMA,
+            provider: "stripe",
+            stripeEventId: input.event.stripeEventId,
+            eventType: input.event.eventType,
+            checkoutSessionId: input.checkout.checkoutId,
+            purposeDigest: reservation.purposeDigest,
+            payloadDigest: input.event.payloadDigest,
+            metadata: input.event.metadata
+          };
+          const insertedEvent = await client.query(
+            `insert into ss.alakazam_stripe_events (
+               id, organization_id, project_id,
+               quote_id, subscription_id,
+               stripe_event_id, event_type,
+               livemode, api_version,
+               provider_object_id, payload_digest,
+               facts, state, attempt_count,
+               signature_verified_at, occurred_at
+             ) values (
+               $1, $2, $3, $4, $5,
+               $6, $7, $8, $9, $10, $11,
+               $12::jsonb, 'received', 0, $13, $14
+             )
+             returning id`,
+            [
+              input.eventRowId,
+              reservation.tenantId,
+              reservation.projectId,
+              reservation.quoteId,
+              input.subscriptionId,
+              input.event.stripeEventId,
+              input.event.eventType,
+              input.event.livemode,
+              input.event.apiVersion,
+              input.checkout.checkoutId,
+              input.event.payloadDigest,
+              JSON.stringify(eventFacts),
+              input.event.signatureVerifiedAt,
+              input.event.occurredAt
+            ]
+          );
+          invariant(
+            insertedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam payment event was not recorded",
+            { status: 500 }
+          );
+          const claimedEvent = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processing',
+                    attempt_count = attempt_count + 1
+              where organization_id = $1
+                and id = $2
+                and state = 'received'
+              returning id`,
+            [reservation.tenantId, input.eventRowId]
+          );
+          invariant(
+            claimedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam payment event was not claimed",
+            { status: 500 }
+          );
+
+          const settledDispatch = await client.query(
+            `update ss.alakazam_checkout_dispatches
+                set state = 'settled',
+                    settled_at = $3
+              where organization_id = $1
+                and id = $2
+                and state = 'ready'
+              returning id`,
+            [
+              reservation.tenantId,
+              reservation.dispatchId,
+              input.payment.providerPaymentTime
+            ]
+          );
+          const settledQuote = await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'payment_settled'
+              where organization_id = $1
+                and id = $2
+                and state = 'checkout_ready'
+              returning id`,
+            [reservation.tenantId, reservation.quoteId]
+          );
+          invariant(
+            settledDispatch.rowCount === 1 &&
+              settledQuote.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam payment state was not reserved",
+            { status: 500 }
+          );
+
+          const receiptKind =
+            reservation.purpose.changeKind === "start"
+              ? "start_payment"
+              : "upgrade_difference";
+          const insertedReceipt = await client.query(
+            `insert into ss.alakazam_payment_receipts (
+               id, organization_id, project_id,
+               customer_user_id, subscription_id,
+               quote_id, stripe_event_row_id,
+               receipt_kind, stripe_invoice_id,
+               stripe_payment_intent_id,
+               list_subtotal_minor,
+               provider_discount_minor,
+               net_subtotal_minor, tax_minor,
+               total_minor, tax_mode, currency,
+               settled_at, provider_facts,
+               provider_facts_digest
+             ) values (
+               $1, $2, $3, $4, $5, $6, $7, $8,
+               $9, $10, $11, $12, $13, $14, $15,
+               $16, 'USD', $17, $18::jsonb, $19
+             )
+             returning id`,
+            [
+              input.receiptId,
+              reservation.tenantId,
+              reservation.projectId,
+              reservation.customerId,
+              input.subscriptionId,
+              reservation.quoteId,
+              input.eventRowId,
+              receiptKind,
+              input.payment.stripeInvoiceId,
+              input.payment.stripePaymentIntentId,
+              input.payment.listSubtotalMinor,
+              input.payment.providerDiscountMinor,
+              input.payment.netSubtotalMinor,
+              input.payment.taxMinor,
+              input.payment.totalMinor,
+              input.payment.taxMode,
+              input.payment.providerPaymentTime,
+              JSON.stringify(input.payment),
+              input.payment.providerFactsDigest
+            ]
+          );
+          invariant(
+            insertedReceipt.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam payment receipt was not recorded",
+            { status: 500 }
+          );
+
+          if (input.creditApplicationId) {
+            const credit = await client.query(
+              `insert into ss.alakazam_credit_applications (
+                 id, organization_id, project_id,
+                 subscription_id, quote_id,
+                 download_entitlement_id,
+                 payment_receipt_id, amount_minor,
+                 state, applied_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7,
+                 500, 'applied', $8
+               )
+               returning id`,
+              [
+                input.creditApplicationId,
+                reservation.tenantId,
+                reservation.projectId,
+                input.subscriptionId,
+                reservation.quoteId,
+                reservation.purpose.downloadCredit
+                  .entitlementId,
+                input.receiptId,
+                input.payment.providerPaymentTime
+              ]
+            );
+            invariant(
+              credit.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam Download credit was not recorded",
+              { status: 500 }
+            );
+          }
+
+          if (input.tierEventId) {
+            const tierFacts = {
+              schema: ALAKAZAM_TIER_EVENT_FACTS_SCHEMA,
+              changeKind: "upgrade",
+              purposeDigest: reservation.purposeDigest,
+              paymentProviderFactsDigest:
+                input.payment.providerFactsDigest,
+              receiptId: input.receiptId
+            };
+            const tierEvent = await client.query(
+              `insert into ss.alakazam_tier_change_events (
+                 id, organization_id, project_id,
+                 subscription_id, quote_id,
+                 stripe_event_row_id, payment_receipt_id,
+                 downgrade_schedule_id,
+                 download_reversal_event_id,
+                 result_subscription_revision,
+                 event_kind, prior_tier_id,
+                 result_tier_id, occurred_at,
+                 facts, facts_digest
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7,
+                 null, null, null,
+                 'upgrade_payment_settled', $8, $9,
+                 $10, $11::jsonb, $12
+               )
+               returning id`,
+              [
+                input.tierEventId,
+                reservation.tenantId,
+                reservation.projectId,
+                input.subscriptionId,
+                reservation.quoteId,
+                input.eventRowId,
+                input.receiptId,
+                reservation.purpose.currentSubscription
+                  .tierId,
+                reservation.purpose.targetTierId,
+                input.payment.providerPaymentTime,
+                JSON.stringify(tierFacts),
+                digest(tierFacts)
+              ]
+            );
+            invariant(
+              tierEvent.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam paid upgrade handoff was not recorded",
+              { status: 500 }
+            );
+          }
+
+          const processedEvent = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processed',
+                    processed_at = $3
+              where organization_id = $1
+                and id = $2
+                and state = 'processing'
+              returning id`,
+            [
+              reservation.tenantId,
+              input.eventRowId,
+              input.event.signatureVerifiedAt
+            ]
+          );
+          invariant(
+            processedEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam payment event was not completed",
+            { status: 500 }
+          );
+
+          if (reservation.purpose.changeKind === "upgrade") {
+            const pendingProviderChange = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'provider_change_pending'
+                where organization_id = $1
+                  and id = $2
+                  and state = 'payment_settled'
+                returning id`,
+              [reservation.tenantId, reservation.quoteId]
+            );
+            invariant(
+              pendingProviderChange.rowCount === 1,
+              "repository_conflict",
+              "the paid Alakazam upgrade was not staged",
+              { status: 500 }
+            );
+          }
+
+          return paymentSettlementResult({
+            reservation,
+            subscriptionId: input.subscriptionId,
+            receiptId: input.receiptId,
+            providerFactsDigest:
+              input.payment.providerFactsDigest
+          });
+        })
       );
     }
   });

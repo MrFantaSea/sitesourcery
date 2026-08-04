@@ -24,6 +24,12 @@ export const ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA =
   "sitesourcery.alakazam-stripe-purpose.v1";
 export const ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA =
   "sitesourcery.alakazam-checkout-dispatch.v1";
+export const ALAKAZAM_PROVIDER_METADATA_SCHEMA =
+  "sitesourcery_alakazam_change_v1";
+export const ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA =
+  "sitesourcery.stripe-alakazam-payment/v1";
+export const ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA =
+  "sitesourcery.stripe-alakazam-subscription/v1";
 export const ALAKAZAM_CATALOG_VERSION =
   "alakazam.2026-08-02.v1";
 export const ALAKAZAM_TERMS_VERSION =
@@ -628,6 +634,108 @@ export function createAlakazamCheckoutDispatch({
         CHECKOUT_DISPATCH_LEASE_MS
     ).toISOString()
   });
+}
+
+export function createAlakazamProviderMetadata({
+  purpose,
+  purposeDigest
+}) {
+  requiredDigest(purposeDigest, "purposeDigest");
+  invariant(
+    purpose &&
+      typeof purpose === "object" &&
+      !Array.isArray(purpose) &&
+      purpose.schema === ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA &&
+      purpose.catalogVersion === ALAKAZAM_CATALOG_VERSION &&
+      purpose.termsVersion === ALAKAZAM_TERMS_VERSION &&
+      ["start", "upgrade", "downgrade"].includes(
+        purpose.changeKind
+      ) &&
+      digest(purpose) === purposeDigest,
+    "invalid_input",
+    "Alakazam provider metadata requires one exact purpose"
+  );
+  const metadata = {
+    schema: ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+    organization_id: requiredText(
+      purpose.organizationId,
+      "purpose.organizationId",
+      36
+    ),
+    customer_id: requiredText(
+      purpose.customerId,
+      "purpose.customerId",
+      36
+    ),
+    project_id: requiredText(
+      purpose.projectId,
+      "purpose.projectId",
+      36
+    ),
+    quote_id: requiredText(
+      purpose.quoteId,
+      "purpose.quoteId",
+      36
+    ),
+    change_kind: purpose.changeKind,
+    target_tier_id: exactTier(
+      purpose.targetTierId
+    ).tierId,
+    accepted_disclosure_digest: requiredDigest(
+      purpose.acceptedDisclosureDigest,
+      "purpose.acceptedDisclosureDigest"
+    ),
+    quote_digest: requiredDigest(
+      purpose.quoteDigest,
+      "purpose.quoteDigest"
+    ),
+    catalog_version: purpose.catalogVersion,
+    terms_version: purpose.termsVersion,
+    tax_mode: purpose.taxMode,
+    purpose_digest: purposeDigest
+  };
+  if (purpose.changeKind !== "start") {
+    invariant(
+      purpose.currentSubscription &&
+        purpose.downloadCredit === null,
+      "invalid_input",
+      "Alakazam tier-change metadata lacks its current subscription"
+    );
+    metadata.prior_tier_id = exactTier(
+      purpose.currentSubscription.tierId
+    ).tierId;
+    metadata.local_subscription_id = requiredText(
+      purpose.currentSubscription.localSubscriptionId,
+      "purpose.currentSubscription.localSubscriptionId",
+      200
+    );
+    metadata.subscription_revision = String(
+      positiveInteger(
+        purpose.currentSubscription.revision,
+        "purpose.currentSubscription.revision"
+      )
+    );
+  } else {
+    invariant(
+      purpose.currentSubscription === null,
+      "invalid_input",
+      "Alakazam start metadata cannot bind a subscription"
+    );
+    if (purpose.downloadCredit !== null) {
+      invariant(
+        purpose.downloadCredit?.amountMinor ===
+          ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
+        "invalid_input",
+        "Alakazam start metadata has invalid Download credit"
+      );
+      metadata.download_entitlement_id = requiredText(
+        purpose.downloadCredit.entitlementId,
+        "purpose.downloadCredit.entitlementId",
+        200
+      );
+    }
+  }
+  return deepFreeze(metadata);
 }
 
 export function quoteAlakazamChange({

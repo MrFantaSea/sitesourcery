@@ -33,3 +33,4 @@ export {
 export * from "./constants.mjs";
 export * from "./alakazam.mjs";
 export * from "./alakazam-billing.mjs";
+export * from "./alakazam-payment.mjs";

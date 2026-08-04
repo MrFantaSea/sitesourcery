@@ -733,3 +733,29 @@ test("Alakazam Checkout dispatch is leased, exact-purpose-bound, and no-retry", 
     /create function ss\.hosted_runtime_contract_v25\(\)/iu
   );
 });
+
+test("Alakazam payment settlement permits one event, quote receipt, and PaymentIntent", async () => {
+  const all = await migrations();
+  const settlement = all.find(
+    ({ name }) =>
+      name ===
+      "202608020026_alakazam_payment_settlement.sql"
+  );
+  assert.ok(settlement);
+  assert.match(
+    settlement.sql,
+    /create unique index alakazam_one_checkout_completion_event[\s\S]*provider_object_id[\s\S]*event_type[\s\S]*checkout\.session\.completed/iu
+  );
+  assert.match(
+    settlement.sql,
+    /create unique index alakazam_one_quote_payment_receipt[\s\S]*organization_id[\s\S]*quote_id[\s\S]*where quote_id is not null/iu
+  );
+  assert.match(
+    settlement.sql,
+    /create unique index alakazam_one_payment_intent_receipt[\s\S]*stripe_payment_intent_id/iu
+  );
+  assert.match(
+    settlement.sql,
+    /create function ss\.hosted_runtime_contract_v26\(\)/iu
+  );
+});
