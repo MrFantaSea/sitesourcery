@@ -30,6 +30,955 @@
     ));
   }
 
+  var ALAKAZAM_ACCOUNT_SCHEMA =
+    "sitesourcery.alakazam-account/v1";
+  var ALAKAZAM_ACCOUNT_STATES = [
+    "available",
+    "activation_pending",
+    "active",
+    "attention_required",
+    "ended"
+  ];
+  var UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+  var ALAKAZAM_PAYMENT_STATES = {
+    pending: "pending",
+    active: "paid",
+    grace: "attention_required",
+    suspended: "suspended",
+    cancelled: "cancelled",
+    ended: "ended"
+  };
+
+  function record(value) {
+    return Boolean(value)
+      && typeof value === "object"
+      && !Array.isArray(value);
+  }
+
+  function exactKeys(value, expected) {
+    return record(value)
+      && JSON.stringify(Object.keys(value).sort())
+        === JSON.stringify(expected.slice().sort());
+  }
+
+  function safeMinor(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+
+  function safeCurrency(value) {
+    return /^[A-Z]{3}$/u.test(text(value));
+  }
+
+  function safeIso(value) {
+    return typeof value === "string"
+      && Number.isFinite(Date.parse(value))
+      && new Date(value).toISOString() === value;
+  }
+
+  function nullableIso(value) {
+    return value === null || safeIso(value);
+  }
+
+  function verifiedAlakazamPrice(value) {
+    return exactKeys(
+      value,
+      ["amountMinor", "billing", "currency", "interval"]
+    )
+      && safeMinor(value.amountMinor)
+      && safeCurrency(value.currency)
+      && value.billing === "recurring"
+      && value.interval === "month";
+  }
+
+  function verifiedAlakazamTier(value) {
+    return exactKeys(
+      value,
+      [
+        "capabilities",
+        "limits",
+        "name",
+        "price",
+        "rank",
+        "tierId"
+      ]
+    )
+      && text(value.tierId)
+      && text(value.name)
+      && Number.isSafeInteger(value.rank)
+      && value.rank > 0
+      && verifiedAlakazamPrice(value.price)
+      && Array.isArray(value.capabilities)
+      && value.capabilities.every(function (capability) {
+        return Boolean(text(capability));
+      })
+      && record(value.limits);
+  }
+
+  function matchingCatalogTier(catalog, tier) {
+    if (!verifiedAlakazamTier(tier)) return false;
+    var stored = catalog.tiers.find(function (candidate) {
+      return candidate.tierId === tier.tierId;
+    });
+    return Boolean(stored)
+      && JSON.stringify(stored) === JSON.stringify(tier);
+  }
+
+  function verifiedAlakazamCatalog(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "catalogVersion",
+          "ladder",
+          "product",
+          "schema",
+          "state",
+          "termsVersion",
+          "tiers"
+        ]
+      )
+      || value.schema !==
+        "sitesourcery.alakazam-public-tier-catalog.v1"
+      || !text(value.catalogVersion)
+      || !text(value.termsVersion)
+      || value.state !== "held"
+      || !exactKeys(
+        value.product,
+        ["name", "productId", "scope"]
+      )
+      || value.product.productId !== "alakazam_hosting"
+      || value.product.name !== "Alakazam"
+      || value.product.scope !== "one_editor_project"
+      || !exactKeys(
+        value.ladder,
+        [
+          "downgradeRule",
+          "downloadCreditMinor",
+          "premiumConfiguration",
+          "upgradeRule"
+        ]
+      )
+      || value.ladder.downloadCreditMinor !== 500
+      || value.ladder.upgradeRule !==
+        "fixed_target_minus_current_tier"
+      || value.ladder.downgradeRule !==
+        "renewal_boundary_no_refund_or_proration"
+      || value.ladder.premiumConfiguration !==
+        "preserved_when_inactive"
+      || !Array.isArray(value.tiers)
+      || value.tiers.length !== 3
+      || !value.tiers.every(verifiedAlakazamTier)
+    ) return false;
+    var ids = value.tiers.map(function (tier) {
+      return tier.tierId;
+    });
+    return JSON.stringify(ids) === JSON.stringify([
+      "alakazam_25",
+      "alakazam_35",
+      "alakazam_50"
+    ])
+      && value.tiers.every(function (tier, index) {
+        var amount = [2500, 3500, 5000][index];
+        return tier.rank === index + 1
+          && tier.price.amountMinor === amount
+          && tier.price.currency === "USD";
+      });
+  }
+
+  function verifiedAlakazamSubscription(value, catalog) {
+    if (value === null) return true;
+    if (
+      !exactKeys(
+        value,
+        [
+          "cancelAtPeriodEnd",
+          "currentPeriod",
+          "firstFailedAt",
+          "graceEndsAt",
+          "paymentState",
+          "price",
+          "revision",
+          "status",
+          "tier"
+        ]
+      )
+      || !matchingCatalogTier(catalog, value.tier)
+      || !verifiedAlakazamPrice(value.price)
+      || value.price.amountMinor !==
+        value.tier.price.amountMinor
+      || value.price.currency !==
+        value.tier.price.currency
+      || ![
+        "pending",
+        "active",
+        "grace",
+        "suspended",
+        "cancelled",
+        "ended"
+      ].includes(value.status)
+      || ![
+        "pending",
+        "paid",
+        "attention_required",
+        "suspended",
+        "cancelled",
+        "ended"
+      ].includes(value.paymentState)
+      || !Number.isSafeInteger(value.revision)
+      || value.revision < 1
+      || typeof value.cancelAtPeriodEnd !== "boolean"
+      || !nullableIso(value.firstFailedAt)
+      || !nullableIso(value.graceEndsAt)
+      || value.paymentState !==
+        ALAKAZAM_PAYMENT_STATES[value.status]
+      || (
+        value.graceEndsAt !== null
+        && value.firstFailedAt === null
+      )
+    ) return false;
+    if (value.currentPeriod === null) {
+      return value.status === "pending";
+    }
+    return value.status !== "pending"
+      && exactKeys(
+      value.currentPeriod,
+      ["endsAt", "startsAt"]
+    )
+      && safeIso(value.currentPeriod.startsAt)
+      && safeIso(value.currentPeriod.endsAt)
+      && Date.parse(value.currentPeriod.endsAt)
+        > Date.parse(value.currentPeriod.startsAt);
+  }
+
+  function verifiedAlakazamPendingChange(value, catalog) {
+    if (value === null) return true;
+    return exactKeys(
+      value,
+      ["changeKind", "effectiveAt", "state", "targetTier"]
+    )
+      && [
+        "start",
+        "upgrade",
+        "downgrade",
+        "cancellation"
+      ].includes(value.changeKind)
+      && [
+        "activation_pending",
+        "payment_pending",
+        "provider_change_pending",
+        "schedule_dispatching",
+        "scheduled",
+        "cancellation_scheduled",
+        "reconciliation_required"
+      ].includes(value.state)
+      && nullableIso(value.effectiveAt)
+      && (
+        !["downgrade", "cancellation"]
+          .includes(value.changeKind)
+        || value.effectiveAt !== null
+      )
+      && (
+        value.changeKind === "cancellation"
+          ? value.targetTier === null
+          : matchingCatalogTier(catalog, value.targetTier)
+      );
+  }
+
+  function verifiedAlakazamRenewal(value, catalog) {
+    if (value === null) return true;
+    var tier = catalog.tiers.find(function (candidate) {
+      return candidate.tierId === value.tierId;
+    });
+    return exactKeys(
+      value,
+      ["amountMinor", "currency", "dueAt", "state", "tierId"]
+    )
+      && Boolean(tier)
+      && safeMinor(value.amountMinor)
+      && value.amountMinor === tier.price.amountMinor
+      && value.currency === tier.price.currency
+      && safeIso(value.dueAt)
+      && ["scheduled", "attention_required"]
+        .includes(value.state);
+  }
+
+  function verifiedAlakazamReceipt(value) {
+    return exactKeys(
+      value,
+      [
+        "currency",
+        "discountMinor",
+        "invoiceAvailable",
+        "kind",
+        "receiptId",
+        "settledAt",
+        "subtotalMinor",
+        "taxMinor",
+        "totalMinor"
+      ]
+    )
+      && UUID.test(text(value.receiptId))
+      && [
+        "start_payment",
+        "upgrade_difference",
+        "renewal_payment"
+      ].includes(value.kind)
+      && safeMinor(value.subtotalMinor)
+      && safeMinor(value.discountMinor)
+      && safeMinor(value.taxMinor)
+      && safeMinor(value.totalMinor)
+      && value.subtotalMinor - value.discountMinor
+        + value.taxMinor === value.totalMinor
+      && value.currency === "USD"
+      && safeIso(value.settledAt)
+      && typeof value.invoiceAvailable === "boolean";
+  }
+
+  function verifiedAlakazamRelationships(value) {
+    var subscription = value.subscription;
+    var pending = value.pendingChange;
+    var renewal = value.nextRenewal;
+    if (!subscription) {
+      return pending === null && renewal === null;
+    }
+    if (subscription.status === "pending") {
+      return renewal === null
+        && Boolean(pending)
+        && pending.changeKind === "start"
+        && pending.state === "activation_pending"
+        && pending.targetTier.tierId ===
+          subscription.tier.tierId;
+    }
+    if (subscription.cancelAtPeriodEnd) {
+      return renewal === null
+        && Boolean(pending)
+        && pending.changeKind === "cancellation"
+        && pending.state === "cancellation_scheduled"
+        && pending.effectiveAt ===
+          subscription.currentPeriod.endsAt;
+    }
+    if (["cancelled", "ended"].includes(
+      subscription.status
+    )) {
+      return renewal === null;
+    }
+    if (!renewal) return false;
+    var scheduledTier =
+      pending
+      && pending.changeKind === "downgrade"
+      && pending.state === "scheduled"
+        ? pending.targetTier
+        : subscription.tier;
+    return renewal.tierId === scheduledTier.tierId
+      && renewal.amountMinor ===
+        scheduledTier.price.amountMinor
+      && renewal.currency === "USD"
+      && renewal.dueAt ===
+        subscription.currentPeriod.endsAt
+      && renewal.state === (
+        ["grace", "suspended"].includes(
+          subscription.status
+        )
+          ? "attention_required"
+          : "scheduled"
+      );
+  }
+
+  function verifiedAlakazamAccount(value, projectId) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "actions",
+          "catalog",
+          "downloadCredit",
+          "nextRenewal",
+          "pendingChange",
+          "projectId",
+          "receipts",
+          "schema",
+          "state",
+          "subscription"
+        ]
+      )
+      || value.schema !== ALAKAZAM_ACCOUNT_SCHEMA
+      || text(value.projectId) !== text(projectId)
+      || !ALAKAZAM_ACCOUNT_STATES.includes(value.state)
+      || !verifiedAlakazamCatalog(value.catalog)
+      || !exactKeys(
+        value.downloadCredit,
+        ["amountMinor", "available", "currency"]
+      )
+      || typeof value.downloadCredit.available !== "boolean"
+      || value.downloadCredit.amountMinor !== (
+        value.downloadCredit.available
+          ? value.catalog.ladder.downloadCreditMinor
+          : 0
+      )
+      || value.downloadCredit.currency !== "USD"
+      || !verifiedAlakazamSubscription(
+        value.subscription,
+        value.catalog
+      )
+      || (
+        value.subscription !== null
+        && value.downloadCredit.available
+      )
+      || !verifiedAlakazamPendingChange(
+        value.pendingChange,
+        value.catalog
+      )
+      || !verifiedAlakazamRenewal(
+        value.nextRenewal,
+        value.catalog
+      )
+      || !Array.isArray(value.receipts)
+      || value.receipts.length > 50
+      || !value.receipts.every(verifiedAlakazamReceipt)
+      || !exactKeys(
+        value.actions,
+        [
+          "cancel",
+          "changeTier",
+          "manageBilling",
+          "reason",
+          "start"
+        ]
+      )
+      || value.actions.start !== false
+      || value.actions.changeTier !== false
+      || value.actions.manageBilling !== false
+      || value.actions.cancel !== false
+      || value.actions.reason !==
+        "customer_commands_not_composed"
+      || !verifiedAlakazamRelationships(value)
+    ) return null;
+    var status = value.subscription
+      && value.subscription.status;
+    var stateMatches = {
+      available: value.subscription === null,
+      activation_pending: status === "pending",
+      active: status === "active",
+      attention_required:
+        status === "grace" || status === "suspended",
+      ended: status === "cancelled" || status === "ended"
+    }[value.state];
+    return stateMatches ? clone(value) : null;
+  }
+
+  function alakazamAccountPresentation(value, projectId) {
+    var account = verifiedAlakazamAccount(
+      value,
+      projectId
+    );
+    if (!account) return null;
+    var copy = {
+      available: {
+        heading: "Alakazam is available for this project.",
+        summary:
+          "There is no Alakazam subscription on this project."
+      },
+      activation_pending: {
+        heading: "Alakazam activation is in progress.",
+        summary:
+          "The selected Alakazam tier is waiting to become active."
+      },
+      active: {
+        heading: "Alakazam is active.",
+        summary:
+          "The current plan and renewal details are shown below."
+      },
+      attention_required: {
+        heading: "This Alakazam account needs attention.",
+        summary:
+          "The payment state and any grace date are shown below."
+      },
+      ended: {
+        heading: "This Alakazam subscription has ended.",
+        summary:
+          "The last recorded plan and receipts remain visible below."
+      }
+    }[account.state];
+    return Object.freeze({
+      account: account,
+      heading: copy.heading,
+      summary: copy.summary
+    });
+  }
+
+  function accountElement(
+    documentRef,
+    name,
+    className,
+    copy
+  ) {
+    var element = documentRef.createElement(name);
+    if (className) element.className = className;
+    if (copy != null) element.textContent = copy;
+    return element;
+  }
+
+  function accountWords(value) {
+    var words = text(value).replaceAll("_", " ");
+    return words
+      ? words.charAt(0).toUpperCase() + words.slice(1)
+      : "Not listed";
+  }
+
+  function accountMoney(value) {
+    if (
+      !value
+      || !safeMinor(value.amountMinor)
+      || !safeCurrency(value.currency)
+    ) return "Not listed";
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: value.currency
+    }).format(value.amountMinor / 100)
+      + " " + value.currency;
+  }
+
+  function accountReceiptMoney(receipt) {
+    return accountMoney({
+      amountMinor: receipt && receipt.totalMinor,
+      currency: receipt && receipt.currency
+    });
+  }
+
+  function accountDate(value) {
+    return safeIso(value)
+      ? new Date(value).toLocaleString()
+      : "Not listed";
+  }
+
+  function appendAccountFact(
+    documentRef,
+    list,
+    label,
+    value
+  ) {
+    var row = accountElement(
+      documentRef,
+      "div",
+      "customer-alakazam-fact"
+    );
+    row.append(
+      accountElement(documentRef, "dt", "", label),
+      accountElement(documentRef, "dd", "", value)
+    );
+    list.appendChild(row);
+  }
+
+  function catalogTierName(account, tierId) {
+    var tier = account.catalog.tiers.find(
+      function (candidate) {
+        return candidate.tierId === tierId;
+      }
+    );
+    return tier ? tier.name : text(tierId);
+  }
+
+  function renderAlakazamAccountBody(
+    documentRef,
+    body,
+    presentation
+  ) {
+    var account = presentation.account;
+    body.replaceChildren();
+    body.append(
+      accountElement(
+        documentRef,
+        "h4",
+        "customer-alakazam-state-title",
+        presentation.heading
+      ),
+      accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-summary",
+        presentation.summary
+      )
+    );
+
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-alakazam-facts"
+    );
+    if (account.subscription) {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Current tier",
+        account.subscription.tier.name
+          + " · "
+          + accountMoney(account.subscription.price)
+          + " a month"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Subscription state",
+        accountWords(account.subscription.status)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Payment state",
+        accountWords(account.subscription.paymentState)
+      );
+      if (account.subscription.currentPeriod) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Current period",
+          accountDate(
+            account.subscription.currentPeriod.startsAt
+          ) + " – " + accountDate(
+            account.subscription.currentPeriod.endsAt
+          )
+        );
+      }
+      if (account.subscription.cancelAtPeriodEnd) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Cancellation",
+          "Scheduled for the end of the current period"
+        );
+      }
+      if (account.subscription.firstFailedAt) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Payment first needed attention",
+          accountDate(account.subscription.firstFailedAt)
+        );
+      }
+      if (account.subscription.graceEndsAt) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Grace period ends",
+          accountDate(account.subscription.graceEndsAt)
+        );
+      }
+    } else {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Current tier",
+        "No subscription"
+      );
+    }
+
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Download credit",
+      account.downloadCredit.available
+        ? accountMoney(account.downloadCredit)
+          + " available"
+        : "Not available · "
+          + accountMoney(account.downloadCredit)
+    );
+
+    if (account.nextRenewal) {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Next renewal",
+        catalogTierName(
+          account,
+          account.nextRenewal.tierId
+        ) + " · "
+          + accountMoney(account.nextRenewal)
+          + " · "
+          + accountDate(account.nextRenewal.dueAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Renewal state",
+        accountWords(account.nextRenewal.state)
+      );
+    } else {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Next renewal",
+        "No renewal is currently listed"
+      );
+    }
+
+    if (account.pendingChange) {
+      var target = account.pendingChange.targetTier
+        ? " to " + account.pendingChange.targetTier.name
+        : "";
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Pending change",
+        accountWords(account.pendingChange.changeKind)
+          + target
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Change state",
+        accountWords(account.pendingChange.state)
+      );
+      if (account.pendingChange.effectiveAt) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Change takes effect",
+          accountDate(account.pendingChange.effectiveAt)
+        );
+      }
+    }
+    body.appendChild(facts);
+
+    if (!account.subscription) {
+      var tiers = accountElement(
+        documentRef,
+        "section",
+        "customer-alakazam-tiers"
+      );
+      var tierHeading = accountElement(
+        documentRef,
+        "h4",
+        "",
+        "Available tiers"
+      );
+      var tierList = accountElement(
+        documentRef,
+        "ul",
+        "customer-alakazam-tier-list"
+      );
+      tierList.setAttribute(
+        "aria-label",
+        "Available Alakazam tiers"
+      );
+      account.catalog.tiers.forEach(function (tier) {
+        var item = accountElement(
+          documentRef,
+          "li",
+          "customer-alakazam-tier"
+        );
+        item.append(
+          accountElement(
+            documentRef,
+            "strong",
+            "",
+            tier.name
+          ),
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            accountMoney(tier.price) + " a month"
+          )
+        );
+        tierList.appendChild(item);
+      });
+      tiers.append(tierHeading, tierList);
+      body.appendChild(tiers);
+    }
+
+    var receipts = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-receipts"
+    );
+    var receiptsHeading = accountElement(
+      documentRef,
+      "h4",
+      "",
+      "Receipts"
+    );
+    receipts.appendChild(receiptsHeading);
+    if (account.receipts.length === 0) {
+      receipts.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "",
+          "No settled Alakazam receipts are listed."
+        )
+      );
+    } else {
+      var receiptList = accountElement(
+        documentRef,
+        "ol",
+        "customer-alakazam-receipt-list"
+      );
+      account.receipts.forEach(function (receipt) {
+        var item = accountElement(
+          documentRef,
+          "li",
+          "customer-alakazam-receipt"
+        );
+        item.append(
+          accountElement(
+            documentRef,
+            "strong",
+            "",
+            accountReceiptMoney(receipt)
+          ),
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            accountWords(receipt.kind)
+              + " · " + accountDate(receipt.settledAt)
+              + " · "
+              + (receipt.invoiceAvailable
+                ? "Invoice recorded"
+                : "No invoice recorded")
+          )
+        );
+        receiptList.appendChild(item);
+      });
+      receipts.appendChild(receiptList);
+    }
+    body.appendChild(receipts);
+    body.appendChild(
+      accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-actions-note",
+        "Plan changes and billing management are not available in this panel yet."
+      )
+    );
+  }
+
+  function createAlakazamAccountPanel(
+    documentRef,
+    retry
+  ) {
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-account"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-alakazam-account-title"
+    );
+    panel.setAttribute("data-alakazam-account", "");
+    var eyebrow = accountElement(
+      documentRef,
+      "p",
+      "spark-kicker",
+      "Project billing"
+    );
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Alakazam account"
+    );
+    heading.id = "customer-alakazam-account-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-alakazam-load-state",
+      "Choose a project to see its billing details."
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("data-alakazam-load-state", "");
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-alakazam-body"
+    );
+    body.setAttribute("data-alakazam-body", "");
+    var retryButton = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Try loading billing again"
+    );
+    retryButton.type = "button";
+    retryButton.hidden = true;
+    retryButton.setAttribute("data-alakazam-retry", "");
+    retryButton.addEventListener("click", function () {
+      if (typeof retry === "function") retry();
+    });
+    panel.append(
+      eyebrow,
+      heading,
+      status,
+      body,
+      retryButton
+    );
+
+    return Object.freeze({
+      element: panel,
+      render: function (readState) {
+        var selected = Boolean(
+          readState && readState.projectId
+        );
+        panel.hidden = !selected;
+        if (!selected) {
+          panel.removeAttribute("data-account-state");
+          panel.removeAttribute("aria-busy");
+          body.replaceChildren();
+          retryButton.hidden = true;
+          return;
+        }
+        panel.setAttribute(
+          "data-account-state",
+          readState.phase
+        );
+        panel.setAttribute(
+          "aria-busy",
+          String(readState.phase === "loading")
+        );
+        retryButton.disabled =
+          readState.phase === "loading";
+        retryButton.hidden =
+          readState.phase !== "error";
+        if (readState.phase === "loading") {
+          status.textContent =
+            "Loading this project's Alakazam details…";
+          body.replaceChildren(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-placeholder",
+              "Tier, renewal, credit, and receipt details are loading."
+            )
+          );
+          return;
+        }
+        if (readState.phase === "error") {
+          status.textContent =
+            "Billing details could not be loaded.";
+          body.replaceChildren(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-error",
+              "No account, payment, or plan data was changed. Try loading those details again."
+            )
+          );
+          return;
+        }
+        status.textContent = "Billing details loaded.";
+        renderAlakazamAccountBody(
+          documentRef,
+          body,
+          readState.presentation
+        );
+      }
+    });
+  }
+
   function fragmentToken(locationObject, key) {
     var hash = text(locationObject && locationObject.hash);
     var prefix = "#" + key + "=";
@@ -457,6 +1406,12 @@
     var activeQuote = null;
     var activeEntitlement = null;
     var quoteExpiryTimer = null;
+    var alakazamReadSequence = 0;
+    var alakazamRead = {
+      projectId: "",
+      phase: "idle",
+      presentation: null
+    };
     var checkoutReturn =
       downloadCheckoutReturnFromLocation(
         windowRef.location
@@ -504,6 +1459,40 @@
       );
     }
 
+    var alakazamPanel =
+      createAlakazamAccountPanel(
+        documentRef,
+        function () {
+          var projectId = idOf(
+            lastState && lastState.project
+          );
+          if (lastState.account && projectId) {
+            requestAlakazamAccount(projectId);
+          }
+        }
+      );
+    var alakazamAnchor =
+      one(".customer-separate-help");
+    if (
+      alakazamAnchor
+      && alakazamAnchor.parentNode
+    ) {
+      alakazamAnchor.parentNode.insertBefore(
+        alakazamPanel.element,
+        alakazamAnchor
+      );
+    } else {
+      var controlShell = one(
+        ".site-shell",
+        controlRoom
+      );
+      if (controlShell) {
+        controlShell.appendChild(
+          alakazamPanel.element
+        );
+      }
+    }
+
     function value(name) {
       var field = one('[name="' + name + '"]');
       return field ? field.value : "";
@@ -532,6 +1521,104 @@
           ? " Request " + error.requestId + "."
           : "";
       return message + requestId;
+    }
+
+    function alakazamReadIsCurrent(
+      sequence,
+      projectId
+    ) {
+      return sequence === alakazamReadSequence
+        && Boolean(lastState.account)
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestAlakazamAccount(projectId) {
+      var selectedProjectId = text(projectId);
+      var sequence = ++alakazamReadSequence;
+      alakazamRead = {
+        projectId: selectedProjectId,
+        phase: "loading",
+        presentation: null
+      };
+      alakazamPanel.render(alakazamRead);
+      if (
+        !client
+        || typeof client.getAlakazamAccount !==
+          "function"
+      ) {
+        alakazamRead = {
+          projectId: selectedProjectId,
+          phase: "error",
+          presentation: null
+        };
+        alakazamPanel.render(alakazamRead);
+        return Promise.resolve(null);
+      }
+      return client
+        .getAlakazamAccount(selectedProjectId)
+        .then(function (result) {
+          if (
+            !alakazamReadIsCurrent(
+              sequence,
+              selectedProjectId
+            )
+          ) return null;
+          var presentation =
+            alakazamAccountPresentation(
+              result,
+              selectedProjectId
+            );
+          if (!presentation) {
+            throw new Error(
+              "The Alakazam account response was invalid."
+            );
+          }
+          alakazamRead = {
+            projectId: selectedProjectId,
+            phase: "ready",
+            presentation: presentation
+          };
+          alakazamPanel.render(alakazamRead);
+          return presentation.account;
+        })
+        .catch(function () {
+          if (
+            !alakazamReadIsCurrent(
+              sequence,
+              selectedProjectId
+            )
+          ) return null;
+          alakazamRead = {
+            projectId: selectedProjectId,
+            phase: "error",
+            presentation: null
+          };
+          alakazamPanel.render(alakazamRead);
+          return null;
+        });
+    }
+
+    function renderAlakazamAccount(state) {
+      var projectId = state.account
+        ? idOf(state.project)
+        : "";
+      if (!projectId) {
+        if (alakazamRead.projectId) {
+          alakazamReadSequence += 1;
+          alakazamRead = {
+            projectId: "",
+            phase: "idle",
+            presentation: null
+          };
+        }
+        alakazamPanel.render(alakazamRead);
+        return;
+      }
+      if (alakazamRead.projectId !== projectId) {
+        requestAlakazamAccount(projectId);
+        return;
+      }
+      alakazamPanel.render(alakazamRead);
     }
 
     function reducedMotion() {
@@ -985,6 +2072,7 @@
       renderProjects(state);
       renderQuote(state);
       renderCapabilities(state);
+      renderAlakazamAccount(state);
 
       var entitlement =
         downloadEntitlement(
@@ -1568,6 +2656,10 @@
   return Object.freeze({
     acceptedProjectVersion:
       acceptedProjectVersion,
+    accountReceiptMoney:
+      accountReceiptMoney,
+    alakazamAccountPresentation:
+      alakazamAccountPresentation,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
     downloadCheckoutReturnFromLocation:
@@ -1585,6 +2677,8 @@
       registrationTokenFromLocation,
     safeCheckoutDestination:
       safeCheckoutDestination,
+    verifiedAlakazamAccount:
+      verifiedAlakazamAccount,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote

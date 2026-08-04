@@ -435,6 +435,14 @@
       return request("GET", "/projects/" + segment(projectId, "Project ID"));
     }
 
+    function getAlakazamAccount(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID") + "/alakazam",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
     function createProject(input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
@@ -1020,6 +1028,7 @@
       listOrganizations: listOrganizations,
       listProjects: listProjects,
       getProject: getProject,
+      getAlakazamAccount: getAlakazamAccount,
       createProject: createProject,
       saveDraft: saveDraft,
       createVersion: createVersion,

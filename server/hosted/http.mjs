@@ -2,6 +2,9 @@ import { MAX_BODY_BYTES, WRITE_METHODS } from "./constants.mjs";
 import { HostedError, invariant, publicError } from "./errors.mjs";
 import { digest, randomToken } from "./security.mjs";
 import {
+  createHeldHostedAlakazamAccount
+} from "../commerce-v2/hosted-alakazam-account.mjs";
+import {
   createHeldHostedDownloadCommerce
 } from "../commerce-v2/hosted-download.mjs";
 
@@ -274,6 +277,7 @@ export function createHostedApi(
     requestIds,
     csrfTokens,
     downloadCommerce = null,
+    alakazamAccount = null,
     stripeWebhook = null
   } = {}
 ) {
@@ -295,6 +299,16 @@ export function createHostedApi(
   );
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
+  const alakazamAccountBoundary =
+    alakazamAccount ??
+    createHeldHostedAlakazamAccount();
+  invariant(
+    typeof alakazamAccountBoundary.getSnapshot ===
+      "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Alakazam account boundary is invalid.",
+    { status: 500 }
+  );
   const nextRequestId =
     requestIds?.next?.bind(requestIds) ??
     (() => `req_${randomToken(12)}`);
@@ -553,6 +567,24 @@ export function createHostedApi(
           headers["Set-Cookie"] = csrfCookie(csrfToken);
         } else if (method === "GET" && pathname === "/api/v1/organizations") {
           result = await service.listOrganizations(actor);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Alakazam billing.",
+            { status: 401 }
+          );
+          result =
+            await alakazamAccountBoundary.getSnapshot(
+              actor,
+              route[0]
+            );
         } else if (
           method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/organizations\/([^/]+)\/projects$/u))

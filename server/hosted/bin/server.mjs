@@ -13,10 +13,12 @@ import {
 } from "../../selfhost/src/index.mjs";
 import {
   createAlakazamDowngradeActivationService,
+  createAlakazamAccountService,
   createAlakazamPaymentService,
   createAlakazamStartActivationService,
   createAlakazamStripeEventRouter,
   createAlakazamUpgradeService,
+  createHostedAlakazamAccount,
   createCommerceV2Boundary,
   createCommerceV2Service,
   createDownloadPaymentService,
@@ -252,6 +254,13 @@ async function start() {
     });
   const alakazamRepository =
     createPostgresAlakazamRepository({ authority });
+  const alakazamAccount =
+    createHostedAlakazamAccount({
+      account: createAlakazamAccountService({
+        repository: alakazamRepository
+      }),
+      resolveSession: commerceV2.resolveSession
+    });
   const alakazamServicePorts = {
     repository: alakazamRepository,
     provider: stripeComposition.adapter,
@@ -378,6 +387,7 @@ async function start() {
     createApiNodeHandler(
       createHostedApi(service, {
         downloadCommerce,
+        alakazamAccount,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,

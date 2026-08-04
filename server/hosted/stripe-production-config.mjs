@@ -1,7 +1,12 @@
 import {
+  STRIPE_ALAKAZAM_CAPABILITIES,
   STRIPE_API_VERSION,
   createStripeProviderAdapter
 } from "../commerce/adapters/stripe.mjs";
+import {
+  ALAKAZAM_TIER_DEFINITIONS,
+  ALAKAZAM_TIER_IDS
+} from "../commerce-v2/alakazam.mjs";
 
 const PRODUCTION_MODES = new Set([
   "held",
@@ -37,14 +42,44 @@ const DOMAIN_CAPABILITIES = Object.freeze([
 ]);
 const APPROVED_CAPABILITIES = new Set([
   ...HOSTED_CAPABILITIES,
-  ...DOMAIN_CAPABILITIES
+  ...DOMAIN_CAPABILITIES,
+  ...STRIPE_ALAKAZAM_CAPABILITIES
 ]);
+const ALAKAZAM_EXCLUSIVE_CAPABILITIES = Object.freeze(
+  STRIPE_ALAKAZAM_CAPABILITIES.filter(
+    (capability) =>
+      !HOSTED_CAPABILITIES.includes(capability)
+  )
+);
 const DOMAIN_ENVIRONMENT_FIELDS = Object.freeze([
   "SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE",
   "SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE",
   "SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE"
 ]);
+const ALAKAZAM_CONFIGURATION_ENVIRONMENT_FIELD =
+  "SITESOURCERY_STRIPE_ALAKAZAM_CONFIGURATION_JSON";
+const ALAKAZAM_CONFIGURATION_FIELDS = Object.freeze([
+  "downloadCreditCouponId",
+  "portalConfigurationId",
+  "productId",
+  "tierPriceIds"
+]);
+const ALAKAZAM_PRICE_EXPECTATION_FIELDS = Object.freeze([
+  "currency",
+  "id",
+  "livemode",
+  "productId",
+  "recurring",
+  "unitAmount"
+]);
+const RECURRING_PRICE_FIELDS = Object.freeze([
+  "interval",
+  "intervalCount"
+]);
 const SAFE_LOG_TOKEN = /^[A-Za-z0-9._:-]{1,200}$/u;
+const SAFE_PROVIDER_TOKEN = /^[A-Za-z0-9._:-]{1,255}$/u;
+const STRIPE_PROVIDER_ID =
+  /^(bpc|price|prod)_[A-Za-z0-9_]+$/u;
 const SENSITIVE_LOG_TOKEN =
   /^(?:approval|pk_|price_|rk_|sk_(?:live|test)|whsec_)/iu;
 
@@ -108,6 +143,34 @@ function exactObject(value, fields, code, message) {
       JSON.stringify([...fields].sort())
   ) {
     fail(code, message);
+  }
+  return value;
+}
+
+function providerId(value, prefix, field) {
+  const match =
+    typeof value === "string" &&
+    value.length <= 255
+      ? STRIPE_PROVIDER_ID.exec(value)
+      : null;
+  if (match?.[1] !== prefix) {
+    fail(
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      `${field} must contain an exact Stripe ${prefix} ID.`
+    );
+  }
+  return value;
+}
+
+function providerToken(value, field) {
+  if (
+    typeof value !== "string" ||
+    !SAFE_PROVIDER_TOKEN.test(value)
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      `${field} must contain an exact Stripe provider token.`
+    );
   }
   return value;
 }
@@ -209,11 +272,32 @@ function exactApproval(environment, deployment, livemode) {
       "Stripe domain approval must include the complete manual-authorization capability set."
     );
   }
+  const approvedAlakazamCapabilities =
+    STRIPE_ALAKAZAM_CAPABILITIES.filter(
+      (capability) => capabilities.has(capability)
+    );
+  const approvedExclusiveAlakazamCapabilities =
+    ALAKAZAM_EXCLUSIVE_CAPABILITIES.filter(
+      (capability) => capabilities.has(capability)
+    );
+  if (
+    approvedExclusiveAlakazamCapabilities.length !== 0 &&
+    approvedAlakazamCapabilities.length !==
+      STRIPE_ALAKAZAM_CAPABILITIES.length
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE",
+      "Stripe Alakazam approval must include the complete provider capability set."
+    );
+  }
   return {
     approval,
     domainApproved:
       approvedDomainCapabilities.length ===
-      DOMAIN_CAPABILITIES.length
+        DOMAIN_CAPABILITIES.length,
+    alakazamApproved:
+      approvedAlakazamCapabilities.length ===
+      STRIPE_ALAKAZAM_CAPABILITIES.length
   };
 }
 
@@ -248,6 +332,141 @@ function domainAuthorization(
       500
     )
   };
+}
+
+function alakazamConfiguration(
+  environment,
+  alakazamApproved,
+  priceExpectations,
+  livemode
+) {
+  const supplied = optionalText(
+    environment,
+    ALAKAZAM_CONFIGURATION_ENVIRONMENT_FIELD,
+    100_000
+  );
+  if (supplied === null) {
+    if (alakazamApproved) {
+      fail(
+        "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED",
+        `${ALAKAZAM_CONFIGURATION_ENVIRONMENT_FIELD} is required for approved Alakazam composition.`
+      );
+    }
+    return null;
+  }
+  if (!alakazamApproved) {
+    fail(
+      "STRIPE_PRODUCTION_ALAKAZAM_APPROVAL_REQUIRED",
+      "Stripe Alakazam configuration requires the complete approved provider capability set."
+    );
+  }
+  const configured = exactObject(
+    json(
+      environment,
+      ALAKAZAM_CONFIGURATION_ENVIRONMENT_FIELD
+    ),
+    ALAKAZAM_CONFIGURATION_FIELDS,
+    "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+    `${ALAKAZAM_CONFIGURATION_ENVIRONMENT_FIELD} must contain the exact Alakazam provider fields.`
+  );
+  const productId = providerId(
+    configured.productId,
+    "prod",
+    "Alakazam Product"
+  );
+  const portalConfigurationId = providerId(
+    configured.portalConfigurationId,
+    "bpc",
+    "Alakazam Billing Portal configuration"
+  );
+  const downloadCreditCouponId = providerToken(
+    configured.downloadCreditCouponId,
+    "Alakazam Download credit Coupon"
+  );
+  const configuredTierPriceIds = exactObject(
+    configured.tierPriceIds,
+    ALAKAZAM_TIER_IDS,
+    "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+    "Stripe Alakazam configuration must bind exactly the $25, $35, and $50 tier Prices."
+  );
+  const tierPriceIds = {};
+  for (const tierId of ALAKAZAM_TIER_IDS) {
+    tierPriceIds[tierId] = providerId(
+      configuredTierPriceIds[tierId],
+      "price",
+      `Alakazam ${tierId} Price`
+    );
+  }
+  const selectedPriceIds = new Set(
+    Object.values(tierPriceIds)
+  );
+  if (selectedPriceIds.size !== ALAKAZAM_TIER_IDS.length) {
+    fail(
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      "Stripe Alakazam tiers require three distinct Price IDs."
+    );
+  }
+  for (const tierId of ALAKAZAM_TIER_IDS) {
+    const priceId = tierPriceIds[tierId];
+    const matches = priceExpectations.filter(
+      (expectation) => expectation?.id === priceId
+    );
+    if (matches.length !== 1) {
+      fail(
+        "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+        `Stripe Alakazam ${tierId} must bind one exact Price expectation.`
+      );
+    }
+    const expectation = exactObject(
+      matches[0],
+      ALAKAZAM_PRICE_EXPECTATION_FIELDS,
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      `Stripe Alakazam ${tierId} Price expectation must contain the exact reviewed fields.`
+    );
+    const recurring = exactObject(
+      expectation.recurring,
+      RECURRING_PRICE_FIELDS,
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      `Stripe Alakazam ${tierId} must be an exact monthly Price.`
+    );
+    const tier = ALAKAZAM_TIER_DEFINITIONS[tierId];
+    if (
+      expectation.productId !== productId ||
+      expectation.currency !== "usd" ||
+      expectation.unitAmount !== tier.price.amountMinor ||
+      expectation.livemode !== livemode ||
+      recurring.interval !== "month" ||
+      recurring.intervalCount !== 1
+    ) {
+      fail(
+        "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+        `Stripe Alakazam ${tierId} Price does not match the owner-approved monthly contract.`
+      );
+    }
+  }
+  const productPriceIds = priceExpectations
+    .filter(
+      (expectation) =>
+        expectation?.productId === productId
+    )
+    .map((expectation) => expectation.id);
+  if (
+    productPriceIds.length !== ALAKAZAM_TIER_IDS.length ||
+    productPriceIds.some(
+      (priceId) => !selectedPriceIds.has(priceId)
+    )
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_ALAKAZAM_CONFIGURATION_INVALID",
+      "Stripe Alakazam configuration must contain exactly its three reviewed Product Prices."
+    );
+  }
+  return Object.freeze({
+    productId,
+    portalConfigurationId,
+    downloadCreditCouponId,
+    tierPriceIds: Object.freeze(tierPriceIds)
+  });
 }
 
 function keyForMode(environment, livemode) {
@@ -351,7 +570,11 @@ export function createConfiguredStripeProvider({
       "Stripe livemode does not match the deployment environment."
     );
   }
-  const { approval, domainApproved } =
+  const {
+    approval,
+    domainApproved,
+    alakazamApproved
+  } =
     exactApproval(
       environment,
       deployment,
@@ -374,6 +597,12 @@ export function createConfiguredStripeProvider({
   const checkoutTtlSeconds = positiveInteger(
     environment,
     "SITESOURCERY_STRIPE_CHECKOUT_TTL_SECONDS"
+  );
+  const alakazam = alakazamConfiguration(
+    environment,
+    alakazamApproved,
+    priceExpectations,
+    livemode
   );
   const config = {
     apiVersion,
@@ -402,6 +631,7 @@ export function createConfiguredStripeProvider({
       environment,
       domainApproved
     ),
+    ...(alakazam === null ? {} : { alakazam }),
     ...(checkoutTtlSeconds === undefined
       ? {}
       : { checkoutTtlSeconds })
@@ -508,5 +738,7 @@ export const STRIPE_PRODUCTION_CONTRACT =
     apiVersion: STRIPE_API_VERSION,
     modes: Object.freeze([...PRODUCTION_MODES]),
     hostedCapabilities: HOSTED_CAPABILITIES,
-    domainCapabilities: DOMAIN_CAPABILITIES
+    domainCapabilities: DOMAIN_CAPABILITIES,
+    alakazamCapabilities:
+      STRIPE_ALAKAZAM_CAPABILITIES
   });

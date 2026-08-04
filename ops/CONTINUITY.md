@@ -517,6 +517,70 @@ these are OWNER RULINGS and open work, not suggestions.
   feature or publication fulfillment opened. Nothing was pushed or deployed;
   public production remains the July 22 predecessor.
 
+## MULTI-AGENT BATCH 1 ACCOUNT AND PROVIDER CHECKPOINT (2026-08-04)
+
+- `ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md` is now the canonical
+  completion and dependency map. Batch 1 used disjoint lead, customer-UI,
+  Stripe-configuration, and read-only public-truth lanes. The lead retained
+  shared contracts, PostgreSQL/HTTP integration, review, tests, documentation,
+  and the checkpoint commit. Live execution state is now checkpointed in
+  `ops/SITESOURCERY-ACTIVE-RUN.md`; chat context is not authoritative for a
+  running test, worker, disposable resource, or next action.
+- A signed-in customer can now read one canonical project-scoped Alakazam
+  snapshot through `GET /api/v1/projects/{projectId}/alakazam`. PostgreSQL
+  supplies the eligible first-payment Download credit, current local tier and
+  payment state, paid period, pending change, next renewal, and up to 50 local
+  receipts. The service emits no Stripe IDs or raw provider facts. HTTP,
+  application, membership, tenant, customer, and project boundaries all fail
+  closed. A project member who is not the current billing owner receives the
+  same generic denial instead of a false empty account; every billing write
+  action remains false.
+- The hosted Abracadabra customer room now fetches and renders that frozen v1
+  snapshot, including useful available, pending, active, attention, ended,
+  loading, error, and safe GET-retry states. It drops late responses after a
+  project switch, rejects schema/money/status/date/provider drift, and adds no
+  start, tier-change, Portal, cancellation, payment, or browser-storage
+  authority. Receipt money is rendered from the exact local receipt total.
+- The production Stripe loader now accepts an Alakazam configuration only with
+  one complete approved capability set and exact bindings for one Product,
+  the three $25/$35/$50 monthly Prices, the one-invoice $5 Download Coupon,
+  and the restricted Billing Portal configuration. Partial, extra, duplicate,
+  cross-mode, or mismatched approved configuration fails before adapter
+  construction. Held mode ignores every supplied value and forwards none. No
+  real provider IDs, keys, network effects, or release change were added.
+- The accepted public-truth audit is preserved in
+  `ops/SITESOURCERY-PUBLIC-TRUTH-AUDIT-2026-08-04.md`. Launch-critical work now
+  explicitly includes removing legacy direct Payment Links and domain refund
+  claims, publishing the complete tier ladder, correcting feature placement
+  and platform-address language, approving lifecycle/legal truth, building the
+  minimum Custom invoice/job workbench, and holding domains and Responder until
+  their fulfillment is real.
+- Focused proof passes 11/11 account/HTTP, 76/76 relevant customer UI, 69/69
+  Stripe adapter/configuration, and 4/4 hosted-artifact tests. Broad proof
+  passes 417/417 core, 135/135 runnable hosted tests with two intentional
+  environment-only skips, 52/52 operations, 23/23 migration structure, and
+  19/19 self-host tests. Source/site, held hosted artifact, and rebuilt public
+  artifact checks pass.
+- An isolated Chrome runtime pass at 1440×1000 and 320×720 proves every account
+  state, hidden signed-out/no-project behavior, safe retry, stale-project
+  response rejection, named accessibility-tree semantics, GET-only traffic,
+  no ready-state mutation control, no horizontal overflow, and the corrected
+  `$10.00 USD` receipt at both widths. Contract-valid fixtures also prove the
+  $5 credit only when no subscription exists; pending, active, attention, and
+  ended states cannot claim it. This is real runtime evidence, not a source-
+  regex accessibility claim; full assistive-technology and keyboard/contrast
+  audits remain part of the later release gate.
+- All 31 migrations replayed on a fresh named disposable HQ database. The real
+  5/5 Alakazam journey now proves the account snapshot at the scheduled higher
+  tier, the lower renewal, the post-boundary lower tier, receipt history, no
+  provider identity, and real cross-tenant/cross-project denial. The database
+  had zero sessions, was dropped, and was verified absent.
+- Batch 1 remains local, held, unpushed, and undeployed. It makes billing truth
+  visible but not yet customer-actionable. Next is Batch 2: exact customer
+  start/upgrade/downgrade/Portal/cancellation commands in parallel with tier
+  fulfillment and broader lifecycle reconciliation. Public production remains
+  the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

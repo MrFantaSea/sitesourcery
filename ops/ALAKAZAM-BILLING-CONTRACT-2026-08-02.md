@@ -99,11 +99,12 @@ does not revoke the Download entitlement.
 ## Current implementation checkpoint
 
 The internal start/upgrade Checkout dispatch and payment-settlement boundaries
-are complete and remain uncomposed. Additive migration 025 gives every
-dispatch a two-minute lease and reconstructs its exact purpose from the durable
-quote, current subscription, and canonical Stripe Customer binding. A ready
-destination replays without another provider effect; interrupted or ambiguous
-creation is never automatically retried.
+are complete and composed only behind the held webhook runtime; customer
+start/change command routes remain uncomposed. Additive migration 025 gives
+every dispatch a two-minute lease and reconstructs its exact purpose from the
+durable quote, current subscription, and canonical Stripe Customer binding. A
+ready destination replays without another provider effect; interrupted or
+ambiguous creation is never automatically retried.
 
 Additive migration 026 permits only one logical Checkout-completion event,
 one quote receipt, and one PaymentIntent receipt. The held payment service
@@ -178,9 +179,22 @@ upgrade activation, or downgrade activation without disturbing Download or
 canonical commerce events. The composed branch defaults held. An explicit
 Alakazam approval requires one reviewed tax mode and matching provider
 readiness at startup; impossible Alakazam event/change-kind combinations fail
-closed. The production Stripe loader still has no Alakazam Product, Price,
-Coupon, or Portal environment binding, so this composition cannot open a real
-provider path yet.
+closed. The production Stripe loader now accepts only one complete approved
+Alakazam capability set and exact environment-only Product, three-Price,
+Coupon, and restricted Portal bindings. No real provider objects or IDs have
+been reviewed into the runtime, and the separate release remains held, so this
+composition cannot open a real provider path yet.
+
+The customer runtime now composes one authenticated project-scoped read route
+from canonical PostgreSQL authority. Its v1 snapshot contains the held catalog,
+eligible first-payment Download credit, current local tier/payment/period,
+pending change, next renewal, and bounded local receipts, but no provider IDs.
+A Download credit is exposed as available only when no subscription record is
+projected; the browser rejects a subscription-plus-available-credit response.
+A project member cannot see another member's billing facts or receive a false
+empty state for a project with a different current billing owner. The hosted
+panel is read-only; every billing action remains disabled until its exact
+command boundary exists.
 
 This checkpoint does not yet expose customer quote/change controls, reconcile
 the broader renewal and status event set, grant rendered tier features,

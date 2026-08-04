@@ -39,25 +39,29 @@ boundary itself has no Stripe identifier, secret, network path, or dispatch
 authority. A checkout preparation is only a durable, idempotent statement of
 the exact server purpose that a separately reviewed dispatcher needs.
 
-The shared reviewed Stripe adapter now has an optional Alakazam provider
-contract, still uncomposed in the hosted customer runtime. It fails closed
+The shared reviewed Stripe adapter and held-by-default production loader now
+have an optional Alakazam provider contract. It fails closed
 unless one Product, the exact $25/$35/$50 monthly Prices, an unrestricted-count
 but one-invoice $5 Coupon, and a restricted Billing Portal configuration all
-read back exactly. Its contract-test surface proves first-subscription
-Checkout, fixed-difference upgrade Checkout, provider payment readback,
+bind and read back exactly. Production configuration requires one complete
+approved capability set and one exact environment-only JSON value; partial,
+extra, duplicate, or cross-mode approved configuration is rejected. Held mode
+ignores every supplied value and forwards none to the adapter. No real provider
+IDs are stored in this repository. Its contract-test surface proves
+first-subscription Checkout, fixed-difference upgrade Checkout, provider payment readback,
 one-item/no-proration Price replacement with an unchanged billing boundary,
 and renewal-boundary downgrade scheduling. Provider uncertainty never creates
-a second payment or Schedule. Production composition deliberately does not yet
-accept these Alakazam capabilities or provider identifiers, so this checkpoint
-does not open Checkout or grant an entitlement.
+a second payment or Schedule. The separate Alakazam release remains held, so
+this configuration boundary alone cannot open Checkout or grant entitlement.
 
 The internal Alakazam quote, direct Customer-provisioning, start/upgrade
 Checkout, payment-settlement, start activation, paid-upgrade provider
 application and activation, and downgrade Schedule and activation transactions
-are now implemented but uncomposed. The held-by-default services open them only
-when release and provider tax/readiness facts match. The PostgreSQL repository locks
-the active project, binds the current subscription revision or one unused
-project Download credit, writes one immutable 30-minute quote per UUID
+are implemented and composed behind held webhook routing. The held-by-default
+services open them only when release and provider tax/readiness facts match.
+The PostgreSQL repository locks the active project, binds the current
+subscription revision or one unused project Download credit, writes one
+immutable 30-minute quote per UUID
 idempotency key, and replays that exact snapshot. A direct start reserves and
 confirms one metadata-only organization Stripe Customer. Checkout then
 reserves one exact quote-bound effect under a two-minute lease before the
@@ -123,9 +127,20 @@ existing routes, and impossible Alakazam event/change-kind pairings fail
 closed. The production executable composes the real repository, provider,
 clock, and identity ports behind a separate Alakazam release mode that defaults
 held and requires matching tax/provider readiness before approved startup. The
-production Stripe loader still accepts no Alakazam Product/Price/Coupon/Portal
-bindings, so customer HTTP controls, approved provider composition, broader
-renewal/status reconciliation, and fulfillment remain held.
+production Stripe loader accepts only the exact reviewed
+Product/Price/Coupon/Portal binding contract. Real provider objects and IDs,
+customer billing commands, broader renewal/status reconciliation, and tier
+fulfillment remain held.
+
+The customer runtime now composes one authenticated, project-scoped read model
+from canonical PostgreSQL authority. `sitesourcery.alakazam-account/v1`
+contains only the held browser catalog, eligible first-payment Download credit,
+current local tier/payment/period state, pending change, next renewal, and up
+to 50 local receipts. It exposes no Stripe IDs or raw provider facts. The
+credit can be available only while no subscription is projected. The hosted
+Abracadabra panel renders that snapshot, rejects contradictory credit state,
+and drops stale project reads; every start, tier-change, Portal, and
+cancellation action remains false until its Lane E command exists.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,
@@ -144,11 +159,15 @@ from a missing entitlement.
 
 The hosted test boundary exposes only:
 
+- `GET /api/v1/projects/{projectId}/alakazam`
 - `POST /api/v1/projects/{projectId}/download-quotes`
 - `POST /api/v1/projects/{projectId}/download-quotes/{quoteId}/checkout-command`
 
-The first route fixes the offer to `spark_download`; it does not accept an offer
-ID. The second returns only the held checkout-command preparation. There is no
-v2 customer catalog, publish-offer, provider-dispatch, or settlement route.
-Without an explicitly injected project-scoped v2 boundary, both routes return
-the production-safe `DOWNLOAD_COMMERCE_HELD` response.
+The Alakazam route is read-only and defaults to
+`ALAKAZAM_ACCOUNT_HELD` without an explicitly injected account boundary. The
+first Download write route fixes the offer to `spark_download`; it does not
+accept an offer ID. The second returns only the held checkout-command
+preparation. There is no v2 customer catalog, Alakazam command,
+publish-offer, provider-dispatch, or settlement route. Without an explicitly
+injected project-scoped Download boundary, both Download routes return the
+production-safe `DOWNLOAD_COMMERCE_HELD` response.

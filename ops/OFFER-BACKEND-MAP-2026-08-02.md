@@ -38,11 +38,11 @@ decisions; implementation must keep those controls held instead of guessing.
 | --- | --- | --- | --- | --- |
 | Free Abracadabra make/preview | Four-step maker and three looks exist | Browser session prototype plus real hosted account/project/version contracts | Partial | One clean unauthenticated preview journey; account handoff preserves the accepted work |
 | $5 Download | Hosted account, exact quote, Stripe destination, automatic return confirmation, and entitlement-gated HTML Download are implemented | V2 Checkout dispatch, provider readback, receipt, Stripe Customer binding, project entitlement, artifact verification, and monotonic reversal handling pass fresh PostgreSQL proof | Implementation checkpoint complete; release held | Owner tax choice; real Stripe test payment on private staging; owner walk; reviewed activation/cutover |
-| Alakazam $25 | Public copy and an old Stripe Payment Link exist | Held catalog, $5-entry-credit rule, direct Stripe Customer reservation, project-locked quote, no-retry Checkout dispatch, exact payment readback/receipt, and exact Subscription-confirmed local activation now exist; no real three-Price/Coupon configuration or composed customer journey exists | Internal start activation complete; customer fulfillment missing | Real Stripe test Product/Price/Coupon readback; customer composition; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
-| Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, changes only the existing Stripe item, and now commits its verified-event local tier revision atomically | Internal upgrade activation complete; fulfillment missing | Real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
-| Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | Direct start, fixed-difference upgrade, durable zero-dollar renewal-boundary Schedule dispatch, and exact verified-event lower-tier activation are implemented | Internal downgrade activation complete; fulfillment missing | Real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
+| Alakazam $25 | A held account panel now displays the server tier ladder and exact project billing snapshot; legacy public copy/link still require correction | Held catalog, $5-entry-credit rule, direct Stripe Customer reservation, project-locked quote, no-retry Checkout dispatch, exact payment readback/receipt, Subscription-confirmed activation, exact production configuration contract, and customer-safe PostgreSQL read model exist | Read/account spine complete and held; commands and fulfillment missing | Real Stripe test Product/Price/Coupon readback; start command/UI; automatic `sitesourcery.me` publication; active/cancelled/past-due proof |
+| Alakazam $35 | The held account panel displays current/pending tier and renewal; some candidate controls remain in the prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, changes only the existing Stripe item, commits its verified-event local revision atomically, and projects the result without provider IDs | Internal upgrade/read complete; command UI and fulfillment missing | Real provider Price; upgrade command/UI; feature gates; three-version retention; modest-care accounting |
+| Alakazam $50 | The held account panel includes the tier in the server ladder; Cash App/Venmo placement in old copy still needs correction | Direct start, fixed-difference upgrade, durable zero-dollar renewal-boundary Schedule dispatch, exact verified-event lower-tier activation, and safe account projection are implemented | Internal lifecycle/read complete; command UI and fulfillment missing | Real provider Price; command/UI rail; richer controls in generated output; higher-care accounting |
 | Customer account | Hosted registration, activation, sign-in, recovery, organization, project, draft, and accepted versions exist | PostgreSQL authority and secure cookies are proven on isolated HTTPS staging; Resend delivery is proven | Real on staging, not public | Public same-origin deployment and post-cutover registration/recovery/project proof |
-| Customer billing controls | A narrow account/project/$5 control fragment exists | Billing portal and cancellation primitives exist; exact Alakazam payment/start/upgrade/downgrade webhooks are composed behind a held release | Partial | Controls expose the customer's actual tier, payment state, invoices/receipts, immediate difference-only upgrades, renewal-boundary downgrades, change/cancel actions, and consequences |
+| Customer billing controls | The hosted project panel now displays actual tier, local payment state, paid period, renewal, pending change, Download credit, and receipts; only safe GET retry is interactive | Canonical PostgreSQL projection and authenticated same-origin read route are composed; provider IDs are excluded; every billing write remains false; billing Portal and lifecycle primitives stay held | Read-only Batch 1 complete; commands missing | Add exact start/upgrade/downgrade/Portal/cancel previews and commands, invoice retrieval, consequences, and full provider journeys |
 | Owner client support | No real owner workbench | Ticket creation and data primitives exist; `ops/OPERATOR-BACKEND-SPEC.md` is explicitly a simulation draft | Missing | Responsive Mac/Pixel owner login; client search; account/project/version/payment/tier/ticket view; audited bounded repair actions |
 | Custom Sorcery builds | Public $400–$4,000 ladder and written-quote path exist | `invoice` means Zack manually uses Stripe Dashboard; no invoice composer, estimate acceptance, job, milestone, balance, or client ledger exists | Missing business backend | Owner creates scope/estimate/invoice from Mac or Pixel; customer pays securely; webhook/readback settles deposit and balance; job and audit state remain visible |
 | $200 assessment | Public direct Stripe Payment Link exists; report is manually produced | No assessment job queue, customer status, delivery record, or automated $200 build-credit ledger | Sellable manually, not managed | Intake attaches to customer/job; owner queue and delivery; payment/credit/status ledger |
@@ -76,7 +76,9 @@ Real and staging-proven today:
   $25 start, exact $10 $25-to-$35 upgrade, rejection of an unproved mutation,
   paid-period retention, rejection of an early downgrade, and $0/no-proration
   renewal-boundary downgrade pass one focused transaction proof. This is
-  local/HQ test proof, not a live provider journey.
+  local/HQ test proof, not a live provider journey. The same fresh database
+  proof now reads the customer-safe snapshot before and after downgrade and
+  rejects cross-tenant and cross-project reads.
 
 Present as substantial code but not a finished product journey:
 
@@ -86,12 +88,18 @@ Present as substantial code but not a finished product journey:
 - Exact Alakazam tier/capability/quote calculations and service-only database
   records for subscriptions, Checkout dispatch, provider events, receipts,
   Download credit, downgrade schedules, and revision-bound tier events.
-- An optional contract-test Alakazam surface in the existing reviewed Stripe
-  adapter. It verifies one active Product, three Product-bound monthly Prices,
+- An optional Alakazam surface in the existing reviewed Stripe adapter plus an
+  exact held-by-default production environment loader. It verifies one active
+  Product, three Product-bound monthly Prices,
   the exact duration-once $5 Coupon, and a Portal configuration that cannot
   change or cancel subscriptions. It creates start/difference Checkouts,
   reconciles provider money, swaps one existing subscription item with no
   proration, and schedules downgrades at renewal without duplicating effects.
+- An authenticated, project-scoped account read service, PostgreSQL projection,
+  same-origin HTTP route, and progressively enhanced customer panel. It shows
+  only canonical local billing facts and safe receipts, rejects provider-shaped
+  or cross-project data, drops stale project responses, and exposes no billing
+  mutation controls.
 - A held-by-default Alakazam billing service plus PostgreSQL quote repository.
   One transaction locks the active project and binds either the current paid
   subscription revision or one unused project Download credit; UUID retries
@@ -146,14 +154,13 @@ Present as substantial code but not a finished product journey:
 
 Absent today:
 
-- Pinned live/test Stripe $25/$35/$50 Price authority and the restricted
-  one-invoice $5 Coupon.
-- Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
-  restricted Portal configuration, and their reviewed environment bindings.
-- Renewal and status-event reconciliation, customer quote/change HTTP
-  boundaries, and reviewed production Stripe Alakazam Product/Price/Coupon/
-  Portal environment bindings.
-- Alakazam customer subscription controls and public provisioning UI/API.
+- Real reviewed Stripe test/live Product, $25/$35/$50 Prices, duration-once
+  $5 Coupon, restricted Portal configuration, and secret environment values.
+  The loader contract exists; no real IDs are in the repository.
+- Renewal and status-event reconciliation beyond the proven start/upgrade/
+  downgrade spine, plus customer quote/change HTTP commands.
+- Interactive Alakazam start, change-tier, Portal, cancellation, and
+  publication controls. The account surface is deliberately read-only.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
 
@@ -174,9 +181,10 @@ Absent today:
    verified-event local upgrade activation, and migration 030's no-retry
    renewal-boundary downgrade Schedule dispatch, and migration 031's atomic
    boundary-event local downgrade activation, plus the held single-verification
-   hosted webhook composition, are complete. Customer controls, approved
-   provider bindings, broader renewal/status reconciliation, and fulfillment
-   remain.**
+   hosted webhook composition, exact production provider-configuration
+   boundary, and customer-safe PostgreSQL/API/account panel are complete.
+   Customer billing commands, real provider objects/IDs, broader renewal/status
+   reconciliation, and fulfillment remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.
 5. Reconcile domains, assessment, separate Custom care, and Responder.

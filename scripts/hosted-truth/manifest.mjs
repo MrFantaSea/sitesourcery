@@ -128,11 +128,11 @@ export const hostedTruthSlots = Object.freeze([
 
 export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-api.js":
-    "3fa60502b4ea058c7fcd7d8c4f1e0392edca3dca00864af603b193fefc9da91e",
+    "53f609c317a1e35fc374c067988b29d2cb91dd6985e99583d0e33758577b101b",
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "402bbc8f89daa6c3a480d9db94a688f6cadd343ed79ffc7822b63fa40e4fc9fb",
+    "fa353de2f9fbe66dd97cc90f1bfb9b06d4ad53b96d6a55cc872cd65847d0383a",
   "abracadabra/app/abracadabra-hosted-control.js":
     "cd98aa081170bb59c348dfc91a3f34919df258cd912d16c50b147661abc88eb3",
 });

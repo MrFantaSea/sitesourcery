@@ -23,6 +23,9 @@ import {
   createAlakazamDowngradeActivationService
 } from "../../commerce-v2/alakazam-downgrade-activation.mjs";
 import {
+  createAlakazamAccountService
+} from "../../commerce-v2/alakazam-account.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -2031,6 +2034,114 @@ test(
       });
       await flushConstraints(client);
 
+      const account = createAlakazamAccountService({
+        repository: settlementRepository
+      });
+      const accountScope = {
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        actorId: authority.userId,
+        projectId: authority.projectId
+      };
+      const scheduledAccount = await account.read(
+        accountScope
+      );
+      assert.deepEqual(
+        {
+          state: scheduledAccount.state,
+          tierId:
+            scheduledAccount.subscription.tier.tierId,
+          amountMinor:
+            scheduledAccount.subscription.price
+              .amountMinor,
+          pendingKind:
+            scheduledAccount.pendingChange.changeKind,
+          pendingTierId:
+            scheduledAccount.pendingChange.targetTier
+              .tierId,
+          pendingState:
+            scheduledAccount.pendingChange.state,
+          renewalTierId:
+            scheduledAccount.nextRenewal.tierId,
+          renewalAmountMinor:
+            scheduledAccount.nextRenewal.amountMinor,
+          renewalDueAt:
+            scheduledAccount.nextRenewal.dueAt,
+          receiptTotals: scheduledAccount.receipts.map(
+            (receipt) => receipt.totalMinor
+          )
+        },
+        {
+          state: "active",
+          tierId: "alakazam_35",
+          amountMinor: 3500,
+          pendingKind: "downgrade",
+          pendingTierId: "alakazam_25",
+          pendingState: "scheduled",
+          renewalTierId: "alakazam_25",
+          renewalAmountMinor: 2500,
+          renewalDueAt:
+            "2026-09-02T12:03:00.000Z",
+          receiptTotals: [1000, 2500]
+        }
+      );
+      assert.doesNotMatch(
+        JSON.stringify(scheduledAccount),
+        /(?:cs_|cus_|in_|pi_|price_|si_|sub_)/u
+      );
+      const otherMemberId = randomUUID();
+      await client.query(
+        "insert into auth.users (id, email) values ($1, $2)",
+        [
+          otherMemberId,
+          `alakazam-member-${otherMemberId}@example.test`
+        ]
+      );
+      await insertRow(client, "organization_memberships", {
+        organization_id: authority.organizationId,
+        user_id: otherMemberId,
+        role: "editor",
+        state: "active",
+        accepted_at: "2026-08-02T12:22:00.000Z"
+      });
+      const otherMemberAccount = createAlakazamAccountService({
+        repository: createPostgresAlakazamRepository({
+          authority: {
+            async service(_context, work) {
+              return work(client);
+            }
+          }
+        })
+      });
+      await assert.rejects(
+        otherMemberAccount.read({
+          tenantId: authority.organizationId,
+          customerId: otherMemberId,
+          actorId: otherMemberId,
+          projectId: authority.projectId
+        }),
+        (error) =>
+          error.code === "project_unavailable" &&
+          error.status === 404
+      );
+      for (const unavailableScope of [
+        {
+          ...accountScope,
+          tenantId: randomUUID()
+        },
+        {
+          ...accountScope,
+          projectId: randomUUID()
+        }
+      ]) {
+        await assert.rejects(
+          account.read(unavailableScope),
+          (error) =>
+            error.code === "project_unavailable" &&
+            error.status === 404
+        );
+      }
+
       await expectRejected(
         client,
         () => client.query(
@@ -2207,6 +2318,46 @@ test(
         ids: 2
       });
       await flushConstraints(client);
+
+      const renewedAccount = await account.read(accountScope);
+      assert.deepEqual(
+        {
+          state: renewedAccount.state,
+          tierId:
+            renewedAccount.subscription.tier.tierId,
+          amountMinor:
+            renewedAccount.subscription.price.amountMinor,
+          pendingChange: renewedAccount.pendingChange,
+          renewalTierId:
+            renewedAccount.nextRenewal.tierId,
+          renewalAmountMinor:
+            renewedAccount.nextRenewal.amountMinor,
+          renewalDueAt:
+            renewedAccount.nextRenewal.dueAt,
+          receiptCount: renewedAccount.receipts.length,
+          commandsEnabled: Object.entries(
+            renewedAccount.actions
+          )
+            .filter(([key]) => key !== "reason")
+            .some(([, enabled]) => enabled === true)
+        },
+        {
+          state: "active",
+          tierId: "alakazam_25",
+          amountMinor: 2500,
+          pendingChange: null,
+          renewalTierId: "alakazam_25",
+          renewalAmountMinor: 2500,
+          renewalDueAt:
+            "2026-10-02T12:03:00.000Z",
+          receiptCount: 2,
+          commandsEnabled: false
+        }
+      );
+      assert.doesNotMatch(
+        JSON.stringify(renewedAccount),
+        /(?:cs_|cus_|in_|pi_|price_|si_|sub_)/u
+      );
 
       assert.deepEqual(
         await upgradeService.ingestStripeEvent(

@@ -4703,12 +4703,397 @@ function currentSubscription(row, pendingChange) {
   });
 }
 
+function exactAccountReadInput(value) {
+  exactKeys(
+    value,
+    ["actorId", "customerId", "projectId", "tenantId"],
+    "the Alakazam customer account input is invalid"
+  );
+  const actorId = exactUuid(value.actorId, "actorId");
+  const customerId = exactUuid(
+    value.customerId,
+    "customerId"
+  );
+  invariant(
+    actorId === customerId,
+    "project_unavailable",
+    "the customer billing project is unavailable",
+    { status: 404 }
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId,
+    actorId,
+    projectId: exactUuid(value.projectId, "projectId")
+  });
+}
+
+function accountSubscription(row) {
+  if (!row) return null;
+  return Object.freeze({
+    tierId: requiredText(row.tier_id, "account.tierId", 100),
+    status: requiredText(row.status, "account.status", 50),
+    amountMinor: exactDatabaseInteger(
+      row.amount_minor,
+      "account.amountMinor"
+    ),
+    currency: requiredText(
+      row.currency,
+      "account.currency",
+      3
+    ),
+    currentPeriodStartsAt:
+      row.current_period_starts_at === null ||
+      row.current_period_starts_at === undefined
+        ? null
+        : exactDatabaseIso(
+            row.current_period_starts_at,
+            "account.currentPeriodStartsAt"
+          ),
+    currentPeriodEndsAt:
+      row.current_period_ends_at === null ||
+      row.current_period_ends_at === undefined
+        ? null
+        : exactDatabaseIso(
+            row.current_period_ends_at,
+            "account.currentPeriodEndsAt"
+          ),
+    cancelAtPeriodEnd:
+      row.cancel_at_period_end === true,
+    firstFailedAt:
+      row.first_failed_at === null ||
+      row.first_failed_at === undefined
+        ? null
+        : exactDatabaseIso(
+            row.first_failed_at,
+            "account.firstFailedAt"
+          ),
+    graceEndsAt:
+      row.grace_ends_at === null ||
+      row.grace_ends_at === undefined
+        ? null
+        : exactDatabaseIso(
+            row.grace_ends_at,
+            "account.graceEndsAt"
+          ),
+    revision: exactDatabaseInteger(
+      row.revision,
+      "account.revision"
+    )
+  });
+}
+
+function accountReceipt(row) {
+  return Object.freeze({
+    receiptId: exactUuid(row.id, "receipt.receiptId"),
+    kind: requiredText(
+      row.receipt_kind,
+      "receipt.kind",
+      50
+    ),
+    subtotalMinor: exactDatabaseInteger(
+      row.list_subtotal_minor,
+      "receipt.subtotalMinor"
+    ),
+    discountMinor: exactDatabaseInteger(
+      row.provider_discount_minor,
+      "receipt.discountMinor"
+    ),
+    taxMinor: exactDatabaseInteger(
+      row.tax_minor,
+      "receipt.taxMinor"
+    ),
+    totalMinor: exactDatabaseInteger(
+      row.total_minor,
+      "receipt.totalMinor"
+    ),
+    settledAt: exactDatabaseIso(
+      row.settled_at,
+      "receipt.settledAt"
+    ),
+    invoiceAvailable:
+      typeof row.stripe_invoice_id === "string"
+  });
+}
+
+function accountQuoteState(row) {
+  if (!row) return null;
+  const changeKind = requiredText(
+    row.change_kind,
+    "pendingChange.changeKind",
+    50
+  );
+  const state = requiredText(
+    row.state,
+    "pendingChange.internalState",
+    100
+  );
+  const customerState = {
+    dispatching: "schedule_dispatching",
+    checkout_dispatching: "payment_pending",
+    checkout_ready: "payment_pending",
+    payment_settled: "provider_change_pending",
+    provider_change_pending: "provider_change_pending",
+    schedule_dispatching: "schedule_dispatching",
+    scheduled: "scheduled",
+    reconciliation_required: "reconciliation_required"
+  }[state];
+  invariant(
+    customerState,
+    "repository_conflict",
+    "the customer Alakazam pending state changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    changeKind,
+    targetTierId: requiredText(
+      row.target_tier_id,
+      "pendingChange.targetTierId",
+      100
+    ),
+    effectiveAt:
+      row.effective_at === null ||
+      row.effective_at === undefined
+        ? null
+        : exactDatabaseIso(
+            row.effective_at,
+            "pendingChange.effectiveAt"
+          ),
+    state: customerState
+  });
+}
+
 export function createPostgresAlakazamRepository({
   authority
 } = {}) {
   const database = validateAuthority(authority);
 
   return Object.freeze({
+    async readCustomerAccount(value) {
+      const input = exactAccountReadInput(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: input.actorId,
+            organizationId: input.tenantId,
+            readOnly: true
+          },
+          async (client) => {
+            const project = await client.query(
+              `select
+                 project.id,
+                 exists (
+                   select 1
+                     from ss.commerce_v2_project_entitlements entitlement
+                    where entitlement.organization_id = $1
+                      and entitlement.project_id = $2
+                      and entitlement.customer_user_id = $3
+                      and entitlement.kind = 'spark_download'
+                      and entitlement.scope = 'editor_project'
+                      and entitlement.state = 'active'
+                      and not exists (
+                        select 1
+                          from ss.alakazam_credit_applications application
+                         where application.download_entitlement_id =
+                               entitlement.id
+                      )
+                 ) as download_credit_available,
+                 not exists (
+                   select 1
+                     from ss.alakazam_subscriptions subscription
+                    where subscription.organization_id = $1
+                      and subscription.project_id = $2
+                      and subscription.status <> 'ended'
+                      and subscription.customer_user_id <> $3
+                 ) as billing_owner_available
+               from ss.projects project
+               join ss.organizations organization
+                 on organization.id = project.organization_id
+                and organization.state = 'active'
+               join ss.organization_memberships membership
+                 on membership.organization_id =
+                    project.organization_id
+                and membership.user_id = $3
+                and membership.state = 'active'
+                and membership.role = any($4::text[])
+              where project.organization_id = $1
+                and project.id = $2
+                and project.lifecycle = 'active'`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId,
+                PROJECT_ROLES
+              ]
+            );
+            invariant(
+              project.rowCount === 1 &&
+                project.rows[0]
+                  .billing_owner_available === true,
+              "project_unavailable",
+              "the customer billing project is unavailable",
+              { status: 404 }
+            );
+
+            const subscriptions = await client.query(
+              `select
+                 subscription.id,
+                 subscription.tier_id,
+                 subscription.status,
+                 subscription.currency,
+                 subscription.amount_minor,
+                 subscription.current_period_starts_at,
+                 subscription.current_period_ends_at,
+                 subscription.cancel_at_period_end,
+                 subscription.first_failed_at,
+                 subscription.grace_ends_at,
+                 subscription.revision
+               from ss.alakazam_subscriptions subscription
+              where subscription.organization_id = $1
+                and subscription.project_id = $2
+                and subscription.customer_user_id = $3
+              order by
+                (subscription.status <> 'ended') desc,
+                subscription.created_at desc,
+                subscription.id desc
+              limit 1`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId
+              ]
+            );
+            const subscriptionRow =
+              subscriptions.rows[0] ?? null;
+            let pendingChange = null;
+
+            if (subscriptionRow?.status === "pending") {
+              pendingChange = {
+                changeKind: "start",
+                targetTierId: subscriptionRow.tier_id,
+                effectiveAt: null,
+                state: "activation_pending"
+              };
+            } else if (subscriptionRow) {
+              const openChanges = await client.query(
+                `select
+                   quote.change_kind,
+                   quote.target_tier_id,
+                   coalesce(
+                     schedule.effective_at,
+                     quote.effective_at
+                   ) as effective_at,
+                   case
+                     when schedule.id is not null
+                       then schedule.state
+                     else quote.state
+                   end as state
+                 from ss.alakazam_change_quotes quote
+                 left join ss.alakazam_downgrade_schedules schedule
+                   on schedule.organization_id =
+                      quote.organization_id
+                  and schedule.quote_id = quote.id
+                  and schedule.state in (
+                    'dispatching', 'scheduled',
+                    'reconciliation_required'
+                  )
+                where quote.organization_id = $1
+                  and quote.project_id = $2
+                  and quote.customer_user_id = $3
+                  and quote.current_subscription_id = $4
+                  and quote.state in (
+                    'checkout_dispatching',
+                    'checkout_ready',
+                    'payment_settled',
+                    'provider_change_pending',
+                    'schedule_dispatching',
+                    'scheduled',
+                    'reconciliation_required'
+                  )
+                order by quote.updated_at desc, quote.id desc
+                limit 2`,
+                [
+                  input.tenantId,
+                  input.projectId,
+                  input.customerId,
+                  subscriptionRow.id
+                ]
+              );
+              invariant(
+                openChanges.rowCount <= 1,
+                "repository_conflict",
+                "the customer has conflicting Alakazam changes",
+                { status: 500 }
+              );
+              invariant(
+                !(
+                  subscriptionRow.cancel_at_period_end ===
+                    true &&
+                  openChanges.rowCount === 1
+                ),
+                "repository_conflict",
+                "the customer has conflicting Alakazam cancellation and tier changes",
+                { status: 500 }
+              );
+              if (subscriptionRow.cancel_at_period_end === true) {
+                pendingChange = {
+                  changeKind: "cancellation",
+                  targetTierId: null,
+                  effectiveAt: exactDatabaseIso(
+                    subscriptionRow.current_period_ends_at,
+                    "pendingChange.cancellationEffectiveAt"
+                  ),
+                  state: "cancellation_scheduled"
+                };
+              } else if (openChanges.rowCount === 1) {
+                pendingChange = accountQuoteState(
+                  openChanges.rows[0]
+                );
+              }
+            }
+
+            const receipts = await client.query(
+              `select
+                 receipt.id,
+                 receipt.receipt_kind,
+                 receipt.stripe_invoice_id,
+                 receipt.list_subtotal_minor,
+                 receipt.provider_discount_minor,
+                 receipt.tax_minor,
+                 receipt.total_minor,
+                 receipt.settled_at
+               from ss.alakazam_payment_receipts receipt
+              where receipt.organization_id = $1
+                and receipt.project_id = $2
+                and receipt.customer_user_id = $3
+              order by receipt.settled_at desc, receipt.id desc
+              limit 50`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId
+              ]
+            );
+
+            return Object.freeze({
+              projectId: input.projectId,
+              downloadCreditAvailable:
+                project.rows[0]
+                  .download_credit_available === true,
+              subscription:
+                accountSubscription(subscriptionRow),
+              pendingChange: pendingChange
+                ? Object.freeze(pendingChange)
+                : null,
+              receipts: Object.freeze(
+                receipts.rows.map(accountReceipt)
+              )
+            });
+          }
+        )
+      );
+    },
+
     async createQuote(value) {
       const input = exactQuoteInput(value);
       return translated(() =>
