@@ -12,6 +12,7 @@ import {
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
 import {
+  createAlakazamBillingService,
   createAlakazamDowngradeActivationService,
   createAlakazamAccountService,
   createAlakazamPaymentService,
@@ -19,6 +20,7 @@ import {
   createAlakazamStripeEventRouter,
   createAlakazamUpgradeService,
   createHostedAlakazamAccount,
+  createHostedAlakazamBilling,
   createCommerceV2Boundary,
   createCommerceV2Service,
   createDownloadPaymentService,
@@ -268,6 +270,13 @@ async function start() {
     ids: commerceV2.ids,
     release: alakazamComposition.release
   };
+  const alakazamBilling =
+    createHostedAlakazamBilling({
+      billing: createAlakazamBillingService(
+        alakazamServicePorts
+      ),
+      resolveSession: commerceV2.resolveSession
+    });
   const alakazamCommerce =
     createAlakazamStripeEventRouter({
       payment: createAlakazamPaymentService(
@@ -388,6 +397,7 @@ async function start() {
       createHostedApi(service, {
         downloadCommerce,
         alakazamAccount,
+        alakazamBilling,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,

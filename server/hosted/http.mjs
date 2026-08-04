@@ -5,6 +5,9 @@ import {
   createHeldHostedAlakazamAccount
 } from "../commerce-v2/hosted-alakazam-account.mjs";
 import {
+  createHeldHostedAlakazamBilling
+} from "../commerce-v2/hosted-alakazam-billing.mjs";
+import {
   createHeldHostedDownloadCommerce
 } from "../commerce-v2/hosted-download.mjs";
 
@@ -278,6 +281,7 @@ export function createHostedApi(
     csrfTokens,
     downloadCommerce = null,
     alakazamAccount = null,
+    alakazamBilling = null,
     stripeWebhook = null
   } = {}
 ) {
@@ -307,6 +311,18 @@ export function createHostedApi(
       "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam account boundary is invalid.",
+    { status: 500 }
+  );
+  const alakazamBillingBoundary =
+    alakazamBilling ??
+    createHeldHostedAlakazamBilling();
+  invariant(
+    typeof alakazamBillingBoundary.createQuote ===
+      "function" &&
+      typeof alakazamBillingBoundary.createCheckout ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Alakazam billing boundary is invalid.",
     { status: 500 }
   );
   const nextRequestId =
@@ -685,6 +701,34 @@ export function createHostedApi(
             write
           );
           status = 202;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam-quotes$/u
+          ))
+        ) {
+          result = await alakazamBillingBoundary.createQuote(
+            actor,
+            route[0],
+            write
+          );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam-quotes\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          result =
+            await alakazamBillingBoundary.createCheckout(
+              actor,
+              route[0],
+              route[1],
+              write
+            );
+          status = 201;
         } else if (
           method === "POST" &&
           (route = match(

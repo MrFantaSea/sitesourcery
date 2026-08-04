@@ -21,6 +21,7 @@ import {
   deepFreeze,
   digest,
   invariant,
+  requiredDigest,
   requiredIso,
   requiredText
 } from "../commerce-v2/canonical.mjs";
@@ -112,6 +113,7 @@ function exactCustomerClaimInput(value) {
   exactKeys(
     value,
     [
+      "acceptedDisclosureDigest",
       "claimedAt",
       "customerId",
       "projectId",
@@ -132,6 +134,10 @@ function exactCustomerClaimInput(value) {
     provisionId: exactUuid(
       value.provisionId,
       "provisionId"
+    ),
+    acceptedDisclosureDigest: requiredDigest(
+      value.acceptedDisclosureDigest,
+      "acceptedDisclosureDigest"
     ),
     claimedAt: requiredIso(value.claimedAt, "claimedAt")
   });
@@ -181,6 +187,7 @@ function exactCheckoutClaimInput(value) {
   exactKeys(
     value,
     [
+      "acceptedDisclosureDigest",
       "claimedAt",
       "customerId",
       "dispatchId",
@@ -212,6 +219,10 @@ function exactCheckoutClaimInput(value) {
     dispatchId: exactUuid(
       value.dispatchId,
       "dispatchId"
+    ),
+    acceptedDisclosureDigest: requiredDigest(
+      value.acceptedDisclosureDigest,
+      "acceptedDisclosureDigest"
     ),
     stripeCustomerId,
     claimedAt: requiredIso(value.claimedAt, "claimedAt")
@@ -5425,6 +5436,8 @@ export function createPostgresAlakazamRepository({
                 quoteRow.state === "quoted" &&
                 quoteRow.provider_effects_authorized ===
                   true &&
+                quoteRow.disclosure_digest ===
+                  input.acceptedDisclosureDigest &&
                 exactDatabaseInteger(
                   quoteRow.due_now_subtotal_minor,
                   "quote.dueNowSubtotalMinor"
@@ -5550,7 +5563,7 @@ export function createPostgresAlakazamRepository({
                 quoteId: input.quoteId,
                 provisionId: input.provisionId,
                 acceptedDisclosureDigest:
-                  quoteRow.disclosure_digest,
+                  input.acceptedDisclosureDigest,
                 quoteDigest: quoteRow.quote_digest,
                 claimedAt: input.claimedAt
               });
@@ -7613,6 +7626,13 @@ export function createPostgresAlakazamRepository({
               { status: 409 }
             );
             const quoteRow = quote.rows[0];
+            invariant(
+              quoteRow.disclosure_digest ===
+                input.acceptedDisclosureDigest,
+              "alakazam_change_unavailable",
+              "the accepted Alakazam disclosure changed",
+              { status: 409 }
+            );
 
             const binding = await client.query(
               `select stripe_customer_id
@@ -7658,7 +7678,10 @@ export function createPostgresAlakazamRepository({
                   reservation.projectId === input.projectId &&
                   reservation.quoteId === input.quoteId &&
                   reservation.stripeCustomerId ===
-                    input.stripeCustomerId,
+                    input.stripeCustomerId &&
+                  reservation.purpose
+                    .acceptedDisclosureDigest ===
+                    input.acceptedDisclosureDigest,
                 "idempotency_conflict",
                 "the Alakazam Checkout identity changed",
                 { status: 409 }
@@ -7885,7 +7908,7 @@ export function createPostgresAlakazamRepository({
                 stripeCustomerId:
                   input.stripeCustomerId,
                 acceptedDisclosureDigest:
-                  quoteRow.disclosure_digest,
+                  input.acceptedDisclosureDigest,
                 quoteDigest: quoteRow.quote_digest,
                 changeKind: quoteRow.change_kind,
                 currentSubscription,

@@ -25,9 +25,10 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Parent checkpoint: `82bf959` (`Compose held Alakazam webhooks`).
-- The commit containing this file is the sealed local Batch 1 checkpoint; use
-  `git log -1 --oneline` for its resulting identity after commit.
+- Sealed parent checkpoint: `671e094` (`Compose held Alakazam account truth`).
+- The staged Batch 2A backend checkpoint is identified by the local `HEAD`
+  subject `Connect held Alakazam customer checkout` after commit; recovery must
+  inspect `git log -1` rather than relying on a self-referential commit hash.
 - Public production remains the July 22 predecessor.
 - No push, deploy, DNS change, provider write, credential capture, or release
   approval is authorized by this run.
@@ -35,10 +36,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Batch 1 is complete: a project-scoped customer-safe Alakazam account projection
-and read-only UI, a complete held Stripe configuration contract, and an
-accepted public-truth audit are sealed together. Batch 2 must start only after
-the checkpoint commit and a clean-worktree verification.
+Batch 2A connects the first customer billing journey without opening release:
+target tier → exact server quote → explicit disclosure acceptance → one fenced
+Checkout dispatch. The accepted-disclosure fence is now implemented and proven
+against a fresh database. The immediate slice is the held hosted projection and
+HTTP contract for creating an exact quote and dispatching its Checkout command.
+Fulfillment and lifecycle lanes may inventory dependencies in parallel but
+cannot edit shared command, route, repository, or account contracts.
 
 ## Completed and reviewed
 
@@ -105,7 +109,41 @@ Verified after the relevant repairs:
   source hashes match the manifest; `git diff --check` remains clean.
 - Syntax and `git diff --check`: pass after each repair.
 
-Sealed checkpoint gates:
+## Batch 2A evidence ledger
+
+- Accepted-disclosure digest is now an exact required input to Customer
+  provisioning and Checkout claims. PostgreSQL compares it with the durable
+  quote before any reservation or provider effect, and replay cannot cross it.
+- Focused Alakazam billing service: 20/20 pass after the fence.
+- Billing service and PostgreSQL repository syntax: pass; `git diff --check`
+  is clean.
+- Fresh 31-migration PostgreSQL journey: 5/5 pass, including wrong-digest
+  rejection before Customer and Checkout reservations.
+- Disposable proof database
+  `ss_alakazam_acceptance_batch2a_20260804_1`: 0 active sessions before its
+  exact drop and 0 matching databases afterward.
+- The exact two-route, browser-input, redacted-output, authentication, CSRF,
+  idempotency, and held-default contract is frozen in the canonical roadmap.
+- Both HTTP POST routes, global CSRF/idempotency reuse, production composition,
+  and lead-owned route tests are written. HTTP, executable, and test syntax
+  pass; `git diff --check` remains clean.
+- Combined billing-service plus hosted-boundary tests: 26/26 pass. Combined
+  Alakazam account/HTTP route tests: 7/7 pass. The route now reaches the exact
+  service contract while remaining held by release/provider readiness.
+- Post-connection broad regressions: core Node 424/424 pass; hosted service
+  139 pass, 2 intentional environment skips, 0 fail. This includes runtime
+  assertion and production-composition source checks.
+- Fulfillment inventory is complete in
+  `SITESOURCERY-ALAKAZAM-FULFILLMENT-INVENTORY-2026-08-04.md`. Its critical
+  later gate is to replace legacy publication subscription proof with exact
+  `ss.alakazam_subscriptions` revision/capability proof; it does not expand the
+  current billing-route slice.
+- Lifecycle inventory is complete in
+  `SITESOURCERY-ALAKAZAM-LIFECYCLE-INVENTORY-2026-08-04.md`. Renewal success is
+  the first safe later slice; grace, suspension, cancellation, retention, and
+  reversal consequences remain owner-held and must not inherit legacy policy.
+
+Batch 1 sealed checkpoint gates:
 
 - [x] Verify the named PostgreSQL test database is idle, drop it, and verify
   it is absent: 0 active sessions before drop, 0 matching databases after.
@@ -121,10 +159,18 @@ Sealed checkpoint gates:
 
 ## Live resources and workers
 
-- Runtime visual verifier Ramanujan,
-  `019fcea8-d4a0-74c3-91e0-71f8eb088f56`, completed the corrected-fixture
-  proof and was closed. Current evidence is under
-  `/private/tmp/sitesourcery-alakazam-credit-verify.6NdTyI/`; the earlier
+- Fulfillment mapper Nietzsche completed its exclusive inventory document and
+  is closed.
+- Lifecycle mapper Raman completed its exclusive inventory document and is
+  closed.
+- Hosted billing boundary worker Aristotle completed its exclusive module and
+  focused test (6/6 pass) and is closed.
+- Disposable PostgreSQL database
+  `ss_alakazam_acceptance_batch2a_20260804_1` completed all 31 migrations and
+  the 5/5 acceptance-fence journey, then was dropped with 0 active sessions
+  and verified absent.
+- Batch 1 runtime visual verifier Ramanujan is closed. Current evidence is
+  under `/private/tmp/sitesourcery-alakazam-credit-verify.6NdTyI/`; the earlier
   evidence under `/private/tmp/sitesourcery-alakazam-verify.hSUfUh/` is
   superseded.
 - Disposable PostgreSQL database
@@ -136,15 +182,15 @@ Sealed checkpoint gates:
 
 ## Next action
 
-Create the one local Batch 1 commit, then verify its identity and a clean
-worktree. The next clean batch is Lane E customer billing commands in parallel
-with Lane F fulfillment and Lane G lifecycle projection; freeze their shared
-contract before assigning disjoint writes.
+Review and stage the exact Batch 2A backend/inventory diff, run the final
+whitespace and secret/provider-ID scope checks, and create one local checkpoint.
+Then begin only the customer API adapter/quote-review UI slice; do not open
+release or provider effects.
 
 ## Batch 1 write scope
 
-The sealed 25-file scope contains only the account projection/UI, held Stripe
-configuration, integration tests, hosted-truth manifest, roadmap, truth audit,
-billing contract, backend map, and continuity updates. The lead owns the local
-integration commit. Generated artifacts, browser harnesses, screenshots,
-credentials, and provider objects are not part of it.
+Lead write scope for the next Batch 2A slice: held hosted billing boundary,
+HTTP route contract, production composition, and focused tests. Parallel
+workers may write only their assigned fulfillment or lifecycle inventory
+document. Browser UI and migrations remain out of scope until the hosted
+contract is green.

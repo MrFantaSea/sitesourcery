@@ -123,7 +123,11 @@ Integration order:
 
 ### Lane E — customer billing commands
 
-- [ ] Start quote and one-use $5 credit.
+- [x] Bind exact customer disclosure acceptance into Customer provisioning and
+  Checkout reservations before any provider effect; prove it after a fresh
+  replay of all 31 migrations.
+- [ ] Start quote and one-use $5 credit. The service/repository contract is
+  complete; the held hosted boundary, HTTP route, and customer UI remain.
 - [ ] Checkout dispatch and safe return.
 - [ ] Fixed-difference upgrade quote and application.
 - [ ] Renewal-boundary downgrade quote and scheduling.
@@ -142,6 +146,8 @@ Integration order:
 
 ### Lane G — lifecycle and reconciliation
 
+- [x] Inventory current event routing, schema capacity, missing transitions,
+  unsafe legacy-policy inheritance, owner-open decisions, and disjoint slices.
 - [ ] Renewal success and new period projection.
 - [ ] Payment failure, past-due, grace, suspension, and restoration.
 - [ ] Period-end cancellation and retained export.
@@ -201,9 +207,9 @@ Lane I launch-critical domain truth only ─┘
 | 1 | Customer account surface | UI worker | `abracadabra/app` client/DOM/tests only | receipt/credit drift corrected; final browser runtime green |
 | 1 | Stripe configuration boundary | Provider worker | hosted Stripe configuration/tests only | reviewed; 12/12 focused green; release held |
 | 1 | Public truth audit | Audit worker | read-only report to lead | accepted; launch gates recorded below |
-| 2 | Billing commands | Assigned after Batch 1 contract | disjoint service/HTTP/UI packets | pending |
-| 2 | Fulfillment feature matrix | Assigned after projection | compiler/control feature files | pending |
-| 2 | Lifecycle projection | Assigned after event inventory | provider event service/tests | pending |
+| 2 | Billing commands | Lead plus bounded workers | acceptance fence proven; hosted route in progress |
+| 2 | Fulfillment feature matrix | Fulfillment mapper | inventory complete; implementation held behind billing route slice |
+| 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
 
 ## Immediate integration target
 
@@ -232,6 +238,39 @@ containing this roadmap is its sealed local integration checkpoint.
 - Proof: 11/11 focused account/HTTP tests and 5/5 real PostgreSQL lifecycle
   tests after a fresh replay of all 31 migrations. The named disposable test
   database was idle, dropped, and verified absent after proof.
+
+## Frozen Batch 2A quote and Checkout route contract
+
+- Routes:
+  `POST /api/v1/projects/{projectId}/alakazam-quotes` and
+  `POST /api/v1/projects/{projectId}/alakazam-quotes/{quoteId}/checkout-command`.
+- Both routes require the existing same-origin CSRF proof, authenticated
+  session, exact project/customer scope, and UUID `Idempotency-Key` header.
+- Quote body accepts only `targetTierId`; the HTTP idempotency key is the
+  server-owned `quoteId`. Checkout body accepts only
+  `acceptedDisclosureDigest`; its idempotency key is the dispatch command ID.
+  Project, quote, customer, organization, money, credit, subscription, tax,
+  provider, and billing-date authority never come from the browser body.
+- The quote response keeps project/quote identity, catalog and terms versions,
+  computed change kind, customer-safe target tier, due-now amount, redacted
+  applied value, effective timing, next renewal, downgrade semantics,
+  disclosure and both digests. It removes organization/customer identity,
+  current local subscription identity, credit entitlement/source IDs,
+  provider authorization, and all provider facts.
+- The Checkout response exposes only command/project/quote identity, `ready`
+  state, purpose digest, HTTPS Stripe Checkout destination, and expiry. It
+  removes provider name, Checkout Session ID, Customer ID, and internal
+  purpose/provider evidence.
+- The default hosted boundary remains an authenticated explicit 503 hold. The
+  production composition may wire the real boundary, but the existing
+  Alakazam release and provider readiness gates remain authoritative and held.
+- The first browser slice uses this contract for starting any canonical
+  `$25/$35/$50` tier and displaying the exact `$5` credit result. Upgrade and
+  downgrade controls remain disabled until their separate route/UI proofs.
+- Backend proof at the connected checkpoint: 26/26 billing/boundary tests,
+  7/7 account/HTTP tests, 424/424 broad core tests, and 139 hosted tests with
+  2 intentional environment skips and no failures. Provider and public release
+  effects remain held.
 
 ## Accepted launch-truth gates from Batch 1 audit
 

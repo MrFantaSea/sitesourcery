@@ -43,6 +43,10 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function disclosureDigestForQuote(quoteId) {
+  return digest(`disclosure:${quoteId}`);
+}
+
 async function insertRow(client, table, row) {
   assert.match(table, /^[a-z0-9_]+$/u);
   const entries = Object.entries(row);
@@ -273,12 +277,26 @@ test(
         }
       });
       const unusedProvisionId = randomUUID();
+      await assert.rejects(
+        repository.claimCustomerProvision({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId,
+          provisionId: unusedProvisionId,
+          acceptedDisclosureDigest: "f".repeat(64),
+          claimedAt: "2026-08-02T12:00:30.000Z"
+        }),
+        (error) => error.code === "alakazam_change_unavailable"
+      );
       const unused = await repository.claimCustomerProvision({
         tenantId: authority.organizationId,
         customerId: authority.userId,
         projectId: authority.projectId,
         quoteId,
         provisionId: unusedProvisionId,
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(quoteId),
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       assert.equal(unused.status, "create");
@@ -301,6 +319,8 @@ test(
         projectId: authority.projectId,
         quoteId,
         provisionId,
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(quoteId),
         claimedAt: "2026-08-02T12:02:00.000Z"
       });
       assert.equal(claimed.status, "create");
@@ -316,6 +336,8 @@ test(
         projectId: authority.projectId,
         quoteId,
         provisionId: randomUUID(),
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(quoteId),
         claimedAt: "2026-08-02T12:02:30.000Z"
       });
       assert.equal(pending.status, "pending");
@@ -488,6 +510,8 @@ test(
         projectId: authority.projectId,
         quoteId,
         provisionId: firstProvisionId,
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(quoteId),
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       assert.equal(first.status, "create");
@@ -499,6 +523,8 @@ test(
           projectId: authority.projectId,
           quoteId,
           provisionId: randomUUID(),
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(quoteId),
           claimedAt: "2026-08-02T12:03:00.000Z"
         });
       assert.deepEqual(interrupted, {
@@ -514,6 +540,8 @@ test(
         projectId: authority.projectId,
         quoteId,
         provisionId: randomUUID(),
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(quoteId),
         claimedAt: "2026-08-02T12:04:00.000Z"
       });
       assert.deepEqual(replay, interrupted);
@@ -580,6 +608,20 @@ test(
           }
         });
       const ambiguousDispatchId = randomUUID();
+      await assert.rejects(
+        ambiguousRepository.claimCheckoutDispatch({
+          tenantId: ambiguousAuthority.organizationId,
+          customerId: ambiguousAuthority.userId,
+          projectId: ambiguousAuthority.projectId,
+          quoteId: ambiguousQuoteId,
+          dispatchId: ambiguousDispatchId,
+          stripeCustomerId:
+            ambiguousAuthority.stripeCustomerId,
+          acceptedDisclosureDigest: "f".repeat(64),
+          claimedAt: "2026-08-02T12:00:30.000Z"
+        }),
+        (error) => error.code === "alakazam_change_unavailable"
+      );
       const ambiguousClaim =
         await ambiguousRepository.claimCheckoutDispatch({
           tenantId: ambiguousAuthority.organizationId,
@@ -589,6 +631,8 @@ test(
           dispatchId: ambiguousDispatchId,
           stripeCustomerId:
             ambiguousAuthority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(ambiguousQuoteId),
           claimedAt: "2026-08-02T12:01:00.000Z"
         });
       assert.equal(ambiguousClaim.status, "create");
@@ -601,6 +645,8 @@ test(
           dispatchId: randomUUID(),
           stripeCustomerId:
             ambiguousAuthority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(ambiguousQuoteId),
           claimedAt: "2026-08-02T12:01:30.000Z"
         });
       assert.equal(pending.status, "pending");
@@ -684,6 +730,8 @@ test(
           dispatchId: failedDispatchId,
           stripeCustomerId:
             failedAuthority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(failedQuoteId),
           claimedAt: "2026-08-02T12:01:00.000Z"
         });
       const failed =
@@ -726,6 +774,8 @@ test(
         quoteId: staleQuoteId,
         dispatchId: staleDispatchId,
         stripeCustomerId: staleAuthority.stripeCustomerId,
+        acceptedDisclosureDigest:
+          disclosureDigestForQuote(staleQuoteId),
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       const interrupted =
@@ -737,6 +787,8 @@ test(
           dispatchId: randomUUID(),
           stripeCustomerId:
             staleAuthority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(staleQuoteId),
           claimedAt: "2026-08-02T12:03:00.000Z"
         });
       assert.deepEqual(
@@ -833,6 +885,8 @@ async function openCheckout(
     quoteId,
     dispatchId,
     stripeCustomerId: authority.stripeCustomerId,
+    acceptedDisclosureDigest:
+      disclosureDigestForQuote(quoteId),
     claimedAt
   });
   assert.equal(claim.status, "create");

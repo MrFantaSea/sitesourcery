@@ -23,6 +23,7 @@ const QUOTE_ID =
   "40000000-0000-4000-8000-000000000001";
 const PROVISION_ID =
   "50000000-0000-4000-8000-000000000001";
+const ACCEPTED_DISCLOSURE_DIGEST = "a".repeat(64);
 
 function input(overrides = {}) {
   return {
@@ -42,6 +43,8 @@ function customerInput(overrides = {}) {
     projectId: PROJECT_ID,
     quoteId: QUOTE_ID,
     provisionId: PROVISION_ID,
+    acceptedDisclosureDigest:
+      ACCEPTED_DISCLOSURE_DIGEST,
     ...overrides
   };
 }
@@ -53,6 +56,8 @@ function checkoutInput(overrides = {}) {
     projectId: PROJECT_ID,
     quoteId: QUOTE_ID,
     commandId: PROVISION_ID,
+    acceptedDisclosureDigest:
+      ACCEPTED_DISCLOSURE_DIGEST,
     ...overrides
   };
 }
@@ -63,6 +68,7 @@ function fixture({
   providerStatus = null,
   repositoryResult = null,
   customerClaimResult = null,
+  customerClaimError = null,
   customerProviderResult = null,
   customerProviderError = null,
   customerConfirmError = null,
@@ -173,6 +179,9 @@ function fixture({
       calls.customerClaims.push(
         structuredClone(value)
       );
+      if (customerClaimError) {
+        throw customerClaimError;
+      }
       if (customerClaimResult) {
         return structuredClone(customerClaimResult);
       }
@@ -185,7 +194,8 @@ function fixture({
           projectId: value.projectId,
           quoteId: value.quoteId,
           provisionId: value.provisionId,
-          acceptedDisclosureDigest: "a".repeat(64),
+          acceptedDisclosureDigest:
+            value.acceptedDisclosureDigest,
           quoteDigest: "b".repeat(64),
           claimedAt: value.claimedAt
         })
@@ -244,7 +254,8 @@ function fixture({
           projectId: value.projectId,
           quoteId: value.quoteId,
           stripeCustomerId: value.stripeCustomerId,
-          acceptedDisclosureDigest: "a".repeat(64),
+          acceptedDisclosureDigest:
+            value.acceptedDisclosureDigest,
           quoteDigest: "b".repeat(64),
           changeKind: "start",
           targetTierId: "alakazam_25",
@@ -662,6 +673,8 @@ test("Alakazam start Checkout binds one Customer, one durable claim, and one Str
     quoteId: QUOTE_ID,
     dispatchId: PROVISION_ID,
     stripeCustomerId: "cus_alakazam_customer_1",
+    acceptedDisclosureDigest:
+      ACCEPTED_DISCLOSURE_DIGEST,
     claimedAt: NOW
   });
   assert.equal(calls.checkoutCreates.length, 1);
@@ -891,4 +904,40 @@ test("Alakazam Checkout rejects browser money before Customer or provider work",
   assert.equal(calls.customerClaims.length, 0);
   assert.equal(calls.checkoutClaims.length, 0);
   assert.equal(calls.checkoutCreates.length, 0);
+});
+
+test("Alakazam Checkout binds accepted disclosure before Customer or provider work", async () => {
+  const repositoryError = Object.assign(
+    new Error("accepted disclosure changed"),
+    { code: "alakazam_change_unavailable" }
+  );
+  const { service, calls } = fixture({
+    customerClaimError: repositoryError
+  });
+  const changedDigest = "f".repeat(64);
+  await assert.rejects(
+    service.createCheckout(
+      checkoutInput({
+        acceptedDisclosureDigest: changedDigest
+      })
+    ),
+    (error) => error === repositoryError
+  );
+  assert.equal(
+    calls.customerClaims[0].acceptedDisclosureDigest,
+    changedDigest
+  );
+  assert.equal(calls.customerCreates.length, 0);
+  assert.equal(calls.checkoutClaims.length, 0);
+  assert.equal(calls.checkoutCreates.length, 0);
+
+  const malformed = fixture();
+  await assert.rejects(
+    malformed.service.createCheckout(
+      checkoutInput({ acceptedDisclosureDigest: "short" })
+    ),
+    (error) => error.code === "invalid_input"
+  );
+  assert.equal(malformed.calls.readiness, 0);
+  assert.equal(malformed.calls.customerClaims.length, 0);
 });

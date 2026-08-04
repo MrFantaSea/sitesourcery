@@ -184,6 +184,7 @@ function exactCustomerInput(value) {
   exactKeys(
     value,
     [
+      "acceptedDisclosureDigest",
       "customerId",
       "projectId",
       "provisionId",
@@ -191,7 +192,7 @@ function exactCustomerInput(value) {
       "tenantId"
     ],
     "invalid_input",
-    "Alakazam Customer preparation accepts only quote and idempotency identity"
+    "Alakazam Customer preparation accepts only quote, accepted disclosure, and idempotency identity"
   );
   return Object.freeze({
     tenantId: exactUuid(value.tenantId, "tenantId"),
@@ -204,6 +205,10 @@ function exactCustomerInput(value) {
     provisionId: exactUuid(
       value.provisionId,
       "provisionId"
+    ),
+    acceptedDisclosureDigest: requiredDigest(
+      value.acceptedDisclosureDigest,
+      "acceptedDisclosureDigest"
     )
   });
 }
@@ -212,6 +217,7 @@ function exactCheckoutInput(value) {
   exactKeys(
     value,
     [
+      "acceptedDisclosureDigest",
       "commandId",
       "customerId",
       "projectId",
@@ -219,7 +225,7 @@ function exactCheckoutInput(value) {
       "tenantId"
     ],
     "invalid_input",
-    "Alakazam Checkout accepts only quote and idempotency identity"
+    "Alakazam Checkout accepts only quote, accepted disclosure, and idempotency identity"
   );
   return Object.freeze({
     tenantId: exactUuid(value.tenantId, "tenantId"),
@@ -229,7 +235,11 @@ function exactCheckoutInput(value) {
     ),
     projectId: exactUuid(value.projectId, "projectId"),
     quoteId: exactUuid(value.quoteId, "quoteId"),
-    commandId: exactUuid(value.commandId, "commandId")
+    commandId: exactUuid(value.commandId, "commandId"),
+    acceptedDisclosureDigest: requiredDigest(
+      value.acceptedDisclosureDigest,
+      "acceptedDisclosureDigest"
+    )
   });
 }
 
@@ -946,7 +956,9 @@ export function createAlakazamBillingService({
         customerId: selected.customerId,
         projectId: selected.projectId,
         quoteId: selected.quoteId,
-        provisionId: selected.commandId
+        provisionId: selected.commandId,
+        acceptedDisclosureDigest:
+          selected.acceptedDisclosureDigest
       });
       const claimedAt = exactClock(ports.clock);
       const claim = await ports.repository
@@ -957,6 +969,8 @@ export function createAlakazamBillingService({
           quoteId: selected.quoteId,
           dispatchId: selected.commandId,
           stripeCustomerId: binding.stripeCustomerId,
+          acceptedDisclosureDigest:
+            selected.acceptedDisclosureDigest,
           claimedAt
         });
       if (claim?.status === "ready") {
