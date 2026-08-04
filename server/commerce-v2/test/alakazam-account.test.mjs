@@ -108,6 +108,147 @@ test("an account without Alakazam exposes only the held catalog and available Do
   assert.deepEqual(context.calls, [scope()]);
 });
 
+test("active $25 and $35 accounts expose only the composed upgrade action", async () => {
+  for (const [tierId, amountMinor] of [
+    ["alakazam_25", 2500],
+    ["alakazam_35", 3500]
+  ]) {
+    const context = service(
+      stored({
+        subscription: activeSubscription({
+          tierId,
+          amountMinor
+        })
+      })
+    );
+    const result = await context.account.read(scope());
+    assert.deepEqual(result.actions, {
+      start: false,
+      changeTier: true,
+      manageBilling: false,
+      cancel: false,
+      reason: "only_upgrade_composed"
+    });
+  }
+});
+
+test("top tier, unsettled state, pending change, attention, and cancellation keep upgrade held", async () => {
+  const cases = [
+    {
+      name: "$50 active",
+      subscription: activeSubscription({
+        tierId: "alakazam_50",
+        amountMinor: 5000
+      }),
+      pendingChange: null
+    },
+    {
+      name: "activation pending",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        status: "pending",
+        currentPeriodStartsAt: null,
+        currentPeriodEndsAt: null
+      }),
+      pendingChange: {
+        changeKind: "start",
+        targetTierId: "alakazam_25",
+        effectiveAt: null,
+        state: "activation_pending"
+      }
+    },
+    {
+      name: "pending tier change",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500
+      }),
+      pendingChange: {
+        changeKind: "upgrade",
+        targetTierId: "alakazam_35",
+        effectiveAt: null,
+        state: "payment_pending"
+      }
+    },
+    {
+      name: "grace attention",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        status: "grace",
+        firstFailedAt: "2026-08-05T12:00:00.000Z",
+        graceEndsAt: "2026-08-19T12:00:00.000Z"
+      }),
+      pendingChange: null
+    },
+    {
+      name: "suspended attention",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        status: "suspended",
+        firstFailedAt: "2026-08-05T12:00:00.000Z",
+        graceEndsAt: "2026-08-19T12:00:00.000Z"
+      }),
+      pendingChange: null
+    },
+    {
+      name: "cancelling at period end",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        cancelAtPeriodEnd: true
+      }),
+      pendingChange: {
+        changeKind: "cancellation",
+        targetTierId: null,
+        effectiveAt: PERIOD_END,
+        state: "cancellation_scheduled"
+      }
+    },
+    {
+      name: "cancelled",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        status: "cancelled"
+      }),
+      pendingChange: null
+    },
+    {
+      name: "ended",
+      subscription: activeSubscription({
+        tierId: "alakazam_25",
+        amountMinor: 2500,
+        status: "ended"
+      }),
+      pendingChange: null
+    }
+  ];
+
+  for (const entry of cases) {
+    const context = service(
+      stored({
+        subscription: entry.subscription,
+        pendingChange: entry.pendingChange
+      })
+    );
+    const result = await context.account.read(scope());
+    assert.deepEqual(
+      result.actions,
+      {
+        start: false,
+        changeTier: false,
+        manageBilling: false,
+        cancel: false,
+        reason: "customer_commands_not_composed"
+      },
+      entry.name
+    );
+  }
+});
+
 test("an active account projects a scheduled lower renewal and bounded receipt without provider identity", async () => {
   const context = service(
     stored({

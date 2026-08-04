@@ -953,6 +953,10 @@ test("the hosted server injects one configured adapter for Checkout and every ve
   );
   assert.match(
     source,
+    /const alakazamUpgrade\s*=\s*createAlakazamUpgradeService\([\s\S]*upgradeActivation:\s*alakazamUpgrade,\s*upgradeApplication:\s*alakazamUpgrade/u
+  );
+  assert.match(
+    source,
     /downloadCommerce,\s*alakazamCommerce/u
   );
   assert.match(
@@ -966,6 +970,12 @@ test("the hosted server injects one configured adapter for Checkout and every ve
   assert.equal(
     source.match(
       /createConfiguredStripeProvider\(\)/gu
+    )?.length,
+    1
+  );
+  assert.equal(
+    source.match(
+      /createAlakazamUpgradeService\(/gu
     )?.length,
     1
   );

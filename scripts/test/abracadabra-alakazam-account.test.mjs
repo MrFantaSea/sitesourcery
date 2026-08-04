@@ -135,6 +135,101 @@ function account(overrides = {}) {
   };
 }
 
+function subscribedAccount(
+  selectedTierId,
+  options = {}
+) {
+  const {
+    actions: suppliedActions,
+    nextRenewal: suppliedRenewal,
+    pendingChange = null,
+    state: suppliedState,
+    subscriptionOverrides = {},
+    ...accountOverrides
+  } = options;
+  const snapshotCatalog = catalog();
+  const selectedTier = snapshotCatalog.tiers.find(
+    (candidate) => candidate.tierId === selectedTierId
+  );
+  assert.ok(selectedTier, "fixture tier must be canonical");
+  const selectedSubscription = subscription(
+    selectedTier,
+    subscriptionOverrides
+  );
+  const inferredState = {
+    pending: "activation_pending",
+    active: "active",
+    grace: "attention_required",
+    suspended: "attention_required",
+    cancelled: "ended",
+    ended: "ended",
+  }[selectedSubscription.status];
+  const hasHigherTier = snapshotCatalog.tiers.some(
+    (candidate) => candidate.rank > selectedTier.rank
+  );
+  const changeTier =
+    selectedSubscription.status === "active"
+    && selectedSubscription.paymentState === "paid"
+    && selectedSubscription.currentPeriod !== null
+    && selectedSubscription.cancelAtPeriodEnd === false
+    && pendingChange === null
+    && hasHigherTier;
+  const actions = suppliedActions || {
+    start: false,
+    changeTier,
+    manageBilling: false,
+    cancel: false,
+    reason: changeTier
+      ? "only_upgrade_composed"
+      : "customer_commands_not_composed",
+  };
+  let nextRenewal = suppliedRenewal;
+  if (nextRenewal === undefined) {
+    const renewalUnavailable =
+      selectedSubscription.currentPeriod === null
+      || selectedSubscription.cancelAtPeriodEnd
+      || ["cancelled", "ended"].includes(
+        selectedSubscription.status
+      );
+    if (renewalUnavailable) {
+      nextRenewal = null;
+    } else {
+      const renewalTier =
+        pendingChange
+        && pendingChange.changeKind === "downgrade"
+        && pendingChange.state === "scheduled"
+          ? pendingChange.targetTier
+          : selectedTier;
+      nextRenewal = {
+        tierId: renewalTier.tierId,
+        amountMinor: renewalTier.price.amountMinor,
+        currency: "USD",
+        dueAt: selectedSubscription.currentPeriod.endsAt,
+        state: ["grace", "suspended"].includes(
+          selectedSubscription.status
+        )
+          ? "attention_required"
+          : "scheduled",
+      };
+    }
+  }
+  return account({
+    ...accountOverrides,
+    state: suppliedState || inferredState,
+    catalog: snapshotCatalog,
+    subscription: selectedSubscription,
+    pendingChange: structuredClone(pendingChange),
+    nextRenewal: structuredClone(nextRenewal),
+    actions,
+  });
+}
+
+function changed(source, mutate) {
+  const copy = structuredClone(source);
+  mutate(copy);
+  return copy;
+}
+
 function startQuote(
   snapshot,
   targetTierId = "alakazam_25",
@@ -210,6 +305,84 @@ function startQuote(
   };
 }
 
+function upgradeQuote(
+  snapshot,
+  targetTierId,
+  overrides = {}
+) {
+  const targetTier = snapshot.catalog.tiers.find(
+    (candidate) => candidate.tierId === targetTierId
+  );
+  assert.ok(targetTier, "upgrade target must be canonical");
+  const currentTier = snapshot.subscription.tier;
+  const appliedValue = {
+    kind: "current_paid_tier",
+    amountMinor: currentTier.price.amountMinor,
+  };
+  const dueNow = {
+    subtotalMinor:
+      targetTier.price.amountMinor
+      - currentTier.price.amountMinor,
+    currency: "USD",
+    taxMinor: 0,
+    totalMinor:
+      targetTier.price.amountMinor
+      - currentTier.price.amountMinor,
+    taxState: "disabled_by_owner",
+  };
+  const renewal = {
+    tierId: targetTierId,
+    amountMinor: targetTier.price.amountMinor,
+    currency: "USD",
+    interval: "month",
+  };
+  return {
+    schema:
+      "sitesourcery.alakazam-tier-change-quote.v1",
+    quoteId:
+      "40000000-0000-4000-8000-000000000011",
+    projectId: PROJECT_ID,
+    catalogVersion: snapshot.catalog.catalogVersion,
+    termsVersion: snapshot.catalog.termsVersion,
+    state: "quoted",
+    changeKind: "upgrade",
+    targetTier: structuredClone(targetTier),
+    dueNow,
+    appliedValue,
+    effectiveAt:
+      "after_payment_and_provider_confirmation",
+    nextRenewal: renewal,
+    noMidPeriodRefundOrProration: false,
+    premiumConfiguration: "preserved_when_inactive",
+    issuedAt: "2026-08-04T18:00:00.000Z",
+    expiresAt: "2026-08-04T18:30:00.000Z",
+    disclosure: {
+      schema:
+        "sitesourcery.alakazam-tier-change-disclosure.v1",
+      changeKind: "upgrade",
+      currentTierId: currentTier.tierId,
+      targetTierId,
+      dueNow: structuredClone(dueNow),
+      appliedValue: structuredClone(appliedValue),
+      effectiveAt:
+        "after_payment_and_provider_confirmation",
+      renewal: structuredClone(renewal),
+      downgrade: {
+        cashRefundMinor: 0,
+        providerProration: false,
+        currentTierKeptThroughPeriod: false,
+      },
+      premiumConfiguration:
+        "preserved_when_inactive",
+      cancellationPolicy:
+        "owner_review_required_before_release",
+    },
+    disclosureDigest: "d".repeat(64),
+    quoteDigest: "e".repeat(64),
+    ...overrides,
+  };
+}
+
 function checkout(quote, overrides = {}) {
   return {
     schema:
@@ -262,6 +435,51 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
     calls[0].options.headers["X-CSRF-Token"],
     undefined
   );
+});
+
+test("the Alakazam quote client sends only the target tier with CSRF and a stable command identity", async () => {
+  const calls = [];
+  const commandId =
+    "50000000-0000-4000-8000-000000000012";
+  const client = createClient({
+    baseUrl: "/api/v1",
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf-proof" });
+      }
+      return response(200, { state: "quoted" });
+    },
+  });
+
+  await client.createAlakazamQuote(
+    PROJECT_ID,
+    { targetTierId: "alakazam_50" },
+    { idempotencyKey: commandId }
+  );
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, "/api/v1/csrf");
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(
+    calls[1].url,
+    `/api/v1/projects/${PROJECT_ID}/alakazam-quotes`
+  );
+  assert.equal(calls[1].options.method, "POST");
+  assert.deepEqual(
+    JSON.parse(calls[1].options.body),
+    { targetTierId: "alakazam_50" }
+  );
+  assert.equal(
+    calls[1].options.headers["Idempotency-Key"],
+    commandId
+  );
+  assert.equal(
+    calls[1].options.headers["X-CSRF-Token"],
+    "csrf-proof"
+  );
+  assert.equal(calls[1].options.credentials, "include");
+  assert.equal(calls[1].options.redirect, "error");
 });
 
 test("start quotes and Checkout destinations are exact, credit-aware, and project-bound", () => {
@@ -332,12 +550,6 @@ test("start quotes and Checkout destinations are exact, credit-aware, and projec
     checkoutResult.checkoutUrl
   );
 
-  function changed(source, mutate) {
-    const copy = structuredClone(source);
-    mutate(copy);
-    return copy;
-  }
-
   for (const invalid of [
     changed(quote, (value) => {
       value.projectId = OTHER_PROJECT_ID;
@@ -360,6 +572,9 @@ test("start quotes and Checkout destinations are exact, credit-aware, and projec
     }),
     changed(quote, (value) => {
       value.provider = "stripe";
+    }),
+    changed(quote, (value) => {
+      value.noMidPeriodRefundOrProration = true;
     }),
   ]) {
     assert.equal(
@@ -395,6 +610,279 @@ test("start quotes and Checkout destinations are exact, credit-aware, and projec
       null
     );
   }
+});
+
+test("upgrade eligibility exposes only higher canonical tiers for exact active paid accounts", () => {
+  const cases = [
+    ["alakazam_25", ["alakazam_35", "alakazam_50"]],
+    ["alakazam_35", ["alakazam_50"]],
+    ["alakazam_50", []],
+  ];
+  for (const [currentTierId, expectedTargets] of cases) {
+    const snapshot = subscribedAccount(currentTierId);
+    const verified = customerControl.verifiedAlakazamAccount(
+      snapshot,
+      PROJECT_ID
+    );
+    assert.ok(verified);
+    assert.equal(
+      verified.actions.changeTier,
+      expectedTargets.length > 0
+    );
+    assert.equal(verified.actions.start, false);
+    assert.deepEqual(
+      verified.catalog.tiers
+        .filter((candidate) => (
+          customerControl.expectedAlakazamQuoteChange(
+            verified,
+            candidate.tierId
+          )
+        ))
+        .map((candidate) => candidate.tierId),
+      expectedTargets
+    );
+  }
+
+  const pending = subscribedAccount("alakazam_25", {
+    pendingChange: {
+      changeKind: "upgrade",
+      targetTier: catalog().tiers[1],
+      effectiveAt: null,
+      state: "payment_pending",
+    },
+  });
+  const cancelling = subscribedAccount("alakazam_25", {
+    subscriptionOverrides: {
+      cancelAtPeriodEnd: true,
+    },
+    pendingChange: {
+      changeKind: "cancellation",
+      targetTier: null,
+      effectiveAt: "2026-09-02T12:00:00.000Z",
+      state: "cancellation_scheduled",
+    },
+  });
+  const grace = subscribedAccount("alakazam_25", {
+    subscriptionOverrides: {
+      status: "grace",
+      paymentState: "attention_required",
+      firstFailedAt: "2026-08-05T12:00:00.000Z",
+      graceEndsAt: "2026-08-19T12:00:00.000Z",
+    },
+  });
+  const suspended = subscribedAccount("alakazam_25", {
+    subscriptionOverrides: {
+      status: "suspended",
+      paymentState: "suspended",
+    },
+  });
+  const ended = subscribedAccount("alakazam_25", {
+    subscriptionOverrides: {
+      status: "ended",
+      paymentState: "ended",
+    },
+  });
+  const pendingView =
+    customerControl.alakazamAccountPresentation(
+      pending,
+      PROJECT_ID
+    );
+  assert.equal(
+    pendingView.account.subscription.tier.tierId,
+    "alakazam_25"
+  );
+  assert.equal(
+    pendingView.account.pendingChange.targetTier.tierId,
+    "alakazam_35"
+  );
+  assert.equal(
+    pendingView.account.pendingChange.state,
+    "payment_pending"
+  );
+  for (const snapshot of [
+    pending,
+    cancelling,
+    grace,
+    suspended,
+    ended,
+  ]) {
+    const verified = customerControl.verifiedAlakazamAccount(
+      snapshot,
+      PROJECT_ID
+    );
+    assert.ok(verified);
+    assert.equal(verified.actions.changeTier, false);
+    assert.equal(
+      customerControl.expectedAlakazamQuoteChange(
+        verified,
+        "alakazam_50"
+      ),
+      null
+    );
+  }
+
+  assert.equal(
+    customerControl.verifiedAlakazamAccount(
+      changed(subscribedAccount("alakazam_25"), (value) => {
+        value.actions.changeTier = false;
+        value.actions.reason =
+          "customer_commands_not_composed";
+      }),
+      PROJECT_ID
+    ),
+    null
+  );
+  assert.equal(
+    customerControl.verifiedAlakazamAccount(
+      changed(subscribedAccount("alakazam_50"), (value) => {
+        value.actions.changeTier = true;
+        value.actions.reason = "only_upgrade_composed";
+      }),
+      PROJECT_ID
+    ),
+    null
+  );
+});
+
+test("upgrade quotes require exact fixed differences, current-tier value, renewal truth, and no provider proration", () => {
+  const observedAt = "2026-08-04T18:10:00.000Z";
+  for (const [currentTierId, targetTierId, dueNowMinor] of [
+    ["alakazam_25", "alakazam_35", 1000],
+    ["alakazam_35", "alakazam_50", 1500],
+    ["alakazam_25", "alakazam_50", 2500],
+  ]) {
+    const snapshot = subscribedAccount(currentTierId);
+    const quote = upgradeQuote(snapshot, targetTierId);
+    const verified = customerControl.verifiedAlakazamQuote(
+      quote,
+      PROJECT_ID,
+      snapshot,
+      targetTierId,
+      observedAt
+    );
+    assert.ok(verified);
+    assert.equal(verified.changeKind, "upgrade");
+    assert.equal(
+      verified.disclosure.currentTierId,
+      currentTierId
+    );
+    assert.equal(
+      verified.appliedValue.kind,
+      "current_paid_tier"
+    );
+    assert.equal(
+      verified.appliedValue.amountMinor,
+      snapshot.subscription.price.amountMinor
+    );
+    assert.equal(
+      verified.dueNow.subtotalMinor,
+      dueNowMinor
+    );
+    assert.equal(
+      verified.nextRenewal.amountMinor,
+      verified.targetTier.price.amountMinor
+    );
+    assert.equal(
+      verified.noMidPeriodRefundOrProration,
+      false
+    );
+    assert.equal(
+      verified.disclosure.downgrade.providerProration,
+      false
+    );
+    assert.equal(snapshot.downloadCredit.available, false);
+    assert.equal(snapshot.downloadCredit.amountMinor, 0);
+  }
+
+  const current35 = subscribedAccount("alakazam_35");
+  for (const rejectedTierId of [
+    "alakazam_25",
+    "alakazam_35",
+  ]) {
+    assert.equal(
+      customerControl.expectedAlakazamQuoteChange(
+        current35,
+        rejectedTierId
+      ),
+      null
+    );
+    assert.equal(
+      customerControl.verifiedAlakazamQuote(
+        upgradeQuote(current35, rejectedTierId),
+        PROJECT_ID,
+        current35,
+        rejectedTierId,
+        observedAt
+      ),
+      null
+    );
+  }
+
+  const current25 = subscribedAccount("alakazam_25");
+  const valid = upgradeQuote(current25, "alakazam_35");
+  for (const invalid of [
+    changed(valid, (value) => {
+      value.disclosure.currentTierId = "alakazam_35";
+    }),
+    changed(valid, (value) => {
+      value.appliedValue.kind = "download_purchase";
+      value.disclosure.appliedValue.kind =
+        "download_purchase";
+    }),
+    changed(valid, (value) => {
+      value.appliedValue.amountMinor = 500;
+      value.dueNow.subtotalMinor = 3000;
+      value.dueNow.totalMinor = 3000;
+      value.disclosure.appliedValue.amountMinor = 500;
+      value.disclosure.dueNow =
+        structuredClone(value.dueNow);
+    }),
+    changed(valid, (value) => {
+      value.dueNow.subtotalMinor = 999;
+      value.dueNow.totalMinor = 999;
+      value.disclosure.dueNow =
+        structuredClone(value.dueNow);
+    }),
+    changed(valid, (value) => {
+      value.nextRenewal.amountMinor = 2500;
+      value.disclosure.renewal =
+        structuredClone(value.nextRenewal);
+    }),
+    changed(valid, (value) => {
+      value.noMidPeriodRefundOrProration = true;
+    }),
+    changed(valid, (value) => {
+      value.disclosure.downgrade.providerProration = true;
+    }),
+    changed(valid, (value) => {
+      value.disclosureDigest = "not-a-digest";
+    }),
+    changed(valid, (value) => {
+      value.expiresAt = observedAt;
+    }),
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamQuote(
+        invalid,
+        PROJECT_ID,
+        current25,
+        "alakazam_35",
+        observedAt
+      ),
+      null
+    );
+  }
+
+  assert.equal(
+    customerControl.verifiedAlakazamQuote(
+      valid,
+      PROJECT_ID,
+      subscribedAccount("alakazam_35"),
+      "alakazam_35",
+      observedAt
+    ),
+    null
+  );
 });
 
 test("the customer projection preserves active, pending, attention, ended, renewal, credit, and receipt facts", () => {
@@ -656,8 +1144,32 @@ test("the panel source declares the responsive, accessible, retry-safe quote acc
     panelStart
   );
   const panelSource = source.slice(panelStart, panelEnd);
+  const quoteRequestStart = source.indexOf(
+    "function requestAlakazamQuote"
+  );
+  const checkoutRequestStart = source.indexOf(
+    "function requestAlakazamCheckout",
+    quoteRequestStart
+  );
+  const accountRenderStart = source.indexOf(
+    "function renderAlakazamAccount",
+    checkoutRequestStart
+  );
+  const quoteRequestSource = source.slice(
+    quoteRequestStart,
+    checkoutRequestStart
+  );
+  const checkoutRequestSource = source.slice(
+    checkoutRequestStart,
+    accountRenderStart
+  );
 
   assert.ok(panelStart >= 0 && panelEnd > panelStart);
+  assert.ok(
+    quoteRequestStart >= 0
+      && checkoutRequestStart > quoteRequestStart
+      && accountRenderStart > checkoutRequestStart
+  );
   assert.match(source, /client\s*\.getAlakazamAccount\(selectedProjectId\)/u);
   assert.match(source, /sequence === alakazamReadSequence/u);
   assert.match(source, /sequence === alakazamCommandSequence/u);
@@ -675,13 +1187,73 @@ test("the panel source declares the responsive, accessible, retry-safe quote acc
   assert.match(panelSource, /data-alakazam-accept/u);
   assert.match(panelSource, /data-alakazam-checkout/u);
   assert.match(panelSource, /checkbox\.checked === true/u);
+  assert.match(
+    panelSource,
+    /quoteButton\.disabled\s*=[\s\S]*capabilities\.alakazamQuote !== true/u
+  );
   assert.match(panelSource, /No account, payment, or plan data was changed/u);
+  assert.match(panelSource, /Upgrade options/u);
+  assert.match(panelSource, /Available Alakazam upgrades/u);
+  assert.match(panelSource, /Review the exact upgrade quote/u);
+  assert.match(panelSource, /Current plan credit/u);
+  assert.match(panelSource, /difference due now and the new monthly renewal/u);
+  assert.match(
+    panelSource,
+    /After difference payment and subscription confirmation/u
+  );
+  assert.match(
+    panelSource,
+    /Upgrade quotes and checkout are not open yet\. Nothing can be charged\./u
+  );
   assert.match(source, /Tier changes and billing management are not available/u);
   assert.match(source, /Subscription checkout is not open yet\. Nothing can be charged/u);
+  assert.match(
+    source,
+    /alakazamQuote:\s*false,\s*alakazamCheckout:\s*false/u
+  );
   assert.match(source, /windowRef\.location\.assign\(destination\)/u);
   assert.match(
     source,
     /subscription quote expired[\s\S]*Request a fresh quote/iu
+  );
+  assert.match(
+    quoteRequestSource,
+    /expectedAlakazamQuoteChange\(\s*account,\s*tierId\s*\)/u
+  );
+  assert.match(
+    quoteRequestSource,
+    /capabilities\.alakazamQuote !== true/u
+  );
+  assert.match(
+    quoteRequestSource,
+    /\{ targetTierId: tierId \}/u
+  );
+  assert.ok(
+    quoteRequestSource.indexOf(
+      "capabilities.alakazamQuote !== true"
+    ) < quoteRequestSource.indexOf(
+      "client.createAlakazamQuote("
+    )
+  );
+  assert.ok(
+    checkoutRequestSource.indexOf(
+      "capabilities.alakazamCheckout !== true"
+    ) < checkoutRequestSource.indexOf(
+      "client.createAlakazamCheckout("
+    )
+  );
+  assert.doesNotMatch(
+    quoteRequestSource.slice(
+      quoteRequestSource.indexOf(
+        "client.createAlakazamQuote("
+      ),
+      quoteRequestSource.indexOf(").then")
+    ),
+    /currentTierId|amountMinor|renewal|subscription|provider|effectiveAt/u
+  );
+  assert.doesNotMatch(
+    checkoutRequestSource,
+    /alakazamRead\s*=|presentation\.account\s*=|subscription\s*=/u
   );
   assert.doesNotMatch(
     panelSource,

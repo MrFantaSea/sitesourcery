@@ -126,11 +126,17 @@ Integration order:
 - [x] Bind exact customer disclosure acceptance into Customer provisioning and
   Checkout reservations before any provider effect; prove it after a fresh
   replay of all 31 migrations.
-- [ ] Start quote and one-use $5 credit. The service/repository contract is
-  complete; the held hosted boundary, HTTP route, and customer UI remain.
-- [ ] Checkout dispatch and safe return.
-- [ ] Fixed-difference upgrade quote and application.
-- [ ] Renewal-boundary downgrade quote and scheduling.
+- [x] Start quote and one-use $5 credit through the held hosted route and
+  customer UI, with exact desktop/mobile browser proof.
+- [x] Checkout dispatch, accepted-disclosure gate, safe Stripe handoff, and
+  refreshed-account return authority.
+- [x] Fixed-difference upgrade quote, paid settlement, provider mutation, and
+  atomic local application backend.
+- [x] Customer-safe fixed-difference upgrade action, quote review, Checkout,
+  pending state, and post-application account refresh.
+- [x] Renewal-boundary downgrade quote, Schedule dispatch, and atomic
+  boundary activation backend.
+- [ ] Customer-safe downgrade scheduling action and renewal review.
 - [ ] Billing Portal and exact cancellation preview/confirmation.
 - [ ] Stable retry, replay, and reconciliation states in the account UI.
 
@@ -316,6 +322,78 @@ containing this roadmap is its sealed local integration checkpoint.
   427/427 core and 140 hosted pass with 2 intentional environment skips.
   Evidence is preserved in
   `/private/tmp/sitesourcery-alakazam-start-browser.pJSraR/`.
+
+## Frozen Batch 2C customer upgrade contract
+
+- Upgrade eligibility is projected separately from runtime capability.
+  `actions.changeTier: true` means only the customer upgrade slice is
+  composed: the selected project has one active, paid, non-cancelling
+  subscription, no pending change, and at least one higher canonical tier.
+  `actions.start`, Portal, and cancellation remain false. A `$50` account,
+  pending/attention/ended account, or any account with a scheduled change is
+  ineligible.
+- The existing quote and Checkout routes remain unchanged. The browser sends
+  only the higher canonical `targetTierId`, accepted disclosure digest,
+  route IDs, CSRF proof, and stable UUID idempotency keys. It never sends
+  current-tier money, difference money, renewal money, subscription identity,
+  provider identity, or effective dates.
+- The panel offers only higher-ranked tiers: `$25` may review `$35` or
+  `$50`; `$35` may review `$50`; `$50` has no upgrade control. No lower
+  tier is rendered as an actionable choice in this slice.
+- An upgrade quote is usable only when its exact customer-safe schema agrees
+  with the latest account and catalog: `changeKind: upgrade`, disclosure
+  current tier equals the active account tier, target rank is higher,
+  `appliedValue.kind: current_paid_tier`, applied amount equals the full
+  current-tier monthly price, due-now subtotal is exactly target minus
+  current, no Download credit is present, effective timing is after payment
+  and provider confirmation, and the next renewal is the full target monthly
+  amount. Expiry, tax, disclosure, digest, project, and command fences remain
+  identical to the start flow.
+- Review copy names the current paid-tier credit rather than a Download
+  credit. It shows the current tier, selected higher tier, exact difference
+  due now, tax state, full next renewal, effective timing, and expiry. The
+  customer must freshly accept both the difference due now and the new monthly
+  renewal before Checkout.
+- A paid Checkout or success URL never grants the higher tier. The old tier
+  stays authoritative while payment settlement or provider application is
+  pending. Refreshed account state may show the pending target; only verified
+  Subscription-event readback plus the atomic local upgrade activation changes
+  the current tier.
+- The existing `noMidPeriodRefundOrProration` field remains the downgrade-only
+  paid-period-retention rule: it is false for starts and upgrades and true for
+  downgrades. Upgrade no-proration truth is instead bound by the exact fixed
+  target-minus-current amount, `disclosure.downgrade.providerProration: false`,
+  and the provider adapter's no-proration/unchanged-boundary contract. Customer
+  copy says the customer pays only the fixed difference, never a second full
+  tier charge; it does not mislabel the downgrade-only field.
+- A verified upgrade Checkout settlement is handed directly to the existing
+  durable `applyPaidUpgrade()` service by the composed Stripe event router.
+  Start settlements never enter that service. Replayed settlement events may
+  re-enter the durable application lookup, but an existing application lease,
+  provider confirmation, or completed activation prevents a second provider
+  Price mutation; uncertain results remain readback-only reconciliation.
+- Network uncertainty reuses the same command identity. Invalid or expired
+  quote truth requires a fresh quote identity. Provider-effect uncertainty
+  remains reconciliation-only and cannot open a second difference payment or
+  repeat the Price mutation.
+- Checkout claim serializes on the project and rejects every other open quote
+  whose dispatch/quote pair is still Checkout-pending, payment-settled,
+  provider-change-pending, or reconciliation-required. A settled dispatch
+  stops blocking only after its quote is atomically `applied`; therefore a
+  stale tab cannot collect a second difference while the old local tier is
+  still authoritative.
+- This slice adds no lower-tier action, Billing Portal, cancellation/refund
+  promise, feature grant, publication effect, provider release, or live
+  configuration. Tier fulfillment remains Lane F.
+- Completion proof: browser/API contract 8/8; backend focused composition
+  110/110; core 434/434; hosted 140 pass with 2 intentional skips; fresh
+  31-migration PostgreSQL journey 5/5, including the settled-payment
+  second-Checkout fence and later post-activation release; Chrome 149 runtime
+  27/27 at 1440×1000 and 320×720 with 0 external responses and 0 unexpected
+  errors. Browser evidence is under
+  `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/` with results
+  SHA-256
+  `f7204667d2a4736239467e139defd19d6ce87525151f08e2252f948c7ea92c40`.
 
 ## Accepted launch-truth gates from Batch 1 audit
 

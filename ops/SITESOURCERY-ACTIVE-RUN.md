@@ -25,10 +25,9 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Prior sealed checkpoint: `3ad0911` (`Connect held Alakazam customer
-  checkout`). This ledger is sealed with Batch 2B when branch `HEAD` has
-  subject `Connect held Alakazam customer start flow`; otherwise treat the
-  listed Batch 2B work as in flight and inspect the worktree before resuming.
+- Prior sealed checkpoint: `47ba558` (`Connect held Alakazam customer start
+  flow`). Batch 2C customer upgrade work is in flight and uncommitted; inspect
+  the exact worktree and this ledger before resuming it.
 - Public production remains the July 22 predecessor.
 - No push, deploy, DNS change, provider write, credential capture, or release
   approval is authorized by this run.
@@ -36,12 +35,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Batch 2B connects the browser to the proven, still-held Batch 2A backend:
-eligible project → canonical tier selection → exact quote and `$5` credit
-review → explicit disclosure acceptance → one safe Stripe Checkout redirect.
-Project eligibility and runtime quote/Checkout readiness remain separate
-truths. Upgrade, downgrade, Portal, and cancellation controls remain out of
-scope for this slice.
+Batch 2C connects the already-proven fixed-difference upgrade machinery to the
+customer-safe account and browser flow while release remains held: active paid
+`$25`/`$35` account → higher-tier choice only → exact difference quote → fresh
+acceptance → safe Checkout → verified settlement → durable provider
+application → Subscription event/readback → atomic local tier revision. Downgrade,
+Portal, cancellation, fulfillment, lifecycle automation, owner invoicing, and
+release remain separate later lanes.
 
 ## Completed and reviewed
 
@@ -187,6 +187,75 @@ Verified after the relevant repairs:
   gate and must not be “fixed” by removing the hosted account/subscription
   architecture.
 
+## Batch 2C in-flight ledger
+
+- The canonical roadmap now freezes the customer upgrade contract. Upgrade is
+  eligible only for an active, paid, non-cancelling `$25` or `$35`
+  subscription with a current period and no pending change. Only higher tiers
+  may be offered; `$50`, attention, pending, scheduled, cancelling, cancelled,
+  and ended states expose no upgrade action.
+- Server account truth implements that exact `actions.changeTier` projection;
+  start, Portal, and cancellation remain false for subscribed accounts.
+- The public `noMidPeriodRefundOrProration` field remains the existing
+  downgrade-only paid-period-retention rule (false for starts/upgrades, true
+  for downgrades). Upgrade truth is the fixed target-minus-current payment,
+  disclosure `providerProration: false`, and the provider adapter's unchanged
+  billing boundary/no-proration contract. No schema or historical quote digest
+  was changed merely to rename that established rule.
+- A critical composition gap found by the read-only audit is repaired in the
+  worktree: verified upgrade payment settlement now enters the existing
+  durable `applyPaidUpgrade()` service. Production creates one upgrade service
+  instance for both paid application and later Subscription-event activation.
+  Starts never enter upgrade application; impossible Checkout change kinds
+  stop before settlement. Existing application leases, confirmation state, and
+  read-only ambiguity recovery remain the duplicate-provider-mutation fences.
+- Backend focused proof currently passes: 33/33 webhook/quote/production
+  composition tests and 77/77 account/billing/payment/upgrade/HTTP/PostgreSQL
+  projection tests. The integrated browser contract is 8/8 green. Syntax and
+  `git diff --check` pass. These are in-flight results, not a sealed
+  checkpoint; broad suites, artifact proof, and browser proof still remain.
+- Browser worker Banach (`019fcf0e-07ad-7511-b9ce-20f431d4b125`) changed only
+  `abracadabra/app/abracadabra-customer-control-dom.js` and
+  `scripts/test/abracadabra-alakazam-account.test.mjs`. Its result was reviewed,
+  independently rerun at 8/8, and the worker is closed.
+- Fresh database `ss_alakazam_upgrade_batch2c_20260804_1` replayed all 31
+  migrations. Its first 5-test journey exposed one stale assertion that still
+  expected every customer command disabled after a completed downgrade to an
+  active paid `$25` tier. The assertion now checks the exact new action object;
+  the authoritative final rerun passes 5/5. It also proves a competing direct
+  `$25→$50` quote cannot claim a Checkout after the first payment settles,
+  while a later legitimate upgrade can claim after atomic activation. The
+  database had 0 active sessions, was dropped, and has 0 remaining matches.
+- Post-integration broad proof passes: core Node 434/434; hosted service 140
+  pass with 2 intentional environment skips; operations 52/52; self-host
+  19/19; migration structure 23/23; runtime assertion; current site check (18
+  live pages, 20 redirects, 28 prices, 5 rails); held hosted build plus HTML;
+  and the rebuilt 78-file public artifact with exact source bytes. The first
+  public-artifact check correctly reported a stale derived `_site`; rebuilding
+  before verification produced the authoritative pass.
+- The reviewed customer-control source SHA-256 is
+  `5445e65e2f1b500f14fd90e44ea381f85a04910b919e4cdec47b8c94c9ba4417`.
+  Its hosted-truth manifest now binds that exact digest, and both the temporary
+  browser artifact and ordinary `_hosted` artifact build and verify.
+- Browser verifier Dalton (`019fcf18-8f2e-7fe1-b380-ed14f165fca6`) passed
+  27/27 proofs and is closed. Chrome for Testing 149 covered 1440×1000 and
+  320×720, 25 screenshots, exact `$25→$50` and `$35→$50` money, eligibility,
+  held zero-write states, retries, acceptance, expiry, destination rejection,
+  intercepted safe redirect, accessibility, no overflow, and server-only tier
+  authority. There were 177 API requests (162 GET, 15 POST), 0 external
+  responses, and 0 unexpected browser errors. Evidence is under
+  `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/`; results JSON
+  SHA-256 is
+  `f7204667d2a4736239467e139defd19d6ce87525151f08e2252f948c7ea92c40`.
+- Volta's completed read-only review found one real blocker before seal: the
+  old Checkout claim query stopped considering a dispatch after settlement,
+  while the local subscription remained on its old tier until the later
+  Subscription event. A stale second quote could therefore attempt another
+  difference payment. The repaired claim joins dispatch and quote state under
+  the existing project lock, blocks settled/provider-pending or reconciliation
+  states, and passes both sides of the PostgreSQL proof. Volta found no other
+  Batch 2C blocker and is closed.
+
 Batch 1 sealed checkpoint gates:
 
 - [x] Verify the named PostgreSQL test database is idle, drop it, and verify
@@ -202,6 +271,17 @@ Batch 1 sealed checkpoint gates:
   provider object ID, or release-opening change is present.
 
 ## Live resources and workers
+
+- Batch 2C isolated Chrome verifier Dalton,
+  `019fcf18-8f2e-7fe1-b380-ed14f165fca6`, passed 27/27 and is closed; evidence
+  is in `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/`.
+- Batch 2C read-only adversarial reviewer Volta,
+  `019fcf19-b777-7c62-aad6-f4ad68541de4`, found the second-payment claim gap,
+  verified the remaining contract, and is closed.
+
+- Batch 2C browser worker Banach,
+  `019fcf0e-07ad-7511-b9ce-20f431d4b125`, completed its exclusive two-file
+  browser write set with 8/8 focused tests and is closed.
 
 - Browser API adapter worker Ampere,
   `019fcee7-6d6f-7d73-bd01-7a2525a764ba`, completed its exclusive
@@ -232,17 +312,16 @@ Batch 1 sealed checkpoint gates:
 
 ## Next action
 
-Freeze the distinct customer upgrade contract before exposing any upgrade
-control. Reconcile the already-proven backend upgrade machinery with the
-customer-safe account/action projection, exact quote/acceptance UX, and
-post-settlement refresh boundary first. Do not infer downgrade, Portal,
-cancellation, fulfillment, lifecycle, owner-tool, release, or provider
-authority from the completed start flow.
+Reconcile the roadmap and continuity ledger with final Batch 2C evidence,
+inspect the exact diff for scope/secrets/release drift, stage only the reviewed
+files, and seal one local commit. Then begin the distinct customer downgrade
+slice; do not mix it into the upgrade checkpoint.
 
 ## Batch 1 write scope
 
-Lead write scope for Batch 2B: account start eligibility, capability projection,
-customer-control validation/DOM/CSS, hosted-artifact proof, and focused tests.
-The API-adapter worker owns only `abracadabra-api.js` and its existing focused
-test. Server billing/repository code, migrations, fulfillment, lifecycle, and
-provider configuration are out of scope.
+Lead write scope for Batch 2C: canonical roadmap/active ledger, account upgrade
+eligibility, webhook settlement-to-upgrade composition, hosted production
+composition, focused backend tests, integration/artifact/browser proof, and
+the final local commit. Banach owns only the two browser files named above.
+Migrations, downgrade controls, fulfillment, lifecycle, owner invoicing,
+provider configuration, release, push, deploy, and DNS are out of scope.

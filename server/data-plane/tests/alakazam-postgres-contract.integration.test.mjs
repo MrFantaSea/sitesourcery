@@ -1433,6 +1433,29 @@ test(
         issuedAt: "2026-08-02T12:10:00.000Z",
         expiresAt: "2026-08-02T12:30:00.000Z"
       });
+      const competingUpgradeQuoteId = await insertQuote(
+        client,
+        authority,
+        {
+          changeKind: "upgrade",
+          currentSubscriptionId: subscriptionId,
+          currentSubscriptionRevision: 2,
+          currentTierId: "alakazam_25",
+          currentAmountMinor: 2500,
+          currentPeriodEndsAt:
+            "2026-09-02T12:03:00.000Z",
+          targetTierId: "alakazam_50",
+          targetAmountMinor: 5000,
+          appliedValueKind: "current_paid_tier",
+          appliedValueMinor: 2500,
+          dueNowSubtotalMinor: 2500,
+          effectiveRule:
+            "after_payment_and_provider_confirmation",
+          noMidPeriodRefund: false,
+          issuedAt: "2026-08-02T12:10:30.000Z",
+          expiresAt: "2026-08-02T12:30:00.000Z"
+        }
+      );
       await flushConstraints(client);
       const upgradeDispatchId = await openCheckout(
         client,
@@ -1510,6 +1533,42 @@ test(
         next: "provider_change"
       });
       await flushConstraints(client);
+      const competingDispatchId = randomUUID();
+      await assert.rejects(
+        settlementRepository.claimCheckoutDispatch({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId: competingUpgradeQuoteId,
+          dispatchId: competingDispatchId,
+          stripeCustomerId: authority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(
+              competingUpgradeQuoteId
+            ),
+          claimedAt: "2026-08-02T12:12:06.000Z"
+        }),
+        (error) =>
+          error.code === "alakazam_change_pending" &&
+          error.status === 409
+      );
+      const competingUpgrade = await client.query(
+        `select quote.state,
+                count(dispatch.id)::integer
+                  as dispatch_count
+           from ss.alakazam_change_quotes quote
+           left join ss.alakazam_checkout_dispatches dispatch
+             on dispatch.quote_id = quote.id
+          where quote.id = $1
+          group by quote.state`,
+        [competingUpgradeQuoteId]
+      );
+      assert.deepEqual(competingUpgrade.rows, [
+        {
+          state: "quoted",
+          dispatch_count: 0
+        }
+      ]);
       const stagedUpgrade = await client.query(
         `select subscription.tier_id,
                 subscription.amount_minor,
@@ -2389,11 +2448,7 @@ test(
           renewalDueAt:
             renewedAccount.nextRenewal.dueAt,
           receiptCount: renewedAccount.receipts.length,
-          commandsEnabled: Object.entries(
-            renewedAccount.actions
-          )
-            .filter(([key]) => key !== "reason")
-            .some(([, enabled]) => enabled === true)
+          actions: renewedAccount.actions
         },
         {
           state: "active",
@@ -2405,7 +2460,13 @@ test(
           renewalDueAt:
             "2026-10-02T12:03:00.000Z",
           receiptCount: 2,
-          commandsEnabled: false
+          actions: {
+            start: false,
+            changeTier: true,
+            manageBilling: false,
+            cancel: false,
+            reason: "only_upgrade_composed"
+          }
         }
       );
       assert.doesNotMatch(
@@ -2476,6 +2537,49 @@ test(
           appliedAt: "2026-09-02T12:03:00.000Z"
         }
       );
+
+      const laterUpgradeQuoteId = await insertQuote(
+        client,
+        authority,
+        {
+          changeKind: "upgrade",
+          currentSubscriptionId: subscriptionId,
+          currentSubscriptionRevision: 4,
+          currentTierId: "alakazam_25",
+          currentAmountMinor: 2500,
+          currentPeriodEndsAt:
+            "2026-10-02T12:03:00.000Z",
+          targetTierId: "alakazam_35",
+          targetAmountMinor: 3500,
+          appliedValueKind: "current_paid_tier",
+          appliedValueMinor: 2500,
+          dueNowSubtotalMinor: 1000,
+          effectiveRule:
+            "after_payment_and_provider_confirmation",
+          noMidPeriodRefund: false,
+          issuedAt: "2026-09-02T12:06:00.000Z",
+          expiresAt: "2026-09-02T12:36:00.000Z"
+        }
+      );
+      const laterUpgradeClaim =
+        await settlementRepository.claimCheckoutDispatch({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId: laterUpgradeQuoteId,
+          dispatchId: randomUUID(),
+          stripeCustomerId: authority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(laterUpgradeQuoteId),
+          claimedAt: "2026-09-02T12:07:00.000Z"
+        });
+      assert.equal(laterUpgradeClaim.status, "create");
+      assert.equal(
+        laterUpgradeClaim.dispatch.purpose.currentSubscription
+          .revision,
+        4
+      );
+      await flushConstraints(client);
 
       const grants = await client.query(`
         select

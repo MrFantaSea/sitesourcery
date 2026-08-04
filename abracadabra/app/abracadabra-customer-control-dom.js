@@ -392,7 +392,36 @@
       );
   }
 
+  function alakazamUpgradeEligible(account) {
+    if (
+      !record(account)
+      || !record(account.catalog)
+      || !Array.isArray(account.catalog.tiers)
+    ) return false;
+    var subscription = account.subscription;
+    return record(subscription)
+      && record(subscription.tier)
+      && Number.isSafeInteger(subscription.tier.rank)
+      && subscription.status === "active"
+      && subscription.paymentState === "paid"
+      && record(subscription.currentPeriod)
+      && subscription.cancelAtPeriodEnd === false
+      && account.pendingChange === null
+      && account.catalog.tiers.some(function (tier) {
+        return record(tier)
+          && Number.isSafeInteger(tier.rank)
+          && tier.rank > subscription.tier.rank;
+      });
+  }
+
   function verifiedAlakazamAccount(value, projectId) {
+    var startAvailable = Boolean(
+      value
+      && value.subscription === null
+      && value.pendingChange === null
+    );
+    var upgradeAvailable =
+      alakazamUpgradeEligible(value);
     if (
       !exactKeys(
         value,
@@ -453,15 +482,15 @@
           "start"
         ]
       )
-      || value.actions.start !== (
-        value.subscription === null
-      )
-      || value.actions.changeTier !== false
+      || value.actions.start !== startAvailable
+      || value.actions.changeTier !== upgradeAvailable
       || value.actions.manageBilling !== false
       || value.actions.cancel !== false
       || value.actions.reason !== (
-        value.subscription === null
+        startAvailable
           ? "only_start_composed"
+          : upgradeAvailable
+            ? "only_upgrade_composed"
           : "customer_commands_not_composed"
       )
       || !verifiedAlakazamRelationships(value)
@@ -547,18 +576,69 @@
 
   function verifiedAlakazamAppliedValue(
     value,
-    account
+    account,
+    changeKind
   ) {
     if (
       !exactKeys(value, ["amountMinor", "kind"])
       || !safeMinor(value.amountMinor)
     ) return false;
-    return account.downloadCredit.available
-      ? value.kind === "download_purchase"
+    if (changeKind === "upgrade") {
+      return Boolean(account.subscription)
+        && value.kind === "current_paid_tier"
         && value.amountMinor ===
-          account.catalog.ladder.downloadCreditMinor
-      : value.kind === "none"
-        && value.amountMinor === 0;
+          account.subscription.price.amountMinor;
+    }
+    return changeKind === "start"
+      && (
+        account.downloadCredit.available
+          ? value.kind === "download_purchase"
+            && value.amountMinor ===
+              account.catalog.ladder.downloadCreditMinor
+          : value.kind === "none"
+            && value.amountMinor === 0
+      );
+  }
+
+  function expectedAlakazamQuoteChange(
+    account,
+    targetTierId
+  ) {
+    if (
+      !record(account)
+      || !record(account.catalog)
+      || !Array.isArray(account.catalog.tiers)
+    ) return null;
+    var target = account.catalog.tiers.find(
+      function (tier) {
+        return tier.tierId === text(targetTierId);
+      }
+    );
+    if (!target) return null;
+    if (
+      account.subscription === null
+      && account.actions.start === true
+    ) {
+      return Object.freeze({
+        changeKind: "start",
+        currentTierId: null,
+        target: target
+      });
+    }
+    if (
+      account.subscription
+      && account.actions.changeTier === true
+      && record(account.subscription.tier)
+      && target.rank > account.subscription.tier.rank
+    ) {
+      return Object.freeze({
+        changeKind: "upgrade",
+        currentTierId:
+          account.subscription.tier.tierId,
+        target: target
+      });
+    }
+    return null;
   }
 
   function verifiedAlakazamQuote(
@@ -572,12 +652,16 @@
       accountValue,
       projectId
     );
+    var expected = expectedAlakazamQuoteChange(
+      account,
+      targetTierId
+    );
     var observed = safeIso(observedAt)
       ? Date.parse(observedAt)
       : Date.now();
     if (
       !account
-      || account.actions.start !== true
+      || !expected
       || !exactKeys(
         value,
         [
@@ -610,7 +694,7 @@
       || value.termsVersion !==
         account.catalog.termsVersion
       || value.state !== "quoted"
-      || value.changeKind !== "start"
+      || value.changeKind !== expected.changeKind
       || !matchingCatalogTier(
         account.catalog,
         value.targetTier
@@ -620,7 +704,8 @@
       || !verifiedAlakazamDueNow(value.dueNow)
       || !verifiedAlakazamAppliedValue(
         value.appliedValue,
-        account
+        account,
+        expected.changeKind
       )
       || value.dueNow.subtotalMinor !==
         value.targetTier.price.amountMinor
@@ -667,8 +752,10 @@
       )
       || value.disclosure.schema !==
         ALAKAZAM_DISCLOSURE_SCHEMA
-      || value.disclosure.changeKind !== "start"
-      || value.disclosure.currentTierId !== null
+      || value.disclosure.changeKind !==
+        expected.changeKind
+      || value.disclosure.currentTierId !==
+        expected.currentTierId
       || value.disclosure.targetTierId !==
         value.targetTier.tierId
       || JSON.stringify(value.disclosure.dueNow) !==
@@ -814,6 +901,7 @@
   function renderAlakazamQuoteReview(
     documentRef,
     body,
+    account,
     command,
     capabilities,
     actions
@@ -844,6 +932,7 @@
     }
 
     var quote = selected.quote;
+    var upgrade = quote.changeKind === "upgrade";
     var review = accountElement(
       documentRef,
       "section",
@@ -858,7 +947,9 @@
       documentRef,
       "h4",
       "",
-      "Review the exact subscription quote"
+      upgrade
+        ? "Review the exact upgrade quote"
+        : "Review the exact subscription quote"
     );
     heading.id = "customer-alakazam-quote-title";
     var facts = accountElement(
@@ -866,6 +957,16 @@
       "dl",
       "customer-alakazam-quote-facts"
     );
+    if (upgrade) {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Current tier",
+        account.subscription.tier.name + " · "
+          + accountMoney(account.subscription.price)
+          + " already paid this period"
+      );
+    }
     appendAccountFact(
       documentRef,
       facts,
@@ -877,12 +978,16 @@
     appendAccountFact(
       documentRef,
       facts,
-      "Download credit",
+      upgrade ? "Current plan credit" : "Download credit",
       quote.appliedValue.amountMinor > 0
         ? "−" + accountMoney({
           amountMinor: quote.appliedValue.amountMinor,
           currency: "USD"
-        }) + " applied once"
+        }) + (
+          upgrade
+            ? " already paid this period"
+            : " applied once"
+        )
         : "No credit applied"
     );
     appendAccountFact(
@@ -912,7 +1017,9 @@
       documentRef,
       facts,
       "Starts",
-      "After payment and subscription confirmation"
+      upgrade
+        ? "After difference payment and subscription confirmation"
+        : "After payment and subscription confirmation"
     );
     appendAccountFact(
       documentRef,
@@ -937,7 +1044,9 @@
       documentRef,
       "span",
       "",
-      "I reviewed and accept the amount due now and monthly renewal shown above."
+      upgrade
+        ? "I reviewed and accept the difference due now and the new monthly renewal shown above."
+        : "I reviewed and accept the amount due now and monthly renewal shown above."
     );
     acceptance.append(checkbox, acceptanceCopy);
 
@@ -976,7 +1085,9 @@
           documentRef,
           "p",
           "customer-alakazam-command-state",
-          "The exact quote is available for review, but secure subscription payment is not open yet."
+          upgrade
+            ? "The exact upgrade quote is available for review, but secure upgrade payment is not open yet."
+            : "The exact quote is available for review, but secure subscription payment is not open yet."
         )
       );
     }
@@ -1148,7 +1259,23 @@
     }
     body.appendChild(facts);
 
-    if (!account.subscription) {
+    var commandKind = account.subscription
+      ? account.actions.changeTier === true
+        ? "upgrade"
+        : ""
+      : account.actions.start === true
+        ? "start"
+        : "";
+    var selectableTiers = account.catalog.tiers.filter(
+      function (tier) {
+        return Boolean(expectedAlakazamQuoteChange(
+          account,
+          tier.tierId
+        ));
+      }
+    );
+
+    if (selectableTiers.length > 0) {
       var tiers = accountElement(
         documentRef,
         "section",
@@ -1158,7 +1285,9 @@
         documentRef,
         "h4",
         "",
-        "Available tiers"
+        commandKind === "upgrade"
+          ? "Upgrade options"
+          : "Available tiers"
       );
       var tierList = accountElement(
         documentRef,
@@ -1167,9 +1296,11 @@
       );
       tierList.setAttribute(
         "aria-label",
-        "Available Alakazam tiers"
+        commandKind === "upgrade"
+          ? "Available Alakazam upgrades"
+          : "Available Alakazam tiers"
       );
-      account.catalog.tiers.forEach(function (tier) {
+      selectableTiers.forEach(function (tier) {
         var item = accountElement(
           documentRef,
           "li",
@@ -1190,7 +1321,9 @@
           command.phase === "quoting"
             && command.selectedTierId === tier.tierId
             ? "Requesting exact quote…"
-            : "Review exact quote"
+            : commandKind === "upgrade"
+              ? "Review upgrade quote"
+              : "Review exact quote"
         );
         quoteButton.type = "button";
         quoteButton.setAttribute(
@@ -1202,7 +1335,11 @@
           tierDetails.id
         );
         quoteButton.disabled =
-          account.actions.start !== true
+          (
+            commandKind === "start"
+              ? account.actions.start !== true
+              : account.actions.changeTier !== true
+          )
           || capabilities.alakazamQuote !== true
           || command.phase === "quoting"
           || command.phase === "checkout";
@@ -1228,6 +1365,7 @@
       renderAlakazamQuoteReview(
         documentRef,
         body,
+        account,
         command,
         capabilities,
         actions
@@ -1297,7 +1435,11 @@
         "p",
         "customer-alakazam-actions-note",
         account.subscription
-          ? "Tier changes and billing management are not available in this panel yet."
+          ? account.actions.changeTier === true
+            ? capabilities.alakazamQuote === true
+              ? "Choose a higher tier, review the exact difference, and accept it before secure payment."
+              : "Upgrade quotes and checkout are not open yet. Nothing can be charged."
+            : "Tier changes and billing management are not available in this panel yet."
           : capabilities.alakazamQuote === true
             ? "Choose a tier, review the exact quote, and accept it before secure payment."
             : "Subscription checkout is not open yet. Nothing can be charged."
@@ -2141,16 +2283,15 @@
       var projectId = idOf(lastState.project);
       var account = currentAlakazamAccount(projectId);
       var tierId = text(tierIdInput);
-      var tier = account
-        && account.catalog.tiers.find(function (candidate) {
-          return candidate.tierId === tierId;
-        });
+      var expectedChange = expectedAlakazamQuoteChange(
+        account,
+        tierId
+      );
       if (
         !projectId
         || !account
-        || account.actions.start !== true
+        || !expectedChange
         || capabilities.alakazamQuote !== true
-        || !tier
         || !client
         || typeof client.createAlakazamQuote !== "function"
       ) return Promise.resolve(null);
@@ -3466,6 +3607,8 @@
       verifiedAlakazamAccount,
     verifiedAlakazamCheckout:
       verifiedAlakazamCheckout,
+    expectedAlakazamQuoteChange:
+      expectedAlakazamQuoteChange,
     verifiedAlakazamQuote:
       verifiedAlakazamQuote,
     versionLabel: versionLabel,

@@ -33,11 +33,35 @@ function selectedEvent(
   };
 }
 
-function fixture() {
+function paymentSettlement(changeKind) {
+  return {
+    status: "payment_settled",
+    provider: "stripe",
+    changeKind,
+    dispatchId: "11111111-1111-4111-8111-111111111111",
+    projectId: "22222222-2222-4222-8222-222222222222",
+    quoteId: "33333333-3333-4333-8333-333333333333",
+    subscriptionId: "44444444-4444-4444-8444-444444444444",
+    receiptId: "55555555-5555-4555-8555-555555555555",
+    paymentProviderFactsDigest: "a".repeat(64),
+    next:
+      changeKind === "upgrade"
+        ? "provider_change"
+        : "subscription_confirmation"
+  };
+}
+
+function fixture({
+  paymentResult = paymentSettlement("start"),
+  upgradeApplicationResult = {
+    status: "provider_confirmed"
+  }
+} = {}) {
   const calls = {
     payment: [],
     start: [],
     upgrade: [],
+    upgradeApplication: [],
     downgrade: []
   };
   function service(name, status) {
@@ -51,12 +75,27 @@ function fixture() {
   return {
     calls,
     router: createAlakazamStripeEventRouter({
-      payment: service("payment", "payment"),
+      payment: {
+        async ingestStripeEvent(event) {
+          calls.payment.push(structuredClone(event));
+          return structuredClone(paymentResult);
+        }
+      },
       startActivation: service("start", "start"),
       upgradeActivation: service(
         "upgrade",
         "upgrade"
       ),
+      upgradeApplication: {
+        async applyPaidUpgrade(settlement) {
+          calls.upgradeApplication.push(
+            structuredClone(settlement)
+          );
+          return structuredClone(
+            upgradeApplicationResult
+          );
+        }
+      },
       downgradeActivation: service(
         "downgrade",
         "downgrade"
@@ -83,12 +122,68 @@ test("Alakazam Checkout payment routes to one exact handler", async () => {
   assert.equal(isPotentialAlakazamStripeEvent(event), true);
   assert.deepEqual(
     await context.router.ingestStripeEvent(event),
-    { status: "payment" }
+    paymentSettlement("start")
   );
   assert.deepEqual(callCounts(context.calls), {
     payment: 1,
     start: 0,
     upgrade: 0,
+    upgradeApplication: 0,
+    downgrade: 0
+  });
+});
+
+test("a paid Alakazam upgrade is handed directly to durable provider application", async () => {
+  const settlement = paymentSettlement("upgrade");
+  const context = fixture({
+    paymentResult: settlement,
+    upgradeApplicationResult: {
+      status: "provider_confirmed",
+      next: "subscription_event"
+    }
+  });
+  assert.deepEqual(
+    await context.router.ingestStripeEvent(
+      selectedEvent(
+        "checkout.session.completed",
+        "upgrade"
+      )
+    ),
+    {
+      status: "provider_confirmed",
+      next: "subscription_event"
+    }
+  );
+  assert.deepEqual(context.calls.upgradeApplication, [
+    settlement
+  ]);
+  assert.deepEqual(callCounts(context.calls), {
+    payment: 1,
+    start: 0,
+    upgrade: 0,
+    upgradeApplication: 1,
+    downgrade: 0
+  });
+});
+
+test("an impossible Checkout change kind stops before payment settlement", async () => {
+  const context = fixture();
+  await assert.rejects(
+    context.router.ingestStripeEvent(
+      selectedEvent(
+        "checkout.session.completed",
+        "downgrade"
+      )
+    ),
+    (error) =>
+      error.code === "stripe_event_invalid" &&
+      error.status === 400
+  );
+  assert.deepEqual(callCounts(context.calls), {
+    payment: 0,
+    start: 0,
+    upgrade: 0,
+    upgradeApplication: 0,
     downgrade: 0
   });
 });
@@ -119,6 +214,7 @@ test("Alakazam Subscription events route only by exact change kind", async () =>
       payment: 0,
       start: expected === "start" ? 1 : 0,
       upgrade: expected === "upgrade" ? 1 : 0,
+      upgradeApplication: 0,
       downgrade: expected === "downgrade" ? 1 : 0
     });
   }
@@ -143,6 +239,7 @@ test("unrelated Stripe events perform no Alakazam work", async () => {
     payment: 0,
     start: 0,
     upgrade: 0,
+    upgradeApplication: 0,
     downgrade: 0
   });
 });
@@ -169,6 +266,7 @@ test("an Alakazam marker with an impossible event transition fails closed", asyn
       payment: 0,
       start: 0,
       upgrade: 0,
+      upgradeApplication: 0,
       downgrade: 0
     });
   }

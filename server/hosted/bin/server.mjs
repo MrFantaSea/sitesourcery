@@ -277,6 +277,10 @@ async function start() {
       ),
       resolveSession: commerceV2.resolveSession
     });
+  const alakazamUpgrade =
+    createAlakazamUpgradeService(
+      alakazamServicePorts
+    );
   const alakazamCommerce =
     createAlakazamStripeEventRouter({
       payment: createAlakazamPaymentService(
@@ -286,10 +290,8 @@ async function start() {
         createAlakazamStartActivationService(
           alakazamServicePorts
         ),
-      upgradeActivation:
-        createAlakazamUpgradeService(
-          alakazamServicePorts
-        ),
+      upgradeActivation: alakazamUpgrade,
+      upgradeApplication: alakazamUpgrade,
       downgradeActivation:
         createAlakazamDowngradeActivationService(
           alakazamServicePorts

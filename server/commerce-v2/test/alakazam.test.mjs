@@ -317,6 +317,14 @@ test("paid upgrades charge only the fixed tier difference and renew at the full 
       result.effectiveAt,
       "after_payment_and_provider_confirmation"
     );
+    assert.equal(
+      result.noMidPeriodRefundOrProration,
+      false
+    );
+    assert.equal(
+      result.disclosure.downgrade.providerProration,
+      false
+    );
   }
 });
 

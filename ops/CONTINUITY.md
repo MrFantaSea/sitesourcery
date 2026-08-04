@@ -1,4 +1,4 @@
-# CONTINUITY — the session ledger (updated 2026-08-02, production continuity proven)
+# CONTINUITY — the session ledger (updated 2026-08-04, production continuity proven)
 
 Written so no ruling, promise, or open thread is lost when the working
 conversation is condensed. If you are an assistant reading this fresh:
@@ -580,6 +580,63 @@ these are OWNER RULINGS and open work, not suggestions.
   start/upgrade/downgrade/Portal/cancellation commands in parallel with tier
   fulfillment and broader lifecycle reconciliation. Public production remains
   the July 22 predecessor.
+
+## MULTI-AGENT BATCH 2 CUSTOMER START AND UPGRADE CHECKPOINT (2026-08-04)
+
+- The held customer room now completes two distinct, evidence-gated billing
+  journeys. A project with no subscription may choose `$25/$35/$50`, apply its
+  one-use `$5` Download credit, review exact first payment and renewal, freshly
+  accept the disclosure, and receive only a safe Stripe Checkout destination.
+  An active paid `$25`/`$35` project with no pending change may choose only a
+  higher tier and review the exact fixed difference (`$10`, `$15`, or `$25`)
+  plus the full target renewal. `$50`, pending, attention, cancelling, ended,
+  and scheduled-change accounts expose no upgrade action.
+- The browser sends only target tier, accepted disclosure digest, route
+  identity, CSRF proof, and stable command UUIDs. It rejects changed money,
+  current-tier identity, renewal, tax, expiry, schema, provider-shaped fields,
+  unsafe destinations, and stale project/account truth. A success URL or
+  Checkout response never mutates local tier authority; only a refreshed
+  server account after verified Subscription-event readback and atomic local
+  activation may show the higher tier.
+- The production Stripe event composition now hands an exact paid upgrade
+  settlement into the already-proven durable `applyPaidUpgrade()` service, then
+  routes the later Subscription update into the same service instance for
+  activation. Existing leases, one idempotent Price mutation, unchanged billing
+  boundary, no provider proration, and read-only ambiguity recovery remain the
+  no-double-effect fences.
+- An independent review caught and closed a second-payment window before the
+  checkpoint: after one dispatch became `settled`, a stale second quote could
+  previously reach Checkout while the local tier still awaited activation.
+  Checkout claim now serializes on the project and joins dispatch with quote
+  state, blocking Checkout-pending, payment-settled, provider-change-pending,
+  and reconciliation-required work. A settled dispatch stops blocking only
+  after its quote is atomically `applied`.
+- The established `noMidPeriodRefundOrProration` quote field remains the
+  downgrade-only paid-period-retention rule (false for starts/upgrades, true
+  for downgrades). Upgrade no-proration truth is separately fixed by exact
+  target-minus-current money, disclosure `providerProration: false`, and the
+  provider adapter contract. No historical quote schema or digest was rewritten
+  to relabel that field.
+- Final proof passes: browser/API contract 8/8; core 434/434; hosted service
+  140 pass with 2 intentional environment skips; operations 52/52; self-host
+  19/19; migration structure 23/23; site, held hosted artifact, and exact
+  78-file public artifact checks. A fresh all-31-migration PostgreSQL journey
+  passes 5/5, proving both rejection of a competing direct `$25→$50` Checkout
+  while the first upgrade is pending and acceptance of a later upgrade after
+  activation. Its named database had 0 sessions, was dropped, and is absent.
+- Isolated Chrome for Testing 149 passes 27/27 proofs at 1440×1000 and 320×720
+  with exact `$25→$50` and `$35→$50` reviews, 25 screenshots, stable quote and
+  Checkout retries, explicit acceptance, expiry and malicious-destination
+  rejection, intercepted safe Stripe navigation, server-only tier authority,
+  accessibility regions, and zero overflow. It recorded 177 API requests,
+  0 external responses, and 0 unexpected browser errors. Evidence lives at
+  `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/`; results SHA-256
+  is `f7204667d2a4736239467e139defd19d6ce87525151f08e2252f948c7ea92c40`.
+- Start and upgrade remain local, held, unpushed, and undeployed. Public
+  production remains the July 22 predecessor. The next single billing slice is
+  customer-safe renewal-boundary downgrade scheduling; Portal, cancellation,
+  fulfillment, lifecycle policy, owner invoicing, release, and provider
+  configuration remain separate gates.
 
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 

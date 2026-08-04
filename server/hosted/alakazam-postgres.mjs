@@ -7779,17 +7779,37 @@ export function createPostgresAlakazamRepository({
               });
             }
 
+            // The project row selected above remains locked, so every
+            // Checkout claim for this project reaches this joined state
+            // check serially. A settled provider payment stays open until
+            // its quote reaches the atomic applied state.
             const open = await client.query(
-              `select id, state
-                 from ss.alakazam_checkout_dispatches
-                where organization_id = $1
-                  and project_id = $2
-                  and state in (
-                    'reserved',
-                    'ready',
-                    'persistence_unknown'
+              `select dispatch.id,
+                      dispatch.state,
+                      quote.state as quote_state
+                 from ss.alakazam_checkout_dispatches dispatch
+                 join ss.alakazam_change_quotes quote
+                   on quote.organization_id =
+                      dispatch.organization_id
+                  and quote.id = dispatch.quote_id
+                where dispatch.organization_id = $1
+                  and dispatch.project_id = $2
+                  and (
+                    dispatch.state in (
+                      'reserved',
+                      'ready',
+                      'persistence_unknown'
+                    )
+                    or (
+                      dispatch.state = 'settled'
+                      and quote.state in (
+                        'payment_settled',
+                        'provider_change_pending',
+                        'reconciliation_required'
+                      )
+                    )
                   )
-                for update`,
+                for update of dispatch, quote`,
               [input.tenantId, input.projectId]
             );
             invariant(

@@ -428,6 +428,20 @@ function nextRenewal(subscription, pendingChange) {
   });
 }
 
+function upgradeAvailable(subscription, pendingChange, catalog) {
+  return Boolean(
+    subscription &&
+      subscription.status === "active" &&
+      subscription.paymentState === "paid" &&
+      subscription.currentPeriod !== null &&
+      subscription.cancelAtPeriodEnd === false &&
+      pendingChange === null &&
+      catalog.tiers.some(
+        (tier) => tier.rank > subscription.tier.rank
+      )
+  );
+}
+
 function exactRepositorySnapshot(value, scope) {
   exactKeys(
     value,
@@ -481,6 +495,11 @@ export function createAlakazamAccountService({
         subscription === null;
       const startAvailable =
         subscription === null && pendingChange === null;
+      const changeTierAvailable = upgradeAvailable(
+        subscription,
+        pendingChange,
+        catalog
+      );
       return deepFreeze({
         schema: ALAKAZAM_ACCOUNT_SCHEMA,
         projectId: scope.projectId,
@@ -502,12 +521,14 @@ export function createAlakazamAccountService({
         receipts: exactReceipts(stored.receipts),
         actions: {
           start: startAvailable,
-          changeTier: false,
+          changeTier: changeTierAvailable,
           manageBilling: false,
           cancel: false,
           reason: startAvailable
             ? "only_start_composed"
-            : "customer_commands_not_composed"
+            : changeTierAvailable
+              ? "only_upgrade_composed"
+              : "customer_commands_not_composed"
         }
       });
     }

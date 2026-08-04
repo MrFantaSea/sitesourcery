@@ -24,15 +24,27 @@ const ALAKAZAM_EVENT_TYPES = new Set([
   "customer.subscription.updated"
 ]);
 
-function exactService(value, name) {
+function exactService(value, name, method = "ingestStripeEvent") {
   invariant(
     value &&
-      typeof value.ingestStripeEvent === "function",
+      typeof value[method] === "function",
     "invalid_configuration",
     `${name} service is incomplete`,
     { status: 500 }
   );
   return value;
+}
+
+function exactCheckoutChangeKind(event) {
+  const changeKind =
+    event?.data?.object?.metadata?.change_kind;
+  invariant(
+    changeKind === "start" || changeKind === "upgrade",
+    "stripe_event_invalid",
+    "The verified Alakazam Checkout event has an invalid change kind",
+    { status: 400 }
+  );
+  return changeKind;
 }
 
 export function isPotentialAlakazamStripeEvent(event) {
@@ -47,6 +59,7 @@ export function createAlakazamStripeEventRouter({
   payment,
   startActivation,
   upgradeActivation,
+  upgradeApplication,
   downgradeActivation
 } = {}) {
   const services = Object.freeze({
@@ -62,6 +75,11 @@ export function createAlakazamStripeEventRouter({
       upgradeActivation,
       "Alakazam upgrade activation"
     ),
+    upgradeApplication: exactService(
+      upgradeApplication,
+      "Alakazam upgrade application",
+      "applyPaidUpgrade"
+    ),
     downgradeActivation: exactService(
       downgradeActivation,
       "Alakazam downgrade activation"
@@ -74,7 +92,14 @@ export function createAlakazamStripeEventRouter({
         return deepFreeze({ status: "not_alakazam" });
       }
       if (isAlakazamCheckoutPaymentEvent(event)) {
-        return services.payment.ingestStripeEvent(event);
+        const changeKind = exactCheckoutChangeKind(event);
+        const settlement =
+          await services.payment.ingestStripeEvent(event);
+        if (changeKind === "upgrade") {
+          return services.upgradeApplication
+            .applyPaidUpgrade(settlement);
+        }
+        return settlement;
       }
       if (isAlakazamStartActivationEvent(event)) {
         return services.startActivation
