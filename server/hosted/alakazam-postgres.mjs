@@ -2,12 +2,15 @@ import {
   ALAKAZAM_CATALOG_VERSION,
   ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_DOWNGRADE_APPLICATION_SCHEMA,
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+  ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
   createAlakazamCheckoutDispatch,
   createAlakazamCustomerProvision,
+  createAlakazamDowngradeApplication,
   createAlakazamProviderMetadata,
   quoteAlakazamChange,
   resolveAlakazamTier
@@ -42,6 +45,7 @@ const STRIPE_EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
 const STRIPE_SUBSCRIPTION_ID = /^sub_[A-Za-z0-9_]+$/u;
 const STRIPE_SUBSCRIPTION_ITEM_ID = /^si_[A-Za-z0-9_]+$/u;
 const STRIPE_PRICE_ID = /^price_[A-Za-z0-9_]+$/u;
+const STRIPE_SCHEDULE_ID = /^sub_sched_[A-Za-z0-9_]+$/u;
 const STRIPE_INVOICE_ID = /^in_[A-Za-z0-9_]+$/u;
 const STRIPE_PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9_]+$/u;
 const ALAKAZAM_PAYMENT_EVENT_TYPE =
@@ -60,6 +64,10 @@ const ALAKAZAM_UPGRADE_RECONCILIATIONS = new Set([
   "confirmed",
   "confirmed_after_ambiguous_submit",
   "confirmed_before_submit",
+  "readback_after_ambiguity"
+]);
+const ALAKAZAM_DOWNGRADE_RECONCILIATIONS = new Set([
+  "confirmed",
   "readback_after_ambiguity"
 ]);
 const DATABASE_CONSTRAINT_CODES = new Set([
@@ -2868,6 +2876,700 @@ function exactUpgradeReconciliationInput(value) {
   });
 }
 
+function exactDowngradeCommandValue(value) {
+  exactKeys(
+    value,
+    [
+      "acceptedDisclosureDigest",
+      "customerId",
+      "projectId",
+      "quoteDigest",
+      "quoteId",
+      "tenantId"
+    ],
+    "the Alakazam downgrade command is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(value.customerId, "customerId"),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    acceptedDisclosureDigest: exactSha(
+      value.acceptedDisclosureDigest,
+      "acceptedDisclosureDigest"
+    ),
+    quoteDigest: exactSha(value.quoteDigest, "quoteDigest")
+  });
+}
+
+function exactDowngradeApplicationValue(value) {
+  exactKeys(
+    value,
+    [
+      "claimedAt",
+      "customerId",
+      "effectiveAt",
+      "idempotencyKey",
+      "leaseExpiresAt",
+      "projectId",
+      "provider",
+      "purpose",
+      "purposeDigest",
+      "quoteId",
+      "scheduleId",
+      "schema",
+      "state",
+      "stripeCustomerId",
+      "subscriptionId",
+      "tenantId"
+    ],
+    "the Alakazam downgrade application is invalid"
+  );
+  let expected;
+  try {
+    expected = createAlakazamDowngradeApplication({
+      scheduleId: value.scheduleId,
+      tenantId: value.tenantId,
+      customerId: value.customerId,
+      projectId: value.projectId,
+      quoteId: value.quoteId,
+      stripeCustomerId: value.stripeCustomerId,
+      acceptedDisclosureDigest:
+        value.purpose.acceptedDisclosureDigest,
+      quoteDigest: value.purpose.quoteDigest,
+      currentSubscription:
+        value.purpose.currentSubscription,
+      targetTierId: value.purpose.targetTierId,
+      taxMode: value.purpose.taxMode,
+      claimedAt: value.claimedAt
+    });
+  } catch {
+    invariant(
+      false,
+      "invalid_input",
+      "the Alakazam downgrade application is invalid"
+    );
+  }
+  invariant(
+    value.schema === ALAKAZAM_DOWNGRADE_APPLICATION_SCHEMA &&
+      value.state === "reserved" &&
+      value.provider === "stripe" &&
+      digest(value) === digest(expected),
+    "invalid_input",
+    "the Alakazam downgrade application changed"
+  );
+  return expected;
+}
+
+function downgradeCommandFromApplication(application) {
+  return exactDowngradeCommandValue({
+    tenantId: application.tenantId,
+    customerId: application.customerId,
+    projectId: application.projectId,
+    quoteId: application.quoteId,
+    acceptedDisclosureDigest:
+      application.purpose.acceptedDisclosureDigest,
+    quoteDigest: application.purpose.quoteDigest
+  });
+}
+
+function exactDowngradeFindInput(value) {
+  exactKeys(
+    value,
+    ["command", "observedAt"],
+    "the Alakazam downgrade lookup is invalid"
+  );
+  return Object.freeze({
+    command: exactDowngradeCommandValue(value.command),
+    observedAt: requiredIso(value.observedAt, "observedAt")
+  });
+}
+
+function exactDowngradeClaimInput(value) {
+  exactKeys(
+    value,
+    ["claimedAt", "command", "scheduleId"],
+    "the Alakazam downgrade claim is invalid"
+  );
+  return Object.freeze({
+    command: exactDowngradeCommandValue(value.command),
+    scheduleId: exactUuid(value.scheduleId, "scheduleId"),
+    claimedAt: requiredIso(value.claimedAt, "claimedAt")
+  });
+}
+
+function exactDowngradeProviderFacts(
+  value,
+  application,
+  confirmedAt
+) {
+  exactKeys(
+    value,
+    [
+      "currentPriceId",
+      "currentTierId",
+      "effectiveAt",
+      "endBehavior",
+      "providerFactsDigest",
+      "providerObservedAt",
+      "providerProration",
+      "schema",
+      "stripeCustomerId",
+      "stripeScheduleId",
+      "stripeSubscriptionId",
+      "targetPriceId",
+      "targetTierId"
+    ],
+    "the Alakazam downgrade provider evidence is invalid"
+  );
+  const current = application.purpose.currentSubscription;
+  const facts = clone(value);
+  delete facts.providerFactsDigest;
+  const observedAt = requiredIso(
+    value.providerObservedAt,
+    "downgrade.providerObservedAt"
+  );
+  invariant(
+    value.schema === ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA &&
+      STRIPE_SCHEDULE_ID.test(value.stripeScheduleId) &&
+      value.stripeSubscriptionId ===
+        current.stripeSubscriptionId &&
+      value.stripeCustomerId === application.stripeCustomerId &&
+      value.currentTierId === current.tierId &&
+      value.targetTierId === application.purpose.targetTierId &&
+      value.currentPriceId === current.stripePriceId &&
+      STRIPE_PRICE_ID.test(value.targetPriceId) &&
+      value.targetPriceId !== value.currentPriceId &&
+      value.effectiveAt === application.effectiveAt &&
+      value.endBehavior === "release" &&
+      value.providerProration === false &&
+      Date.parse(observedAt) >= Date.parse(application.claimedAt) &&
+      Date.parse(confirmedAt) >= Date.parse(observedAt) &&
+      exactSha(
+        value.providerFactsDigest,
+        "downgrade.providerFactsDigest"
+      ) === digest(facts),
+    "invalid_input",
+    "the Alakazam downgrade provider evidence changed"
+  );
+  return deepFreeze(clone(value));
+}
+
+function exactDowngradeConfirmationInput(value) {
+  exactKeys(
+    value,
+    [
+      "application",
+      "confirmedAt",
+      "reconciliation",
+      "schedule",
+      "tierEventId"
+    ],
+    "the Alakazam downgrade confirmation is invalid"
+  );
+  const application = exactDowngradeApplicationValue(
+    value.application
+  );
+  const confirmedAt = requiredIso(
+    value.confirmedAt,
+    "confirmedAt"
+  );
+  invariant(
+    ALAKAZAM_DOWNGRADE_RECONCILIATIONS.has(
+      value.reconciliation
+    ),
+    "invalid_input",
+    "the Alakazam downgrade reconciliation is invalid"
+  );
+  return Object.freeze({
+    application,
+    confirmedAt,
+    reconciliation: value.reconciliation,
+    schedule: exactDowngradeProviderFacts(
+      value.schedule,
+      application,
+      confirmedAt
+    ),
+    tierEventId: exactUuid(
+      value.tierEventId,
+      "tierEventId"
+    )
+  });
+}
+
+function exactDowngradeReconciliationInput(value) {
+  exactKeys(
+    value,
+    [
+      "application",
+      "errorCode",
+      "markedAt",
+      "stripeScheduleId"
+    ],
+    "the Alakazam downgrade reconciliation is invalid"
+  );
+  const errorCode = requiredText(
+    value.errorCode,
+    "errorCode",
+    200
+  );
+  invariant(
+    /^[a-z0-9_]+$/u.test(errorCode) &&
+      (
+        value.stripeScheduleId === null ||
+        STRIPE_SCHEDULE_ID.test(value.stripeScheduleId)
+      ),
+    "invalid_input",
+    "the Alakazam downgrade reconciliation is invalid"
+  );
+  return Object.freeze({
+    application: exactDowngradeApplicationValue(
+      value.application
+    ),
+    errorCode,
+    stripeScheduleId: value.stripeScheduleId,
+    markedAt: requiredIso(value.markedAt, "markedAt")
+  });
+}
+
+async function selectDowngradeBinding(client, command) {
+  const selected = await client.query(
+    `select quote.organization_id as downgrade_organization_id,
+            quote.project_id as downgrade_project_id,
+            quote.customer_user_id as downgrade_customer_id,
+            quote.id as downgrade_quote_id,
+            quote.change_kind as downgrade_change_kind,
+            quote.current_subscription_id
+              as downgrade_quote_subscription_id,
+            quote.current_subscription_revision
+              as downgrade_quote_subscription_revision,
+            quote.current_tier_id
+              as downgrade_quote_current_tier_id,
+            quote.current_amount_minor
+              as downgrade_quote_current_amount_minor,
+            quote.current_period_ends_at
+              as downgrade_quote_period_ends_at,
+            quote.target_tier_id
+              as downgrade_quote_target_tier_id,
+            quote.target_amount_minor
+              as downgrade_quote_target_amount_minor,
+            quote.due_now_subtotal_minor
+              as downgrade_due_now_subtotal_minor,
+            quote.next_renewal_amount_minor
+              as downgrade_next_renewal_amount_minor,
+            quote.currency as downgrade_currency,
+            quote.effective_rule as downgrade_effective_rule,
+            quote.effective_at as downgrade_effective_at,
+            quote.no_mid_period_refund
+              as downgrade_no_mid_period_refund,
+            quote.provider_proration_enabled
+              as downgrade_provider_proration_enabled,
+            quote.tax_state as downgrade_tax_state,
+            quote.disclosure_digest
+              as downgrade_disclosure_digest,
+            quote.quote_digest as downgrade_quote_digest,
+            quote.state as downgrade_quote_state,
+            quote.provider_effects_authorized
+              as downgrade_provider_effects_authorized,
+            quote.issued_at as downgrade_issued_at,
+            quote.expires_at as downgrade_expires_at,
+            subscription.id as downgrade_subscription_id,
+            subscription.project_id
+              as downgrade_subscription_project_id,
+            subscription.customer_user_id
+              as downgrade_subscription_customer_id,
+            subscription.revision
+              as downgrade_subscription_revision,
+            subscription.tier_id
+              as downgrade_subscription_tier_id,
+            subscription.status
+              as downgrade_subscription_status,
+            subscription.amount_minor
+              as downgrade_subscription_amount_minor,
+            subscription.stripe_subscription_id
+              as downgrade_stripe_subscription_id,
+            subscription.stripe_subscription_item_id
+              as downgrade_stripe_subscription_item_id,
+            subscription.stripe_price_id
+              as downgrade_stripe_price_id,
+            subscription.current_period_starts_at
+              as downgrade_period_starts_at,
+            subscription.current_period_ends_at
+              as downgrade_period_ends_at,
+            subscription.cancel_at_period_end
+              as downgrade_cancel_at_period_end,
+            subscription.provider_facts_digest
+              as downgrade_subscription_provider_facts_digest,
+            customer.stripe_customer_id
+              as downgrade_stripe_customer_id
+       from ss.alakazam_change_quotes quote
+       join ss.alakazam_subscriptions subscription
+         on subscription.organization_id = quote.organization_id
+        and subscription.id = quote.current_subscription_id
+       join ss.stripe_customers customer
+         on customer.organization_id =
+            subscription.organization_id
+        and customer.id =
+            subscription.stripe_customer_row_id
+      where quote.organization_id = $1
+        and quote.project_id = $2
+        and quote.customer_user_id = $3
+        and quote.id = $4
+      for update of quote, subscription, customer`,
+    [
+      command.tenantId,
+      command.projectId,
+      command.customerId,
+      command.quoteId
+    ]
+  );
+  invariant(
+    selected.rowCount === 1,
+    "alakazam_downgrade_unavailable",
+    "the Alakazam downgrade quote is unavailable",
+    { status: 409 }
+  );
+  const row = selected.rows[0];
+  const currentTier = resolveAlakazamTier(
+    row.downgrade_subscription_tier_id
+  );
+  const targetTier = resolveAlakazamTier(
+    row.downgrade_quote_target_tier_id
+  );
+  const currentPeriodStartsAt = exactDatabaseIso(
+    row.downgrade_period_starts_at,
+    "downgrade.currentPeriodStartsAt"
+  );
+  const currentPeriodEndsAt = exactDatabaseIso(
+    row.downgrade_period_ends_at,
+    "downgrade.currentPeriodEndsAt"
+  );
+  invariant(
+    row.downgrade_organization_id === command.tenantId &&
+      row.downgrade_project_id === command.projectId &&
+      row.downgrade_customer_id === command.customerId &&
+      row.downgrade_quote_id === command.quoteId &&
+      row.downgrade_change_kind === "downgrade" &&
+      row.downgrade_quote_subscription_id ===
+        row.downgrade_subscription_id &&
+      row.downgrade_subscription_project_id ===
+        command.projectId &&
+      row.downgrade_subscription_customer_id ===
+        command.customerId &&
+      row.downgrade_subscription_status === "active" &&
+      exactDatabaseInteger(
+        row.downgrade_subscription_revision,
+        "downgrade.subscriptionRevision"
+      ) === exactDatabaseInteger(
+        row.downgrade_quote_subscription_revision,
+        "downgrade.quoteSubscriptionRevision"
+      ) &&
+      row.downgrade_subscription_tier_id ===
+        row.downgrade_quote_current_tier_id &&
+      exactDatabaseInteger(
+        row.downgrade_subscription_amount_minor,
+        "downgrade.subscriptionAmountMinor"
+      ) === currentTier.price.amountMinor &&
+      exactDatabaseInteger(
+        row.downgrade_quote_current_amount_minor,
+        "downgrade.quoteCurrentAmountMinor"
+      ) === currentTier.price.amountMinor &&
+      exactDatabaseInteger(
+        row.downgrade_quote_target_amount_minor,
+        "downgrade.quoteTargetAmountMinor"
+      ) === targetTier.price.amountMinor &&
+      targetTier.rank < currentTier.rank &&
+      exactDatabaseInteger(
+        row.downgrade_due_now_subtotal_minor,
+        "downgrade.dueNowSubtotalMinor"
+      ) === 0 &&
+      exactDatabaseInteger(
+        row.downgrade_next_renewal_amount_minor,
+        "downgrade.nextRenewalAmountMinor"
+      ) === targetTier.price.amountMinor &&
+      row.downgrade_currency === "USD" &&
+      row.downgrade_effective_rule === "current_period_end" &&
+      exactDatabaseIso(
+        row.downgrade_quote_period_ends_at,
+        "downgrade.quotePeriodEndsAt"
+      ) === currentPeriodEndsAt &&
+      exactDatabaseIso(
+        row.downgrade_effective_at,
+        "downgrade.effectiveAt"
+      ) === currentPeriodEndsAt &&
+      row.downgrade_no_mid_period_refund === true &&
+      row.downgrade_provider_proration_enabled === false &&
+      TAX_MODES.has(row.downgrade_tax_state) &&
+      row.downgrade_disclosure_digest ===
+        command.acceptedDisclosureDigest &&
+      row.downgrade_quote_digest === command.quoteDigest &&
+      row.downgrade_provider_effects_authorized === true &&
+      row.downgrade_cancel_at_period_end === false &&
+      STRIPE_SUBSCRIPTION_ID.test(
+        row.downgrade_stripe_subscription_id
+      ) &&
+      STRIPE_SUBSCRIPTION_ITEM_ID.test(
+        row.downgrade_stripe_subscription_item_id
+      ) &&
+      STRIPE_PRICE_ID.test(row.downgrade_stripe_price_id) &&
+      Date.parse(currentPeriodEndsAt) >
+        Date.parse(currentPeriodStartsAt) &&
+      [
+        "quoted",
+        "schedule_dispatching",
+        "scheduled",
+        "reconciliation_required",
+        "applied"
+      ].includes(row.downgrade_quote_state),
+    "repository_conflict",
+    "the durable Alakazam downgrade binding changed",
+    { status: 500 }
+  );
+  return row;
+}
+
+async function selectDowngradeSchedule(client, quoteId) {
+  return client.query(
+    `select *
+       from ss.alakazam_downgrade_schedules
+      where quote_id = $1
+      for update`,
+    [quoteId]
+  );
+}
+
+function downgradeApplicationFromBinding(
+  binding,
+  scheduleId,
+  claimedAt
+) {
+  return createAlakazamDowngradeApplication({
+    scheduleId,
+    tenantId: binding.downgrade_organization_id,
+    customerId: binding.downgrade_customer_id,
+    projectId: binding.downgrade_project_id,
+    quoteId: binding.downgrade_quote_id,
+    stripeCustomerId: binding.downgrade_stripe_customer_id,
+    acceptedDisclosureDigest:
+      binding.downgrade_disclosure_digest,
+    quoteDigest: binding.downgrade_quote_digest,
+    currentSubscription: {
+      localSubscriptionId:
+        binding.downgrade_subscription_id,
+      revision: exactDatabaseInteger(
+        binding.downgrade_subscription_revision,
+        "downgrade.subscriptionRevision"
+      ),
+      tierId: binding.downgrade_subscription_tier_id,
+      amountMinor: exactDatabaseInteger(
+        binding.downgrade_subscription_amount_minor,
+        "downgrade.subscriptionAmountMinor"
+      ),
+      stripeSubscriptionId:
+        binding.downgrade_stripe_subscription_id,
+      stripeSubscriptionItemId:
+        binding.downgrade_stripe_subscription_item_id,
+      stripePriceId: binding.downgrade_stripe_price_id,
+      currentPeriodStartsAt: exactDatabaseIso(
+        binding.downgrade_period_starts_at,
+        "downgrade.currentPeriodStartsAt"
+      ),
+      currentPeriodEndsAt: exactDatabaseIso(
+        binding.downgrade_period_ends_at,
+        "downgrade.currentPeriodEndsAt"
+      ),
+      providerFactsDigest:
+        binding.downgrade_subscription_provider_facts_digest
+    },
+    targetTierId: binding.downgrade_quote_target_tier_id,
+    taxMode: binding.downgrade_tax_state,
+    claimedAt
+  });
+}
+
+function storedDowngradeApplication(row, binding) {
+  const application = downgradeApplicationFromBinding(
+    binding,
+    row.id,
+    exactDatabaseIso(
+      row.created_at,
+      "downgradeApplication.createdAt"
+    )
+  );
+  const purpose = jsonObject(
+    row.purpose,
+    "downgradeApplication.purpose"
+  );
+  invariant(
+    row.organization_id === application.tenantId &&
+      row.project_id === application.projectId &&
+      row.subscription_id === application.subscriptionId &&
+      row.quote_id === application.quoteId &&
+      row.current_tier_id ===
+        application.purpose.currentSubscription.tierId &&
+      row.target_tier_id === application.purpose.targetTierId &&
+      row.current_stripe_price_id ===
+        application.purpose.currentSubscription.stripePriceId &&
+      exactDatabaseIso(
+        row.effective_at,
+        "downgradeApplication.effectiveAt"
+      ) === application.effectiveAt &&
+      row.provider_idempotency_key ===
+        application.idempotencyKey &&
+      digest(purpose) === digest(application.purpose) &&
+      row.purpose_digest === application.purposeDigest &&
+      exactDatabaseIso(
+        row.lease_expires_at,
+        "downgradeApplication.leaseExpiresAt"
+      ) === application.leaseExpiresAt &&
+      [
+        "dispatching",
+        "scheduled",
+        "applied",
+        "cancelled",
+        "reconciliation_required"
+      ].includes(row.state),
+    "repository_conflict",
+    "the durable Alakazam downgrade application changed",
+    { status: 500 }
+  );
+  return application;
+}
+
+function exactDowngradeQuoteState(row, binding) {
+  invariant(
+    (
+      row.state === "dispatching"
+        ? binding.downgrade_quote_state ===
+          "schedule_dispatching"
+        : row.state === "reconciliation_required"
+          ? binding.downgrade_quote_state ===
+            "reconciliation_required"
+          : row.state === "scheduled"
+            ? binding.downgrade_quote_state === "scheduled"
+            : ["applied", "cancelled"].includes(row.state)
+    ),
+    "repository_conflict",
+    "the Alakazam downgrade application and quote disagree",
+    { status: 500 }
+  );
+}
+
+function downgradeScheduleConfirmation(
+  row,
+  application,
+  expectedFacts = null
+) {
+  invariant(
+    ["scheduled", "applied", "cancelled"].includes(
+      row.state
+    ) &&
+      row.provider_effect_certainty === "confirmed" &&
+      row.provider_error_code === null &&
+      ALAKAZAM_DOWNGRADE_RECONCILIATIONS.has(
+        row.provider_reconciliation
+      ) &&
+      STRIPE_SCHEDULE_ID.test(row.stripe_schedule_id),
+    "repository_conflict",
+    "the durable Alakazam downgrade confirmation changed",
+    { status: 500 }
+  );
+  const confirmedAt = exactDatabaseIso(
+    row.scheduled_at,
+    "downgradeApplication.scheduledAt"
+  );
+  const providerFacts = exactDowngradeProviderFacts(
+    jsonObject(
+      row.provider_facts,
+      "downgradeApplication.providerFacts"
+    ),
+    application,
+    confirmedAt
+  );
+  invariant(
+    row.target_stripe_price_id ===
+        providerFacts.targetPriceId &&
+      row.provider_facts_digest ===
+        providerFacts.providerFactsDigest &&
+      (
+        expectedFacts === null ||
+        digest(providerFacts) === digest(expectedFacts)
+      ),
+    "repository_conflict",
+    "the durable Alakazam downgrade evidence changed",
+    { status: 500 }
+  );
+  const current = application.purpose.currentSubscription;
+  return Object.freeze({
+    status: "scheduled",
+    provider: "stripe",
+    scheduleId: application.scheduleId,
+    stripeScheduleId: providerFacts.stripeScheduleId,
+    projectId: application.projectId,
+    quoteId: application.quoteId,
+    subscriptionId: application.subscriptionId,
+    priorTierId: current.tierId,
+    targetTierId: application.purpose.targetTierId,
+    currentRevision: current.revision,
+    effectiveAt: application.effectiveAt,
+    providerFactsDigest:
+      providerFacts.providerFactsDigest,
+    reconciliation: row.provider_reconciliation,
+    next: "boundary_confirmation"
+  });
+}
+
+function downgradeApplicationResolution(
+  row,
+  binding,
+  status = row.state
+) {
+  const application = storedDowngradeApplication(row, binding);
+  exactDowngradeQuoteState(row, binding);
+  const publicStatus =
+    status === "dispatching" ? "in_progress" :
+      ["applied", "cancelled"].includes(status)
+        ? "scheduled"
+        : status;
+  const base = {
+    status: publicStatus,
+    provider: "stripe",
+    application,
+    stripeScheduleId: row.stripe_schedule_id ?? null
+  };
+  if (publicStatus !== "scheduled") {
+    return Object.freeze(base);
+  }
+  return Object.freeze({
+    ...base,
+    confirmation: downgradeScheduleConfirmation(
+      row,
+      application
+    )
+  });
+}
+
+function downgradeScheduledTierFacts(
+  application,
+  schedule,
+  reconciliation
+) {
+  const current = application.purpose.currentSubscription;
+  return {
+    schema: ALAKAZAM_TIER_EVENT_FACTS_SCHEMA,
+    changeKind: "downgrade",
+    scheduleId: application.scheduleId,
+    stripeScheduleId: schedule.stripeScheduleId,
+    purposeDigest: application.purposeDigest,
+    providerFactsDigest: schedule.providerFactsDigest,
+    reconciliation,
+    priorTierId: current.tierId,
+    targetTierId: application.purpose.targetTierId,
+    currentRevision: current.revision,
+    effectiveAt: application.effectiveAt
+  };
+}
+
 function exactUpgradeActivationEventValue(
   value,
   reservation,
@@ -4227,6 +4929,419 @@ export function createPostgresAlakazamRepository({
             reservation,
             pending: pendingStartActivation(row, reservation)
           });
+        })
+      );
+    },
+
+    async findDowngradeApplication(value) {
+      const input = exactDowngradeFindInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          let binding = await selectDowngradeBinding(
+            client,
+            input.command
+          );
+          const schedules = await selectDowngradeSchedule(
+            client,
+            input.command.quoteId
+          );
+          if (schedules.rowCount === 0) return null;
+          invariant(
+            schedules.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade has conflicting applications",
+            { status: 500 }
+          );
+          let row = schedules.rows[0];
+          storedDowngradeApplication(row, binding);
+          exactDowngradeQuoteState(row, binding);
+          if (
+            row.state === "dispatching" &&
+            Date.parse(
+              exactDatabaseIso(
+                row.lease_expires_at,
+                "downgradeApplication.leaseExpiresAt"
+              )
+            ) <= Date.parse(input.observedAt)
+          ) {
+            const fenced = await client.query(
+              `update ss.alakazam_downgrade_schedules
+                  set state = 'reconciliation_required',
+                      provider_effect_certainty = 'ambiguous',
+                      provider_error_code =
+                        'downgrade_worker_interrupted'
+                where id = $1
+                  and state = 'dispatching'
+                returning *`,
+              [row.id]
+            );
+            const held = await client.query(
+              `update ss.alakazam_change_quotes
+                  set state = 'reconciliation_required'
+                where organization_id = $1
+                  and id = $2
+                  and state = 'schedule_dispatching'
+                returning id`,
+              [input.command.tenantId, input.command.quoteId]
+            );
+            invariant(
+              fenced.rowCount === 1 && held.rowCount === 1,
+              "repository_conflict",
+              "the interrupted Alakazam downgrade was not fenced",
+              { status: 500 }
+            );
+            row = fenced.rows[0];
+            binding = {
+              ...binding,
+              downgrade_quote_state: "reconciliation_required"
+            };
+          }
+          return downgradeApplicationResolution(row, binding);
+        })
+      );
+    },
+
+    async claimDowngradeApplication(value) {
+      const input = exactDowngradeClaimInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          let binding = await selectDowngradeBinding(
+            client,
+            input.command
+          );
+          const existing = await selectDowngradeSchedule(
+            client,
+            input.command.quoteId
+          );
+          if (existing.rowCount === 1) {
+            return downgradeApplicationResolution(
+              existing.rows[0],
+              binding
+            );
+          }
+          invariant(
+            existing.rowCount === 0 &&
+              binding.downgrade_quote_state === "quoted" &&
+              Date.parse(input.claimedAt) >= Date.parse(
+                exactDatabaseIso(
+                  binding.downgrade_issued_at,
+                  "downgrade.issuedAt"
+                )
+              ) &&
+              Date.parse(input.claimedAt) <= Date.parse(
+                exactDatabaseIso(
+                  binding.downgrade_expires_at,
+                  "downgrade.expiresAt"
+                )
+              ),
+            "alakazam_downgrade_unavailable",
+            "the Alakazam downgrade quote cannot be scheduled",
+            { status: 409 }
+          );
+          const application = downgradeApplicationFromBinding(
+            binding,
+            input.scheduleId,
+            input.claimedAt
+          );
+          const claimedQuote = await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'schedule_dispatching'
+              where organization_id = $1
+                and id = $2
+                and state = 'quoted'
+              returning id`,
+            [input.command.tenantId, input.command.quoteId]
+          );
+          invariant(
+            claimedQuote.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade quote was not claimed",
+            { status: 500 }
+          );
+          const inserted = await client.query(
+            `insert into ss.alakazam_downgrade_schedules (
+               id, organization_id, project_id,
+               subscription_id, quote_id,
+               current_tier_id, target_tier_id,
+               current_stripe_price_id,
+               target_stripe_price_id, effective_at,
+               provider_idempotency_key,
+               purpose, purpose_digest,
+               stripe_schedule_id, state,
+               provider_effect_certainty,
+               provider_facts, provider_facts_digest,
+               provider_reconciliation,
+               provider_error_code, lease_expires_at,
+               scheduled_at, applied_at, cancelled_at,
+               created_at, updated_at
+             ) values (
+               $1, $2, $3, $4, $5, $6, $7, $8,
+               null, $9, $10, $11::jsonb, $12,
+               null, 'dispatching', 'not_submitted',
+               null, null, null, null, $13,
+               null, null, null, $14, $14
+             )
+             returning *`,
+            [
+              application.scheduleId,
+              application.tenantId,
+              application.projectId,
+              application.subscriptionId,
+              application.quoteId,
+              application.purpose.currentSubscription.tierId,
+              application.purpose.targetTierId,
+              application.purpose.currentSubscription.stripePriceId,
+              application.effectiveAt,
+              application.idempotencyKey,
+              JSON.stringify(application.purpose),
+              application.purposeDigest,
+              application.leaseExpiresAt,
+              application.claimedAt
+            ]
+          );
+          invariant(
+            inserted.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade application was not reserved",
+            { status: 500 }
+          );
+          binding = {
+            ...binding,
+            downgrade_quote_state: "schedule_dispatching"
+          };
+          return downgradeApplicationResolution(
+            inserted.rows[0],
+            binding,
+            "claimed"
+          );
+        })
+      );
+    },
+
+    async confirmDowngradeSchedule(value) {
+      const input = exactDowngradeConfirmationInput(value);
+      const command = downgradeCommandFromApplication(
+        input.application
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const binding = await selectDowngradeBinding(
+            client,
+            command
+          );
+          const schedules = await selectDowngradeSchedule(
+            client,
+            command.quoteId
+          );
+          invariant(
+            schedules.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade application is unavailable",
+            { status: 500 }
+          );
+          const row = schedules.rows[0];
+          const stored = storedDowngradeApplication(row, binding);
+          invariant(
+            digest(stored) === digest(input.application),
+            "repository_conflict",
+            "the Alakazam downgrade application changed",
+            { status: 500 }
+          );
+          exactDowngradeQuoteState(row, binding);
+          if (
+            ["scheduled", "applied", "cancelled"].includes(
+              row.state
+            )
+          ) {
+            return downgradeScheduleConfirmation(
+              row,
+              stored,
+              input.schedule
+            );
+          }
+          invariant(
+            [
+              "dispatching",
+              "reconciliation_required"
+            ].includes(row.state),
+            "repository_conflict",
+            "the Alakazam downgrade cannot be confirmed",
+            { status: 500 }
+          );
+          const confirmed = await client.query(
+            `update ss.alakazam_downgrade_schedules
+                set state = 'scheduled',
+                    target_stripe_price_id = $2,
+                    stripe_schedule_id = $3,
+                    provider_effect_certainty = 'confirmed',
+                    provider_facts = $4::jsonb,
+                    provider_facts_digest = $5,
+                    provider_reconciliation = $6,
+                    provider_error_code = null,
+                    scheduled_at = $7
+              where id = $1
+                and state in (
+                  'dispatching',
+                  'reconciliation_required'
+                )
+              returning *`,
+            [
+              stored.scheduleId,
+              input.schedule.targetPriceId,
+              input.schedule.stripeScheduleId,
+              JSON.stringify(input.schedule),
+              input.schedule.providerFactsDigest,
+              input.reconciliation,
+              input.confirmedAt
+            ]
+          );
+          invariant(
+            confirmed.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade confirmation was not stored",
+            { status: 500 }
+          );
+          const scheduledQuote = await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'scheduled'
+              where organization_id = $1
+                and id = $2
+                and state in (
+                  'schedule_dispatching',
+                  'reconciliation_required'
+                )
+              returning id`,
+            [stored.tenantId, stored.quoteId]
+          );
+          invariant(
+            scheduledQuote.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade quote was not scheduled",
+            { status: 500 }
+          );
+          const tierFacts = downgradeScheduledTierFacts(
+            stored,
+            input.schedule,
+            input.reconciliation
+          );
+          const tierEvent = await client.query(
+            `insert into ss.alakazam_tier_change_events (
+               id, organization_id, project_id,
+               subscription_id, quote_id,
+               stripe_event_row_id, payment_receipt_id,
+               downgrade_schedule_id,
+               download_reversal_event_id,
+               result_subscription_revision,
+               event_kind, prior_tier_id,
+               result_tier_id, occurred_at,
+               facts, facts_digest
+             ) values (
+               $1, $2, $3, $4, $5,
+               null, null, $6, null, null,
+               'downgrade_scheduled', $7, $8, $9,
+               $10::jsonb, $11
+             )
+             returning id`,
+            [
+              input.tierEventId,
+              stored.tenantId,
+              stored.projectId,
+              stored.subscriptionId,
+              stored.quoteId,
+              stored.scheduleId,
+              stored.purpose.currentSubscription.tierId,
+              stored.purpose.targetTierId,
+              input.confirmedAt,
+              JSON.stringify(tierFacts),
+              digest(tierFacts)
+            ]
+          );
+          invariant(
+            tierEvent.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade tier event was not stored",
+            { status: 500 }
+          );
+          return downgradeScheduleConfirmation(
+            confirmed.rows[0],
+            stored,
+            input.schedule
+          );
+        })
+      );
+    },
+
+    async markDowngradeReconciliationRequired(value) {
+      const input = exactDowngradeReconciliationInput(value);
+      const command = downgradeCommandFromApplication(
+        input.application
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          let binding = await selectDowngradeBinding(
+            client,
+            command
+          );
+          const schedules = await selectDowngradeSchedule(
+            client,
+            command.quoteId
+          );
+          invariant(
+            schedules.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam downgrade application is unavailable",
+            { status: 500 }
+          );
+          const row = schedules.rows[0];
+          const stored = storedDowngradeApplication(row, binding);
+          invariant(
+            digest(stored) === digest(input.application),
+            "repository_conflict",
+            "the Alakazam downgrade application changed",
+            { status: 500 }
+          );
+          exactDowngradeQuoteState(row, binding);
+          if (row.state !== "dispatching") {
+            return downgradeApplicationResolution(row, binding);
+          }
+          const fenced = await client.query(
+            `update ss.alakazam_downgrade_schedules
+                set state = 'reconciliation_required',
+                    stripe_schedule_id = $2,
+                    provider_effect_certainty = 'ambiguous',
+                    provider_error_code = $3
+              where id = $1
+                and state = 'dispatching'
+              returning *`,
+            [
+              stored.scheduleId,
+              input.stripeScheduleId,
+              input.errorCode
+            ]
+          );
+          const held = await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'reconciliation_required'
+              where organization_id = $1
+                and id = $2
+                and state = 'schedule_dispatching'
+              returning id`,
+            [stored.tenantId, stored.quoteId]
+          );
+          invariant(
+            fenced.rowCount === 1 && held.rowCount === 1,
+            "repository_conflict",
+            "the ambiguous Alakazam downgrade was not fenced",
+            { status: 500 }
+          );
+          binding = {
+            ...binding,
+            downgrade_quote_state: "reconciliation_required"
+          };
+          return downgradeApplicationResolution(
+            fenced.rows[0],
+            binding
+          );
         })
       );
     },

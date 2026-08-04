@@ -24,10 +24,14 @@ export const ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA =
   "sitesourcery.alakazam-stripe-purpose.v1";
 export const ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA =
   "sitesourcery.alakazam-checkout-dispatch.v1";
+export const ALAKAZAM_DOWNGRADE_APPLICATION_SCHEMA =
+  "sitesourcery.alakazam-downgrade-application/v1";
 export const ALAKAZAM_PROVIDER_METADATA_SCHEMA =
   "sitesourcery_alakazam_change_v1";
 export const ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA =
   "sitesourcery.stripe-alakazam-payment/v1";
+export const ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA =
+  "sitesourcery.stripe-alakazam-downgrade-schedule/v1";
 export const ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA =
   "sitesourcery.stripe-alakazam-subscription/v1";
 export const ALAKAZAM_CATALOG_VERSION =
@@ -42,6 +46,7 @@ const ACTIVE_CHANGE_STATUS = "active";
 const CHANGE_QUOTE_TTL_MS = 30 * 60 * 1000;
 const CUSTOMER_PROVISION_LEASE_MS = 2 * 60 * 1000;
 const CHECKOUT_DISPATCH_LEASE_MS = 2 * 60 * 1000;
+const DOWNGRADE_APPLICATION_LEASE_MS = 2 * 60 * 1000;
 const STRIPE_IDS = Object.freeze({
   customer: /^cus_[A-Za-z0-9_]+$/u,
   price: /^price_[A-Za-z0-9_]+$/u,
@@ -632,6 +637,161 @@ export function createAlakazamCheckoutDispatch({
     leaseExpiresAt: new Date(
       Date.parse(createdAt) +
         CHECKOUT_DISPATCH_LEASE_MS
+    ).toISOString()
+  });
+}
+
+export function createAlakazamDowngradeApplication({
+  scheduleId,
+  tenantId,
+  customerId,
+  projectId,
+  quoteId,
+  stripeCustomerId,
+  acceptedDisclosureDigest,
+  quoteDigest,
+  currentSubscription,
+  targetTierId,
+  taxMode,
+  claimedAt
+}) {
+  const identity = {
+    scheduleId: requiredText(
+      scheduleId,
+      "scheduleId",
+      36
+    ),
+    tenantId: requiredText(tenantId, "tenantId", 36),
+    customerId: requiredText(
+      customerId,
+      "customerId",
+      36
+    ),
+    projectId: requiredText(projectId, "projectId", 36),
+    quoteId: requiredText(quoteId, "quoteId", 36),
+    stripeCustomerId: requiredText(
+      stripeCustomerId,
+      "stripeCustomerId",
+      255
+    )
+  };
+  invariant(
+    STRIPE_IDS.customer.test(identity.stripeCustomerId),
+    "invalid_input",
+    "stripeCustomerId is invalid"
+  );
+  requiredDigest(
+    acceptedDisclosureDigest,
+    "acceptedDisclosureDigest"
+  );
+  requiredDigest(quoteDigest, "quoteDigest");
+  invariant(
+    taxMode === "automatic" ||
+      taxMode === "disabled_by_owner",
+    "invalid_input",
+    "taxMode is invalid"
+  );
+  invariant(
+    currentSubscription &&
+      typeof currentSubscription === "object" &&
+      !Array.isArray(currentSubscription),
+    "invalid_input",
+    "an Alakazam downgrade requires one current subscription"
+  );
+  const currentTier = exactTier(
+    currentSubscription.tierId
+  );
+  const target = exactTier(targetTierId);
+  const startsAt = requiredIso(
+    currentSubscription.currentPeriodStartsAt,
+    "currentSubscription.currentPeriodStartsAt"
+  );
+  const endsAt = requiredIso(
+    currentSubscription.currentPeriodEndsAt,
+    "currentSubscription.currentPeriodEndsAt"
+  );
+  requiredDigest(
+    currentSubscription.providerFactsDigest,
+    "currentSubscription.providerFactsDigest"
+  );
+  invariant(
+    currentSubscription.amountMinor ===
+        currentTier.price.amountMinor &&
+      positiveInteger(
+        currentSubscription.revision,
+        "currentSubscription.revision"
+      ) > 0 &&
+      STRIPE_IDS.subscription.test(
+        currentSubscription.stripeSubscriptionId
+      ) &&
+      STRIPE_IDS.subscriptionItem.test(
+        currentSubscription.stripeSubscriptionItemId
+      ) &&
+      STRIPE_IDS.price.test(
+        currentSubscription.stripePriceId
+      ) &&
+      Date.parse(endsAt) > Date.parse(startsAt) &&
+      target.rank < currentTier.rank,
+    "invalid_input",
+    "Alakazam downgrade subscription evidence is invalid"
+  );
+  const current = {
+    localSubscriptionId: requiredText(
+      currentSubscription.localSubscriptionId,
+      "currentSubscription.localSubscriptionId",
+      200
+    ),
+    revision: currentSubscription.revision,
+    tierId: currentTier.tierId,
+    amountMinor: currentTier.price.amountMinor,
+    stripeSubscriptionId:
+      currentSubscription.stripeSubscriptionId,
+    stripeSubscriptionItemId:
+      currentSubscription.stripeSubscriptionItemId,
+    stripePriceId: currentSubscription.stripePriceId,
+    currentPeriodStartsAt: startsAt,
+    currentPeriodEndsAt: endsAt,
+    providerFactsDigest:
+      currentSubscription.providerFactsDigest
+  };
+  const createdAt = requiredIso(claimedAt, "claimedAt");
+  const purpose = {
+    schema: ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA,
+    catalogVersion: ALAKAZAM_CATALOG_VERSION,
+    termsVersion: ALAKAZAM_TERMS_VERSION,
+    organizationId: identity.tenantId,
+    customerId: identity.customerId,
+    projectId: identity.projectId,
+    quoteId: identity.quoteId,
+    stripeCustomerId: identity.stripeCustomerId,
+    acceptedDisclosureDigest,
+    quoteDigest,
+    changeKind: "downgrade",
+    currentSubscription: current,
+    targetTierId: target.tierId,
+    targetAmountMinor: target.price.amountMinor,
+    dueNowSubtotalMinor: 0,
+    nextRenewalAmountMinor: target.price.amountMinor,
+    currency: CURRENCY,
+    taxMode,
+    downloadCredit: null
+  };
+  const purposeDigest = digest(purpose);
+  return deepFreeze({
+    schema: ALAKAZAM_DOWNGRADE_APPLICATION_SCHEMA,
+    state: "reserved",
+    provider: "stripe",
+    ...identity,
+    subscriptionId: current.localSubscriptionId,
+    idempotencyKey:
+      `alakazam:downgrade:schedule:${identity.scheduleId}`,
+    purpose,
+    purposeDigest,
+    effectiveAt: current.currentPeriodEndsAt,
+    claimedAt: createdAt,
+    leaseExpiresAt: new Date(
+      Date.parse(createdAt) +
+        DOWNGRADE_APPLICATION_LEASE_MS
     ).toISOString()
   });
 }

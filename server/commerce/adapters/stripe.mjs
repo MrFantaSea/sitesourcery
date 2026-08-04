@@ -16,6 +16,7 @@ import {
   ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+  ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_TERMS_VERSION,
   ALAKAZAM_TIER_DEFINITIONS,
@@ -96,7 +97,7 @@ const STRIPE_ALAKAZAM_SUBSCRIPTION_SCHEMA =
 const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
-  "sitesourcery.stripe-alakazam-downgrade-schedule/v1";
+  ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA;
 
 export function createOfficialStripeClient({
   secretKey,
@@ -3259,6 +3260,7 @@ export function createStripeProviderAdapter(options = {}) {
       createAlakazamUpgradeCheckout: reject,
       retrieveAlakazamPayment: reject,
       retrieveAlakazamSubscription: reject,
+      retrieveAlakazamSchedule: reject,
       applyAlakazamUpgrade: reject,
       scheduleAlakazamDowngrade: reject,
       retrieveDownloadCheckoutLifecycle: reject,
@@ -4183,6 +4185,44 @@ export function createStripeProviderAdapter(options = {}) {
       return Object.freeze({
         ...confirmed,
         reconciliation: "confirmed"
+      });
+    },
+
+    async retrieveAlakazamSchedule(request) {
+      requireCapability("subscription_schedules:read");
+      const validated = validateAlakazamPurpose(
+        request,
+        config.alakazam,
+        "downgrade",
+        ["purpose", "purposeDigest", "stripeScheduleId"],
+        config.taxMode
+      );
+      const stripeScheduleId = providerId(
+        request.stripeScheduleId,
+        "sub_sched",
+        "stripeScheduleId"
+      );
+      await verifyAlakazamConfiguration();
+      const current =
+        await retrieveAlakazamSubscriptionInternal({
+          stripeSubscriptionId:
+            validated.current.stripeSubscriptionId,
+          stripeCustomerId:
+            validated.identity.stripeCustomerId
+        });
+      invariant(
+        alakazamCurrentMatches(
+          current,
+          validated,
+          stripeScheduleId
+        ),
+        "stripe_alakazam_downgrade_stale",
+        "Stripe Alakazam Subscription changed before Schedule reconciliation",
+        { status: 409 }
+      );
+      return retrieveAlakazamScheduleInternal({
+        stripeScheduleId,
+        validated
       });
     },
 

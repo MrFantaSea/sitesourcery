@@ -433,6 +433,39 @@ these are OWNER RULINGS and open work, not suggestions.
   renewal-boundary downgrade transaction and customer tier controls. Public
   production remains the July 22 predecessor.
 
+## ALAKAZAM DOWNGRADE SCHEDULE DISPATCH CHECKPOINT (2026-08-04)
+
+- An accepted zero-dollar downgrade now enters one durable application before
+  Stripe can attach or change a Subscription Schedule. It binds the exact
+  customer, project, quote, active subscription revision, existing item and
+  Price, paid period end, lower target tier, disclosure, and one stable
+  provider idempotency key. The current local tier and revision remain
+  unchanged.
+- The held downgrade service schedules the current Price through the exact
+  renewal boundary and the lower Price afterward, with no proration and
+  release behavior. A provider response loss is fenced in PostgreSQL. If the
+  exact Schedule ID is known, recovery can only retrieve that Schedule; it
+  cannot submit another create, attachment, or phase mutation. If the ID is
+  unknown, only owner reconciliation can continue.
+- Additive migration 030 makes provider confirmation, the quote's `scheduled`
+  state, and one `downgrade_scheduled` tier event a single transaction. A
+  deferred trigger proves the exact purpose, current revision, Schedule facts,
+  lower Price, effective boundary, and unchanged current entitlement agree at
+  commit. Durable replay performs no Stripe work and allocates no identity.
+- All 30 migrations replayed cleanly on a fresh disposable HQ database. The
+  real PostgreSQL journey passes 5/5, including an ambiguous known Schedule,
+  strict read-only recovery, atomic confirmation, local replay, rejection of
+  an early tier switch, and the later boundary transition. Focused gates pass
+  11/11 downgrade service, 57/57 Stripe adapter, 22/22 migration structure,
+  and 5/5 repository readiness. Wider gates pass 397/397 core and 121/121
+  runnable hosted tests with the same two intentional environment-only skips.
+- This remains internal, held, local, and unpushed. Migration 030 schedules
+  the provider change but does not activate the lower local tier early. The
+  separate renewal-boundary webhook transaction, HTTP/customer controls,
+  feature rendering, publication effects, real provider configuration, and
+  production capability remain closed. Public production remains the July 22
+  predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

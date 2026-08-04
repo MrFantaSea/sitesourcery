@@ -825,3 +825,29 @@ test("Alakazam paid upgrade activation is one atomic local revision", async () =
     /create function ss\.hosted_runtime_contract_v29\(\)/iu
   );
 });
+
+test("Alakazam downgrade Schedule dispatch is durable and atomic", async () => {
+  const all = await migrations();
+  const downgrade = all.find(
+    ({ name }) =>
+      name ===
+      "202608040030_alakazam_downgrade_schedule_dispatch.sql"
+  );
+  assert.ok(downgrade);
+  assert.match(
+    downgrade.sql,
+    /provider_idempotency_key =[\s\S]*'alakazam:downgrade:schedule:'/iu
+  );
+  assert.match(
+    downgrade.sql,
+    /create unique index alakazam_one_downgrade_schedule_event[\s\S]*where event_kind = 'downgrade_scheduled'/iu
+  );
+  assert.match(
+    downgrade.sql,
+    /create constraint trigger alakazam_downgrade_dispatches_validate[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    downgrade.sql,
+    /create function ss\.hosted_runtime_contract_v30\(\)/iu
+  );
+});

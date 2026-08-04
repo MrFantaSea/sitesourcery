@@ -95,7 +95,16 @@ the existing local subscription to the paid target tier without changing its
 period, and applies the quote and provider application together. A deferred
 database trigger proves the complete binding at commit. Applied replay uses
 durable activation evidence without another Stripe read or new identity, even
-after a later tier revision. Downgrade Schedule dispatch, webhook/HTTP
+after a later tier revision.
+
+Migration 030 adds the separate downgrade Schedule transaction. Before Stripe,
+the held service commits one exact current-revision application and stable
+idempotency key. It keeps the current Price through the paid period, schedules
+the lower Price afterward with no proration, and atomically stores exact
+provider facts, the scheduled quote, and one pending tier event without
+changing current access. Provider uncertainty is no-retry: a known Schedule
+can only be retrieved and confirmed read-only; an unknown Schedule identity
+requires owner reconciliation. Renewal-boundary activation, webhook/HTTP
 composition, customer controls, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,

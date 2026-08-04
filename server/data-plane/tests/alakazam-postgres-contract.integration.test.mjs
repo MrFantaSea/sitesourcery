@@ -6,6 +6,7 @@ import pg from "pg";
 
 import {
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_SUBSCRIPTION_PROVIDER_FACTS_SCHEMA,
   createAlakazamProviderMetadata
 } from "../../commerce-v2/alakazam.mjs";
@@ -15,6 +16,9 @@ import {
 import {
   createAlakazamUpgradeService
 } from "../../commerce-v2/alakazam-upgrade.mjs";
+import {
+  createAlakazamDowngradeService
+} from "../../commerce-v2/alakazam-downgrade.mjs";
 import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
@@ -1815,54 +1819,212 @@ test(
         expiresAt: "2026-08-02T12:30:00.000Z"
       });
       await flushConstraints(client);
-      await client.query(
-        `update ss.alakazam_change_quotes
-            set state = 'schedule_dispatching'
+      const downgradeQuote = await client.query(
+        `select disclosure_digest, quote_digest
+           from ss.alakazam_change_quotes
           where id = $1`,
         [downgradeQuoteId]
       );
-      const downgradeScheduleId = randomUUID();
-      await insertRow(client, "alakazam_downgrade_schedules", {
-        id: downgradeScheduleId,
-        organization_id: authority.organizationId,
-        project_id: authority.projectId,
-        subscription_id: subscriptionId,
-        quote_id: downgradeQuoteId,
-        current_tier_id: "alakazam_35",
-        target_tier_id: "alakazam_25",
-        current_stripe_price_id: "price_alakazam_35",
-        target_stripe_price_id: "price_alakazam_25",
-        effective_at: "2026-09-02T12:03:00.000Z",
-        provider_idempotency_key: "alakazam-downgrade-35-25",
-        purpose_digest: digest("downgrade:35:25"),
-        state: "dispatching"
-      });
-      await client.query(
-        `update ss.alakazam_downgrade_schedules
-            set state = 'scheduled',
-                stripe_schedule_id = 'sub_sched_alakazam_35_25',
-                provider_facts = '{"test":true}'::jsonb,
-                provider_facts_digest = $2,
-                scheduled_at = $3
-          where id = $1`,
-        [
-          downgradeScheduleId,
-          digest("schedule:35:25"),
-          "2026-08-02T12:21:00.000Z"
-        ]
-      );
-      await client.query(
-        "update ss.alakazam_change_quotes set state = 'scheduled' where id = $1",
-        [downgradeQuoteId]
-      );
-      await insertTierEvent(client, authority, {
-        subscriptionId,
+      assert.equal(downgradeQuote.rowCount, 1);
+      const downgradeCommand = {
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        projectId: authority.projectId,
         quoteId: downgradeQuoteId,
-        downgradeScheduleId,
-        eventKind: "downgrade_scheduled",
-        priorTierId: "alakazam_35",
-        resultTierId: "alakazam_25",
-        occurredAt: "2026-08-02T12:21:00.000Z"
+        acceptedDisclosureDigest:
+          downgradeQuote.rows[0].disclosure_digest,
+        quoteDigest: downgradeQuote.rows[0].quote_digest
+      };
+      const downgradeProviderCalls = {
+        schedules: 0,
+        reads: 0,
+        ids: 0
+      };
+      let downgradeClockCalls = 0;
+      const downgradeIds = [randomUUID(), randomUUID()];
+      function downgradeScheduleFacts(
+        purpose,
+        providerObservedAt =
+          "2026-08-02T12:21:02.000Z"
+      ) {
+        const facts = {
+          schema: ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA,
+          stripeScheduleId:
+            "sub_sched_alakazam_35_25",
+          stripeSubscriptionId:
+            purpose.currentSubscription
+              .stripeSubscriptionId,
+          stripeCustomerId: purpose.stripeCustomerId,
+          currentTierId:
+            purpose.currentSubscription.tierId,
+          targetTierId: purpose.targetTierId,
+          currentPriceId:
+            purpose.currentSubscription.stripePriceId,
+          targetPriceId: "price_alakazam_25",
+          effectiveAt:
+            purpose.currentSubscription.currentPeriodEndsAt,
+          endBehavior: "release",
+          providerProration: false,
+          providerObservedAt
+        };
+        return {
+          ...facts,
+          providerFactsDigest: canonicalDigest(facts)
+        };
+      }
+      await expectRejected(
+        client,
+        async () => {
+          const unsupported =
+            await settlementRepository
+              .claimDowngradeApplication({
+                command: downgradeCommand,
+                scheduleId: randomUUID(),
+                claimedAt:
+                  "2026-08-02T12:20:30.000Z"
+              });
+          const unsupportedFacts =
+            downgradeScheduleFacts(
+              unsupported.application.purpose,
+              "2026-08-02T12:20:31.000Z"
+            );
+          await client.query(
+            `update ss.alakazam_downgrade_schedules
+                set state = 'scheduled',
+                    target_stripe_price_id = $2,
+                    stripe_schedule_id = $3,
+                    provider_effect_certainty = 'confirmed',
+                    provider_facts = $4::jsonb,
+                    provider_facts_digest = $5,
+                    provider_reconciliation = 'confirmed',
+                    scheduled_at = $6
+              where id = $1`,
+            [
+              unsupported.application.scheduleId,
+              unsupportedFacts.targetPriceId,
+              unsupportedFacts.stripeScheduleId,
+              JSON.stringify(unsupportedFacts),
+              unsupportedFacts.providerFactsDigest,
+              "2026-08-02T12:20:32.000Z"
+            ]
+          );
+          await client.query(
+            `update ss.alakazam_change_quotes
+                set state = 'scheduled'
+              where id = $1`,
+            [downgradeQuoteId]
+          );
+        },
+        /lacks exact atomic local evidence/iu
+      );
+      const downgradeService =
+        createAlakazamDowngradeService({
+          repository: settlementRepository,
+          provider: {
+            async readiness() {
+              return {
+                ready: true,
+                provider: "stripe",
+                alakazam: true,
+                taxMode: "disabled_by_owner",
+                livemode: false
+              };
+            },
+            async scheduleAlakazamDowngrade(input) {
+              downgradeProviderCalls.schedules += 1;
+              throw Object.assign(
+                new Error("Schedule update response lost"),
+                {
+                  code: "stripe_schedule_update_unknown",
+                  details: {
+                    stripeScheduleId:
+                      "sub_sched_alakazam_35_25"
+                  }
+                }
+              );
+            },
+            async retrieveAlakazamSchedule(input) {
+              downgradeProviderCalls.reads += 1;
+              assert.equal(
+                input.stripeScheduleId,
+                "sub_sched_alakazam_35_25"
+              );
+              return downgradeScheduleFacts(input.purpose);
+            }
+          },
+          clock: {
+            now() {
+              downgradeClockCalls += 1;
+              return [
+                "2026-08-02T12:21:00.000Z",
+                "2026-08-02T12:21:01.000Z",
+                "2026-08-02T12:21:02.000Z",
+                "2026-08-02T12:21:03.000Z",
+                "2026-08-02T12:21:04.000Z"
+              ][downgradeClockCalls - 1];
+            }
+          },
+          ids: {
+            next(label) {
+              downgradeProviderCalls.ids += 1;
+              assert.ok(
+                [
+                  "alakazam_downgrade_application",
+                  "alakazam_downgrade_tier_event"
+                ].includes(label)
+              );
+              return downgradeIds.shift();
+            }
+          },
+          release: createAlakazamBillingRelease({
+            approved: true,
+            taxMode: "disabled_by_owner"
+          })
+        });
+      await assert.rejects(
+        downgradeService.scheduleDowngrade(
+          downgradeCommand
+        ),
+        (error) =>
+          error.code ===
+            "alakazam_downgrade_reconciliation_required" &&
+          error.status === 409
+      );
+      assert.deepEqual(downgradeProviderCalls, {
+        schedules: 1,
+        reads: 0,
+        ids: 1
+      });
+      const scheduledDowngrade =
+        await downgradeService.scheduleDowngrade(
+          downgradeCommand
+        );
+      const downgradeScheduleId =
+        scheduledDowngrade.scheduleId;
+      assert.deepEqual(downgradeProviderCalls, {
+        schedules: 1,
+        reads: 1,
+        ids: 2
+      });
+      assert.equal(scheduledDowngrade.status, "scheduled");
+      assert.equal(
+        scheduledDowngrade.effectiveAt,
+        "2026-09-02T12:03:00.000Z"
+      );
+      assert.equal(
+        scheduledDowngrade.next,
+        "boundary_confirmation"
+      );
+      assert.deepEqual(
+        await downgradeService.scheduleDowngrade(
+          downgradeCommand
+        ),
+        scheduledDowngrade
+      );
+      assert.deepEqual(downgradeProviderCalls, {
+        schedules: 1,
+        reads: 1,
+        ids: 2
       });
       await flushConstraints(client);
 

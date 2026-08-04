@@ -1333,6 +1333,7 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "createAlakazamUpgradeCheckout",
     "retrieveAlakazamPayment",
     "retrieveAlakazamSubscription",
+    "retrieveAlakazamSchedule",
     "applyAlakazamUpgrade",
     "scheduleAlakazamDowngrade",
     "createBillingPortal",
@@ -2242,6 +2243,41 @@ test("a completed Alakazam Schedule replay is read back without another provider
   const result =
     await adapter.scheduleAlakazamDowngrade(request);
   assert.equal(result.stripeScheduleId, schedule.id);
+  assert.equal(calls.scheduleCreates.length, 0);
+  assert.equal(calls.scheduleUpdates.length, 0);
+  assert.equal(calls.scheduleReads.length, 1);
+});
+
+test("Alakazam Schedule reconciliation is strictly read-only", async () => {
+  const config = alakazamConfiguration();
+  const seed = alakazamRequest(
+    { changeKind: "downgrade" },
+    { stripeScheduleId: null }
+  );
+  const schedule = fakeAlakazamSchedule(seed);
+  const request = {
+    purpose: seed.purpose,
+    purposeDigest: seed.purposeDigest,
+    stripeScheduleId: schedule.id
+  };
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({
+        tierId: "alakazam_50",
+        schedule: schedule.id
+      })
+    ],
+    scheduleRetrieveResponses: [schedule]
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const result =
+    await adapter.retrieveAlakazamSchedule(request);
+  assert.equal(result.stripeScheduleId, schedule.id);
+  assert.equal(result.targetTierId, "alakazam_25");
   assert.equal(calls.scheduleCreates.length, 0);
   assert.equal(calls.scheduleUpdates.length, 0);
   assert.equal(calls.scheduleReads.length, 1);

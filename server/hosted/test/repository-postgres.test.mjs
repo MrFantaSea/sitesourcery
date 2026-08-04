@@ -87,6 +87,7 @@ function readyRow(overrides = {}) {
     alakazam_activation_contract_ready: true,
     alakazam_upgrade_contract_ready: true,
     alakazam_upgrade_activation_contract_ready: true,
+    alakazam_downgrade_dispatch_contract_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,

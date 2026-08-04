@@ -149,10 +149,21 @@ applies both quote and provider application. A deferred database trigger proves
 those facts agree at commit. An applied replay, including after a later tier
 revision, performs no Stripe read and allocates no identity.
 
-This checkpoint does not dispatch a downgrade Schedule through the customer
-runtime, expose an HTTP/webhook route, grant rendered tier features, publish a
-site, or open production Checkout. Those remain separate evidence-gated slices
-below the same release holds.
+Additive migration 030 fences a zero-dollar downgrade before Stripe can attach
+or change a Subscription Schedule. The application binds the accepted quote,
+current subscription revision, item, Price, paid boundary, and lower target to
+one durable idempotency key. Exact confirmation atomically records the
+Schedule, advances the quote to `scheduled`, and writes one
+`downgrade_scheduled` tier event while leaving the current local tier and
+revision untouched. Provider uncertainty can never cause a second write: a
+known Schedule ID permits only exact read-only recovery, while an unknown ID
+requires owner reconciliation. A deferred database trigger proves the
+Schedule facts, current entitlement, quote, and tier event agree at commit.
+
+This checkpoint does not yet process the renewal-boundary Subscription event,
+expose an HTTP/customer route, grant rendered tier features, publish a site, or
+open production Checkout. Those remain separate evidence-gated slices below
+the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period
