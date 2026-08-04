@@ -1,4 +1,5 @@
 import {
+  isPotentialAlakazamStripeEvent,
   isDownloadStripeEvent,
   isPotentialDownloadReversalEvent
 } from "../commerce-v2/index.mjs";
@@ -16,7 +17,8 @@ function providerCode(error) {
 export function createStripeWebhookRouter({
   provider,
   canonicalService,
-  downloadCommerce
+  downloadCommerce,
+  alakazamCommerce
 } = {}) {
   invariant(
     provider &&
@@ -26,6 +28,9 @@ export function createStripeWebhookRouter({
         "function" &&
       downloadCommerce &&
       typeof downloadCommerce.ingestStripeEvent ===
+        "function" &&
+      alakazamCommerce &&
+      typeof alakazamCommerce.ingestStripeEvent ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "The shared Stripe webhook router is incomplete.",
@@ -84,6 +89,11 @@ export function createStripeWebhookRouter({
         if (result?.status !== "not_download") {
           return result;
         }
+      }
+      if (isPotentialAlakazamStripeEvent(event)) {
+        return alakazamCommerce.ingestStripeEvent(
+          event
+        );
       }
       return canonicalService.ingestVerifiedStripeEvent(
         event

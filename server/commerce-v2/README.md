@@ -114,8 +114,18 @@ must agree before one atomic repository transaction records the processed
 event and `downgrade_applied` revision evidence, advances the local tier and
 period, and applies the Schedule and quote together. A deferred database
 trigger proves that binding at commit. Applied replay performs no Stripe read
-or identity allocation. Webhook/HTTP runtime composition, broader renewal and
-status reconciliation, customer controls, and fulfillment remain held.
+or identity allocation.
+
+The hosted Stripe ingress now verifies raw webhook bytes once and sends exact
+Alakazam metadata to one payment, start-activation, upgrade-activation, or
+downgrade-activation handler. Download and canonical events retain their
+existing routes, and impossible Alakazam event/change-kind pairings fail
+closed. The production executable composes the real repository, provider,
+clock, and identity ports behind a separate Alakazam release mode that defaults
+held and requires matching tax/provider readiness before approved startup. The
+production Stripe loader still accepts no Alakazam Product/Price/Coupon/Portal
+bindings, so customer HTTP controls, approved provider composition, broader
+renewal/status reconciliation, and fulfillment remain held.
 
 Quotes bind the catalog and terms versions, exact server price, tenant,
 customer, editor project, accepted project version, version content digest,

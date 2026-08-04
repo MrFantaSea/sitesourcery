@@ -12,11 +12,23 @@ import {
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
 import {
+  createAlakazamDowngradeActivationService,
+  createAlakazamPaymentService,
+  createAlakazamStartActivationService,
+  createAlakazamStripeEventRouter,
+  createAlakazamUpgradeService,
   createCommerceV2Boundary,
   createCommerceV2Service,
   createDownloadPaymentService,
   createHostedDownloadCommerce
 } from "../../commerce-v2/index.mjs";
+import {
+  assertApprovedAlakazamReady,
+  createConfiguredAlakazamRelease
+} from "../alakazam-release-config.mjs";
+import {
+  createPostgresAlakazamRepository
+} from "../alakazam-postgres.mjs";
 import {
   cancellationWorkerOptionsFromEnvironment,
   createCancellationWorker
@@ -211,6 +223,8 @@ async function start() {
     createConfiguredStripeProvider();
   const downloadPaymentComposition =
     createConfiguredDownloadPaymentRelease();
+  const alakazamComposition =
+    createConfiguredAlakazamRelease();
   const downloadPayment =
     createDownloadPaymentService({
       repository:
@@ -235,6 +249,33 @@ async function start() {
       ),
       resolveSession: commerceV2.resolveSession,
       payment: downloadPayment
+    });
+  const alakazamRepository =
+    createPostgresAlakazamRepository({ authority });
+  const alakazamServicePorts = {
+    repository: alakazamRepository,
+    provider: stripeComposition.adapter,
+    clock: commerceV2.clock,
+    ids: commerceV2.ids,
+    release: alakazamComposition.release
+  };
+  const alakazamCommerce =
+    createAlakazamStripeEventRouter({
+      payment: createAlakazamPaymentService(
+        alakazamServicePorts
+      ),
+      startActivation:
+        createAlakazamStartActivationService(
+          alakazamServicePorts
+        ),
+      upgradeActivation:
+        createAlakazamUpgradeService(
+          alakazamServicePorts
+        ),
+      downgradeActivation:
+        createAlakazamDowngradeActivationService(
+          alakazamServicePorts
+        )
     });
   const domainRuntime =
     createHeldDomainRuntime();
@@ -312,6 +353,10 @@ async function start() {
     downloadPaymentComposition,
     await downloadPayment.readiness()
   );
+  assertApprovedAlakazamReady(
+    alakazamComposition,
+    readiness.payments
+  );
   if (!readiness.ready) {
     throw new Error(
       "Hosted runtime is not ready; inspect the private readiness endpoint for exact held dependencies."
@@ -336,7 +381,8 @@ async function start() {
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,
-          downloadCommerce
+          downloadCommerce,
+          alakazamCommerce
         })
       })
     )
@@ -385,6 +431,7 @@ async function start() {
       compilerRevision: readiness.compiler.revision,
       catalogVersion: readiness.catalog.catalogVersion,
       payments: paymentReadiness,
+      alakazamMode: alakazamComposition.mode,
       cancellationWorker:
         cancellationWorker?.snapshot().state ??
         "held_not_started",

@@ -493,6 +493,30 @@ these are OWNER RULINGS and open work, not suggestions.
   customer/runtime composition and broader renewal/status reconciliation.
   Public production remains the July 22 predecessor.
 
+## ALAKAZAM HELD WEBHOOK COMPOSITION CHECKPOINT (2026-08-04)
+
+- The hosted Stripe ingress now verifies raw webhook bytes exactly once and
+  routes exact Alakazam metadata to one of four already-proven handlers:
+  Checkout payment settlement, start activation, upgrade activation, or
+  renewal-boundary downgrade activation. Download and older canonical events
+  retain their existing branches. An Alakazam marker with an impossible event
+  type/change-kind pairing is rejected instead of silently falling through.
+- The production executable composes those handlers with the canonical
+  PostgreSQL Alakazam repository, the one reviewed Stripe adapter, and the
+  shared clock/identity ports. `SITESOURCERY_ALAKAZAM_MODE` defaults to `held`;
+  an `approved` mode requires one exact reviewed tax mode and matching provider
+  readiness at startup. Held mode carries no latent tax authority.
+- Focused composition gates pass 21/21. Wider gates pass 408/408 core,
+  125/125 runnable hosted tests with the same two intentional environment-only
+  skips, 52/52 operations tests, and the hosted runtime assertion. This slice
+  changes no persistence contract; migration 031 and its fresh 5/5 PostgreSQL
+  proof remain authoritative.
+- This is wired but still not customer-usable. The production Stripe loader
+  does not yet accept the reviewed Alakazam Product/Price/Coupon/Portal
+  bindings, no customer quote/change routes or controls exist, and no tier
+  feature or publication fulfillment opened. Nothing was pushed or deployed;
+  public production remains the July 22 predecessor.
+
 ## OWNER PRODUCT CONTRACT (2026-08-02 — newest ruling wins)
 
 When dated owner statements conflict, the newest explicit owner statement is

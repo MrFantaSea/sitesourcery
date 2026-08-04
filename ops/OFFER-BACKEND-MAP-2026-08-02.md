@@ -42,7 +42,7 @@ decisions; implementation must keep those controls held instead of guessing.
 | Alakazam $35 | Some candidate style controls exist in the browser prototype | The $25-to-$35 $10-only upgrade is revision-bound, settled once, changes only the existing Stripe item, and now commits its verified-event local tier revision atomically | Internal upgrade activation complete; fulfillment missing | Real provider Price; service/UI rail; feature gates; three-version retention; modest-care accounting |
 | Alakazam $50 | Cash App/Venmo and customization ideas exist in old prototype notes | Direct start, fixed-difference upgrade, durable zero-dollar renewal-boundary Schedule dispatch, and exact verified-event lower-tier activation are implemented | Internal downgrade activation complete; fulfillment missing | Real provider Price; service/UI rail; richer controls in generated output; higher-care accounting |
 | Customer account | Hosted registration, activation, sign-in, recovery, organization, project, draft, and accepted versions exist | PostgreSQL authority and secure cookies are proven on isolated HTTPS staging; Resend delivery is proven | Real on staging, not public | Public same-origin deployment and post-cutover registration/recovery/project proof |
-| Customer billing controls | A narrow account/project/$5 control fragment exists | Billing portal, cancellation, subscription/webhook primitives exist | Partial | Controls expose the customer's actual tier, payment state, invoices/receipts, immediate difference-only upgrades, renewal-boundary downgrades, change/cancel actions, and consequences |
+| Customer billing controls | A narrow account/project/$5 control fragment exists | Billing portal and cancellation primitives exist; exact Alakazam payment/start/upgrade/downgrade webhooks are composed behind a held release | Partial | Controls expose the customer's actual tier, payment state, invoices/receipts, immediate difference-only upgrades, renewal-boundary downgrades, change/cancel actions, and consequences |
 | Owner client support | No real owner workbench | Ticket creation and data primitives exist; `ops/OPERATOR-BACKEND-SPEC.md` is explicitly a simulation draft | Missing | Responsive Mac/Pixel owner login; client search; account/project/version/payment/tier/ticket view; audited bounded repair actions |
 | Custom Sorcery builds | Public $400–$4,000 ladder and written-quote path exist | `invoice` means Zack manually uses Stripe Dashboard; no invoice composer, estimate acceptance, job, milestone, balance, or client ledger exists | Missing business backend | Owner creates scope/estimate/invoice from Mac or Pixel; customer pays securely; webhook/readback settles deposit and balance; job and audit state remain visible |
 | $200 assessment | Public direct Stripe Payment Link exists; report is manually produced | No assessment job queue, customer status, delivery record, or automated $200 build-credit ledger | Sellable manually, not managed | Intake attaches to customer/job; owner queue and delivery; payment/credit/status ledger |
@@ -138,6 +138,11 @@ Present as substantial code but not a finished product journey:
   item, Customer, attached Schedule, lower Price, and new period before the
   processed event, lower-tier revision, applied Schedule, and quote commit
   together. Applied replay performs no provider work or identity allocation.
+- A single-verification hosted webhook branch. Exact Alakazam metadata routes
+  to payment, start, upgrade, or downgrade handling while Download and
+  canonical events retain their existing paths. Production composes the real
+  repository and provider ports, but the Alakazam release defaults held and an
+  approved mode refuses startup without matching tax and provider readiness.
 
 Absent today:
 
@@ -145,8 +150,9 @@ Absent today:
   one-invoice $5 Coupon.
 - Real Stripe test/live Product, $25/$35/$50 Prices, duration-once $5 Coupon,
   restricted Portal configuration, and their reviewed environment bindings.
-- Renewal and status-event reconciliation, HTTP/customer boundaries, and
-  hosted runtime composition that can safely invoke the provider contract.
+- Renewal and status-event reconciliation, customer quote/change HTTP
+  boundaries, and reviewed production Stripe Alakazam Product/Price/Coupon/
+  Portal environment bindings.
 - Alakazam customer subscription controls and public provisioning UI/API.
 - Owner back office and custom estimate/invoice/job workflow.
 - Care accounting and bounded owner repair actions.
@@ -167,8 +173,9 @@ Absent today:
    028's no-retry paid-upgrade provider application, migration 029's atomic
    verified-event local upgrade activation, and migration 030's no-retry
    renewal-boundary downgrade Schedule dispatch, and migration 031's atomic
-   boundary-event local downgrade activation are complete. Customer controls,
-   hosted composition, broader renewal/status reconciliation, and fulfillment
+   boundary-event local downgrade activation, plus the held single-verification
+   hosted webhook composition, are complete. Customer controls, approved
+   provider bindings, broader renewal/status reconciliation, and fulfillment
    remain.**
 3. Wire automatic hosted-address publication and customer billing controls.
 4. Build the responsive owner client/invoice/support workbench.

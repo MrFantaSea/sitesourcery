@@ -457,7 +457,7 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
   );
 });
 
-test("the hosted server injects one configured adapter for Checkout and raw webhook verification", async () => {
+test("the hosted server injects one configured adapter for Checkout and every verified webhook branch", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -469,6 +469,22 @@ test("the hosted server injects one configured adapter for Checkout and raw webh
   assert.match(
     source,
     /paymentProvider:\s*stripeComposition\.adapter/u
+  );
+  assert.match(
+    source,
+    /createConfiguredAlakazamRelease\(\)/u
+  );
+  assert.match(
+    source,
+    /createPostgresAlakazamRepository\(\{ authority \}\)/u
+  );
+  assert.match(
+    source,
+    /createAlakazamStripeEventRouter\(\{/u
+  );
+  assert.match(
+    source,
+    /downloadCommerce,\s*alakazamCommerce/u
   );
   assert.match(
     source,

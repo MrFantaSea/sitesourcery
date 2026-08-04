@@ -963,7 +963,12 @@ test(
     const stripeWebhook = createStripeWebhookRouter({
       provider: payment.port,
       canonicalService: service,
-      downloadCommerce
+      downloadCommerce,
+      alakazamCommerce: {
+        async ingestStripeEvent() {
+          return { status: "not_alakazam" };
+        }
+      }
     });
 
     const ownerEmail =

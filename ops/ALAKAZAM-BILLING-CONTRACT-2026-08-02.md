@@ -172,11 +172,20 @@ applies both Schedule and quote. A deferred database trigger proves the exact
 scheduled purpose, event, provider readback, boundary, and revision agree at
 commit. Applied replay performs no Stripe read and allocates no identity.
 
-This checkpoint does not yet compose the boundary service into the hosted
-webhook/HTTP runtime, expose customer controls, reconcile the broader renewal
-and status event set, grant rendered tier features, publish a site, or open
-production Checkout. Those remain separate evidence-gated slices below the
-same release holds.
+The shared hosted webhook runtime now verifies Stripe's raw body once and
+routes exact Alakazam metadata to payment settlement, start activation,
+upgrade activation, or downgrade activation without disturbing Download or
+canonical commerce events. The composed branch defaults held. An explicit
+Alakazam approval requires one reviewed tax mode and matching provider
+readiness at startup; impossible Alakazam event/change-kind combinations fail
+closed. The production Stripe loader still has no Alakazam Product, Price,
+Coupon, or Portal environment binding, so this composition cannot open a real
+provider path yet.
+
+This checkpoint does not yet expose customer quote/change controls, reconcile
+the broader renewal and status event set, grant rendered tier features,
+publish a site, or open production Checkout. Those remain separate
+evidence-gated slices below the same release holds.
 
 Stripe's current documentation supports a one-invoice fixed Coupon for
 subscription Checkout, recommends Subscription Schedules for end-of-period

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  ALAKAZAM_PROVIDER_METADATA_SCHEMA
+} from "../../commerce-v2/index.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
 
 function event(metadata = {}) {
@@ -21,12 +24,16 @@ function event(metadata = {}) {
 
 function fixture(
   selectedEvent,
-  { downloadResult = { status: "download" } } = {}
+  {
+    downloadResult = { status: "download" },
+    alakazamResult = { status: "alakazam" }
+  } = {}
 ) {
   const calls = {
     verify: [],
     canonical: [],
-    download: []
+    download: [],
+    alakazam: []
   };
   const router = createStripeWebhookRouter({
     provider: {
@@ -45,6 +52,12 @@ function fixture(
       async ingestStripeEvent(input) {
         calls.download.push(structuredClone(input));
         return structuredClone(downloadResult);
+      }
+    },
+    alakazamCommerce: {
+      async ingestStripeEvent(input) {
+        calls.alakazam.push(structuredClone(input));
+        return structuredClone(alakazamResult);
       }
     }
   });
@@ -65,8 +78,29 @@ test("shared webhook router verifies raw bytes once and sends Download metadata 
   );
   assert.equal(context.calls.verify.length, 1);
   assert.equal(context.calls.download.length, 1);
+  assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.download[0], selected);
+});
+
+test("shared webhook router sends verified Alakazam events to one held runtime branch", async () => {
+  const selected = event({
+    schema: ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+    change_kind: "start"
+  });
+  const context = fixture(selected);
+  assert.deepEqual(
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from("alakazam-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "alakazam" }
+  );
+  assert.equal(context.calls.verify.length, 1);
+  assert.equal(context.calls.alakazam.length, 1);
+  assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.canonical.length, 0);
+  assert.deepEqual(context.calls.alakazam[0], selected);
 });
 
 test("shared webhook router offers refund and dispute events to Download before canonical commerce", async () => {
@@ -107,6 +141,7 @@ test("shared webhook router offers refund and dispute events to Download before 
       "suspended"
     );
     assert.equal(context.calls.download.length, 1);
+    assert.equal(context.calls.alakazam.length, 0);
     assert.equal(context.calls.canonical.length, 0);
   }
 });
@@ -133,6 +168,7 @@ test("non-Download reversal continues to canonical commerce", async () => {
     { status: "canonical" }
   );
   assert.equal(context.calls.download.length, 1);
+  assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 1);
 });
 
@@ -151,6 +187,7 @@ test("shared webhook router preserves canonical Stripe events without double ver
   assert.equal(context.calls.verify.length, 1);
   assert.equal(context.calls.canonical.length, 1);
   assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.alakazam.length, 0);
 });
 
 test("shared webhook router rejects missing raw bytes before provider verification", async () => {
