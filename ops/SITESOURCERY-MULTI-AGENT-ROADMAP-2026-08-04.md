@@ -245,8 +245,10 @@ H1 pre-commerce foundation checkpoint:
 - [x] Replay all 34 migrations from zero and pass maintained structural,
   repository, real-PostgreSQL adversarial, core, hosted, self-host, operations,
   and site regressions; drop and verify the disposable database absent.
-- [ ] Connect anonymous inquiry/claim and the customer account request surface
-  to this authority.
+- [x] Connect the customer account request, owner quote issue, current-quote
+  review, and exact customer acceptance surface to this authority.
+- [ ] Connect the simple anonymous inquiry/claim path without creating a quote,
+  invoice, job, or account authority before the customer activates an account.
 - [x] Add exact versioned standard-assessment quote and account-bound
   acceptance authority with immutable scope/money/legal digests, current
   profile/intake binding, operator grant/revoke evidence, minimal privileges,
@@ -315,6 +317,9 @@ Five existing-site revenue lanes:
 
 Customer and owner surfaces:
 
+- [x] Add the minimum responsive Mac/Pixel owner operation for submitted `$200`
+  assessment review and exact quote issue; ordinary customer accounts cannot
+  discover or grant the operation.
 - [ ] Add customer account views for assessment/onboarding result, quote,
   acceptance, invoice, payment, job, access request, change order, handoff,
   management plan, capacity, ticket, monthly receipt, and safe recovery state.
@@ -410,19 +415,20 @@ Lane D/J Polish truth ────────────┘
 | H1A | Custom-services pre-commerce foundation | Lead plus bounded read-only review and Polish lane | migration 34, exact held assessment policy, actor-bound request state, typed intake, minimal grants, readiness, clean-room PostgreSQL and broad proof | reviewed and sealed locally; payment and release held |
 | H1B | Assessment quote and acceptance authority | Lead plus bounded readiness and customer-projection workers | migration 35, deployment-controlled operator grants, immutable exact `$200` revisions, named scope, account-bound acceptance, clean-room PostgreSQL and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, and release held |
 | H1C | Authenticated custom-services account read | Lead plus bounded PostgreSQL adapter worker | exact customer/project scope, read-only canonical repository, customer-safe projection, same-origin GET, production composition, real PostgreSQL and broad proof | reviewed and sealed locally; writes, commerce, public copy, and release held |
-| H1D | Customer request and quote surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw routes; current quote read and acceptance; signed-in dashboard form/review; real PostgreSQL, hosted artifact, and broad proof | reviewed locally; minimum owner quote-issue command remains before the vertical journey is complete; invoice, payment, job, report, credit, and release held |
+| H1D | Customer request, owner quote, and acceptance surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw; deployment-authorized owner queue and exact `$200` issue; current quote read/acceptance; responsive customer and owner controls; real PostgreSQL, hosted artifact, and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, deployment grant, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, H1A, H1B, and H1C are sealed; H1D now supplies the customer
-request and quote-review/acceptance surface over migration 36. Complete its
-vertical handoff with one minimum owner quote-issue command, then continue Lane
-H1 as one outcome: anonymous inquiry/claim + activated account + a
-customer-owned external-site request + exact accepted `$200` assessment quote
-+ held invoice/reservation + provider-confirmed payment + job/report delivery
-+ exact one-use `$200` Custom build credit. Migrations 34 through 36 still
-deliberately supply no invoice, payable tax total, provider dispatch, payment,
-job, report, or credit.
+Batch 3C, H0, and H1A through H1D are sealed. H1D now supplies the customer
+request, deployment-authorized owner quote issue, and exact customer acceptance
+surface over migrations 34 through 36. Continue Lane H1 as one outcome:
+anonymous inquiry/claim + activated account + a customer-owned external-site
+request + exact accepted `$200` assessment quote + held invoice/reservation +
+provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
+build credit. The immediate slice is the account-bound held invoice and
+non-dispatchable reservation. Migrations 34 through 36 still deliberately
+supply no invoice, payable tax total, provider dispatch, payment, job, report,
+or credit.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

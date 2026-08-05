@@ -609,6 +609,63 @@
       );
     }
 
+    function listOwnerAssessmentRequests(requestOptions) {
+      return request(
+        "GET",
+        "/operator/custom-services/assessment-requests",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function issueOwnerAssessmentQuote(caseId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      var reviewTargets = Array.isArray(source.reviewTargets)
+        ? source.reviewTargets.map(function (target) {
+            var selected = isObject(target) ? target : {};
+            return {
+              kind: oneOf(
+                selected.kind,
+                "Review target kind",
+                ["page", "page_type"]
+              ),
+              value: requiredText(
+                selected.value,
+                "Review target",
+                154
+              )
+            };
+          })
+        : [];
+      if (reviewTargets.length < 1 || reviewTargets.length > 5) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Choose between one and five representative pages or page types."
+        });
+      }
+      return request(
+        "POST",
+        "/operator/custom-services/assessment-requests/"
+          + segment(caseId, "Assessment request ID")
+          + "/quote",
+        {
+          body: {
+            organizationId: requiredText(
+              source.organizationId,
+              "Organization ID",
+              36
+            ),
+            deliveryDate: requiredText(
+              source.deliveryDate,
+              "Delivery date",
+              10
+            ),
+            reviewTargets: reviewTargets
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function createProject(input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
@@ -1273,6 +1330,10 @@
         getCustomServicesAssessmentQuote,
       acceptCustomServicesAssessmentQuote:
         acceptCustomServicesAssessmentQuote,
+      listOwnerAssessmentRequests:
+        listOwnerAssessmentRequests,
+      issueOwnerAssessmentQuote:
+        issueOwnerAssessmentQuote,
       createProject: createProject,
       saveDraft: saveDraft,
       createVersion: createVersion,

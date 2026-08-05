@@ -36,13 +36,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Finish H1 from the now-proven customer request and accepted-quote surface: add
-the smallest owner Mac/Pixel operation that issues the bounded `$200` quote
-with its actual delivery date and named targets, then one held invoice and
-provider-effect reservation before tax calculation, Checkout,
+Continue H1 from the now-proven customer request, owner-issued quote, and
+customer-acceptance surface: add one account-bound held invoice and one
+non-dispatchable payment reservation before tax calculation, Checkout,
 provider-confirmed payment, job/report delivery, and one-use `$200` Custom
-base-build credit authority. All payment and public-service release gates
-remain held.
+base-build credit authority. All provider effects and public-service release
+gates remain held.
 
 ## Completed and reviewed
 
@@ -769,11 +768,54 @@ Batch 3C sealed checkpoint gates:
 - Disposable database `ss_h1_commands_20260805_codex1` had zero active
   sessions, was dropped by exact name, and is verified absent. No customer or
   production data was touched.
-- One operational gap remains inside H1: quote revision authoring is protected
-  by real deployment-controlled operator authority but has no usable owner
-  Mac/Pixel command yet. Until that minimum owner action is connected, a
-  submitted customer request pauses at owner review rather than receiving its
-  quote automatically.
+- The owner quote-authoring gap recorded by this checkpoint is closed by the
+  immediately following owner-operation checkpoint. No second quote system or
+  migration 37 was introduced.
+- No push, deployment, DNS change, provider effect, credential, public-copy
+  release, or production mutation occurred. The July 22 fallback remains
+  untouched.
+
+## H1 owner assessment quote operation sealed checkpoint evidence
+
+- The production hosted runtime now composes one PostgreSQL owner boundary over
+  the existing migration-35 quote tables and operator grant chain. It adds no
+  migration 37, alternate quote store, general administration framework, or
+  browser price authority.
+- `GET /api/v1/operator/custom-services/assessment-requests` lists at most 100
+  submitted, unaccepted assessment requests only after the signed-in account
+  has a current database-controlled `service_quote_author` grant. The private
+  projection includes the customer, organization, site, intake facts, and any
+  current quote needed for owner review.
+- `POST /api/v1/operator/custom-services/assessment-requests/{caseId}/quote`
+  accepts only organization scope, an actual delivery date, one-to-five safe
+  page/page-type targets, CSRF proof, and an idempotency key. PostgreSQL fixes
+  the price at `$200`, USD, later tax calculation, full payment before work,
+  one website, at most five targets, at most ten findings, desktop and phone
+  review, the exact legal contract, and a 14-day quote expiry.
+- Exact command replay returns one stored receipt. A second command with the
+  same current intake, profile, date, and targets reuses the same revision;
+  changed current intake/profile truth or changed owner scope requires a new
+  immutable revision. An accepted quote cannot be revised.
+- The hosted account interface now contains a compact responsive owner quote
+  desk. It stays hidden for ordinary customers and held runtimes; an authorized
+  owner can review the request and issue or update the quote from Mac or Pixel
+  by choosing only delivery date and review targets. The browser sends no
+  amount, currency, tax result, invoice total, payment claim, or provider ID.
+- Focused browser/API/owner-boundary proof passes 30/30. The maintained real
+  PostgreSQL quote journey passes 1/1 with queue read, exact issue, exact replay,
+  fresh-command duplicate suppression, customer projection compatibility, and
+  the existing adversarial quote/acceptance checks.
+- Post-integration Node 24 proof passes: core 493/493; hosted service 231 pass
+  with 2 intentional environment skips; the hosted artifact builds and
+  verifies; changed-source syntax and `git diff --check` pass.
+- Disposable database `ss_h1_owner_20260805_codex1` replayed all 36 migrations,
+  had zero active sessions, was dropped by exact name, and is verified absent.
+  It contained no customer or production data and is not recoverable because it
+  was a disposable test database.
+- Production activation still requires one deliberate deployment-control grant
+  for the owner's existing Site Sourcery account. No customer account can grant
+  itself owner tools, and this launch configuration must be proven before
+  deployment rather than weakened in application code.
 - No push, deployment, DNS change, provider effect, credential, public-copy
   release, or production mutation occurred. The July 22 fallback remains
   untouched.
@@ -787,16 +829,14 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Add the smallest owner-authenticated Mac/Pixel operation needed to inspect one
-submitted assessment and issue its exact `$200` quote: actual delivery date and
-one-to-five canonical review targets only. Reuse migration-35 operator
-authority and quote revision tables; do not create a second quote system or a
-general dashboard first. Once the customer can submit, the owner can issue,
-and the customer can accept in one real journey, move to one held invoice plus
-one non-dispatchable payment reservation. Do not call Stripe, claim tax is
-zero, mark an invoice payable, open public copy, or begin a job before the
-later tax, dispatch, settlement, report, credit, owner-operation, replay,
-fresh-PostgreSQL, and responsive browser gates are connected.
+Add one account-bound invoice projection and one non-dispatchable payment
+reservation for the exact accepted `$200` quote. Reuse the existing accepted
+quote, legal, customer, organization, project, and idempotency authority; do
+not create a general billing framework or call Stripe yet. Tax must remain
+`calculation_required`, the invoice must remain not payable, and the customer
+must see plainly that no charge occurred. Only after that held slice and its
+fresh-PostgreSQL/customer proof are sealed should tax calculation and one exact
+Checkout dispatch be added.
 
 ## Batch 3B write scope
 

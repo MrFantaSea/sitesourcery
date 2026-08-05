@@ -13,6 +13,9 @@ import {
 import {
   createHeldHostedCustomServicesAccount
 } from "./custom-services-account-hosted.mjs";
+import {
+  createHeldCustomServicesOwner
+} from "./custom-services-owner-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -300,6 +303,7 @@ export function createHostedApi(
     alakazamAccount = null,
     alakazamBilling = null,
     customServicesAccount = null,
+    customServicesOwner = null,
     stripeWebhook = null
   } = {}
 ) {
@@ -317,6 +321,18 @@ export function createHostedApi(
       typeof downloadBoundary.download === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Download commerce boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesOwnerBoundary =
+    customServicesOwner ??
+    createHeldCustomServicesOwner();
+  invariant(
+    typeof customServicesOwnerBoundary.listAssessmentRequests ===
+      "function" &&
+      typeof customServicesOwnerBoundary.issueAssessmentQuote ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted custom-services owner boundary is invalid.",
     { status: 500 }
   );
   const stripeWebhookBoundary =
@@ -634,6 +650,51 @@ export function createHostedApi(
           headers["Set-Cookie"] = csrfCookie(csrfToken);
         } else if (method === "GET" && pathname === "/api/v1/organizations") {
           result = await service.listOrganizations(actor);
+        } else if (
+          method === "GET" &&
+          pathname ===
+            "/api/v1/operator/custom-services/assessment-requests"
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening owner quote tools.",
+            { status: 401 }
+          );
+          result =
+            await customServicesOwnerBoundary.listAssessmentRequests(
+              actor
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-requests\/([^/]+)\/quote$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before issuing an assessment quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesOwnerBoundary.issueAssessmentQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "deliveryDate",
+                  "organizationId",
+                  "reviewTargets"
+                ],
+                "INVALID_OWNER_ASSESSMENT_QUOTE",
+                "The owner assessment quote is invalid."
+              )
+            );
+          status = 201;
         } else if (
           method === "GET" &&
           (route = match(

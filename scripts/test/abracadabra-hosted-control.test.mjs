@@ -621,7 +621,10 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
   }
   assert.doesNotMatch(source, /\b(?:we|us|our)\b|we[’'](?:ll|re)/iu);
   assert.match(source, /href="\/legal\/website-terms\/"/u);
-  assert.doesNotMatch(source, /Rent|Own|Owned \+ managed/u);
+  assert.doesNotMatch(
+    source,
+    /spark\.rent|Owned \+ managed|Customer owns the finished site|Spark — Own/u
+  );
   for (const jargon of [
     "Hosted staging boundary",
     "server-verified",

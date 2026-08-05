@@ -10,6 +10,9 @@ import {
   createPostgresCustomServicesAssessmentQuoteRepository
 } from "../../hosted/custom-services-assessment-quote-postgres.mjs";
 import {
+  createPostgresCustomServicesOwner
+} from "../../hosted/custom-services-owner-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 
@@ -372,6 +375,113 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       foundationSnapshot.intake.publicHostname,
       "customer.example.com"
     );
+
+    const ownerAdapterRequest =
+      await seedCustomerAssessmentRequest(client, other);
+    const ownerRepositoryContexts = [];
+    const ownerRepository =
+      createPostgresCustomServicesOwner({
+        authority: {
+          async service(context, work) {
+            ownerRepositoryContexts.push(structuredClone(context));
+            if (context.actorKind === "operator") {
+              await setActor(
+                client,
+                "operator",
+                { organizationId: context.organizationId },
+                context.userId
+              );
+            }
+            return work(client);
+          }
+        }
+      });
+    const ownerQueue =
+      await ownerRepository.listAssessmentRequests({
+        userId: firstOperatorId
+      });
+    const queuedRequest = ownerQueue.requests.find(
+      (entry) => entry.caseId === ownerAdapterRequest.caseId
+    );
+    assert.equal(
+      ownerQueue.schema,
+      "sitesourcery.custom-services-owner-assessment-queue/v1"
+    );
+    assert.equal(queuedRequest.organizationId, other.organizationId);
+    assert.equal(queuedRequest.currentQuote, null);
+    assert.equal(queuedRequest.website.publicUrl, "https://customer.example.com/");
+
+    const ownerIssueInput = {
+      commandId: `owner-quote-${randomUUID()}`,
+      organizationId: other.organizationId,
+      deliveryDate: dateAfter(14),
+      reviewTargets: [
+        { kind: "page_type", value: "product" },
+        { kind: "page", value: "/" }
+      ]
+    };
+    const ownerReceipt =
+      await ownerRepository.issueAssessmentQuote(
+        { userId: firstOperatorId },
+        ownerAdapterRequest.caseId,
+        ownerIssueInput
+      );
+    assert.equal(
+      ownerReceipt.schema,
+      "sitesourcery.custom-services-owner-assessment-quote/v1"
+    );
+    assert.equal(ownerReceipt.state, "issued");
+    assert.equal(ownerReceipt.quoteRevision, 1);
+    assert.deepEqual(ownerReceipt.price, {
+      amountMinor: 20000,
+      currency: "USD"
+    });
+    assert.deepEqual(
+      await ownerRepository.issueAssessmentQuote(
+        { userId: firstOperatorId },
+        ownerAdapterRequest.caseId,
+        ownerIssueInput
+      ),
+      ownerReceipt
+    );
+    const duplicateSafe =
+      await ownerRepository.issueAssessmentQuote(
+        { userId: firstOperatorId },
+        ownerAdapterRequest.caseId,
+        {
+          ...ownerIssueInput,
+          commandId: `owner-quote-${randomUUID()}`
+        }
+      );
+    assert.equal(duplicateSafe.quoteRevision, 1);
+    const ownerRevisionCount = await client.query(
+      `select count(*)::integer as count
+         from ss.service_quote_revisions
+        where case_id = $1`,
+      [ownerAdapterRequest.caseId]
+    );
+    assert.equal(ownerRevisionCount.rows[0].count, 1);
+    assert.deepEqual(ownerRepositoryContexts, [
+      {
+        userId: firstOperatorId,
+        readOnly: true
+      },
+      {
+        actorKind: "operator",
+        userId: firstOperatorId,
+        organizationId: other.organizationId
+      },
+      {
+        actorKind: "operator",
+        userId: firstOperatorId,
+        organizationId: other.organizationId
+      },
+      {
+        actorKind: "operator",
+        userId: firstOperatorId,
+        organizationId: other.organizationId
+      }
+    ]);
 
     await expectRejected(
       client,

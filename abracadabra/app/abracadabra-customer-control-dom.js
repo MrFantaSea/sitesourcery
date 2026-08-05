@@ -2631,6 +2631,334 @@
     });
   }
 
+  function safeOwnerWebsiteUrl(value) {
+    try {
+      var parsed = new URL(text(value));
+      return ["http:", "https:"].includes(parsed.protocol)
+        && parsed.username === ""
+        && parsed.password === ""
+        && parsed.port === ""
+        && parsed.pathname === "/"
+        && parsed.search === ""
+        && parsed.hash === "";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function verifiedOwnerAssessmentQueue(value) {
+    if (
+      !record(value)
+      || value.schema !==
+        "sitesourcery.custom-services-owner-assessment-queue/v1"
+      || !Array.isArray(value.requests)
+      || value.requests.length > 100
+    ) return null;
+    var valid = value.requests.every(function (entry) {
+      if (
+        !record(entry)
+        || !UUID.test(text(entry.caseId))
+        || !UUID.test(text(entry.organizationId))
+        || !text(entry.organizationName)
+        || !UUID.test(text(entry.projectId))
+        || !text(entry.projectName)
+        || !safeIso(entry.submittedAt)
+        || !record(entry.customer)
+        || !UUID.test(text(entry.customer.customerId))
+        || !text(entry.customer.name)
+        || !text(entry.customer.email)
+        || !record(entry.website)
+        || !text(entry.website.displayName)
+        || !safeOwnerWebsiteUrl(entry.website.publicUrl)
+        || !record(entry.request)
+        || !text(entry.request.primaryGoal)
+      ) return false;
+      var quote = entry.currentQuote;
+      return quote === null || (
+        record(quote)
+        && UUID.test(text(quote.quoteId))
+        && Number.isSafeInteger(quote.quoteRevision)
+        && quote.quoteRevision > 0
+        && typeof quote.deliveryDate === "string"
+        && safeIso(quote.expiresAt)
+        && safeIso(quote.issuedAt)
+        && Array.isArray(quote.reviewTargets)
+        && quote.reviewTargets.length >= 1
+        && quote.reviewTargets.length <= 5
+        && quote.reviewTargets.every(function (target) {
+          return record(target)
+            && ["page", "page_type"].includes(target.kind)
+            && Boolean(text(target.value));
+        })
+      );
+    });
+    return valid ? value : null;
+  }
+
+  function ownerTargetLine(target) {
+    return target.kind === "page"
+      ? text(target.value)
+      : "type:" + text(target.value);
+  }
+
+  function defaultOwnerDeliveryDate() {
+    return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  function ownerReviewTargets(value) {
+    var lines = text(value)
+      .split(/\r?\n/u)
+      .map(text)
+      .filter(Boolean);
+    if (lines.length < 1 || lines.length > 5) {
+      throw new Error(
+        "Enter between one and five pages or page types, one per line."
+      );
+    }
+    var unique = new Set(lines);
+    if (unique.size !== lines.length) {
+      throw new Error("Each review target must be listed once.");
+    }
+    return lines.map(function (line) {
+      if (line.startsWith("/")) {
+        return { kind: "page", value: line };
+      }
+      if (/^type:[a-z][a-z0-9_]{1,79}$/u.test(line)) {
+        return {
+          kind: "page_type",
+          value: line.slice(5)
+        };
+      }
+      throw new Error(
+        "Use a page path like /about or a page type like type:product."
+      );
+    });
+  }
+
+  function createOwnerAssessmentPanel(documentRef, actions) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-owner-quote-desk"
+    );
+    panel.hidden = true;
+    panel.setAttribute("aria-labelledby", "owner-quote-desk-title");
+    panel.setAttribute("data-owner-quote-desk", "");
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-owner-quote-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-owner-quote-body"
+    );
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Owner assessment quote desk"
+    );
+    heading.id = "owner-quote-desk-title";
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Private Site Sourcery tools"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Review submitted requests and issue the fixed $200 assessment quote. Price, scope limits, tax state, payment timing, contract, and quote expiration are set by the server."
+      ),
+      status,
+      body
+    );
+
+    function renderRequest(entry, busyCaseId) {
+      var quote = entry.currentQuote;
+      var card = accountElement(
+        documentRef,
+        "article",
+        "customer-owner-quote-card"
+      );
+      card.appendChild(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          entry.website.displayName
+        )
+      );
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-alakazam-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Customer",
+        entry.customer.name + " · " + entry.customer.email
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Organization",
+        entry.organizationName
+      );
+      var siteLink = accountElement(
+        documentRef,
+        "a",
+        "",
+        entry.website.publicUrl
+      );
+      siteLink.href = entry.website.publicUrl;
+      siteLink.target = "_blank";
+      siteLink.rel = "noreferrer noopener";
+      appendAccountFact(documentRef, facts, "Website", siteLink);
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Submitted",
+        accountDate(entry.submittedAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Goal",
+        entry.request.primaryGoal
+      );
+      if (text(entry.request.customerObservation)) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Customer noticed",
+          entry.request.customerObservation
+        );
+      }
+      if (quote) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Current quote",
+          "Revision " + quote.quoteRevision
+            + " · delivery " + quote.deliveryDate
+            + " · expires " + accountDate(quote.expiresAt)
+        );
+      }
+      card.appendChild(facts);
+
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form"
+      );
+      form.append(
+        assessmentField(
+          documentRef,
+          "deliveryDate",
+          "Promised delivery date",
+          quote ? quote.deliveryDate : defaultOwnerDeliveryDate(),
+          { required: true, type: "date", maximum: 10 }
+        ),
+        assessmentField(
+          documentRef,
+          "reviewTargets",
+          "Pages or page types (one per line)",
+          quote
+            ? quote.reviewTargets.map(ownerTargetLine).join("\n")
+            : "/",
+          {
+            required: true,
+            multiline: true,
+            maximum: 800,
+            placeholder: "/\n/about\ntype:product"
+          }
+        )
+      );
+      form.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "Use paths such as / or /about. Use type:product for a representative page type. Choose 1–5 total."
+        )
+      );
+      var formError = accountElement(
+        documentRef,
+        "p",
+        "customer-owner-quote-form-error"
+      );
+      formError.setAttribute("role", "alert");
+      form.appendChild(formError);
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        quote ? "Update $200 quote" : "Issue $200 quote"
+      );
+      submit.type = "submit";
+      submit.disabled = busyCaseId === entry.caseId;
+      form.appendChild(submit);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        formError.textContent = "";
+        var data = new FormData(form);
+        try {
+          var input = {
+            organizationId: entry.organizationId,
+            deliveryDate: text(data.get("deliveryDate")),
+            reviewTargets: ownerReviewTargets(
+              data.get("reviewTargets")
+            )
+          };
+          if (typeof actions.issue === "function") {
+            actions.issue(entry, input);
+          }
+        } catch (error) {
+          formError.textContent = error.message;
+        }
+      });
+      card.appendChild(form);
+      body.appendChild(card);
+    }
+
+    return Object.freeze({
+      element: panel,
+      render: function (state) {
+        var queue = state && state.queue
+          ? verifiedOwnerAssessmentQueue(state.queue)
+          : null;
+        panel.hidden = !queue;
+        body.replaceChildren();
+        if (!queue) return;
+        panel.setAttribute(
+          "aria-busy",
+          String(Boolean(state.busyCaseId))
+        );
+        status.textContent = state.error
+          || (queue.requests.length === 0
+            ? "No submitted assessment requests are waiting."
+            : queue.requests.length + " assessment request"
+              + (queue.requests.length === 1 ? " is" : "s are")
+              + " ready for owner review.");
+        queue.requests.forEach(function (entry) {
+          renderRequest(entry, state.busyCaseId);
+        });
+      }
+    });
+  }
+
   function createAlakazamAccountPanel(
     documentRef,
     actions
@@ -3229,6 +3557,13 @@
       command: "",
       error: ""
     };
+    var ownerQuoteRead = {
+      accountId: "",
+      phase: "idle",
+      queue: null,
+      busyCaseId: "",
+      error: ""
+    };
     var alakazamReadSequence = 0;
     var alakazamRead = {
       projectId: "",
@@ -3368,6 +3703,15 @@
           }
         }
       );
+    var ownerAssessmentPanel =
+      createOwnerAssessmentPanel(
+        documentRef,
+        {
+          issue: function (entry, input) {
+            runOwnerAssessmentQuote(entry, input);
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -3414,6 +3758,10 @@
         assessmentPanel.element,
         alakazamAnchor
       );
+      alakazamAnchor.parentNode.insertBefore(
+        ownerAssessmentPanel.element,
+        assessmentPanel.element
+      );
     }
     if (
       alakazamAnchor
@@ -3429,6 +3777,9 @@
         controlRoom
       );
       if (controlShell) {
+        controlShell.appendChild(
+          ownerAssessmentPanel.element
+        );
         controlShell.appendChild(
           assessmentPanel.element
         );
@@ -3466,6 +3817,120 @@
           ? " Request " + error.requestId + "."
           : "";
       return message + requestId;
+    }
+
+    function renderOwnerAssessmentPanel() {
+      ownerAssessmentPanel.render(ownerQuoteRead);
+    }
+
+    function requestOwnerAssessmentQueue(accountId) {
+      var selectedAccountId = text(accountId);
+      if (
+        !selectedAccountId
+        || typeof client.listOwnerAssessmentRequests !== "function"
+      ) return Promise.resolve(null);
+      ownerQuoteRead = {
+        accountId: selectedAccountId,
+        phase: "loading",
+        queue: null,
+        busyCaseId: "",
+        error: ""
+      };
+      renderOwnerAssessmentPanel();
+      return client.listOwnerAssessmentRequests()
+        .then(function (queue) {
+          if (
+            ownerQuoteRead.accountId !== selectedAccountId
+            || !lastState.account
+          ) return null;
+          ownerQuoteRead = {
+            accountId: selectedAccountId,
+            phase: "ready",
+            queue: queue,
+            busyCaseId: "",
+            error: ""
+          };
+          renderOwnerAssessmentPanel();
+          return queue;
+        })
+        .catch(function (error) {
+          if (ownerQuoteRead.accountId !== selectedAccountId) {
+            return null;
+          }
+          ownerQuoteRead = {
+            accountId: selectedAccountId,
+            phase:
+              error && [401, 403, 503].includes(error.status)
+                ? "unavailable"
+                : "error",
+            queue: null,
+            busyCaseId: "",
+            error: ""
+          };
+          renderOwnerAssessmentPanel();
+          return null;
+        });
+    }
+
+    function runOwnerAssessmentQuote(entry, input) {
+      if (
+        !entry
+        || !ownerQuoteRead.queue
+        || ownerQuoteRead.busyCaseId
+        || typeof client.issueOwnerAssessmentQuote !== "function"
+      ) return Promise.resolve(null);
+      var selectedAccountId = ownerQuoteRead.accountId;
+      ownerQuoteRead = Object.assign({}, ownerQuoteRead, {
+        busyCaseId: entry.caseId,
+        error: ""
+      });
+      renderOwnerAssessmentPanel();
+      return client.issueOwnerAssessmentQuote(
+        entry.caseId,
+        input
+      )
+        .then(function () {
+          if (ownerQuoteRead.accountId !== selectedAccountId) {
+            return null;
+          }
+          return requestOwnerAssessmentQueue(selectedAccountId);
+        })
+        .catch(function (error) {
+          if (ownerQuoteRead.accountId !== selectedAccountId) {
+            return null;
+          }
+          ownerQuoteRead = Object.assign({}, ownerQuoteRead, {
+            busyCaseId: "",
+            error: explain(
+              error,
+              "The assessment quote could not be issued."
+            )
+          });
+          renderOwnerAssessmentPanel();
+          return null;
+        });
+    }
+
+    function syncOwnerAssessmentAccount(state) {
+      var nextAccountId = text(
+        state && state.account && state.account.id
+      );
+      if (!nextAccountId) {
+        if (ownerQuoteRead.accountId) {
+          ownerQuoteRead = {
+            accountId: "",
+            phase: "idle",
+            queue: null,
+            busyCaseId: "",
+            error: ""
+          };
+          renderOwnerAssessmentPanel();
+        }
+        return;
+      }
+      if (ownerQuoteRead.accountId !== nextAccountId) {
+        requestOwnerAssessmentQueue(nextAccountId);
+      }
     }
 
     function renderAssessmentPanel() {
@@ -4981,6 +5446,7 @@
       renderCapabilities(state);
       renderAssessmentAccount(state);
       renderAlakazamAccount(state);
+      syncOwnerAssessmentAccount(state);
 
       var entitlement =
         downloadEntitlement(
@@ -5584,6 +6050,8 @@
       downloadEntitlement,
     locationWithoutDownloadCheckoutReturn:
       locationWithoutDownloadCheckoutReturn,
+    ownerReviewTargets:
+      ownerReviewTargets,
     recoveryOutcome: recoveryOutcome,
     recoveryTokenFromLocation:
       recoveryTokenFromLocation,
@@ -5607,6 +6075,8 @@
       verifiedAlakazamQuote,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
-      verifiedDownloadQuote
+      verifiedDownloadQuote,
+    verifiedOwnerAssessmentQueue:
+      verifiedOwnerAssessmentQueue
   });
 }));

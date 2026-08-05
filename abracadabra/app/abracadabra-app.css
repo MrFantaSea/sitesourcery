@@ -229,6 +229,16 @@
 .customer-assessment-quote h4{margin:0}
 .customer-assessment-note{margin:0;padding:.8rem;border-left:3px solid var(--spark-gold);background:rgba(241,207,137,.05)}
 .customer-assessment-withdraw{justify-self:start;border-color:rgba(255,184,200,.28);color:#ffe3ea}
+.customer-owner-quote-desk{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(241,207,137,.38);border-radius:1.2rem;background:linear-gradient(145deg,rgba(241,207,137,.09),rgba(25,16,35,.76))}
+.customer-owner-quote-desk>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
+.customer-owner-quote-status{margin:.5rem 0 1rem;padding:.7rem .8rem;border-left:3px solid var(--spark-gold);color:var(--spark-muted);background:rgba(241,207,137,.05)}
+.customer-owner-quote-body{display:grid;gap:1rem}
+.customer-owner-quote-card{padding:1rem;border:1px solid rgba(241,207,137,.25);border-radius:.9rem;background:rgba(8,5,12,.3)}
+.customer-owner-quote-card h4{margin:0;font-size:1.12rem}
+.customer-owner-quote-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}
+.customer-owner-quote-form .customer-assessment-note,.customer-owner-quote-form .customer-owner-quote-form-error,.customer-owner-quote-form .spark-button{grid-column:1/-1}
+.customer-owner-quote-form textarea{min-height:7rem;resize:vertical}
+.customer-owner-quote-form-error{min-height:1.4em;margin:0;color:#ffe3ea;font-size:.86rem;line-height:1.5}
 .customer-alakazam-account{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(185,152,255,.3);border-radius:1.2rem;background:linear-gradient(145deg,rgba(185,152,255,.08),rgba(25,16,35,.72))}
 .customer-alakazam-account>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
 .customer-alakazam-load-state,.customer-alakazam-summary,.customer-alakazam-placeholder,.customer-alakazam-error{margin:.35rem 0 1rem;color:var(--spark-muted);line-height:1.55}
@@ -411,6 +421,9 @@
   .customer-alakazam-receipt{grid-template-columns:1fr}
   .customer-assessment-complexity{grid-template-columns:1fr}
   .customer-assessment-complexity legend{grid-column:auto}
+  .customer-owner-quote-form{grid-template-columns:1fr}
+  .customer-owner-quote-form .customer-assessment-note,.customer-owner-quote-form .customer-owner-quote-form-error,.customer-owner-quote-form .spark-button{grid-column:auto}
+  .customer-owner-quote-form .spark-button{width:100%}
   .customer-separate-help{display:grid}
   .spark-progress{grid-template-columns:repeat(3,1fr)}
   .spark-progress li:nth-child(4){border-left:0}

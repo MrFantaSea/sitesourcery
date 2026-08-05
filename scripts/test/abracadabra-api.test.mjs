@@ -765,6 +765,72 @@ test("custom-service assessment requests and quote acceptance use exact project 
   }
 });
 
+test("owner quote commands send only scope, delivery date, and review targets", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_owner_quote" });
+      }
+      return response(200, { state: "issued" });
+    },
+    idempotencyFactory: () => "owner-quote-command-key"
+  });
+
+  await client.listOwnerAssessmentRequests();
+  await client.issueOwnerAssessmentQuote(
+    "30000000-0000-4000-8000-000000000001",
+    {
+      organizationId:
+        "20000000-0000-4000-8000-000000000001",
+      deliveryDate: "2026-08-20",
+      reviewTargets: [
+        { kind: "page", value: "/" },
+        { kind: "page_type", value: "product" }
+      ]
+    }
+  );
+
+  const serviceCalls = calls.filter(
+    ({ url }) => url !== "/api/v1/csrf"
+  );
+  assert.deepEqual(
+    serviceCalls.map(({ url, options }) => [options.method, url]),
+    [
+      [
+        "GET",
+        "/api/v1/operator/custom-services/assessment-requests"
+      ],
+      [
+        "POST",
+        "/api/v1/operator/custom-services/assessment-requests/30000000-0000-4000-8000-000000000001/quote"
+      ]
+    ]
+  );
+  assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
+    organizationId:
+      "20000000-0000-4000-8000-000000000001",
+    deliveryDate: "2026-08-20",
+    reviewTargets: [
+      { kind: "page", value: "/" },
+      { kind: "page_type", value: "product" }
+    ]
+  });
+  assert.equal(
+    serviceCalls[1].options.headers["X-CSRF-Token"],
+    "csrf_owner_quote"
+  );
+  assert.equal(
+    serviceCalls[1].options.headers["Idempotency-Key"],
+    "owner-quote-command-key"
+  );
+  assert.doesNotMatch(
+    serviceCalls[1].options.body,
+    /amount|currency|price|tax/iu
+  );
+});
+
 test("catalog discovery and release rollback use the customer API boundary", async () => {
   const calls = [];
   const client = createClient({

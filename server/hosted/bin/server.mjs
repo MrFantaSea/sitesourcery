@@ -57,6 +57,9 @@ import {
   createPostgresCustomServicesRequestRepository
 } from "../custom-services-request-postgres.mjs";
 import {
+  createPostgresCustomServicesOwner
+} from "../custom-services-owner-postgres.mjs";
+import {
   assertApprovedDownloadPaymentReady,
   createConfiguredDownloadPaymentRelease
 } from "../download-payment-config.mjs";
@@ -294,6 +297,8 @@ async function start() {
     });
   const customServicesRequestRepository =
     createPostgresCustomServicesRequestRepository({ authority });
+  const customServicesOwner =
+    createPostgresCustomServicesOwner({ authority });
   const customServicesAccount =
     createHostedCustomServicesAccount({
       quoteRepository: customServicesAssessmentQuoteRepository,
@@ -456,6 +461,7 @@ async function start() {
         alakazamAccount,
         alakazamBilling,
         customServicesAccount,
+        customServicesOwner,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,
