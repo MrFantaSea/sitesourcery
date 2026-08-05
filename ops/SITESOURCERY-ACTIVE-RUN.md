@@ -25,7 +25,7 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 automatic-tax assessment-Checkout surface is the
+- The H1 provider-confirmed assessment settlement and job-open surface is the
   latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
@@ -36,14 +36,14 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven account-bound automatic-tax assessment
-Checkout: add exact Stripe readback and one atomic provider-confirmed payment
-settlement before job/report delivery and one-use `$200` Custom base-build
-credit authority. Stripe Checkout owns billing-address collection and the
-jurisdictional tax calculation; Site Sourcery owns the immutable `$200`
-subtotal and must not build a duplicate tax calculator. All real provider
-effects and public-service release gates remain held until each preceding
-local boundary is proven.
+Continue H1 from the now-proven provider-confirmed assessment receipt and
+bounded open job: add owner-safe assessment work, up to ten evidence-backed
+findings, immutable customer report delivery, and one atomic same-project
+90-day `$200` Custom base-build credit. Stripe Checkout continues to own
+billing-address collection and jurisdictional tax calculation; Site Sourcery
+owns the immutable `$200` subtotal and final verified receipt. All real
+provider effects and public-service release gates remain held until each
+preceding local boundary is proven.
 
 ## Completed and reviewed
 
@@ -924,24 +924,86 @@ Batch 3C sealed checkpoint gates:
   change, credential handling, or release mutation occurred. Public production
   remains the July 22 predecessor.
 
+## H1 assessment settlement and job-open checkpoint evidence
+
+- Migration 39 adds three narrow retained authorities:
+  `ss.service_assessment_stripe_events`,
+  `ss.service_assessment_payment_receipts`, and
+  `ss.service_assessment_jobs`. A signed webhook is only a durable wake-up;
+  receipt and job authority require exact provider readback. Receipts and jobs
+  are immutable, forced-RLS, service-role-only, non-deletable records. The
+  event transition distinguishes pending, processed, and permanent
+  reconciliation-required evidence, and runtime readiness verifies all three
+  tables, exact privileges, guards, retention, and the v39 marker.
+- The Stripe adapter now performs read-only assessment Session lifecycle and
+  paid-payment reads. Settlement accepts only the exact retained purpose,
+  metadata, test/live mode, `$200.00` subtotal, automatic tax, USD final total,
+  paid PaymentIntent, fully captured and unrefunded Charge, bound Customer, and
+  provider payment time. Returned facts are digest-bound and contain no secret
+  or customer-facing provider authority.
+- The shared Stripe webhook verifies raw bytes once and routes only the exact
+  assessment metadata schema to the assessment settlement service. Permanent
+  paid-evidence drift creates one manual-review state; transient provider-read
+  failure leaves the event safely retryable. Same-event replay and a second
+  event ID for the same Session return the original receipt/job without a
+  second local or provider effect.
+- One atomic settlement binds or verifies the organization's Stripe Customer,
+  writes the final subtotal/tax/total receipt, opens exactly one job frozen to
+  the accepted one-site, five-target, desktop/phone, ten-finding scope and
+  delivery date, and marks the event processed. The original Checkout attempt
+  remains retained dispatch evidence. A paid invoice now blocks both a new
+  Checkout command and replay of an old Checkout destination.
+- A locally expired ready Checkout is not replaced from the browser clock
+  alone. Exact read-only Stripe lifecycle proof must show `expired`; `open`,
+  `paid`, transport uncertainty, or changed purpose keeps replacement held.
+  Once exact expiry is recorded, the caller must use one fresh command for the
+  single replacement.
+- The customer invoice projection is now v2. It exposes exact safe
+  `checkout_available`, `payment_verifying`, `payment_attention`, and
+  `paid_job_open` states, final tax/total, local receipt, and bounded job dates,
+  while rejecting extra/provider-shaped fields. The Stripe return parser binds
+  the exact project and invoice, removes payment query fields, polls only the
+  same-origin account projection, announces paid/review/pending truth, and
+  never starts another payment.
+- Fresh database `ss_h1_assessment_settlement_20260805_codex1` replayed all 39
+  migrations from empty state. The maintained foundation journey passes 2/2
+  and the accepted-quote through Checkout, expiry reconciliation, mismatch,
+  transient retry, tax-positive settlement, replay/alias, paid projection,
+  duplicate-payment denial, job, and cross-tenant journey passes 1/1. It had
+  zero active sessions, was dropped by exact name, and is verified absent.
+- Authoritative Node 24 proof passes: core 510/510; hosted service 239 pass
+  with 2 intentional environment skips and 0 failures; self-host 19/19;
+  operations 52/52; current site checks for 18 live pages, 20 redirects, 27
+  catalog prices, and five sellable rails; exact 78-file public artifact;
+  hosted build and HTML validation; and the current browser audit across 15
+  hosted routes at 320px, 390px, and 1440px. The reviewed customer-control
+  source digest is
+  `e68d70303100744a2729e86251d099cede900024d89908e00087843eedefde16`.
+- Provider and architecture sidecars completed their bounded reviews and are
+  closed. No real Stripe call, customer/production-data write, push,
+  deployment, DNS change, credential handling, or release mutation occurred.
+  Findings, report delivery, credit, and the production grant remain held.
+
 ## Live resources and workers
 
-- No H1, Batch 3C, H0, quote-readiness, invoice-proof, or Checkout-dispatch
-  worker remains running. The final read-only H1F audit is closed. The exact
-  Batch 3C and H1 disposable PostgreSQL databases are absent.
+- No H1, Batch 3C, H0, quote-readiness, invoice-proof, Checkout-dispatch, or
+  settlement worker remains running. The provider and architecture sidecars
+  are closed. The exact Batch 3C and H1 disposable PostgreSQL databases are
+  absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add exact read-only Stripe Checkout and PaymentIntent readback, with a verified
-webhook used only as a wake-up signal. Atomically record final subtotal, tax,
-total, payment receipt, and bound Stripe Customer only after exact paid
-provider evidence; open one assessment job in that same settlement boundary.
-Also reconcile expired ready Checkouts before allowing one safe replacement.
-Prove unpaid, paid, tax-zero, tax-positive, refunded/underpaid, metadata drift,
-replay, cross-tenant, delayed-webhook, and uncertain-readback behavior against
-fresh PostgreSQL without a second charge.
+Add one owner-safe assessment-work boundary over the existing bounded open job:
+record the exact reviewed targets, desktop and phone coverage, and up to ten
+prioritized findings with accessible screenshot evidence; deliver one
+immutable customer-safe account report; and atomically create exactly one
+same-project 90-day `$200` Custom base-build credit only after delivery.
+Duplicate owner commands, report delivery, notice retries, and customer reads
+must not duplicate findings, reports, or credit. Keep anonymous inquiry,
+expanded assessment, Rescue pricing, broader Custom invoicing, provider
+release, push, deployment, and DNS outside this next slice.
 
 ## Batch 3B write scope
 

@@ -265,7 +265,14 @@ H1 pre-commerce foundation checkpoint:
   destination, bind returned provider evidence to that purpose, expose no raw
   provider identity, and fence every ambiguous outcome without claiming
   payment. Keep the separate payment release gate held by default.
-- [ ] Add verified provider settlement, job/report, and one-use `$200` credit
+- [x] Add verified provider settlement and assessment-job opening over
+  migration 39: one signed webhook wake-up, exact read-only Stripe Session /
+  PaymentIntent / captured-Charge readback, immutable final subtotal/tax/total
+  receipt, bound Stripe Customer, one bounded job, safe event replay, permanent
+  mismatch review, transient-read retry, and exact expired-Checkout
+  reconciliation before one replacement. Customer return and account states
+  expose paid/verifying/review truth without provider identifiers.
+- [ ] Add bounded findings, report delivery, and one-use `$200` credit
   migrations and services before any payment or public release.
 
 Assessment and findings:
@@ -426,22 +433,26 @@ Lane D/J Polish truth ────────────┘
 | H1D | Customer request, owner quote, and acceptance surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw; deployment-authorized owner queue and exact `$200` issue; current quote read/acceptance; responsive customer and owner controls; real PostgreSQL, hosted artifact, and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, deployment grant, and release held |
 | H1E | Held assessment invoice | Lead | migration 37; automatic exact accepted-installment materialization; immutable `$200` invoice line; tax/total pending; non-dispatchable reservation; authenticated customer route and no-charge UI; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; tax, Checkout, payment, job, report, credit, deployment grant, and release held |
 | H1F | Automatic-tax assessment Checkout dispatch | Lead plus bounded browser worker and read-only audit | migration 38; durable reserve-before-effect; unique provider Session binding; exact `$200` Stripe purpose and returned-Session purpose validation; Stripe-hosted address/tax calculation; separate default-held release that cannot start approved without settlement readiness; account-bound command and responsive customer control without raw provider IDs; exact command-before-attempt locking; replay, expiry, concurrency, tamper, and ambiguity fences; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; real provider effects, settlement, job, report, credit, deployment grant, and release held |
+| H1G | Assessment payment settlement and job open | Lead plus bounded provider and architecture review | migration 39; webhook-as-wakeup routing; exact Stripe Session, PaymentIntent, Charge, Customer, subtotal, tax, total, metadata, and purpose readback; immutable receipt; one exact bounded assessment job; safe replay/alias handling; mismatch and transient-read states; expired unpaid Checkout reconciliation; paid customer projection and return polling; clean-room PostgreSQL, hosted artifact, browser, and broad proof | reviewed locally; real provider effects, findings, report, credit, deployment grant, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1F are sealed locally. H1D supplies the customer
+Batch 3C, H0, and H1A through H1G are sealed locally. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
 surface; H1E adds the account-bound invoice and H1F adds one automatic-tax
-Checkout dispatch over migrations 34 through 38.
+Checkout dispatch. H1G adds provider-confirmed settlement, the immutable
+receipt, expired-unpaid reconciliation, one bounded assessment job, and safe
+customer payment/return truth over migrations 34 through 39.
 Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
 request + exact accepted `$200` assessment quote + invoice/Checkout +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
-build credit. The immediate slice is exact read-only Stripe readback, atomic
-payment settlement, expired-Checkout reconciliation, and assessment-job open.
-Stripe Checkout—not a duplicate local calculator—collects billing address and
-calculates tax. Migrations 34 through 38 still deliberately supply no verified
-payment, receipt, job, report, or credit authority.
+build credit. The immediate slice is owner-safe assessment work, bounded
+findings with evidence, immutable report delivery, and atomic creation of one
+same-project 90-day `$200` Custom base-build credit. Stripe Checkout—not a
+duplicate local calculator—continues to collect billing address and calculate
+tax. Migrations 34 through 39 deliberately supply no finding, delivered-report,
+or credit authority.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

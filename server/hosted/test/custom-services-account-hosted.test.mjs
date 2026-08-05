@@ -68,7 +68,7 @@ function context({ scope, snapshot } = {}) {
       async readCurrentInvoice(value) {
         calls.invoiceRead.push(structuredClone(value));
         return {
-          schema: "sitesourcery.custom-services-assessment-invoice/v1",
+          schema: "sitesourcery.custom-services-assessment-invoice/v2",
           state: "not_available",
           invoice: null,
           actions: {

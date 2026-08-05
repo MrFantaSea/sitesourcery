@@ -983,6 +983,11 @@ test(
       provider: payment.port,
       canonicalService: service,
       downloadCommerce,
+      assessmentCommerce: {
+        async ingestStripeEvent() {
+          return { status: "not_assessment" };
+        }
+      },
       alakazamCommerce: {
         async ingestStripeEvent() {
           return { status: "not_alakazam" };

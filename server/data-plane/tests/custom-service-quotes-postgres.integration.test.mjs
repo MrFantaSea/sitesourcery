@@ -19,8 +19,12 @@ import {
   createPostgresCustomServicesAssessmentPayment
 } from "../../hosted/custom-services-assessment-payment-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentSettlement
+} from "../../hosted/custom-services-assessment-settlement-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
+import { digest } from "../../hosted/security.mjs";
 
 const { Pool } = pg;
 const DATABASE_URL =
@@ -942,7 +946,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       await invoiceRepository.readCurrentInvoice(quoteScope);
     assert.equal(
       invoiceProjection.schema,
-      "sitesourcery.custom-services-assessment-invoice/v1"
+      "sitesourcery.custom-services-assessment-invoice/v2"
     );
     assert.equal(invoiceProjection.state, "checkout_available");
     assert.equal(invoiceProjection.invoice.subtotal.amountMinor, 20000);
@@ -1406,26 +1410,61 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       "reconciliation_required"
     );
     let expiredProviderCalls = 0;
+    let expiredLifecycleCalls = 0;
+    const expiredProvider = {
+      async createServiceAssessmentCheckout() {
+        expiredProviderCalls += 1;
+        return {
+          checkoutId:
+            "cs_test_service_assessment_replacement",
+          url:
+            "https://checkout.stripe.com/c/pay/service_assessment_replacement",
+          expiresAt: isoAfter({ hours: 1 })
+        };
+      },
+      async retrieveServiceAssessmentPayment() {
+        throw new Error("expiry must not read payment facts");
+      },
+      async retrieveServiceAssessmentCheckoutLifecycle(input) {
+        expiredLifecycleCalls += 1;
+        assert.equal(
+          input.checkoutSessionId,
+          "cs_test_service_assessment_expired"
+        );
+        return {
+          schema:
+            "sitesourcery.stripe-service-assessment-checkout-lifecycle/v1",
+          provider: "stripe",
+          checkoutSessionId: input.checkoutSessionId,
+          purposeDigest: input.purposeDigest,
+          state: "expired"
+        };
+      }
+    };
+    const expiredAuthority = {
+      async service(context, work) {
+        await setActor(
+          client,
+          context.actorKind,
+          customer,
+          context.userId ?? customer.userId
+        );
+        return work(client);
+      }
+    };
+    const expiredReconciliation =
+      createPostgresCustomServicesAssessmentSettlement({
+        authority: expiredAuthority,
+        provider: expiredProvider,
+        clock: { now: () => new Date().toISOString() },
+        ids: { next: () => randomUUID() }
+      });
     const expiredPayment =
       createPostgresCustomServicesAssessmentPayment({
-        authority: {
-          async service(context, work) {
-            await setActor(
-              client,
-              context.actorKind,
-              customer,
-              context.userId
-            );
-            return work(client);
-          }
-        },
-        provider: {
-          async createServiceAssessmentCheckout() {
-            expiredProviderCalls += 1;
-            throw new Error("expired Checkout reached Stripe");
-          }
-        },
-        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+        authority: expiredAuthority,
+        provider: expiredProvider,
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE,
+        reconciliation: expiredReconciliation
       });
     await assert.rejects(
       expiredPayment.createCheckout({
@@ -1434,9 +1473,17 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       }),
       (error) =>
         error.code ===
-          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+          "ASSESSMENT_CHECKOUT_REQUIRES_NEW_COMMAND"
     );
     assert.equal(expiredProviderCalls, 0);
+    assert.equal(expiredLifecycleCalls, 1);
+    const replacementCheckout = await expiredPayment.createCheckout({
+      ...checkoutInput,
+      commandId: `assessment-replacement-${randomUUID()}`
+    });
+    assert.equal(replacementCheckout.state, "ready");
+    assert.equal(expiredProviderCalls, 1);
+    assert.equal(expiredLifecycleCalls, 1);
     await client.query("rollback to savepoint expired_ready_checkout");
 
     assert.deepEqual(quoteRepositoryContexts, [
@@ -1838,6 +1885,310 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.deepEqual(lockRaceStored.rows, [
       { state: "ready", command_state: "completed" }
     ]);
+
+    const retainedPurpose = checkoutCalls[0].purpose;
+    const retainedPurposeDigest = digest(retainedPurpose);
+    const settlementNow = new Date().toISOString();
+    const providerPaymentTime = new Date(
+      Date.parse(settlementNow) - 1000
+    ).toISOString();
+    const settlementMetadata = {
+      schema: "sitesourcery_service_assessment_checkout_v1",
+      tenant_id: retainedPurpose.tenantId,
+      customer_id: retainedPurpose.customerId,
+      project_id: retainedPurpose.projectId,
+      invoice_id: retainedPurpose.invoiceId,
+      invoice_number: retainedPurpose.invoiceNumber,
+      quote_id: retainedPurpose.quoteId,
+      accepted_disclosure_digest:
+        retainedPurpose.acceptedDisclosureDigest,
+      invoice_digest: retainedPurpose.invoiceDigest,
+      purpose_digest: retainedPurposeDigest
+    };
+    const paymentFacts = {
+      schema:
+        "sitesourcery.stripe-service-assessment-payment-facts/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_service_assessment_lock_order",
+      paymentIntentId:
+        "pi_test_service_assessment_settlement",
+      customerId: "cus_test_service_assessment_settlement",
+      paymentStatus: "paid",
+      subtotalMinor: 20000,
+      taxMinor: 1450,
+      totalMinor: 21450,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: retainedPurposeDigest,
+      providerPaymentTime
+    };
+    paymentFacts.providerFactsDigest = digest(paymentFacts);
+    const settlementEvent = {
+      id: "evt_test_service_assessment_settlement",
+      type: "checkout.session.completed",
+      livemode: false,
+      api_version: "2026-06-24.dahlia",
+      created: Math.floor(
+        (Date.parse(settlementNow) - 500) / 1000
+      ),
+      data: {
+        object: {
+          id: "cs_test_service_assessment_lock_order",
+          metadata: settlementMetadata
+        }
+      }
+    };
+    const settlementAuthority = {
+      async service(context, work) {
+        const transactionClient = await pool.connect();
+        try {
+          await transactionClient.query("begin");
+          await setActor(
+            transactionClient,
+            context.actorKind,
+            {
+              ...customer,
+              organizationId: context.organizationId
+            },
+            context.userId ?? customer.userId
+          );
+          const result = await work(transactionClient);
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    };
+    let settlementReadCalls = 0;
+    let returnPermanentMismatch = true;
+    let failReadOnce = true;
+    const settlementProvider = {
+      async retrieveServiceAssessmentPayment(input) {
+        settlementReadCalls += 1;
+        assert.deepEqual(input, {
+          checkoutSessionId:
+            "cs_test_service_assessment_lock_order",
+          purpose: retainedPurpose,
+          purposeDigest: retainedPurposeDigest
+        });
+        if (returnPermanentMismatch) {
+          returnPermanentMismatch = false;
+          const mismatched = {
+            ...paymentFacts,
+            totalMinor: 21449
+          };
+          delete mismatched.providerFactsDigest;
+          mismatched.providerFactsDigest = digest(mismatched);
+          return mismatched;
+        }
+        if (failReadOnce) {
+          failReadOnce = false;
+          const error = new Error("readback temporarily unavailable");
+          error.code = "stripe_service_assessment_payment_read_unavailable";
+          throw error;
+        }
+        return structuredClone(paymentFacts);
+      },
+      async retrieveServiceAssessmentCheckoutLifecycle() {
+        throw new Error("settlement must not use lifecycle readback");
+      }
+    };
+    const settlement =
+      createPostgresCustomServicesAssessmentSettlement({
+        authority: settlementAuthority,
+        provider: settlementProvider,
+        clock: { now: () => settlementNow },
+        ids: { next: () => randomUUID() }
+      });
+    assert.deepEqual(await settlement.readiness(), {
+      schema:
+        "sitesourcery.custom-services-assessment-settlement-readiness/v1",
+      ready: true,
+      webhookWakeup: true,
+      stripeReadback: true,
+      atomicSettlement: true
+    });
+    const mismatchEvent = {
+      ...settlementEvent,
+      id: "evt_test_service_assessment_mismatch"
+    };
+    assert.deepEqual(
+      await settlement.ingestStripeEvent(mismatchEvent),
+      {
+        schema:
+          "sitesourcery.custom-services-assessment-reconciliation/v1",
+        status: "reconciliation_required",
+        projectId: customer.projectId,
+        invoiceId: retainedPurpose.invoiceId,
+        next: "manual_review"
+      }
+    );
+    assert.deepEqual(
+      await settlement.ingestStripeEvent(mismatchEvent),
+      {
+        schema:
+          "sitesourcery.custom-services-assessment-reconciliation/v1",
+        status: "reconciliation_required",
+        projectId: customer.projectId,
+        invoiceId: retainedPurpose.invoiceId,
+        next: "manual_review"
+      }
+    );
+    assert.equal(settlementReadCalls, 1);
+    const attentionInvoiceProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(
+      attentionInvoiceProjection.state,
+      "payment_attention"
+    );
+    assert.equal(
+      attentionInvoiceProjection.invoice.payment.chargeOccurred,
+      null
+    );
+    assert.equal(
+      attentionInvoiceProjection.actions.checkout.reason,
+      "payment_attention"
+    );
+    await assert.rejects(
+      settlement.ingestStripeEvent(settlementEvent),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_PAYMENT_RECONCILIATION_UNAVAILABLE" &&
+        error.status === 503
+    );
+    const verifyingInvoiceProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(
+      verifyingInvoiceProjection.state,
+      "payment_verifying"
+    );
+    assert.equal(
+      verifyingInvoiceProjection.invoice.payment.chargeOccurred,
+      null
+    );
+    assert.equal(
+      verifyingInvoiceProjection.actions.checkout.reason,
+      "payment_verifying"
+    );
+    let settlementCounts = await pool.query(
+      `select
+         (select count(*)::int
+            from ss.service_assessment_stripe_events
+           where id = $1 and state = 'pending') as pending_events,
+         (select count(*)::int
+            from ss.service_assessment_payment_receipts
+           where invoice_id = $2) as receipts,
+         (select count(*)::int
+            from ss.service_assessment_jobs
+           where invoice_id = $2) as jobs`,
+      [settlementEvent.id, retainedPurpose.invoiceId]
+    );
+    assert.deepEqual(settlementCounts.rows[0], {
+      pending_events: 1,
+      receipts: 0,
+      jobs: 0
+    });
+
+    const settled =
+      await settlement.ingestStripeEvent(settlementEvent);
+    assert.equal(settled.status, "payment_settled");
+    assert.equal(settled.projectId, customer.projectId);
+    assert.equal(settled.invoiceId, retainedPurpose.invoiceId);
+    assert.equal(settled.next, "assessment_work");
+    assert.match(settled.receiptId, /^[0-9a-f-]{36}$/u);
+    assert.match(settled.jobId, /^[0-9a-f-]{36}$/u);
+    const paidInvoiceProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(paidInvoiceProjection.state, "paid_job_open");
+    assert.equal(
+      paidInvoiceProjection.invoice.payment.chargeOccurred,
+      true
+    );
+    assert.equal(
+      paidInvoiceProjection.invoice.payment.receiptId,
+      settled.receiptId
+    );
+    assert.equal(paidInvoiceProjection.invoice.tax.amountMinor, 1450);
+    assert.equal(paidInvoiceProjection.invoice.total.amountMinor, 21450);
+    assert.equal(paidInvoiceProjection.job.jobId, settled.jobId);
+    assert.equal(paidInvoiceProjection.job.state, "open");
+    assert.equal(
+      paidInvoiceProjection.actions.checkout.reason,
+      "already_paid"
+    );
+    const checkoutCallsBeforePaidReplay = checkoutCalls.length;
+    await assert.rejects(
+      assessmentPayment.createCheckout(checkoutInput),
+      (error) => error.code === "ASSESSMENT_INVOICE_ALREADY_PAID"
+    );
+    assert.equal(checkoutCalls.length, checkoutCallsBeforePaidReplay);
+    assert.deepEqual(
+      await settlement.ingestStripeEvent(settlementEvent),
+      settled
+    );
+    assert.equal(settlementReadCalls, 3);
+
+    const aliasEvent = {
+      ...settlementEvent,
+      id: "evt_test_service_assessment_settlement_alias"
+    };
+    assert.deepEqual(
+      await settlement.ingestStripeEvent(aliasEvent),
+      settled
+    );
+    assert.equal(settlementReadCalls, 4);
+    settlementCounts = await pool.query(
+      `select
+         (select count(*)::int
+            from ss.service_assessment_stripe_events
+           where checkout_session_id = $1
+             and state = 'processed') as processed_events,
+         (select count(*)::int
+            from ss.service_assessment_stripe_events
+           where checkout_session_id = $1
+             and state = 'reconciliation_required')
+           as reconciliation_events,
+         (select count(*)::int
+            from ss.service_assessment_payment_receipts
+           where invoice_id = $2
+             and subtotal_minor = 20000
+             and tax_minor = 1450
+             and total_minor = 21450) as receipts,
+         (select count(*)::int
+            from ss.service_assessment_jobs
+           where invoice_id = $2
+             and state = 'open'
+             and maximum_websites = 1
+             and maximum_representative_pages_or_types = 5
+             and maximum_findings = 10
+             and desktop_review_included
+             and phone_review_included) as jobs`,
+      [
+        "cs_test_service_assessment_lock_order",
+        retainedPurpose.invoiceId
+      ]
+    );
+    assert.deepEqual(settlementCounts.rows[0], {
+      processed_events: 2,
+      reconciliation_events: 1,
+      receipts: 1,
+      jobs: 1
+    });
+
+    const foreignEvent = structuredClone(settlementEvent);
+    foreignEvent.id = "evt_test_service_assessment_foreign";
+    foreignEvent.data.object.metadata.tenant_id = randomUUID();
+    await assert.rejects(
+      settlement.ingestStripeEvent(foreignEvent),
+      (error) =>
+        error.code === "STRIPE_EVENT_BINDING_INVALID"
+    );
+    assert.equal(settlementReadCalls, 4);
   } finally {
     await client.query("rollback").catch(() => {});
     client.release();

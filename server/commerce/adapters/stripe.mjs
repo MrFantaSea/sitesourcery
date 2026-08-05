@@ -86,6 +86,10 @@ export const STRIPE_SERVICE_ASSESSMENT_PURPOSE_SCHEMA =
   "sitesourcery.custom-services-assessment-checkout-purpose/v1";
 const STRIPE_SERVICE_ASSESSMENT_METADATA_SCHEMA =
   "sitesourcery_service_assessment_checkout_v1";
+const STRIPE_SERVICE_ASSESSMENT_PAYMENT_SCHEMA =
+  "sitesourcery.stripe-service-assessment-payment-facts/v1";
+const STRIPE_SERVICE_ASSESSMENT_LIFECYCLE_SCHEMA =
+  "sitesourcery.stripe-service-assessment-checkout-lifecycle/v1";
 export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
   ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA;
 export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
@@ -1562,15 +1566,24 @@ function downloadMetadata(validated) {
   });
 }
 
-function validateServiceAssessmentPurpose(request) {
-  const requestFields = [
-    "idempotencyKey",
-    "purpose",
-    "purposeDigest",
-    ...(request?.stripeCustomerId === undefined
-      ? []
-      : ["stripeCustomerId"])
-  ];
+function validateServiceAssessmentPurpose(
+  request,
+  { retrieval = false } = {}
+) {
+  const requestFields = retrieval
+    ? [
+        "checkoutSessionId",
+        "purpose",
+        "purposeDigest"
+      ]
+    : [
+        "idempotencyKey",
+        "purpose",
+        "purposeDigest",
+        ...(request?.stripeCustomerId === undefined
+          ? []
+          : ["stripeCustomerId"])
+      ];
   invariant(
     exactObjectKeys(request, requestFields) &&
       exactObjectKeys(request.purpose, [
@@ -1652,6 +1665,7 @@ function validateServiceAssessmentPurpose(request) {
     invoiceDigest,
     purposeDigest,
     stripeCustomerId:
+      retrieval ||
       request.stripeCustomerId === undefined
         ? null
         : providerId(
@@ -1659,11 +1673,13 @@ function validateServiceAssessmentPurpose(request) {
             "cus",
             "stripeCustomerId"
           ),
-    idempotencyKey: requiredText(
-      request.idempotencyKey,
-      "idempotencyKey",
-      255
-    )
+    idempotencyKey: retrieval
+      ? null
+      : requiredText(
+          request.idempotencyKey,
+          "idempotencyKey",
+          255
+        )
   });
 }
 
@@ -1717,6 +1733,277 @@ function serviceAssessmentCheckoutResponse(
     { status: 502 }
   );
   return checkout;
+}
+
+function validateServiceAssessmentMetadata(
+  value,
+  expected,
+  code,
+  message
+) {
+  invariant(
+    exactObjectKeys(value, Object.keys(expected)) &&
+      Object.entries(expected).every(
+        ([key, expectedValue]) =>
+          value[key] === expectedValue
+      ),
+    code,
+    message,
+    { status: 502 }
+  );
+}
+
+function serviceAssessmentProviderObject(
+  value,
+  prefix,
+  field,
+  code
+) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value),
+    code,
+    `${field} was not expanded by Stripe`,
+    { status: 502 }
+  );
+  providerId(value.id, prefix, `${field}.id`);
+  return value;
+}
+
+function serviceAssessmentProviderMinor(
+  value,
+  field,
+  code
+) {
+  invariant(
+    Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= 99_999_999,
+    code,
+    `${field} is invalid`,
+    { status: 502 }
+  );
+  return value;
+}
+
+function serviceAssessmentProviderTime(
+  value,
+  field,
+  code
+) {
+  invariant(
+    Number.isSafeInteger(value) &&
+      value > 0 &&
+      value <= 8_640_000_000_000,
+    code,
+    `${field} is invalid`,
+    { status: 502 }
+  );
+  return new Date(value * 1000).toISOString();
+}
+
+function serviceAssessmentPaymentFacts(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_service_assessment_payment_mismatch";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe assessment Checkout Session ID"
+  );
+  const expectedMetadata =
+    serviceAssessmentMetadata(validated);
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    expectedMetadata,
+    code,
+    "Stripe assessment payment metadata changed"
+  );
+  const taxMinor = serviceAssessmentProviderMinor(
+    value?.total_details?.amount_tax,
+    "Stripe assessment tax amount",
+    code
+  );
+  const subtotalMinor = 20000;
+  const totalMinor = subtotalMinor + taxMinor;
+  const customerId = providerReferenceId(
+    value?.customer,
+    "cus",
+    "Stripe assessment Checkout Customer ID"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === subtotalMinor &&
+      value.amount_total === totalMinor &&
+      value.automatic_tax?.enabled === true &&
+      value.automatic_tax?.status === "complete" &&
+      value.total_details?.amount_discount === 0 &&
+      value.total_details?.amount_shipping === 0 &&
+      value.status === "complete" &&
+      value.payment_status === "paid",
+    code,
+    "Stripe did not confirm the exact paid $200 assessment Checkout",
+    { status: 502 }
+  );
+  const intent = serviceAssessmentProviderObject(
+    value.payment_intent,
+    "pi",
+    "Stripe assessment PaymentIntent",
+    code
+  );
+  validateServiceAssessmentMetadata(
+    intent.metadata,
+    expectedMetadata,
+    code,
+    "Stripe assessment PaymentIntent metadata changed"
+  );
+  invariant(
+    intent.livemode === config.livemode &&
+      intent.status === "succeeded" &&
+      intent.currency === "usd" &&
+      intent.amount === totalMinor &&
+      intent.amount_received === totalMinor &&
+      intent.amount_capturable === 0 &&
+      providerReferenceId(
+        intent.customer,
+        "cus",
+        "Stripe assessment PaymentIntent Customer ID"
+      ) === customerId,
+    code,
+    "Stripe did not confirm the exact succeeded assessment PaymentIntent",
+    { status: 502 }
+  );
+  const charge = serviceAssessmentProviderObject(
+    intent.latest_charge,
+    "ch",
+    "Stripe assessment Charge",
+    code
+  );
+  invariant(
+    charge.livemode === config.livemode &&
+      charge.status === "succeeded" &&
+      charge.paid === true &&
+      charge.captured === true &&
+      charge.refunded === false &&
+      charge.currency === "usd" &&
+      charge.amount === totalMinor &&
+      charge.amount_captured === totalMinor &&
+      charge.amount_refunded === 0 &&
+      providerReferenceId(
+        charge.customer,
+        "cus",
+        "Stripe assessment Charge Customer ID"
+      ) === customerId &&
+      providerReferenceId(
+        charge.payment_intent,
+        "pi",
+        "Stripe assessment Charge PaymentIntent ID"
+      ) === intent.id,
+    code,
+    "Stripe did not confirm the exact captured assessment Charge",
+    { status: 502 }
+  );
+  const facts = {
+    schema: STRIPE_SERVICE_ASSESSMENT_PAYMENT_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    paymentIntentId: intent.id,
+    customerId,
+    paymentStatus: "paid",
+    subtotalMinor,
+    taxMinor,
+    totalMinor,
+    taxMode: "automatic",
+    currency: "USD",
+    purposeDigest: validated.purposeDigest,
+    providerPaymentTime:
+      serviceAssessmentProviderTime(
+        charge.created,
+        "Stripe assessment payment time",
+        code
+      )
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
+  });
+}
+
+function serviceAssessmentCheckoutLifecycle(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_service_assessment_checkout_lifecycle_invalid";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe assessment Checkout Session ID"
+  );
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    serviceAssessmentMetadata(validated),
+    code,
+    "Stripe assessment Checkout lifecycle metadata changed"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === 20000 &&
+      value.automatic_tax?.enabled === true,
+    code,
+    "Stripe did not return the exact assessment Checkout lifecycle",
+    { status: 502 }
+  );
+  let state;
+  if (
+    value.status === "open" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "open";
+  } else if (
+    value.status === "expired" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "expired";
+  } else if (
+    value.status === "complete" &&
+    value.payment_status === "paid" &&
+    value.automatic_tax?.status === "complete"
+  ) {
+    state = "paid";
+  } else {
+    invariant(
+      false,
+      code,
+      "Stripe returned an unsafe assessment Checkout lifecycle",
+      { status: 502 }
+    );
+  }
+  return Object.freeze({
+    schema:
+      STRIPE_SERVICE_ASSESSMENT_LIFECYCLE_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    purposeDigest: validated.purposeDigest,
+    state
+  });
 }
 
 function validateDownloadMetadata(value, expected) {
@@ -3446,6 +3733,8 @@ export function createStripeProviderAdapter(options = {}) {
       createCheckout: reject,
       createDownloadCheckout: reject,
       createServiceAssessmentCheckout: reject,
+      retrieveServiceAssessmentPayment: reject,
+      retrieveServiceAssessmentCheckoutLifecycle: reject,
       createAlakazamCustomer: reject,
       retrieveAlakazamCustomer: reject,
       createAlakazamStartCheckout: reject,
@@ -4975,6 +5264,95 @@ export function createStripeProviderAdapter(options = {}) {
           }
         );
       }
+    },
+
+    async retrieveServiceAssessmentPayment(request) {
+      requireCapability("checkout:read");
+      const validated =
+        validateServiceAssessmentPurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe assessment settlement requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId,
+            {
+              expand: ["payment_intent.latest_charge"]
+            }
+          );
+      } catch {
+        throw noEffect(
+          "stripe_service_assessment_payment_read_unavailable",
+          "Stripe assessment payment could not be read for reconciliation",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return serviceAssessmentPaymentFacts(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async retrieveServiceAssessmentCheckoutLifecycle(
+      request
+    ) {
+      requireCapability("checkout:read");
+      const validated =
+        validateServiceAssessmentPurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe assessment lifecycle requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId
+          );
+      } catch {
+        throw noEffect(
+          "stripe_service_assessment_checkout_lifecycle_unavailable",
+          "Stripe assessment Checkout lifecycle could not be read",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return serviceAssessmentCheckoutLifecycle(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
     },
 
     async retrieveDownloadCheckout(request) {

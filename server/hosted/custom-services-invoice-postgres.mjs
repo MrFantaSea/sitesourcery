@@ -5,7 +5,7 @@ import {
 import { HostedError, invariant } from "./errors.mjs";
 
 export const CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA =
-  "sitesourcery.custom-services-assessment-invoice/v1";
+  "sitesourcery.custom-services-assessment-invoice/v2";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -114,12 +114,17 @@ function amount(value, field) {
   return selected;
 }
 
+function usd(value) {
+  return `$${(value / 100).toFixed(2)}`;
+}
+
 function project(row, input, paymentRelease) {
   if (!row) {
     return deepFreeze({
       schema: CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA,
       state: "not_available",
       invoice: null,
+      job: null,
       actions: {
         checkout: {
           available: false,
@@ -136,7 +141,12 @@ function project(row, input, paymentRelease) {
       "accepted_at",
       "accepted_disclosure_digest",
       "accepted_quote_digest",
+      "assessment_job_delivery_date",
+      "assessment_job_id",
+      "assessment_job_opened_at",
+      "assessment_job_state",
       "charge_occurred",
+      "checkout_attempt_id",
       "checkout_attempt_state",
       "checkout_expires_at",
       "checkout_provider_effect_certainty",
@@ -161,6 +171,7 @@ function project(row, input, paymentRelease) {
       "organization_id",
       "payable",
       "payment_state",
+      "payment_receipt_id",
       "project_id",
       "provider_effect_certainty",
       "purpose",
@@ -169,6 +180,17 @@ function project(row, input, paymentRelease) {
       "quote_revision",
       "recomputed_invoice_digest",
       "reservation_invoice_digest",
+      "receipt_checkout_attempt_id",
+      "receipt_currency",
+      "receipt_payment_status",
+      "receipt_provider_facts_digest",
+      "receipt_provider_paid_at",
+      "receipt_settled_at",
+      "receipt_subtotal_minor",
+      "receipt_tax_minor",
+      "receipt_total_minor",
+      "settlement_event_state",
+      "settlement_reconciliation_code",
       "subtotal_minor",
       "tax_minor",
       "tax_state",
@@ -249,6 +271,112 @@ function project(row, input, paymentRelease) {
     { status: 500 }
   );
 
+  const hasReceipt = row.payment_receipt_id !== null;
+  let receipt = null;
+  let job = null;
+  if (hasReceipt) {
+    const taxMinor = amount(
+      row.receipt_tax_minor,
+      "receipt.tax"
+    );
+    const totalMinor = amount(
+      row.receipt_total_minor,
+      "receipt.total"
+    );
+    invariant(
+      UUID.test(String(row.payment_receipt_id ?? "")) &&
+        row.receipt_checkout_attempt_id ===
+          row.checkout_attempt_id &&
+        row.receipt_payment_status === "paid" &&
+        amount(
+          row.receipt_subtotal_minor,
+          "receipt.subtotal"
+        ) === 20000 &&
+        totalMinor === 20000 + taxMinor &&
+        row.receipt_currency === "USD" &&
+        SHA256.test(
+          String(row.receipt_provider_facts_digest ?? "")
+        ) &&
+        UUID.test(String(row.assessment_job_id ?? "")) &&
+        row.assessment_job_state === "open" &&
+        Number.isFinite(
+          Date.parse(row.assessment_job_delivery_date)
+        ),
+      "invoice_repository_conflict",
+      "The settled assessment invoice changed unexpectedly.",
+      { status: 500 }
+    );
+    receipt = {
+      receiptId: row.payment_receipt_id,
+      paidAt: iso(
+        row.receipt_provider_paid_at,
+        "receipt.paidAt"
+      ),
+      settledAt: iso(
+        row.receipt_settled_at,
+        "receipt.settledAt"
+      ),
+      taxMinor,
+      totalMinor
+    };
+    job = {
+      jobId: row.assessment_job_id,
+      state: "open",
+      openedAt: iso(
+        row.assessment_job_opened_at,
+        "job.openedAt"
+      ),
+      deliveryDate: String(
+        row.assessment_job_delivery_date
+      ).slice(0, 10)
+    };
+  } else {
+    invariant(
+      row.receipt_checkout_attempt_id === null &&
+        row.receipt_payment_status === null &&
+        row.receipt_subtotal_minor === null &&
+        row.receipt_tax_minor === null &&
+        row.receipt_total_minor === null &&
+        row.receipt_currency === null &&
+        row.receipt_provider_facts_digest === null &&
+        row.receipt_provider_paid_at === null &&
+        row.receipt_settled_at === null &&
+        row.assessment_job_id === null &&
+        row.assessment_job_state === null &&
+        row.assessment_job_opened_at === null &&
+        row.assessment_job_delivery_date === null,
+      "invoice_repository_conflict",
+      "The assessment settlement projection is incomplete.",
+      { status: 500 }
+    );
+  }
+
+  const paymentVerifying =
+    !hasReceipt && row.settlement_event_state === "pending";
+  const paymentAttention =
+    !hasReceipt &&
+    row.settlement_event_state ===
+      "reconciliation_required";
+  invariant(
+    [null, "pending", "processed", "reconciliation_required"].includes(
+      row.settlement_event_state
+    ) &&
+      (
+        row.settlement_event_state !== "processed" ||
+        hasReceipt
+      ) &&
+      (
+        row.settlement_event_state ===
+          "reconciliation_required"
+          ? typeof row.settlement_reconciliation_code === "string" &&
+            row.settlement_reconciliation_code.length > 0
+          : row.settlement_reconciliation_code === null
+      ),
+    "invoice_repository_conflict",
+    "The assessment payment-verification state is inconsistent.",
+    { status: 500 }
+  );
+
   let liveReadyCheckout = false;
   if (row.checkout_attempt_state === "ready") {
     invariant(
@@ -267,24 +395,47 @@ function project(row, input, paymentRelease) {
       Date.parse(row.checkout_expires_at) > Date.now();
   }
   const checkoutRequiresReconciliation =
+    paymentVerifying ||
+    paymentAttention ||
     row.checkout_attempt_state === "persistence_unknown" ||
     (
       row.checkout_attempt_state === "ready" &&
       !liveReadyCheckout
     );
   const checkoutAvailable =
+    !hasReceipt &&
+    !paymentVerifying &&
+    !paymentAttention &&
     paymentRelease.approved &&
     (
       row.checkout_attempt_state === null ||
       row.checkout_attempt_state === "failed" ||
+      row.checkout_attempt_state === "expired" ||
       liveReadyCheckout
     );
 
+  const projectionState = hasReceipt
+    ? "paid_job_open"
+    : paymentVerifying
+      ? "payment_verifying"
+      : paymentAttention
+        ? "payment_attention"
+        : checkoutAvailable
+          ? "checkout_available"
+          : "tax_calculation_pending";
+  const paymentState = hasReceipt
+    ? "paid"
+    : paymentVerifying
+      ? "verifying"
+      : paymentAttention
+        ? "attention"
+        : checkoutAvailable
+          ? "checkout_available"
+          : "held";
+
   return deepFreeze({
     schema: CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA,
-    state: checkoutAvailable
-      ? "checkout_available"
-      : "tax_calculation_pending",
+    state: projectionState,
     invoice: {
       invoiceId: uuid(row.invoice_id, "invoice.invoiceId"),
       invoiceNumber: row.invoice_number,
@@ -318,43 +469,71 @@ function project(row, input, paymentRelease) {
         formatted: "$200.00"
       },
       tax: {
-        state: "calculation_required",
-        amountMinor: null,
-        message: "Stripe calculates tax at secure checkout, if applicable."
+        state: hasReceipt ? "calculated" : "calculation_required",
+        amountMinor: receipt?.taxMinor ?? null,
+        message: hasReceipt
+          ? `Tax confirmed at ${usd(receipt.taxMinor)}.`
+          : "Stripe calculates tax at secure checkout, if applicable."
       },
       total: {
-        state: "pending_tax",
-        amountMinor: null,
+        state: hasReceipt ? "final" : "pending_tax",
+        amountMinor: receipt?.totalMinor ?? null,
         currency: "USD",
-        formatted: null
+        formatted: hasReceipt
+          ? usd(receipt.totalMinor)
+          : null
       },
       payment: {
-        state: checkoutAvailable
-          ? "checkout_available"
-          : "held",
+        state: paymentState,
         checkoutAvailable,
-        chargeOccurred: false,
-        message: checkoutAvailable
-          ? "Secure checkout is available. No charge occurred."
-          : "No payment has been requested and no charge occurred."
+        chargeOccurred: hasReceipt
+          ? true
+          : paymentVerifying || paymentAttention
+            ? null
+            : false,
+        receiptId: receipt?.receiptId ?? null,
+        paidAt: receipt?.paidAt ?? null,
+        settledAt: receipt?.settledAt ?? null,
+        message: hasReceipt
+          ? "Payment is confirmed and the assessment job is open."
+          : paymentVerifying
+            ? "Payment verification is in progress. Do not pay again."
+            : paymentAttention
+              ? "Payment needs manual review. Do not submit another payment."
+              : checkoutAvailable
+                ? "Secure checkout is available. No charge occurred."
+                : "No payment has been requested and no charge occurred."
       },
       invoiceDigest,
       issuedAt: iso(row.issued_at, "invoice.issuedAt"),
       createdAt: iso(row.created_at, "invoice.createdAt")
     },
+    job,
     actions: {
       checkout: {
         available: checkoutAvailable,
         reason: checkoutAvailable
           ? null
-          : checkoutRequiresReconciliation
+          : hasReceipt
+            ? "already_paid"
+            : paymentVerifying
+              ? "payment_verifying"
+              : paymentAttention
+                ? "payment_attention"
+            : checkoutRequiresReconciliation
             ? "reconciliation_required"
             : !paymentRelease.approved
               ? "payment_release_held"
             : "checkout_not_available",
         message: checkoutAvailable
           ? "Stripe shows tax, if applicable, and the exact total before payment."
-          : checkoutRequiresReconciliation
+          : hasReceipt
+            ? "Payment is complete and assessment work is queued."
+            : paymentVerifying
+              ? "Payment verification is in progress. Do not pay again."
+              : paymentAttention
+                ? "Payment needs manual review before any further action."
+            : checkoutRequiresReconciliation
             ? "The earlier payment-page request is being reconciled before another can open."
             : !paymentRelease.approved
               ? "Secure assessment payment is held in this runtime."
@@ -459,10 +638,33 @@ export function createPostgresCustomServicesInvoiceRepository({
                  reservation.expected_total_minor,
                  reservation.invoice_digest as reservation_invoice_digest,
                  checkout_attempt.state as checkout_attempt_state,
+                 checkout_attempt.id as checkout_attempt_id,
                  checkout_attempt.provider_effect_certainty
                    as checkout_provider_effect_certainty,
                  checkout_attempt.checkout_session_id,
-                 checkout_attempt.expires_at as checkout_expires_at
+                 checkout_attempt.expires_at as checkout_expires_at,
+                 settlement_event.state as settlement_event_state,
+                 settlement_event.reconciliation_code
+                   as settlement_reconciliation_code,
+                 receipt.id as payment_receipt_id,
+                 receipt.checkout_attempt_id
+                   as receipt_checkout_attempt_id,
+                 receipt.payment_status as receipt_payment_status,
+                 receipt.subtotal_minor as receipt_subtotal_minor,
+                 receipt.tax_minor as receipt_tax_minor,
+                 receipt.total_minor as receipt_total_minor,
+                 receipt.currency as receipt_currency,
+                 receipt.provider_facts_digest
+                   as receipt_provider_facts_digest,
+                 receipt.provider_paid_at
+                   as receipt_provider_paid_at,
+                 receipt.settled_at as receipt_settled_at,
+                 assessment_job.id as assessment_job_id,
+                 assessment_job.state as assessment_job_state,
+                 assessment_job.opened_at
+                   as assessment_job_opened_at,
+                 assessment_job.delivery_date
+                   as assessment_job_delivery_date
                from ss.service_invoices invoice
                join ss.service_quote_acceptances acceptance
                  on acceptance.organization_id = invoice.organization_id
@@ -505,6 +707,21 @@ export function createPostgresCustomServicesInvoiceRepository({
                   order by attempt.created_at desc, attempt.id desc
                   limit 1
                ) checkout_attempt on true
+               left join lateral (
+                 select event.state,
+                        event.reconciliation_code
+                   from ss.service_assessment_stripe_events event
+                  where event.organization_id = invoice.organization_id
+                    and event.invoice_id = invoice.id
+                  order by event.created_at desc, event.id desc
+                  limit 1
+               ) settlement_event on true
+               left join ss.service_assessment_payment_receipts receipt
+                 on receipt.organization_id = invoice.organization_id
+                and receipt.invoice_id = invoice.id
+               left join ss.service_assessment_jobs assessment_job
+                 on assessment_job.organization_id = receipt.organization_id
+                and assessment_job.payment_receipt_id = receipt.id
               where invoice.organization_id = $1
                 and invoice.project_id = $2
                 and invoice.customer_user_id = $3

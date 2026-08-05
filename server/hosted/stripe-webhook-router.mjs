@@ -3,6 +3,9 @@ import {
   isDownloadStripeEvent,
   isPotentialDownloadReversalEvent
 } from "../commerce-v2/index.mjs";
+import {
+  isPotentialCustomServicesAssessmentStripeEvent
+} from "./custom-services-assessment-settlement-postgres.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 
 const SAFE_CODE = /^[A-Za-z0-9._:-]{1,200}$/u;
@@ -18,6 +21,7 @@ export function createStripeWebhookRouter({
   provider,
   canonicalService,
   downloadCommerce,
+  assessmentCommerce,
   alakazamCommerce
 } = {}) {
   invariant(
@@ -28,6 +32,9 @@ export function createStripeWebhookRouter({
         "function" &&
       downloadCommerce &&
       typeof downloadCommerce.ingestStripeEvent ===
+        "function" &&
+      assessmentCommerce &&
+      typeof assessmentCommerce.ingestStripeEvent ===
         "function" &&
       alakazamCommerce &&
       typeof alakazamCommerce.ingestStripeEvent ===
@@ -89,6 +96,15 @@ export function createStripeWebhookRouter({
         if (result?.status !== "not_download") {
           return result;
         }
+      }
+      if (
+        isPotentialCustomServicesAssessmentStripeEvent(
+          event
+        )
+      ) {
+        return assessmentCommerce.ingestStripeEvent(
+          event
+        );
       }
       if (isPotentialAlakazamStripeEvent(event)) {
         return alakazamCommerce.ingestStripeEvent(

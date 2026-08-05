@@ -166,7 +166,7 @@ test("owner quote desk stays private and exposes only the bounded quote controls
 
 function assessmentInvoiceProjection(checkoutAvailable = false) {
   return {
-    schema: "sitesourcery.custom-services-assessment-invoice/v1",
+    schema: "sitesourcery.custom-services-assessment-invoice/v2",
     state: checkoutAvailable
       ? "checkout_available"
       : "tax_calculation_pending",
@@ -174,7 +174,13 @@ function assessmentInvoiceProjection(checkoutAvailable = false) {
       invoiceId: "60000000-0000-4000-8000-000000000001",
       invoiceNumber: "SSA-60000000000040008000000000000001",
       purpose: "assessment",
-      quote: {},
+      quote: {
+        quoteId: QUOTE_ID,
+        quoteRevision: 1,
+        acceptedAt: "2026-08-05T11:59:00.000Z",
+        acceptedQuoteDigest: "b".repeat(64),
+        acceptedDisclosureDigest: "c".repeat(64)
+      },
       line: {
         name: "Website assessment",
         quantity: 1,
@@ -205,6 +211,9 @@ function assessmentInvoiceProjection(checkoutAvailable = false) {
         state: checkoutAvailable ? "checkout_available" : "held",
         checkoutAvailable,
         chargeOccurred: false,
+        receiptId: null,
+        paidAt: null,
+        settledAt: null,
         message: checkoutAvailable
           ? "Secure checkout is available. No charge occurred."
           : "No payment has been requested and no charge occurred."
@@ -213,6 +222,7 @@ function assessmentInvoiceProjection(checkoutAvailable = false) {
       issuedAt: "2026-08-05T12:00:00.000Z",
       createdAt: "2026-08-05T12:00:01.000Z"
     },
+    job: null,
     actions: {
       checkout: {
         available: checkoutAvailable,
@@ -222,6 +232,50 @@ function assessmentInvoiceProjection(checkoutAvailable = false) {
         message: checkoutAvailable
           ? "Tax and the exact total are shown by Stripe before payment."
           : "Secure payment is not available yet."
+      }
+    }
+  };
+}
+
+function paidAssessmentInvoiceProjection() {
+  const pending = assessmentInvoiceProjection();
+  return {
+    ...pending,
+    state: "paid_job_open",
+    invoice: {
+      ...pending.invoice,
+      tax: {
+        state: "calculated",
+        amountMinor: 1450,
+        message: "Tax confirmed at $14.50."
+      },
+      total: {
+        state: "final",
+        amountMinor: 21450,
+        currency: "USD",
+        formatted: "$214.50"
+      },
+      payment: {
+        state: "paid",
+        checkoutAvailable: false,
+        chargeOccurred: true,
+        receiptId: "70000000-0000-4000-8000-000000000001",
+        paidAt: "2026-08-05T12:05:00.000Z",
+        settledAt: "2026-08-05T12:05:01.000Z",
+        message: "Payment is confirmed and the assessment job is open."
+      }
+    },
+    job: {
+      jobId: "80000000-0000-4000-8000-000000000001",
+      state: "open",
+      openedAt: "2026-08-05T12:05:01.000Z",
+      deliveryDate: "2026-08-20"
+    },
+    actions: {
+      checkout: {
+        available: false,
+        reason: "already_paid",
+        message: "Payment is complete and assessment work is queued."
       }
     }
   };
@@ -259,8 +313,20 @@ function assessmentCheckoutResponse(invoice) {
 test("customer assessment invoice accepts held and checkout-available no-charge truth", () => {
   const held = assessmentInvoiceProjection();
   const available = assessmentInvoiceProjection(true);
+  const paid = paidAssessmentInvoiceProjection();
   assert.equal(verifiedAssessmentInvoice(held), held);
   assert.equal(verifiedAssessmentInvoice(available), available);
+  assert.equal(verifiedAssessmentInvoice(paid), paid);
+  assert.equal(
+    verifiedAssessmentInvoice({
+      ...paid,
+      invoice: {
+        ...paid.invoice,
+        total: { ...paid.invoice.total, amountMinor: 21449 }
+      }
+    }),
+    null
+  );
   assert.equal(
     verifiedAssessmentInvoice({
       ...available,

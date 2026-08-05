@@ -2140,54 +2140,196 @@
   }
 
   function verifiedAssessmentInvoice(value) {
+    var states = [
+      "not_available",
+      "tax_calculation_pending",
+      "checkout_available",
+      "payment_verifying",
+      "payment_attention",
+      "paid_job_open"
+    ];
     var checkoutAvailable = record(value)
       && value.state === "checkout_available";
     if (
-      !record(value)
+      !exactKeys(
+        value,
+        ["actions", "invoice", "job", "schema", "state"]
+      )
       || value.schema !==
-        "sitesourcery.custom-services-assessment-invoice/v1"
-      || ![
-        "not_available",
-        "tax_calculation_pending",
-        "checkout_available"
-      ].includes(value.state)
-      || !record(value.actions)
-      || !record(value.actions.checkout)
+        "sitesourcery.custom-services-assessment-invoice/v2"
+      || !states.includes(value.state)
+      || !exactKeys(value.actions, ["checkout"])
+      || !exactKeys(
+        value.actions.checkout,
+        ["available", "message", "reason"]
+      )
       || value.actions.checkout.available !== checkoutAvailable
+      || typeof value.actions.checkout.message !== "string"
+      || value.actions.checkout.message.length < 1
     ) return null;
     if (value.state === "not_available") {
-      return value.invoice === null ? value : null;
+      return value.invoice === null
+        && value.job === null
+        && value.actions.checkout.reason ===
+          "accepted_quote_required"
+        ? value
+        : null;
     }
     var invoice = value.invoice;
+    var paid = value.state === "paid_job_open";
+    var verifying = value.state === "payment_verifying";
+    var attention = value.state === "payment_attention";
+    var expectedPaymentState = paid
+      ? "paid"
+      : verifying
+        ? "verifying"
+        : attention
+          ? "attention"
+          : checkoutAvailable
+            ? "checkout_available"
+            : "held";
+    var expectedActionReason = paid
+      ? "already_paid"
+      : verifying
+        ? "payment_verifying"
+        : attention
+          ? "payment_attention"
+          : checkoutAvailable
+            ? null
+            : value.actions.checkout.reason;
     if (
-      !record(invoice)
+      !exactKeys(
+        invoice,
+        [
+          "createdAt",
+          "invoiceDigest",
+          "invoiceId",
+          "invoiceNumber",
+          "issuedAt",
+          "line",
+          "payment",
+          "purpose",
+          "quote",
+          "subtotal",
+          "tax",
+          "total"
+        ]
+      )
       || !UUID.test(text(invoice.invoiceId))
       || !/^SSA-[0-9A-F]{32}$/u.test(text(invoice.invoiceNumber))
       || invoice.purpose !== "assessment"
-      || !record(invoice.line)
+      || !exactKeys(
+        invoice.quote,
+        [
+          "acceptedAt",
+          "acceptedDisclosureDigest",
+          "acceptedQuoteDigest",
+          "quoteId",
+          "quoteRevision"
+        ]
+      )
+      || !UUID.test(text(invoice.quote.quoteId))
+      || !Number.isSafeInteger(invoice.quote.quoteRevision)
+      || invoice.quote.quoteRevision < 1
+      || !safeIso(invoice.quote.acceptedAt)
+      || !SHA256.test(text(invoice.quote.acceptedQuoteDigest))
+      || !SHA256.test(text(invoice.quote.acceptedDisclosureDigest))
+      || !exactKeys(
+        invoice.line,
+        ["name", "quantity", "unit", "unitAmount"]
+      )
       || invoice.line.name !== "Website assessment"
       || invoice.line.quantity !== 1
-      || !record(invoice.subtotal)
+      || invoice.line.unit !== "assessment"
+      || !exactKeys(
+        invoice.line.unitAmount,
+        ["amountMinor", "currency", "formatted"]
+      )
+      || invoice.line.unitAmount.amountMinor !== 20000
+      || invoice.line.unitAmount.currency !== "USD"
+      || invoice.line.unitAmount.formatted !== "$200.00"
+      || !exactKeys(
+        invoice.subtotal,
+        ["amountMinor", "currency", "formatted"]
+      )
       || invoice.subtotal.amountMinor !== 20000
       || invoice.subtotal.currency !== "USD"
       || invoice.subtotal.formatted !== "$200.00"
-      || !record(invoice.tax)
-      || invoice.tax.state !== "calculation_required"
-      || invoice.tax.amountMinor !== null
-      || !record(invoice.total)
-      || invoice.total.state !== "pending_tax"
-      || invoice.total.amountMinor !== null
-      || invoice.total.currency !== "USD"
-      || invoice.total.formatted !== null
-      || !record(invoice.payment)
-      || invoice.payment.state !== (
-        checkoutAvailable ? "checkout_available" : "held"
+      || !exactKeys(invoice.tax, ["amountMinor", "message", "state"])
+      || typeof invoice.tax.message !== "string"
+      || invoice.tax.message.length < 1
+      || !exactKeys(
+        invoice.total,
+        ["amountMinor", "currency", "formatted", "state"]
       )
+      || invoice.total.currency !== "USD"
+      || !exactKeys(
+        invoice.payment,
+        [
+          "chargeOccurred",
+          "checkoutAvailable",
+          "message",
+          "paidAt",
+          "receiptId",
+          "settledAt",
+          "state"
+        ]
+      )
+      || invoice.payment.state !== expectedPaymentState
       || invoice.payment.checkoutAvailable !== checkoutAvailable
-      || invoice.payment.chargeOccurred !== false
+      || typeof invoice.payment.message !== "string"
+      || invoice.payment.message.length < 1
+      || value.actions.checkout.reason !== expectedActionReason
       || !SHA256.test(text(invoice.invoiceDigest))
       || !safeIso(invoice.issuedAt)
       || !safeIso(invoice.createdAt)
+    ) return null;
+    if (paid) {
+      if (
+        invoice.payment.chargeOccurred !== true
+        || !UUID.test(text(invoice.payment.receiptId))
+        || !safeIso(invoice.payment.paidAt)
+        || !safeIso(invoice.payment.settledAt)
+        || invoice.tax.state !== "calculated"
+        || !safeMinor(invoice.tax.amountMinor)
+        || invoice.total.state !== "final"
+        || !safeMinor(invoice.total.amountMinor)
+        || invoice.total.amountMinor !==
+          20000 + invoice.tax.amountMinor
+        || invoice.total.formatted !==
+          "$" + (invoice.total.amountMinor / 100).toFixed(2)
+        || !exactKeys(
+          value.job,
+          ["deliveryDate", "jobId", "openedAt", "state"]
+        )
+        || !UUID.test(text(value.job.jobId))
+        || value.job.state !== "open"
+        || !safeIso(value.job.openedAt)
+        || !/^\d{4}-\d{2}-\d{2}$/u.test(
+          text(value.job.deliveryDate)
+        )
+      ) return null;
+    } else if (
+      value.job !== null
+      || invoice.tax.state !== "calculation_required"
+      || invoice.tax.amountMinor !== null
+      || invoice.total.state !== "pending_tax"
+      || invoice.total.amountMinor !== null
+      || invoice.total.formatted !== null
+      || invoice.payment.receiptId !== null
+      || invoice.payment.paidAt !== null
+      || invoice.payment.settledAt !== null
+      || invoice.payment.chargeOccurred !== (
+        verifying || attention ? null : false
+      )
+      || (
+        value.state === "tax_calculation_pending"
+        && ![
+          "checkout_not_available",
+          "payment_release_held",
+          "reconciliation_required"
+        ].includes(value.actions.checkout.reason)
+      )
     ) return null;
     return value;
   }
@@ -2676,29 +2818,58 @@
         documentRef,
         facts,
         "Tax",
-        "Shown by Stripe at secure checkout, if applicable"
+        invoiceState.state === "paid_job_open"
+          ? "$" + (invoice.tax.amountMinor / 100).toFixed(2) + " USD"
+          : "Shown by Stripe at secure checkout, if applicable"
       );
       appendAccountFact(
         documentRef,
         facts,
         "Total",
-        "Shown by Stripe before payment"
+        invoiceState.state === "paid_job_open"
+          ? invoice.total.formatted + " USD"
+          : "Shown by Stripe before payment"
       );
+      var paymentLabel = checkoutAvailable
+        ? "Secure checkout available"
+        : invoiceState.state === "paid_job_open"
+          ? "Paid and verified"
+          : invoiceState.state === "payment_verifying"
+            ? "Verifying payment"
+            : invoiceState.state === "payment_attention"
+              ? "Needs Site Sourcery review"
+              : "Not open";
       appendAccountFact(
         documentRef,
         facts,
         "Payment",
-        checkoutAvailable ? "Secure checkout available" : "Not open"
+        paymentLabel
       );
+      if (invoiceState.job) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Assessment work",
+          "Open · delivery by " + invoiceState.job.deliveryDate
+        );
+      }
+      var statusMessage = checkoutAvailable
+        ? "Stripe will show tax, if applicable, and the exact total before you confirm payment. Work begins only after Site Sourcery verifies payment."
+        : invoiceState.state === "paid_job_open"
+          ? "Payment is verified. Your assessment is queued for delivery by "
+            + invoiceState.job.deliveryDate + "."
+          : invoiceState.state === "payment_verifying"
+            ? "Payment verification is in progress. Do not pay again while Site Sourcery confirms it."
+            : invoiceState.state === "payment_attention"
+              ? "Payment needs Site Sourcery review. Do not submit another payment."
+              : "Secure payment is not available yet, and nothing has been charged. When checkout opens, Stripe will show tax, if applicable, and the exact total before payment.";
       section.append(
         facts,
         accountElement(
           documentRef,
           "p",
           "customer-assessment-note",
-          checkoutAvailable
-            ? "Stripe will show tax, if applicable, and the exact total before you confirm payment. Work begins only after Site Sourcery verifies payment."
-            : "Secure payment is not available yet, and nothing has been charged. When checkout opens, Stripe will show tax, if applicable, and the exact total before payment."
+          statusMessage
         )
       );
       if (checkoutAvailable) {
@@ -3332,6 +3503,8 @@
     if (
       checkoutValues.length !== 1
       || projectValues.length !== 1
+      || parameters.has("assessment_project")
+      || parameters.has("assessment_invoice")
     ) return null;
     var checkoutSessionId = text(checkoutValues[0]);
     var projectId = text(projectValues[0]);
@@ -3344,6 +3517,43 @@
     ) return null;
     return Object.freeze({
       checkoutSessionId: checkoutSessionId,
+      projectId: projectId
+    });
+  }
+
+  function assessmentCheckoutReturnFromLocation(
+    locationObject
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      return null;
+    }
+    var checkoutValues = parameters.getAll("checkout");
+    var projectValues =
+      parameters.getAll("assessment_project");
+    var invoiceValues =
+      parameters.getAll("assessment_invoice");
+    if (
+      checkoutValues.length !== 1
+      || projectValues.length !== 1
+      || invoiceValues.length !== 1
+      || parameters.has("download_project")
+    ) return null;
+    var checkoutSessionId = text(checkoutValues[0]);
+    var projectId = text(projectValues[0]);
+    var invoiceId = text(invoiceValues[0]);
+    if (
+      !/^cs_[A-Za-z0-9_]+$/u.test(checkoutSessionId)
+      || !UUID.test(projectId)
+      || !UUID.test(invoiceId)
+    ) return null;
+    return Object.freeze({
+      checkoutSessionId: checkoutSessionId,
+      invoiceId: invoiceId,
       projectId: projectId
     });
   }
@@ -3361,6 +3571,31 @@
     }
     parameters.delete("checkout");
     parameters.delete("download_project");
+    var query = parameters.toString();
+    return (
+      text(locationObject && locationObject.pathname)
+        || "/"
+    ) + (query ? "?" + query : "")
+      + text(locationObject && locationObject.hash);
+  }
+
+  function locationWithoutCheckoutReturn(locationObject) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      parameters = new URLSearchParams();
+    }
+    [
+      "assessment_invoice",
+      "assessment_project",
+      "checkout",
+      "download_project"
+    ].forEach(function (field) {
+      parameters.delete(field);
+    });
     var query = parameters.toString();
     return (
       text(locationObject && locationObject.pathname)
@@ -3774,8 +4009,12 @@
       setupLabel: "",
       error: ""
     };
-    var checkoutReturn =
+    var downloadCheckoutReturn =
       downloadCheckoutReturnFromLocation(
+        windowRef.location
+      );
+    var assessmentCheckoutReturn =
+      assessmentCheckoutReturnFromLocation(
         windowRef.location
       );
     var checkoutReturnStarted = false;
@@ -5346,13 +5585,13 @@
       windowRef.history.replaceState(
         null,
         "",
-        locationWithoutDownloadCheckoutReturn(
+        locationWithoutCheckoutReturn(
           windowRef.location
         )
       );
     }
 
-    function reconcileCheckoutReturn(selectedReturn) {
+    function reconcileDownloadCheckoutReturn(selectedReturn) {
       clearCheckoutReturnLocation();
       announce(
         "Checking Stripe for your payment and secure Download…"
@@ -5448,15 +5687,130 @@
         });
     }
 
+    function reconcileAssessmentCheckoutReturn(selectedReturn) {
+      clearCheckoutReturnLocation();
+      assessmentCheckoutAttempt = {
+        projectId: "",
+        invoiceId: "",
+        invoiceDigest: "",
+        commandId: ""
+      };
+      announce(
+        "Checking Stripe for your assessment payment…"
+      );
+      return control
+        .selectProject(
+          selectedReturn.projectId,
+          function (project) {
+            return maker.loadProject(project);
+          }
+        )
+        .then(function (project) {
+          if (!project) {
+            throw new Error(
+              "The assessment project could not be opened in this account."
+            );
+          }
+          revealControlRoom();
+          var delays = [
+            0,
+            500,
+            1000,
+            1500,
+            2500,
+            4000,
+            6000
+          ];
+          var attempt = 0;
+
+          function check() {
+            if (attempt >= delays.length) {
+              return Promise.resolve(null);
+            }
+            var delay = delays[attempt];
+            attempt += 1;
+            return pause(delay)
+              .then(function () {
+                return requestAssessment(
+                  selectedReturn.projectId
+                );
+              })
+              .then(function (readState) {
+                var projection = verifiedAssessmentInvoice(
+                  readState && readState.invoice
+                );
+                if (
+                  projection
+                  && projection.state !== "not_available"
+                  && projection.invoice.invoiceId !==
+                    selectedReturn.invoiceId
+                ) {
+                  throw new Error(
+                    "The returned assessment invoice does not match this project."
+                  );
+                }
+                if (
+                  projection
+                  && [
+                    "paid_job_open",
+                    "payment_attention"
+                  ].includes(projection.state)
+                ) return projection;
+                return check();
+              });
+          }
+
+          return check();
+        })
+        .then(function (projection) {
+          if (projection?.state === "paid_job_open") {
+            announce(
+              "Payment confirmed. Your assessment work is queued.",
+              "success"
+            );
+            return projection;
+          }
+          if (projection?.state === "payment_attention") {
+            announce(
+              "Your assessment payment needs Site Sourcery review. Do not pay again.",
+              "error"
+            );
+            return projection;
+          }
+          announce(
+            "Stripe is still confirming the assessment payment. This page will not start another charge. Reopen this project in a moment to see its status."
+          );
+          return null;
+        })
+        .catch(function (error) {
+          announce(
+            explain(
+              error,
+              "Assessment payment confirmation could not be loaded. This page will not start another charge. Open the project again in a moment."
+            ),
+            "error"
+          );
+          return null;
+        });
+    }
+
     function maybeReconcileCheckoutReturn(state) {
       if (
-        !checkoutReturn
+        (!downloadCheckoutReturn && !assessmentCheckoutReturn)
         || checkoutReturnStarted
         || !state.account
       ) return;
       checkoutReturnStarted = true;
       windowRef.setTimeout(function () {
-        reconcileCheckoutReturn(checkoutReturn);
+        if (assessmentCheckoutReturn) {
+          reconcileAssessmentCheckoutReturn(
+            assessmentCheckoutReturn
+          );
+        } else {
+          reconcileDownloadCheckoutReturn(
+            downloadCheckoutReturn
+          );
+        }
       }, 0);
     }
 
@@ -6338,9 +6692,14 @@
       .then(function () {
         if (control.getState().account) {
           announce("Account ready.", "success");
-        } else if (checkoutReturn) {
+        } else if (
+          downloadCheckoutReturn
+          || assessmentCheckoutReturn
+        ) {
           announce(
-            "Sign in to finish confirming the payment and open your Download."
+            assessmentCheckoutReturn
+              ? "Sign in to finish confirming the assessment payment."
+              : "Sign in to finish confirming the payment and open your Download."
           );
         } else if (!activationToken && !recoveryToken) {
           announce(
@@ -6365,6 +6724,8 @@
       acceptedProjectVersion,
     accountReceiptMoney:
       accountReceiptMoney,
+    assessmentCheckoutReturnFromLocation:
+      assessmentCheckoutReturnFromLocation,
     confirmedAlakazamDowngradeProjection:
       confirmedAlakazamDowngradeProjection,
     alakazamAccountPresentation:
@@ -6377,6 +6738,8 @@
       downloadEntitlement,
     locationWithoutDownloadCheckoutReturn:
       locationWithoutDownloadCheckoutReturn,
+    locationWithoutCheckoutReturn:
+      locationWithoutCheckoutReturn,
     ownerReviewTargets:
       ownerReviewTargets,
     recoveryOutcome: recoveryOutcome,

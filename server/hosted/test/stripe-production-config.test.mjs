@@ -957,7 +957,7 @@ test("the hosted server injects one configured adapter for Checkout and every ve
   );
   assert.match(
     source,
-    /downloadCommerce,\s*alakazamCommerce/u
+    /downloadCommerce,\s*assessmentCommerce:\s*customServicesAssessmentSettlement,\s*alakazamCommerce/u
   );
   assert.match(
     source,

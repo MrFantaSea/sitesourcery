@@ -147,6 +147,20 @@ async function verifyPlatformSchema(pool) {
       to_regprocedure(
         'ss.guard_service_assessment_checkout_attempt()'
       ) is not null as service_assessment_checkout_guard,
+      to_regclass('ss.service_assessment_stripe_events') is not null
+        as service_assessment_stripe_events,
+      to_regclass('ss.service_assessment_payment_receipts') is not null
+        as service_assessment_payment_receipts,
+      to_regclass('ss.service_assessment_jobs') is not null
+        as service_assessment_jobs,
+      to_regprocedure('ss.hosted_runtime_contract_v39()') is not null
+        as custom_service_assessment_settlement_runtime_contract,
+      to_regprocedure(
+        'ss.guard_service_assessment_stripe_event()'
+      ) is not null as service_assessment_stripe_event_guard,
+      to_regprocedure(
+        'ss.guard_service_assessment_settlement_insert()'
+      ) is not null as service_assessment_settlement_insert_guard,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -305,6 +319,9 @@ async function verifyPlatformSchema(pool) {
       ss.hosted_runtime_contract_v38() =
         'canonical-ss-v38-custom-service-assessment-checkout'
         as exact_assessment_checkout_runtime_marker,
+      ss.hosted_runtime_contract_v39() =
+        'canonical-ss-v39-custom-service-assessment-settlement'
+        as exact_assessment_settlement_runtime_marker,
       (
         select count(*) = 1
           and bool_and(relation.relrowsecurity)
@@ -471,6 +488,93 @@ async function verifyPlatformSchema(pool) {
              and index_relation.relname =
                'service_assessment_checkout_one_active'
         ) as exact_assessment_checkout_security,
+      (
+        select count(*) = 3
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege(
+              'service_role', relation.oid, 'SELECT'
+            )
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            )
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = (
+              relation.relname =
+                'service_assessment_stripe_events'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'UPDATE'
+            )
+          )
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relkind = 'r'
+           and relation.relname in (
+             'service_assessment_stripe_events',
+             'service_assessment_payment_receipts',
+             'service_assessment_jobs'
+           )
+      )
+        and (
+          select count(*) = 6
+            from pg_trigger trigger_record
+            join pg_class trigger_relation
+              on trigger_relation.oid = trigger_record.tgrelid
+            join pg_namespace trigger_namespace
+              on trigger_namespace.oid =
+                trigger_relation.relnamespace
+           where trigger_namespace.nspname = 'ss'
+             and trigger_relation.relname in (
+               'service_assessment_stripe_events',
+               'service_assessment_payment_receipts',
+               'service_assessment_jobs'
+             )
+             and not trigger_record.tgisinternal
+        )
+        and not exists (
+          select 1
+            from pg_constraint constraint_record
+            join pg_class constraint_relation
+              on constraint_relation.oid =
+                constraint_record.conrelid
+            join pg_namespace constraint_namespace
+              on constraint_namespace.oid =
+                constraint_relation.relnamespace
+           where constraint_namespace.nspname = 'ss'
+             and constraint_relation.relname in (
+               'service_assessment_stripe_events',
+               'service_assessment_payment_receipts',
+               'service_assessment_jobs'
+             )
+             and constraint_record.contype = 'f'
+             and constraint_record.confdeltype = 'c'
+        ) as exact_assessment_settlement_security,
       (
         select count(*) = 11
           and bool_and(relation.relrowsecurity)

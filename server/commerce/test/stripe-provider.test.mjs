@@ -297,6 +297,108 @@ function serviceAssessmentRequest(overrides = {}) {
   };
 }
 
+function serviceAssessmentMetadata(
+  purpose = serviceAssessmentPurpose()
+) {
+  return {
+    schema:
+      "sitesourcery_service_assessment_checkout_v1",
+    tenant_id: purpose.tenantId,
+    customer_id: purpose.customerId,
+    project_id: purpose.projectId,
+    invoice_id: purpose.invoiceId,
+    invoice_number: purpose.invoiceNumber,
+    quote_id: purpose.quoteId,
+    accepted_disclosure_digest:
+      purpose.acceptedDisclosureDigest,
+    invoice_digest: purpose.invoiceDigest,
+    purpose_digest: digest(purpose)
+  };
+}
+
+function serviceAssessmentReadRequest(
+  overrides = {}
+) {
+  const purpose = serviceAssessmentPurpose(
+    overrides.purpose
+  );
+  return {
+    checkoutSessionId:
+      "cs_test_service_assessment_1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function serviceAssessmentCheckoutReadback({
+  purpose = serviceAssessmentPurpose(),
+  taxMinor = 0,
+  status = "complete",
+  paymentStatus = "paid",
+  overrides = {}
+} = {}) {
+  const subtotalMinor = 20000;
+  const totalMinor = subtotalMinor + taxMinor;
+  const metadata = serviceAssessmentMetadata(purpose);
+  const customerId = "cus_test_service_assessment_1";
+  const paymentIntentId =
+    "pi_test_service_assessment_1";
+  return {
+    id: "cs_test_service_assessment_1",
+    client_reference_id: purpose.invoiceId,
+    livemode: false,
+    mode: "payment",
+    currency: "usd",
+    amount_subtotal: subtotalMinor,
+    amount_total: totalMinor,
+    automatic_tax: {
+      enabled: true,
+      status: status === "complete" ? "complete" : null
+    },
+    total_details: {
+      amount_discount: 0,
+      amount_shipping: 0,
+      amount_tax: taxMinor
+    },
+    status,
+    payment_status: paymentStatus,
+    customer: customerId,
+    metadata,
+    payment_intent: {
+      id: paymentIntentId,
+      livemode: false,
+      status: "succeeded",
+      currency: "usd",
+      amount: totalMinor,
+      amount_received: totalMinor,
+      amount_capturable: 0,
+      customer: customerId,
+      metadata,
+      latest_charge: {
+        id: "ch_test_service_assessment_1",
+        livemode: false,
+        status: "succeeded",
+        paid: true,
+        captured: true,
+        refunded: false,
+        currency: "usd",
+        amount: totalMinor,
+        amount_captured: totalMinor,
+        amount_refunded: 0,
+        customer: customerId,
+        payment_intent: paymentIntentId,
+        created: 1785672000
+      }
+    },
+    ...overrides
+  };
+}
+
 function alakazamCurrent({
   tierId = "alakazam_25",
   stripePriceId = ALAKAZAM_PRICE_IDS[tierId]
@@ -1389,6 +1491,8 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   for (const operation of [
     "createCheckout",
     "createServiceAssessmentCheckout",
+    "retrieveServiceAssessmentPayment",
+    "retrieveServiceAssessmentCheckoutLifecycle",
     "createAlakazamCustomer",
     "retrieveAlakazamCustomer",
     "createAlakazamStartCheckout",
@@ -2711,6 +2815,322 @@ test("assessment Checkout treats every wrong-but-valid Stripe Session as ambiguo
     );
     assert.equal(fixture.calls.checkouts.length, 1);
   }
+});
+
+test("assessment settlement returns frozen redacted facts for tax-zero and tax-positive exact payments", async () => {
+  const purpose = serviceAssessmentPurpose();
+  for (const taxMinor of [0, 1450]) {
+    const config = configuration({ taxMode: "automatic" });
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        serviceAssessmentCheckoutReadback({
+          purpose,
+          taxMinor
+        })
+    });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    const facts =
+      await adapter.retrieveServiceAssessmentPayment(
+        serviceAssessmentReadRequest({ purpose })
+      );
+    const {
+      providerFactsDigest,
+      ...factsWithoutDigest
+    } = facts;
+    assert.deepEqual(factsWithoutDigest, {
+      schema:
+        "sitesourcery.stripe-service-assessment-payment-facts/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_service_assessment_1",
+      paymentIntentId:
+        "pi_test_service_assessment_1",
+      customerId: "cus_test_service_assessment_1",
+      paymentStatus: "paid",
+      subtotalMinor: 20000,
+      taxMinor,
+      totalMinor: 20000 + taxMinor,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: digest(purpose),
+      providerPaymentTime:
+        "2026-08-02T12:00:00.000Z"
+    });
+    assert.equal(
+      providerFactsDigest,
+      digest(factsWithoutDigest)
+    );
+    assert.equal(Object.isFrozen(facts), true);
+    assert.equal("chargeId" in facts, false);
+    assert.deepEqual(calls.checkoutReads, [
+      {
+        id: "cs_test_service_assessment_1",
+        params: {
+          expand: ["payment_intent.latest_charge"]
+        }
+      }
+    ]);
+  }
+});
+
+test("assessment readback accepts only retrieval identity and the exact purpose digest", async () => {
+  const purpose = serviceAssessmentPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      serviceAssessmentCheckoutReadback({ purpose })
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  for (const request of [
+    {
+      ...serviceAssessmentReadRequest({ purpose }),
+      idempotencyKey: "assessment:creation-only"
+    },
+    {
+      ...serviceAssessmentReadRequest({ purpose }),
+      stripeCustomerId: "cus_test_service_assessment_1"
+    },
+    {
+      ...serviceAssessmentReadRequest({ purpose }),
+      purposeDigest: "0".repeat(64)
+    }
+  ]) {
+    await assert.rejects(
+      adapter.retrieveServiceAssessmentPayment(request),
+      (error) =>
+        error.code ===
+          "stripe_service_assessment_checkout_invalid" &&
+        error.status === 500 &&
+        error.certainty === undefined
+    );
+  }
+  assert.equal(calls.checkoutReads.length, 0);
+});
+
+test("assessment settlement rejects an unpaid Checkout as a 502 validation mismatch", async () => {
+  const purpose = serviceAssessmentPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      serviceAssessmentCheckoutReadback({
+        purpose,
+        status: "open",
+        paymentStatus: "unpaid"
+      })
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.retrieveServiceAssessmentPayment(
+        serviceAssessmentReadRequest({ purpose })
+      ),
+    (error) =>
+      error.code ===
+        "stripe_service_assessment_payment_mismatch" &&
+      error.status === 502 &&
+      error.certainty === undefined
+  );
+});
+
+test("assessment settlement rejects underpaid PaymentIntent evidence", async () => {
+  const purpose = serviceAssessmentPurpose();
+  const response =
+    serviceAssessmentCheckoutReadback({ purpose });
+  response.payment_intent.amount_received = 19999;
+  const config = configuration({ taxMode: "automatic" });
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: response
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.retrieveServiceAssessmentPayment(
+        serviceAssessmentReadRequest({ purpose })
+      ),
+    (error) =>
+      error.code ===
+        "stripe_service_assessment_payment_mismatch" &&
+      error.status === 502
+  );
+});
+
+test("assessment settlement rejects refunded Charge evidence", async () => {
+  const purpose = serviceAssessmentPurpose();
+  for (const mutate of [
+    (charge) => {
+      charge.refunded = true;
+    },
+    (charge) => {
+      charge.amount_refunded = 1;
+    }
+  ]) {
+    const response =
+      serviceAssessmentCheckoutReadback({ purpose });
+    mutate(response.payment_intent.latest_charge);
+    const config = configuration({
+      taxMode: "automatic"
+    });
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.retrieveServiceAssessmentPayment(
+          serviceAssessmentReadRequest({ purpose })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_service_assessment_payment_mismatch" &&
+        error.status === 502
+    );
+  }
+});
+
+test("assessment settlement rejects exact metadata, tax, and total drift", async () => {
+  const purpose = serviceAssessmentPurpose();
+  for (const mutate of [
+    (response) => {
+      response.metadata.purpose_digest = "0".repeat(64);
+    },
+    (response) => {
+      response.payment_intent.metadata.invoice_digest =
+        "0".repeat(64);
+    },
+    (response) => {
+      response.total_details.amount_tax = 1;
+    },
+    (response) => {
+      response.amount_total = 20001;
+    }
+  ]) {
+    const response =
+      serviceAssessmentCheckoutReadback({ purpose });
+    mutate(response);
+    const config = configuration({
+      taxMode: "automatic"
+    });
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.retrieveServiceAssessmentPayment(
+          serviceAssessmentReadRequest({ purpose })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_service_assessment_payment_mismatch" &&
+        error.status === 502 &&
+        error.certainty === undefined
+    );
+  }
+});
+
+test("assessment provider read transport failures are not submitted", async () => {
+  const purpose = serviceAssessmentPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const [operation, code] of [
+    [
+      "retrieveServiceAssessmentPayment",
+      "stripe_service_assessment_payment_read_unavailable"
+    ],
+    [
+      "retrieveServiceAssessmentCheckoutLifecycle",
+      "stripe_service_assessment_checkout_lifecycle_unavailable"
+    ]
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveError:
+        new Error("transport down")
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake }).adapter[
+        operation
+      ](serviceAssessmentReadRequest({ purpose })),
+      (error) =>
+        error.name === "ExternalEffectError" &&
+        error.code === code &&
+        error.certainty === "not_submitted"
+    );
+    assert.equal(fake.calls.checkoutReads.length, 1);
+  }
+});
+
+test("assessment lifecycle readback projects only open, expired, or paid", async () => {
+  const purpose = serviceAssessmentPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const [status, paymentStatus, state] of [
+    ["open", "unpaid", "open"],
+    ["expired", "unpaid", "expired"],
+    ["complete", "paid", "paid"]
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        serviceAssessmentCheckoutReadback({
+          purpose,
+          status,
+          paymentStatus
+        })
+    });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    const lifecycle =
+      await adapter
+        .retrieveServiceAssessmentCheckoutLifecycle(
+          serviceAssessmentReadRequest({ purpose })
+        );
+    assert.deepEqual(lifecycle, {
+      schema:
+        "sitesourcery.stripe-service-assessment-checkout-lifecycle/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_service_assessment_1",
+      purposeDigest: digest(purpose),
+      state
+    });
+    assert.equal(Object.isFrozen(lifecycle), true);
+    assert.deepEqual(calls.checkoutReads, [
+      {
+        id: "cs_test_service_assessment_1",
+        params: undefined
+      }
+    ]);
+  }
+
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      serviceAssessmentCheckoutReadback({
+        purpose,
+        status: "complete",
+        paymentStatus: "unpaid"
+      })
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter
+      .retrieveServiceAssessmentCheckoutLifecycle(
+        serviceAssessmentReadRequest({ purpose })
+      ),
+    (error) =>
+      error.code ===
+        "stripe_service_assessment_checkout_lifecycle_invalid" &&
+      error.status === 502
+  );
 });
 
 test("Download Checkout rejects changed money and purpose before Stripe", async () => {

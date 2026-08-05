@@ -57,6 +57,9 @@ import {
   createPostgresCustomServicesAssessmentPayment
 } from "../custom-services-assessment-payment-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentSettlement
+} from "../custom-services-assessment-settlement-postgres.mjs";
+import {
   assertApprovedCustomServicesAssessmentPaymentReady,
   createConfiguredCustomServicesAssessmentPaymentRelease
 } from "../custom-services-assessment-payment-config.mjs";
@@ -313,12 +316,21 @@ async function start() {
       release:
         customServicesAssessmentPaymentComposition.release
     });
+  const customServicesAssessmentSettlement =
+    createPostgresCustomServicesAssessmentSettlement({
+      authority,
+      provider: stripeComposition.adapter,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
   const customServicesAssessmentPayment =
     createPostgresCustomServicesAssessmentPayment({
       authority,
       provider: stripeComposition.adapter,
       release:
-        customServicesAssessmentPaymentComposition.release
+        customServicesAssessmentPaymentComposition.release,
+      reconciliation:
+        customServicesAssessmentSettlement
     });
   const customServicesRequestRepository =
     createPostgresCustomServicesRequestRepository({ authority });
@@ -462,7 +474,8 @@ async function start() {
   );
   assertApprovedCustomServicesAssessmentPaymentReady(
     customServicesAssessmentPaymentComposition,
-    readiness.payments
+    readiness.payments,
+    await customServicesAssessmentSettlement.readiness()
   );
   assertApprovedAlakazamReady(
     alakazamComposition,
@@ -497,6 +510,8 @@ async function start() {
           provider: stripeComposition.adapter,
           canonicalService: service,
           downloadCommerce,
+          assessmentCommerce:
+            customServicesAssessmentSettlement,
           alakazamCommerce
         })
       })

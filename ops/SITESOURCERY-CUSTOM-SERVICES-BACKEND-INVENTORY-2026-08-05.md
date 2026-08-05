@@ -6,23 +6,25 @@ This is the bounded Build-lane inventory for Custom sites and the five approved
 existing-site service lanes. It is an architecture and sequencing document,
 not an implementation or release authorization.
 
-Implementation update: H1A through H1F now occupy actual migrations 34–38:
-foundation, quotes, customer commands, the assessment invoice, and its exact
-automatic-tax Stripe Checkout dispatch. The
+Implementation update: H1A through H1G now occupy actual migrations 34–39:
+foundation, quotes, customer commands, the assessment invoice, its exact
+automatic-tax Stripe Checkout dispatch, provider-confirmed settlement, and one
+bounded assessment job. The
 numbered migration headings below preserve the original inventory and are no
 longer filename assignments. Use `SITESOURCERY-ACTIVE-RUN.md` and the canonical
 roadmap for current sequence and completion state. Checkout now collects the
 billing address and calculates tax at Stripe while Site Sourcery holds the
 immutable `$200` subtotal. Its separate release defaults held, its returned
 Session must preserve the exact invoice purpose, and no raw provider identity
-crosses the browser boundary; verified settlement, jobs/reports, and credit
-remain unfinished.
+crosses the browser boundary. A verified webhook is only a wake-up signal;
+exact read-only Stripe Session, PaymentIntent, captured-Charge, Customer,
+subtotal, tax, total, and metadata evidence precedes one immutable receipt and
+one atomic job open. Findings, report delivery, and credit remain unfinished.
 
-The unfinished Batch 3C Alakazam tier-fulfillment slice is protected. Migration
-`202608040033_alakazam_tier_fulfillment.sql` and every pre-existing worktree
-change must be reviewed and sealed before any migration proposed here is
-created. Nothing in this document authorizes a push, deploy, DNS/provider
-change, provider object, credential read, payment effect, or public promise.
+Batch 3C Alakazam tier fulfillment is sealed in migration 33. H1 migrations
+34–39 remain additive and must not widen or reinterpret that authority.
+Nothing in this document authorizes a push, deploy, DNS/provider change,
+provider object, credential read, payment effect, or public promise.
 
 The governing rule is additive integration with the canonical hosted platform:
 
@@ -60,11 +62,12 @@ The repository already has a strong production-shaped foundation:
 
 The first custom-services commercial spine now exists through an authenticated
 external-site intake, deployment-authorized owner quote operation, exact
-customer acceptance, immutable assessment invoice, and one safely replayable
-automatic-tax Checkout destination. This is not yet a complete sellable
-lifecycle: provider-confirmed settlement, the assessment job and findings,
-report delivery, service credit, client-work checklist/handoff, outside-site
-takeover, recurring management ledger, and the broader owner workbench remain.
+customer acceptance, immutable assessment invoice, safely replayable
+automatic-tax Checkout destination, exact provider-confirmed receipt, and one
+bounded assessment job. This is not yet a complete sellable lifecycle:
+findings, report delivery, service credit, client-work checklist/handoff,
+outside-site takeover, recurring management ledger, and the broader owner
+workbench remain.
 
 The fastest safe route is therefore to reuse the platform primitives and add
 one narrow `service_*` vertical, not to stretch the old Spark commerce tables
@@ -887,12 +890,12 @@ references the first as included at zero additional charge.
    cross-tenant workbench cannot be built on raw service-role access or hidden
    customer memberships. Operator permission, recent reauthentication, MFA,
    bounded commands, and audited reads precede release.
-4. **There is no custom invoice/payment/job authority.** Public copy must stay
-   inquiry-only until provider-confirmed payment, start gates, completion, and
-   handoff agree.
-5. **Batch 3C is unfinished and owns migration 33/shared repository files.** Do
-   not start migration 34 or shared composition until Batch 3C is sealed and
-   its worktree ownership is clear.
+4. **Only the standard assessment has invoice/payment/job authority.** Public
+   copy for every broader Custom service must stay inquiry/quote-only until its
+   own provider-confirmed payment, start gates, completion, and handoff agree.
+5. **Migrations 33–39 are now occupied and sealed in sequence.** New work must
+   remain additive, preserve those contracts, and take the next migration only
+   from a clean reviewed checkpoint.
 
 ### P1 — close before owner/customer staging
 
@@ -923,12 +926,11 @@ references the first as included at zero additional charge.
 
 ## Build-lane handoff to the lead
 
-The first implementation checkpoint should be migration 034 plus its structural
-and two-tenant tests only, after Batch 3C is sealed. The next vertical proof is
-not all five public cards; it is one complete paid standard-assessment journey
-through quote, acceptance, invoice, provider-confirmed payment, bounded
-findings, report delivery, and exact USD 200 build credit. That journey proves
-the shared commercial spine. Rescue, Custom builds, onboarding, management,
+The next implementation checkpoint begins from the proven migration-39 receipt
+and bounded open job. It must complete the paid standard-assessment journey
+through bounded findings, immutable report delivery, and exact USD 200 build
+credit before broadening into all five public cards. That journey proves the
+shared commercial spine. Rescue, Custom builds, onboarding, management,
 email/domain, Website Move, and Local Presence then compose it without creating
 new payment or customer authorities.
 

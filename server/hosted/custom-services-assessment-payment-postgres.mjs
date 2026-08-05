@@ -141,6 +141,25 @@ function validateProvider(value) {
   return value;
 }
 
+function validateReconciliation(value) {
+  if (value === null || value === undefined) return null;
+  invariant(
+    typeof value.reconcileExpiredCheckout === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Assessment Checkout reconciliation is incomplete.",
+    { status: 500 }
+  );
+  return value;
+}
+
+function expiredReady(row) {
+  return Boolean(
+    row?.state === "ready" &&
+      Number.isFinite(Date.parse(row.expires_at)) &&
+      Date.parse(row.expires_at) <= Date.now()
+  );
+}
+
 function exactCheckout(value) {
   exactKeys(
     value,
@@ -432,15 +451,34 @@ function attemptSelect() {
              and attempt.id = $2`;
 }
 
+async function assertInvoiceUnpaid(client, input, invoiceId) {
+  const receipt = await client.query(
+    `select id
+       from ss.service_assessment_payment_receipts
+      where organization_id = $1
+        and invoice_id = $2`,
+    [input.organizationId, invoiceId]
+  );
+  invariant(
+    receipt.rowCount === 0,
+    "ASSESSMENT_INVOICE_ALREADY_PAID",
+    "This assessment invoice is already paid. No payment page will be opened again.",
+    { status: 409 }
+  );
+}
+
 export function createPostgresCustomServicesAssessmentPayment({
   authority,
   provider,
-  release
+  release,
+  reconciliation = null
 } = {}) {
   const database = validateAuthority(authority);
   const paymentProvider = validateProvider(provider);
   const paymentRelease =
     validateCustomServicesAssessmentPaymentRelease(release);
+  const checkoutReconciliation =
+    validateReconciliation(reconciliation);
 
   async function stage(input) {
     const requestDigest = exactRequestDigest(input);
@@ -490,6 +528,14 @@ export function createPostgresCustomServicesAssessmentPayment({
                 "The retained assessment payment response is incomplete.",
                 { status: 503 }
               );
+              await assertInvoiceUnpaid(
+                client,
+                input,
+                existing.rows[0].invoice_id
+              );
+              if (expiredReady(existing.rows[0])) {
+                return { status: "reconcile" };
+              }
               const canonical = response(
                 existing.rows[0],
                 input
@@ -529,6 +575,14 @@ export function createPostgresCustomServicesAssessmentPayment({
               { status: 503 }
             );
             const row = existing.rows[0];
+            await assertInvoiceUnpaid(
+              client,
+              input,
+              row.invoice_id
+            );
+            if (expiredReady(row)) {
+              return { status: "reconcile" };
+            }
             if (row.state === "ready") {
               const result = response(row, input);
               await client.query(
@@ -583,6 +637,7 @@ export function createPostgresCustomServicesAssessmentPayment({
                reservation.provider_effect_certainty
                  as reservation_effect_certainty,
                reservation.invoice_digest as reservation_invoice_digest,
+               receipt.id as payment_receipt_id,
                customer.stripe_customer_id
              from ss.service_invoices invoice
              join ss.service_payment_reservations reservation
@@ -602,6 +657,9 @@ export function createPostgresCustomServicesAssessmentPayment({
               and membership.role in ('owner', 'admin')
              left join ss.stripe_customers customer
                on customer.organization_id = invoice.organization_id
+             left join ss.service_assessment_payment_receipts receipt
+               on receipt.organization_id = invoice.organization_id
+              and receipt.invoice_id = invoice.id
             where invoice.organization_id = $1
               and invoice.project_id = $2
               and invoice.customer_user_id = $3
@@ -620,6 +678,12 @@ export function createPostgresCustomServicesAssessmentPayment({
             { status: 404 }
           );
           const invoice = invoiceResult.rows[0];
+          invariant(
+            invoice.payment_receipt_id === null,
+            "ASSESSMENT_INVOICE_ALREADY_PAID",
+            "This assessment invoice is already paid. No payment page will be opened again.",
+            { status: 409 }
+          );
           invariant(
             invoice.invoice_digest === input.invoiceDigest &&
               invoice.reservation_invoice_digest ===
@@ -664,6 +728,14 @@ export function createPostgresCustomServicesAssessmentPayment({
           );
           if (active.rowCount === 1) {
             const row = active.rows[0];
+            await assertInvoiceUnpaid(
+              client,
+              input,
+              row.invoice_id
+            );
+            if (expiredReady(row)) {
+              return { status: "reconcile" };
+            }
             if (
               row.state === "ready" &&
               Date.parse(iso(row.expires_at, "Checkout expiration")) >
@@ -1010,6 +1082,21 @@ export function createPostgresCustomServicesAssessmentPayment({
       );
       const claim = await stage(input);
       if (claim.status === "replay") return claim.result;
+      if (claim.status === "reconcile") {
+        invariant(
+          checkoutReconciliation,
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED",
+          "The earlier payment page must be reconciled before a replacement opens.",
+          { status: 503 }
+        );
+        await checkoutReconciliation
+          .reconcileExpiredCheckout(value);
+        throw new HostedError(
+          "ASSESSMENT_CHECKOUT_REQUIRES_NEW_COMMAND",
+          "The expired payment page is safely closed. Refresh before opening one replacement.",
+          { status: 409 }
+        );
+      }
 
       let providerReturned = false;
       try {

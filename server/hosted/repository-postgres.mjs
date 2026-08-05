@@ -223,6 +223,18 @@ const READINESS_QUERY = `
       and to_regclass(
         'ss.service_assessment_checkout_attempts'
       ) is not null
+      and to_regclass(
+        'ss.service_assessment_stripe_events'
+      ) is not null
+      and to_regclass(
+        'ss.service_assessment_payment_receipts'
+      ) is not null
+      and to_regclass(
+        'ss.service_assessment_jobs'
+      ) is not null
+      and to_regprocedure(
+        'ss.hosted_runtime_contract_v39()'
+      ) is not null
       as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -369,6 +381,9 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ss.hosted_runtime_contract_v38() =
       'canonical-ss-v38-custom-service-assessment-checkout'
       as custom_service_assessment_checkout_contract_marker_ready,
+    ss.hosted_runtime_contract_v39() =
+      'canonical-ss-v39-custom-service-assessment-settlement'
+      as custom_service_assessment_settlement_contract_marker_ready,
     (
       select count(*) = 1
         and bool_and(relation.relrowsecurity)
@@ -540,6 +555,100 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
              'service_assessment_checkout_one_active'
       )
       as custom_service_assessment_checkout_ready,
+    (
+      select count(*) = 3
+        and bool_and(relation.relrowsecurity)
+        and bool_and(relation.relforcerowsecurity)
+        and bool_and(
+          has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          )
+          and has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          )
+          and has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          ) = (
+            relation.relname =
+              'service_assessment_stripe_events'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'TRUNCATE'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'UPDATE'
+          )
+          and not has_table_privilege(
+            'anon', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'anon', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege(
+            'anon', relation.oid, 'UPDATE'
+          )
+        )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_assessment_stripe_events',
+           'service_assessment_payment_receipts',
+           'service_assessment_jobs'
+         )
+    )
+      and to_regprocedure(
+        'ss.guard_service_assessment_stripe_event()'
+      ) is not null
+      and to_regprocedure(
+        'ss.guard_service_assessment_settlement_insert()'
+      ) is not null
+      and (
+        select count(*) = 6
+          from pg_trigger trigger_record
+          join pg_class trigger_relation
+            on trigger_relation.oid = trigger_record.tgrelid
+          join pg_namespace trigger_namespace
+            on trigger_namespace.oid =
+              trigger_relation.relnamespace
+         where trigger_namespace.nspname = 'ss'
+           and trigger_relation.relname in (
+             'service_assessment_stripe_events',
+             'service_assessment_payment_receipts',
+             'service_assessment_jobs'
+           )
+           and not trigger_record.tgisinternal
+      )
+      and not exists (
+        select 1
+          from pg_constraint constraint_record
+          join pg_class constraint_relation
+            on constraint_relation.oid =
+              constraint_record.conrelid
+          join pg_namespace constraint_namespace
+            on constraint_namespace.oid =
+              constraint_relation.relnamespace
+         where constraint_namespace.nspname = 'ss'
+           and constraint_relation.relname in (
+             'service_assessment_stripe_events',
+             'service_assessment_payment_receipts',
+             'service_assessment_jobs'
+           )
+           and constraint_record.contype = 'f'
+           and constraint_record.confdeltype = 'c'
+      )
+      as custom_service_assessment_settlement_ready,
     (
       select count(*) = 11
         and bool_and(relation.relrowsecurity)
@@ -1136,7 +1245,9 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_customer_commands_contract_marker_ready: false,
           custom_service_invoices_contract_marker_ready: false,
           custom_service_assessment_checkout_contract_marker_ready: false,
+          custom_service_assessment_settlement_contract_marker_ready: false,
           custom_service_assessment_checkout_ready: false,
+          custom_service_assessment_settlement_ready: false,
           custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
@@ -1152,7 +1263,9 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_customer_commands_contract_marker_ready: false,
           custom_service_invoices_contract_marker_ready: false,
           custom_service_assessment_checkout_contract_marker_ready: false,
+          custom_service_assessment_settlement_contract_marker_ready: false,
           custom_service_assessment_checkout_ready: false,
+          custom_service_assessment_settlement_ready: false,
           custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
@@ -1202,7 +1315,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations through custom-service assessment Checkout v38 are required.",
+        : "Canonical PostgreSQL migrations through custom-service assessment settlement v39 are required.",
       { status: 503, details: status }
     );
     return status;

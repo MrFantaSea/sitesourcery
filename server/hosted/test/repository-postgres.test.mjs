@@ -105,6 +105,8 @@ function readyRow(overrides = {}) {
     custom_service_invoices_held_ready: true,
     custom_service_assessment_checkout_contract_marker_ready: true,
     custom_service_assessment_checkout_ready: true,
+    custom_service_assessment_settlement_contract_marker_ready: true,
+    custom_service_assessment_settlement_ready: true,
     custom_service_quotes_security_ready: true,
     custom_service_quotes_retention_ready: true,
     custom_service_quotes_digests_ready: true,
@@ -138,6 +140,19 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   });
   assert.deepEqual((await authority.readiness()).missing, [
     "runtime_contract"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        custom_service_assessment_settlement_contract_marker_ready: false,
+        custom_service_assessment_settlement_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "custom_service_assessment_settlement",
+    "custom_service_assessment_settlement_contract_marker"
   ]);
 
   authority = createCanonicalPostgresAuthority({
@@ -350,6 +365,8 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   assert.deepEqual((await authority.readiness()).missing, [
     "custom_service_assessment_checkout",
     "custom_service_assessment_checkout_contract_marker",
+    "custom_service_assessment_settlement",
+    "custom_service_assessment_settlement_contract_marker",
     "custom_service_customer_commands_contract_marker",
     "custom_service_customer_commands_fences",
     "custom_service_invoices_contract_marker",
@@ -511,6 +528,11 @@ test("production PostgreSQL source contains no aggregate or ss_hosted persistenc
   assert.match(
     source,
     /canonical-ss-v38-custom-service-assessment-checkout/u
+  );
+  assert.match(source, /hosted_runtime_contract_v39/u);
+  assert.match(
+    source,
+    /canonical-ss-v39-custom-service-assessment-settlement/u
   );
   assert.match(source, /authoritySchema: "ss"/u);
 });

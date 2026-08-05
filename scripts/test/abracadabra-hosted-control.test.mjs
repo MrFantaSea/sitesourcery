@@ -155,6 +155,53 @@ test("customer control accepts only exact activation fragments, quotes, and Stri
     "/abracadabra/app/?keep=1#account",
   );
 
+  const assessmentInvoiceId =
+    "8e30fb8b-e4fb-4f84-86eb-16e85f20daf3";
+  assert.deepEqual(
+    customerControl.assessmentCheckoutReturnFromLocation({
+      search:
+        "?checkout=cs_test_assessment_1&assessment_project="
+        + downloadProjectId
+        + "&assessment_invoice="
+        + assessmentInvoiceId,
+    }),
+    {
+      checkoutSessionId: "cs_test_assessment_1",
+      invoiceId: assessmentInvoiceId,
+      projectId: downloadProjectId,
+    },
+  );
+  for (const search of [
+    "?checkout=cs_test_assessment_1&assessment_project="
+      + downloadProjectId,
+    "?checkout=cs_test_assessment_1&assessment_project="
+      + downloadProjectId
+      + "&assessment_invoice=not-an-invoice",
+    "?checkout=cs_test_assessment_1&download_project="
+      + downloadProjectId
+      + "&assessment_project="
+      + downloadProjectId
+      + "&assessment_invoice="
+      + assessmentInvoiceId,
+  ]) {
+    assert.equal(
+      customerControl.assessmentCheckoutReturnFromLocation({ search }),
+      null,
+    );
+  }
+  assert.equal(
+    customerControl.locationWithoutCheckoutReturn({
+      pathname: "/abracadabra/app/",
+      search:
+        "?keep=1&checkout=cs_test_assessment_1&assessment_project="
+        + downloadProjectId
+        + "&assessment_invoice="
+        + assessmentInvoiceId,
+      hash: "#account",
+    }),
+    "/abracadabra/app/?keep=1#account",
+  );
+
   assert.equal(
     customerControl.safeCheckoutDestination({
       checkoutUrl: "https://checkout.stripe.com/c/pay/test",

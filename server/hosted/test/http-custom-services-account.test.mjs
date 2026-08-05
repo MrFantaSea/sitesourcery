@@ -305,7 +305,7 @@ test("assessment request HTTP routes read, save, submit, and withdraw", async ()
 test("assessment invoice HTTP route reads the exact customer project", async () => {
   const calls = [];
   const invoice = {
-    schema: "sitesourcery.custom-services-assessment-invoice/v1",
+    schema: "sitesourcery.custom-services-assessment-invoice/v2",
     state: "tax_calculation_pending"
   };
   const api = createHostedApi(service(), {
@@ -442,11 +442,23 @@ test("production composes custom-services account from canonical project and Pos
   );
   assert.match(
     source,
+    /createPostgresCustomServicesAssessmentSettlement\(\{[\s\S]*authority,[\s\S]*provider:\s*stripeComposition\.adapter,[\s\S]*clock:\s*commerceV2\.clock,[\s\S]*ids:\s*commerceV2\.ids[\s\S]*\}\)/u
+  );
+  assert.match(
+    source,
+    /reconciliation:\s*customServicesAssessmentSettlement/u
+  );
+  assert.match(
+    source,
     /payment:\s*customServicesAssessmentPayment/u
   );
   assert.match(
     source,
-    /assertApprovedCustomServicesAssessmentPaymentReady\([\s\S]*customServicesAssessmentPaymentComposition,[\s\S]*readiness\.payments[\s\S]*\)/u
+    /assertApprovedCustomServicesAssessmentPaymentReady\([\s\S]*customServicesAssessmentPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesAssessmentSettlement\.readiness\(\)[\s\S]*\)/u
+  );
+  assert.match(
+    source,
+    /assessmentCommerce:\s*customServicesAssessmentSettlement/u
   );
   assert.match(
     source,
