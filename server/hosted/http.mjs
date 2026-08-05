@@ -10,6 +10,9 @@ import {
 import {
   createHeldHostedDownloadCommerce
 } from "../commerce-v2/hosted-download.mjs";
+import {
+  createHeldHostedCustomServicesAccount
+} from "./custom-services-account-hosted.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -296,6 +299,7 @@ export function createHostedApi(
     downloadCommerce = null,
     alakazamAccount = null,
     alakazamBilling = null,
+    customServicesAccount = null,
     stripeWebhook = null
   } = {}
 ) {
@@ -341,6 +345,15 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam billing boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesAccountBoundary =
+    customServicesAccount ??
+    createHeldHostedCustomServicesAccount();
+  invariant(
+    typeof customServicesAccountBoundary.getSnapshot === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted custom-services account boundary is invalid.",
     { status: 500 }
   );
   const nextRequestId =
@@ -624,6 +637,24 @@ export function createHostedApi(
           );
           result =
             await alakazamAccountBoundary.getSnapshot(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing custom services.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getSnapshot(
               actor,
               route[0]
             );

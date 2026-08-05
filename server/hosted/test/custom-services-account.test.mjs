@@ -285,6 +285,32 @@ test("draft foundation projects safe website state without inventing submitted f
   }
 });
 
+test("website observation may predate its saved profile but not its latest update", () => {
+  const historicObservation = projectCustomServicesAccount(
+    input({
+      snapshot: snapshot({
+        profile: profile({ observedAt: "2026-08-05T11:59:00.000Z" }),
+        serviceCase: serviceCase()
+      })
+    })
+  );
+  assert.equal(historicObservation.website.updatedAt, PROFILE_UPDATED_AT);
+
+  assertError(
+    () =>
+      projectCustomServicesAccount(
+        input({
+          snapshot: snapshot({
+            profile: profile({ observedAt: "2026-08-05T12:02:00.000Z" }),
+            serviceCase: serviceCase()
+          })
+        })
+      ),
+    "repository_conflict",
+    500
+  );
+});
+
 test("submitted foundation projects bounded customer-stated website and assessment facts", () => {
   const projection = projectCustomServicesAccount(
     input({ snapshot: submittedSnapshot() })

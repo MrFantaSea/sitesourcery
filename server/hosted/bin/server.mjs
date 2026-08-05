@@ -45,6 +45,12 @@ import {
   createPostgresCommerceV2Adapter
 } from "../commerce-v2-postgres.mjs";
 import {
+  createHostedCustomServicesAccount
+} from "../custom-services-account-hosted.mjs";
+import {
+  createPostgresCustomServicesAccountRepository
+} from "../custom-services-account-postgres.mjs";
+import {
   assertApprovedDownloadPaymentReady,
   createConfiguredDownloadPaymentRelease
 } from "../download-payment-config.mjs";
@@ -272,6 +278,15 @@ async function start() {
       }),
       resolveSession: commerceV2.resolveSession
     });
+  const customServicesAccountRepository =
+    createPostgresCustomServicesAccountRepository({
+      authority
+    });
+  const customServicesAccount =
+    createHostedCustomServicesAccount({
+      repository: customServicesAccountRepository,
+      resolveSession: commerceV2.resolveSession
+    });
   const alakazamServicePorts = {
     repository: alakazamRepository,
     provider: stripeComposition.adapter,
@@ -426,6 +441,7 @@ async function start() {
         downloadCommerce,
         alakazamAccount,
         alakazamBilling,
+        customServicesAccount,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,

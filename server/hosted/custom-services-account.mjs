@@ -357,10 +357,7 @@ function exactProfile(value, scope) {
       Date.parse(createdAt) <= Date.parse(updatedAt) &&
       (
         observedAt === null ||
-        (
-          Date.parse(createdAt) <= Date.parse(observedAt) &&
-          Date.parse(observedAt) <= Date.parse(updatedAt)
-        )
+        Date.parse(observedAt) <= Date.parse(updatedAt)
       ),
     "repository_conflict",
     "the customer website profile changed",

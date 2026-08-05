@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import pg from "pg";
+import {
+  createPostgresCustomServicesAccountRepository
+} from "../../hosted/custom-services-account-postgres.mjs";
 
 const { Pool } = pg;
 const DATABASE_URL =
@@ -321,6 +324,41 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
 
     await client.query("set local role service_role");
     const request = await seedCustomerAssessmentRequest(client, customer);
+
+    const accountReadContexts = [];
+    const accountRepository =
+      createPostgresCustomServicesAccountRepository({
+        authority: {
+          async service(context, work) {
+            accountReadContexts.push(structuredClone(context));
+            return work(client);
+          }
+        }
+      });
+    const foundationSnapshot =
+      await accountRepository.readFoundationSnapshot({
+        actorId: customer.userId,
+        customerId: customer.userId,
+        organizationId: customer.organizationId,
+        projectId: customer.projectId
+      });
+    assert.deepEqual(accountReadContexts, [
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId,
+        readOnly: true
+      }
+    ]);
+    assert.equal(foundationSnapshot.account.customerId, customer.userId);
+    assert.equal(foundationSnapshot.profile.origin, "external");
+    assert.equal(foundationSnapshot.serviceCase.state, "submitted");
+    assert.equal(foundationSnapshot.offering.state, "requested");
+    assert.equal(foundationSnapshot.intake.revision, 1);
+    assert.equal(
+      foundationSnapshot.intake.publicHostname,
+      "customer.example.com"
+    );
 
     await expectRejected(
       client,

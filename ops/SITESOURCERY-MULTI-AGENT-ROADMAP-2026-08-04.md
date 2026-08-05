@@ -251,6 +251,9 @@ H1 pre-commerce foundation checkpoint:
   acceptance authority with immutable scope/money/legal digests, current
   profile/intake binding, operator grant/revoke evidence, minimal privileges,
   fresh-PostgreSQL adversarial proof, and no provider effect.
+- [x] Connect one authenticated, project-bound, held-by-default customer read
+  route to the canonical PostgreSQL account, site profile, case, offering, and
+  latest-intake authority; expose no commercial or operator authority.
 - [ ] Add invoice, held payment reservation, tax/provider dispatch,
   settlement, job/report, and one-use `$200` credit migrations and services
   before any payment or public release.
@@ -406,10 +409,11 @@ Lane D/J Polish truth ────────────┘
 | H0 | Polish-lane public audit | Bounded polish worker | one new CHANGE/REMOVE/HOLD/KEEP report | completed and reviewed; no public-copy writes |
 | H1A | Custom-services pre-commerce foundation | Lead plus bounded read-only review and Polish lane | migration 34, exact held assessment policy, actor-bound request state, typed intake, minimal grants, readiness, clean-room PostgreSQL and broad proof | reviewed and sealed locally; payment and release held |
 | H1B | Assessment quote and acceptance authority | Lead plus bounded readiness and customer-projection workers | migration 35, deployment-controlled operator grants, immutable exact `$200` revisions, named scope, account-bound acceptance, clean-room PostgreSQL and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, and release held |
+| H1C | Authenticated custom-services account read | Lead plus bounded PostgreSQL adapter worker | exact customer/project scope, read-only canonical repository, customer-safe projection, same-origin GET, production composition, real PostgreSQL and broad proof | reviewed and sealed locally; writes, commerce, public copy, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, H1A, and H1B are sealed. Continue Lane H1 as one vertical
+Batch 3C, H0, H1A, H1B, and H1C are sealed. Continue Lane H1 as one vertical
 customer outcome: anonymous inquiry/claim + activated account + a
 customer-owned external-site request + exact accepted `$200` assessment quote
 + held invoice/reservation + provider-confirmed payment + job/report delivery

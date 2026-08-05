@@ -25,7 +25,7 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 assessment quote-and-acceptance authority is the latest reviewed
+- The H1 authenticated custom-services account read is the latest reviewed
   local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
@@ -36,13 +36,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Finish H1 from the now-proven request and accepted-quote foundation: connect
-the exact customer account read/request/acceptance boundary, then add one held
-invoice and provider-effect reservation before tax calculation, Checkout,
-provider-confirmed payment, job/report delivery, and one-use `$200` Custom
-base-build credit authority. The Polish lane applies the frozen six-step
-Mac/Pixel matrix in parallel. All payment and public-service release gates
-remain held.
+Finish H1 from the now-proven account read, request, and accepted-quote
+foundation: add exact customer request writes plus customer-safe quote review
+and acceptance commands, then one held invoice and provider-effect reservation
+before tax calculation, Checkout, provider-confirmed payment, job/report
+delivery, and one-use `$200` Custom base-build credit authority. The Polish
+lane applies the frozen six-step Mac/Pixel matrix in parallel. All payment and
+public-service release gates remain held.
 
 ## Completed and reviewed
 
@@ -697,25 +697,61 @@ Batch 3C sealed checkpoint gates:
   or release mutation occurred. The July 22 production fallback remains
   untouched.
 
+## H1 customer account read sealed checkpoint evidence
+
+- The production hosted service now composes one canonical PostgreSQL
+  custom-services account repository and one authenticated account boundary.
+  `GET /api/v1/projects/{projectId}/custom-services` resolves the signed-in
+  actor and selected project through the existing session authority; the
+  default boundary remains explicitly held with no latent database read.
+- The repository uses one exact customer-bound read-only transaction and reads
+  only the canonical active account, organization, membership, project, exact
+  held assessment policy, customer-owned website profile, current service case,
+  requested offering, and latest intake. Every profile, case, offering, and
+  intake query repeats the exact customer identity instead of relying only on
+  organization or project binding.
+- The customer projector remains the sole schema, chronology, safe-text, and
+  cross-binding validator. Its response contains no internal IDs, policy or
+  legal digests, operator/provider authority, money, invoice, payment, job,
+  report, credit, or credential-shaped text. Customer writes, quote display,
+  and quote acceptance remain held by this read-only slice.
+- Real PostgreSQL proof caught and repaired a false chronology assumption:
+  a website observation may legitimately predate the database row created when
+  the customer later saves it, but it still cannot postdate the row's latest
+  update. Maintained tests cover both the accepted and rejected chronology.
+- Focused account, repository, boundary, and HTTP proof passes 45/45. The
+  migration-34 foundation journey and migration-35 quote journey each pass
+  against the same clean 35-migration PostgreSQL database; the quote journey
+  now also exercises the real account repository over the seeded customer
+  request.
+- Authoritative Node 24 regressions pass: core 487/487; hosted service 204 pass
+  with 2 intentional environment skips; runtime and changed hosted-source
+  syntax pass; `git diff --check` is clean.
+- Disposable database `ss_h1_account_20260805_codex1` had zero active sessions,
+  was dropped by exact name, and is verified absent. No customer or production
+  data was touched.
+- No worker remains open. No push, deployment, DNS change, provider effect,
+  credential, public copy, or release mutation occurred. The July 22 production
+  fallback remains untouched.
+
 ## Live resources and workers
 
-- The bounded H1 customer-account PostgreSQL snapshot worker is active only in
-  two new hosted adapter/test files. It owns no migration, route, shared
-  repository, public UI, provider, or release file.
-- No Batch 3C, H0, quote-readiness, or quote-proof worker remains running. The
-  exact Batch 3C and H1 disposable PostgreSQL databases are absent.
+- No H1 customer-account, Batch 3C, H0, quote-readiness, or quote-proof worker
+  remains running. The exact Batch 3C and H1 disposable PostgreSQL databases
+  are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Review and connect the bounded customer-account PostgreSQL snapshot, then add
-the exact same-origin read/request/quote/acceptance service boundary. The next
-database authority is one held invoice plus one non-dispatchable payment
-reservation. Do not call Stripe, claim tax is zero, mark an invoice payable,
-open public copy, or begin a job until the later tax, dispatch, settlement,
-report, credit, owner-operation, replay, fresh-PostgreSQL, and responsive
-browser gates are connected.
+Extend the authenticated custom-services account surface with bounded customer
+request writes, current customer-safe quote projection, and exact accepted-
+digest acceptance commands. Keep operator quote authoring out of the customer
+browser. After that boundary is proven, the next database authority is one held
+invoice plus one non-dispatchable payment reservation. Do not call Stripe,
+claim tax is zero, mark an invoice payable, open public copy, or begin a job
+until the later tax, dispatch, settlement, report, credit, owner-operation,
+replay, fresh-PostgreSQL, and responsive browser gates are connected.
 
 ## Batch 3B write scope
 
