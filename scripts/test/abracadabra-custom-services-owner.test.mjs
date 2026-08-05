@@ -6,6 +6,8 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const {
   ownerReviewTargets,
+  safeCheckoutDestination,
+  verifiedAssessmentCheckout,
   verifiedAssessmentInvoice,
   verifiedOwnerAssessmentQueue
 } = require(
@@ -162,10 +164,12 @@ test("owner quote desk stays private and exposes only the bounded quote controls
   );
 });
 
-test("customer held invoice accepts only exact no-charge truth", () => {
-  const invoice = {
+function assessmentInvoiceProjection(checkoutAvailable = false) {
+  return {
     schema: "sitesourcery.custom-services-assessment-invoice/v1",
-    state: "tax_calculation_pending",
+    state: checkoutAvailable
+      ? "checkout_available"
+      : "tax_calculation_pending",
     invoice: {
       invoiceId: "60000000-0000-4000-8000-000000000001",
       invoiceNumber: "SSA-60000000000040008000000000000001",
@@ -198,10 +202,12 @@ test("customer held invoice accepts only exact no-charge truth", () => {
         formatted: null
       },
       payment: {
-        state: "held",
-        checkoutAvailable: false,
+        state: checkoutAvailable ? "checkout_available" : "held",
+        checkoutAvailable,
         chargeOccurred: false,
-        message: "No payment has been requested and no charge occurred."
+        message: checkoutAvailable
+          ? "Secure checkout is available. No charge occurred."
+          : "No payment has been requested and no charge occurred."
       },
       invoiceDigest: "a".repeat(64),
       issuedAt: "2026-08-05T12:00:00.000Z",
@@ -209,21 +215,162 @@ test("customer held invoice accepts only exact no-charge truth", () => {
     },
     actions: {
       checkout: {
-        available: false,
-        reason: "tax_calculation_required",
-        message: "Secure payment opens only after the exact tax and total are recorded."
+        available: checkoutAvailable,
+        reason: checkoutAvailable
+          ? null
+          : "checkout_not_available",
+        message: checkoutAvailable
+          ? "Tax and the exact total are shown by Stripe before payment."
+          : "Secure payment is not available yet."
       }
     }
   };
-  assert.equal(verifiedAssessmentInvoice(invoice), invoice);
+}
+
+function assessmentCheckoutResponse(invoice) {
+  return {
+    schema:
+      "sitesourcery.custom-services-assessment-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId: invoice.invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      url: "https://checkout.stripe.com/c/pay/assessment_test",
+      expiresAt: "2026-08-05T18:00:00.000Z",
+      subtotal: {
+        amountMinor: 20000,
+        currency: "USD",
+        formatted: "$200.00"
+      },
+      tax: {
+        state: "calculated_at_checkout",
+        amountMinor: null
+      },
+      total: {
+        state: "shown_at_checkout",
+        amountMinor: null,
+        currency: "USD"
+      },
+      chargeOccurred: false
+    }
+  };
+}
+
+test("customer assessment invoice accepts held and checkout-available no-charge truth", () => {
+  const held = assessmentInvoiceProjection();
+  const available = assessmentInvoiceProjection(true);
+  assert.equal(verifiedAssessmentInvoice(held), held);
+  assert.equal(verifiedAssessmentInvoice(available), available);
   assert.equal(
     verifiedAssessmentInvoice({
-      ...invoice,
+      ...available,
       invoice: {
-        ...invoice.invoice,
-        payment: { ...invoice.invoice.payment, chargeOccurred: true }
+        ...available.invoice,
+        payment: {
+          ...available.invoice.payment,
+          chargeOccurred: true
+        }
       }
     }),
     null
+  );
+  assert.equal(
+    verifiedAssessmentInvoice({
+      ...available,
+      actions: {
+        checkout: {
+          ...available.actions.checkout,
+          available: false
+        }
+      }
+    }),
+    null
+  );
+});
+
+test("assessment checkout accepts only the exact live invoice and Stripe destination", () => {
+  const invoice = assessmentInvoiceProjection(true).invoice;
+  const checkout = assessmentCheckoutResponse(invoice);
+  assert.deepEqual(
+    verifiedAssessmentCheckout(
+      checkout,
+      invoice,
+      "2026-08-05T17:00:00.000Z"
+    ),
+    checkout
+  );
+  assert.equal(
+    safeCheckoutDestination(checkout),
+    checkout.checkout.url
+  );
+  assert.equal(
+    verifiedAssessmentCheckout(
+      { ...checkout, unexpected: true },
+      invoice,
+      "2026-08-05T17:00:00.000Z"
+    ),
+    null
+  );
+  assert.equal(
+    verifiedAssessmentCheckout(
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          checkoutSessionId: "cs_test_must_stay_server_side"
+        }
+      },
+      invoice,
+      "2026-08-05T17:00:00.000Z"
+    ),
+    null
+  );
+  assert.equal(
+    verifiedAssessmentCheckout(
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          url: "https://checkout.stripe.com.evil.test/c/pay/fake"
+        }
+      },
+      invoice,
+      "2026-08-05T17:00:00.000Z"
+    ),
+    null
+  );
+  assert.equal(
+    verifiedAssessmentCheckout(
+      checkout,
+      { ...invoice, invoiceId: CASE_ID },
+      "2026-08-05T17:00:00.000Z"
+    ),
+    null
+  );
+});
+
+test("customer assessment invoice offers secure checkout with pre-payment tax truth", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  for (const copy of [
+    "Pay secure $200 assessment invoice",
+    "Stripe will show tax, if applicable, and the exact total before you confirm payment.",
+    "Work begins only after Site Sourcery verifies payment."
+  ]) {
+    assert.ok(source.includes(copy), copy);
+  }
+  assert.ok(
+    source.includes("createCustomServicesAssessmentCheckout")
+  );
+  assert.equal(
+    source.includes(
+      "Secure payment will open only after the exact tax and total are recorded."
+    ),
+    false
   );
 });

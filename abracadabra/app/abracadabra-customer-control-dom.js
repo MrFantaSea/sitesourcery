@@ -2140,14 +2140,20 @@
   }
 
   function verifiedAssessmentInvoice(value) {
+    var checkoutAvailable = record(value)
+      && value.state === "checkout_available";
     if (
       !record(value)
       || value.schema !==
         "sitesourcery.custom-services-assessment-invoice/v1"
-      || !["not_available", "tax_calculation_pending"].includes(value.state)
+      || ![
+        "not_available",
+        "tax_calculation_pending",
+        "checkout_available"
+      ].includes(value.state)
       || !record(value.actions)
       || !record(value.actions.checkout)
-      || value.actions.checkout.available !== false
+      || value.actions.checkout.available !== checkoutAvailable
     ) return null;
     if (value.state === "not_available") {
       return value.invoice === null ? value : null;
@@ -2171,15 +2177,78 @@
       || !record(invoice.total)
       || invoice.total.state !== "pending_tax"
       || invoice.total.amountMinor !== null
+      || invoice.total.currency !== "USD"
+      || invoice.total.formatted !== null
       || !record(invoice.payment)
-      || invoice.payment.state !== "held"
-      || invoice.payment.checkoutAvailable !== false
+      || invoice.payment.state !== (
+        checkoutAvailable ? "checkout_available" : "held"
+      )
+      || invoice.payment.checkoutAvailable !== checkoutAvailable
       || invoice.payment.chargeOccurred !== false
       || !SHA256.test(text(invoice.invoiceDigest))
       || !safeIso(invoice.issuedAt)
       || !safeIso(invoice.createdAt)
     ) return null;
     return value;
+  }
+
+  function verifiedAssessmentCheckout(
+    value,
+    expectedInvoice,
+    observedAt
+  ) {
+    var checkout = value && value.checkout;
+    var observed = safeIso(observedAt)
+      ? Date.parse(observedAt)
+      : Date.now();
+    var destination = safeCheckoutDestination(value);
+    if (
+      !exactKeys(value, ["checkout", "schema", "state"])
+      || value.schema !==
+        "sitesourcery.custom-services-assessment-checkout/v1"
+      || value.state !== "ready"
+      || !record(expectedInvoice)
+      || !exactKeys(
+        checkout,
+        [
+          "chargeOccurred",
+          "expiresAt",
+          "invoiceId",
+          "invoiceNumber",
+          "subtotal",
+          "tax",
+          "total",
+          "url"
+        ]
+      )
+      || checkout.invoiceId !== expectedInvoice.invoiceId
+      || checkout.invoiceNumber !== expectedInvoice.invoiceNumber
+      || !UUID.test(text(checkout.invoiceId))
+      || !/^SSA-[0-9A-F]{32}$/u.test(text(checkout.invoiceNumber))
+      || !safeIso(checkout.expiresAt)
+      || Date.parse(checkout.expiresAt) <= observed
+      || !destination
+      || destination !== checkout.url
+      || !exactKeys(
+        checkout.subtotal,
+        ["amountMinor", "currency", "formatted"]
+      )
+      || checkout.subtotal.amountMinor !== 20000
+      || checkout.subtotal.currency !== "USD"
+      || checkout.subtotal.formatted !== "$200.00"
+      || !exactKeys(checkout.tax, ["amountMinor", "state"])
+      || checkout.tax.state !== "calculated_at_checkout"
+      || checkout.tax.amountMinor !== null
+      || !exactKeys(
+        checkout.total,
+        ["amountMinor", "currency", "state"]
+      )
+      || checkout.total.state !== "shown_at_checkout"
+      || checkout.total.amountMinor !== null
+      || checkout.total.currency !== "USD"
+      || checkout.chargeOccurred !== false
+    ) return null;
+    return clone(value);
   }
 
   function assessmentField(
@@ -2529,7 +2598,7 @@
         documentRef,
         facts,
         "Tax",
-        "Calculated later on the separate invoice, if applicable"
+        "Shown by Stripe at secure checkout, if applicable"
       );
       section.appendChild(facts);
       if (quoteState.state === "review_required") {
@@ -2582,9 +2651,12 @@
       body.appendChild(section);
     }
 
-    function renderInvoice(invoiceState) {
+    function renderInvoice(invoiceState, busy) {
       if (!invoiceState || invoiceState.state === "not_available") return;
       var invoice = invoiceState.invoice;
+      var checkoutAvailable =
+        invoiceState.state === "checkout_available"
+        && invoiceState.actions.checkout.available === true;
       var section = accountElement(
         documentRef,
         "section",
@@ -2600,18 +2672,51 @@
       );
       var facts = accountElement(documentRef, "dl", "");
       appendAccountFact(documentRef, facts, "Assessment", "$200.00 USD");
-      appendAccountFact(documentRef, facts, "Tax", "Calculation pending");
-      appendAccountFact(documentRef, facts, "Total", "Waiting for exact tax");
-      appendAccountFact(documentRef, facts, "Payment", "Not open");
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        "Shown by Stripe at secure checkout, if applicable"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Total",
+        "Shown by Stripe before payment"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Payment",
+        checkoutAvailable ? "Secure checkout available" : "Not open"
+      );
       section.append(
         facts,
         accountElement(
           documentRef,
           "p",
           "customer-assessment-note",
-          "No payment has been requested and no charge occurred. Secure payment will open only after the exact tax and total are recorded."
+          checkoutAvailable
+            ? "Stripe will show tax, if applicable, and the exact total before you confirm payment. Work begins only after Site Sourcery verifies payment."
+            : "Secure payment is not available yet, and nothing has been charged. When checkout opens, Stripe will show tax, if applicable, and the exact total before payment."
         )
       );
+      if (checkoutAvailable) {
+        var checkout = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary customer-assessment-checkout",
+          "Pay secure $200 assessment invoice"
+        );
+        checkout.type = "button";
+        checkout.disabled = busy;
+        checkout.addEventListener("click", function () {
+          if (typeof actions.checkout === "function") {
+            actions.checkout(invoiceState);
+          }
+        });
+        section.appendChild(checkout);
+      }
       body.appendChild(section);
     }
 
@@ -2704,7 +2809,7 @@
           body.appendChild(withdraw);
         }
         renderQuote(quote, busy);
-        renderInvoice(invoice);
+        renderInvoice(invoice, busy);
       }
     });
   }
@@ -3636,6 +3741,12 @@
       command: "",
       error: ""
     };
+    var assessmentCheckoutAttempt = {
+      projectId: "",
+      invoiceId: "",
+      invoiceDigest: "",
+      commandId: ""
+    };
     var ownerQuoteRead = {
       accountId: "",
       phase: "idle",
@@ -3779,6 +3890,9 @@
                   );
               }
             );
+          },
+          checkout: function (invoiceState) {
+            requestAssessmentCheckout(invoiceState);
           }
         }
       );
@@ -4120,6 +4234,134 @@
           assessmentPanel.focusStatus();
           return null;
         });
+    }
+
+    function assessmentCheckoutCommandId(projectId, invoice) {
+      if (
+        assessmentCheckoutAttempt.projectId === projectId
+        && assessmentCheckoutAttempt.invoiceId === invoice.invoiceId
+        && assessmentCheckoutAttempt.invoiceDigest === invoice.invoiceDigest
+        && UUID.test(text(assessmentCheckoutAttempt.commandId))
+      ) return assessmentCheckoutAttempt.commandId;
+      var cryptoObject = windowRef.crypto;
+      var commandId = cryptoObject
+        && typeof cryptoObject.randomUUID === "function"
+        ? cryptoObject.randomUUID()
+        : "";
+      if (!UUID.test(text(commandId))) {
+        throw new Error(
+          "This browser cannot safely identify the assessment payment request. Update it and try again."
+        );
+      }
+      assessmentCheckoutAttempt = {
+        projectId: projectId,
+        invoiceId: invoice.invoiceId,
+        invoiceDigest: invoice.invoiceDigest,
+        commandId: commandId
+      };
+      return commandId;
+    }
+
+    function requestAssessmentCheckout(invoiceState) {
+      var projectId = idOf(lastState && lastState.project);
+      var selected = verifiedAssessmentInvoice(invoiceState);
+      var current = verifiedAssessmentInvoice(assessmentRead.invoice);
+      if (
+        !projectId
+        || assessmentRead.phase !== "ready"
+        || !selected
+        || selected.state !== "checkout_available"
+        || !current
+        || current.state !== "checkout_available"
+        || selected.invoice.invoiceId !== current.invoice.invoiceId
+        || selected.invoice.invoiceDigest !== current.invoice.invoiceDigest
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        if (
+          typeof client.createCustomServicesAssessmentCheckout
+            !== "function"
+        ) {
+          throw new Error(
+            "Assessment payment is unavailable in this build."
+          );
+        }
+        commandId = assessmentCheckoutCommandId(
+          projectId,
+          selected.invoice
+        );
+      } catch (error) {
+        assessmentRead = Object.assign({}, assessmentRead, {
+          command: "",
+          error: explain(
+            error,
+            "Secure assessment payment could not start."
+          )
+        });
+        renderAssessmentPanel();
+        assessmentPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      var sequence = assessmentReadSequence;
+      assessmentRead = Object.assign({}, assessmentRead, {
+        command: "opening secure payment",
+        error: ""
+      });
+      renderAssessmentPanel();
+      return client.createCustomServicesAssessmentCheckout(
+        projectId,
+        selected.invoice.invoiceId,
+        { invoiceDigest: selected.invoice.invoiceDigest },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (!assessmentReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        var checkout = verifiedAssessmentCheckout(
+          result,
+          selected.invoice,
+          new Date().toISOString()
+        );
+        var destination = safeCheckoutDestination(checkout);
+        if (!checkout || !destination) {
+          throw new Error(
+            "The secure assessment payment destination could not be verified."
+          );
+        }
+        windowRef.location.assign(destination);
+        return checkout;
+      }).catch(function (error) {
+        if (!assessmentReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        if (
+          [
+            "ASSESSMENT_PAYMENT_UNAVAILABLE",
+            "ASSESSMENT_CHECKOUT_REQUIRES_NEW_COMMAND"
+          ].includes(text(error && error.code))
+          && assessmentCheckoutAttempt.projectId === projectId
+          && assessmentCheckoutAttempt.invoiceId ===
+            selected.invoice.invoiceId
+          && assessmentCheckoutAttempt.commandId === commandId
+        ) {
+          assessmentCheckoutAttempt = {
+            projectId: "",
+            invoiceId: "",
+            invoiceDigest: "",
+            commandId: ""
+          };
+        }
+        assessmentRead = Object.assign({}, assessmentRead, {
+          command: "",
+          error: explain(
+            error,
+            "Secure assessment payment could not open. The same request can be tried safely."
+          )
+        });
+        renderAssessmentPanel();
+        assessmentPanel.focusStatus();
+        return null;
+      });
     }
 
     function renderAssessmentAccount(state) {
@@ -6158,6 +6400,8 @@
       expectedAlakazamQuoteChange,
     verifiedAlakazamQuote:
       verifiedAlakazamQuote,
+    verifiedAssessmentCheckout:
+      verifiedAssessmentCheckout,
     verifiedAssessmentInvoice:
       verifiedAssessmentInvoice,
     versionLabel: versionLabel,

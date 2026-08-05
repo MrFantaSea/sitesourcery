@@ -253,6 +253,50 @@ function downloadMetadata(purpose = downloadPurpose()) {
   };
 }
 
+function serviceAssessmentPurpose(overrides = {}) {
+  return {
+    schema:
+      "sitesourcery.custom-services-assessment-checkout-purpose/v1",
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    invoiceId:
+      "60000000-0000-4000-8000-000000000001",
+    invoiceNumber:
+      "SSA-60000000000040008000000000000001",
+    quoteId:
+      "50000000-0000-4000-8000-000000000001",
+    acceptedDisclosureDigest: "e".repeat(64),
+    invoiceDigest: "f".repeat(64),
+    price: {
+      amountMinor: 20000,
+      currency: "USD",
+      billing: "one_time",
+      taxBehavior: "automatic_exclusive"
+    },
+    ...overrides
+  };
+}
+
+function serviceAssessmentRequest(overrides = {}) {
+  const purpose = serviceAssessmentPurpose(
+    overrides.purpose
+  );
+  return {
+    idempotencyKey: "assessment:checkout-command-1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
 function alakazamCurrent({
   tierId = "alakazam_25",
   stripePriceId = ALAKAZAM_PRICE_IDS[tierId]
@@ -568,14 +612,31 @@ function fakeStripe({
               structuredClone(requestOptions)
           });
           if (checkoutError) throw checkoutError;
-          return (
-            checkoutResponse ?? {
-              id: "cs_test_checkout_1",
-              url: "https://checkout.stripe.com/c/pay/test_1",
-              expires_at: 1785241800,
-              livemode: false
-            }
-          );
+          const selectedCheckoutResponse =
+            typeof checkoutResponse === "function"
+              ? checkoutResponse(params)
+              : checkoutResponse;
+          return structuredClone({
+            client_reference_id:
+              params.client_reference_id ?? null,
+            metadata: params.metadata ?? {},
+            mode: params.mode,
+            currency:
+              params.line_items?.[0]?.price_data?.currency ??
+              null,
+            amount_subtotal:
+              params.line_items?.[0]?.price_data?.unit_amount ??
+              null,
+            automatic_tax:
+              params.automatic_tax ?? { enabled: false },
+            status: "open",
+            payment_status: "unpaid",
+            id: "cs_test_checkout_1",
+            url: "https://checkout.stripe.com/c/pay/test_1",
+            expires_at: 1785241800,
+            livemode: false,
+            ...(selectedCheckoutResponse ?? {})
+          });
         },
         async retrieve(id, params) {
           calls.checkoutReads.push({
@@ -1327,6 +1388,7 @@ test("held mode exposes every operation but cannot perform a provider effect", a
   });
   for (const operation of [
     "createCheckout",
+    "createServiceAssessmentCheckout",
     "createAlakazamCustomer",
     "retrieveAlakazamCustomer",
     "createAlakazamStartCheckout",
@@ -2512,6 +2574,143 @@ test("one-time Download reuses the account's bound Stripe Customer", async () =>
     undefined
   );
   assert.equal(params.customer_update, undefined);
+});
+
+test("assessment invoice creates one exact automatic-tax $200 Checkout", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const { adapter, calls } = adapterFixture({ config });
+  const request = serviceAssessmentRequest();
+  const result =
+    await adapter.createServiceAssessmentCheckout(request);
+  assert.deepEqual(result, {
+    checkoutId: "cs_test_checkout_1",
+    url: "https://checkout.stripe.com/c/pay/test_1",
+    expiresAt: "2026-07-28T12:30:00.000Z"
+  });
+  assert.equal(calls.checkouts.length, 1);
+  const [{ params, requestOptions }] = calls.checkouts;
+  assert.equal(params.mode, "payment");
+  assert.deepEqual(params.line_items, [
+    {
+      price_data: {
+        currency: "usd",
+        unit_amount: 20000,
+        tax_behavior: "exclusive",
+        product_data: {
+          name: "Site Sourcery website assessment"
+        }
+      },
+      quantity: 1
+    }
+  ]);
+  assert.equal(params.automatic_tax.enabled, true);
+  assert.equal(params.billing_address_collection, "required");
+  assert.equal(params.customer_creation, "always");
+  assert.equal(
+    params.client_reference_id,
+    request.purpose.invoiceId
+  );
+  assert.equal(
+    params.success_url,
+    config.successUrl
+      + "&assessment_project="
+      + encodeURIComponent(request.purpose.projectId)
+      + "&assessment_invoice="
+      + encodeURIComponent(request.purpose.invoiceId)
+  );
+  assert.deepEqual(
+    params.payment_intent_data.metadata,
+    params.metadata
+  );
+  assert.equal(
+    params.metadata.invoice_digest,
+    request.purpose.invoiceDigest
+  );
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:service_assessment_checkout:[a-f0-9]{64}$/u
+  );
+});
+
+test("assessment Checkout rejects changed price and disabled automatic tax before Stripe", async () => {
+  let fixture = adapterFixture({
+    config: configuration({ taxMode: "automatic" })
+  });
+  await assert.rejects(
+    fixture.adapter.createServiceAssessmentCheckout(
+      serviceAssessmentRequest({
+        purpose: {
+          price: {
+            amountMinor: 19999,
+            currency: "USD",
+            billing: "one_time",
+            taxBehavior: "automatic_exclusive"
+          }
+        }
+      })
+    ),
+    (error) =>
+      error.code ===
+        "stripe_service_assessment_checkout_invalid" &&
+      error.certainty === "not_submitted"
+  );
+  assert.equal(fixture.calls.checkouts.length, 0);
+
+  fixture = adapterFixture();
+  await assert.rejects(
+    fixture.adapter.createServiceAssessmentCheckout(
+      serviceAssessmentRequest()
+    ),
+    (error) =>
+      error.code ===
+        "stripe_service_assessment_tax_required" &&
+      error.certainty === "not_submitted"
+  );
+  assert.equal(fixture.calls.checkouts.length, 0);
+});
+
+test("assessment Checkout treats every wrong-but-valid Stripe Session as ambiguous", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const drifts = [
+    () => ({
+      client_reference_id:
+        "60000000-0000-4000-8000-000000000099"
+    }),
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        purpose_digest: "0".repeat(64)
+      }
+    }),
+    () => ({ mode: "subscription" }),
+    () => ({ currency: "eur" }),
+    () => ({ amount_subtotal: 19999 }),
+    () => ({ automatic_tax: { enabled: false } }),
+    () => ({ status: "complete" }),
+    () => ({ payment_status: "paid" }),
+    () => ({
+      url: "https://checkout.stripe.com:444/c/pay/unsafe"
+    })
+  ];
+  for (const drift of drifts) {
+    const fake = fakeStripe({
+      config,
+      checkoutResponse: drift
+    });
+    const fixture = adapterFixture({ config, fake });
+    await assert.rejects(
+      fixture.adapter.createServiceAssessmentCheckout(
+        serviceAssessmentRequest()
+      ),
+      (error) =>
+        [
+          "stripe_checkout_response_invalid",
+          "stripe_service_assessment_checkout_response_invalid"
+        ].includes(error.code) &&
+        error.certainty === "ambiguous"
+    );
+    assert.equal(fixture.calls.checkouts.length, 1);
+  }
 });
 
 test("Download Checkout rejects changed money and purpose before Stripe", async () => {

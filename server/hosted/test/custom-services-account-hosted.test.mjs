@@ -52,6 +52,7 @@ function foundationSnapshot() {
 
 function context({ scope, snapshot } = {}) {
   const calls = {
+    checkout: [],
     invoiceRead: [],
     quoteAcceptance: [],
     quoteRead: [],
@@ -77,6 +78,16 @@ function context({ scope, snapshot } = {}) {
               message: "Accept the current assessment quote before an invoice exists."
             }
           }
+        };
+      }
+    },
+    payment: {
+      async createCheckout(value) {
+        calls.checkout.push(structuredClone(value));
+        return {
+          schema:
+            "sitesourcery.custom-services-assessment-checkout/v1",
+          state: "ready"
         };
       }
     },
@@ -328,6 +339,33 @@ test("hosted custom-services invoice read stays bound to the resolved customer p
   ]);
 });
 
+test("hosted assessment checkout sends only resolved customer and invoice authority", async () => {
+  const selected = context();
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000001";
+  const result = await selected.service.createAssessmentCheckout(
+    actor(),
+    PROJECT_ID,
+    invoiceId,
+    {
+      commandId: "assessment-checkout-command-1",
+      invoiceDigest: "c".repeat(64)
+    }
+  );
+  assert.equal(result.state, "ready");
+  assert.deepEqual(selected.calls.checkout, [
+    {
+      actorId: CUSTOMER_ID,
+      customerId: CUSTOMER_ID,
+      organizationId: ORGANIZATION_ID,
+      projectId: PROJECT_ID,
+      commandId: "assessment-checkout-command-1",
+      invoiceDigest: "c".repeat(64),
+      invoiceId
+    }
+  ]);
+});
+
 test("hosted custom-services quote read and acceptance stay bound to the resolved customer project", async () => {
   const selected = context();
   const quote = await selected.service.getAssessmentQuote(
@@ -435,6 +473,10 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.getAssessmentInvoice(actor(), PROJECT_ID),
     isError("CUSTOM_SERVICES_INVOICE_HELD", 503)
+  );
+  await assert.rejects(
+    held.createAssessmentCheckout(actor(), PROJECT_ID, OTHER_ID, {}),
+    isError("CUSTOM_SERVICES_PAYMENT_HELD", 503)
   );
   await assert.rejects(
     held.acceptAssessmentQuote(actor(), PROJECT_ID, {}),

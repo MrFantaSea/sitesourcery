@@ -1287,3 +1287,41 @@ test("custom-service held invoices materialize exact accepted assessment truth",
     /on delete cascade|grant all privileges|checkout_session|provider_checkout_url/iu
   );
 });
+
+test("custom-service assessment Checkout reserves one exact automatic-tax payment page", async () => {
+  const all = await migrations();
+  const checkout = all.find(
+    ({ name }) =>
+      name ===
+        "202608050038_custom_service_assessment_checkout.sql"
+  );
+  assert.ok(checkout);
+  assert.match(
+    checkout.sql,
+    /create table ss\.service_assessment_checkout_attempts \([\s\S]*expected_subtotal_minor bigint not null[\s\S]*check \(expected_subtotal_minor = 20000\)[\s\S]*tax_mode text not null check \(tax_mode = 'automatic'\)[\s\S]*checkout_session_id text unique/iu
+  );
+  assert.match(
+    checkout.sql,
+    /create unique index service_assessment_checkout_one_active[\s\S]*where state in \('provider_pending', 'ready', 'persistence_unknown'\)/iu
+  );
+  assert.match(
+    checkout.sql,
+    /create function ss\.guard_service_assessment_checkout_attempt\(\)[\s\S]*current_service_actor_kind\(\)[\s\S]*assessment Checkout requires one exact held invoice/iu
+  );
+  assert.match(
+    checkout.sql,
+    /grant select, insert, update[\s\S]*service_assessment_checkout_attempts[\s\S]*to service_role/iu
+  );
+  assert.match(
+    checkout.sql,
+    /has_table_privilege\([\s\S]*'authenticated'[\s\S]*'INSERT'[\s\S]*'authenticated'[\s\S]*'UPDATE'[\s\S]*'authenticated'[\s\S]*'DELETE'[\s\S]*'authenticated'[\s\S]*'TRUNCATE'[\s\S]*'anon'[\s\S]*'INSERT'[\s\S]*'anon'[\s\S]*'UPDATE'[\s\S]*'anon'[\s\S]*'DELETE'[\s\S]*'anon'[\s\S]*'TRUNCATE'/iu
+  );
+  assert.match(
+    checkout.sql,
+    /create function ss\.hosted_runtime_contract_v38\(\)[\s\S]*canonical-ss-v38-custom-service-assessment-checkout/iu
+  );
+  assert.doesNotMatch(
+    checkout.sql,
+    /on delete cascade|grant all privileges/iu
+  );
+});

@@ -584,6 +584,33 @@
       );
     }
 
+    function createCustomServicesAssessmentCheckout(
+      projectId,
+      invoiceId,
+      input,
+      requestOptions
+    ) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-invoices/"
+          + segment(invoiceId, "Assessment invoice ID")
+          + "/checkout-command",
+        {
+          body: {
+            invoiceDigest: requiredDigest(
+              source.invoiceDigest,
+              "Assessment invoice digest"
+            )
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function acceptCustomServicesAssessmentQuote(projectId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       return request(
@@ -1339,6 +1366,8 @@
         getCustomServicesAssessmentQuote,
       getCustomServicesAssessmentInvoice:
         getCustomServicesAssessmentInvoice,
+      createCustomServicesAssessmentCheckout:
+        createCustomServicesAssessmentCheckout,
       acceptCustomServicesAssessmentQuote:
         acceptCustomServicesAssessmentQuote,
       listOwnerAssessmentRequests:

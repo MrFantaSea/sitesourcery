@@ -1,4 +1,7 @@
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
+import {
+  validateCustomServicesAssessmentPaymentRelease
+} from "./custom-services-assessment-payment-config.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 
 export const CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA =
@@ -111,7 +114,7 @@ function amount(value, field) {
   return selected;
 }
 
-function project(row, input) {
+function project(row, input, paymentRelease) {
   if (!row) {
     return deepFreeze({
       schema: CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA,
@@ -134,6 +137,10 @@ function project(row, input) {
       "accepted_disclosure_digest",
       "accepted_quote_digest",
       "charge_occurred",
+      "checkout_attempt_state",
+      "checkout_expires_at",
+      "checkout_provider_effect_certainty",
+      "checkout_session_id",
       "component_key",
       "created_at",
       "currency",
@@ -189,6 +196,16 @@ function project(row, input) {
       row.provider_effect_certainty === "not_submitted" &&
       row.expected_tax_minor === null &&
       row.expected_total_minor === null &&
+      (
+        row.checkout_attempt_state === null ||
+        [
+          "provider_pending",
+          "ready",
+          "failed",
+          "persistence_unknown",
+          "expired"
+        ].includes(row.checkout_attempt_state)
+      ) &&
       Number(row.installment_number) === 1 &&
       Number(row.line_number) === 1 &&
       row.component_key === "website_assessment_standard" &&
@@ -232,9 +249,42 @@ function project(row, input) {
     { status: 500 }
   );
 
+  let liveReadyCheckout = false;
+  if (row.checkout_attempt_state === "ready") {
+    invariant(
+      row.checkout_provider_effect_certainty === "confirmed" &&
+        /^cs_[A-Za-z0-9_]+$/u.test(
+          String(row.checkout_session_id ?? "")
+        ) &&
+        Number.isFinite(
+          Date.parse(row.checkout_expires_at)
+        ),
+      "invoice_repository_conflict",
+      "The retained assessment Checkout is inconsistent.",
+      { status: 500 }
+    );
+    liveReadyCheckout =
+      Date.parse(row.checkout_expires_at) > Date.now();
+  }
+  const checkoutRequiresReconciliation =
+    row.checkout_attempt_state === "persistence_unknown" ||
+    (
+      row.checkout_attempt_state === "ready" &&
+      !liveReadyCheckout
+    );
+  const checkoutAvailable =
+    paymentRelease.approved &&
+    (
+      row.checkout_attempt_state === null ||
+      row.checkout_attempt_state === "failed" ||
+      liveReadyCheckout
+    );
+
   return deepFreeze({
     schema: CUSTOM_SERVICES_ASSESSMENT_INVOICE_SCHEMA,
-    state: "tax_calculation_pending",
+    state: checkoutAvailable
+      ? "checkout_available"
+      : "tax_calculation_pending",
     invoice: {
       invoiceId: uuid(row.invoice_id, "invoice.invoiceId"),
       invoiceNumber: row.invoice_number,
@@ -270,7 +320,7 @@ function project(row, input) {
       tax: {
         state: "calculation_required",
         amountMinor: null,
-        message: "Tax is still being calculated, if applicable."
+        message: "Stripe calculates tax at secure checkout, if applicable."
       },
       total: {
         state: "pending_tax",
@@ -279,10 +329,14 @@ function project(row, input) {
         formatted: null
       },
       payment: {
-        state: "held",
-        checkoutAvailable: false,
+        state: checkoutAvailable
+          ? "checkout_available"
+          : "held",
+        checkoutAvailable,
         chargeOccurred: false,
-        message: "No payment has been requested and no charge occurred."
+        message: checkoutAvailable
+          ? "Secure checkout is available. No charge occurred."
+          : "No payment has been requested and no charge occurred."
       },
       invoiceDigest,
       issuedAt: iso(row.issued_at, "invoice.issuedAt"),
@@ -290,9 +344,21 @@ function project(row, input) {
     },
     actions: {
       checkout: {
-        available: false,
-        reason: "tax_calculation_required",
-        message: "Secure payment opens only after the exact tax and total are recorded."
+        available: checkoutAvailable,
+        reason: checkoutAvailable
+          ? null
+          : checkoutRequiresReconciliation
+            ? "reconciliation_required"
+            : !paymentRelease.approved
+              ? "payment_release_held"
+            : "checkout_not_available",
+        message: checkoutAvailable
+          ? "Stripe shows tax, if applicable, and the exact total before payment."
+          : checkoutRequiresReconciliation
+            ? "The earlier payment-page request is being reconciled before another can open."
+            : !paymentRelease.approved
+              ? "Secure assessment payment is held in this runtime."
+            : "Secure payment is not available yet."
       }
     }
   });
@@ -310,8 +376,13 @@ function databaseError(error) {
   return error;
 }
 
-export function createPostgresCustomServicesInvoiceRepository({ authority } = {}) {
+export function createPostgresCustomServicesInvoiceRepository({
+  authority,
+  release
+} = {}) {
   const database = validateAuthority(authority);
+  const paymentRelease =
+    validateCustomServicesAssessmentPaymentRelease(release);
   return Object.freeze({
     async readCurrentInvoice(value) {
       const input = scope(value);
@@ -386,7 +457,12 @@ export function createPostgresCustomServicesInvoiceRepository({ authority } = {}
                  reservation.expected_subtotal_minor,
                  reservation.expected_tax_minor,
                  reservation.expected_total_minor,
-                 reservation.invoice_digest as reservation_invoice_digest
+                 reservation.invoice_digest as reservation_invoice_digest,
+                 checkout_attempt.state as checkout_attempt_state,
+                 checkout_attempt.provider_effect_certainty
+                   as checkout_provider_effect_certainty,
+                 checkout_attempt.checkout_session_id,
+                 checkout_attempt.expires_at as checkout_expires_at
                from ss.service_invoices invoice
                join ss.service_quote_acceptances acceptance
                  on acceptance.organization_id = invoice.organization_id
@@ -421,6 +497,14 @@ export function createPostgresCustomServicesInvoiceRepository({ authority } = {}
                join ss.hosted_account_profiles account_profile
                  on account_profile.user_id = invoice.customer_user_id
                 and account_profile.state = 'active'
+               left join lateral (
+                 select attempt.*
+                   from ss.service_assessment_checkout_attempts attempt
+                  where attempt.organization_id = invoice.organization_id
+                    and attempt.invoice_id = invoice.id
+                  order by attempt.created_at desc, attempt.id desc
+                  limit 1
+               ) checkout_attempt on true
               where invoice.organization_id = $1
                 and invoice.project_id = $2
                 and invoice.customer_user_id = $3
@@ -428,7 +512,11 @@ export function createPostgresCustomServicesInvoiceRepository({ authority } = {}
               limit 2`,
               [input.organizationId, input.projectId, input.customerId]
             ));
-            return project(selected[0] ?? null, input);
+            return project(
+              selected[0] ?? null,
+              input,
+              paymentRelease
+            );
           }
         );
       } catch (error) {

@@ -140,6 +140,13 @@ async function verifyPlatformSchema(pool) {
         as service_payment_reservations,
       to_regprocedure('ss.hosted_runtime_contract_v37()') is not null
         as custom_service_invoices_runtime_contract,
+      to_regclass('ss.service_assessment_checkout_attempts') is not null
+        as service_assessment_checkout_attempts,
+      to_regprocedure('ss.hosted_runtime_contract_v38()') is not null
+        as custom_service_assessment_checkout_runtime_contract,
+      to_regprocedure(
+        'ss.guard_service_assessment_checkout_attempt()'
+      ) is not null as service_assessment_checkout_guard,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -295,6 +302,175 @@ async function verifyPlatformSchema(pool) {
       ss.hosted_runtime_contract_v37() =
         'canonical-ss-v37-custom-service-held-invoices'
         as exact_held_invoice_runtime_marker,
+      ss.hosted_runtime_contract_v38() =
+        'canonical-ss-v38-custom-service-assessment-checkout'
+        as exact_assessment_checkout_runtime_marker,
+      (
+        select count(*) = 1
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege(
+              'service_role', relation.oid, 'SELECT'
+            )
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            )
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'anon', relation.oid, 'TRUNCATE'
+            )
+          )
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relkind = 'r'
+           and relation.relname =
+             'service_assessment_checkout_attempts'
+      )
+        and (
+          select count(*) = 2
+            and array_agg(
+              trigger_record.tgname
+              order by trigger_record.tgname
+            ) = array[
+              'service_assessment_checkout_attempt_guard',
+              'service_assessment_checkout_attempt_no_delete'
+            ]::name[]
+            and bool_and(trigger_record.tgenabled = 'O')
+            and bool_and(
+              case trigger_record.tgname
+                when 'service_assessment_checkout_attempt_guard' then
+                  trigger_record.tgfoid = to_regprocedure(
+                    'ss.guard_service_assessment_checkout_attempt()'
+                  )
+                  and trigger_record.tgtype = 23
+                  and pg_get_triggerdef(
+                    trigger_record.oid, false
+                  ) =
+                    'CREATE TRIGGER service_assessment_checkout_attempt_guard BEFORE INSERT OR UPDATE ON ss.service_assessment_checkout_attempts FOR EACH ROW EXECUTE FUNCTION ss.guard_service_assessment_checkout_attempt()'
+                when 'service_assessment_checkout_attempt_no_delete' then
+                  trigger_record.tgfoid = to_regprocedure(
+                    'ss.reject_update()'
+                  )
+                  and trigger_record.tgtype = 11
+                  and pg_get_triggerdef(
+                    trigger_record.oid, false
+                  ) =
+                    'CREATE TRIGGER service_assessment_checkout_attempt_no_delete BEFORE DELETE ON ss.service_assessment_checkout_attempts FOR EACH ROW EXECUTE FUNCTION ss.reject_update()'
+                else false
+              end
+            )
+            from pg_trigger trigger_record
+            join pg_class trigger_relation
+              on trigger_relation.oid = trigger_record.tgrelid
+            join pg_namespace trigger_namespace
+              on trigger_namespace.oid =
+                trigger_relation.relnamespace
+           where trigger_namespace.nspname = 'ss'
+             and trigger_relation.relname =
+               'service_assessment_checkout_attempts'
+             and not trigger_record.tgisinternal
+        )
+        and exists (
+          select 1
+            from pg_constraint constraint_record
+            join pg_class constraint_relation
+              on constraint_relation.oid =
+                constraint_record.conrelid
+            join pg_namespace constraint_namespace
+              on constraint_namespace.oid =
+                constraint_relation.relnamespace
+           where constraint_namespace.nspname = 'ss'
+             and constraint_relation.relname =
+               'service_assessment_checkout_attempts'
+             and constraint_record.contype = 'u'
+             and pg_get_constraintdef(
+               constraint_record.oid
+             ) = 'UNIQUE (checkout_session_id)'
+        )
+        and (
+          select count(*) = 1
+            and bool_and(index_record.indisunique)
+            and bool_and(index_record.indisvalid)
+            and bool_and(index_record.indisready)
+            and bool_and(index_record.indislive)
+            and bool_and(not index_record.indnullsnotdistinct)
+            and bool_and(index_record.indnkeyatts = 1)
+            and bool_and(index_record.indnatts = 1)
+            and bool_and(index_record.indexprs is null)
+            and bool_and(
+              index_record.indkey[0] =
+                indexed_attribute.attnum
+            )
+            and bool_and(index_method.amname = 'btree')
+            and bool_and(
+              pg_get_expr(
+                index_record.indpred,
+                index_record.indrelid,
+                false
+              ) =
+                '(state = ANY (ARRAY[''provider_pending''::text, ''ready''::text, ''persistence_unknown''::text]))'
+            )
+            from pg_index index_record
+            join pg_class index_relation
+              on index_relation.oid = index_record.indexrelid
+            join pg_class indexed_relation
+              on indexed_relation.oid = index_record.indrelid
+            join pg_namespace index_namespace
+              on index_namespace.oid =
+                index_relation.relnamespace
+            join pg_am index_method
+              on index_method.oid = index_relation.relam
+            join pg_attribute indexed_attribute
+              on indexed_attribute.attrelid =
+                indexed_relation.oid
+             and indexed_attribute.attname = 'invoice_id'
+             and not indexed_attribute.attisdropped
+           where index_namespace.nspname = 'ss'
+             and indexed_relation.relnamespace =
+               index_namespace.oid
+             and indexed_relation.relname =
+               'service_assessment_checkout_attempts'
+             and index_relation.relname =
+               'service_assessment_checkout_one_active'
+        ) as exact_assessment_checkout_security,
       (
         select count(*) = 11
           and bool_and(relation.relrowsecurity)

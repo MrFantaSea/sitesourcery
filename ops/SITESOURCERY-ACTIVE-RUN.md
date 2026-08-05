@@ -25,7 +25,7 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 held assessment-invoice surface is the
+- The H1 automatic-tax assessment-Checkout surface is the
   latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
@@ -36,11 +36,14 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven account-bound held assessment invoice: add one
-server-calculated tax result and exact payable total before one Checkout,
-provider-confirmed payment, job/report delivery, and one-use `$200` Custom
-base-build credit authority. All provider effects and public-service release
-gates remain held until each preceding local boundary is proven.
+Continue H1 from the now-proven account-bound automatic-tax assessment
+Checkout: add exact Stripe readback and one atomic provider-confirmed payment
+settlement before job/report delivery and one-use `$200` Custom base-build
+credit authority. Stripe Checkout owns billing-address collection and the
+jurisdictional tax calculation; Site Sourcery owns the immutable `$200`
+subtotal and must not build a duplicate tax calculator. All real provider
+effects and public-service release gates remain held until each preceding
+local boundary is proven.
 
 ## Completed and reviewed
 
@@ -855,21 +858,90 @@ Batch 3C sealed checkpoint gates:
   release, or production mutation occurred. The July 22 fallback remains
   untouched.
 
+## H1 assessment Checkout dispatch checkpoint evidence
+
+- Migration 38 adds one retained
+  `ss.service_assessment_checkout_attempts` table. An exact invoice-bound
+  attempt is durably reserved before Stripe is contacted, only one active
+  attempt can exist per invoice, and one Stripe Checkout Session identity can
+  belong to only one retained attempt. The guarded state machine distinguishes
+  definitely unsubmitted failure from provider/persistence uncertainty. Both
+  browser roles have no table privilege; the service role has no DELETE or
+  TRUNCATE authority; both required triggers, forced RLS, the active-attempt
+  index, and the unique Session constraint are startup-readiness requirements.
+  All retained invoice relationships remain intact.
+- The authenticated command
+  `POST /api/v1/projects/{projectId}/custom-services/assessment-invoices/{invoiceId}/checkout-command`
+  accepts only the immutable invoice digest plus the existing CSRF and stable
+  idempotency identity. Customer, organization, project, invoice, quote,
+  disclosure, currency, and `$200.00` subtotal authority are reconstructed
+  from PostgreSQL; the browser cannot submit tax, total, address, money,
+  provider, or payment state.
+- Stripe Checkout collects the billing address and calculates jurisdictional
+  tax. The one-time line remains exactly `$200.00 USD` with automatic tax;
+  customer copy says tax and the final total are shown before payment and does
+  not claim a charge before verified settlement. An existing bound Stripe
+  Customer is reused; otherwise Stripe creates one through the narrow provider
+  adapter. Provider output is accepted only when the returned Session preserves
+  the exact invoice identity, purpose metadata, payment mode, USD subtotal,
+  automatic-tax setting, open state, and unpaid state.
+- Assessment payment has a separate exact release configuration that defaults
+  held. The production invoice projection and payment command consume that same
+  release object; after ordinary account/project authentication, held mode
+  stops before the payment claim or Stripe and exposes no pay button. The
+  customer-safe response contains only the retained invoice, verified HTTPS
+  Stripe destination, expiry, and pre-payment money states. It never exposes
+  the Checkout Session ID or another raw provider identifier. Production
+  `approved` mode remains startup-impossible until the next slice composes an
+  exact assessment webhook, Stripe readback, and atomic-settlement readiness
+  boundary.
+- Safe command replay returns the same verified HTTPS Stripe destination
+  without another provider call. Ambiguous transport or post-provider
+  persistence outcomes enter a no-automatic-retry state. A stale or expired
+  Checkout is rejected by the browser and remains held for the next readback/
+  reconciliation slice rather than opening a duplicate payment page.
+- Focused adapter, migration, repository, hosted-boundary, HTTP, browser, and
+  readiness proof passes 148/148. Fresh database
+  `ss_h1_assessment_checkout_20260805_codex4` replayed all 38 migrations,
+  reported canonical runtime readiness, and passed the real PostgreSQL
+  accepted-quote-to-invoice-to-Checkout journey 1/1. That journey proves exact
+  replay, foreign-scope denial before provider work, one-active-command
+  concurrency, stored-response tamper rejection, transport and post-provider
+  persistence ambiguity without a second provider call, stale-ready Checkout
+  hold behavior, and two-connection command-before-attempt lock order while
+  provider completion races a replay lock. Returned-Session nondefault ports
+  are rejected, pre-Stripe preparation failures are explicitly not submitted,
+  and runtime readiness verifies exact trigger functions and active-index
+  structure rather than names alone.
+- Authoritative Node 24 regressions pass: core 502/502; hosted service 238 pass
+  with 2 intentional environment skips; self-host 19/19; operations 52/52;
+  current site 18 live pages and 20 redirects with 27 catalog prices and five
+  sellable rails. The hosted artifact builds and validates; the public artifact
+  verifies all 78 allowlisted files with exact source bytes.
+- The stale `codex2`, interim `codex3`, and final `codex4` databases each had
+  zero active sessions before exact-name removal and are verified absent. No
+  real Stripe call, customer/production-data write, push, deployment, DNS
+  change, credential handling, or release mutation occurred. Public production
+  remains the July 22 predecessor.
+
 ## Live resources and workers
 
-- No H1, Batch 3C, H0, quote-readiness, or invoice-proof worker remains running.
-  The exact Batch 3C and H1 disposable PostgreSQL databases are absent.
+- No H1, Batch 3C, H0, quote-readiness, invoice-proof, or Checkout-dispatch
+  worker remains running. The final read-only H1F audit is closed. The exact
+  Batch 3C and H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add one server-owned tax calculation result for the exact held assessment
-invoice, producing one immutable payable total without accepting money, tax,
-address, provider, or invoice state from the browser. Keep Checkout dispatch
-held during this slice. Prove tax-required, tax-zero, stale-address, replay,
-cross-tenant, and no-charge behavior against fresh PostgreSQL before opening
-one exact Stripe Checkout command in the following slice.
+Add exact read-only Stripe Checkout and PaymentIntent readback, with a verified
+webhook used only as a wake-up signal. Atomically record final subtotal, tax,
+total, payment receipt, and bound Stripe Customer only after exact paid
+provider evidence; open one assessment job in that same settlement boundary.
+Also reconcile expired ready Checkouts before allowing one safe replacement.
+Prove unpaid, paid, tax-zero, tax-positive, refunded/underpaid, metadata drift,
+replay, cross-tenant, delayed-webhook, and uncertain-readback behavior against
+fresh PostgreSQL without a second charge.
 
 ## Batch 3B write scope
 

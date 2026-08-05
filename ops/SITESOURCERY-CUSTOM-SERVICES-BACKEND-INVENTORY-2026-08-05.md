@@ -6,12 +6,17 @@ This is the bounded Build-lane inventory for Custom sites and the five approved
 existing-site service lanes. It is an architecture and sequencing document,
 not an implementation or release authorization.
 
-Implementation update: H1A through H1E now occupy actual migrations 34–37:
-foundation, quotes, customer commands, and the held assessment invoice. The
+Implementation update: H1A through H1F now occupy actual migrations 34–38:
+foundation, quotes, customer commands, the assessment invoice, and its exact
+automatic-tax Stripe Checkout dispatch. The
 numbered migration headings below preserve the original inventory and are no
 longer filename assignments. Use `SITESOURCERY-ACTIVE-RUN.md` and the canonical
-roadmap for current sequence and completion state. The held invoice now exists;
-tax, Checkout dispatch, settlement, jobs/reports, and credit remain unfinished.
+roadmap for current sequence and completion state. Checkout now collects the
+billing address and calculates tax at Stripe while Site Sourcery holds the
+immutable `$200` subtotal. Its separate release defaults held, its returned
+Session must preserve the exact invoice purpose, and no raw provider identity
+crosses the browser boundary; verified settlement, jobs/reports, and credit
+remain unfinished.
 
 The unfinished Batch 3C Alakazam tier-fulfillment slice is protected. Migration
 `202608040033_alakazam_tier_fulfillment.sql` and every pre-existing worktree
@@ -53,11 +58,13 @@ The repository already has a strong production-shaped foundation:
 - fresh-database, HTTP, provider-fake, browser, backup, and restoration test
   harnesses.
 
-The custom-services commercial lifecycle itself does **not** exist. In
-particular, there is no durable custom intake, assessment, finding selection,
-custom quote acceptance, invoice, installment, service credit, client-work
-job, checklist, handoff, outside-site takeover, recurring management ledger,
-or authenticated owner workbench.
+The first custom-services commercial spine now exists through an authenticated
+external-site intake, deployment-authorized owner quote operation, exact
+customer acceptance, immutable assessment invoice, and one safely replayable
+automatic-tax Checkout destination. This is not yet a complete sellable
+lifecycle: provider-confirmed settlement, the assessment job and findings,
+report delivery, service credit, client-work checklist/handoff, outside-site
+takeover, recurring management ledger, and the broader owner workbench remain.
 
 The fastest safe route is therefore to reuse the platform primitives and add
 one narrow `service_*` vertical, not to stretch the old Spark commerce tables

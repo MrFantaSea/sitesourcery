@@ -259,8 +259,14 @@ H1 pre-commerce foundation checkpoint:
 - [x] Add one exact account-bound assessment invoice and non-dispatchable
   payment reservation with tax/total pending and an explicit no-charge
   customer projection.
-- [ ] Add tax/provider dispatch, settlement, job/report, and one-use `$200`
-  credit migrations and services before any payment or public release.
+- [x] Add one exact automatic-tax Stripe Checkout dispatch over migration 38:
+  reserve before effect, derive the immutable `$200` purpose server-side,
+  collect address and calculate tax in Stripe Checkout, safely replay one
+  destination, bind returned provider evidence to that purpose, expose no raw
+  provider identity, and fence every ambiguous outcome without claiming
+  payment. Keep the separate payment release gate held by default.
+- [ ] Add verified provider settlement, job/report, and one-use `$200` credit
+  migrations and services before any payment or public release.
 
 Assessment and findings:
 
@@ -419,20 +425,23 @@ Lane D/J Polish truth ────────────┘
 | H1C | Authenticated custom-services account read | Lead plus bounded PostgreSQL adapter worker | exact customer/project scope, read-only canonical repository, customer-safe projection, same-origin GET, production composition, real PostgreSQL and broad proof | reviewed and sealed locally; writes, commerce, public copy, and release held |
 | H1D | Customer request, owner quote, and acceptance surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw; deployment-authorized owner queue and exact `$200` issue; current quote read/acceptance; responsive customer and owner controls; real PostgreSQL, hosted artifact, and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, deployment grant, and release held |
 | H1E | Held assessment invoice | Lead | migration 37; automatic exact accepted-installment materialization; immutable `$200` invoice line; tax/total pending; non-dispatchable reservation; authenticated customer route and no-charge UI; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; tax, Checkout, payment, job, report, credit, deployment grant, and release held |
+| H1F | Automatic-tax assessment Checkout dispatch | Lead plus bounded browser worker and read-only audit | migration 38; durable reserve-before-effect; unique provider Session binding; exact `$200` Stripe purpose and returned-Session purpose validation; Stripe-hosted address/tax calculation; separate default-held release that cannot start approved without settlement readiness; account-bound command and responsive customer control without raw provider IDs; exact command-before-attempt locking; replay, expiry, concurrency, tamper, and ambiguity fences; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; real provider effects, settlement, job, report, credit, deployment grant, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1D are sealed. H1D supplies the customer
+Batch 3C, H0, and H1A through H1F are sealed locally. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
-surface; H1E adds the held account-bound invoice over migrations 34 through 37.
+surface; H1E adds the account-bound invoice and H1F adds one automatic-tax
+Checkout dispatch over migrations 34 through 38.
 Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
-request + exact accepted `$200` assessment quote + held invoice/reservation +
+request + exact accepted `$200` assessment quote + invoice/Checkout +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
-build credit. The immediate slice is server-owned tax calculation and an exact
-payable total while Checkout remains held. Migrations 34 through 37 still
-deliberately supply no provider dispatch, payment, job, report,
-or credit.
+build credit. The immediate slice is exact read-only Stripe readback, atomic
+payment settlement, expired-Checkout reconciliation, and assessment-job open.
+Stripe Checkout—not a duplicate local calculator—collects billing address and
+calculates tax. Migrations 34 through 38 still deliberately supply no verified
+payment, receipt, job, report, or credit authority.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

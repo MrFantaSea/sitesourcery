@@ -372,6 +372,8 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getAssessmentInvoice ===
         "function" &&
+      typeof customServicesAccountBoundary.createAssessmentCheckout ===
+        "function" &&
       typeof customServicesAccountBoundary.getAssessmentRequest ===
         "function" &&
       typeof customServicesAccountBoundary.saveAssessmentRequest ===
@@ -696,6 +698,33 @@ export function createHostedApi(
                 "The owner assessment quote is invalid."
               )
             );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-invoices\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before paying an assessment invoice.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary
+              .createAssessmentCheckout(
+                actor,
+                route[0],
+                route[1],
+                exactRouteBody(
+                  write,
+                  ["commandId", "invoiceDigest"],
+                  "INVALID_ASSESSMENT_CHECKOUT",
+                  "The assessment invoice checkout request is invalid."
+                )
+              );
           status = 201;
         } else if (
           method === "GET" &&

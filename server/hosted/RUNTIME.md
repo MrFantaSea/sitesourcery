@@ -207,6 +207,18 @@ readback, and refuses startup if readiness is not exact. Startup and worker logs
 emit only an allowlisted readiness projection; secret keys, webhook secrets,
 Price IDs, approval IDs, and return URLs are never serialized.
 
+The `$200` custom-services assessment has a separate release switch:
+`SITESOURCERY_CUSTOM_SERVICES_ASSESSMENT_PAYMENT_MODE` defaults to `held` and
+accepts only `held` or `approved`. `approved` refuses startup unless the shared
+Stripe adapter is ready with automatic tax and the assessment-specific webhook,
+readback, and atomic-settlement boundary reports its exact readiness schema.
+That settlement boundary is not present in the Checkout-dispatch checkpoint,
+so `approved` is deliberately impossible until the next settlement slice is
+composed. The invoice projection and payment command consume the same immutable
+release object, so a held runtime exposes no pay button and performs no database
+or provider payment effect. This switch does not authorize a deployment, public
+release, DNS change, or production credential change.
+
 ## Durable worker inventory
 
 Only a durable job with an implemented lease and exact effect-certainty contract

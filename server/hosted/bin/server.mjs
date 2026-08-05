@@ -54,6 +54,13 @@ import {
   createPostgresCustomServicesAssessmentQuoteRepository
 } from "../custom-services-assessment-quote-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentPayment
+} from "../custom-services-assessment-payment-postgres.mjs";
+import {
+  assertApprovedCustomServicesAssessmentPaymentReady,
+  createConfiguredCustomServicesAssessmentPaymentRelease
+} from "../custom-services-assessment-payment-config.mjs";
+import {
   createPostgresCustomServicesInvoiceRepository
 } from "../custom-services-invoice-postgres.mjs";
 import {
@@ -254,6 +261,8 @@ async function start() {
     createConfiguredStripeProvider();
   const downloadPaymentComposition =
     createConfiguredDownloadPaymentRelease();
+  const customServicesAssessmentPaymentComposition =
+    createConfiguredCustomServicesAssessmentPaymentRelease();
   const alakazamComposition =
     createConfiguredAlakazamRelease();
   const downloadPayment =
@@ -299,7 +308,18 @@ async function start() {
       authority
     });
   const customServicesInvoiceRepository =
-    createPostgresCustomServicesInvoiceRepository({ authority });
+    createPostgresCustomServicesInvoiceRepository({
+      authority,
+      release:
+        customServicesAssessmentPaymentComposition.release
+    });
+  const customServicesAssessmentPayment =
+    createPostgresCustomServicesAssessmentPayment({
+      authority,
+      provider: stripeComposition.adapter,
+      release:
+        customServicesAssessmentPaymentComposition.release
+    });
   const customServicesRequestRepository =
     createPostgresCustomServicesRequestRepository({ authority });
   const customServicesOwner =
@@ -307,6 +327,7 @@ async function start() {
   const customServicesAccount =
     createHostedCustomServicesAccount({
       invoiceRepository: customServicesInvoiceRepository,
+      payment: customServicesAssessmentPayment,
       quoteRepository: customServicesAssessmentQuoteRepository,
       requestRepository: customServicesRequestRepository,
       repository: customServicesAccountRepository,
@@ -438,6 +459,10 @@ async function start() {
   assertApprovedDownloadPaymentReady(
     downloadPaymentComposition,
     await downloadPayment.readiness()
+  );
+  assertApprovedCustomServicesAssessmentPaymentReady(
+    customServicesAssessmentPaymentComposition,
+    readiness.payments
   );
   assertApprovedAlakazamReady(
     alakazamComposition,

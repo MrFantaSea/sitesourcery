@@ -767,6 +767,94 @@ test("custom-service assessment requests and quote acceptance use exact project 
   }
 });
 
+test("assessment invoice checkout sends only the invoice digest with the caller's idempotency key", async () => {
+  const calls = [];
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000001";
+  const checkoutResponse = {
+    schema:
+      "sitesourcery.custom-services-assessment-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId,
+      invoiceNumber:
+        "SSA-60000000000040008000000000000001",
+      url: "https://checkout.stripe.com/c/pay/assessment_test",
+      expiresAt: "2026-08-05T18:00:00.000Z",
+      subtotal: {
+        amountMinor: 20000,
+        currency: "USD",
+        formatted: "$200.00"
+      },
+      tax: {
+        state: "calculated_at_checkout",
+        amountMinor: null
+      },
+      total: {
+        state: "shown_at_checkout",
+        amountMinor: null,
+        currency: "USD"
+      },
+      chargeOccurred: false
+    }
+  };
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, {
+          csrfToken: "csrf_assessment_checkout"
+        });
+      }
+      return response(200, checkoutResponse);
+    },
+    idempotencyFactory: () => {
+      assert.fail("the explicit assessment checkout key must be preserved");
+    }
+  });
+
+  const result =
+    await client.createCustomServicesAssessmentCheckout(
+      "project_1",
+      invoiceId,
+      { invoiceDigest: "c".repeat(64) },
+      { idempotencyKey: "assessment-checkout-command-1" }
+    );
+
+  assert.deepEqual(result, checkoutResponse);
+  assert.equal(calls.length, 2);
+  const checkout = calls[1];
+  assert.equal(
+    checkout.url,
+    "/api/v1/projects/project_1/custom-services/assessment-invoices/"
+      + invoiceId
+      + "/checkout-command"
+  );
+  assert.equal(checkout.options.method, "POST");
+  assert.equal(checkout.options.credentials, "include");
+  assert.equal(
+    checkout.options.headers["X-CSRF-Token"],
+    "csrf_assessment_checkout"
+  );
+  assert.equal(
+    checkout.options.headers["Idempotency-Key"],
+    "assessment-checkout-command-1"
+  );
+  assert.deepEqual(JSON.parse(checkout.options.body), {
+    invoiceDigest: "c".repeat(64)
+  });
+  assert.throws(
+    () => client.createCustomServicesAssessmentCheckout(
+      "project_1",
+      invoiceId,
+      { invoiceDigest: "not-a-digest" },
+      { idempotencyKey: "invalid-checkout-command" }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.equal(calls.length, 2);
+});
+
 test("owner quote commands send only scope, delivery date, and review targets", async () => {
   const calls = [];
   const client = createClient({

@@ -82,6 +82,10 @@ const DOWNLOAD_CHECKOUT_METADATA_SCHEMA =
   "sitesourcery_download_checkout_v2";
 const DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-download-checkout-lifecycle/v2";
+export const STRIPE_SERVICE_ASSESSMENT_PURPOSE_SCHEMA =
+  "sitesourcery.custom-services-assessment-checkout-purpose/v1";
+const STRIPE_SERVICE_ASSESSMENT_METADATA_SCHEMA =
+  "sitesourcery_service_assessment_checkout_v1";
 export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
   ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA;
 export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
@@ -261,6 +265,35 @@ function downloadReturnUrl(template, projectId) {
         "{CHECKOUT_SESSION_ID}"
       ),
     "Download success URL",
+    { checkoutSessionPlaceholder: true }
+  );
+}
+
+function serviceAssessmentReturnUrl(template, validated) {
+  const parsed = new URL(template);
+  invariant(
+    !parsed.searchParams.has("assessment_project") &&
+      !parsed.searchParams.has("assessment_invoice"),
+    "stripe_redirect_invalid",
+    "Assessment return URL already contains invoice identity",
+    { status: 500 }
+  );
+  parsed.searchParams.set(
+    "assessment_project",
+    validated.identity.projectId
+  );
+  parsed.searchParams.set(
+    "assessment_invoice",
+    validated.identity.invoiceId
+  );
+  return exactUrl(
+    parsed
+      .toString()
+      .replace(
+        "%7BCHECKOUT_SESSION_ID%7D",
+        "{CHECKOUT_SESSION_ID}"
+      ),
+    "Assessment success URL",
     { checkoutSessionPlaceholder: true }
   );
 }
@@ -1529,6 +1562,163 @@ function downloadMetadata(validated) {
   });
 }
 
+function validateServiceAssessmentPurpose(request) {
+  const requestFields = [
+    "idempotencyKey",
+    "purpose",
+    "purposeDigest",
+    ...(request?.stripeCustomerId === undefined
+      ? []
+      : ["stripeCustomerId"])
+  ];
+  invariant(
+    exactObjectKeys(request, requestFields) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "customerId",
+        "invoiceDigest",
+        "invoiceId",
+        "invoiceNumber",
+        "price",
+        "projectId",
+        "quoteId",
+        "schema",
+        "tenantId"
+      ]),
+    "stripe_service_assessment_checkout_invalid",
+    "Assessment Checkout requires the exact server invoice purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const identity = {};
+  for (const field of [
+    "tenantId",
+    "customerId",
+    "projectId",
+    "invoiceId",
+    "invoiceNumber",
+    "quoteId"
+  ]) {
+    identity[field] = safeMetadataValue(
+      purpose[field],
+      `purpose.${field}`
+    );
+  }
+  invariant(
+    purpose.schema ===
+      STRIPE_SERVICE_ASSESSMENT_PURPOSE_SCHEMA &&
+      /^SSA-[0-9A-F]{32}$/u.test(identity.invoiceNumber) &&
+      exactObjectKeys(purpose.price, [
+        "amountMinor",
+        "billing",
+        "currency",
+        "taxBehavior"
+      ]) &&
+      purpose.price.amountMinor === 20000 &&
+      purpose.price.currency === "USD" &&
+      purpose.price.billing === "one_time" &&
+      purpose.price.taxBehavior === "automatic_exclusive",
+    "stripe_service_assessment_checkout_invalid",
+    "Assessment Checkout permits only the reviewed one-time $200 invoice",
+    { status: 500 }
+  );
+  const acceptedDisclosureDigest = safeMetadataValue(
+    purpose.acceptedDisclosureDigest,
+    "purpose.acceptedDisclosureDigest"
+  );
+  const invoiceDigest = safeMetadataValue(
+    purpose.invoiceDigest,
+    "purpose.invoiceDigest"
+  );
+  invariant(
+    SHA256.test(acceptedDisclosureDigest) &&
+      SHA256.test(invoiceDigest),
+    "stripe_service_assessment_checkout_invalid",
+    "Assessment Checkout invoice authority is invalid",
+    { status: 500 }
+  );
+  const purposeDigest = digest(purpose);
+  invariant(
+    request.purposeDigest === purposeDigest &&
+      SHA256.test(request.purposeDigest),
+    "stripe_service_assessment_checkout_invalid",
+    "Assessment Checkout purpose digest changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    purpose,
+    identity,
+    acceptedDisclosureDigest,
+    invoiceDigest,
+    purposeDigest,
+    stripeCustomerId:
+      request.stripeCustomerId === undefined
+        ? null
+        : providerId(
+            request.stripeCustomerId,
+            "cus",
+            "stripeCustomerId"
+          ),
+    idempotencyKey: requiredText(
+      request.idempotencyKey,
+      "idempotencyKey",
+      255
+    )
+  });
+}
+
+function serviceAssessmentMetadata(validated) {
+  return Object.freeze({
+    schema: STRIPE_SERVICE_ASSESSMENT_METADATA_SCHEMA,
+    tenant_id: validated.identity.tenantId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    invoice_id: validated.identity.invoiceId,
+    invoice_number: validated.identity.invoiceNumber,
+    quote_id: validated.identity.quoteId,
+    accepted_disclosure_digest:
+      validated.acceptedDisclosureDigest,
+    invoice_digest: validated.invoiceDigest,
+    purpose_digest: validated.purposeDigest
+  });
+}
+
+function serviceAssessmentCheckoutResponse(
+  value,
+  config,
+  expectedExpiresAt,
+  validated,
+  expectedMetadata
+) {
+  const checkout = checkoutResponse(
+    value,
+    config,
+    expectedExpiresAt
+  );
+  const metadata = value?.metadata;
+  invariant(
+    value?.client_reference_id ===
+      validated.identity.invoiceId &&
+      value?.mode === "payment" &&
+      value?.currency === "usd" &&
+      value?.amount_subtotal === 20000 &&
+      value?.automatic_tax?.enabled === true &&
+      value?.status === "open" &&
+      value?.payment_status === "unpaid" &&
+      exactObjectKeys(
+        metadata,
+        Object.keys(expectedMetadata)
+      ) &&
+      Object.entries(expectedMetadata).every(
+        ([key, expected]) => metadata[key] === expected
+      ),
+    "stripe_service_assessment_checkout_response_invalid",
+    "Stripe assessment Checkout did not preserve the exact invoice purpose",
+    { status: 502 }
+  );
+  return checkout;
+}
+
 function validateDownloadMetadata(value, expected) {
   invariant(
     exactObjectKeys(value, Object.keys(expected)) &&
@@ -2723,6 +2913,7 @@ function checkoutResponse(
   if (
     url.protocol !== "https:" ||
     !CHECKOUT_HOSTS.has(url.hostname) ||
+    url.port ||
     url.username ||
     url.password ||
     url.hash
@@ -3254,6 +3445,7 @@ export function createStripeProviderAdapter(options = {}) {
       },
       createCheckout: reject,
       createDownloadCheckout: reject,
+      createServiceAssessmentCheckout: reject,
       createAlakazamCustomer: reject,
       retrieveAlakazamCustomer: reject,
       createAlakazamStartCheckout: reject,
@@ -4662,6 +4854,121 @@ export function createStripeProviderAdapter(options = {}) {
         throw ambiguous(
           "stripe_download_checkout_response_invalid",
           "Stripe Download Checkout returned an unsafe response that requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+    },
+
+    async createServiceAssessmentCheckout(request) {
+      let validated;
+      let providerMetadata;
+      let expiresAt;
+      let params;
+      let stripeIdempotencyKey;
+      try {
+        requireCapability("checkout:create");
+        invariant(
+          config.taxMode === "automatic",
+          "stripe_service_assessment_tax_required",
+          "Assessment Checkout requires automatic tax",
+          { status: 503 }
+        );
+        validated =
+          validateServiceAssessmentPurpose(request);
+        providerMetadata =
+          serviceAssessmentMetadata(validated);
+        expiresAt =
+          Math.floor(Date.parse(clock.now()) / 1000) +
+          config.checkoutTtlSeconds;
+        invariant(
+          Number.isSafeInteger(expiresAt),
+          "stripe_clock_invalid",
+          "Stripe checkout clock is invalid",
+          { status: 500 }
+        );
+        params = {
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: 20000,
+                tax_behavior: "exclusive",
+                product_data: {
+                  name: "Site Sourcery website assessment"
+                }
+              },
+              quantity: 1
+            }
+          ],
+          success_url: serviceAssessmentReturnUrl(
+            config.successUrl,
+            validated
+          ),
+          cancel_url: config.cancelUrl,
+          client_reference_id:
+            validated.identity.invoiceId,
+          metadata: providerMetadata,
+          expires_at: expiresAt,
+          automatic_tax: { enabled: true },
+          billing_address_collection: "required",
+          ...(validated.stripeCustomerId
+            ? {
+                customer: validated.stripeCustomerId,
+                customer_update: { address: "auto" }
+              }
+            : { customer_creation: "always" }),
+          payment_intent_data: {
+            metadata: providerMetadata
+          }
+        };
+        stripeIdempotencyKey = providerIdempotencyKey(
+          "service_assessment_checkout",
+          validated.idempotencyKey,
+          validated.purposeDigest
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw noEffect(
+          typeof error?.code === "string"
+            ? error.code
+            : "stripe_service_assessment_checkout_not_submitted",
+          "Assessment Checkout was rejected before Stripe submission"
+        );
+      }
+      let response;
+      try {
+        response = await client.checkout.sessions.create(
+          params,
+          { idempotencyKey: stripeIdempotencyKey }
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_service_assessment_checkout_effect_unknown",
+          "Stripe assessment Checkout creation requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      try {
+        return serviceAssessmentCheckoutResponse(
+          response,
+          config,
+          expiresAt,
+          validated,
+          providerMetadata
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw ambiguous(
+          "stripe_service_assessment_checkout_response_invalid",
+          "Stripe assessment Checkout returned unsafe evidence that requires reconciliation",
           {
             idempotencyKey: stripeIdempotencyKey,
             purposeDigest: validated.purposeDigest

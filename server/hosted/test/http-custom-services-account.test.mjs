@@ -65,6 +65,9 @@ test("custom-services account HTTP route is authenticated, project-bound, and GE
       async getAssessmentInvoice() {
         throw new Error("unexpected invoice read");
       },
+      async createAssessmentCheckout() {
+        throw new Error("unexpected assessment checkout");
+      },
       async getAssessmentRequest() {
         throw new Error("unexpected request read");
       },
@@ -131,6 +134,9 @@ test("assessment quote HTTP routes read and accept the exact customer quote", as
       },
       async getAssessmentInvoice() {
         throw new Error("unexpected invoice read");
+      },
+      async createAssessmentCheckout() {
+        throw new Error("unexpected assessment checkout");
       },
       async acceptAssessmentQuote(actor, projectId, input) {
         calls.push({ action: "accept", actor, projectId, input });
@@ -205,6 +211,9 @@ test("assessment request HTTP routes read, save, submit, and withdraw", async ()
       },
       async getAssessmentInvoice() {
         throw new Error("unexpected invoice read");
+      },
+      async createAssessmentCheckout() {
+        throw new Error("unexpected assessment checkout");
       },
       async acceptAssessmentQuote() {
         throw new Error("unexpected quote acceptance");
@@ -307,6 +316,9 @@ test("assessment invoice HTTP route reads the exact customer project", async () 
         calls.push({ actor, projectId });
         return invoice;
       },
+      async createAssessmentCheckout() {
+        throw new Error("unexpected assessment checkout");
+      },
       async acceptAssessmentQuote() {},
       async getAssessmentRequest() {},
       async saveAssessmentRequest() {},
@@ -321,6 +333,63 @@ test("assessment invoice HTTP route reads the exact customer project", async () 
   assert.deepEqual(await response.json(), invoice);
   assert.deepEqual(calls, [
     { actor: { userId: CUSTOMER_ID }, projectId: PROJECT_ID }
+  ]);
+});
+
+test("assessment checkout HTTP route binds project, invoice, digest, and command", async () => {
+  const calls = [];
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000001";
+  const result = {
+    schema:
+      "sitesourcery.custom-services-assessment-checkout/v1",
+    state: "ready"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: {
+      async getSnapshot() {},
+      async getAssessmentQuote() {},
+      async getAssessmentInvoice() {},
+      async createAssessmentCheckout(
+        actor,
+        projectId,
+        selectedInvoiceId,
+        input
+      ) {
+        calls.push({
+          actor,
+          projectId,
+          invoiceId: selectedInvoiceId,
+          input
+        });
+        return result;
+      },
+      async acceptAssessmentQuote() {},
+      async getAssessmentRequest() {},
+      async saveAssessmentRequest() {},
+      async submitAssessmentRequest() {},
+      async withdrawAssessmentRequest() {}
+    }
+  });
+  const response = await api.fetch(request({
+    method: "POST",
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-invoices/${invoiceId}/checkout-command`,
+    body: { invoiceDigest: "d".repeat(64) },
+    write: true
+  }));
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), result);
+  assert.deepEqual(calls, [
+    {
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      invoiceId,
+      input: {
+        commandId: "accept-command-1",
+        invoiceDigest: "d".repeat(64)
+      }
+    }
   ]);
 });
 
@@ -357,11 +426,27 @@ test("production composes custom-services account from canonical project and Pos
   );
   assert.match(
     source,
-    /createPostgresCustomServicesInvoiceRepository\(\{\s*authority\s*\}\)/u
+    /createConfiguredCustomServicesAssessmentPaymentRelease\(\)/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesInvoiceRepository\(\{[\s\S]*authority,[\s\S]*release:\s*customServicesAssessmentPaymentComposition\.release[\s\S]*\}\)/u
   );
   assert.match(
     source,
     /invoiceRepository:\s*customServicesInvoiceRepository/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesAssessmentPayment\(\{[\s\S]*provider:\s*stripeComposition\.adapter,[\s\S]*release:\s*customServicesAssessmentPaymentComposition\.release[\s\S]*\}\)/u
+  );
+  assert.match(
+    source,
+    /payment:\s*customServicesAssessmentPayment/u
+  );
+  assert.match(
+    source,
+    /assertApprovedCustomServicesAssessmentPaymentReady\([\s\S]*customServicesAssessmentPaymentComposition,[\s\S]*readiness\.payments[\s\S]*\)/u
   );
   assert.match(
     source,

@@ -16,6 +16,9 @@ import {
   createPostgresCustomServicesInvoiceRepository
 } from "../../hosted/custom-services-invoice-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentPayment
+} from "../../hosted/custom-services-assessment-payment-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 
@@ -36,6 +39,12 @@ const ASSESSMENT_POLICY_ID =
 const CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
 const CONTRACT_DIGEST =
   "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+const APPROVED_ASSESSMENT_PAYMENT_RELEASE = Object.freeze({
+  approved: true,
+  amountMinor: 20000,
+  currency: "USD",
+  taxMode: "automatic"
+});
 
 async function insertRow(client, table, row) {
   assert.match(table, /^[a-z0-9_]+$/u);
@@ -67,6 +76,33 @@ function isoAfter({ days = 0, hours = 0 } = {}) {
 
 function dateAfter(days) {
   return isoAfter({ days }).slice(0, 10);
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+async function within(promise, message, milliseconds = 5000) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(message)),
+          milliseconds
+        );
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function seedAccountProject(client, label) {
@@ -316,7 +352,7 @@ async function insertQuoteRevision(
 }
 
 test("custom-service assessment quotes are exact, append-only, and account-bound", async () => {
-  const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 4 });
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -864,6 +900,33 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(acceptedProjection.state, "accepted");
     assert.equal(acceptedProjection.actions.acceptQuote.available, false);
 
+    const heldInvoiceRepository =
+      createPostgresCustomServicesInvoiceRepository({
+        authority: {
+          async service(_context, work) {
+            return work(client);
+          }
+        },
+        release: {
+          ...APPROVED_ASSESSMENT_PAYMENT_RELEASE,
+          approved: false
+        }
+      });
+    const heldInvoiceProjection =
+      await heldInvoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(
+      heldInvoiceProjection.state,
+      "tax_calculation_pending"
+    );
+    assert.equal(
+      heldInvoiceProjection.actions.checkout.reason,
+      "payment_release_held"
+    );
+    assert.equal(
+      heldInvoiceProjection.invoice.payment.checkoutAvailable,
+      false
+    );
+
     const invoiceRepositoryContexts = [];
     const invoiceRepository =
       createPostgresCustomServicesInvoiceRepository({
@@ -872,7 +935,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             invoiceRepositoryContexts.push(structuredClone(context));
             return work(client);
           }
-        }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
       });
     const invoiceProjection =
       await invoiceRepository.readCurrentInvoice(quoteScope);
@@ -880,11 +944,11 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       invoiceProjection.schema,
       "sitesourcery.custom-services-assessment-invoice/v1"
     );
-    assert.equal(invoiceProjection.state, "tax_calculation_pending");
+    assert.equal(invoiceProjection.state, "checkout_available");
     assert.equal(invoiceProjection.invoice.subtotal.amountMinor, 20000);
     assert.equal(invoiceProjection.invoice.tax.amountMinor, null);
     assert.equal(invoiceProjection.invoice.total.amountMinor, null);
-    assert.equal(invoiceProjection.invoice.payment.checkoutAvailable, false);
+    assert.equal(invoiceProjection.invoice.payment.checkoutAvailable, true);
     assert.equal(invoiceProjection.invoice.payment.chargeOccurred, false);
     assert.match(invoiceProjection.invoice.invoiceNumber, /^SSA-[0-9A-F]{32}$/u);
     assert.deepEqual(invoiceRepositoryContexts, [
@@ -896,6 +960,134 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       }
     ]);
 
+    const checkoutCalls = [];
+    const checkoutContexts = [];
+    const assessmentPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            checkoutContexts.push(structuredClone(context));
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout(input) {
+            checkoutCalls.push(structuredClone(input));
+            return {
+              checkoutId: "cs_test_service_assessment_1",
+              url:
+                "https://checkout.stripe.com/c/pay/service_assessment_1",
+              expiresAt: isoAfter({ hours: 1 })
+            };
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    const checkoutInput = {
+      ...quoteScope,
+      commandId: `assessment-checkout-${randomUUID()}`,
+      invoiceId: invoiceProjection.invoice.invoiceId,
+      invoiceDigest: invoiceProjection.invoice.invoiceDigest
+    };
+    const checkout =
+      await assessmentPayment.createCheckout(checkoutInput);
+    assert.equal(checkout.state, "ready");
+    assert.equal(checkout.checkout.subtotal.amountMinor, 20000);
+    assert.equal(checkout.checkout.tax.state, "calculated_at_checkout");
+    assert.equal(checkout.checkout.total.state, "shown_at_checkout");
+    assert.equal(checkout.checkout.chargeOccurred, false);
+    assert.equal(
+      Object.hasOwn(checkout.checkout, "checkoutSessionId"),
+      false
+    );
+    assert.deepEqual(
+      await assessmentPayment.createCheckout(checkoutInput),
+      checkout
+    );
+    assert.equal(checkoutCalls.length, 1);
+    assert.equal(
+      checkoutCalls[0].purpose.invoiceId,
+      invoiceProjection.invoice.invoiceId
+    );
+    assert.equal(
+      checkoutCalls[0].purpose.price.amountMinor,
+      20000
+    );
+    assert.equal(
+      checkoutCalls[0].purpose.price.taxBehavior,
+      "automatic_exclusive"
+    );
+    assert.equal(checkoutContexts.length, 3);
+
+    const replayTampering = [
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          expiresAt: "2000-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          invoiceId: randomUUID()
+        }
+      },
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          invoiceNumber:
+            "SSA-00000000000040008000000000000000"
+        }
+      },
+      {
+        ...checkout,
+        checkout: {
+          ...checkout.checkout,
+          url:
+            "https://checkout.stripe.com/c/pay/another_invoice"
+        }
+      },
+      { ...checkout, providerSecret: "must-not-leak" }
+    ];
+    for (const tamperedResponse of replayTampering) {
+      await client.query(
+        `update ss.idempotency_keys
+            set response_body = $3::jsonb
+          where principal_id = $1
+            and route_key = 'custom-services.assessment-checkout'
+            and idempotency_key = $2`,
+        [
+          customer.userId,
+          checkoutInput.commandId,
+          JSON.stringify(tamperedResponse)
+        ]
+      );
+      await assert.rejects(
+        assessmentPayment.createCheckout(checkoutInput),
+        (error) =>
+          error.code ===
+            "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+      );
+    }
+    assert.equal(checkoutCalls.length, 1);
+
+    const checkoutProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(checkoutProjection.state, "checkout_available");
+    assert.equal(
+      checkoutProjection.invoice.payment.checkoutAvailable,
+      true
+    );
+
     const materialized = await client.query(
       `select
          (select count(*)::int from ss.service_invoices
@@ -905,14 +1097,347 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           where invoice.quote_id = $1) as lines,
          (select count(*)::int from ss.service_payment_reservations reservation
            join ss.service_invoices invoice on invoice.id = reservation.invoice_id
-          where invoice.quote_id = $1) as reservations`,
+          where invoice.quote_id = $1) as reservations,
+         (select count(*)::int
+            from ss.service_assessment_checkout_attempts attempt
+            join ss.service_invoices invoice on invoice.id = attempt.invoice_id
+           where invoice.quote_id = $1) as checkout_attempts`,
       [quoteId]
     );
     assert.deepEqual(materialized.rows[0], {
       invoices: 1,
       lines: 1,
-      reservations: 1
+      reservations: 1,
+      checkout_attempts: 1
     });
+
+    const foreignProviderCalls = [];
+    const foreignAssessmentPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout(input) {
+            foreignProviderCalls.push(structuredClone(input));
+            throw new Error("foreign scope reached Stripe");
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    for (const changed of [
+      { organizationId: randomUUID() },
+      { projectId: randomUUID() },
+      { invoiceId: randomUUID() },
+      { invoiceDigest: "0".repeat(64) }
+    ]) {
+      await assert.rejects(
+        foreignAssessmentPayment.createCheckout({
+          ...checkoutInput,
+          ...changed,
+          commandId: `assessment-foreign-${randomUUID()}`
+        }),
+        (error) =>
+          [
+            "ASSESSMENT_INVOICE_UNAVAILABLE",
+            "ASSESSMENT_INVOICE_CONFLICT"
+          ].includes(error.code)
+      );
+    }
+    assert.equal(foreignProviderCalls.length, 0);
+
+    await client.query("savepoint concurrent_checkout_commands");
+    await setActor(client, "customer", customer);
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'expired'
+        where invoice_id = $1 and state = 'ready'`,
+      [checkoutInput.invoiceId]
+    );
+    let concurrentPayment;
+    const concurrentProviderCalls = [];
+    concurrentPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout(input) {
+            concurrentProviderCalls.push(structuredClone(input));
+            await assert.rejects(
+              concurrentPayment.createCheckout({
+                ...checkoutInput,
+                commandId:
+                  `assessment-concurrent-${randomUUID()}`
+              }),
+              (error) =>
+                error.code ===
+                  "ASSESSMENT_CHECKOUT_IN_PROGRESS"
+            );
+            return {
+              checkoutId: "cs_test_service_assessment_concurrent",
+              url:
+                "https://checkout.stripe.com/c/pay/service_assessment_concurrent",
+              expiresAt: isoAfter({ hours: 1 })
+            };
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    await concurrentPayment.createCheckout({
+      ...checkoutInput,
+      commandId: `assessment-primary-${randomUUID()}`
+    });
+    assert.equal(concurrentProviderCalls.length, 1);
+    await client.query("rollback to savepoint concurrent_checkout_commands");
+
+    await client.query("savepoint ambiguous_provider_transport");
+    await setActor(client, "customer", customer);
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'expired'
+        where invoice_id = $1 and state = 'ready'`,
+      [checkoutInput.invoiceId]
+    );
+    let transportProviderCalls = 0;
+    const transportCommandId =
+      `assessment-transport-${randomUUID()}`;
+    const transportPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout() {
+            transportProviderCalls += 1;
+            throw new Error("transport outcome unknown");
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    const transportInput = {
+      ...checkoutInput,
+      commandId: transportCommandId
+    };
+    await assert.rejects(
+      transportPayment.createCheckout(transportInput),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+    );
+    const transportAttempt = await client.query(
+      `select attempt.state, attempt.provider_effect_certainty,
+              command.state as command_state
+         from ss.service_assessment_checkout_attempts attempt
+         join ss.idempotency_keys command
+           on command.resource_id = attempt.id
+        where attempt.command_id = $1`,
+      [transportCommandId]
+    );
+    assert.deepEqual(transportAttempt.rows[0], {
+      state: "persistence_unknown",
+      provider_effect_certainty: "ambiguous",
+      command_state: "running"
+    });
+    await assert.rejects(
+      transportPayment.createCheckout(transportInput),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+    );
+    assert.equal(transportProviderCalls, 1);
+    await client.query("rollback to savepoint ambiguous_provider_transport");
+
+    await client.query("savepoint post_provider_persistence_failure");
+    await setActor(client, "customer", customer);
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'expired'
+        where invoice_id = $1 and state = 'ready'`,
+      [checkoutInput.invoiceId]
+    );
+    let persistenceAuthorityCalls = 0;
+    let persistenceProviderCalls = 0;
+    const persistenceCommandId =
+      `assessment-persistence-${randomUUID()}`;
+    const persistencePayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            persistenceAuthorityCalls += 1;
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            if (persistenceAuthorityCalls === 2) {
+              throw new Error("Checkout persistence unavailable");
+            }
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout() {
+            persistenceProviderCalls += 1;
+            return {
+              checkoutId: "cs_test_service_assessment_persistence",
+              url:
+                "https://checkout.stripe.com/c/pay/service_assessment_persistence",
+              expiresAt: isoAfter({ hours: 1 })
+            };
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    const persistenceInput = {
+      ...checkoutInput,
+      commandId: persistenceCommandId
+    };
+    await assert.rejects(
+      persistencePayment.createCheckout(persistenceInput),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+    );
+    const persistenceAttempt = await client.query(
+      `select attempt.state, attempt.provider_effect_certainty,
+              command.state as command_state
+         from ss.service_assessment_checkout_attempts attempt
+         join ss.idempotency_keys command
+           on command.resource_id = attempt.id
+        where attempt.command_id = $1`,
+      [persistenceCommandId]
+    );
+    assert.deepEqual(persistenceAttempt.rows[0], {
+      state: "persistence_unknown",
+      provider_effect_certainty: "ambiguous",
+      command_state: "running"
+    });
+    await assert.rejects(
+      persistencePayment.createCheckout(persistenceInput),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+    );
+    assert.equal(persistenceProviderCalls, 1);
+    await client.query("rollback to savepoint post_provider_persistence_failure");
+
+    await client.query("savepoint expired_ready_checkout");
+    await setActor(client, "customer", customer);
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'expired'
+        where invoice_id = $1 and state = 'ready'`,
+      [checkoutInput.invoiceId]
+    );
+    const expiredAttemptId = randomUUID();
+    const expiredAttemptCommand =
+      `assessment-expired-${randomUUID()}`;
+    await client.query(
+      `insert into ss.service_assessment_checkout_attempts (
+         id, organization_id, project_id, customer_user_id,
+         invoice_id, command_id, provider, purpose_digest,
+         invoice_digest, accepted_disclosure_digest,
+         expected_subtotal_minor, currency, tax_mode,
+         state, provider_effect_certainty, created_at, updated_at
+       )
+       select $2, organization_id, project_id, customer_user_id,
+              invoice_id, $3, provider, purpose_digest,
+              invoice_digest, accepted_disclosure_digest,
+              expected_subtotal_minor, currency, tax_mode,
+              'provider_pending', 'not_submitted',
+              clock_timestamp() - interval '200 milliseconds',
+              clock_timestamp() - interval '200 milliseconds'
+         from ss.service_assessment_checkout_attempts
+        where invoice_id = $1
+        order by created_at desc
+        limit 1`,
+      [
+        checkoutInput.invoiceId,
+        expiredAttemptId,
+        expiredAttemptCommand
+      ]
+    );
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'ready',
+              provider_effect_certainty = 'confirmed',
+              checkout_session_id = 'cs_test_service_assessment_expired',
+              checkout_url =
+                'https://checkout.stripe.com/c/pay/service_assessment_expired',
+              expires_at =
+                clock_timestamp() - interval '100 milliseconds'
+        where id = $1`,
+      [expiredAttemptId]
+    );
+    const expiredProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(
+      expiredProjection.state,
+      "tax_calculation_pending"
+    );
+    assert.equal(
+      expiredProjection.actions.checkout.reason,
+      "reconciliation_required"
+    );
+    let expiredProviderCalls = 0;
+    const expiredPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: {
+          async service(context, work) {
+            await setActor(
+              client,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            return work(client);
+          }
+        },
+        provider: {
+          async createServiceAssessmentCheckout() {
+            expiredProviderCalls += 1;
+            throw new Error("expired Checkout reached Stripe");
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    await assert.rejects(
+      expiredPayment.createCheckout({
+        ...checkoutInput,
+        commandId: `assessment-after-expiry-${randomUUID()}`
+      }),
+      (error) =>
+        error.code ===
+          "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED"
+    );
+    assert.equal(expiredProviderCalls, 0);
+    await client.query("rollback to savepoint expired_ready_checkout");
 
     assert.deepEqual(quoteRepositoryContexts, [
       {
@@ -1162,6 +1687,157 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       /permission denied/iu
     );
     await client.query("rollback to savepoint authenticated_denial");
+
+    // Commit only after every retained-data assertion above. The disposable
+    // database then supplies two independently locking sessions to prove that
+    // same-command replay and provider completion share command-then-attempt
+    // lock order instead of deadlocking each other.
+    await setActor(client, "customer", customer);
+    await client.query(
+      `update ss.service_assessment_checkout_attempts
+          set state = 'expired'
+        where invoice_id = $1 and state = 'ready'`,
+      [checkoutInput.invoiceId]
+    );
+    await client.query("commit");
+
+    const providerEntered = deferred();
+    const releaseProvider = deferred();
+    const finishEntered = deferred();
+    let lockRaceAuthorityCalls = 0;
+    let lockRaceProviderCalls = 0;
+    const lockRaceCommandId =
+      `assessment-lock-order-${randomUUID()}`;
+    const lockRaceInput = {
+      ...checkoutInput,
+      commandId: lockRaceCommandId
+    };
+    const lockRaceAuthority = {
+      async service(context, work) {
+        lockRaceAuthorityCalls += 1;
+        const transactionClient = await pool.connect();
+        try {
+          await transactionClient.query("begin");
+          await setActor(
+            transactionClient,
+            context.actorKind,
+            {
+              ...customer,
+              organizationId: context.organizationId
+            },
+            context.userId
+          );
+          if (lockRaceAuthorityCalls === 2) {
+            const backend = await transactionClient.query(
+              "select pg_backend_pid()::int as pid"
+            );
+            finishEntered.resolve(backend.rows[0].pid);
+          }
+          const result = await work(transactionClient);
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    };
+    const lockRacePayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: lockRaceAuthority,
+        provider: {
+          async createServiceAssessmentCheckout() {
+            lockRaceProviderCalls += 1;
+            providerEntered.resolve();
+            await releaseProvider.promise;
+            return {
+              checkoutId:
+                "cs_test_service_assessment_lock_order",
+              url:
+                "https://checkout.stripe.com/c/pay/service_assessment_lock_order",
+              expiresAt: isoAfter({ hours: 1 })
+            };
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    const lockRaceResultPromise =
+      lockRacePayment.createCheckout(lockRaceInput);
+    await within(
+      providerEntered.promise,
+      "assessment lock-order provider was not reached"
+    );
+
+    await client.query("begin");
+    await setActor(client, "customer", customer);
+    const lockedCommand = await client.query(
+      `select resource_id
+         from ss.idempotency_keys
+        where organization_id = $1
+          and principal_id = $2
+          and route_key = 'custom-services.assessment-checkout'
+          and idempotency_key = $3
+        for update`,
+      [
+        customer.organizationId,
+        customer.userId,
+        lockRaceCommandId
+      ]
+    );
+    assert.equal(lockedCommand.rowCount, 1);
+    releaseProvider.resolve();
+    const finishBackendPid = await within(
+      finishEntered.promise,
+      "assessment lock-order finish transaction did not start"
+    );
+    let finishBlockedOnCommand = false;
+    for (let observation = 0; observation < 100; observation += 1) {
+      const activity = await client.query(
+        `select wait_event_type
+           from pg_stat_activity
+          where pid = $1`,
+        [finishBackendPid]
+      );
+      if (activity.rows[0]?.wait_event_type === "Lock") {
+        finishBlockedOnCommand = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(finishBlockedOnCommand, true);
+    await client.query("set local lock_timeout = '2s'");
+    const unlockedAttempt = await client.query(
+      `select state
+         from ss.service_assessment_checkout_attempts
+        where organization_id = $1 and id = $2
+        for update`,
+      [customer.organizationId, lockedCommand.rows[0].resource_id]
+    );
+    assert.deepEqual(unlockedAttempt.rows, [
+      { state: "provider_pending" }
+    ]);
+    await client.query("rollback");
+
+    const lockRaceResult = await within(
+      lockRaceResultPromise,
+      "assessment lock-order completion did not resume"
+    );
+    assert.equal(lockRaceResult.state, "ready");
+    assert.equal(lockRaceProviderCalls, 1);
+    assert.equal(lockRaceAuthorityCalls, 2);
+    const lockRaceStored = await client.query(
+      `select attempt.state, command.state as command_state
+         from ss.service_assessment_checkout_attempts attempt
+         join ss.idempotency_keys command
+           on command.resource_id = attempt.id
+        where attempt.command_id = $1`,
+      [lockRaceCommandId]
+    );
+    assert.deepEqual(lockRaceStored.rows, [
+      { state: "ready", command_state: "completed" }
+    ]);
   } finally {
     await client.query("rollback").catch(() => {});
     client.release();
