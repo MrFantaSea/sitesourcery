@@ -12,6 +12,12 @@
 
   var WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
   var SHA256 = /^[a-f0-9]{64}$/u;
+  var UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+  var SAFE_PAGE_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/u;
+  var SAFE_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
+  var CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+  var MAXIMUM_ASSESSMENT_EVIDENCE_BYTES = 700 * 1024;
   var FORBIDDEN_AUTHORITY_FIELDS = new Set([
     "amount",
     "amountMinor",
@@ -129,6 +135,136 @@
       });
     }
     return selected;
+  }
+
+  function exactInput(value, expected, field) {
+    if (
+      !isObject(value)
+      || JSON.stringify(Object.keys(value).sort()) !==
+        JSON.stringify(expected.slice().sort())
+    ) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " contains unsupported fields."
+      });
+    }
+    return value;
+  }
+
+  function requiredUuid(value, field) {
+    var selected = requiredText(value, field, 36);
+    if (!UUID.test(selected)) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " is invalid."
+      });
+    }
+    return selected;
+  }
+
+  function boundedText(value, field, minimum, maximum) {
+    var selected = String(value == null ? "" : value).trim();
+    if (
+      selected.length < minimum
+      || selected.length > maximum
+      || CONTROL_CHARACTER.test(selected)
+    ) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " must be between " + minimum + " and "
+          + maximum + " characters."
+      });
+    }
+    return selected;
+  }
+
+  function assessmentTarget(value, field) {
+    var selected = exactInput(value, ["kind", "value"], field);
+    var kind = oneOf(
+      selected.kind,
+      field + " kind",
+      ["page", "page_type"]
+    );
+    var targetValue = boundedText(
+      selected.value,
+      field,
+      1,
+      154
+    );
+    var valid = kind === "page"
+      ? SAFE_PAGE_PATH.test(targetValue)
+        && !/(^|\/)\.\.?($|\/)/u.test(targetValue)
+      : SAFE_PAGE_TYPE.test(targetValue);
+    if (!valid) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " is invalid."
+      });
+    }
+    return { kind: kind, value: targetValue };
+  }
+
+  function assessmentViewports(value) {
+    if (!Array.isArray(value) || value.length < 1 || value.length > 2) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Choose desktop, phone, or both for this finding."
+      });
+    }
+    var selected = value.map(function (entry) {
+      return oneOf(entry, "Assessment viewport", ["desktop", "phone"]);
+    }).sort();
+    if (new Set(selected).size !== selected.length) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Each assessment viewport may be chosen once."
+      });
+    }
+    return selected;
+  }
+
+  function assessmentEvidenceIds(value) {
+    if (!Array.isArray(value) || value.length < 1 || value.length > 10) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Choose between one and ten evidence images."
+      });
+    }
+    var selected = value.map(function (entry) {
+      return requiredUuid(entry, "Assessment evidence ID");
+    }).sort();
+    if (new Set(selected).size !== selected.length) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Each evidence image may be chosen once."
+      });
+    }
+    return selected;
+  }
+
+  function assessmentEvidenceBase64(value) {
+    if (
+      typeof value !== "string"
+      || value.length < 4
+      || value.length % 4 !== 0
+      || value.length >
+        Math.ceil(MAXIMUM_ASSESSMENT_EVIDENCE_BYTES / 3) * 4 + 4
+      || !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+    ) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Assessment evidence is invalid or larger than 700 KiB."
+      });
+    }
+    var padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+    var byteCount = Math.floor(value.length * 3 / 4) - padding;
+    if (byteCount < 1 || byteCount > MAXIMUM_ASSESSMENT_EVIDENCE_BYTES) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "Assessment evidence is invalid or larger than 700 KiB."
+      });
+    }
+    return value;
   }
 
   function rejectClaimedAuthority(source) {
@@ -699,6 +835,217 @@
           },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
+      );
+    }
+
+    function listOwnerAssessmentJobs(requestOptions) {
+      return request(
+        "GET",
+        "/operator/custom-services/assessment-jobs",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function uploadOwnerAssessmentEvidence(
+      jobId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        [
+          "accessibleDescription",
+          "bytesBase64",
+          "mediaType",
+          "organizationId",
+          "reviewTarget",
+          "viewport"
+        ],
+        "Assessment evidence"
+      );
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/operator/custom-services/assessment-jobs/"
+          + segment(requiredUuid(jobId, "Assessment job ID"), "Assessment job ID")
+          + "/evidence",
+        {
+          body: {
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            reviewTarget: assessmentTarget(
+              source.reviewTarget,
+              "Review target"
+            ),
+            viewport: oneOf(
+              source.viewport,
+              "Assessment viewport",
+              ["desktop", "phone"]
+            ),
+            accessibleDescription: boundedText(
+              source.accessibleDescription,
+              "Accessible evidence description",
+              10,
+              500
+            ),
+            mediaType: oneOf(
+              source.mediaType,
+              "Evidence image type",
+              ["image/jpeg", "image/png", "image/webp"]
+            ),
+            bytesBase64: assessmentEvidenceBase64(
+              source.bytesBase64
+            )
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function putOwnerAssessmentFinding(
+      jobId,
+      priority,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        [
+          "category",
+          "evidenceIds",
+          "expectedRevision",
+          "included",
+          "organizationId",
+          "primaryTarget",
+          "recommendation",
+          "severity",
+          "summary",
+          "viewports"
+        ],
+        "Assessment finding"
+      );
+      rejectClaimedAuthority(source);
+      if (typeof source.included !== "boolean") {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Assessment finding inclusion is invalid."
+        });
+      }
+      return request(
+        "PUT",
+        "/operator/custom-services/assessment-jobs/"
+          + segment(requiredUuid(jobId, "Assessment job ID"), "Assessment job ID")
+          + "/findings/"
+          + integerBetween(priority, "Assessment finding priority", 1, 10),
+        {
+          body: {
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            expectedRevision: integerBetween(
+              source.expectedRevision,
+              "Assessment finding revision",
+              0,
+              Number.MAX_SAFE_INTEGER
+            ),
+            included: source.included,
+            severity: oneOf(
+              source.severity,
+              "Assessment severity",
+              ["critical", "high", "moderate", "low", "positive"]
+            ),
+            category: oneOf(
+              source.category,
+              "Assessment category",
+              [
+                "accessibility",
+                "content",
+                "functionality",
+                "performance",
+                "responsive_design",
+                "search_visibility",
+                "security_observation",
+                "usability",
+                "visual_design"
+              ]
+            ),
+            primaryTarget: assessmentTarget(
+              source.primaryTarget,
+              "Primary target"
+            ),
+            viewports: assessmentViewports(source.viewports),
+            summary: boundedText(
+              source.summary,
+              "Assessment finding summary",
+              10,
+              240
+            ),
+            recommendation: boundedText(
+              source.recommendation,
+              "Assessment recommendation",
+              10,
+              1500
+            ),
+            evidenceIds: assessmentEvidenceIds(source.evidenceIds)
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function deliverOwnerAssessmentReport(
+      jobId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["expectedWorkDigest", "organizationId", "overallSummary"],
+        "Assessment report delivery"
+      );
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/operator/custom-services/assessment-jobs/"
+          + segment(requiredUuid(jobId, "Assessment job ID"), "Assessment job ID")
+          + "/delivery",
+        {
+          body: {
+            expectedWorkDigest: requiredDigest(
+              source.expectedWorkDigest,
+              "Assessment work digest"
+            ),
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            overallSummary: boundedText(
+              source.overallSummary,
+              "Assessment report summary",
+              20,
+              2000
+            )
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function getCustomServicesAssessmentReport(
+      projectId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-report",
+        { signal: requestOptions && requestOptions.signal }
       );
     }
 
@@ -1374,6 +1721,16 @@
         listOwnerAssessmentRequests,
       issueOwnerAssessmentQuote:
         issueOwnerAssessmentQuote,
+      listOwnerAssessmentJobs:
+        listOwnerAssessmentJobs,
+      uploadOwnerAssessmentEvidence:
+        uploadOwnerAssessmentEvidence,
+      putOwnerAssessmentFinding:
+        putOwnerAssessmentFinding,
+      deliverOwnerAssessmentReport:
+        deliverOwnerAssessmentReport,
+      getCustomServicesAssessmentReport:
+        getCustomServicesAssessmentReport,
       createProject: createProject,
       saveDraft: saveDraft,
       createVersion: createVersion,

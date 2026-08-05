@@ -131,6 +131,22 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getAssessmentReport(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_SERVICES_ASSESSMENT_WORK_HELD",
+        "Custom-services assessment reports are held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async getAssessmentEvidence(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_SERVICES_ASSESSMENT_WORK_HELD",
+        "Custom-services assessment evidence is held in this runtime.",
+        { status: 503 }
+      );
+    },
     async createAssessmentCheckout(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -183,6 +199,7 @@ export function createHeldHostedCustomServicesAccount() {
 }
 
 export function createHostedCustomServicesAccount({
+  assessmentWork,
   invoiceRepository,
   payment,
   quoteRepository,
@@ -190,6 +207,14 @@ export function createHostedCustomServicesAccount({
   repository,
   resolveSession
 } = {}) {
+  invariant(
+    assessmentWork &&
+      typeof assessmentWork.readCustomerReport === "function" &&
+      typeof assessmentWork.readCustomerEvidence === "function",
+    "invalid_configuration",
+    "the custom-services assessment work boundary is required",
+    { status: 500 }
+  );
   invariant(
     payment && typeof payment.createCheckout === "function",
     "invalid_configuration",
@@ -263,6 +288,29 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return invoiceRepository.readCurrentInvoice(scope);
+    },
+
+    async getAssessmentReport(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return assessmentWork.readCustomerReport(scope);
+    },
+
+    async getAssessmentEvidence(
+      actorInput,
+      projectIdInput,
+      evidenceIdInput
+    ) {
+      const evidenceId = requireProjectId(evidenceIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return assessmentWork.readCustomerEvidence(scope, evidenceId);
     },
 
     async createAssessmentCheckout(

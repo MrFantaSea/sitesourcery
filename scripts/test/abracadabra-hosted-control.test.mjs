@@ -641,6 +641,66 @@ test("staging catalog configuration rejects every private price authority field"
   );
 });
 
+test("H1H customer and owner reads are jointly refreshed and stale work responses cannot cross accounts", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /Promise\.all\(\[[\s\S]*?getCustomServicesAssessmentRequest\(selectedProjectId\)[\s\S]*?getCustomServicesAssessmentQuote\(selectedProjectId\)[\s\S]*?getCustomServicesAssessmentInvoice\(selectedProjectId\)[\s\S]*?getCustomServicesAssessmentReport\(selectedProjectId\)[\s\S]*?\]\)/u,
+    "request, quote, invoice, and delivered-report truth refresh together",
+  );
+  assert.match(
+    source,
+    /report:\s*results\[3\]\.value[\s\S]*?reportError:\s*results\[3\]\.error/u,
+    "the customer report is bound to the same selected-project read",
+  );
+  assert.match(
+    source,
+    /function ownerAssessmentWorkIsCurrent\(sequence, accountId\)[\s\S]*?sequence === ownerWorkReadSequence[\s\S]*?ownerWorkRead\.accountId === accountId[\s\S]*?lastState\.account/u,
+    "owner work responses are fenced by sequence and authenticated account",
+  );
+  assert.match(
+    source,
+    /function assessmentReadIsCurrent\(sequence, projectId\)[\s\S]*?lastState\.account[\s\S]*?assessmentRead\.accountId[\s\S]*?idOf\(lastState\.project\) === projectId/u,
+    "customer assessment reads are fenced by account as well as project",
+  );
+  assert.match(
+    source,
+    /assessmentRead\.accountId !== accountId[\s\S]*?assessmentRead\.projectId !== projectId[\s\S]*?requestAssessment\(projectId\)/u,
+    "an in-place identity change forces a fresh account-scoped read",
+  );
+  assert.match(
+    source,
+    /if \(!verify\(result\)\)[\s\S]*?requestOwnerAssessmentJobs\(selectedAccountId\)/u,
+    "a write response is verified before the owner list refreshes",
+  );
+  assert.match(
+    source,
+    /sessionStorage\.getItem[\s\S]*?sessionStorage\.setItem[\s\S]*?ownerEvidenceAttempt\.signature === signature[\s\S]*?ownerEvidenceAttempt\.commandId/u,
+    "an uncertain evidence upload reuses its session-durable command ID",
+  );
+  assert.match(
+    source,
+    /Assessment in progress[\s\S]*?Check for delivered report[\s\S]*?actions\.retry/u,
+    "an already-open customer page can refresh into delivered truth",
+  );
+  assert.match(
+    source,
+    /!ownerAssessmentCoverageComplete\(current\)[\s\S]*?!ownerAssessmentFindingsReady\(current\)[\s\S]*?deliverOwnerAssessmentReport/u,
+    "report delivery is fenced behind exact evidence coverage and finding order",
+  );
+  assert.doesNotMatch(
+    source,
+    /reportState\.draft|report\.draft|draftFindings/u,
+    "customer rendering never consumes draft findings",
+  );
+});
+
 test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon", async () => {
   const source = [
     await readFile(

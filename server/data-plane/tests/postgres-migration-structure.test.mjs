@@ -1325,3 +1325,66 @@ test("custom-service assessment Checkout reserves one exact automatic-tax paymen
     /on delete cascade|grant all privileges/iu
   );
 });
+
+test("paid assessment delivery freezes exact evidence, findings, report, and one Custom credit", async () => {
+  const all = await migrations();
+  const delivery = all.find(
+    ({ name }) =>
+      name ===
+        "202608050040_custom_service_assessment_delivery.sql"
+  );
+  assert.ok(delivery);
+  for (const table of [
+    "service_document_payloads",
+    "service_assessment_evidence",
+    "service_assessment_finding_drafts",
+    "service_assessment_reports",
+    "service_assessment_report_findings",
+    "service_credit_grants"
+  ]) {
+    assert.match(
+      delivery.sql,
+      new RegExp(`create table ss\\.${table} \\(`, "iu")
+    );
+  }
+  assert.match(
+    delivery.sql,
+    /octet_length\(payload\) between 1 and 786432/iu
+  );
+  assert.match(
+    delivery.sql,
+    /request_digest ss\.sha256_hex not null[\s\S]*unique \(created_by_operator_user_id, job_id, command_id\)/iu
+  );
+  assert.match(
+    delivery.sql,
+    /delivery_command_id text not null[\s\S]*work_digest ss\.sha256_hex not null[\s\S]*delivery_digest ss\.sha256_hex not null[\s\S]*unique \(delivered_by_operator_user_id, job_id, delivery_command_id\)/iu
+  );
+  assert.match(
+    delivery.sql,
+    /cross join unnest\(array\['desktop', 'phone'\]::text\[\]\)[\s\S]*assessment report lacks exact coverage or finding proof/iu
+  );
+  assert.match(
+    delivery.sql,
+    /create function ss\.materialize_service_assessment_delivery\(\)[\s\S]*insert into ss\.service_assessment_report_findings[\s\S]*insert into ss\.service_credit_grants/iu
+  );
+  assert.match(
+    delivery.sql,
+    /create trigger service_assessment_reports_materialize[\s\S]*after insert on ss\.service_assessment_reports[\s\S]*materialize_service_assessment_delivery/iu
+  );
+  assert.match(
+    delivery.sql,
+    /amount_minor bigint not null check \(amount_minor = 20000\)[\s\S]*application_scope text not null check \(application_scope = 'custom_base_build'\)[\s\S]*maximum_applications integer not null check \(maximum_applications = 1\)[\s\S]*non_cash boolean not null check \(non_cash\)[\s\S]*acceptance_cutoff = delivered_at \+ interval '90 days'/iu
+  );
+  assert.match(
+    delivery.sql,
+    /revoke insert on table\s+ss\.service_assessment_report_findings,\s+ss\.service_credit_grants\s+from service_role/iu
+  );
+  assert.match(
+    delivery.sql,
+    /create function ss\.hosted_runtime_contract_v40\(\)[\s\S]*canonical-ss-v40-custom-service-assessment-delivery/iu
+  );
+  assert.doesNotMatch(
+    delivery.sql,
+    /on delete cascade|grant all privileges/iu
+  );
+});

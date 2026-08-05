@@ -982,28 +982,71 @@ Batch 3C sealed checkpoint gates:
 - Provider and architecture sidecars completed their bounded reviews and are
   closed. No real Stripe call, customer/production-data write, push,
   deployment, DNS change, credential handling, or release mutation occurred.
-  Findings, report delivery, credit, and the production grant remain held.
+  At the H1G boundary, findings, report delivery, credit, and the production
+  grant remained held; H1H below completes the first three locally.
+
+## H1 paid assessment work, delivery, and credit checkpoint evidence
+
+- Migration 40 adds forced-RLS, service-role-only private document payloads,
+  immutable screenshot evidence, revision-fenced finding drafts, immutable
+  delivered reports and finding snapshots, and one database-materialized
+  `$200` same-project Custom base-build credit. Delivery and credit are one
+  transaction; the grant is non-cash, one-use, and expires at the exact
+  PostgreSQL `delivered_at + interval '90 days'` boundary.
+- The private owner workbench works from Mac or Pixel. It lists paid jobs,
+  transcodes every JPEG/PNG/WebP upload through canvas to strip metadata,
+  bounds decoded dimensions and bytes, persists uncertain-upload command
+  identity for the browser session, binds finding evidence to the selected
+  target and every affected viewport, and lazily opens one job rather than
+  eagerly constructing up to one thousand finding forms.
+- Final delivery carries the digest of the exact evidence/finding work the
+  operator reviewed. The repository serializes all job mutations, recomputes
+  that digest after locking, rejects stale concurrent work, and permits a
+  truthful replay only when the immutable work and summary match. A second
+  summary cannot receive the first operator's success receipt.
+- The customer account read is fenced by both authenticated account and
+  project. Draft findings remain private; after delivery the customer can
+  refresh an already-open page, read the immutable report, load only its
+  integrity-checked evidence, and see exact available/expired credit truth.
+- Fresh database `ss_h1h_delivery_20260805_codex5` replayed all 40 migrations
+  from empty state and passed the complete real PostgreSQL journey 1/1:
+  request, quote, acceptance, invoice, Checkout, settlement/job, desktop and
+  phone evidence, finding revision/replay, stale-delivery rejection,
+  immutable report, exactly one credit, customer report/evidence,
+  cross-tenant and pre-delivery denial, and post-delivery immutability. The
+  database had zero active sessions before exact-name deletion and is verified
+  absent; the preceding disposable `codex4` database was likewise removed.
+- Authoritative Node 24 proof passes: the focused UI/HTTP/migration set 97/97;
+  hosted service 242 pass with 2 intentional environment skips and 0 failures;
+  and the complete Node suite 517/517. The hosted staging manifest now binds
+  API digest `ee85542e568cf3ffd8f500ebfc01d73ee53bb0987b60f2bf7d54c82e3234111f`
+  and customer-control digest
+  `024559504427f26f275116b51db7a912dba0047697af29155c8a942e0cd316ee`.
+- The browser implementer and independent redline reviewer are closed. No real
+  Stripe call, customer/production-data write, push, deployment, DNS change,
+  credential handling, or release mutation occurred. Credit issuance is now
+  complete; credit reservation/redemption and the Custom build commercial
+  lifecycle remain held.
 
 ## Live resources and workers
 
-- No H1, Batch 3C, H0, quote-readiness, invoice-proof, Checkout-dispatch, or
-  settlement worker remains running. The provider and architecture sidecars
-  are closed. The exact Batch 3C and H1 disposable PostgreSQL databases are
-  absent.
+- No H1, Batch 3C, H0, quote-readiness, invoice-proof, Checkout-dispatch,
+  settlement, assessment-work, browser, or redline worker remains running.
+  The exact Batch 3C and H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add one owner-safe assessment-work boundary over the existing bounded open job:
-record the exact reviewed targets, desktop and phone coverage, and up to ten
-prioritized findings with accessible screenshot evidence; deliver one
-immutable customer-safe account report; and atomically create exactly one
-same-project 90-day `$200` Custom base-build credit only after delivery.
-Duplicate owner commands, report delivery, notice retries, and customer reads
-must not duplicate findings, reports, or credit. Keep anonymous inquiry,
-expanded assessment, Rescue pricing, broader Custom invoicing, provider
-release, push, deployment, and DNS outside this next slice.
+Add the one-use credit reservation/application boundary to the Custom build
+quote and acceptance path. The accepted quote must bind the same organization
+and project, reserve only an available migration-40 grant, apply it only to the
+base build, preserve the exact owner-approved Card-through-Scale installment
+rules, and prevent simultaneous or repeated acceptance from double-use. A
+voided/unsettled quote may release only its reservation; a settled application
+is never reusable or cash. Then carry the exact remaining due-now amount into
+the invoice, automatic-tax Checkout, provider-confirmed settlement, and Custom
+build job. Keep provider release, push, deployment, and DNS held.
 
 ## Batch 3B write scope
 

@@ -60,6 +60,9 @@ import {
   createPostgresCustomServicesAssessmentSettlement
 } from "../custom-services-assessment-settlement-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentWork
+} from "../custom-services-assessment-work-postgres.mjs";
+import {
   assertApprovedCustomServicesAssessmentPaymentReady,
   createConfiguredCustomServicesAssessmentPaymentRelease
 } from "../custom-services-assessment-payment-config.mjs";
@@ -336,8 +339,15 @@ async function start() {
     createPostgresCustomServicesRequestRepository({ authority });
   const customServicesOwner =
     createPostgresCustomServicesOwner({ authority });
+  const customServicesAssessmentWork =
+    createPostgresCustomServicesAssessmentWork({
+      authority,
+      clock: commerceV2.clock,
+      randomUUID: () => commerceV2.ids.next("assessment_work")
+    });
   const customServicesAccount =
     createHostedCustomServicesAccount({
+      assessmentWork: customServicesAssessmentWork,
       invoiceRepository: customServicesInvoiceRepository,
       payment: customServicesAssessmentPayment,
       quoteRepository: customServicesAssessmentQuoteRepository,
@@ -505,6 +515,7 @@ async function start() {
         alakazamAccount,
         alakazamBilling,
         customServicesAccount,
+        customServicesAssessmentWork,
         customServicesOwner,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,

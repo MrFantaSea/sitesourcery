@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { MAX_BODY_BYTES, WRITE_METHODS } from "./constants.mjs";
 import { HostedError, invariant, publicError } from "./errors.mjs";
 import { digest, randomToken } from "./security.mjs";
@@ -16,6 +18,9 @@ import {
 import {
   createHeldCustomServicesOwner
 } from "./custom-services-owner-postgres.mjs";
+import {
+  createHeldCustomServicesAssessmentWork
+} from "./custom-services-assessment-work-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -24,6 +29,7 @@ const JSON_HEADERS = Object.freeze({
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY"
 });
+const MAXIMUM_PRIVATE_EVIDENCE_BYTES = 700 * 1024;
 const SESSIONLESS_IDENTITY_WRITES = new Set([
   "/api/v1/auth/register",
   "/api/v1/auth/register/complete",
@@ -93,6 +99,40 @@ function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { ...JSON_HEADERS, ...headers }
+  });
+}
+
+function privateEvidence(payload, requestId) {
+  const bytes = Buffer.from(payload?.bytes ?? []);
+  invariant(
+    payload &&
+      payload.bytes instanceof Uint8Array &&
+      ["image/jpeg", "image/png", "image/webp"].includes(
+        payload.mediaType
+      ) &&
+      /^[a-f0-9]{64}$/u.test(payload.contentDigest) &&
+      Number.isSafeInteger(Number(payload.byteCount)) &&
+      bytes.byteLength >= 1 &&
+      bytes.byteLength <= MAXIMUM_PRIVATE_EVIDENCE_BYTES &&
+      Number(payload.byteCount) === bytes.byteLength &&
+      createHash("sha256").update(bytes).digest("hex") ===
+        payload.contentDigest,
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Assessment evidence response is invalid.",
+    { status: 500 }
+  );
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "Content-Length": String(payload.byteCount),
+      "Content-Type": payload.mediaType,
+      "Digest":
+        `sha-256=${Buffer.from(payload.contentDigest, "hex").toString("base64")}`,
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "X-Request-Id": requestId
+    }
   });
 }
 
@@ -303,6 +343,7 @@ export function createHostedApi(
     alakazamAccount = null,
     alakazamBilling = null,
     customServicesAccount = null,
+    customServicesAssessmentWork = null,
     customServicesOwner = null,
     stripeWebhook = null
   } = {}
@@ -333,6 +374,22 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services owner boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesAssessmentWorkBoundary =
+    customServicesAssessmentWork ??
+    createHeldCustomServicesAssessmentWork();
+  invariant(
+    typeof customServicesAssessmentWorkBoundary.listJobs === "function" &&
+      typeof customServicesAssessmentWorkBoundary.uploadEvidence ===
+        "function" &&
+      typeof customServicesAssessmentWorkBoundary.putFinding === "function" &&
+      typeof customServicesAssessmentWorkBoundary.deliverReport ===
+        "function" &&
+      typeof customServicesAssessmentWorkBoundary.readOwnerEvidence ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted custom-services assessment work boundary is invalid.",
     { status: 500 }
   );
   const stripeWebhookBoundary =
@@ -371,6 +428,10 @@ export function createHostedApi(
       typeof customServicesAccountBoundary.getAssessmentQuote ===
         "function" &&
       typeof customServicesAccountBoundary.getAssessmentInvoice ===
+        "function" &&
+      typeof customServicesAccountBoundary.getAssessmentReport ===
+        "function" &&
+      typeof customServicesAccountBoundary.getAssessmentEvidence ===
         "function" &&
       typeof customServicesAccountBoundary.createAssessmentCheckout ===
         "function" &&
@@ -700,6 +761,140 @@ export function createHostedApi(
             );
           status = 201;
         } else if (
+          method === "GET" &&
+          pathname ===
+            "/api/v1/operator/custom-services/assessment-jobs"
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening assessment work tools.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAssessmentWorkBoundary.listJobs(actor);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-jobs\/([^/]+)\/evidence\/([^/]+)$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing assessment evidence.",
+            { status: 401 }
+          );
+          return privateEvidence(
+            await customServicesAssessmentWorkBoundary.readOwnerEvidence(
+              actor,
+              route[0],
+              route[1]
+            ),
+            requestId
+          );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-jobs\/([^/]+)\/evidence$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before recording assessment evidence.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAssessmentWorkBoundary.uploadEvidence(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "accessibleDescription",
+                  "bytesBase64",
+                  "commandId",
+                  "mediaType",
+                  "organizationId",
+                  "reviewTarget",
+                  "viewport"
+                ],
+                "INVALID_ASSESSMENT_EVIDENCE",
+                "The assessment evidence upload is invalid."
+              )
+            );
+          status = 201;
+        } else if (
+          method === "PUT" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-jobs\/([^/]+)\/findings\/([^/]+)$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before recording an assessment finding.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAssessmentWorkBoundary.putFinding(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                [
+                  "category",
+                  "commandId",
+                  "evidenceIds",
+                  "expectedRevision",
+                  "included",
+                  "organizationId",
+                  "primaryTarget",
+                  "recommendation",
+                  "severity",
+                  "summary",
+                  "viewports"
+                ],
+                "INVALID_ASSESSMENT_FINDING",
+                "The assessment finding is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-jobs\/([^/]+)\/delivery$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before delivering an assessment report.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAssessmentWorkBoundary.deliverReport(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "expectedWorkDigest",
+                  "organizationId",
+                  "overallSummary"
+                ],
+                "INVALID_ASSESSMENT_DELIVERY",
+                "The assessment delivery is invalid."
+              )
+            );
+          status = 201;
+        } else if (
           method === "POST" &&
           (route = match(
             pathname,
@@ -726,6 +921,45 @@ export function createHostedApi(
                 )
               );
           status = 201;
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-evidence\/([^/]+)$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing assessment evidence.",
+            { status: 401 }
+          );
+          return privateEvidence(
+            await customServicesAccountBoundary.getAssessmentEvidence(
+              actor,
+              route[0],
+              route[1]
+            ),
+            requestId
+          );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-report$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing an assessment report.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getAssessmentReport(
+              actor,
+              route[0]
+            );
         } else if (
           method === "GET" &&
           (route = match(

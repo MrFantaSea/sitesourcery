@@ -161,6 +161,23 @@ async function verifyPlatformSchema(pool) {
       to_regprocedure(
         'ss.guard_service_assessment_settlement_insert()'
       ) is not null as service_assessment_settlement_insert_guard,
+      to_regclass('ss.service_document_payloads') is not null
+        as service_document_payloads,
+      to_regclass('ss.service_assessment_evidence') is not null
+        as service_assessment_evidence,
+      to_regclass('ss.service_assessment_finding_drafts') is not null
+        as service_assessment_finding_drafts,
+      to_regclass('ss.service_assessment_reports') is not null
+        as service_assessment_reports,
+      to_regclass('ss.service_assessment_report_findings') is not null
+        as service_assessment_report_findings,
+      to_regclass('ss.service_credit_grants') is not null
+        as service_credit_grants,
+      to_regprocedure('ss.hosted_runtime_contract_v40()') is not null
+        as custom_service_assessment_delivery_runtime_contract,
+      to_regprocedure(
+        'ss.materialize_service_assessment_delivery()'
+      ) is not null as service_assessment_delivery_materializer,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -288,6 +305,10 @@ async function verifyPlatformSchema(pool) {
         'ss.operator_permissions',
         'INSERT'
       ) and not has_table_privilege(
+        'service_role',
+        'ss.service_documents',
+        'UPDATE'
+      ) and has_table_privilege(
         'service_role',
         'ss.service_documents',
         'INSERT'
@@ -1012,6 +1033,142 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `custom-service quote migration contract failed: ${name}`
+    );
+  }
+
+  const assessmentDelivery = await pool.query(`
+    select
+      ss.hosted_runtime_contract_v40() =
+        'canonical-ss-v40-custom-service-assessment-delivery'
+        as exact_runtime_marker,
+      (
+        select count(*) = 6
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and not has_table_privilege('service_role', relation.oid, 'DELETE')
+            and not has_table_privilege('service_role', relation.oid, 'TRUNCATE')
+            and not has_table_privilege('authenticated', relation.oid, 'SELECT')
+            and not has_table_privilege('authenticated', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and has_table_privilege('service_role', relation.oid, 'INSERT') =
+              relation.relname in (
+                'service_document_payloads',
+                'service_assessment_evidence',
+                'service_assessment_finding_drafts',
+                'service_assessment_reports'
+              )
+            and has_table_privilege('service_role', relation.oid, 'UPDATE') =
+              (relation.relname = 'service_assessment_finding_drafts')
+          )
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relkind = 'r'
+           and relation.relname in (
+             'service_document_payloads',
+             'service_assessment_evidence',
+             'service_assessment_finding_drafts',
+             'service_assessment_reports',
+             'service_assessment_report_findings',
+             'service_credit_grants'
+           )
+      ) as exact_security_boundary,
+      has_table_privilege(
+        'service_role', 'ss.service_documents', 'INSERT'
+      )
+        and not has_table_privilege(
+          'service_role', 'ss.service_documents', 'UPDATE'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.service_documents', 'DELETE'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.service_documents', 'TRUNCATE'
+        ) as append_only_document_authority,
+      (
+        select count(*) = 2
+          and bool_and(column_record.is_generated = 'ALWAYS')
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name = 'service_document_payloads'
+           and column_record.column_name in ('content_digest', 'byte_count')
+      ) as payload_facts_are_database_generated,
+      (
+        select count(*) = 15
+          from pg_trigger trigger_record
+          join pg_class relation on relation.oid = trigger_record.tgrelid
+          join pg_namespace namespace on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname in (
+             'service_documents',
+             'service_document_payloads',
+             'service_assessment_evidence',
+             'service_assessment_finding_drafts',
+             'service_assessment_reports',
+             'service_assessment_report_findings',
+             'service_credit_grants'
+           )
+           and trigger_record.tgname in (
+             'service_documents_immutable',
+             'service_documents_assessment_guard',
+             'service_document_payloads_immutable',
+             'service_document_payloads_guard',
+             'service_assessment_evidence_guard',
+             'service_assessment_evidence_immutable',
+             'service_assessment_finding_drafts_guard',
+             'service_assessment_finding_drafts_no_delete',
+             'service_assessment_reports_guard',
+             'service_assessment_reports_immutable',
+             'service_assessment_reports_materialize',
+             'service_assessment_report_findings_immutable',
+             'service_assessment_report_findings_guard',
+             'service_credit_grants_guard',
+             'service_credit_grants_immutable'
+           )
+           and not trigger_record.tgisinternal
+      ) as retained_work_triggers,
+      (
+        select procedure_record.prosecdef
+          and not has_function_privilege(
+            'service_role',
+            'ss.materialize_service_assessment_delivery()',
+            'EXECUTE'
+          )
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_credit_grants%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_assessment_report_findings%'
+          from pg_proc procedure_record
+         where procedure_record.oid =
+           'ss.materialize_service_assessment_delivery()'::regprocedure
+      ) as atomic_report_credit_materializer,
+      not exists (
+        select 1
+          from pg_constraint constraint_record
+          join pg_class relation on relation.oid = constraint_record.conrelid
+          join pg_namespace namespace on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname in (
+             'service_document_payloads',
+             'service_assessment_evidence',
+             'service_assessment_finding_drafts',
+             'service_assessment_reports',
+             'service_assessment_report_findings',
+             'service_credit_grants'
+           )
+           and constraint_record.contype = 'f'
+           and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(assessmentDelivery.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `assessment delivery migration contract failed: ${name}`
     );
   }
 }

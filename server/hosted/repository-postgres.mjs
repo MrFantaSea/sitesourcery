@@ -235,6 +235,13 @@ const READINESS_QUERY = `
       and to_regprocedure(
         'ss.hosted_runtime_contract_v39()'
       ) is not null
+      and to_regclass('ss.service_document_payloads') is not null
+      and to_regclass('ss.service_assessment_evidence') is not null
+      and to_regclass('ss.service_assessment_finding_drafts') is not null
+      and to_regclass('ss.service_assessment_reports') is not null
+      and to_regclass('ss.service_assessment_report_findings') is not null
+      and to_regclass('ss.service_credit_grants') is not null
+      and to_regprocedure('ss.hosted_runtime_contract_v40()') is not null
       as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -330,7 +337,8 @@ const CUSTOM_SERVICES_READINESS_QUERY = `
               'service_project_profiles',
               'service_cases',
               'service_case_offerings',
-              'service_intakes'
+              'service_intakes',
+              'service_documents'
             )
           )
           and has_table_privilege(
@@ -384,6 +392,9 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ss.hosted_runtime_contract_v39() =
       'canonical-ss-v39-custom-service-assessment-settlement'
       as custom_service_assessment_settlement_contract_marker_ready,
+    ss.hosted_runtime_contract_v40() =
+      'canonical-ss-v40-custom-service-assessment-delivery'
+      as custom_service_assessment_delivery_contract_marker_ready,
     (
       select count(*) = 1
         and bool_and(relation.relrowsecurity)
@@ -649,6 +660,60 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
            and constraint_record.confdeltype = 'c'
       )
       as custom_service_assessment_settlement_ready,
+    (
+      select count(*) = 6
+        and bool_and(relation.relrowsecurity)
+        and bool_and(relation.relforcerowsecurity)
+        and bool_and(
+          has_table_privilege('service_role', relation.oid, 'SELECT')
+          and not has_table_privilege('service_role', relation.oid, 'DELETE')
+          and not has_table_privilege('service_role', relation.oid, 'TRUNCATE')
+          and not has_table_privilege('authenticated', relation.oid, 'SELECT')
+          and not has_table_privilege('authenticated', relation.oid, 'INSERT')
+          and not has_table_privilege('anon', relation.oid, 'SELECT')
+          and not has_table_privilege('anon', relation.oid, 'INSERT')
+          and has_table_privilege('service_role', relation.oid, 'INSERT') =
+            relation.relname in (
+              'service_document_payloads',
+              'service_assessment_evidence',
+              'service_assessment_finding_drafts',
+              'service_assessment_reports'
+            )
+          and has_table_privilege('service_role', relation.oid, 'UPDATE') =
+            (relation.relname = 'service_assessment_finding_drafts')
+        )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_document_payloads',
+           'service_assessment_evidence',
+           'service_assessment_finding_drafts',
+           'service_assessment_reports',
+           'service_assessment_report_findings',
+           'service_credit_grants'
+         )
+    )
+      and has_table_privilege(
+        'service_role', 'ss.service_documents', 'INSERT'
+      )
+      and not has_table_privilege(
+        'service_role', 'ss.service_documents', 'UPDATE'
+      )
+      and (
+        select procedure_record.prosecdef
+          and not has_function_privilege(
+            'service_role',
+            'ss.materialize_service_assessment_delivery()',
+            'EXECUTE'
+          )
+          from pg_proc procedure_record
+         where procedure_record.oid =
+           'ss.materialize_service_assessment_delivery()'::regprocedure
+      )
+      as custom_service_assessment_delivery_ready,
     (
       select count(*) = 11
         and bool_and(relation.relrowsecurity)
@@ -1246,8 +1311,10 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_invoices_contract_marker_ready: false,
           custom_service_assessment_checkout_contract_marker_ready: false,
           custom_service_assessment_settlement_contract_marker_ready: false,
+          custom_service_assessment_delivery_contract_marker_ready: false,
           custom_service_assessment_checkout_ready: false,
           custom_service_assessment_settlement_ready: false,
+          custom_service_assessment_delivery_ready: false,
           custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
@@ -1315,7 +1382,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations through custom-service assessment settlement v39 are required.",
+        : "Canonical PostgreSQL migrations through custom-service assessment delivery v40 are required.",
       { status: 503, details: status }
     );
     return status;

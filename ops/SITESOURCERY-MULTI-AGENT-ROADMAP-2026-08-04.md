@@ -272,16 +272,19 @@ H1 pre-commerce foundation checkpoint:
   mismatch review, transient-read retry, and exact expired-Checkout
   reconciliation before one replacement. Customer return and account states
   expose paid/verifying/review truth without provider identifiers.
-- [ ] Add bounded findings, report delivery, and one-use `$200` credit
+- [x] Add bounded findings, report delivery, and one-use `$200` credit
   migrations and services before any payment or public release.
 
 Assessment and findings:
 
-- [ ] Implement the bounded `$200` assessment: one site, up to five
+- [x] Implement the bounded `$200` assessment: one site, up to five
   representative public pages/page types, phone and desktop, up to ten
   prioritized findings, evidence, delivery, and expanded-assessment hold.
-- [ ] Implement one-use, same-project, 90-day Custom base-build credit and
-  separately record reused scope so overlapping work is not billed twice.
+- [x] Issue exactly one non-cash, same-project, 90-day Custom base-build
+  credit only with immutable report delivery.
+- [ ] Implement atomic one-use credit reservation/application during Custom
+  quote acceptance and separately record reused scope so overlapping work is
+  not billed twice.
 - [ ] Let the customer read the delivered report and select safe findings for a
   later fixed Rescue quote; do not turn report findings into automatic charges.
 
@@ -434,25 +437,29 @@ Lane D/J Polish truth ────────────┘
 | H1E | Held assessment invoice | Lead | migration 37; automatic exact accepted-installment materialization; immutable `$200` invoice line; tax/total pending; non-dispatchable reservation; authenticated customer route and no-charge UI; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; tax, Checkout, payment, job, report, credit, deployment grant, and release held |
 | H1F | Automatic-tax assessment Checkout dispatch | Lead plus bounded browser worker and read-only audit | migration 38; durable reserve-before-effect; unique provider Session binding; exact `$200` Stripe purpose and returned-Session purpose validation; Stripe-hosted address/tax calculation; separate default-held release that cannot start approved without settlement readiness; account-bound command and responsive customer control without raw provider IDs; exact command-before-attempt locking; replay, expiry, concurrency, tamper, and ambiguity fences; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; real provider effects, settlement, job, report, credit, deployment grant, and release held |
 | H1G | Assessment payment settlement and job open | Lead plus bounded provider and architecture review | migration 39; webhook-as-wakeup routing; exact Stripe Session, PaymentIntent, Charge, Customer, subtotal, tax, total, metadata, and purpose readback; immutable receipt; one exact bounded assessment job; safe replay/alias handling; mismatch and transient-read states; expired unpaid Checkout reconciliation; paid customer projection and return polling; clean-room PostgreSQL, hosted artifact, browser, and broad proof | reviewed locally; real provider effects, findings, report, credit, deployment grant, and release held |
+| H1H | Paid assessment work, report, and credit grant | Lead plus bounded browser implementation and independent redline review | migration 40; private evidence payloads; Mac/Pixel owner workbench; target- and viewport-bound screenshots; up to ten revision-fenced findings; reviewed-work digest; immutable customer report; exact one-time `$200` same-project 90-day credit grant; account-scoped customer report/evidence reads; clean-room PostgreSQL, hosted artifact, responsive browser, and broad proof | reviewed and sealed locally; credit redemption, Custom build quote/invoice/job, deployment grant, provider effects, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1G are sealed locally. H1D supplies the customer
+Batch 3C, H0, and H1A through H1H are sealed locally. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
 surface; H1E adds the account-bound invoice and H1F adds one automatic-tax
 Checkout dispatch. H1G adds provider-confirmed settlement, the immutable
 receipt, expired-unpaid reconciliation, one bounded assessment job, and safe
-customer payment/return truth over migrations 34 through 39.
+customer payment/return truth over migrations 34 through 39. H1H adds the
+private owner workbench, exact evidence and finding boundary, immutable
+customer report, and atomic credit grant in migration 40.
 Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
 request + exact accepted `$200` assessment quote + invoice/Checkout +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
-build credit. The immediate slice is owner-safe assessment work, bounded
-findings with evidence, immutable report delivery, and atomic creation of one
-same-project 90-day `$200` Custom base-build credit. Stripe Checkout—not a
-duplicate local calculator—continues to collect billing address and calculate
-tax. Migrations 34 through 39 deliberately supply no finding, delivered-report,
-or credit authority.
+build credit + one accepted Custom build that applies the credit exactly once.
+The immediate slice is the Custom build quote/acceptance ledger: reserve an
+available same-project credit atomically, apply it only to the Custom base
+build, release only an unsettled reservation when its quote is voided, and
+carry the exact remaining start/final installment values into invoice,
+Checkout, settlement, and the build job. Stripe Checkout—not a duplicate local
+calculator—continues to calculate tax.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

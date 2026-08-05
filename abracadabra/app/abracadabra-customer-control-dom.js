@@ -72,6 +72,38 @@
   var UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
   var SHA256 = /^[a-f0-9]{64}$/u;
+  var ASSESSMENT_PAGE_PATH =
+    /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/u;
+  var ASSESSMENT_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
+  var ASSESSMENT_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+  var ASSESSMENT_MAXIMUM_EVIDENCE_BYTES = 700 * 1024;
+  var ASSESSMENT_ELIGIBLE_TIER_IDS = [
+    "card",
+    "card-plus",
+    "site",
+    "site-plus",
+    "signature",
+    "flagship",
+    "scale"
+  ];
+  var ASSESSMENT_SEVERITIES = [
+    "critical",
+    "high",
+    "moderate",
+    "low",
+    "positive"
+  ];
+  var ASSESSMENT_CATEGORIES = [
+    "accessibility",
+    "content",
+    "functionality",
+    "performance",
+    "responsive_design",
+    "search_visibility",
+    "security_observation",
+    "usability",
+    "visual_design"
+  ];
   var ALAKAZAM_PAYMENT_STATES = {
     pending: "pending",
     active: "paid",
@@ -2062,6 +2094,699 @@
     );
   }
 
+  function assessmentText(value, minimum, maximum) {
+    return typeof value === "string"
+      && value === value.trim()
+      && value.length >= minimum
+      && value.length <= maximum
+      && !ASSESSMENT_CONTROL_CHARACTER.test(value);
+  }
+
+  function assessmentDate(value) {
+    return typeof value === "string"
+      && /^\d{4}-\d{2}-\d{2}$/u.test(value)
+      && !Number.isNaN(Date.parse(value + "T00:00:00.000Z"));
+  }
+
+  function assessmentCreditWindowIsNinetyDays(
+    deliveredAt,
+    acceptanceCutoff
+  ) {
+    var difference = Date.parse(acceptanceCutoff)
+      - Date.parse(deliveredAt);
+    var ninetyDays = 90 * 24 * 60 * 60 * 1000;
+    var daylightSavingAllowance = 2 * 60 * 60 * 1000;
+    return Number.isFinite(difference)
+      && difference >= ninetyDays - daylightSavingAllowance
+      && difference <= ninetyDays + daylightSavingAllowance;
+  }
+
+  function safeAssessmentTarget(value) {
+    if (
+      !exactKeys(value, ["kind", "value"])
+      || !assessmentText(value.value, 1, 154)
+    ) return false;
+    if (value.kind === "page") {
+      return ASSESSMENT_PAGE_PATH.test(value.value)
+        && !/(^|\/)\.\.?($|\/)/u.test(value.value);
+    }
+    return value.kind === "page_type"
+      && ASSESSMENT_PAGE_TYPE.test(value.value);
+  }
+
+  function assessmentTargetKey(value) {
+    return safeAssessmentTarget(value)
+      ? value.kind + ":" + value.value
+      : "";
+  }
+
+  function sameAssessmentList(value, expected) {
+    return Array.isArray(value)
+      && JSON.stringify(value) === JSON.stringify(expected);
+  }
+
+  function safeAssessmentViewports(value) {
+    return Array.isArray(value)
+      && value.length >= 1
+      && value.length <= 2
+      && new Set(value).size === value.length
+      && value.every(function (entry) {
+        return ["desktop", "phone"].includes(entry);
+      })
+      && JSON.stringify(value) ===
+        JSON.stringify(value.slice().sort());
+  }
+
+  function safeAssessmentCredit(value, expected) {
+    var expectation = expected || {};
+    if (
+      !exactKeys(
+        value,
+        [
+          "acceptanceCutoff",
+          "amountMinor",
+          "applicationScope",
+          "creditDigest",
+          "creditId",
+          "currency",
+          "deliveredAt",
+          "eligibleTierIds",
+          "maximumApplications",
+          "nonCash",
+          "state"
+        ]
+      )
+      || !UUID.test(text(value.creditId))
+      || value.amountMinor !== 20000
+      || value.currency !== "USD"
+      || value.applicationScope !== "custom_base_build"
+      || !sameAssessmentList(
+        value.eligibleTierIds,
+        ASSESSMENT_ELIGIBLE_TIER_IDS
+      )
+      || value.maximumApplications !== 1
+      || value.nonCash !== true
+      || !safeIso(value.deliveredAt)
+      || !safeIso(value.acceptanceCutoff)
+      || !assessmentCreditWindowIsNinetyDays(
+        value.deliveredAt,
+        value.acceptanceCutoff
+      )
+      || !["available", "expired"].includes(value.state)
+      || !SHA256.test(text(value.creditDigest))
+    ) return false;
+    return (!expectation.deliveredAt
+        || value.deliveredAt === expectation.deliveredAt)
+      && (!expectation.acceptanceCutoff
+        || value.acceptanceCutoff === expectation.acceptanceCutoff);
+  }
+
+  function safeOwnerAssessmentEvidence(value, expectedJobId) {
+    return exactKeys(
+      value,
+      [
+        "accessibleDescription",
+        "byteCount",
+        "capturedAt",
+        "evidenceId",
+        "jobId",
+        "mediaType",
+        "reviewTarget",
+        "viewport"
+      ]
+    )
+      && UUID.test(text(value.evidenceId))
+      && UUID.test(text(value.jobId))
+      && (!expectedJobId || value.jobId === expectedJobId)
+      && safeAssessmentTarget(value.reviewTarget)
+      && ["desktop", "phone"].includes(value.viewport)
+      && assessmentText(value.accessibleDescription, 10, 500)
+      && ["image/jpeg", "image/png", "image/webp"]
+        .includes(value.mediaType)
+      && Number.isSafeInteger(value.byteCount)
+      && value.byteCount >= 1
+      && value.byteCount <= ASSESSMENT_MAXIMUM_EVIDENCE_BYTES
+      && safeIso(value.capturedAt);
+  }
+
+  function safeOwnerAssessmentFinding(value, expectedJobId) {
+    return exactKeys(
+      value,
+      [
+        "category",
+        "evidenceIds",
+        "findingDigest",
+        "findingId",
+        "included",
+        "jobId",
+        "primaryTarget",
+        "priority",
+        "recommendation",
+        "revision",
+        "severity",
+        "summary",
+        "updatedAt",
+        "viewports"
+      ]
+    )
+      && UUID.test(text(value.findingId))
+      && UUID.test(text(value.jobId))
+      && (!expectedJobId || value.jobId === expectedJobId)
+      && Number.isSafeInteger(value.priority)
+      && value.priority >= 1
+      && value.priority <= 10
+      && typeof value.included === "boolean"
+      && ASSESSMENT_SEVERITIES.includes(value.severity)
+      && ASSESSMENT_CATEGORIES.includes(value.category)
+      && safeAssessmentTarget(value.primaryTarget)
+      && safeAssessmentViewports(value.viewports)
+      && assessmentText(value.summary, 10, 240)
+      && assessmentText(value.recommendation, 10, 1500)
+      && Array.isArray(value.evidenceIds)
+      && value.evidenceIds.length >= 1
+      && value.evidenceIds.length <= 10
+      && new Set(value.evidenceIds).size === value.evidenceIds.length
+      && value.evidenceIds.every(function (evidenceId) {
+        return UUID.test(text(evidenceId));
+      })
+      && Number.isSafeInteger(value.revision)
+      && value.revision >= 1
+      && SHA256.test(text(value.findingDigest))
+      && safeIso(value.updatedAt);
+  }
+
+  function verifiedOwnerAssessmentDelivery(value, expectedJobId) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "credit",
+          "deliveredAt",
+          "findingCount",
+          "jobId",
+          "overallSummary",
+          "reportId",
+          "schema",
+          "state"
+        ]
+      )
+      || value.schema !==
+        "sitesourcery.custom-services-owner-assessment-delivery/v1"
+      || value.state !== "delivered"
+      || !UUID.test(text(value.jobId))
+      || (expectedJobId && value.jobId !== expectedJobId)
+      || !UUID.test(text(value.reportId))
+      || !safeIso(value.deliveredAt)
+      || !assessmentText(value.overallSummary, 20, 2000)
+      || !Number.isSafeInteger(value.findingCount)
+      || value.findingCount < 0
+      || value.findingCount > 10
+      || !safeAssessmentCredit(value.credit, {
+        deliveredAt: value.deliveredAt
+      })
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerAssessmentEvidence(value, expectedJobId) {
+    return exactKeys(value, ["evidence", "schema"])
+      && value.schema ===
+        "sitesourcery.custom-services-owner-assessment-evidence/v1"
+      && safeOwnerAssessmentEvidence(value.evidence, expectedJobId)
+      ? value
+      : null;
+  }
+
+  function verifiedOwnerAssessmentFinding(
+    value,
+    expectedJobId,
+    expectedPriority
+  ) {
+    return exactKeys(value, ["finding", "schema"])
+      && value.schema ===
+        "sitesourcery.custom-services-owner-assessment-finding/v1"
+      && safeOwnerAssessmentFinding(value.finding, expectedJobId)
+      && (
+        expectedPriority === undefined
+        || value.finding.priority === expectedPriority
+      )
+      ? value
+      : null;
+  }
+
+  function verifiedOwnerAssessmentJobs(value) {
+    if (
+      !exactKeys(value, ["jobs", "schema"])
+      || value.schema !==
+        "sitesourcery.custom-services-owner-assessment-jobs/v1"
+      || !Array.isArray(value.jobs)
+      || value.jobs.length > 100
+    ) return null;
+    var jobIds = new Set();
+    var valid = value.jobs.every(function (job) {
+      if (
+        !exactKeys(
+          job,
+          [
+            "caseId",
+            "customer",
+            "delivery",
+            "deliveryDate",
+            "evidence",
+            "findings",
+            "jobId",
+            "openedAt",
+            "organizationId",
+            "organizationName",
+            "projectId",
+            "projectName",
+            "scope",
+            "state",
+            "workDigest"
+          ]
+        )
+        || !UUID.test(text(job.jobId))
+        || jobIds.has(job.jobId)
+        || !UUID.test(text(job.organizationId))
+        || !assessmentText(job.organizationName, 1, 200)
+        || !UUID.test(text(job.projectId))
+        || !assessmentText(job.projectName, 1, 200)
+        || !UUID.test(text(job.caseId))
+        || !exactKeys(
+          job.customer,
+          ["customerId", "email", "name"]
+        )
+        || !UUID.test(text(job.customer.customerId))
+        || !assessmentText(job.customer.name, 1, 200)
+        || !assessmentText(job.customer.email, 3, 320)
+        || !["open", "delivered"].includes(job.state)
+        || !safeIso(job.openedAt)
+        || !assessmentDate(job.deliveryDate)
+        || !SHA256.test(text(job.workDigest))
+        || !exactKeys(
+          job.scope,
+          [
+            "maximumFindings",
+            "maximumRepresentativePagesOrTypes",
+            "maximumWebsites",
+            "requiredViewports",
+            "reviewTargets"
+          ]
+        )
+        || job.scope.maximumWebsites !== 1
+        || job.scope.maximumRepresentativePagesOrTypes !== 5
+        || job.scope.maximumFindings !== 10
+        || !sameAssessmentList(
+          job.scope.requiredViewports,
+          ["desktop", "phone"]
+        )
+        || !Array.isArray(job.scope.reviewTargets)
+        || job.scope.reviewTargets.length < 1
+        || job.scope.reviewTargets.length > 5
+        || !job.scope.reviewTargets.every(safeAssessmentTarget)
+        || new Set(job.scope.reviewTargets.map(assessmentTargetKey))
+          .size !== job.scope.reviewTargets.length
+        || !Array.isArray(job.evidence)
+        || job.evidence.length > 250
+        || !job.evidence.every(function (entry) {
+          return safeOwnerAssessmentEvidence(entry, job.jobId);
+        })
+        || new Set(job.evidence.map(function (entry) {
+          return entry.evidenceId;
+        })).size !== job.evidence.length
+        || !Array.isArray(job.findings)
+        || job.findings.length > 10
+        || !job.findings.every(function (entry) {
+          return safeOwnerAssessmentFinding(entry, job.jobId);
+        })
+        || new Set(job.findings.map(function (entry) {
+          return entry.priority;
+        })).size !== job.findings.length
+        || !job.findings.every(function (entry, index, findings) {
+          return index === 0
+            || findings[index - 1].priority < entry.priority;
+        })
+      ) return false;
+      jobIds.add(job.jobId);
+      var targetKeys = new Set(
+        job.scope.reviewTargets.map(assessmentTargetKey)
+      );
+      var evidenceById = new Map(
+        job.evidence.map(function (entry) {
+          return [entry.evidenceId, entry];
+        })
+      );
+      var scoped = job.evidence.every(function (entry) {
+        return targetKeys.has(
+          assessmentTargetKey(entry.reviewTarget)
+        );
+      }) && job.findings.every(function (finding) {
+        if (
+          !targetKeys.has(
+            assessmentTargetKey(finding.primaryTarget)
+          )
+        ) return false;
+        var selected = finding.evidenceIds.map(function (id) {
+          return evidenceById.get(id);
+        });
+        return selected.every(Boolean)
+          && finding.viewports.every(function (viewport) {
+            return selected.some(function (entry) {
+              return entry.viewport === viewport;
+            });
+          });
+      });
+      var delivery = job.delivery === null
+        ? null
+        : verifiedOwnerAssessmentDelivery(
+            job.delivery,
+            job.jobId
+          );
+      var includedCount = job.findings.filter(function (finding) {
+        return finding.included;
+      }).length;
+      return scoped
+        && (job.state === "delivered") === Boolean(delivery)
+        && (!delivery || delivery.findingCount === includedCount);
+    });
+    return valid ? value : null;
+  }
+
+  function customerAssessmentEvidenceUrl(
+    value,
+    projectId,
+    evidenceId
+  ) {
+    var expected = "/api/v1/projects/" + projectId
+      + "/custom-services/assessment-evidence/" + evidenceId;
+    return value === expected ? expected : null;
+  }
+
+  function ownerAssessmentEvidenceUrl(jobId, evidenceId) {
+    if (!UUID.test(text(jobId)) || !UUID.test(text(evidenceId))) {
+      return null;
+    }
+    return "/api/v1/operator/custom-services/assessment-jobs/"
+      + jobId + "/evidence/" + evidenceId;
+  }
+
+  function safeAssessmentReportBuildCredit(
+    value,
+    deliveredAt
+  ) {
+    return exactKeys(
+      value,
+      [
+        "acceptanceCutoff",
+        "amountMinor",
+        "applicationScope",
+        "currency",
+        "deliveredAt",
+        "eligibleTierIds",
+        "maximumApplications",
+        "nonCash",
+        "sameOrganizationAndProjectOnly"
+      ]
+    )
+      && value.amountMinor === 20000
+      && value.currency === "USD"
+      && value.applicationScope === "custom_base_build"
+      && sameAssessmentList(
+        value.eligibleTierIds,
+        ASSESSMENT_ELIGIBLE_TIER_IDS
+      )
+      && value.maximumApplications === 1
+      && value.nonCash === true
+      && value.sameOrganizationAndProjectOnly === true
+      && value.deliveredAt === deliveredAt
+      && safeIso(value.deliveredAt)
+      && safeIso(value.acceptanceCutoff)
+      && assessmentCreditWindowIsNinetyDays(
+        value.deliveredAt,
+        value.acceptanceCutoff
+      );
+  }
+
+  function safeCustomerAssessmentJob(value) {
+    return exactKeys(
+      value,
+      ["deliveryDate", "jobId", "openedAt", "scope", "state"]
+    )
+      && UUID.test(text(value.jobId))
+      && ["open", "delivered"].includes(value.state)
+      && safeIso(value.openedAt)
+      && assessmentDate(value.deliveryDate)
+      && exactKeys(
+        value.scope,
+        ["maximumFindings", "requiredViewports", "reviewTargets"]
+      )
+      && value.scope.maximumFindings === 10
+      && sameAssessmentList(
+        value.scope.requiredViewports,
+        ["desktop", "phone"]
+      )
+      && Array.isArray(value.scope.reviewTargets)
+      && value.scope.reviewTargets.length >= 1
+      && value.scope.reviewTargets.length <= 5
+      && value.scope.reviewTargets.every(safeAssessmentTarget)
+      && new Set(value.scope.reviewTargets.map(assessmentTargetKey))
+        .size === value.scope.reviewTargets.length;
+  }
+
+  function safeAssessmentReportDocument(
+    value,
+    job,
+    expectedProjectId
+  ) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "buildCredit",
+          "coverage",
+          "deliveredAt",
+          "findings",
+          "jobId",
+          "overallSummary",
+          "project",
+          "reportId",
+          "schema",
+          "scope"
+        ]
+      )
+      || value.schema !== "sitesourcery.assessment-report/v1"
+      || !UUID.test(text(value.reportId))
+      || value.jobId !== job.jobId
+      || !exactKeys(
+        value.project,
+        [
+          "organizationId",
+          "organizationName",
+          "projectId",
+          "projectName"
+        ]
+      )
+      || !UUID.test(text(value.project.organizationId))
+      || !assessmentText(value.project.organizationName, 1, 200)
+      || !UUID.test(text(value.project.projectId))
+      || value.project.projectId !== expectedProjectId
+      || !assessmentText(value.project.projectName, 1, 200)
+      || !safeIso(value.deliveredAt)
+      || !assessmentText(value.overallSummary, 20, 2000)
+      || !exactKeys(
+        value.scope,
+        [
+          "expandedAssessmentState",
+          "maximumFindings",
+          "maximumWebsites",
+          "requiredViewports",
+          "reviewTargets"
+        ]
+      )
+      || value.scope.maximumWebsites !== 1
+      || value.scope.maximumFindings !== 10
+      || value.scope.expandedAssessmentState !== "separately_quoted"
+      || !sameAssessmentList(
+        value.scope.requiredViewports,
+        ["desktop", "phone"]
+      )
+      || JSON.stringify(value.scope.reviewTargets)
+        !== JSON.stringify(job.scope.reviewTargets)
+      || !safeAssessmentReportBuildCredit(
+        value.buildCredit,
+        value.deliveredAt
+      )
+      || !Array.isArray(value.coverage)
+      || value.coverage.length !==
+        value.scope.reviewTargets.length * 2
+      || !Array.isArray(value.findings)
+      || value.findings.length > 10
+    ) return false;
+    var targetKeys = new Set(
+      value.scope.reviewTargets.map(assessmentTargetKey)
+    );
+    var coverageKeys = new Set();
+    var exposedEvidence = new Set();
+    var validCoverage = value.coverage.every(function (entry) {
+      if (
+        !exactKeys(
+          entry,
+          [
+            "accessibleDescription",
+            "capturedAt",
+            "evidenceId",
+            "reviewTarget",
+            "url",
+            "viewport"
+          ]
+        )
+        || !UUID.test(text(entry.evidenceId))
+        || !safeAssessmentTarget(entry.reviewTarget)
+        || !targetKeys.has(assessmentTargetKey(entry.reviewTarget))
+        || !["desktop", "phone"].includes(entry.viewport)
+        || !assessmentText(entry.accessibleDescription, 10, 500)
+        || !safeIso(entry.capturedAt)
+        || !customerAssessmentEvidenceUrl(
+          entry.url,
+          expectedProjectId,
+          entry.evidenceId
+        )
+      ) return false;
+      var coverageKey = assessmentTargetKey(entry.reviewTarget)
+        + ":" + entry.viewport;
+      if (coverageKeys.has(coverageKey)) return false;
+      coverageKeys.add(coverageKey);
+      exposedEvidence.add(entry.evidenceId);
+      return true;
+    });
+    if (!validCoverage) return false;
+    var validFindings = value.findings.every(function (finding, index) {
+      if (
+        !exactKeys(
+          finding,
+          [
+            "category",
+            "evidence",
+            "findingDigest",
+            "findingId",
+            "primaryTarget",
+            "priority",
+            "recommendation",
+            "revision",
+            "severity",
+            "summary",
+            "viewports"
+          ]
+        )
+        || !UUID.test(text(finding.findingId))
+        || !Number.isSafeInteger(finding.revision)
+        || finding.revision < 1
+        || !SHA256.test(text(finding.findingDigest))
+        || finding.priority !== index + 1
+        || !ASSESSMENT_SEVERITIES.includes(finding.severity)
+        || !ASSESSMENT_CATEGORIES.includes(finding.category)
+        || !safeAssessmentTarget(finding.primaryTarget)
+        || !targetKeys.has(
+          assessmentTargetKey(finding.primaryTarget)
+        )
+        || !safeAssessmentViewports(finding.viewports)
+        || !assessmentText(finding.summary, 10, 240)
+        || !assessmentText(finding.recommendation, 10, 1500)
+        || !Array.isArray(finding.evidence)
+        || finding.evidence.length < 1
+        || finding.evidence.length > 10
+      ) return false;
+      var evidenceIds = new Set();
+      var validEvidence = finding.evidence.every(function (entry) {
+        if (
+          !exactKeys(
+            entry,
+            [
+              "accessibleDescription",
+              "evidenceId",
+              "url",
+              "viewport"
+            ]
+          )
+          || !UUID.test(text(entry.evidenceId))
+          || evidenceIds.has(entry.evidenceId)
+          || !["desktop", "phone"].includes(entry.viewport)
+          || !assessmentText(entry.accessibleDescription, 10, 500)
+          || !customerAssessmentEvidenceUrl(
+            entry.url,
+            expectedProjectId,
+            entry.evidenceId
+          )
+        ) return false;
+        evidenceIds.add(entry.evidenceId);
+        exposedEvidence.add(entry.evidenceId);
+        return true;
+      });
+      return validEvidence
+        && finding.viewports.every(function (viewport) {
+          return finding.evidence.some(function (entry) {
+            return entry.viewport === viewport;
+          });
+        });
+    });
+    return validFindings
+      && targetKeys.size * 2 === coverageKeys.size
+      && exposedEvidence.size <= 110;
+  }
+
+  function verifiedCustomerAssessmentReport(value, expectedProjectId) {
+    if (
+      !exactKeys(
+        value,
+        ["credit", "job", "report", "schema", "state"]
+      )
+      || value.schema !==
+        "sitesourcery.custom-services-assessment-report/v1"
+      || !["not_available", "in_progress", "delivered"]
+        .includes(value.state)
+    ) return null;
+    if (value.state === "not_available") {
+      return value.job === null
+        && value.report === null
+        && value.credit === null
+        ? value
+        : null;
+    }
+    if (
+      !UUID.test(text(expectedProjectId))
+      || !safeCustomerAssessmentJob(value.job)
+    ) return null;
+    if (value.state === "in_progress") {
+      return value.job.state === "open"
+        && value.report === null
+        && value.credit === null
+        ? value
+        : null;
+    }
+    if (
+      value.job.state !== "delivered"
+      || !safeAssessmentReportDocument(
+        value.report,
+        value.job,
+        expectedProjectId
+      )
+      || !safeAssessmentCredit(value.credit, {
+        deliveredAt: value.report.deliveredAt,
+        acceptanceCutoff:
+          value.report.buildCredit.acceptanceCutoff
+      })
+      || value.credit.amountMinor !==
+        value.report.buildCredit.amountMinor
+      || value.credit.currency !==
+        value.report.buildCredit.currency
+      || JSON.stringify(value.credit.eligibleTierIds)
+        !== JSON.stringify(
+          value.report.buildCredit.eligibleTierIds
+        )
+    ) return null;
+    return value;
+  }
+
   function verifiedAssessmentRequest(value) {
     if (
       !record(value)
@@ -2891,6 +3616,241 @@
       body.appendChild(section);
     }
 
+    function renderReport(reportState) {
+      if (!reportState || reportState.state === "not_available") {
+        return;
+      }
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-invoice customer-assessment-report customer-quote-review"
+      );
+      section.setAttribute("data-assessment-report", reportState.state);
+      if (reportState.state === "in_progress") {
+        section.append(
+          accountElement(
+            documentRef,
+            "h4",
+            "",
+            "Assessment in progress"
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Your paid assessment is being completed for delivery by "
+              + reportState.job.deliveryDate
+              + ". Draft findings stay private until the complete report is delivered."
+          )
+        );
+        var progressFacts = accountElement(documentRef, "dl", "");
+        appendAccountFact(
+          documentRef,
+          progressFacts,
+          "Review targets",
+          String(reportState.job.scope.reviewTargets.length)
+        );
+        appendAccountFact(
+          documentRef,
+          progressFacts,
+          "Evidence coverage",
+          "Desktop and phone for every target"
+        );
+        appendAccountFact(
+          documentRef,
+          progressFacts,
+          "Findings",
+          "Up to 10 in the delivered report"
+        );
+        var refreshReport = accountElement(
+          documentRef,
+          "button",
+          "spark-button",
+          "Check for delivered report"
+        );
+        refreshReport.type = "button";
+        refreshReport.addEventListener("click", function () {
+          if (typeof actions.retry === "function") actions.retry();
+        });
+        section.append(progressFacts, refreshReport);
+        body.appendChild(section);
+        return;
+      }
+
+      var report = reportState.report;
+      section.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Delivered website assessment"
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          report.overallSummary
+        )
+      );
+      var reportFacts = accountElement(documentRef, "dl", "");
+      appendAccountFact(
+        documentRef,
+        reportFacts,
+        "Delivered",
+        accountDate(report.deliveredAt)
+      );
+      appendAccountFact(
+        documentRef,
+        reportFacts,
+        "Bound scope",
+        "1 website · " + report.scope.reviewTargets.length
+          + " targets · " + report.findings.length + " findings"
+      );
+      appendAccountFact(
+        documentRef,
+        reportFacts,
+        "Expanded assessment",
+        "Separately quoted when a larger review is needed"
+      );
+      section.appendChild(reportFacts);
+
+      var coverage = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-report-coverage"
+      );
+      coverage.appendChild(
+        accountElement(documentRef, "h5", "", "Desktop and phone evidence")
+      );
+      var coverageGrid = accountElement(
+        documentRef,
+        "div",
+        "customer-assessment-evidence-grid"
+      );
+      coverageGrid.style.display = "grid";
+      coverageGrid.style.gap = "1rem";
+      coverageGrid.style.gridTemplateColumns =
+        "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))";
+      report.coverage.forEach(function (entry) {
+        var figure = accountElement(
+          documentRef,
+          "figure",
+          "customer-assessment-evidence"
+        );
+        var image = accountElement(documentRef, "img", "");
+        image.src = entry.url;
+        image.alt = entry.accessibleDescription;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.style.display = "block";
+        image.style.width = "100%";
+        image.style.height = "auto";
+        figure.append(
+          image,
+          accountElement(
+            documentRef,
+            "figcaption",
+            "",
+            accountWords(entry.viewport) + " · "
+              + ownerTargetLine(entry.reviewTarget) + " · "
+              + entry.accessibleDescription
+          )
+        );
+        coverageGrid.appendChild(figure);
+      });
+      coverage.appendChild(coverageGrid);
+      section.appendChild(coverage);
+
+      var findings = accountElement(
+        documentRef,
+        "ol",
+        "customer-assessment-report-findings"
+      );
+      report.findings.forEach(function (finding) {
+        var item = accountElement(
+          documentRef,
+          "li",
+          "customer-assessment-report-finding"
+        );
+        item.append(
+          accountElement(
+            documentRef,
+            "h5",
+            "",
+            "Finding " + finding.priority + " · "
+              + accountWords(finding.severity)
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "",
+            finding.summary
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Recommendation: " + finding.recommendation
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Target " + ownerTargetLine(finding.primaryTarget)
+              + " · " + finding.viewports.map(accountWords).join(" and ")
+          )
+        );
+        var evidenceLinks = accountElement(
+          documentRef,
+          "ul",
+          "customer-assessment-finding-evidence"
+        );
+        finding.evidence.forEach(function (entry) {
+          var evidenceItem = accountElement(documentRef, "li", "");
+          var link = accountElement(
+            documentRef,
+            "a",
+            "",
+            accountWords(entry.viewport) + " evidence · "
+              + entry.accessibleDescription
+          );
+          link.href = entry.url;
+          link.target = "_blank";
+          link.rel = "noreferrer noopener";
+          evidenceItem.appendChild(link);
+          evidenceLinks.appendChild(evidenceItem);
+        });
+        item.appendChild(evidenceLinks);
+        findings.appendChild(item);
+      });
+      section.appendChild(findings);
+
+      var credit = reportState.credit;
+      var creditSection = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-build-credit"
+      );
+      creditSection.append(
+        accountElement(
+          documentRef,
+          "h5",
+          "",
+          "$200 Custom build credit"
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "This is a one-use, non-cash $200 credit toward an eligible Custom base build for this same organization and project. It "
+            + (credit.state === "available" ? "can be accepted through " : "expired on ")
+            + accountDate(credit.acceptanceCutoff) + "."
+        )
+      );
+      section.appendChild(creditSection);
+      body.appendChild(section);
+    }
+
     return Object.freeze({
       element: panel,
       focusStatus: function () {
@@ -2927,6 +3887,12 @@
         var request = verifiedAssessmentRequest(readState.request);
         var quote = verifiedAssessmentQuote(readState.quote);
         var invoice = verifiedAssessmentInvoice(readState.invoice);
+        var report = readState.report === null
+          ? null
+          : verifiedCustomerAssessmentReport(
+              readState.report,
+              readState.projectId
+            );
         if (!request || !quote || !invoice) {
           status.textContent =
             "The assessment response could not be verified. Nothing was changed.";
@@ -2981,6 +3947,19 @@
         }
         renderQuote(quote, busy);
         renderInvoice(invoice, busy);
+        if (report) {
+          renderReport(report);
+        } else {
+          body.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-assessment-note",
+              readState.reportError
+                || "The assessment report response could not be verified. Existing request, quote, invoice, and payment details remain available."
+            )
+          );
+        }
       }
     });
   }
@@ -3089,6 +4068,231 @@
         "Use a page path like /about or a page type like type:product."
       );
     });
+  }
+
+  function assessmentImageBytesMatch(bytes, mediaType) {
+    var jpeg = bytes.length >= 3
+      && bytes[0] === 0xff
+      && bytes[1] === 0xd8
+      && bytes[2] === 0xff;
+    var png = bytes.length >= 8
+      && bytes[0] === 0x89
+      && bytes[1] === 0x50
+      && bytes[2] === 0x4e
+      && bytes[3] === 0x47
+      && bytes[4] === 0x0d
+      && bytes[5] === 0x0a
+      && bytes[6] === 0x1a
+      && bytes[7] === 0x0a;
+    var webp = bytes.length >= 12
+      && String.fromCharCode(
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        bytes[3]
+      ) === "RIFF"
+      && String.fromCharCode(
+        bytes[8],
+        bytes[9],
+        bytes[10],
+        bytes[11]
+      ) === "WEBP";
+    return (mediaType === "image/jpeg" && jpeg)
+      || (mediaType === "image/png" && png)
+      || (mediaType === "image/webp" && webp);
+  }
+
+  function assessmentBytesToBase64(bytes, environment) {
+    var runtime = environment || (
+      typeof globalThis === "object" ? globalThis : {}
+    );
+    var binary = "";
+    for (var offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length))
+      );
+    }
+    if (typeof runtime.btoa === "function") {
+      return runtime.btoa(binary);
+    }
+    if (typeof Buffer === "function") {
+      return Buffer.from(bytes).toString("base64");
+    }
+    throw new Error(
+      "This browser cannot safely prepare screenshot evidence."
+    );
+  }
+
+  function assessmentCanvasBlob(canvas, mediaType, quality) {
+    return new Promise(function (resolve) {
+      if (!canvas || typeof canvas.toBlob !== "function") {
+        resolve(null);
+        return;
+      }
+      canvas.toBlob(resolve, mediaType, quality);
+    });
+  }
+
+  function assessmentDecodedImage(file, runtime) {
+    if (typeof runtime.createImageBitmap === "function") {
+      return runtime.createImageBitmap(file).then(function (bitmap) {
+        return {
+          source: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          release: function () {
+            if (typeof bitmap.close === "function") bitmap.close();
+          }
+        };
+      });
+    }
+    var documentRef = runtime.document;
+    var URLRef = runtime.URL;
+    if (
+      typeof runtime.Image !== "function"
+      || !URLRef
+      || typeof URLRef.createObjectURL !== "function"
+      || typeof URLRef.revokeObjectURL !== "function"
+      || !documentRef
+    ) {
+      return Promise.reject(new Error(
+        "This browser cannot safely prepare screenshot evidence."
+      ));
+    }
+    return new Promise(function (resolve, reject) {
+      var objectUrl = URLRef.createObjectURL(file);
+      var image = new runtime.Image();
+      image.onload = function () {
+        resolve({
+          source: image,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+          release: function () {
+            URLRef.revokeObjectURL(objectUrl);
+          }
+        });
+      };
+      image.onerror = function () {
+        URLRef.revokeObjectURL(objectUrl);
+        reject(new Error("That screenshot could not be opened."));
+      };
+      image.src = objectUrl;
+    });
+  }
+
+  async function prepareAssessmentEvidenceFile(file, environment) {
+    var runtime = environment || (
+      typeof globalThis === "object" ? globalThis : {}
+    );
+    if (
+      !file
+      || !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+      || typeof file.arrayBuffer !== "function"
+    ) {
+      throw new Error("Choose a JPEG, PNG, or WebP screenshot.");
+    }
+    if (
+      Number.isFinite(file.size)
+      && (file.size < 1 || file.size > 25 * 1024 * 1024)
+    ) {
+      throw new Error(
+        "Choose a screenshot between 1 byte and 25 MiB."
+      );
+    }
+    var original = new Uint8Array(await file.arrayBuffer());
+    if (
+      original.length < 1
+      || original.length > 25 * 1024 * 1024
+      || !assessmentImageBytesMatch(original, file.type)
+    ) {
+      throw new Error("That screenshot does not match its image type.");
+    }
+    var decoded = await assessmentDecodedImage(file, runtime);
+    try {
+      if (
+        !Number.isFinite(decoded.width)
+        || !Number.isFinite(decoded.height)
+        || decoded.width < 1
+        || decoded.height < 1
+      ) throw new Error("That screenshot has invalid dimensions.");
+      var documentRef = runtime.document;
+      var canvas = documentRef
+        && typeof documentRef.createElement === "function"
+        ? documentRef.createElement("canvas")
+        : null;
+      var context = canvas
+        && typeof canvas.getContext === "function"
+        ? canvas.getContext("2d", { alpha: false })
+        : null;
+      if (!canvas || !context || typeof context.drawImage !== "function") {
+        throw new Error(
+          "This browser cannot safely prepare screenshot evidence."
+        );
+      }
+      var scale = Math.min(
+        1,
+        2048 / decoded.width,
+        5000 / decoded.height
+      );
+      var qualities = [0.86, 0.74, 0.62, 0.5, 0.4];
+      for (var pass = 0; pass < 8; pass += 1) {
+        canvas.width = Math.max(1, Math.round(decoded.width * scale));
+        canvas.height = Math.max(1, Math.round(decoded.height * scale));
+        context.drawImage(
+          decoded.source,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+        for (var index = 0; index < qualities.length; index += 1) {
+          var quality = qualities[index];
+          var blob = await assessmentCanvasBlob(
+            canvas,
+            "image/webp",
+            quality
+          );
+          if (
+            !blob
+            || !["image/webp", "image/jpeg"].includes(blob.type)
+          ) {
+            blob = await assessmentCanvasBlob(
+              canvas,
+              "image/jpeg",
+              quality
+            );
+          }
+          if (
+            !blob
+            || !["image/webp", "image/jpeg"].includes(blob.type)
+            || blob.size < 1
+            || blob.size > ASSESSMENT_MAXIMUM_EVIDENCE_BYTES
+            || typeof blob.arrayBuffer !== "function"
+          ) continue;
+          var compressed = new Uint8Array(await blob.arrayBuffer());
+          if (
+            compressed.length === blob.size
+            && assessmentImageBytesMatch(compressed, blob.type)
+          ) {
+            return Object.freeze({
+              bytesBase64: assessmentBytesToBase64(
+                compressed,
+                runtime
+              ),
+              byteCount: compressed.length,
+              mediaType: blob.type
+            });
+          }
+        }
+        scale *= 0.78;
+      }
+      throw new Error(
+        "That screenshot could not be reduced below 700 KiB. Crop it and try again."
+      );
+    } finally {
+      decoded.release();
+    }
   }
 
   function createOwnerAssessmentPanel(documentRef, actions) {
@@ -3308,6 +4512,834 @@
               + " ready for owner review.");
         queue.requests.forEach(function (entry) {
           renderRequest(entry, state.busyCaseId);
+        });
+      }
+    });
+  }
+
+  function ownerAssessmentCoverageComplete(job) {
+    if (!job || !job.scope || !Array.isArray(job.evidence)) return false;
+    return job.scope.reviewTargets.every(function (target) {
+      var targetKey = assessmentTargetKey(target);
+      return ["desktop", "phone"].every(function (viewport) {
+        return job.evidence.some(function (entry) {
+          return assessmentTargetKey(entry.reviewTarget) === targetKey
+            && entry.viewport === viewport;
+        });
+      });
+    });
+  }
+
+  function ownerAssessmentFindingsReady(job) {
+    if (!job || !Array.isArray(job.findings)) return false;
+    var included = job.findings.filter(function (finding) {
+      return finding.included;
+    }).sort(function (left, right) {
+      return left.priority - right.priority;
+    });
+    return included.every(function (finding, index) {
+      return finding.priority === index + 1;
+    });
+  }
+
+  function ownerAssessmentTargetSelect(
+    documentRef,
+    name,
+    labelCopy,
+    targets,
+    selected
+  ) {
+    return assessmentSelect(
+      documentRef,
+      name,
+      labelCopy,
+      assessmentTargetKey(selected || targets[0]),
+      targets.map(function (target) {
+        return [assessmentTargetKey(target), ownerTargetLine(target)];
+      })
+    );
+  }
+
+  function selectedOwnerAssessmentTarget(job, key) {
+    return job.scope.reviewTargets.find(function (target) {
+      return assessmentTargetKey(target) === key;
+    }) || null;
+  }
+
+  function ownerAssessmentEvidenceSignature(job, input) {
+    var source = text(job && job.jobId) + "\n" + JSON.stringify(input);
+    var first = 0x811c9dc5;
+    var second = 0x9e3779b9;
+    for (var index = 0; index < source.length; index += 1) {
+      var code = source.charCodeAt(index);
+      first = Math.imul(first ^ code, 0x01000193) >>> 0;
+      second = Math.imul(second ^ code, 0x85ebca6b) >>> 0;
+    }
+    return source.length + ":" + first.toString(16).padStart(8, "0")
+      + ":" + second.toString(16).padStart(8, "0");
+  }
+
+  function createOwnerAssessmentWorkPanel(documentRef, actions) {
+    actions = actions || {};
+    var expandedJobIds = new Set();
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-owner-quote-desk customer-owner-assessment-workbench"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "owner-assessment-workbench-title"
+    );
+    panel.setAttribute("data-owner-assessment-workbench", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Owner assessment workbench"
+    );
+    heading.id = "owner-assessment-workbench-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-owner-quote-status customer-owner-assessment-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh assessment jobs"
+    );
+    refresh.type = "button";
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-owner-quote-body customer-owner-assessment-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Private Site Sourcery tools"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Complete the paid, bounded assessment from Mac or Pixel: add desktop and phone screenshot evidence, author up to ten customer-safe findings, then deliver one immutable report and its one-use $200 Custom build credit."
+      ),
+      status,
+      refresh,
+      body
+    );
+
+    function busyFor(state, jobId) {
+      return Boolean(state.busyKey);
+    }
+
+    function renderEvidence(job, state, card) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-form customer-owner-assessment-evidence"
+      );
+      section.appendChild(
+        accountElement(documentRef, "h5", "", "Screenshot evidence")
+      );
+      var coverageComplete = ownerAssessmentCoverageComplete(job);
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          coverageComplete
+            ? "Coverage complete: every paid target has desktop and phone evidence."
+            : "Coverage incomplete: add both desktop and phone evidence for every paid target."
+        )
+      );
+      if (job.evidence.length > 0) {
+        var evidenceGrid = accountElement(
+          documentRef,
+          "div",
+          "customer-owner-assessment-evidence-grid"
+        );
+        evidenceGrid.style.display = "grid";
+        evidenceGrid.style.gap = "1rem";
+        evidenceGrid.style.gridTemplateColumns =
+          "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))";
+        job.evidence.forEach(function (entry) {
+          var figure = accountElement(documentRef, "figure", "");
+          var image = accountElement(documentRef, "img", "");
+          image.src = ownerAssessmentEvidenceUrl(
+            job.jobId,
+            entry.evidenceId
+          );
+          image.alt = entry.accessibleDescription;
+          image.loading = "lazy";
+          image.decoding = "async";
+          image.style.display = "block";
+          image.style.width = "100%";
+          image.style.height = "auto";
+          figure.append(
+            image,
+            accountElement(
+              documentRef,
+              "figcaption",
+              "",
+              accountWords(entry.viewport) + " · "
+                + ownerTargetLine(entry.reviewTarget) + " · "
+                + entry.accessibleDescription
+            )
+          );
+          evidenceGrid.appendChild(figure);
+        });
+        section.appendChild(evidenceGrid);
+      }
+      if (job.state === "delivered") {
+        card.appendChild(section);
+        return;
+      }
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-assessment-evidence-form"
+      );
+      form.style.display = "grid";
+      form.style.gap = "0.75rem";
+      form.style.gridTemplateColumns = "minmax(0, 1fr)";
+      form.append(
+        ownerAssessmentTargetSelect(
+          documentRef,
+          "reviewTarget",
+          "Paid review target",
+          job.scope.reviewTargets,
+          job.scope.reviewTargets[0]
+        ),
+        assessmentSelect(
+          documentRef,
+          "viewport",
+          "Viewport",
+          "desktop",
+          [
+            ["desktop", "Desktop"],
+            ["phone", "Phone"]
+          ]
+        ),
+        assessmentField(
+          documentRef,
+          "accessibleDescription",
+          "Accessible screenshot description",
+          "",
+          {
+            required: true,
+            maximum: 500,
+            multiline: true,
+            placeholder:
+              "Describe what the screenshot shows and why it matters."
+          }
+        )
+      );
+      var fileLabel = accountElement(
+        documentRef,
+        "label",
+        "spark-field"
+      );
+      fileLabel.appendChild(
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "Screenshot file"
+        )
+      );
+      var file = accountElement(documentRef, "input", "");
+      file.type = "file";
+      file.name = "evidenceFile";
+      file.accept = "image/jpeg,image/png,image/webp";
+      file.required = true;
+      fileLabel.appendChild(file);
+      var formStatus = accountElement(
+        documentRef,
+        "p",
+        "customer-owner-assessment-form-status"
+      );
+      formStatus.setAttribute("role", "status");
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        "Prepare and upload screenshot"
+      );
+      submit.type = "submit";
+      submit.disabled = busyFor(state, job.jobId);
+      form.append(fileLabel, formStatus, submit);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (typeof actions.evidence !== "function") return;
+        var data = new FormData(form);
+        var selectedTarget = selectedOwnerAssessmentTarget(
+          job,
+          text(data.get("reviewTarget"))
+        );
+        if (!selectedTarget || !file.files || file.files.length !== 1) {
+          formStatus.textContent = "Choose one paid target and one screenshot.";
+          return;
+        }
+        submit.disabled = true;
+        formStatus.textContent =
+          "Preparing a private image no larger than 700 KiB…";
+        prepareAssessmentEvidenceFile(file.files[0])
+          .then(function (prepared) {
+            return actions.evidence(job, {
+              accessibleDescription: text(
+                data.get("accessibleDescription")
+              ),
+              bytesBase64: prepared.bytesBase64,
+              mediaType: prepared.mediaType,
+              organizationId: job.organizationId,
+              reviewTarget: selectedTarget,
+              viewport: text(data.get("viewport"))
+            });
+          })
+          .catch(function (error) {
+            formStatus.textContent = error && error.message
+              ? error.message
+              : "The screenshot could not be prepared.";
+            submit.disabled = false;
+          });
+      });
+      section.appendChild(form);
+      card.appendChild(section);
+    }
+
+    function renderFindingForm(job, priority, state, container) {
+      var existing = job.findings.find(function (finding) {
+        return finding.priority === priority;
+      }) || null;
+      var details = accountElement(
+        documentRef,
+        "details",
+        "customer-owner-assessment-finding"
+      );
+      var summary = accountElement(
+        documentRef,
+        "summary",
+        "",
+        "Finding " + priority + " · "
+          + (existing
+            ? existing.summary
+            : "Not authored")
+      );
+      details.appendChild(summary);
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-assessment-finding-form"
+      );
+      form.style.display = "grid";
+      form.style.gap = "0.75rem";
+      form.style.gridTemplateColumns = "minmax(0, 1fr)";
+      var includedLabel = accountElement(documentRef, "label", "");
+      var included = accountElement(documentRef, "input", "");
+      included.type = "checkbox";
+      included.name = "included";
+      included.checked = existing ? existing.included : true;
+      includedLabel.append(
+        included,
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "Include this finding in the delivered customer report"
+        )
+      );
+      var primaryTargetField = ownerAssessmentTargetSelect(
+        documentRef,
+        "primaryTarget",
+        "Primary paid target",
+        job.scope.reviewTargets,
+        existing
+          ? existing.primaryTarget
+          : job.scope.reviewTargets[0]
+      );
+      var primaryTargetSelect = primaryTargetField.querySelector("select");
+      form.append(
+        includedLabel,
+        assessmentSelect(
+          documentRef,
+          "severity",
+          "Severity",
+          existing ? existing.severity : "moderate",
+          ASSESSMENT_SEVERITIES.map(function (entry) {
+            return [entry, accountWords(entry)];
+          })
+        ),
+        assessmentSelect(
+          documentRef,
+          "category",
+          "Category",
+          existing ? existing.category : "usability",
+          ASSESSMENT_CATEGORIES.map(function (entry) {
+            return [entry, accountWords(entry)];
+          })
+        ),
+        primaryTargetField
+      );
+      var viewportGroup = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-owner-assessment-viewports"
+      );
+      viewportGroup.appendChild(
+        accountElement(documentRef, "legend", "", "Affected viewports")
+      );
+      ["desktop", "phone"].forEach(function (viewport) {
+        var label = accountElement(documentRef, "label", "");
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.name = "viewports";
+        checkbox.value = viewport;
+        checkbox.checked = existing
+          ? existing.viewports.includes(viewport)
+          : true;
+        label.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            accountWords(viewport)
+          )
+        );
+        viewportGroup.appendChild(label);
+      });
+      form.append(
+        viewportGroup,
+        assessmentField(
+          documentRef,
+          "summary",
+          "Customer-safe finding summary",
+          existing ? existing.summary : "",
+          { required: true, maximum: 240, multiline: true }
+        ),
+        assessmentField(
+          documentRef,
+          "recommendation",
+          "Customer-safe recommendation",
+          existing ? existing.recommendation : "",
+          { required: true, maximum: 1500, multiline: true }
+        )
+      );
+      var evidenceGroup = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-owner-assessment-finding-evidence"
+      );
+      evidenceGroup.appendChild(
+        accountElement(
+          documentRef,
+          "legend",
+          "",
+          "Supporting screenshot evidence"
+        )
+      );
+      if (job.evidence.length === 0) {
+        evidenceGroup.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Upload screenshot evidence before authoring findings."
+          )
+        );
+      }
+      var evidenceOptions = [];
+      job.evidence.forEach(function (entry) {
+        var label = accountElement(documentRef, "label", "");
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.name = "evidenceIds";
+        checkbox.value = entry.evidenceId;
+        checkbox.checked = Boolean(
+          existing
+          && existing.evidenceIds.includes(entry.evidenceId)
+        );
+        label.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            accountWords(entry.viewport) + " · "
+              + ownerTargetLine(entry.reviewTarget) + " · "
+              + entry.accessibleDescription
+          )
+        );
+        evidenceOptions.push({
+          checkbox: checkbox,
+          label: label,
+          targetKey: assessmentTargetKey(entry.reviewTarget),
+          viewport: entry.viewport
+        });
+        evidenceGroup.appendChild(label);
+      });
+      function syncFindingEvidenceChoices() {
+        var selectedTargetKey = text(
+          primaryTargetSelect && primaryTargetSelect.value
+        );
+        evidenceOptions.forEach(function (option) {
+          var matches = option.targetKey === selectedTargetKey;
+          option.label.hidden = !matches;
+          option.checkbox.disabled = !matches;
+          if (!matches) option.checkbox.checked = false;
+        });
+      }
+      if (primaryTargetSelect) {
+        primaryTargetSelect.addEventListener(
+          "change",
+          syncFindingEvidenceChoices
+        );
+      }
+      syncFindingEvidenceChoices();
+      var formError = accountElement(
+        documentRef,
+        "p",
+        "customer-owner-assessment-form-status"
+      );
+      formError.setAttribute("role", "alert");
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        existing ? "Save finding revision" : "Save finding"
+      );
+      submit.type = "submit";
+      submit.disabled = busyFor(state, job.jobId)
+        || job.evidence.length === 0;
+      form.append(evidenceGroup, formError, submit);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        formError.textContent = "";
+        if (typeof actions.finding !== "function") return;
+        var data = new FormData(form);
+        var target = selectedOwnerAssessmentTarget(
+          job,
+          text(data.get("primaryTarget"))
+        );
+        var viewports = data.getAll("viewports").map(text).sort();
+        var evidenceIds = data.getAll("evidenceIds").map(text).sort();
+        var targetKey = target ? assessmentTargetKey(target) : "";
+        var selectedEvidence = job.evidence.filter(function (entry) {
+          return evidenceIds.includes(entry.evidenceId)
+            && assessmentTargetKey(entry.reviewTarget) === targetKey;
+        });
+        var evidenceCoversViewports = viewports.every(function (viewport) {
+          return selectedEvidence.some(function (entry) {
+            return entry.viewport === viewport;
+          });
+        });
+        if (
+          !target
+          || viewports.length < 1
+          || evidenceIds.length < 1
+          || selectedEvidence.length !== evidenceIds.length
+          || !evidenceCoversViewports
+        ) {
+          formError.textContent =
+            "Choose evidence from this paid target for every affected viewport.";
+          return;
+        }
+        actions.finding(job, priority, {
+          category: text(data.get("category")),
+          evidenceIds: evidenceIds,
+          expectedRevision: existing ? existing.revision : 0,
+          included: included.checked,
+          organizationId: job.organizationId,
+          primaryTarget: target,
+          recommendation: text(data.get("recommendation")),
+          severity: text(data.get("severity")),
+          summary: text(data.get("summary")),
+          viewports: viewports
+        });
+      });
+      details.appendChild(form);
+      container.appendChild(details);
+    }
+
+    function renderDelivery(job, state, card) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-form customer-owner-assessment-delivery"
+      );
+      section.appendChild(
+        accountElement(documentRef, "h5", "", "Report delivery")
+      );
+      if (job.delivery) {
+        var deliveredFacts = accountElement(documentRef, "dl", "");
+        appendAccountFact(
+          documentRef,
+          deliveredFacts,
+          "Delivered",
+          accountDate(job.delivery.deliveredAt)
+        );
+        appendAccountFact(
+          documentRef,
+          deliveredFacts,
+          "Findings",
+          String(job.delivery.findingCount)
+        );
+        appendAccountFact(
+          documentRef,
+          deliveredFacts,
+          "Build credit",
+          "$200.00 USD · one use · non-cash · "
+            + accountWords(job.delivery.credit.state)
+            + (job.delivery.credit.state === "available"
+              ? " through "
+              : " on ")
+            + accountDate(job.delivery.credit.acceptanceCutoff)
+        );
+        section.append(
+          deliveredFacts,
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            job.delivery.overallSummary
+          )
+        );
+        card.appendChild(section);
+        return;
+      }
+      var coverageComplete = ownerAssessmentCoverageComplete(job);
+      var findingsReady = ownerAssessmentFindingsReady(job);
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-assessment-delivery-form"
+      );
+      form.style.display = "grid";
+      form.style.gap = "0.75rem";
+      form.style.gridTemplateColumns = "minmax(0, 1fr)";
+      form.appendChild(
+        assessmentField(
+          documentRef,
+          "overallSummary",
+          "Customer-facing overall summary",
+          "",
+          { required: true, maximum: 2000, multiline: true }
+        )
+      );
+      var confirmation = accountElement(documentRef, "label", "");
+      var confirmationBox = accountElement(documentRef, "input", "");
+      confirmationBox.type = "checkbox";
+      confirmation.append(
+        confirmationBox,
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "I reviewed the complete desktop and phone evidence and understand delivery freezes the customer report and issues exactly one non-cash $200 same-project Custom build credit."
+        )
+      );
+      var readiness = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-note",
+        !coverageComplete
+          ? "Delivery is locked until every target has desktop and phone evidence."
+          : !findingsReady
+            ? "Delivery is locked until included findings use consecutive priorities beginning with 1."
+            : "Coverage and finding order are ready for final review."
+      );
+      var formError = accountElement(
+        documentRef,
+        "p",
+        "customer-owner-assessment-form-status"
+      );
+      formError.setAttribute("role", "alert");
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        "Deliver immutable assessment report"
+      );
+      submit.type = "submit";
+      function updateDeliveryButton() {
+        submit.disabled = busyFor(state, job.jobId)
+          || !coverageComplete
+          || !findingsReady
+          || !confirmationBox.checked;
+      }
+      confirmationBox.addEventListener("change", updateDeliveryButton);
+      updateDeliveryButton();
+      form.append(confirmation, readiness, formError, submit);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        formError.textContent = "";
+        if (
+          !coverageComplete
+          || !findingsReady
+          || !confirmationBox.checked
+          || typeof actions.deliver !== "function"
+        ) return;
+        var data = new FormData(form);
+        var overallSummary = text(data.get("overallSummary"));
+        if (overallSummary.length < 20) {
+          formError.textContent =
+            "Write an overall summary of at least 20 characters.";
+          return;
+        }
+        actions.deliver(job, {
+          expectedWorkDigest: job.workDigest,
+          organizationId: job.organizationId,
+          overallSummary: overallSummary
+        });
+      });
+      section.appendChild(form);
+      card.appendChild(section);
+    }
+
+    function renderJob(job, state) {
+      var card = accountElement(
+        documentRef,
+        "details",
+        "customer-owner-quote-card customer-owner-assessment-job"
+      );
+      card.setAttribute("data-assessment-job", job.jobId);
+      card.style.minWidth = "0";
+      var jobSummary = accountElement(
+        documentRef,
+        "summary",
+        "customer-owner-assessment-job-summary",
+        job.projectName + " · " + accountWords(job.state)
+      );
+      card.appendChild(jobSummary);
+      var rendered = false;
+      function renderJobContents() {
+        if (rendered) return;
+        rendered = true;
+        var contents = accountElement(
+          documentRef,
+          "div",
+          "customer-owner-assessment-job-contents"
+        );
+        var facts = accountElement(
+          documentRef,
+          "dl",
+          "customer-alakazam-facts"
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Customer",
+          job.customer.name + " · " + job.customer.email
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Organization",
+          job.organizationName
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Delivery date",
+          job.deliveryDate
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Paid scope",
+          "1 website · " + job.scope.reviewTargets.length
+            + " targets · up to 10 findings"
+        );
+        contents.appendChild(facts);
+        renderEvidence(job, state, contents);
+        if (job.state === "open") {
+          var findings = accountElement(
+            documentRef,
+            "section",
+            "customer-owner-assessment-findings"
+          );
+          findings.appendChild(
+            accountElement(
+              documentRef,
+              "h5",
+              "",
+              "Customer-safe findings (up to 10)"
+            )
+          );
+          for (var priority = 1; priority <= 10; priority += 1) {
+            renderFindingForm(job, priority, state, findings);
+          }
+          contents.appendChild(findings);
+        }
+        renderDelivery(job, state, contents);
+        card.appendChild(contents);
+      }
+      card.addEventListener("toggle", function () {
+        if (card.open) {
+          expandedJobIds.add(job.jobId);
+          renderJobContents();
+        } else {
+          expandedJobIds.delete(job.jobId);
+        }
+      });
+      if (expandedJobIds.has(job.jobId)) {
+        card.open = true;
+        renderJobContents();
+      }
+      body.appendChild(card);
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: function (state) {
+        var visible = Boolean(
+          state
+          && !["idle", "unavailable"].includes(state.phase)
+        );
+        panel.hidden = !visible;
+        body.replaceChildren();
+        if (!visible) return;
+        refresh.disabled = state.phase === "loading"
+          || Boolean(state.busyKey);
+        panel.setAttribute(
+          "aria-busy",
+          String(refresh.disabled)
+        );
+        if (state.phase === "loading") {
+          status.textContent = "Loading paid assessment jobs…";
+          return;
+        }
+        var jobs = verifiedOwnerAssessmentJobs(state.jobs);
+        if (!jobs) {
+          status.textContent = state.error
+            || "The assessment job response could not be verified. No owner action is available.";
+          return;
+        }
+        status.textContent = state.error
+          || (jobs.jobs.length === 0
+            ? "No paid assessment jobs are open."
+            : jobs.jobs.length + " paid assessment job"
+              + (jobs.jobs.length === 1 ? " is" : "s are")
+              + " available.");
+        jobs.jobs.forEach(function (job) {
+          renderJob(job, state);
         });
       }
     });
@@ -3968,11 +6000,14 @@
     var quoteExpiryTimer = null;
     var assessmentReadSequence = 0;
     var assessmentRead = {
+      accountId: "",
       projectId: "",
       phase: "idle",
       request: null,
       quote: null,
       invoice: null,
+      report: null,
+      reportError: "",
       command: "",
       error: ""
     };
@@ -3989,6 +6024,70 @@
       busyCaseId: "",
       error: ""
     };
+    var ownerWorkReadSequence = 0;
+    var ownerWorkRead = {
+      accountId: "",
+      phase: "idle",
+      jobs: null,
+      busyKey: "",
+      error: ""
+    };
+    var ownerEvidenceAttemptStorageKey =
+      "sitesourcery.owner-assessment-evidence-attempt/v1";
+
+    function emptyOwnerEvidenceAttempt() {
+      return {
+        accountId: "",
+        jobId: "",
+        signature: "",
+        commandId: ""
+      };
+    }
+
+    function readOwnerEvidenceAttempt() {
+      try {
+        var stored = windowRef.sessionStorage
+          && windowRef.sessionStorage.getItem(
+            ownerEvidenceAttemptStorageKey
+          );
+        var parsed = stored ? JSON.parse(stored) : null;
+        return parsed
+          && exactKeys(
+            parsed,
+            ["accountId", "commandId", "jobId", "signature"]
+          )
+          && UUID.test(text(parsed.accountId))
+          && UUID.test(text(parsed.commandId))
+          && UUID.test(text(parsed.jobId))
+          && /^[0-9]+:[a-f0-9]{8}:[a-f0-9]{8}$/u.test(
+            text(parsed.signature)
+          )
+          ? parsed
+          : emptyOwnerEvidenceAttempt();
+      } catch (error) {
+        return emptyOwnerEvidenceAttempt();
+      }
+    }
+
+    function storeOwnerEvidenceAttempt(attempt) {
+      try {
+        if (!windowRef.sessionStorage) return;
+        if (attempt.accountId && attempt.jobId) {
+          windowRef.sessionStorage.setItem(
+            ownerEvidenceAttemptStorageKey,
+            JSON.stringify(attempt)
+          );
+        } else {
+          windowRef.sessionStorage.removeItem(
+            ownerEvidenceAttemptStorageKey
+          );
+        }
+      } catch (error) {
+        // A blocked storage API leaves safe in-memory retry identity intact.
+      }
+    }
+
+    var ownerEvidenceAttempt = readOwnerEvidenceAttempt();
     var alakazamReadSequence = 0;
     var alakazamRead = {
       projectId: "",
@@ -4144,6 +6243,30 @@
           }
         }
       );
+    var ownerAssessmentWorkPanel =
+      createOwnerAssessmentWorkPanel(
+        documentRef,
+        {
+          refresh: function () {
+            requestOwnerAssessmentJobs(
+              text(lastState.account && lastState.account.id)
+            );
+          },
+          evidence: function (job, input) {
+            return runOwnerAssessmentEvidence(job, input);
+          },
+          finding: function (job, priority, input) {
+            return runOwnerAssessmentFinding(
+              job,
+              priority,
+              input
+            );
+          },
+          deliver: function (job, input) {
+            return runOwnerAssessmentDelivery(job, input);
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -4194,6 +6317,10 @@
         ownerAssessmentPanel.element,
         assessmentPanel.element
       );
+      alakazamAnchor.parentNode.insertBefore(
+        ownerAssessmentWorkPanel.element,
+        assessmentPanel.element
+      );
     }
     if (
       alakazamAnchor
@@ -4211,6 +6338,9 @@
       if (controlShell) {
         controlShell.appendChild(
           ownerAssessmentPanel.element
+        );
+        controlShell.appendChild(
+          ownerAssessmentWorkPanel.element
         );
         controlShell.appendChild(
           assessmentPanel.element
@@ -4365,26 +6495,358 @@
       }
     }
 
+    function renderOwnerAssessmentWorkPanel() {
+      ownerAssessmentWorkPanel.render(ownerWorkRead);
+    }
+
+    function ownerAssessmentWorkIsCurrent(sequence, accountId) {
+      return sequence === ownerWorkReadSequence
+        && ownerWorkRead.accountId === accountId
+        && text(lastState.account && lastState.account.id) === accountId;
+    }
+
+    function requestOwnerAssessmentJobs(accountId) {
+      var selectedAccountId = text(accountId);
+      var sequence = ++ownerWorkReadSequence;
+      if (
+        !selectedAccountId
+        || typeof client.listOwnerAssessmentJobs !== "function"
+      ) {
+        ownerWorkRead = {
+          accountId: selectedAccountId,
+          phase: "unavailable",
+          jobs: null,
+          busyKey: "",
+          error: ""
+        };
+        renderOwnerAssessmentWorkPanel();
+        return Promise.resolve(null);
+      }
+      ownerWorkRead = {
+        accountId: selectedAccountId,
+        phase: "loading",
+        jobs: null,
+        busyKey: "",
+        error: ""
+      };
+      renderOwnerAssessmentWorkPanel();
+      return client.listOwnerAssessmentJobs()
+        .then(function (jobs) {
+          if (!ownerAssessmentWorkIsCurrent(sequence, selectedAccountId)) {
+            return null;
+          }
+          if (!verifiedOwnerAssessmentJobs(jobs)) {
+            throw new Error(
+              "The assessment job response could not be verified."
+            );
+          }
+          ownerWorkRead = {
+            accountId: selectedAccountId,
+            phase: "ready",
+            jobs: jobs,
+            busyKey: "",
+            error: ""
+          };
+          renderOwnerAssessmentWorkPanel();
+          return jobs;
+        })
+        .catch(function (error) {
+          if (!ownerAssessmentWorkIsCurrent(sequence, selectedAccountId)) {
+            return null;
+          }
+          ownerWorkRead = {
+            accountId: selectedAccountId,
+            phase: error && [401, 403, 503].includes(error.status)
+              ? "unavailable"
+              : "error",
+            jobs: null,
+            busyKey: "",
+            error: error && [401, 403, 503].includes(error.status)
+              ? ""
+              : explain(
+                  error,
+                  "Paid assessment jobs could not be loaded."
+                )
+          };
+          renderOwnerAssessmentWorkPanel();
+          return null;
+        });
+    }
+
+    function freshOwnerAssessmentCommandId() {
+      var cryptoObject = windowRef.crypto;
+      var commandId = cryptoObject
+        && typeof cryptoObject.randomUUID === "function"
+        ? cryptoObject.randomUUID()
+        : "";
+      if (!UUID.test(text(commandId))) {
+        throw new Error(
+          "This browser cannot safely identify the assessment work request. Update it and try again."
+        );
+      }
+      return commandId;
+    }
+
+    function currentOwnerAssessmentJob(job) {
+      var jobs = verifiedOwnerAssessmentJobs(ownerWorkRead.jobs);
+      if (!jobs || !job) return null;
+      return jobs.jobs.find(function (entry) {
+        return entry.jobId === job.jobId
+          && entry.organizationId === job.organizationId;
+      }) || null;
+    }
+
+    function runOwnerAssessmentWork(
+      job,
+      action,
+      invoke,
+      verify,
+      fallback
+    ) {
+      var current = currentOwnerAssessmentJob(job);
+      if (
+        !current
+        || current.state !== "open"
+        || ownerWorkRead.phase !== "ready"
+        || ownerWorkRead.busyKey
+      ) return Promise.resolve(null);
+      var selectedAccountId = ownerWorkRead.accountId;
+      var sequence = ownerWorkReadSequence;
+      var busyKey = current.jobId + ":" + action;
+      ownerWorkRead = Object.assign({}, ownerWorkRead, {
+        busyKey: busyKey,
+        error: ""
+      });
+      renderOwnerAssessmentWorkPanel();
+      return Promise.resolve()
+        .then(invoke)
+        .then(function (result) {
+          if (
+            !ownerAssessmentWorkIsCurrent(sequence, selectedAccountId)
+            || ownerWorkRead.busyKey !== busyKey
+          ) return null;
+          if (!verify(result)) {
+            throw new Error(
+              "The assessment work response could not be verified. Nothing else was changed."
+            );
+          }
+          return requestOwnerAssessmentJobs(selectedAccountId)
+            .then(function () {
+              return result;
+            });
+        })
+        .catch(function (error) {
+          if (!ownerAssessmentWorkIsCurrent(sequence, selectedAccountId)) {
+            return null;
+          }
+          if (error && [401, 403, 503].includes(error.status)) {
+            ownerWorkRead = {
+              accountId: selectedAccountId,
+              phase: "unavailable",
+              jobs: null,
+              busyKey: "",
+              error: ""
+            };
+          } else {
+            ownerWorkRead = Object.assign({}, ownerWorkRead, {
+              busyKey: "",
+              error: explain(error, fallback)
+            });
+          }
+          renderOwnerAssessmentWorkPanel();
+          ownerAssessmentWorkPanel.focusStatus();
+          return null;
+        });
+    }
+
+    function runOwnerAssessmentEvidence(job, input) {
+      if (
+        typeof client.uploadOwnerAssessmentEvidence !== "function"
+      ) return Promise.resolve(null);
+      var signature = ownerAssessmentEvidenceSignature(job, input);
+      var commandId;
+      try {
+        commandId = ownerEvidenceAttempt.accountId === ownerWorkRead.accountId
+          && ownerEvidenceAttempt.jobId === job.jobId
+          && ownerEvidenceAttempt.signature === signature
+          && UUID.test(text(ownerEvidenceAttempt.commandId))
+          ? ownerEvidenceAttempt.commandId
+          : freshOwnerAssessmentCommandId();
+      } catch (error) {
+        ownerWorkRead = Object.assign({}, ownerWorkRead, {
+          error: explain(
+            error,
+            "The screenshot upload could not start."
+          )
+        });
+        renderOwnerAssessmentWorkPanel();
+        return Promise.resolve(null);
+      }
+      ownerEvidenceAttempt = {
+        accountId: ownerWorkRead.accountId,
+        jobId: job.jobId,
+        signature: signature,
+        commandId: commandId
+      };
+      storeOwnerEvidenceAttempt(ownerEvidenceAttempt);
+      return runOwnerAssessmentWork(
+        job,
+        "uploading evidence",
+        function () {
+          return client.uploadOwnerAssessmentEvidence(
+            job.jobId,
+            input,
+            { idempotencyKey: commandId }
+          );
+        },
+        function (result) {
+          var verified = verifiedOwnerAssessmentEvidence(
+            result,
+            job.jobId
+          );
+          if (verified) {
+            ownerEvidenceAttempt = emptyOwnerEvidenceAttempt();
+            storeOwnerEvidenceAttempt(ownerEvidenceAttempt);
+          }
+          return Boolean(verified);
+        },
+        "The screenshot evidence could not be uploaded safely."
+      );
+    }
+
+    function runOwnerAssessmentFinding(job, priority, input) {
+      if (
+        typeof client.putOwnerAssessmentFinding !== "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = freshOwnerAssessmentCommandId();
+      } catch (error) {
+        ownerWorkRead = Object.assign({}, ownerWorkRead, {
+          error: explain(error, "The finding could not be saved.")
+        });
+        renderOwnerAssessmentWorkPanel();
+        return Promise.resolve(null);
+      }
+      return runOwnerAssessmentWork(
+        job,
+        "saving finding " + priority,
+        function () {
+          return client.putOwnerAssessmentFinding(
+            job.jobId,
+            priority,
+            input,
+            { idempotencyKey: commandId }
+          );
+        },
+        function (result) {
+          return Boolean(verifiedOwnerAssessmentFinding(
+            result,
+            job.jobId,
+            priority
+          ));
+        },
+        "The assessment finding could not be saved safely."
+      );
+    }
+
+    function runOwnerAssessmentDelivery(job, input) {
+      var current = currentOwnerAssessmentJob(job);
+      if (
+        !current
+        || !ownerAssessmentCoverageComplete(current)
+        || !ownerAssessmentFindingsReady(current)
+        || typeof client.deliverOwnerAssessmentReport !== "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = freshOwnerAssessmentCommandId();
+      } catch (error) {
+        ownerWorkRead = Object.assign({}, ownerWorkRead, {
+          error: explain(
+            error,
+            "The assessment report delivery could not start."
+          )
+        });
+        renderOwnerAssessmentWorkPanel();
+        return Promise.resolve(null);
+      }
+      return runOwnerAssessmentWork(
+        job,
+        "delivering report",
+        function () {
+          return client.deliverOwnerAssessmentReport(
+            job.jobId,
+            input,
+            { idempotencyKey: commandId }
+          );
+        },
+        function (result) {
+          return Boolean(verifiedOwnerAssessmentDelivery(
+            result,
+            job.jobId
+          ));
+        },
+        "The immutable assessment report could not be delivered safely."
+      );
+    }
+
+    function syncOwnerAssessmentWorkAccount(state) {
+      var nextAccountId = text(
+        state && state.account && state.account.id
+      );
+      if (!nextAccountId) {
+        if (ownerWorkRead.accountId) {
+          ownerWorkReadSequence += 1;
+          ownerWorkRead = {
+            accountId: "",
+            phase: "idle",
+            jobs: null,
+            busyKey: "",
+            error: ""
+          };
+          ownerEvidenceAttempt = emptyOwnerEvidenceAttempt();
+          storeOwnerEvidenceAttempt(ownerEvidenceAttempt);
+          renderOwnerAssessmentWorkPanel();
+        }
+        return;
+      }
+      if (ownerWorkRead.accountId !== nextAccountId) {
+        ownerEvidenceAttempt = emptyOwnerEvidenceAttempt();
+        storeOwnerEvidenceAttempt(ownerEvidenceAttempt);
+        requestOwnerAssessmentJobs(nextAccountId);
+      }
+    }
+
     function renderAssessmentPanel() {
       assessmentPanel.render(assessmentRead);
     }
 
     function assessmentReadIsCurrent(sequence, projectId) {
       return sequence === assessmentReadSequence
-        && Boolean(lastState.account)
+        && text(lastState.account && lastState.account.id) ===
+          assessmentRead.accountId
         && idOf(lastState.project) === projectId;
     }
 
     function requestAssessment(projectId) {
       var selectedProjectId = text(projectId);
-      if (!selectedProjectId) return Promise.resolve(null);
+      var selectedAccountId = text(
+        lastState.account && lastState.account.id
+      );
+      if (!selectedProjectId || !selectedAccountId) {
+        return Promise.resolve(null);
+      }
       var sequence = ++assessmentReadSequence;
       assessmentRead = {
+        accountId: selectedAccountId,
         projectId: selectedProjectId,
         phase: "loading",
         request: null,
         quote: null,
         invoice: null,
+        report: null,
+        reportError: "",
         command: "",
         error: ""
       };
@@ -4393,6 +6855,7 @@
         typeof client.getCustomServicesAssessmentRequest !== "function"
         || typeof client.getCustomServicesAssessmentQuote !== "function"
         || typeof client.getCustomServicesAssessmentInvoice !== "function"
+        || typeof client.getCustomServicesAssessmentReport !== "function"
       ) {
         assessmentRead.phase = "error";
         assessmentRead.error =
@@ -4403,17 +6866,33 @@
       return Promise.all([
         client.getCustomServicesAssessmentRequest(selectedProjectId),
         client.getCustomServicesAssessmentQuote(selectedProjectId),
-        client.getCustomServicesAssessmentInvoice(selectedProjectId)
+        client.getCustomServicesAssessmentInvoice(selectedProjectId),
+        client.getCustomServicesAssessmentReport(selectedProjectId)
+          .then(function (report) {
+            return { error: "", value: report };
+          })
+          .catch(function (error) {
+            return {
+              error: explain(
+                error,
+                "The assessment report status could not be loaded."
+              ),
+              value: null
+            };
+          })
       ]).then(function (results) {
         if (!assessmentReadIsCurrent(sequence, selectedProjectId)) {
           return null;
         }
         assessmentRead = {
+          accountId: selectedAccountId,
           projectId: selectedProjectId,
           phase: "ready",
           request: results[0],
           quote: results[1],
           invoice: results[2],
+          report: results[3].value,
+          reportError: results[3].error,
           command: "",
           error: ""
         };
@@ -4424,11 +6903,14 @@
           return null;
         }
         assessmentRead = {
+          accountId: selectedAccountId,
           projectId: selectedProjectId,
           phase: "error",
           request: null,
           quote: null,
           invoice: null,
+          report: null,
+          reportError: "",
           command: "",
           error: explain(
             error,
@@ -4604,16 +7086,20 @@
     }
 
     function renderAssessmentAccount(state) {
-      var projectId = state.account ? idOf(state.project) : "";
+      var accountId = text(state.account && state.account.id);
+      var projectId = accountId ? idOf(state.project) : "";
       if (!projectId) {
-        if (assessmentRead.projectId) {
+        if (assessmentRead.projectId || assessmentRead.accountId) {
           assessmentReadSequence += 1;
           assessmentRead = {
+            accountId: "",
             projectId: "",
             phase: "idle",
             request: null,
             quote: null,
             invoice: null,
+            report: null,
+            reportError: "",
             command: "",
             error: ""
           };
@@ -4621,7 +7107,10 @@
         renderAssessmentPanel();
         return;
       }
-      if (assessmentRead.projectId !== projectId) {
+      if (
+        assessmentRead.accountId !== accountId
+        || assessmentRead.projectId !== projectId
+      ) {
         requestAssessment(projectId);
         return;
       }
@@ -6128,6 +8617,7 @@
       renderAssessmentAccount(state);
       renderAlakazamAccount(state);
       syncOwnerAssessmentAccount(state);
+      syncOwnerAssessmentWorkAccount(state);
 
       var entitlement =
         downloadEntitlement(
@@ -6742,6 +9232,12 @@
       locationWithoutCheckoutReturn,
     ownerReviewTargets:
       ownerReviewTargets,
+    ownerAssessmentCoverageComplete:
+      ownerAssessmentCoverageComplete,
+    ownerAssessmentEvidenceUrl:
+      ownerAssessmentEvidenceUrl,
+    prepareAssessmentEvidenceFile:
+      prepareAssessmentEvidenceFile,
     recoveryOutcome: recoveryOutcome,
     recoveryTokenFromLocation:
       recoveryTokenFromLocation,
@@ -6767,6 +9263,16 @@
       verifiedAssessmentCheckout,
     verifiedAssessmentInvoice:
       verifiedAssessmentInvoice,
+    verifiedCustomerAssessmentReport:
+      verifiedCustomerAssessmentReport,
+    verifiedOwnerAssessmentDelivery:
+      verifiedOwnerAssessmentDelivery,
+    verifiedOwnerAssessmentEvidence:
+      verifiedOwnerAssessmentEvidence,
+    verifiedOwnerAssessmentFinding:
+      verifiedOwnerAssessmentFinding,
+    verifiedOwnerAssessmentJobs:
+      verifiedOwnerAssessmentJobs,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote,

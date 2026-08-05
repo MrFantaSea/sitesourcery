@@ -22,6 +22,9 @@ import {
   createPostgresCustomServicesAssessmentSettlement
 } from "../../hosted/custom-services-assessment-settlement-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentWork
+} from "../../hosted/custom-services-assessment-work-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -259,35 +262,41 @@ async function seedOperator(client, label) {
     authorized_by_user_id: controlUserId,
     authorized_at: isoAfter()
   });
-  await insertRow(client, "operator_permissions", {
-    operator_user_id: operatorUserId,
-    capability: "service_quote_author",
-    state: "held",
-    granted_by_user_id: controlUserId,
-    granted_at: isoAfter()
-  });
-  const grant = await insertRow(
-    client,
-    "service_operator_authority_events",
-    {
+  for (const capability of [
+    "service_quote_author",
+    "service_job_manage",
+    "service_document_manage"
+  ]) {
+    await insertRow(client, "operator_permissions", {
       operator_user_id: operatorUserId,
-      capability: "service_quote_author",
-      event_sequence: 99,
-      event_kind: "grant",
-      predecessor_event_id: null,
-      recorded_by_kind: "deployment_control",
-      effective_at: "2001-01-01T00:00:00.000Z",
-      expires_at: isoAfter({ days: 2 }),
-      created_at: "2001-01-01T00:00:00.000Z"
-    }
-  );
-  assert.equal(Number(grant.rows[0].event_sequence), 1);
-  assert.equal(grant.rows[0].event_kind, "grant");
-  assert.notEqual(
-    grant.rows[0].effective_at.toISOString(),
-    "2001-01-01T00:00:00.000Z"
-  );
-  assert.match(grant.rows[0].event_digest, /^[0-9a-f]{64}$/u);
+      capability,
+      state: "held",
+      granted_by_user_id: controlUserId,
+      granted_at: isoAfter()
+    });
+    const grant = await insertRow(
+      client,
+      "service_operator_authority_events",
+      {
+        operator_user_id: operatorUserId,
+        capability,
+        event_sequence: 99,
+        event_kind: "grant",
+        predecessor_event_id: null,
+        recorded_by_kind: "deployment_control",
+        effective_at: "2001-01-01T00:00:00.000Z",
+        expires_at: isoAfter({ days: 2 }),
+        created_at: "2001-01-01T00:00:00.000Z"
+      }
+    );
+    assert.equal(Number(grant.rows[0].event_sequence), 1);
+    assert.equal(grant.rows[0].event_kind, "grant");
+    assert.notEqual(
+      grant.rows[0].effective_at.toISOString(),
+      "2001-01-01T00:00:00.000Z"
+    );
+    assert.match(grant.rows[0].event_digest, /^[0-9a-f]{64}$/u);
+  }
   return operatorUserId;
 }
 
@@ -2189,6 +2198,373 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         error.code === "STRIPE_EVENT_BINDING_INVALID"
     );
     assert.equal(settlementReadCalls, 4);
+
+    const assessmentWorkAuthority = {
+      async service(context, work) {
+        const transactionClient = await pool.connect();
+        try {
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          const operatorContext = context.userId === secondOperatorId;
+          await setActor(
+            transactionClient,
+            operatorContext ? "operator" : "customer",
+            {
+              organizationId:
+                context.organizationId ??
+                (operatorContext ? undefined : customer.organizationId)
+            },
+            context.userId
+          );
+          const result = await work(transactionClient);
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    };
+    const assessmentWork = createPostgresCustomServicesAssessmentWork({
+      authority: assessmentWorkAuthority,
+      clock: { now: () => settlementNow },
+      randomUUID
+    });
+    const operatorActor = { userId: secondOperatorId };
+    const openJobs = await assessmentWork.listJobs(operatorActor);
+    assert.equal(
+      openJobs.schema,
+      "sitesourcery.custom-services-owner-assessment-jobs/v1"
+    );
+    const paidJob = openJobs.jobs.find(
+      (job) => job.jobId === settled.jobId
+    );
+    assert.ok(paidJob);
+    assert.equal(paidJob.state, "open");
+    assert.deepEqual(paidJob.scope.reviewTargets, [
+      { kind: "page", value: "/" },
+      { kind: "page_type", value: "product" }
+    ]);
+    assert.deepEqual(paidJob.scope.requiredViewports, [
+      "desktop",
+      "phone"
+    ]);
+    assert.equal(paidJob.scope.maximumFindings, 10);
+    assert.deepEqual(paidJob.evidence, []);
+    assert.deepEqual(paidJob.findings, []);
+    assert.equal(paidJob.delivery, null);
+
+    const evidenceBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64"
+    );
+    const staleDesktopInput = {
+      accessibleDescription:
+        "Earlier desktop capture of the paid home-page review target.",
+      bytesBase64: evidenceBytes.toString("base64"),
+      commandId: `assessment-evidence-${randomUUID()}`,
+      mediaType: "image/png",
+      organizationId: customer.organizationId,
+      reviewTarget: paidJob.scope.reviewTargets[0],
+      viewport: "desktop"
+    };
+    const staleDesktop = await assessmentWork.uploadEvidence(
+      operatorActor,
+      paidJob.jobId,
+      staleDesktopInput
+    );
+    assert.deepEqual(
+      await assessmentWork.uploadEvidence(
+        operatorActor,
+        paidJob.jobId,
+        staleDesktopInput
+      ),
+      staleDesktop
+    );
+    await assert.rejects(
+      assessmentWork.uploadEvidence(operatorActor, paidJob.jobId, {
+        ...staleDesktopInput,
+        accessibleDescription:
+          "Conflicting details for a command that already stored evidence."
+      }),
+      (error) => error.code === "idempotency_conflict"
+    );
+    const oneEvidenceJobs = await assessmentWork.listJobs(operatorActor);
+    const oneEvidenceJob = oneEvidenceJobs.jobs.find(
+      (job) => job.jobId === paidJob.jobId
+    );
+    assert.ok(oneEvidenceJob);
+    await assert.rejects(
+      assessmentWork.deliverReport(operatorActor, paidJob.jobId, {
+        commandId: `assessment-delivery-${randomUUID()}`,
+        expectedWorkDigest: oneEvidenceJob.workDigest,
+        organizationId: customer.organizationId,
+        overallSummary:
+          "This assessment cannot be delivered until every paid target has desktop and phone proof."
+      }),
+      (error) => error.code === "ASSESSMENT_COVERAGE_INCOMPLETE"
+    );
+
+    const selectedEvidence = new Map();
+    for (const reviewTarget of paidJob.scope.reviewTargets) {
+      for (const selectedViewport of ["desktop", "phone"]) {
+        const evidenceInput = {
+          accessibleDescription:
+            `Current ${selectedViewport} capture for ${reviewTarget.kind} ${reviewTarget.value}.`,
+          bytesBase64: evidenceBytes.toString("base64"),
+          commandId: `assessment-evidence-${randomUUID()}`,
+          mediaType: "image/png",
+          organizationId: customer.organizationId,
+          reviewTarget,
+          viewport: selectedViewport
+        };
+        const receipt = await assessmentWork.uploadEvidence(
+          operatorActor,
+          paidJob.jobId,
+          evidenceInput
+        );
+        assert.equal(receipt.evidence.mediaType, "image/png");
+        assert.equal(receipt.evidence.byteCount, evidenceBytes.byteLength);
+        selectedEvidence.set(
+          `${reviewTarget.kind}:${reviewTarget.value}:${selectedViewport}`,
+          receipt.evidence
+        );
+      }
+    }
+    const firstDesktop = selectedEvidence.get("page:/:desktop");
+    const firstPhone = selectedEvidence.get("page:/:phone");
+    const productDesktop = selectedEvidence.get(
+      "page_type:product:desktop"
+    );
+    assert.ok(firstDesktop);
+    assert.ok(firstPhone);
+    assert.ok(productDesktop);
+
+    await assert.rejects(
+      assessmentWork.putFinding(operatorActor, paidJob.jobId, 1, {
+        category: "responsive_design",
+        commandId: `assessment-finding-${randomUUID()}`,
+        evidenceIds: [productDesktop.evidenceId],
+        expectedRevision: 0,
+        included: true,
+        organizationId: customer.organizationId,
+        primaryTarget: paidJob.scope.reviewTargets[0],
+        recommendation:
+          "Use evidence from the same paid target before saving this finding.",
+        severity: "moderate",
+        summary: "The finding cannot cite evidence from another target.",
+        viewports: ["desktop"]
+      }),
+      (error) => error.code === "ASSESSMENT_WORK_CHANGED"
+    );
+
+    const findingInput = {
+      category: "responsive_design",
+      commandId: `assessment-finding-${randomUUID()}`,
+      evidenceIds: [firstPhone.evidenceId, firstDesktop.evidenceId],
+      expectedRevision: 0,
+      included: true,
+      organizationId: customer.organizationId,
+      primaryTarget: paidJob.scope.reviewTargets[0],
+      recommendation:
+        "Increase spacing and preserve the primary action across desktop and phone layouts.",
+      severity: "moderate",
+      summary: "The primary action loses emphasis in the crowded phone layout.",
+      viewports: ["phone", "desktop"]
+    };
+    const firstFinding = await assessmentWork.putFinding(
+      operatorActor,
+      paidJob.jobId,
+      1,
+      findingInput
+    );
+    assert.equal(firstFinding.finding.revision, 1);
+    assert.deepEqual(
+      await assessmentWork.putFinding(
+        operatorActor,
+        paidJob.jobId,
+        1,
+        findingInput
+      ),
+      firstFinding
+    );
+    const revisedFindingInput = {
+      ...findingInput,
+      commandId: `assessment-finding-${randomUUID()}`,
+      expectedRevision: 1,
+      recommendation:
+        "Increase spacing, shorten the supporting copy, and preserve the primary action across desktop and phone layouts."
+    };
+    const revisedFinding = await assessmentWork.putFinding(
+      operatorActor,
+      paidJob.jobId,
+      1,
+      revisedFindingInput
+    );
+    assert.equal(revisedFinding.finding.revision, 2);
+    assert.deepEqual(
+      await assessmentWork.putFinding(
+        operatorActor,
+        paidJob.jobId,
+        1,
+        revisedFindingInput
+      ),
+      revisedFinding
+    );
+
+    const readyJobs = await assessmentWork.listJobs(operatorActor);
+    const readyJob = readyJobs.jobs.find(
+      (job) => job.jobId === paidJob.jobId
+    );
+    assert.ok(readyJob);
+    assert.notEqual(readyJob.workDigest, paidJob.workDigest);
+    await assert.rejects(
+      assessmentWork.deliverReport(operatorActor, paidJob.jobId, {
+        commandId: `assessment-delivery-${randomUUID()}`,
+        expectedWorkDigest: paidJob.workDigest,
+        organizationId: customer.organizationId,
+        overallSummary:
+          "This stale delivery must not freeze work that was not reviewed."
+      }),
+      (error) => error.code === "ASSESSMENT_WORK_CHANGED"
+    );
+    const deliveryInput = {
+      commandId: `assessment-delivery-${randomUUID()}`,
+      expectedWorkDigest: readyJob.workDigest,
+      organizationId: customer.organizationId,
+      overallSummary:
+        "The paid targets are functional, with the clearest opportunity being stronger phone hierarchy and primary-action emphasis."
+    };
+    const delivery = await assessmentWork.deliverReport(
+      operatorActor,
+      paidJob.jobId,
+      deliveryInput
+    );
+    assert.equal(delivery.state, "delivered");
+    assert.equal(delivery.findingCount, 1);
+    assert.equal(delivery.credit.amountMinor, 20000);
+    assert.equal(delivery.credit.currency, "USD");
+    assert.equal(delivery.credit.applicationScope, "custom_base_build");
+    assert.equal(delivery.credit.maximumApplications, 1);
+    assert.equal(delivery.credit.nonCash, true);
+    const expectedCreditCutoff = await pool.query(
+      "select $1::timestamptz + interval '90 days' as cutoff",
+      [delivery.deliveredAt]
+    );
+    assert.equal(
+      delivery.credit.acceptanceCutoff,
+      expectedCreditCutoff.rows[0].cutoff.toISOString()
+    );
+    assert.deepEqual(
+      await assessmentWork.deliverReport(
+        operatorActor,
+        paidJob.jobId,
+        deliveryInput
+      ),
+      delivery
+    );
+    await assert.rejects(
+      assessmentWork.deliverReport(operatorActor, paidJob.jobId, {
+        ...deliveryInput,
+        commandId: `assessment-delivery-${randomUUID()}`,
+        overallSummary:
+          "A different summary cannot claim success after immutable delivery."
+      }),
+      (error) => error.code === "ASSESSMENT_ALREADY_DELIVERED"
+    );
+
+    const deliveredJobs = await assessmentWork.listJobs(operatorActor);
+    const deliveredJob = deliveredJobs.jobs.find(
+      (job) => job.jobId === paidJob.jobId
+    );
+    assert.equal(deliveredJob.state, "delivered");
+    assert.equal(deliveredJob.evidence.length, 5);
+    assert.equal(deliveredJob.findings.length, 1);
+    assert.equal(deliveredJob.findings[0].revision, 2);
+    assert.equal(deliveredJob.delivery.reportId, delivery.reportId);
+
+    const ownerEvidence = await assessmentWork.readOwnerEvidence(
+      operatorActor,
+      paidJob.jobId,
+      firstDesktop.evidenceId
+    );
+    assert.deepEqual(ownerEvidence.bytes, evidenceBytes);
+    assert.equal(ownerEvidence.mediaType, "image/png");
+
+    const customerAssessmentScope = {
+      actorId: customer.userId,
+      customerId: customer.userId,
+      organizationId: customer.organizationId,
+      projectId: customer.projectId
+    };
+    const customerReport = await assessmentWork.readCustomerReport(
+      customerAssessmentScope
+    );
+    assert.equal(customerReport.state, "delivered");
+    assert.equal(customerReport.job.jobId, paidJob.jobId);
+    assert.equal(customerReport.report.reportId, delivery.reportId);
+    assert.equal(customerReport.report.findings.length, 1);
+    assert.equal(customerReport.report.findings[0].revision, 2);
+    assert.equal(
+      customerReport.report.findings[0].recommendation,
+      revisedFindingInput.recommendation
+    );
+    assert.equal(customerReport.credit.creditId, delivery.credit.creditId);
+    const customerEvidence = await assessmentWork.readCustomerEvidence(
+      customerAssessmentScope,
+      firstDesktop.evidenceId
+    );
+    assert.deepEqual(customerEvidence.bytes, evidenceBytes);
+    await assert.rejects(
+      assessmentWork.readCustomerEvidence(
+        customerAssessmentScope,
+        staleDesktop.evidence.evidenceId
+      ),
+      (error) => error.code === "ASSESSMENT_EVIDENCE_UNAVAILABLE"
+    );
+    await assert.rejects(
+      assessmentWork.readCustomerReport({
+        ...customerAssessmentScope,
+        actorId: other.userId
+      }),
+      (error) => error.code === "project_unavailable"
+    );
+
+    await assert.rejects(
+      assessmentWork.uploadEvidence(operatorActor, paidJob.jobId, {
+        ...staleDesktopInput,
+        commandId: `assessment-evidence-${randomUUID()}`
+      }),
+      (error) => error.code === "ASSESSMENT_WORK_CHANGED"
+    );
+    await assert.rejects(
+      assessmentWork.putFinding(operatorActor, paidJob.jobId, 1, {
+        ...revisedFindingInput,
+        commandId: `assessment-finding-${randomUUID()}`,
+        expectedRevision: 2
+      }),
+      (error) => error.code === "ASSESSMENT_WORK_CHANGED"
+    );
+    const deliveryCounts = await pool.query(
+      `select
+         (select count(*)::int from ss.service_assessment_reports
+           where job_id = $1) as reports,
+         (select count(*)::int from ss.service_assessment_report_findings
+           where job_id = $1) as report_findings,
+         (select count(*)::int from ss.service_credit_grants
+           where source_job_id = $1 and amount_minor = 20000) as credits,
+         (select count(*)::int from ss.service_assessment_evidence
+           where job_id = $1) as evidence`,
+      [paidJob.jobId]
+    );
+    assert.deepEqual(deliveryCounts.rows[0], {
+      reports: 1,
+      report_findings: 1,
+      credits: 1,
+      evidence: 5
+    });
   } finally {
     await client.query("rollback").catch(() => {});
     client.release();

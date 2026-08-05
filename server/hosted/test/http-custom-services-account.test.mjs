@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -10,6 +11,8 @@ const CUSTOMER_ID =
   "20000000-0000-4000-8000-000000000001";
 const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
+const EVIDENCE_ID =
+  "40000000-0000-4000-8000-000000000001";
 
 function service() {
   return {
@@ -18,6 +21,35 @@ function service() {
         ? { userId: CUSTOMER_ID }
         : null;
     }
+  };
+}
+
+function assessmentWorkMethods() {
+  return {
+    async getAssessmentReport() {
+      throw new Error("unexpected assessment report read");
+    },
+    async getAssessmentEvidence() {
+      throw new Error("unexpected assessment evidence read");
+    }
+  };
+}
+
+function completeAccountBoundary(overrides = {}) {
+  const noOp = async () => undefined;
+  return {
+    getSnapshot: noOp,
+    getAssessmentQuote: noOp,
+    getAssessmentInvoice: noOp,
+    getAssessmentReport: noOp,
+    getAssessmentEvidence: noOp,
+    createAssessmentCheckout: noOp,
+    getAssessmentRequest: noOp,
+    saveAssessmentRequest: noOp,
+    submitAssessmentRequest: noOp,
+    withdrawAssessmentRequest: noOp,
+    acceptAssessmentQuote: noOp,
+    ...overrides
   };
 }
 
@@ -56,6 +88,7 @@ test("custom-services account HTTP route is authenticated, project-bound, and GE
   };
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      ...assessmentWorkMethods(),
       async acceptAssessmentQuote() {
         throw new Error("unexpected quote acceptance");
       },
@@ -125,6 +158,7 @@ test("assessment quote HTTP routes read and accept the exact customer quote", as
   const accepted = { ...current, state: "accepted" };
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      ...assessmentWorkMethods(),
       async getSnapshot() {
         throw new Error("unexpected account read");
       },
@@ -203,6 +237,7 @@ test("assessment request HTTP routes read, save, submit, and withdraw", async ()
   const calls = [];
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      ...assessmentWorkMethods(),
       async getSnapshot() {
         throw new Error("unexpected account read");
       },
@@ -310,6 +345,7 @@ test("assessment invoice HTTP route reads the exact customer project", async () 
   };
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      ...assessmentWorkMethods(),
       async getSnapshot() {},
       async getAssessmentQuote() {},
       async getAssessmentInvoice(actor, projectId) {
@@ -347,6 +383,7 @@ test("assessment checkout HTTP route binds project, invoice, digest, and command
   };
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      ...assessmentWorkMethods(),
       async getSnapshot() {},
       async getAssessmentQuote() {},
       async getAssessmentInvoice() {},
@@ -391,6 +428,97 @@ test("assessment checkout HTTP route binds project, invoice, digest, and command
       }
     }
   ]);
+});
+
+test("assessment report and evidence routes stay customer-bound and integrity checked", async () => {
+  const calls = [];
+  const bytes = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
+  ]);
+  const contentDigest = createHash("sha256")
+    .update(bytes)
+    .digest("hex");
+  const report = {
+    schema: "sitesourcery.custom-services-assessment-report/v1",
+    state: "delivered"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getAssessmentReport(actor, projectId) {
+        calls.push({ action: "report", actor, projectId });
+        return report;
+      },
+      async getAssessmentEvidence(actor, projectId, evidenceId) {
+        calls.push({ action: "evidence", actor, projectId, evidenceId });
+        return {
+          bytes,
+          mediaType: "image/png",
+          contentDigest:
+            evidenceId === EVIDENCE_ID
+              ? contentDigest
+              : "0".repeat(64),
+          byteCount: bytes.byteLength,
+          accessibleDescription: "Customer assessment screenshot"
+        };
+      }
+    }),
+    requestIds: {
+      next() {
+        return "request_customer_assessment_work_1";
+      }
+    }
+  });
+
+  const reportResponse = await api.fetch(request({
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-report`
+  }));
+  assert.equal(reportResponse.status, 200);
+  assert.deepEqual(await reportResponse.json(), report);
+
+  const evidenceResponse = await api.fetch(request({
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-evidence/${EVIDENCE_ID}`
+  }));
+  assert.equal(evidenceResponse.status, 200);
+  assert.equal(
+    evidenceResponse.headers.get("cache-control"),
+    "private, no-store"
+  );
+  assert.equal(evidenceResponse.headers.get("content-type"), "image/png");
+  assert.equal(
+    evidenceResponse.headers.get("digest"),
+    `sha-256=${Buffer.from(contentDigest, "hex").toString("base64")}`
+  );
+  assert.deepEqual(
+    Buffer.from(await evidenceResponse.arrayBuffer()),
+    bytes
+  );
+  assert.deepEqual(calls, [
+    {
+      action: "report",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "evidence",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      evidenceId: EVIDENCE_ID
+    }
+  ]);
+
+  const corruptId =
+    "50000000-0000-4000-8000-000000000001";
+  const corrupt = await api.fetch(request({
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-evidence/${corruptId}`
+  }));
+  assert.equal(corrupt.status, 500);
+  assert.equal(
+    (await corrupt.json()).error.code,
+    "RUNTIME_CONFIGURATION_ERROR"
+  );
 });
 
 test("default hosted runtime keeps custom-services account reading held", async () => {
@@ -459,6 +587,10 @@ test("production composes custom-services account from canonical project and Pos
   assert.match(
     source,
     /assessmentCommerce:\s*customServicesAssessmentSettlement/u
+  );
+  assert.match(
+    source,
+    /assessmentWork:\s*customServicesAssessmentWork/u
   );
   assert.match(
     source,

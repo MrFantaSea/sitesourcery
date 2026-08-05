@@ -17,6 +17,8 @@ const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const OTHER_ID =
   "40000000-0000-4000-8000-000000000001";
+const EVIDENCE_ID =
+  "50000000-0000-4000-8000-000000000001";
 
 function actor() {
   return { userId: CUSTOMER_ID };
@@ -52,6 +54,8 @@ function foundationSnapshot() {
 
 function context({ scope, snapshot } = {}) {
   const calls = {
+    assessmentEvidence: [],
+    assessmentReport: [],
     checkout: [],
     invoiceRead: [],
     quoteAcceptance: [],
@@ -64,6 +68,31 @@ function context({ scope, snapshot } = {}) {
     resolver: []
   };
   const service = createHostedCustomServicesAccount({
+    assessmentWork: {
+      async readCustomerReport(value) {
+        calls.assessmentReport.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-services-assessment-report/v1",
+          state: "not_available",
+          job: null,
+          report: null,
+          credit: null
+        };
+      },
+      async readCustomerEvidence(value, evidenceId) {
+        calls.assessmentEvidence.push({
+          scope: structuredClone(value),
+          evidenceId
+        });
+        return {
+          bytes: Buffer.from("evidence"),
+          mediaType: "image/png",
+          contentDigest: "0".repeat(64),
+          byteCount: 8,
+          accessibleDescription: "Assessment evidence"
+        };
+      }
+    },
     invoiceRepository: {
       async readCurrentInvoice(value) {
         calls.invoiceRead.push(structuredClone(value));
@@ -336,6 +365,31 @@ test("hosted custom-services invoice read stays bound to the resolved customer p
       organizationId: ORGANIZATION_ID,
       projectId: PROJECT_ID
     }
+  ]);
+});
+
+test("hosted assessment report and evidence reads stay bound to the resolved customer project", async () => {
+  const selected = context();
+  const report = await selected.service.getAssessmentReport(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(report.state, "not_available");
+  const evidence = await selected.service.getAssessmentEvidence(
+    actor(),
+    PROJECT_ID,
+    EVIDENCE_ID
+  );
+  assert.deepEqual(evidence.bytes, Buffer.from("evidence"));
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.assessmentReport, [scope]);
+  assert.deepEqual(selected.calls.assessmentEvidence, [
+    { scope, evidenceId: EVIDENCE_ID }
   ]);
 });
 
