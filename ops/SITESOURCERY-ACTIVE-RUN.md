@@ -25,8 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Prior sealed checkpoint: `c641898` (`Connect held Alakazam customer upgrade
-  flow`). The reviewed Batch 2D customer downgrade slice is the next local
+- Prior sealed checkpoint: `23fced6` (`Connect held Alakazam customer downgrade
+  flow`). The reviewed Batch 3A fulfillment backend is the next local
   checkpoint represented by this ledger; inspect the exact worktree before
   assuming its commit exists.
 - Public production remains the July 22 predecessor.
@@ -36,12 +36,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Seal the completed Batch 2D renewal-boundary downgrade slice as one local
-checkpoint. After that clean checkpoint, freeze and implement one narrow
-customer-visible `$25` fulfillment journey: choose one of three base looks and
-publish it to the verified `sitesourcery.me` platform address. Portal,
-cancellation, premium-tier fulfillment, lifecycle automation, owner invoicing,
-and release remain separate later slices.
+Seal the completed Batch 3A fulfillment backend as one local checkpoint. The
+next slice is the customer-visible `$25` path: choose a verified platform
+address and one of three base looks, expose fulfillment status in the account,
+and prove the authenticated browser journey. Portal, cancellation, unresolved
+premium controls, lifecycle automation, owner invoicing, and release remain
+separate later slices.
 
 ## Completed and reviewed
 
@@ -325,29 +325,91 @@ Batch 2D sealed checkpoint gates:
 - [x] Durable evidence and the next action are recorded before the local
   checkpoint commit.
 
+## Batch 3A fulfillment backend sealed checkpoint evidence
+
+- Migration 32 adds service-only fulfillment intents, operations, and a
+  durable fulfillment projection. A start intent freezes the exact quote, accepted
+  source version, licensed platform address, and selected look before any
+  provider effect. The queued operation later freezes the exact active
+  subscription revision, tier, effective policy, and capability.
+- Fulfillment proof keeps the customer-accepted source version separate from
+  the deterministic policy-derived publication artifact. Both byte digests,
+  compiler identities, screening evidence, address authority, and active
+  subscription revision must agree; a stale, cross-project, forged, or
+  browser-expanded claim fails closed.
+- Crystal, Hearth, and Midnight are three distinct canonical base looks. The
+  `$25` and `$35` policies mask unresolved premium rendering without deleting
+  configured facts. Only canonical `$50` authority enables the currently
+  implemented Cash App and Venmo output; unimplemented premium controls remain
+  held.
+- Start activation enqueues one semantic fulfillment operation. Replay returns
+  the same operation instead of compiling or publishing twice. The held-by-
+  default worker claims, compiles, stages, screens, binds, self-hosts, and
+  finalizes one exact release only when both Alakazam and publication release
+  gates permit it.
+- The self-host adapter serves the exact compiled bytes at the licensed
+  `label.sitesourcery.me` address. A finalization failure compensates by
+  unpublishing and recording durable dark/retry truth rather than claiming the
+  site is live.
+- A definitely pre-effect Checkout failure supersedes its prepared fulfillment
+  intent and now proves that the temporary projection is removed, preventing a
+  failed payment attempt from leaving a ghost pending-site state.
+- Fresh database `ss_alakazam_fulfillment_f3_20260804_1` replayed all 32
+  migrations and passed the complete 5/5 PostgreSQL journey: payment
+  settlement, start activation, queue, real compilation, real self-host
+  publication, exact served bytes, replay, upgrade, and renewal-boundary
+  downgrade. After the final failure-path repair, the same journey again
+  passed 5/5.
+- Authoritative Node 24 proof passes: final focused fulfillment/repository/
+  publication set 34/34; core Node 446/446; hosted service 151 pass with 2
+  intentional environment skips; operations 52/52; self-host 19/19; current
+  site 18 live pages, 20 redirects, 28 catalog prices, and 5 sellable rails;
+  hosted HTML and the exact 78-file public artifact verify.
+- The disposable proof database had zero active sessions, was dropped by exact
+  name, and is verified absent. No customer or production data was touched.
+- This checkpoint proves the backend vertical contract, not the customer UI.
+  Platform-label/look controls, account fulfillment projection, authenticated
+  browser proof, and launch polish remain the next slice.
+- No push, deployment, DNS change, provider release, or production mutation
+  occurred. The July 22 public fallback remains untouched.
+
+Batch 3A sealed checkpoint gates:
+
+- [x] Exact accepted-source and policy-derived-artifact authority is frozen.
+- [x] Migration 32 replays from zero and the real PostgreSQL/self-host journey
+  passes.
+- [x] Replay, stale authority, failed Checkout, and post-publication
+  compensation paths fail safely.
+- [x] Focused, broad, site, hosted, and public-artifact regressions pass under
+  the required Node 24 runtime.
+- [x] The named disposable database is dropped and verified absent.
+- [x] Release, provider, DNS, push, and deployment holds remain unchanged.
+- [x] Customer controls are explicitly still open rather than misreported as
+  complete.
+
 ## Live resources and workers
 
-- No Batch 2D browser verifier or local evidence server remains running.
-- Batch 2D Chrome evidence is under
-  `/private/tmp/sitesourcery-alakazam-downgrade-browser.lctWsN/`.
-- The Batch 2D disposable PostgreSQL database is absent.
-- All Batch 2D workers and auditors are closed; none owns a remaining write.
+- No Batch 3A browser verifier or local evidence server remains running.
+- The Batch 3A disposable PostgreSQL database is absent.
+- The bounded compiler worker is closed; no worker owns a remaining write.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-After this local Batch 2D checkpoint is sealed, begin one narrow
-customer-visible fulfillment slice: prove the `$25` Alakazam customer can
-select one of the three base looks and publish it to the verified
-`sitesourcery.me` platform address while every premium feature remains held.
-Freeze that contract before implementation; route non-blocking visual/copy
-ideas to the polish queue instead of widening the slice.
+After this local Batch 3A checkpoint is sealed, connect one narrow
+customer-visible `$25` journey: project-scoped platform-label and base-look
+selection, customer-safe fulfillment status in the account projection, the
+authenticated HTTP boundary, and desktop/mobile browser proof through exact
+self-hosted bytes. Keep `$35/$50` unresolved controls, Portal, cancellation,
+lifecycle, invoicing, domains, push, deployment, and public cutover outside
+that slice; queue non-blocking visual/copy polish durably.
 
-## Batch 2D write scope
+## Batch 3A write scope
 
-Sixteen reviewed files cover account truth, browser API/control and tests,
-hosted Schedule boundary/composition and tests, one PostgreSQL expectation,
-hosted-truth hashes, and the two canonical ledgers. No migration, provider
-adapter, fulfillment, lifecycle, invoice, release, push, deploy, or DNS file is
-part of this checkpoint.
+Twenty-four reviewed implementation/test files cover the canonical compiler,
+fulfillment contract, migration 32, PostgreSQL authority, worker, publication
+adapters, production composition, and exact unit/integration proof. These two
+canonical ledgers record the checkpoint. No customer control, public copy,
+provider credential, lifecycle, invoice, registrar, push, deploy, DNS, or
+production state is changed by this checkpoint.

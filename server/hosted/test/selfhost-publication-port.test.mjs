@@ -7,6 +7,10 @@ import test from "node:test";
 
 import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
+import {
+  createAlakazamFulfillmentAuthority,
+  createAlakazamFulfillmentDecision
+} from "../../commerce-v2/alakazam-fulfillment.mjs";
 
 const NOW = "2026-07-28T20:00:00.000Z";
 const COMPILER_REVISION = `sha256:${"a".repeat(64)}`;
@@ -110,6 +114,149 @@ function tenantRequest(hostname) {
   return new Request(`https://${hostname}/`, {
     headers: { host: hostname }
   });
+}
+
+function alakazamProof() {
+  const ids = {
+    organizationId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "10000000-0000-4000-8000-000000000002",
+    projectId:
+      "10000000-0000-4000-8000-000000000003",
+    subscriptionId:
+      "10000000-0000-4000-8000-000000000004",
+    operationId:
+      "10000000-0000-4000-8000-000000000005",
+    versionId:
+      "10000000-0000-4000-8000-000000000006",
+    screeningId:
+      "10000000-0000-4000-8000-000000000007",
+    addressId:
+      "10000000-0000-4000-8000-000000000008",
+    requestId:
+      "10000000-0000-4000-8000-000000000009"
+  };
+  const htmlBytes = Buffer.from(
+    "<!doctype html><html><body>Alakazam live</body></html>",
+    "utf8"
+  );
+  const artifactDigest = digest(htmlBytes);
+  const sourceArtifactDigest = digest("accepted Alakazam source");
+  const authority = createAlakazamFulfillmentAuthority({
+    tenantId: ids.organizationId,
+    customerId: ids.customerId,
+    projectId: ids.projectId,
+    subscription: {
+      tenantId: ids.organizationId,
+      customerId: ids.customerId,
+      projectId: ids.projectId,
+      subscriptionId: ids.subscriptionId,
+      tierId: "alakazam_25",
+      status: "active",
+      revision: 2,
+      currentPeriodStartsAt:
+        "2026-07-01T00:00:00.000Z",
+      currentPeriodEndsAt:
+        "2026-08-28T00:00:00.000Z",
+      cancelAtPeriodEnd: false,
+      graceEndsAt: null,
+      scheduledTierId: null,
+      scheduledEffectiveAt: null
+    },
+    expectedSubscriptionRevision: 2,
+    now: NOW
+  });
+  const decision = createAlakazamFulfillmentDecision({
+    operationId: ids.operationId,
+    authority,
+    capability: "publish_accepted_project_version",
+    sourceVersion: {
+      versionId: ids.versionId,
+      state: "accepted_release",
+      artifactDigest: sourceArtifactDigest,
+      compilerSchema: "abracadabra.spark/v1",
+      compilerRevision: COMPILER_REVISION
+    },
+    publicationArtifact: {
+      artifactDigest,
+      compilerSchema: "abracadabra.spark/v1",
+      compilerRevision: COMPILER_REVISION,
+      policyDigest: authority.policyDigest,
+      screeningId: ids.screeningId,
+      screeningStage: "pre_publication",
+      screeningPassed: true,
+      screeningArtifactDigest: artifactDigest
+    },
+    address: {
+      tenantId: ids.organizationId,
+      projectId: ids.projectId,
+      addressId: ids.addressId,
+      kind: "licensed",
+      state: "configured",
+      hostname: "alchemy.sitesourcery.me"
+    },
+    servingRevision: 0,
+    now: NOW
+  });
+  return {
+    organizationId: ids.organizationId,
+    projectId: ids.projectId,
+    releaseId: ids.operationId,
+    project: {
+      id: ids.projectId,
+      organizationId: ids.organizationId,
+      lifecycle: "active",
+      safetyState: "clear"
+    },
+    releaseRequest: {
+      id: ids.requestId,
+      organizationId: ids.organizationId,
+      projectId: ids.projectId,
+      versionId: ids.versionId,
+      addressId: ids.addressId,
+      prepublicationScreeningId: ids.screeningId
+    },
+    version: {
+      id: ids.versionId,
+      state: "accepted_release",
+      artifactDigest: sourceArtifactDigest,
+      compilerSchema: "abracadabra.spark/v1",
+      compilerRevision: COMPILER_REVISION
+    },
+    screening: {
+      id: ids.screeningId,
+      versionId: ids.versionId,
+      stage: "pre_publication",
+      passed: true,
+      artifactDigest
+    },
+    entitlement: {
+      kind: "alakazam",
+      organizationId: ids.organizationId,
+      projectId: ids.projectId,
+      subscriptionId: ids.subscriptionId,
+      subscriptionRevision: 2,
+      status: "active",
+      graceEndsAt: null,
+      decision
+    },
+    address: {
+      id: ids.addressId,
+      organizationId: ids.organizationId,
+      projectId: ids.projectId,
+      kind: "licensed",
+      state: "configured",
+      verified: true,
+      hostname: "alchemy.sitesourcery.me"
+    },
+    artifact: {
+      htmlBytes,
+      sha256: artifactDigest,
+      compilerSchema: "abracadabra.spark/v1",
+      compilerRevision: COMPILER_REVISION
+    }
+  };
 }
 
 test("publication hold performs no mutation and lifting it cannot publish a queued row", async () => {
@@ -317,6 +464,29 @@ test("licensed addresses map only to the reserved platform namespace", async () 
   assert.equal(
     context.runtime.control.lookup("cedar.sitesourcery.me").source,
     "platform"
+  );
+});
+
+test("Alakazam publication consumes one exact revision and effective-artifact decision", async () => {
+  const context = await harness();
+  const input = alakazamProof();
+  const released = await context.port.request(input);
+  assert.equal(released.published, true);
+  assert.equal(released.releaseId, input.releaseId);
+  assert.match(
+    await (await context.runtime.fetch(
+      tenantRequest("alchemy.sitesourcery.me")
+    )).text(),
+    /Alakazam live/u
+  );
+
+  const changed = structuredClone(input);
+  changed.entitlement.decision.policyDigest = "f".repeat(64);
+  await assert.rejects(
+    context.port.request(changed),
+    (error) =>
+      error.code === "PUBLICATION_PROOF_INVALID" &&
+      error.status === 409
   );
 });
 

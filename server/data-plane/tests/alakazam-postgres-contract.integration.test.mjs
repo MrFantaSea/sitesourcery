@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import pg from "pg";
@@ -31,6 +34,16 @@ import {
 import {
   createPostgresAlakazamRepository
 } from "../../hosted/alakazam-postgres.mjs";
+import {
+  createAlakazamFulfillmentWorker
+} from "../../hosted/alakazam-fulfillment-worker.mjs";
+import {
+  createSelfHostPublicationPort
+} from "../../hosted/selfhost-publication-port.mjs";
+import {
+  createSparkCompilerPort
+} from "../../hosted/spark-compiler-port.mjs";
+import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
 
 const { Pool } = pg;
 const DATABASE_URL =
@@ -76,6 +89,20 @@ async function expectRejected(client, action, pattern) {
   }, pattern);
   await client.query("rollback to savepoint expected_rejection");
   await client.query("set constraints all deferred");
+}
+
+async function makeDirectoriesOwnerWritable(target) {
+  const details = await lstat(target);
+  if (!details.isDirectory()) return;
+  await chmod(target, 0o700);
+  const entries = await readdir(target, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await makeDirectoriesOwnerWritable(
+        path.join(target, entry.name)
+      );
+    }
+  }
 }
 
 async function seedAuthority(
@@ -126,6 +153,25 @@ async function seedAuthority(
     billing_policy_id: authority.billingPolicyId,
     name: "Alakazam Project"
   });
+  await insertRow(client, "project_safety_projection", {
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    state: "clear",
+    updated_at: "2026-08-02T11:55:00.000Z"
+  });
+  await insertRow(client, "project_address_projection", {
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    current_address_id: null,
+    updated_at: "2026-08-02T11:55:00.000Z"
+  });
+  await insertRow(client, "project_serving_projection", {
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    state: "unpublished",
+    resume_state: "unpublished",
+    updated_at: "2026-08-02T11:55:00.000Z"
+  });
   if (withStripeCustomer) {
     await insertRow(client, "stripe_customers", {
       id: authority.stripeCustomerRowId,
@@ -134,6 +180,167 @@ async function seedAuthority(
     });
   }
   return authority;
+}
+
+async function seedAcceptedPlatformSite(
+  client,
+  authority,
+  { compiler, theme = "clear" }
+) {
+  const rawFacts = {
+    schema: "abracadabra.spark/v1",
+    theme,
+    businessName: `Alakazam ${theme} proof`,
+    summary: "A paid Site Sourcery website with exact fulfillment evidence.",
+    about: "Built once, accepted once, and published from durable facts.",
+    offerings: ["Focused service", "Clear follow-through"],
+    location: "Richmond, Virginia",
+    hours: "Monday through Friday, 9-5",
+    phone: "(804) 555-0100",
+    email: `hello-${theme}@example.test`,
+    website: "",
+    primaryAction: "email"
+  };
+  const compiled = compiler.compile(rawFacts);
+  const factSetId = randomUUID();
+  const artifactId = randomUUID();
+  const versionId = randomUUID();
+  const screeningId = randomUUID();
+  const attestationId = randomUUID();
+  const stateEventId = randomUUID();
+  const addressId = randomUUID();
+  const label = `alakazam-${authority.projectId.slice(0, 8)}`;
+  const hostname = `${label}.sitesourcery.me`;
+  const facts = compiled.contentFacts;
+  const normalized = compiled.normalizedFacts;
+  const acceptedAt = "2026-08-02T11:58:00.000Z";
+
+  await insertRow(client, "fact_sets", {
+    id: factSetId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    schema_version: compiled.schema,
+    theme: normalized.theme,
+    business_name: facts.businessName,
+    summary: facts.summary,
+    about: facts.about,
+    offerings_count: compiled.offerings.length,
+    location: facts.location,
+    hours: facts.hours,
+    phone_display: facts.phone?.display ?? null,
+    phone_href: facts.phone?.href ?? null,
+    email_display: facts.email?.display ?? null,
+    email_href: facts.email?.href ?? null,
+    website_display: facts.website?.display ?? null,
+    website_href: facts.website?.href ?? null,
+    primary_action: facts.primaryAction,
+    content_digest: compiled.contentDigest,
+    normalized_digest: compiled.normalizedDigest,
+    created_at: acceptedAt
+  });
+  for (const [index, offering] of compiled.offerings.entries()) {
+    await insertRow(client, "fact_offerings", {
+      organization_id: authority.organizationId,
+      fact_set_id: factSetId,
+      position: index + 1,
+      offering
+    });
+  }
+  await insertRow(client, "artifacts", {
+    id: artifactId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    html_bytes: compiled.htmlBytes,
+    created_at: acceptedAt
+  });
+  await insertRow(client, "site_versions", {
+    id: versionId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    version_number: 1,
+    fact_set_id: factSetId,
+    artifact_id: artifactId,
+    raw_facts: rawFacts,
+    compiler_schema: compiled.schema,
+    compiler_revision: compiled.compilerRevision,
+    created_by_user_id: authority.userId,
+    created_at: acceptedAt
+  });
+  await insertRow(client, "release_screenings", {
+    id: screeningId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    version_id: versionId,
+    stage: "pre_acceptance",
+    method: "canonical_compile",
+    passed: true,
+    artifact_digest: compiled.artifactDigest,
+    findings: JSON.stringify([]),
+    checker_revision: compiled.compilerRevision,
+    checked_at: acceptedAt
+  });
+  await insertRow(client, "version_attestations", {
+    id: attestationId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    version_id: versionId,
+    user_id: authority.userId,
+    statement_version: "abracadabra.exact-preview/v1",
+    attested_at: acceptedAt,
+    request_id: randomUUID()
+  });
+  await insertRow(client, "version_state_events", {
+    id: stateEventId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    version_id: versionId,
+    state: "accepted_release",
+    screening_id: screeningId,
+    attestation_id: attestationId,
+    actor_user_id: authority.userId,
+    occurred_at: acceptedAt
+  });
+  await insertRow(client, "version_state_projection", {
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    version_id: versionId,
+    state: "accepted_release",
+    last_event_id: stateEventId,
+    updated_at: acceptedAt
+  });
+  await insertRow(client, "project_addresses", {
+    id: addressId,
+    organization_id: authority.organizationId,
+    project_id: authority.projectId,
+    kind: "licensed",
+    ownership: "licensed",
+    label,
+    retained_domain: null,
+    serving_hostname: hostname,
+    state: "configured",
+    allocated_at: acceptedAt,
+    configured_at: acceptedAt
+  });
+  await client.query(
+    `update ss.project_address_projection
+        set current_address_id = $3,
+            updated_at = $4
+      where organization_id = $1
+        and project_id = $2`,
+    [
+      authority.organizationId,
+      authority.projectId,
+      addressId,
+      acceptedAt
+    ]
+  );
+  return Object.freeze({
+    rawFacts,
+    compiled,
+    versionId,
+    addressId,
+    hostname
+  });
 }
 
 test(
@@ -578,10 +785,16 @@ test(
     try {
       await client.query("begin");
       await client.query("set constraints all deferred");
+      const compiler = await createSparkCompilerPort();
 
       const ambiguousAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_ambiguous"
       });
+      await seedAcceptedPlatformSite(
+        client,
+        ambiguousAuthority,
+        { compiler, theme: "clear" }
+      );
       const ambiguousQuoteId = await insertQuote(
         client,
         ambiguousAuthority,
@@ -703,6 +916,10 @@ test(
       const failedAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_failed"
       });
+      await seedAcceptedPlatformSite(client, failedAuthority, {
+        compiler,
+        theme: "warm"
+      });
       const failedQuoteId = await insertQuote(
         client,
         failedAuthority,
@@ -745,9 +962,36 @@ test(
           errorCode: "stripe_configuration_unavailable"
         });
       assert.equal(failed.status, "failed");
+      const failedFulfillment = await client.query(
+        `select intent.state,
+                exists (
+                  select 1
+                    from ss.alakazam_fulfillment_projection projection
+                   where projection.organization_id = intent.organization_id
+                     and projection.project_id = intent.project_id
+                     and projection.intent_id = intent.id
+                ) as projection_exists
+           from ss.alakazam_fulfillment_intents intent
+          where intent.organization_id = $1
+            and intent.quote_id = $2`,
+        [failedAuthority.organizationId, failedQuoteId]
+      );
+      assert.deepEqual(
+        failedFulfillment.rows,
+        [
+          {
+            state: "superseded",
+            projection_exists: false
+          }
+        ]
+      );
 
       const staleAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_stale"
+      });
+      await seedAcceptedPlatformSite(client, staleAuthority, {
+        compiler,
+        theme: "arcane"
       });
       const staleQuoteId = await insertQuote(
         client,
@@ -1165,6 +1409,12 @@ test(
       await client.query("begin");
       await client.query("set constraints all deferred");
       const authority = await seedAuthority(client);
+      const compiler = await createSparkCompilerPort();
+      const acceptedSite = await seedAcceptedPlatformSite(
+        client,
+        authority,
+        { compiler, theme: "clear" }
+      );
       const subscriptionId = randomUUID();
       const settlementRepository =
         createPostgresAlakazamRepository({
@@ -1396,6 +1646,131 @@ test(
         activeReplay.activation,
         startActivation
       );
+
+      const fulfillmentOperationId = randomUUID();
+      const queuedFulfillment =
+        await settlementRepository.enqueueStartFulfillment({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId: startQuoteId,
+          subscriptionId,
+          subscriptionRevision: startActivation.revision,
+          tierId: startActivation.tierId,
+          operationId: fulfillmentOperationId,
+          enqueuedAt: "2026-08-02T12:05:00.000Z"
+        });
+      assert.equal(queuedFulfillment.status, "queued");
+      assert.equal(
+        queuedFulfillment.operationId,
+        fulfillmentOperationId
+      );
+      await flushConstraints(client);
+
+      const runtimeRoot = await mkdtemp(
+        path.join(os.tmpdir(), "sitesourcery-alakazam-pg-")
+      );
+      try {
+        const workerNow = "2026-08-02T12:06:00.000Z";
+        const runtime = await SelfHostRuntime.open({
+          root: path.join(runtimeRoot, "tenant"),
+          publicationHeld: false,
+          platformBaseDomain: "sitesourcery.me",
+          clock: () => workerNow
+        });
+        const worker = createAlakazamFulfillmentWorker({
+          repository: settlementRepository,
+          compiler,
+          publicationPort: createSelfHostPublicationPort({
+            runtime,
+            clock: { now: () => workerNow }
+          }),
+          clock: { now: () => workerNow },
+          ids: { next: () => randomUUID() },
+          workerId: "alakazam-postgres-contract-worker"
+        });
+        const live = await worker.runOnce();
+        assert.equal(live.status, "live");
+        assert.equal(live.operationId, fulfillmentOperationId);
+        assert.equal(live.projectId, authority.projectId);
+        assert.equal(live.subscriptionId, subscriptionId);
+        assert.equal(live.subscriptionRevision, 2);
+        assert.equal(live.tierId, "alakazam_25");
+        assert.equal(live.hostname, acceptedSite.hostname);
+        assert.equal(live.sourceVersionId, acceptedSite.versionId);
+        await flushConstraints(client);
+
+        const durable = await client.query(
+          `select
+             operation.state as operation_state,
+             projection.state as projection_state,
+             serving.state as serving_state,
+             artifact.html_bytes,
+             artifact.artifact_digest
+           from ss.alakazam_fulfillment_operations operation
+           join ss.alakazam_fulfillment_projection projection
+             on projection.organization_id = operation.organization_id
+            and projection.operation_id = operation.id
+           join ss.project_serving_projection serving
+             on serving.organization_id = operation.organization_id
+            and serving.project_id = operation.project_id
+           join ss.artifacts artifact
+             on artifact.organization_id = operation.organization_id
+            and artifact.id = operation.effective_artifact_id
+          where operation.id = $1`,
+          [fulfillmentOperationId]
+        );
+        assert.equal(durable.rowCount, 1);
+        assert.deepEqual(
+          {
+            operation: durable.rows[0].operation_state,
+            projection: durable.rows[0].projection_state,
+            serving: durable.rows[0].serving_state
+          },
+          {
+            operation: "published",
+            projection: "live",
+            serving: "live"
+          }
+        );
+        assert.equal(
+          durable.rows[0].artifact_digest,
+          live.artifactDigest
+        );
+
+        const response = await runtime.fetch(
+          new Request(`https://${acceptedSite.hostname}/`, {
+            headers: { host: acceptedSite.hostname }
+          })
+        );
+        assert.equal(response.status, 200);
+        assert.deepEqual(
+          Buffer.from(await response.arrayBuffer()),
+          Buffer.from(durable.rows[0].html_bytes)
+        );
+        assert.equal((await worker.runOnce()).status, "idle");
+
+        const enqueueReplay =
+          await settlementRepository.enqueueStartFulfillment({
+            tenantId: authority.organizationId,
+            customerId: authority.userId,
+            projectId: authority.projectId,
+            quoteId: startQuoteId,
+            subscriptionId,
+            subscriptionRevision: startActivation.revision,
+            tierId: startActivation.tierId,
+            operationId: randomUUID(),
+            enqueuedAt: "2026-08-02T12:07:00.000Z"
+          });
+        assert.equal(
+          enqueueReplay.operationId,
+          fulfillmentOperationId
+        );
+        assert.equal(enqueueReplay.status, "published");
+      } finally {
+        await makeDirectoriesOwnerWritable(runtimeRoot);
+        await rm(runtimeRoot, { recursive: true, force: true });
+      }
 
       await expectRejected(
         client,

@@ -92,6 +92,14 @@ function valid(overrides = {}) {
   };
 }
 
+function policyProvenance(policyDigest = "a".repeat(64)) {
+  return {
+    schema: "abracadabra.spark-policy-provenance/v1",
+    policySchema: "sitesourcery.alakazam-effective-policy/v1",
+    policyDigest,
+  };
+}
+
 function errorFields(callback) {
   try {
     callback();
@@ -105,8 +113,13 @@ const compiler = loadCompiler();
 
 test("compiler exposes one frozen Spark V1 contract", () => {
   assert.equal(compiler.SCHEMA, "abracadabra.spark/v1");
+  assert.equal(
+    compiler.PROVENANCE_SCHEMA,
+    "abracadabra.spark-policy-provenance/v1",
+  );
   assert.deepEqual(Array.from(compiler.THEME_IDS), ["clear", "warm", "arcane"]);
   assert.deepEqual(Array.from(compiler.ACTION_IDS), ["none", "phone", "email", "website"]);
+  assert.equal(typeof compiler.compileSiteWithProvenance, "function");
   assert.equal(Object.isFrozen(compiler), true);
   assert.equal(Object.isFrozen(compiler.THEME_IDS), true);
 });
@@ -189,6 +202,52 @@ test("the same normalized facts always create exact same bytes and identity", ()
   assert.equal(first.artifactDigest, second.artifactDigest);
   assert.equal(first.versionId, second.versionId);
   assert.equal(first.artifactDigest, createHash("sha256").update(first.html).digest("hex"));
+});
+
+test("explicit policy provenance is deterministic and changes version identity only on the policy-aware path", () => {
+  const configured = valid({
+    offerings: ["Inspection", "Repair"],
+    accent: "ocean",
+  });
+  const ordinary = compiler.compileSite(configured);
+  const base = compiler.compileSiteWithProvenance(
+    configured,
+    policyProvenance("a".repeat(64)),
+  );
+  const replay = compiler.compileSiteWithProvenance(
+    configured,
+    policyProvenance("a".repeat(64)),
+  );
+  const changedPolicy = compiler.compileSiteWithProvenance(
+    configured,
+    policyProvenance("b".repeat(64)),
+  );
+
+  assert.equal(base.html, replay.html);
+  assert.equal(base.artifactDigest, replay.artifactDigest);
+  assert.equal(base.provenanceDigest, replay.provenanceDigest);
+  assert.equal(base.contentDigest, ordinary.contentDigest);
+  assert.equal(base.normalizedDigest, ordinary.normalizedDigest);
+  assert.notEqual(base.provenanceDigest, changedPolicy.provenanceDigest);
+  assert.notEqual(base.artifactDigest, changedPolicy.artifactDigest);
+  assert.notEqual(base.versionId, changedPolicy.versionId);
+  assert.doesNotMatch(ordinary.html, /sitesourcery-policy-provenance/u);
+  assert.match(
+    base.html,
+    new RegExp(
+      `<meta name="sitesourcery-policy-provenance" content="${base.provenanceDigest}">`,
+      "u",
+    ),
+  );
+  assert.equal(Object.isFrozen(base.provenance), true);
+
+  assert.throws(
+    () => compiler.compileSiteWithProvenance(configured, {
+      ...policyProvenance(),
+      tierId: "alakazam_50",
+    }),
+    (error) => error?.name === "SparkProvenanceError",
+  );
 });
 
 test("themes alter presentation but never facts or content identity", () => {

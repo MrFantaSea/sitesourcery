@@ -25,6 +25,8 @@ const SUBSCRIPTION_ID =
 const RECEIPT_ID = "10000000-0000-4000-8000-000000000007";
 const EVENT_ROW_ID = "20000000-0000-4000-8000-000000000001";
 const TIER_EVENT_ID = "20000000-0000-4000-8000-000000000002";
+const FULFILLMENT_OPERATION_ID =
+  "20000000-0000-4000-8000-000000000003";
 const STRIPE_SUBSCRIPTION_ID = "sub_alakazam_activation_1";
 const CLAIMED_AT = "2026-08-04T12:00:00.000Z";
 const PAYMENT_AT = "2026-08-04T12:04:00.000Z";
@@ -153,6 +155,7 @@ function fixture({
     finds: [],
     reads: [],
     activations: [],
+    fulfillments: [],
     ids: []
   };
   const resolved = {
@@ -169,7 +172,9 @@ function fixture({
   };
   const idValues = {
     alakazam_subscription_event: EVENT_ROW_ID,
-    alakazam_tier_event: TIER_EVENT_ID
+    alakazam_tier_event: TIER_EVENT_ID,
+    alakazam_fulfillment_operation:
+      FULFILLMENT_OPERATION_ID
   };
   const service = createAlakazamStartActivationService({
     repository: {
@@ -180,6 +185,13 @@ function fixture({
       async activateStartSubscription(input) {
         calls.activations.push(structuredClone(input));
         return structuredClone(result);
+      },
+      async enqueueStartFulfillment(input) {
+        calls.fulfillments.push(structuredClone(input));
+        return {
+          status: "queued",
+          operationId: FULFILLMENT_OPERATION_ID
+        };
       }
     },
     provider: {
@@ -244,6 +256,7 @@ test("Alakazam start activation remains held before repository or provider work"
     finds: [],
     reads: [],
     activations: [],
+    fulfillments: [],
     ids: []
   });
 });
@@ -267,9 +280,23 @@ test("Alakazam start activates only after exact Subscription readback", async ()
   ]);
   assert.deepEqual(calls.ids, [
     "alakazam_subscription_event",
-    "alakazam_tier_event"
+    "alakazam_tier_event",
+    "alakazam_fulfillment_operation"
   ]);
   assert.equal(calls.activations.length, 1);
+  assert.deepEqual(calls.fulfillments, [
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      quoteId: QUOTE_ID,
+      subscriptionId: SUBSCRIPTION_ID,
+      subscriptionRevision: 2,
+      tierId: "alakazam_25",
+      operationId: FULFILLMENT_OPERATION_ID,
+      enqueuedAt: VERIFIED_AT
+    }
+  ]);
   assert.deepEqual(
     {
       subscriptionId:
@@ -291,7 +318,7 @@ test("Alakazam start activates only after exact Subscription readback", async ()
   );
 });
 
-test("an active Alakazam start replays without provider readback or new IDs", async () => {
+test("an active Alakazam start replays without provider readback and re-enqueues idempotently", async () => {
   const { calls, event, result, service } = fixture({
     resolvedStatus: "active"
   });
@@ -303,7 +330,10 @@ test("an active Alakazam start replays without provider readback or new IDs", as
   assert.equal(calls.finds.length, 1);
   assert.deepEqual(calls.reads, []);
   assert.deepEqual(calls.activations, []);
-  assert.deepEqual(calls.ids, []);
+  assert.equal(calls.fulfillments.length, 1);
+  assert.deepEqual(calls.ids, [
+    "alakazam_fulfillment_operation"
+  ]);
 });
 
 test("an active replay cannot cross its durable Stripe Subscription", async () => {
@@ -321,6 +351,7 @@ test("an active replay cannot cross its durable Stripe Subscription", async () =
   assert.equal(calls.finds.length, 1);
   assert.deepEqual(calls.reads, []);
   assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
@@ -336,6 +367,7 @@ test("non-start Subscription events do not touch Alakazam activation authority",
     finds: [],
     reads: [],
     activations: [],
+    fulfillments: [],
     ids: []
   });
 });

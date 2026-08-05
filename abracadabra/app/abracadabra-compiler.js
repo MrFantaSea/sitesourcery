@@ -11,6 +11,7 @@
   "use strict";
 
   var SCHEMA = "abracadabra.spark/v1";
+  var PROVENANCE_SCHEMA = "abracadabra.spark-policy-provenance/v1";
   var THEME_IDS = Object.freeze(["clear", "warm", "arcane"]);
 
   /* Paid extras vocabulary. Every option here RENDERS - a paywalled option
@@ -105,6 +106,14 @@
   }
   SparkValidationError.prototype = Object.create(Error.prototype);
   SparkValidationError.prototype.constructor = SparkValidationError;
+
+  function SparkProvenanceError(message) {
+    this.name = "SparkProvenanceError";
+    this.message = message || "Abracadabra Spark provenance is invalid.";
+    if (Error.captureStackTrace) Error.captureStackTrace(this, SparkProvenanceError);
+  }
+  SparkProvenanceError.prototype = Object.create(Error.prototype);
+  SparkProvenanceError.prototype.constructor = SparkProvenanceError;
 
   function codePointLength(value) {
     return Array.from(value).length;
@@ -315,6 +324,30 @@
     return JSON.stringify(value);
   }
 
+  function normalizeProvenance(input) {
+    var expectedKeys = "policyDigest,policySchema,schema";
+    if (
+      !input
+      || typeof input !== "object"
+      || Array.isArray(input)
+      || Object.keys(input).sort().join(",") !== expectedKeys
+      || input.schema !== PROVENANCE_SCHEMA
+      || typeof input.policySchema !== "string"
+      || input.policySchema !== input.policySchema.trim()
+      || !input.policySchema
+      || input.policySchema.length > 200
+      || typeof input.policyDigest !== "string"
+      || !/^[a-f0-9]{64}$/u.test(input.policyDigest)
+    ) {
+      throw new SparkProvenanceError();
+    }
+    return deepFreeze({
+      schema: input.schema,
+      policySchema: input.policySchema,
+      policyDigest: input.policyDigest
+    });
+  }
+
   function utf8Bytes(value) {
     var bytes = [];
     for (var index = 0; index < value.length; index += 1) {
@@ -466,7 +499,7 @@
     };
   }
 
-  function renderHtml(normalized, contentDigest) {
+  function renderHtml(normalized, contentDigest, provenanceDigest) {
     var theme = THEMES[normalized.theme];
     var sections = [];
     var navigation = [];
@@ -594,6 +627,9 @@
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
       "<title>" + escapeHtml(normalized.businessName) + "</title>",
       '<meta name="description" content="' + escapeHtml(normalized.summary) + '">',
+      provenanceDigest
+        ? '<meta name="sitesourcery-policy-provenance" content="' + provenanceDigest + '">'
+        : "",
       "<style>" + baseCss + theme.css + extrasCss + "</style>",
       "</head>",
       "<body>",
@@ -617,14 +653,16 @@
     ].join("");
   }
 
-  function compileSite(input) {
+  function compile(input, provenanceInput) {
     var normalized = normalizeFacts(input);
+    var provenance = provenanceInput === null ? null : normalizeProvenance(provenanceInput);
     var facts = contentFacts(normalized);
     var contentDigest = sha256(stableStringify(facts));
     var normalizedDigest = sha256(stableStringify(normalized));
-    var html = renderHtml(normalized, contentDigest);
+    var provenanceDigest = provenance ? sha256(stableStringify(provenance)) : null;
+    var html = renderHtml(normalized, contentDigest, provenanceDigest);
     var artifactDigest = sha256(html);
-    return deepFreeze({
+    var result = {
       schema: SCHEMA,
       versionId: "spark-" + artifactDigest.slice(0, 12),
       theme: normalized.theme,
@@ -633,19 +671,36 @@
       normalizedDigest: normalizedDigest,
       artifactDigest: artifactDigest,
       html: html
-    });
+    };
+    if (provenance) {
+      result.provenance = provenance;
+      result.provenanceDigest = provenanceDigest;
+    }
+    return deepFreeze(result);
+  }
+
+  function compileSite(input) {
+    return compile(input, null);
+  }
+
+  function compileSiteWithProvenance(input, provenance) {
+    return compile(input, provenance);
   }
 
   return Object.freeze({
     SCHEMA: SCHEMA,
+    PROVENANCE_SCHEMA: PROVENANCE_SCHEMA,
     THEME_IDS: THEME_IDS,
     ACTION_IDS: ACTION_IDS,
     MAXIMUMS: MAXIMUMS,
     SparkValidationError: SparkValidationError,
+    SparkProvenanceError: SparkProvenanceError,
     normalizeFacts: normalizeFacts,
+    normalizeProvenance: normalizeProvenance,
     stableStringify: stableStringify,
     sha256: sha256,
     escapeHtml: escapeHtml,
-    compileSite: compileSite
+    compileSite: compileSite,
+    compileSiteWithProvenance: compileSiteWithProvenance
   });
 }));

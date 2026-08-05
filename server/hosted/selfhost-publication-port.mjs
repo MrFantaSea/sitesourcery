@@ -7,6 +7,9 @@ import {
 } from "../selfhost/src/index.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 import { SPARK_COMPILER_SCHEMA } from "./spark-compiler-port.mjs";
+import {
+  verifyAlakazamFulfillmentDecision
+} from "../commerce-v2/alakazam-fulfillment.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMPILER_REVISION = /^sha256:[a-f0-9]{64}$/u;
@@ -120,6 +123,7 @@ function publicationProof(input, now) {
     proof.entitlement ?? proof.subscription,
     "Paid entitlement"
   );
+  const entitlementKind = entitlement.kind ?? "subscription";
   const address = object(proof.address, "Address");
   const artifact = exactArtifact(proof.artifact);
 
@@ -169,7 +173,8 @@ function publicationProof(input, now) {
   );
   invariant(
     version.compilerSchema === SPARK_COMPILER_SCHEMA &&
-      version.compilerRevision === artifact.compilerRevision,
+      typeof version.compilerRevision === "string" &&
+      COMPILER_REVISION.test(version.compilerRevision),
     "PUBLICATION_COMPILER_MISMATCH",
     "The accepted version was not produced by the exact server compiler.",
     { status: 409 }
@@ -184,18 +189,21 @@ function publicationProof(input, now) {
     "Publication requires a passed screening of the exact accepted artifact.",
     { status: 409 }
   );
-  invariant(
-    versionDigest === artifact.digest,
-    "PUBLICATION_ARTIFACT_MISMATCH",
-    "The accepted version and server artifact do not match.",
-    { status: 409 }
-  );
-
-  const entitlementKind =
-    entitlement.kind ?? "subscription";
+  if (entitlementKind !== "alakazam") {
+    invariant(
+      versionDigest === artifact.digest &&
+        version.compilerRevision === artifact.compilerRevision,
+      "PUBLICATION_ARTIFACT_MISMATCH",
+      "The accepted version and server artifact do not match.",
+      { status: 409 }
+    );
+  }
   invariant(
     (
-      entitlementKind === "subscription" &&
+      (
+        entitlementKind === "subscription" ||
+        entitlementKind === "alakazam"
+      ) &&
       PAID_STATES.has(entitlement.status)
     ) ||
       (
@@ -220,7 +228,10 @@ function publicationProof(input, now) {
     { status: 409 }
   );
   if (
-    entitlementKind === "subscription" &&
+    (
+      entitlementKind === "subscription" ||
+      entitlementKind === "alakazam"
+    ) &&
     entitlement.status === "grace"
   ) {
     futureDate(
@@ -236,6 +247,59 @@ function publicationProof(input, now) {
       ),
       "PAID_ENTITLEMENT_REQUIRED",
       "The ownership entitlement completion proof is invalid.",
+      { status: 409 }
+    );
+  }
+
+  if (entitlementKind === "alakazam") {
+    let decision;
+    try {
+      decision = verifyAlakazamFulfillmentDecision(
+        entitlement.decision
+      );
+    } catch {
+      invariant(
+        false,
+        "PUBLICATION_PROOF_INVALID",
+        "The exact Alakazam fulfillment decision is invalid.",
+        { status: 409 }
+      );
+    }
+    invariant(
+      exactId(
+        entitlement.subscriptionId,
+        "Alakazam subscription ID"
+      ) === decision.subscriptionId &&
+        Number.isSafeInteger(
+          entitlement.subscriptionRevision
+        ) &&
+        entitlement.subscriptionRevision ===
+          decision.subscriptionRevision &&
+        decision.tenantId === organizationId &&
+        decision.projectId === projectId &&
+        decision.capability ===
+          "publish_accepted_project_version" &&
+        decision.sourceVersion.versionId === versionId &&
+        decision.sourceVersion.artifactDigest === versionDigest &&
+        decision.sourceVersion.compilerSchema ===
+          version.compilerSchema &&
+        decision.sourceVersion.compilerRevision ===
+          version.compilerRevision &&
+        decision.publicationArtifact.screeningId ===
+          screeningId &&
+        decision.publicationArtifact.artifactDigest ===
+          artifact.digest &&
+        decision.publicationArtifact.compilerSchema ===
+          artifact.compilerSchema &&
+        decision.publicationArtifact.compilerRevision ===
+          artifact.compilerRevision &&
+        decision.publicationArtifact.policyDigest ===
+          decision.policyDigest &&
+        decision.address.addressId === addressId &&
+        decision.address.hostname ===
+          normalizeHostname(address.hostname),
+      "PUBLICATION_PROOF_INVALID",
+      "The Alakazam decision does not bind this exact publication.",
       { status: 409 }
     );
   }

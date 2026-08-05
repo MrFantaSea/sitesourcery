@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   ALAKAZAM_CATALOG_VERSION,
   ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
@@ -28,6 +30,11 @@ import {
 import {
   ALAKAZAM_UPGRADE_APPLICATION_SCHEMA
 } from "../commerce-v2/alakazam-upgrade.mjs";
+import {
+  ALAKAZAM_EFFECTIVE_POLICY_SCHEMA,
+  createAlakazamFulfillmentAuthority,
+  verifyAlakazamFulfillmentDecision
+} from "../commerce-v2/alakazam-fulfillment.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -4827,6 +4834,576 @@ function accountReceipt(row) {
   });
 }
 
+function exactFulfillmentEnqueueInput(value) {
+  exactKeys(
+    value,
+    [
+      "customerId",
+      "enqueuedAt",
+      "operationId",
+      "projectId",
+      "quoteId",
+      "subscriptionId",
+      "subscriptionRevision",
+      "tenantId",
+      "tierId"
+    ],
+    "the Alakazam fulfillment enqueue input is invalid"
+  );
+  const subscriptionRevision = Number(
+    value.subscriptionRevision
+  );
+  invariant(
+    Number.isSafeInteger(subscriptionRevision) &&
+      subscriptionRevision > 0,
+    "invalid_input",
+    "subscriptionRevision is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(value.customerId, "customerId"),
+    projectId: exactUuid(value.projectId, "projectId"),
+    quoteId: exactUuid(value.quoteId, "quoteId"),
+    subscriptionId: exactUuid(
+      value.subscriptionId,
+      "subscriptionId"
+    ),
+    subscriptionRevision,
+    tierId: requiredText(value.tierId, "tierId", 100),
+    operationId: exactUuid(
+      value.operationId,
+      "operationId"
+    ),
+    enqueuedAt: requiredIso(value.enqueuedAt, "enqueuedAt")
+  });
+}
+
+function fulfillmentIntentFacts(row) {
+  return Object.freeze({
+    schema: "sitesourcery.alakazam-fulfillment-intent/v1",
+    intentId: exactUuid(row.id, "fulfillment.intentId"),
+    tenantId: exactUuid(
+      row.organization_id,
+      "fulfillment.tenantId"
+    ),
+    customerId: exactUuid(
+      row.customer_user_id,
+      "fulfillment.customerId"
+    ),
+    projectId: exactUuid(
+      row.project_id,
+      "fulfillment.projectId"
+    ),
+    quoteId: exactUuid(row.quote_id, "fulfillment.quoteId"),
+    versionId: exactUuid(
+      row.version_id,
+      "fulfillment.versionId"
+    ),
+    artifactDigest: exactSha(
+      row.artifact_digest,
+      "fulfillment.artifactDigest"
+    ),
+    addressId: exactUuid(
+      row.address_id,
+      "fulfillment.addressId"
+    ),
+    hostname: requiredText(
+      row.hostname,
+      "fulfillment.hostname",
+      253
+    ),
+    targetTierId: requiredText(
+      row.target_tier_id,
+      "fulfillment.targetTierId",
+      100
+    ),
+    preparedAt: exactDatabaseIso(
+      row.prepared_at,
+      "fulfillment.preparedAt"
+    )
+  });
+}
+
+function exactStoredFulfillmentIntent(row) {
+  const facts = fulfillmentIntentFacts(row);
+  invariant(
+    exactSha(
+      row.intent_digest,
+      "fulfillment.intentDigest"
+    ) === digest(facts),
+    "repository_conflict",
+    "the durable Alakazam fulfillment intent changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    ...facts,
+    state: requiredText(
+      row.state,
+      "fulfillment.state",
+      50
+    ),
+    intentDigest: row.intent_digest
+  });
+}
+
+function exactStoredFulfillmentOperation(row) {
+  invariant(
+    row.policy_schema === ALAKAZAM_EFFECTIVE_POLICY_SCHEMA,
+    "repository_conflict",
+    "the durable Alakazam fulfillment policy changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    status: requiredText(
+      row.state,
+      "fulfillmentOperation.state",
+      50
+    ),
+    operationId: exactUuid(
+      row.id,
+      "fulfillmentOperation.operationId"
+    ),
+    intentId: exactUuid(
+      row.intent_id,
+      "fulfillmentOperation.intentId"
+    ),
+    projectId: exactUuid(
+      row.project_id,
+      "fulfillmentOperation.projectId"
+    ),
+    subscriptionId: exactUuid(
+      row.subscription_id,
+      "fulfillmentOperation.subscriptionId"
+    ),
+    subscriptionRevision: exactDatabaseInteger(
+      row.subscription_revision,
+      "fulfillmentOperation.subscriptionRevision"
+    ),
+    tierId: requiredText(
+      row.effective_tier_id,
+      "fulfillmentOperation.tierId",
+      100
+    ),
+    policyDigest: exactSha(
+      row.policy_digest,
+      "fulfillmentOperation.policyDigest"
+    ),
+    queuedAt: exactDatabaseIso(
+      row.queued_at,
+      "fulfillmentOperation.queuedAt"
+    )
+  });
+}
+
+function exactFulfillmentWorker(value, field = "workerId") {
+  const selected = requiredText(value, field, 200);
+  invariant(
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{2,199}$/u.test(selected),
+    "invalid_input",
+    `${field} is invalid`
+  );
+  return selected;
+}
+
+function exactFulfillmentClaimInput(value) {
+  exactKeys(
+    value,
+    ["claimedAt", "leaseExpiresAt", "workerId"],
+    "the Alakazam fulfillment claim input is invalid"
+  );
+  const claimedAt = requiredIso(value.claimedAt, "claimedAt");
+  const leaseExpiresAt = requiredIso(
+    value.leaseExpiresAt,
+    "leaseExpiresAt"
+  );
+  invariant(
+    Date.parse(leaseExpiresAt) > Date.parse(claimedAt),
+    "invalid_input",
+    "the Alakazam fulfillment lease is invalid"
+  );
+  return Object.freeze({
+    workerId: exactFulfillmentWorker(value.workerId),
+    claimedAt,
+    leaseExpiresAt
+  });
+}
+
+function exactFulfillmentLeaseReference(
+  value,
+  extraFields = []
+) {
+  exactKeys(
+    value,
+    [
+      "attemptCount",
+      "operationId",
+      "workerId",
+      ...extraFields
+    ],
+    "the Alakazam fulfillment lease reference is invalid"
+  );
+  const attemptCount = Number(value.attemptCount);
+  invariant(
+    Number.isSafeInteger(attemptCount) && attemptCount > 0,
+    "invalid_input",
+    "attemptCount is invalid"
+  );
+  return {
+    operationId: exactUuid(
+      value.operationId,
+      "operationId"
+    ),
+    workerId: exactFulfillmentWorker(value.workerId),
+    attemptCount
+  };
+}
+
+function exactFulfillmentStageInput(value) {
+  const reference = exactFulfillmentLeaseReference(value, [
+    "artifactId",
+    "compiled",
+    "releaseRequestId",
+    "screeningId",
+    "stagedAt"
+  ]);
+  exactKeys(
+    value.compiled,
+    [
+      "artifactDigest",
+      "compilerRevision",
+      "compilerSchema",
+      "htmlBytes",
+      "policyDigest"
+    ],
+    "the Alakazam compiled artifact is invalid"
+  );
+  invariant(
+    Buffer.isBuffer(value.compiled.htmlBytes) ||
+      value.compiled.htmlBytes instanceof Uint8Array,
+    "invalid_input",
+    "the Alakazam compiled artifact bytes are invalid"
+  );
+  const htmlBytes = Buffer.from(value.compiled.htmlBytes);
+  const artifactDigest = requiredDigest(
+    value.compiled.artifactDigest,
+    "compiled.artifactDigest"
+  );
+  invariant(
+    htmlBytes.byteLength >= 64 &&
+      htmlBytes.byteLength <= 250_000 &&
+      createHash("sha256")
+        .update(htmlBytes)
+        .digest("hex") === artifactDigest,
+    "invalid_input",
+    "the Alakazam compiled artifact digest is invalid"
+  );
+  return Object.freeze({
+    ...reference,
+    artifactId: exactUuid(value.artifactId, "artifactId"),
+    screeningId: exactUuid(
+      value.screeningId,
+      "screeningId"
+    ),
+    releaseRequestId: exactUuid(
+      value.releaseRequestId,
+      "releaseRequestId"
+    ),
+    stagedAt: requiredIso(value.stagedAt, "stagedAt"),
+    compiled: Object.freeze({
+      compilerSchema: requiredText(
+        value.compiled.compilerSchema,
+        "compiled.compilerSchema",
+        100
+      ),
+      compilerRevision: requiredText(
+        value.compiled.compilerRevision,
+        "compiled.compilerRevision",
+        200
+      ),
+      policyDigest: requiredDigest(
+        value.compiled.policyDigest,
+        "compiled.policyDigest"
+      ),
+      artifactDigest,
+      htmlBytes
+    })
+  });
+}
+
+function exactFulfillmentDecisionInput(value) {
+  const reference = exactFulfillmentLeaseReference(value, [
+    "decision"
+  ]);
+  return Object.freeze({
+    ...reference,
+    decision: verifyAlakazamFulfillmentDecision(
+      value.decision
+    )
+  });
+}
+
+function exactFulfillmentFinalizationInput(value) {
+  const reference = exactFulfillmentLeaseReference(value, [
+    "completedAt",
+    "decisionDigest",
+    "providerResult",
+    "receiptId",
+    "releaseId"
+  ]);
+  exactKeys(
+    value.providerResult,
+    [
+      "bindingRevision",
+      "manifestDigest",
+      "providerRequestId",
+      "published",
+      "releaseId",
+      "replay",
+      "status"
+    ],
+    "the Alakazam publication result is invalid"
+  );
+  invariant(
+    value.providerResult.status === "released" &&
+      value.providerResult.published === true &&
+      typeof value.providerResult.replay === "boolean" &&
+      Number.isSafeInteger(
+        value.providerResult.bindingRevision
+      ) &&
+      value.providerResult.bindingRevision > 0,
+    "invalid_input",
+    "the Alakazam publication result is invalid"
+  );
+  return Object.freeze({
+    ...reference,
+    receiptId: exactUuid(value.receiptId, "receiptId"),
+    releaseId: exactUuid(value.releaseId, "releaseId"),
+    decisionDigest: requiredDigest(
+      value.decisionDigest,
+      "decisionDigest"
+    ),
+    completedAt: requiredIso(
+      value.completedAt,
+      "completedAt"
+    ),
+    providerResult: Object.freeze({
+      providerRequestId: requiredText(
+        value.providerResult.providerRequestId,
+        "providerResult.providerRequestId",
+        500
+      ),
+      status: "released",
+      published: true,
+      replay: value.providerResult.replay,
+      releaseId: exactUuid(
+        value.providerResult.releaseId,
+        "providerResult.releaseId"
+      ),
+      manifestDigest: requiredDigest(
+        value.providerResult.manifestDigest,
+        "providerResult.manifestDigest"
+      ),
+      bindingRevision:
+        value.providerResult.bindingRevision
+    })
+  });
+}
+
+function exactFulfillmentDarkInput(value) {
+  const reference = exactFulfillmentLeaseReference(value, [
+    "decisionDigest",
+    "failedAt",
+    "failureCode"
+  ]);
+  const failureCode = requiredText(
+    value.failureCode,
+    "failureCode",
+    128
+  );
+  invariant(
+    /^[a-z][a-z0-9_]{2,127}$/u.test(failureCode),
+    "invalid_input",
+    "failureCode is invalid"
+  );
+  return Object.freeze({
+    ...reference,
+    decisionDigest: requiredDigest(
+      value.decisionDigest,
+      "decisionDigest"
+    ),
+    failureCode,
+    failedAt: requiredIso(value.failedAt, "failedAt")
+  });
+}
+
+async function prepareStartFulfillmentIntent(
+  client,
+  input,
+  quoteRow
+) {
+  const existing = await client.query(
+    `select *
+       from ss.alakazam_fulfillment_intents
+      where organization_id = $1
+        and quote_id = $2
+      for update`,
+    [input.tenantId, input.quoteId]
+  );
+  invariant(
+    existing.rowCount <= 1,
+    "repository_conflict",
+    "the Alakazam fulfillment intent identity conflicts",
+    { status: 500 }
+  );
+  if (existing.rowCount === 1) {
+    const stored = exactStoredFulfillmentIntent(
+      existing.rows[0]
+    );
+    invariant(
+      stored.intentId === input.dispatchId &&
+        stored.customerId === input.customerId &&
+        stored.projectId === input.projectId &&
+        stored.targetTierId === quoteRow.target_tier_id,
+      "idempotency_conflict",
+      "the Alakazam fulfillment intent changed",
+      { status: 409 }
+    );
+    return stored;
+  }
+
+  const selected = await client.query(
+    `select
+       version.id as version_id,
+       artifact.artifact_digest,
+       address.id as address_id,
+       address.serving_hostname
+     from ss.site_versions version
+     join ss.version_state_projection version_state
+       on version_state.organization_id =
+          version.organization_id
+      and version_state.project_id = version.project_id
+      and version_state.version_id = version.id
+      and version_state.state = 'accepted_release'
+     join ss.artifacts artifact
+       on artifact.organization_id = version.organization_id
+      and artifact.project_id = version.project_id
+      and artifact.id = version.artifact_id
+     join ss.project_address_projection address_projection
+       on address_projection.organization_id =
+          version.organization_id
+      and address_projection.project_id = version.project_id
+     join ss.project_addresses address
+       on address.organization_id =
+          address_projection.organization_id
+      and address.project_id = address_projection.project_id
+      and address.id = address_projection.current_address_id
+      and address.kind = 'licensed'
+      and address.ownership = 'licensed'
+      and address.state = 'configured'
+    where version.organization_id = $1
+      and version.project_id = $2
+    order by version.version_number desc, version.id desc
+    limit 2
+    for update of version, address`,
+    [input.tenantId, input.projectId]
+  );
+  invariant(
+    selected.rowCount >= 1,
+    "alakazam_fulfillment_intent_unavailable",
+    "accept a website version and choose its Site Sourcery address before payment",
+    { status: 409 }
+  );
+  const evidence = selected.rows[0];
+  const facts = {
+    schema: "sitesourcery.alakazam-fulfillment-intent/v1",
+    intentId: input.dispatchId,
+    tenantId: input.tenantId,
+    customerId: input.customerId,
+    projectId: input.projectId,
+    quoteId: input.quoteId,
+    versionId: evidence.version_id,
+    artifactDigest: evidence.artifact_digest,
+    addressId: evidence.address_id,
+    hostname: evidence.serving_hostname,
+    targetTierId: quoteRow.target_tier_id,
+    preparedAt: input.claimedAt
+  };
+  const intentDigest = digest(facts);
+  await client.query(
+    `update ss.alakazam_fulfillment_intents
+        set state = 'superseded',
+            updated_at = $3
+      where organization_id = $1
+        and project_id = $2
+        and state = 'prepared'`,
+    [input.tenantId, input.projectId, input.claimedAt]
+  );
+  const inserted = await client.query(
+    `insert into ss.alakazam_fulfillment_intents (
+       id, organization_id, project_id,
+       customer_user_id, quote_id, version_id,
+       artifact_digest, address_id, hostname,
+       target_tier_id, state, intent_digest,
+       prepared_at, updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6,
+       $7, $8, $9, $10,
+       'prepared', $11, $12, $12
+     )
+     returning *`,
+    [
+      facts.intentId,
+      facts.tenantId,
+      facts.projectId,
+      facts.customerId,
+      facts.quoteId,
+      facts.versionId,
+      facts.artifactDigest,
+      facts.addressId,
+      facts.hostname,
+      facts.targetTierId,
+      intentDigest,
+      facts.preparedAt
+    ]
+  );
+  invariant(
+    inserted.rowCount === 1,
+    "repository_conflict",
+    "the Alakazam fulfillment intent was not committed",
+    { status: 500 }
+  );
+  await client.query(
+    `insert into ss.alakazam_fulfillment_projection (
+       organization_id, project_id, intent_id,
+       operation_id, state, hostname,
+       effective_tier_id, subscription_revision,
+       current_release_id, last_failure_code,
+       updated_at
+     ) values (
+       $1, $2, $3, null, 'prepared', $4,
+       null, null, null, null, $5
+     )
+     on conflict (project_id) do update
+       set intent_id = excluded.intent_id,
+           operation_id = null,
+           state = 'prepared',
+           hostname = excluded.hostname,
+           effective_tier_id = null,
+           subscription_revision = null,
+           current_release_id = null,
+           last_failure_code = null,
+           updated_at = excluded.updated_at`,
+    [
+      facts.tenantId,
+      facts.projectId,
+      facts.intentId,
+      facts.hostname,
+      facts.preparedAt
+    ]
+  );
+  return exactStoredFulfillmentIntent(inserted.rows[0]);
+}
+
 function accountQuoteState(row) {
   if (!row) return null;
   const changeKind = requiredText(
@@ -7942,6 +8519,13 @@ export function createPostgresAlakazamRepository({
                 downloadCredit,
                 claimedAt: input.claimedAt
               });
+            if (quoteRow.change_kind === "start") {
+              await prepareStartFulfillmentIntent(
+                client,
+                input,
+                quoteRow
+              );
+            }
             const moved = await client.query(
               `update ss.alakazam_change_quotes
                   set state = 'checkout_dispatching'
@@ -8279,7 +8863,7 @@ export function createPostgresAlakazamRepository({
           },
           async (client) => {
             const quote = await client.query(
-              `select state
+              `select state, change_kind
                  from ss.alakazam_change_quotes
                 where organization_id = $1
                   and id = $2
@@ -8368,6 +8952,43 @@ export function createPostgresAlakazamRepository({
               "the unused Checkout quote was not failed",
               { status: 500 }
             );
+            if (quote.rows[0].change_kind === "start") {
+              const abandoned = await client.query(
+                `update ss.alakazam_fulfillment_intents
+                    set state = 'superseded',
+                        updated_at = clock_timestamp()
+                  where organization_id = $1
+                    and quote_id = $2
+                    and state = 'prepared'
+                  returning id, project_id`,
+                [reference.tenantId, reference.quoteId]
+              );
+              invariant(
+                abandoned.rowCount === 1,
+                "repository_conflict",
+                "the unused Alakazam fulfillment intent was not closed",
+                { status: 500 }
+              );
+              const removedProjection = await client.query(
+                `delete from ss.alakazam_fulfillment_projection
+                  where organization_id = $1
+                    and project_id = $2
+                    and intent_id = $3
+                    and state = 'prepared'
+                  returning project_id`,
+                [
+                  reference.tenantId,
+                  abandoned.rows[0].project_id,
+                  abandoned.rows[0].id
+                ]
+              );
+              invariant(
+                removedProjection.rowCount === 1,
+                "repository_conflict",
+                "the unused Alakazam fulfillment projection was not removed",
+                { status: 500 }
+              );
+            }
             return Object.freeze({
               status: "failed",
               provider: "stripe",
@@ -8685,6 +9306,1768 @@ export function createPostgresAlakazamRepository({
               activated.rows[0].provider_facts_digest,
               "startActivation.providerFactsDigest"
             )
+          });
+        })
+      );
+    },
+
+    async enqueueStartFulfillment(value) {
+      const input = exactFulfillmentEnqueueInput(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: input.customerId,
+            organizationId: input.tenantId
+          },
+          async (client) => {
+            const existing = await client.query(
+              `select *
+                 from ss.alakazam_fulfillment_operations
+                where organization_id = $1
+                  and (
+                    id = $2
+                    or (
+                      subscription_id = $3
+                      and subscription_revision = $4
+                      and operation_kind =
+                          'start_activation'
+                    )
+                  )
+                for update`,
+              [
+                input.tenantId,
+                input.operationId,
+                input.subscriptionId,
+                input.subscriptionRevision
+              ]
+            );
+            invariant(
+              existing.rowCount <= 1,
+              "idempotency_conflict",
+              "the Alakazam fulfillment operation identity conflicts",
+              { status: 409 }
+            );
+            if (existing.rowCount === 1) {
+              const stored =
+                exactStoredFulfillmentOperation(
+                  existing.rows[0]
+                );
+              invariant(
+                stored.projectId === input.projectId &&
+                  stored.subscriptionId ===
+                    input.subscriptionId &&
+                  stored.subscriptionRevision ===
+                    input.subscriptionRevision &&
+                  stored.tierId === input.tierId,
+                "idempotency_conflict",
+                "the Alakazam fulfillment operation changed",
+                { status: 409 }
+              );
+              return stored;
+            }
+
+            const selected = await client.query(
+              `select
+                 intent.*,
+                 quote.state as quote_state,
+                 subscription.id as subscription_id,
+                 subscription.tier_id as subscription_tier_id,
+                 subscription.status as subscription_status,
+               subscription.revision as active_subscription_revision,
+                 subscription.current_period_starts_at,
+                 subscription.current_period_ends_at,
+                 subscription.cancel_at_period_end,
+                 subscription.grace_ends_at,
+                 schedule.target_tier_id as scheduled_tier_id,
+                 schedule.effective_at as scheduled_effective_at
+               from ss.alakazam_fulfillment_intents intent
+               join ss.alakazam_change_quotes quote
+                 on quote.organization_id =
+                    intent.organization_id
+                and quote.id = intent.quote_id
+               join ss.alakazam_subscriptions subscription
+                 on subscription.organization_id =
+                    intent.organization_id
+                and subscription.project_id = intent.project_id
+                and subscription.customer_user_id =
+                    intent.customer_user_id
+                and subscription.id = $5
+               join ss.projects project
+                 on project.organization_id =
+                    intent.organization_id
+                and project.id = intent.project_id
+                and project.lifecycle = 'active'
+               join ss.organization_memberships membership
+                 on membership.organization_id =
+                    intent.organization_id
+                and membership.user_id =
+                    intent.customer_user_id
+                and membership.state = 'active'
+                and membership.role = any($6::text[])
+               left join ss.alakazam_downgrade_schedules schedule
+                 on schedule.organization_id =
+                    subscription.organization_id
+                and schedule.subscription_id = subscription.id
+                and schedule.state in (
+                  'dispatching', 'scheduled',
+                  'reconciliation_required'
+                )
+              where intent.organization_id = $1
+                and intent.project_id = $2
+                and intent.customer_user_id = $3
+                and intent.quote_id = $4
+                and intent.state in ('prepared', 'activated')
+              for update of intent, quote, subscription, project`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId,
+                input.quoteId,
+                input.subscriptionId,
+                PROJECT_ROLES
+              ]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "alakazam_fulfillment_intent_unavailable",
+              "the paid Alakazam fulfillment intent is unavailable",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            const intent = exactStoredFulfillmentIntent(row);
+            invariant(
+              intent.tenantId === input.tenantId &&
+                intent.customerId === input.customerId &&
+                intent.projectId === input.projectId &&
+                intent.quoteId === input.quoteId &&
+                row.subscription_id === input.subscriptionId &&
+                row.quote_state === "applied" &&
+                row.subscription_status === "active" &&
+                exactDatabaseInteger(
+                  row.active_subscription_revision,
+                  "subscription.revision"
+                ) === input.subscriptionRevision &&
+                row.subscription_tier_id === input.tierId &&
+                intent.targetTierId === input.tierId,
+              "alakazam_fulfillment_revision_changed",
+              "the paid Alakazam subscription changed before fulfillment",
+              { status: 409 }
+            );
+            const authority =
+              createAlakazamFulfillmentAuthority({
+                tenantId: input.tenantId,
+                customerId: input.customerId,
+                projectId: input.projectId,
+                subscription: {
+                  tenantId: input.tenantId,
+                  customerId: input.customerId,
+                  projectId: input.projectId,
+                  subscriptionId: input.subscriptionId,
+                  tierId: row.subscription_tier_id,
+                  status: row.subscription_status,
+                  revision: exactDatabaseInteger(
+                    row.active_subscription_revision,
+                    "subscription.revision"
+                  ),
+                  currentPeriodStartsAt:
+                    exactDatabaseIso(
+                      row.current_period_starts_at,
+                      "subscription.currentPeriodStartsAt"
+                    ),
+                  currentPeriodEndsAt:
+                    exactDatabaseIso(
+                      row.current_period_ends_at,
+                      "subscription.currentPeriodEndsAt"
+                    ),
+                  cancelAtPeriodEnd:
+                    row.cancel_at_period_end === true,
+                  graceEndsAt:
+                    row.grace_ends_at === null ||
+                    row.grace_ends_at === undefined
+                      ? null
+                      : exactDatabaseIso(
+                          row.grace_ends_at,
+                          "subscription.graceEndsAt"
+                        ),
+                  scheduledTierId:
+                    row.scheduled_tier_id ?? null,
+                  scheduledEffectiveAt:
+                    row.scheduled_effective_at === null ||
+                    row.scheduled_effective_at === undefined
+                      ? null
+                      : exactDatabaseIso(
+                          row.scheduled_effective_at,
+                          "subscription.scheduledEffectiveAt"
+                        )
+                },
+                expectedSubscriptionRevision:
+                  input.subscriptionRevision,
+                now: input.enqueuedAt
+              });
+            invariant(
+              authority.policy.tierId === input.tierId,
+              "alakazam_fulfillment_revision_changed",
+              "the effective Alakazam tier changed before fulfillment",
+              { status: 409 }
+            );
+            const activated = await client.query(
+              `update ss.alakazam_fulfillment_intents
+                  set state = 'activated',
+                      activated_at = coalesce(
+                        activated_at,
+                        $3
+                      ),
+                      updated_at = $3
+                where organization_id = $1
+                  and id = $2
+                  and state in ('prepared', 'activated')
+                returning id`,
+              [
+                input.tenantId,
+                intent.intentId,
+                input.enqueuedAt
+              ]
+            );
+            invariant(
+              activated.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam fulfillment intent was not activated",
+              { status: 500 }
+            );
+            const inserted = await client.query(
+              `insert into ss.alakazam_fulfillment_operations (
+                 id, organization_id, project_id,
+                 customer_user_id, intent_id,
+                 subscription_id, subscription_revision,
+                 operation_kind, capability,
+                 effective_tier_id, policy_schema,
+                 policy_digest, state, attempt_count,
+                 serving_revision, queued_at, updated_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7,
+                 'start_activation',
+                 'publish_accepted_project_version',
+                 $8, $9, $10, 'queued', 0, 0, $11, $11
+               )
+               returning *`,
+              [
+                input.operationId,
+                input.tenantId,
+                input.projectId,
+                input.customerId,
+                intent.intentId,
+                input.subscriptionId,
+                input.subscriptionRevision,
+                authority.policy.tierId,
+                authority.policy.schema,
+                authority.policyDigest,
+                input.enqueuedAt
+              ]
+            );
+            invariant(
+              inserted.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam fulfillment operation was not queued",
+              { status: 500 }
+            );
+            await client.query(
+              `update ss.alakazam_fulfillment_projection
+                  set operation_id = $3,
+                      state = 'pending',
+                      effective_tier_id = $4,
+                      subscription_revision = $5,
+                      current_release_id = null,
+                      last_failure_code = null,
+                      updated_at = $6
+                where organization_id = $1
+                  and project_id = $2
+                  and intent_id = $7`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.operationId,
+                authority.policy.tierId,
+                input.subscriptionRevision,
+                input.enqueuedAt,
+                intent.intentId
+              ]
+            );
+            return exactStoredFulfillmentOperation(
+              inserted.rows[0]
+            );
+          }
+        )
+      );
+    },
+
+    async claimNextFulfillment(value) {
+      const input = exactFulfillmentClaimInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const candidate = await client.query(
+            `select id
+               from ss.alakazam_fulfillment_operations
+              where state in ('queued', 'dark', 'failed')
+                 or (
+                   state = 'processing'
+                   and lease_expires_at <= $1
+                 )
+              order by queued_at, id
+              for update skip locked
+              limit 1`,
+            [input.claimedAt]
+          );
+          if (candidate.rowCount === 0) {
+            return Object.freeze({ status: "idle" });
+          }
+          const operationId = candidate.rows[0].id;
+          const claimed = await client.query(
+            `update ss.alakazam_fulfillment_operations
+                set state = 'processing',
+                    attempt_count = attempt_count + 1,
+                    lease_owner = $2,
+                    lease_expires_at = $3,
+                    failure_code = null,
+                    updated_at = $1
+              where id = $4
+              returning attempt_count`,
+            [
+              input.claimedAt,
+              input.workerId,
+              input.leaseExpiresAt,
+              operationId
+            ]
+          );
+          invariant(
+            claimed.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam fulfillment operation was not claimed",
+            { status: 500 }
+          );
+          const selected = await client.query(
+            `select
+               operation.*,
+               intent.quote_id,
+               intent.version_id as source_version_id,
+               intent.artifact_digest as source_artifact_digest,
+               intent.address_id,
+               intent.hostname,
+               intent.intent_digest,
+               intent.prepared_at,
+               intent.target_tier_id,
+               version.raw_facts,
+               version.compiler_schema as source_compiler_schema,
+               version.compiler_revision as source_compiler_revision,
+               version_state.state as source_version_state,
+               source_artifact.artifact_digest as stored_source_digest,
+               project.lifecycle as project_lifecycle,
+               safety.state as safety_state,
+               address.kind as address_kind,
+               address.state as address_state,
+               address.serving_hostname,
+               subscription.tier_id as subscription_tier_id,
+               subscription.status as subscription_status,
+               subscription.current_period_starts_at,
+               subscription.current_period_ends_at,
+               subscription.cancel_at_period_end,
+               subscription.grace_ends_at,
+               subscription.revision as active_subscription_revision,
+               schedule.target_tier_id as scheduled_tier_id,
+               schedule.effective_at as scheduled_effective_at,
+               serving.state as serving_state,
+               serving.current_release_id as serving_release_id,
+               effective_artifact.html_bytes as effective_html_bytes,
+               effective_artifact.artifact_digest as stored_effective_digest,
+               screening.stage as screening_stage,
+               screening.passed as screening_passed,
+               screening.artifact_digest as screening_artifact_digest,
+               request.version_id as request_version_id,
+               request.address_id as request_address_id,
+               request.prepublication_screening_id as request_screening_id,
+               request.requested_at
+             from ss.alakazam_fulfillment_operations operation
+             join ss.alakazam_fulfillment_intents intent
+               on intent.organization_id = operation.organization_id
+              and intent.id = operation.intent_id
+             join ss.site_versions version
+               on version.organization_id = operation.organization_id
+              and version.project_id = operation.project_id
+              and version.id = intent.version_id
+             join ss.version_state_projection version_state
+               on version_state.organization_id = version.organization_id
+              and version_state.project_id = version.project_id
+              and version_state.version_id = version.id
+             join ss.artifacts source_artifact
+               on source_artifact.organization_id = version.organization_id
+              and source_artifact.id = version.artifact_id
+             join ss.projects project
+               on project.organization_id = operation.organization_id
+              and project.id = operation.project_id
+             join ss.project_safety_projection safety
+               on safety.organization_id = project.organization_id
+              and safety.project_id = project.id
+             join ss.project_addresses address
+               on address.organization_id = operation.organization_id
+              and address.project_id = operation.project_id
+              and address.id = intent.address_id
+             join ss.project_address_projection address_projection
+               on address_projection.organization_id = address.organization_id
+              and address_projection.project_id = address.project_id
+              and address_projection.current_address_id = address.id
+             join ss.alakazam_subscriptions subscription
+               on subscription.organization_id = operation.organization_id
+              and subscription.project_id = operation.project_id
+              and subscription.customer_user_id =
+                  operation.customer_user_id
+              and subscription.id = operation.subscription_id
+             left join ss.alakazam_downgrade_schedules schedule
+               on schedule.organization_id = subscription.organization_id
+              and schedule.subscription_id = subscription.id
+              and schedule.state in (
+                'dispatching', 'scheduled',
+                'reconciliation_required'
+              )
+             join ss.project_serving_projection serving
+               on serving.organization_id = operation.organization_id
+              and serving.project_id = operation.project_id
+             left join ss.artifacts effective_artifact
+               on effective_artifact.organization_id =
+                  operation.organization_id
+              and effective_artifact.id =
+                  operation.effective_artifact_id
+             left join ss.release_screenings screening
+               on screening.organization_id = operation.organization_id
+              and screening.id = operation.screening_id
+             left join ss.release_requests request
+               on request.organization_id = operation.organization_id
+              and request.id = operation.release_request_id
+            where operation.id = $1`,
+            [operationId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "alakazam_fulfillment_evidence_changed",
+            "the Alakazam fulfillment evidence changed before processing",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          invariant(
+            row.state === "processing" &&
+              row.lease_owner === input.workerId &&
+              exactDatabaseInteger(
+                row.attempt_count,
+                "fulfillment.attemptCount"
+              ) === Number(claimed.rows[0].attempt_count) &&
+              row.project_lifecycle === "active" &&
+              row.safety_state === "clear" &&
+              row.source_version_state === "accepted_release" &&
+              row.source_artifact_digest ===
+                row.stored_source_digest &&
+              row.address_kind === "licensed" &&
+              row.address_state === "configured" &&
+              row.hostname === row.serving_hostname &&
+              exactDatabaseInteger(
+                row.active_subscription_revision,
+                "subscription.activeRevision"
+              ) === exactDatabaseInteger(
+                row.subscription_revision,
+                "fulfillment.subscriptionRevision"
+              ) &&
+              row.subscription_tier_id ===
+                row.effective_tier_id,
+            "alakazam_fulfillment_evidence_changed",
+            "the Alakazam fulfillment evidence changed before processing",
+            { status: 409 }
+          );
+          const authority =
+            createAlakazamFulfillmentAuthority({
+              tenantId: row.organization_id,
+              customerId: row.customer_user_id,
+              projectId: row.project_id,
+              subscription: {
+                tenantId: row.organization_id,
+                customerId: row.customer_user_id,
+                projectId: row.project_id,
+                subscriptionId: row.subscription_id,
+                tierId: row.subscription_tier_id,
+                status: row.subscription_status,
+                revision: exactDatabaseInteger(
+                  row.active_subscription_revision,
+                  "subscription.activeRevision"
+                ),
+                currentPeriodStartsAt: exactDatabaseIso(
+                  row.current_period_starts_at,
+                  "subscription.currentPeriodStartsAt"
+                ),
+                currentPeriodEndsAt: exactDatabaseIso(
+                  row.current_period_ends_at,
+                  "subscription.currentPeriodEndsAt"
+                ),
+                cancelAtPeriodEnd:
+                  row.cancel_at_period_end === true,
+                graceEndsAt:
+                  row.grace_ends_at === null ||
+                  row.grace_ends_at === undefined
+                    ? null
+                    : exactDatabaseIso(
+                        row.grace_ends_at,
+                        "subscription.graceEndsAt"
+                      ),
+                scheduledTierId:
+                  row.scheduled_tier_id ?? null,
+                scheduledEffectiveAt:
+                  row.scheduled_effective_at === null ||
+                  row.scheduled_effective_at === undefined
+                    ? null
+                    : exactDatabaseIso(
+                        row.scheduled_effective_at,
+                        "subscription.scheduledEffectiveAt"
+                      )
+              },
+              expectedSubscriptionRevision:
+                exactDatabaseInteger(
+                  row.subscription_revision,
+                  "fulfillment.subscriptionRevision"
+                ),
+              now: input.claimedAt
+            });
+          invariant(
+            authority.policy.tierId ===
+                row.effective_tier_id &&
+              authority.policyDigest === row.policy_digest &&
+              row.policy_schema ===
+                ALAKAZAM_EFFECTIVE_POLICY_SCHEMA,
+            "alakazam_fulfillment_revision_changed",
+            "the Alakazam fulfillment policy changed before processing",
+            { status: 409 }
+          );
+          invariant(
+            row.raw_facts &&
+              typeof row.raw_facts === "object" &&
+              !Array.isArray(row.raw_facts),
+            "repository_conflict",
+            "the accepted website facts are unavailable",
+            { status: 500 }
+          );
+          const stagePresent =
+            row.effective_artifact_id !== null &&
+            row.effective_artifact_id !== undefined;
+          invariant(
+            !stagePresent ||
+              (
+                row.screening_id &&
+                row.release_request_id &&
+                row.effective_html_bytes &&
+                row.effective_artifact_digest ===
+                  row.stored_effective_digest &&
+                row.screening_stage === "pre_publication" &&
+                row.screening_passed === true &&
+                row.screening_artifact_digest ===
+                  row.effective_artifact_digest &&
+                row.request_version_id ===
+                  row.source_version_id &&
+                row.request_address_id === row.address_id &&
+                row.request_screening_id === row.screening_id
+              ),
+            "repository_conflict",
+            "the staged Alakazam publication changed",
+            { status: 500 }
+          );
+          return deepFreeze({
+            status: "claimed",
+            operationId: row.id,
+            attemptCount: exactDatabaseInteger(
+              row.attempt_count,
+              "fulfillment.attemptCount"
+            ),
+            workerId: input.workerId,
+            leaseExpiresAt: exactDatabaseIso(
+              row.lease_expires_at,
+              "fulfillment.leaseExpiresAt"
+            ),
+            tenantId: row.organization_id,
+            customerId: row.customer_user_id,
+            projectId: row.project_id,
+            subscriptionId: row.subscription_id,
+            subscriptionRevision: exactDatabaseInteger(
+              row.subscription_revision,
+              "fulfillment.subscriptionRevision"
+            ),
+            authority,
+            configuredFacts: clone(row.raw_facts),
+            sourceVersion: {
+              versionId: row.source_version_id,
+              state: "accepted_release",
+              artifactDigest: row.source_artifact_digest,
+              compilerSchema: row.source_compiler_schema,
+              compilerRevision: row.source_compiler_revision
+            },
+            address: {
+              tenantId: row.organization_id,
+              projectId: row.project_id,
+              addressId: row.address_id,
+              kind: "licensed",
+              state: "configured",
+              hostname: row.hostname
+            },
+            project: {
+              id: row.project_id,
+              organizationId: row.organization_id,
+              lifecycle: "active",
+              safetyState: "clear"
+            },
+            servingRevision: exactDatabaseInteger(
+              row.serving_revision,
+              "fulfillment.servingRevision"
+            ),
+            staged: stagePresent
+              ? {
+                  artifactId: row.effective_artifact_id,
+                  artifactDigest:
+                    row.effective_artifact_digest,
+                  htmlBytes: Buffer.from(
+                    row.effective_html_bytes
+                  ),
+                  screeningId: row.screening_id,
+                  releaseRequestId:
+                    row.release_request_id,
+                  requestedAt: exactDatabaseIso(
+                    row.requested_at,
+                    "fulfillment.requestedAt"
+                  ),
+                  decisionDigest:
+                    row.decision_digest ?? null
+                }
+              : null
+          });
+        })
+      );
+    },
+
+    async stageFulfillmentPublication(value) {
+      const input = exactFulfillmentStageInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select
+               operation.*,
+               intent.version_id,
+               intent.address_id,
+               intent.hostname,
+               address.kind as address_kind,
+               address.state as address_state,
+               version_state.state as version_state,
+               project.lifecycle as project_lifecycle,
+               safety.state as safety_state
+             from ss.alakazam_fulfillment_operations operation
+             join ss.alakazam_fulfillment_intents intent
+               on intent.organization_id = operation.organization_id
+              and intent.id = operation.intent_id
+             join ss.project_addresses address
+               on address.organization_id = operation.organization_id
+              and address.project_id = operation.project_id
+              and address.id = intent.address_id
+             join ss.version_state_projection version_state
+               on version_state.organization_id = operation.organization_id
+              and version_state.project_id = operation.project_id
+              and version_state.version_id = intent.version_id
+             join ss.projects project
+               on project.organization_id = operation.organization_id
+              and project.id = operation.project_id
+             join ss.project_safety_projection safety
+               on safety.organization_id = project.organization_id
+              and safety.project_id = project.id
+            where operation.id = $1
+            for update of operation, intent, address, project`,
+            [input.operationId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "alakazam_fulfillment_evidence_changed",
+            "the claimed Alakazam fulfillment operation is unavailable",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          invariant(
+            row.state === "processing" &&
+              row.lease_owner === input.workerId &&
+              exactDatabaseInteger(
+                row.attempt_count,
+                "fulfillment.attemptCount"
+              ) === input.attemptCount &&
+              Date.parse(
+                exactDatabaseIso(
+                  row.lease_expires_at,
+                  "fulfillment.leaseExpiresAt"
+                )
+              ) > Date.parse(input.stagedAt) &&
+              row.policy_digest ===
+                input.compiled.policyDigest &&
+              input.compiled.compilerSchema ===
+                "abracadabra.spark/v1" &&
+              /^sha256:[a-f0-9]{64}$/u.test(
+                input.compiled.compilerRevision
+              ) &&
+              row.version_state === "accepted_release" &&
+              row.address_kind === "licensed" &&
+              row.address_state === "configured" &&
+              row.project_lifecycle === "active" &&
+              row.safety_state === "clear",
+            "alakazam_fulfillment_evidence_changed",
+            "the claimed Alakazam fulfillment evidence changed",
+            { status: 409 }
+          );
+
+          let artifactId = row.effective_artifact_id;
+          let screeningId = row.screening_id;
+          let releaseRequestId = row.release_request_id;
+          if (artifactId) {
+            invariant(
+              row.effective_artifact_digest ===
+                  input.compiled.artifactDigest &&
+                screeningId &&
+                releaseRequestId,
+              "repository_conflict",
+              "the staged Alakazam artifact changed",
+              { status: 500 }
+            );
+          } else {
+            invariant(
+              !row.effective_artifact_digest &&
+                !screeningId &&
+                !releaseRequestId &&
+                !row.decision_digest,
+              "repository_conflict",
+              "the Alakazam publication is partially staged",
+              { status: 500 }
+            );
+            await client.query(
+              `insert into ss.artifacts (
+                 id, organization_id, project_id,
+                 media_type, html_bytes
+               ) values (
+                 $1, $2, $3,
+                 'text/html; charset=utf-8', $4
+               )
+               on conflict (
+                 organization_id,
+                 project_id,
+                 artifact_digest
+               ) do nothing`,
+              [
+                input.artifactId,
+                row.organization_id,
+                row.project_id,
+                input.compiled.htmlBytes
+              ]
+            );
+            const artifact = await client.query(
+              `select id, artifact_digest, html_bytes
+                 from ss.artifacts
+                where organization_id = $1
+                  and project_id = $2
+                  and artifact_digest = $3`,
+              [
+                row.organization_id,
+                row.project_id,
+                input.compiled.artifactDigest
+              ]
+            );
+            invariant(
+              artifact.rowCount === 1 &&
+                Buffer.from(
+                  artifact.rows[0].html_bytes
+                ).equals(input.compiled.htmlBytes),
+              "repository_conflict",
+              "the effective Alakazam artifact changed",
+              { status: 500 }
+            );
+            artifactId = artifact.rows[0].id;
+            screeningId = input.screeningId;
+            releaseRequestId = input.releaseRequestId;
+            const artifactBound = await client.query(
+              `update ss.alakazam_fulfillment_operations
+                  set effective_artifact_id = $3,
+                      effective_artifact_digest = $4,
+                      updated_at = $5
+                where organization_id = $1
+                  and id = $2
+                  and state = 'processing'
+                  and lease_owner = $6
+                  and attempt_count = $7
+                  and effective_artifact_id is null
+                  and screening_id is null
+                  and release_request_id is null
+                  and decision_digest is null
+                returning id`,
+              [
+                row.organization_id,
+                row.id,
+                artifactId,
+                input.compiled.artifactDigest,
+                input.stagedAt,
+                input.workerId,
+                input.attemptCount
+              ]
+            );
+            invariant(
+              artifactBound.rowCount === 1,
+              "repository_conflict",
+              "the policy-derived Alakazam artifact was not bound",
+              { status: 500 }
+            );
+            await client.query(
+              `insert into ss.release_screenings (
+                 id, organization_id, project_id,
+                 version_id, stage, method, passed,
+                 artifact_digest, findings,
+                 checker_revision, checked_at
+               ) values (
+                 $1, $2, $3, $4,
+                 'pre_publication',
+                 'alakazam_effective_policy', true,
+                 $5, '[]'::jsonb, $6, $7
+               )`,
+              [
+                screeningId,
+                row.organization_id,
+                row.project_id,
+                row.version_id,
+                input.compiled.artifactDigest,
+                input.compiled.compilerRevision,
+                input.stagedAt
+              ]
+            );
+            await client.query(
+              `insert into ss.release_requests (
+                 id, organization_id, project_id,
+                 version_id, address_id,
+                 requested_by_user_id,
+                 prepublication_screening_id,
+                 requested_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7, $8
+               )`,
+              [
+                releaseRequestId,
+                row.organization_id,
+                row.project_id,
+                row.version_id,
+                row.address_id,
+                row.customer_user_id,
+                screeningId,
+                input.stagedAt
+              ]
+            );
+            await client.query(
+              `insert into ss.release_events (
+                 organization_id, project_id,
+                 release_request_id, state,
+                 occurred_at
+               ) values ($1, $2, $3, 'queued', $4)`,
+              [
+                row.organization_id,
+                row.project_id,
+                releaseRequestId,
+                input.stagedAt
+              ]
+            );
+            await client.query(
+              `update ss.project_serving_projection
+                  set state = 'deploying',
+                      resume_state = case
+                        when state = 'live' then 'live'
+                        else resume_state
+                      end,
+                      updated_at = $3
+                where organization_id = $1
+                  and project_id = $2`,
+              [
+                row.organization_id,
+                row.project_id,
+                input.stagedAt
+              ]
+            );
+            await client.query(
+              `insert into ss.serving_events (
+                 organization_id, project_id,
+                 release_id, event_kind,
+                 source_receipt_id, occurred_at
+               ) values (
+                 $1, $2, null,
+                 'deploy_requested', null, $3
+               )`,
+              [
+                row.organization_id,
+                row.project_id,
+                input.stagedAt
+              ]
+            );
+            const staged = await client.query(
+              `update ss.alakazam_fulfillment_operations
+                  set screening_id = $3,
+                      release_request_id = $4,
+                      updated_at = $5
+                where organization_id = $1
+                  and id = $2
+                  and state = 'processing'
+                  and lease_owner = $6
+                  and attempt_count = $7
+                  and effective_artifact_id = $8
+                  and effective_artifact_digest = $9
+                  and screening_id is null
+                  and release_request_id is null
+                  and decision_digest is null
+                returning id`,
+              [
+                row.organization_id,
+                row.id,
+                screeningId,
+                releaseRequestId,
+                input.stagedAt,
+                input.workerId,
+                input.attemptCount,
+                artifactId,
+                input.compiled.artifactDigest
+              ]
+            );
+            invariant(
+              staged.rowCount === 1,
+              "repository_conflict",
+              "the effective Alakazam publication was not staged",
+              { status: 500 }
+            );
+          }
+
+          const proof = await client.query(
+            `select
+               artifact.id as artifact_id,
+               artifact.artifact_digest,
+               artifact.html_bytes,
+               screening.id as screening_id,
+               screening.stage as screening_stage,
+               screening.passed as screening_passed,
+               screening.artifact_digest as screening_artifact_digest,
+               screening.checker_revision,
+               request.id as release_request_id,
+               request.version_id,
+               request.address_id,
+               request.prepublication_screening_id,
+               request.requested_at
+             from ss.artifacts artifact
+             join ss.release_screenings screening
+               on screening.organization_id = artifact.organization_id
+              and screening.id = $4
+             join ss.release_requests request
+               on request.organization_id = artifact.organization_id
+              and request.id = $5
+            where artifact.organization_id = $1
+              and artifact.project_id = $2
+              and artifact.id = $3`,
+            [
+              row.organization_id,
+              row.project_id,
+              artifactId,
+              screeningId,
+              releaseRequestId
+            ]
+          );
+          const stored = proof.rows[0];
+          invariant(
+            proof.rowCount === 1 &&
+              stored.artifact_digest ===
+                input.compiled.artifactDigest &&
+              Buffer.from(stored.html_bytes).equals(
+                input.compiled.htmlBytes
+              ) &&
+              stored.screening_stage ===
+                "pre_publication" &&
+              stored.screening_passed === true &&
+              stored.screening_artifact_digest ===
+                input.compiled.artifactDigest &&
+              stored.checker_revision ===
+                input.compiled.compilerRevision &&
+              stored.version_id === row.version_id &&
+              stored.address_id === row.address_id &&
+              stored.prepublication_screening_id ===
+                screeningId,
+            "repository_conflict",
+            "the staged Alakazam publication proof changed",
+            { status: 500 }
+          );
+          return deepFreeze({
+            operationId: row.id,
+            attemptCount: input.attemptCount,
+            workerId: input.workerId,
+            tenantId: row.organization_id,
+            customerId: row.customer_user_id,
+            projectId: row.project_id,
+            subscriptionId: row.subscription_id,
+            subscriptionRevision: exactDatabaseInteger(
+              row.subscription_revision,
+              "fulfillment.subscriptionRevision"
+            ),
+            policyDigest: row.policy_digest,
+            servingRevision: exactDatabaseInteger(
+              row.serving_revision,
+              "fulfillment.servingRevision"
+            ),
+            versionId: row.version_id,
+            addressId: row.address_id,
+            hostname: row.hostname,
+            artifactId,
+            artifactDigest: stored.artifact_digest,
+            htmlBytes: Buffer.from(stored.html_bytes),
+            compilerSchema: input.compiled.compilerSchema,
+            compilerRevision: stored.checker_revision,
+            screeningId,
+            releaseRequestId,
+            requestedAt: exactDatabaseIso(
+              stored.requested_at,
+              "fulfillment.requestedAt"
+            )
+          });
+        })
+      );
+    },
+
+    async bindFulfillmentDecision(value) {
+      const input = exactFulfillmentDecisionInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select
+               operation.*,
+               intent.version_id,
+               intent.artifact_digest as source_artifact_digest,
+               intent.address_id,
+               intent.hostname,
+               source_version.compiler_schema as source_compiler_schema,
+               source_version.compiler_revision as source_compiler_revision,
+               source_artifact.artifact_digest as stored_source_artifact_digest,
+               version_state.state as version_state,
+               project.lifecycle as project_lifecycle,
+               safety.state as safety_state,
+               address.kind as address_kind,
+               address.state as address_state,
+               artifact.artifact_digest,
+               artifact.html_bytes,
+               screening.stage as screening_stage,
+               screening.passed as screening_passed,
+               screening.artifact_digest as screening_artifact_digest,
+               screening.checker_revision,
+               request.version_id as request_version_id,
+               request.address_id as request_address_id,
+               request.prepublication_screening_id,
+               request.requested_at,
+               subscription.status as subscription_status,
+               subscription.grace_ends_at,
+               subscription.revision as active_subscription_revision
+             from ss.alakazam_fulfillment_operations operation
+             join ss.alakazam_fulfillment_intents intent
+               on intent.organization_id = operation.organization_id
+              and intent.id = operation.intent_id
+             join ss.version_state_projection version_state
+               on version_state.organization_id = operation.organization_id
+              and version_state.project_id = operation.project_id
+              and version_state.version_id = intent.version_id
+             join ss.site_versions source_version
+               on source_version.organization_id = operation.organization_id
+              and source_version.project_id = operation.project_id
+              and source_version.id = intent.version_id
+             join ss.artifacts source_artifact
+               on source_artifact.organization_id = operation.organization_id
+              and source_artifact.id = source_version.artifact_id
+             join ss.projects project
+               on project.organization_id = operation.organization_id
+              and project.id = operation.project_id
+             join ss.project_safety_projection safety
+               on safety.organization_id = project.organization_id
+              and safety.project_id = project.id
+             join ss.project_addresses address
+               on address.organization_id = operation.organization_id
+              and address.project_id = operation.project_id
+              and address.id = intent.address_id
+             join ss.artifacts artifact
+               on artifact.organization_id = operation.organization_id
+              and artifact.id = operation.effective_artifact_id
+             join ss.release_screenings screening
+               on screening.organization_id = operation.organization_id
+              and screening.id = operation.screening_id
+             join ss.release_requests request
+               on request.organization_id = operation.organization_id
+              and request.id = operation.release_request_id
+             join ss.alakazam_subscriptions subscription
+               on subscription.organization_id = operation.organization_id
+              and subscription.project_id = operation.project_id
+              and subscription.id = operation.subscription_id
+            where operation.id = $1
+            for update of operation, intent, project,
+              address, subscription`,
+            [input.operationId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "alakazam_fulfillment_evidence_changed",
+            "the staged Alakazam fulfillment operation is unavailable",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          const decision = input.decision;
+          invariant(
+            row.state === "processing" &&
+              row.lease_owner === input.workerId &&
+              exactDatabaseInteger(
+                row.attempt_count,
+                "fulfillment.attemptCount"
+              ) === input.attemptCount &&
+              Date.parse(
+                exactDatabaseIso(
+                  row.lease_expires_at,
+                  "fulfillment.leaseExpiresAt"
+                )
+              ) > Date.parse(decision.decidedAt) &&
+              row.project_lifecycle === "active" &&
+              row.safety_state === "clear" &&
+              row.version_state === "accepted_release" &&
+              row.address_kind === "licensed" &&
+              row.address_state === "configured" &&
+              row.subscription_status === "active" &&
+              exactDatabaseInteger(
+                row.active_subscription_revision,
+                "subscription.activeRevision"
+              ) === exactDatabaseInteger(
+                row.subscription_revision,
+                "fulfillment.subscriptionRevision"
+              ) &&
+              decision.operationId === row.id &&
+              decision.tenantId === row.organization_id &&
+              decision.customerId === row.customer_user_id &&
+              decision.projectId === row.project_id &&
+              decision.subscriptionId === row.subscription_id &&
+              decision.subscriptionRevision ===
+                Number(row.subscription_revision) &&
+              decision.policyDigest === row.policy_digest &&
+              decision.policy.schema === row.policy_schema &&
+              decision.policy.tierId === row.effective_tier_id &&
+              decision.sourceVersion.versionId === row.version_id &&
+              decision.sourceVersion.artifactDigest ===
+                row.source_artifact_digest &&
+              row.source_artifact_digest ===
+                row.stored_source_artifact_digest &&
+              decision.sourceVersion.compilerSchema ===
+                row.source_compiler_schema &&
+              decision.sourceVersion.compilerRevision ===
+                row.source_compiler_revision &&
+              decision.publicationArtifact.artifactDigest ===
+                row.artifact_digest &&
+              decision.publicationArtifact.screeningId ===
+                row.screening_id &&
+              decision.publicationArtifact.compilerSchema ===
+                "abracadabra.spark/v1" &&
+              decision.publicationArtifact.compilerRevision ===
+                row.checker_revision &&
+              decision.publicationArtifact.policyDigest ===
+                row.policy_digest &&
+              decision.address.addressId === row.address_id &&
+              decision.address.hostname === row.hostname &&
+              decision.servingRevision ===
+                Number(row.serving_revision) &&
+              row.screening_stage === "pre_publication" &&
+              row.screening_passed === true &&
+              row.screening_artifact_digest ===
+                row.artifact_digest &&
+              row.request_version_id === row.version_id &&
+              row.request_address_id === row.address_id &&
+              row.prepublication_screening_id ===
+                row.screening_id,
+            "alakazam_fulfillment_evidence_changed",
+            "the Alakazam fulfillment decision does not match the staged evidence",
+            { status: 409 }
+          );
+          if (row.decision_digest) {
+            invariant(
+              row.decision_digest === decision.decisionDigest,
+              "repository_conflict",
+              "the durable Alakazam fulfillment decision changed",
+              { status: 500 }
+            );
+          } else {
+            const bound = await client.query(
+              `update ss.alakazam_fulfillment_operations
+                  set decision_digest = $3,
+                      updated_at = $4
+                where organization_id = $1
+                  and id = $2
+                  and state = 'processing'
+                  and lease_owner = $5
+                  and attempt_count = $6
+                  and decision_digest is null
+                returning id`,
+              [
+                row.organization_id,
+                row.id,
+                decision.decisionDigest,
+                decision.decidedAt,
+                input.workerId,
+                input.attemptCount
+              ]
+            );
+            invariant(
+              bound.rowCount === 1,
+              "repository_conflict",
+              "the exact Alakazam fulfillment decision was not bound",
+              { status: 500 }
+            );
+          }
+          const htmlBytes = Buffer.from(row.html_bytes);
+          return Object.freeze({
+            organizationId: row.organization_id,
+            projectId: row.project_id,
+            releaseId: row.id,
+            project: Object.freeze({
+              id: row.project_id,
+              organizationId: row.organization_id,
+              lifecycle: "active",
+              safetyState: "clear"
+            }),
+            releaseRequest: Object.freeze({
+              id: row.release_request_id,
+              organizationId: row.organization_id,
+              projectId: row.project_id,
+              versionId: row.version_id,
+              addressId: row.address_id,
+              prepublicationScreeningId:
+                row.screening_id
+            }),
+            version: Object.freeze({
+              id: row.version_id,
+              state: "accepted_release",
+              artifactDigest: row.source_artifact_digest,
+              compilerSchema: row.source_compiler_schema,
+              compilerRevision: row.source_compiler_revision
+            }),
+            screening: Object.freeze({
+              id: row.screening_id,
+              versionId: row.version_id,
+              stage: "pre_publication",
+              passed: true,
+              artifactDigest: row.artifact_digest
+            }),
+            entitlement: Object.freeze({
+              kind: "alakazam",
+              organizationId: row.organization_id,
+              projectId: row.project_id,
+              subscriptionId: row.subscription_id,
+              subscriptionRevision:
+                exactDatabaseInteger(
+                  row.subscription_revision,
+                  "fulfillment.subscriptionRevision"
+                ),
+              status: row.subscription_status,
+              graceEndsAt:
+                row.grace_ends_at === null ||
+                row.grace_ends_at === undefined
+                  ? null
+                  : exactDatabaseIso(
+                      row.grace_ends_at,
+                      "subscription.graceEndsAt"
+                    ),
+              decision
+            }),
+            address: Object.freeze({
+              id: row.address_id,
+              organizationId: row.organization_id,
+              projectId: row.project_id,
+              kind: "licensed",
+              state: "configured",
+              verified: true,
+              hostname: row.hostname
+            }),
+            artifact: Object.freeze({
+              htmlBytes,
+              sha256: row.artifact_digest,
+              compilerSchema: "abracadabra.spark/v1",
+              compilerRevision: row.checker_revision
+            })
+          });
+        })
+      );
+    },
+
+    async finalizeFulfillmentPublication(value) {
+      const input = exactFulfillmentFinalizationInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select
+               operation.*,
+               intent.version_id,
+               intent.address_id,
+               intent.hostname,
+               intent.state as intent_state,
+               artifact.artifact_digest,
+               request.requested_at,
+               subscription.status as subscription_status,
+               subscription.revision as active_subscription_revision
+             from ss.alakazam_fulfillment_operations operation
+             join ss.alakazam_fulfillment_intents intent
+               on intent.organization_id = operation.organization_id
+              and intent.id = operation.intent_id
+             join ss.artifacts artifact
+               on artifact.organization_id = operation.organization_id
+              and artifact.id = operation.effective_artifact_id
+             join ss.release_requests request
+               on request.organization_id = operation.organization_id
+              and request.id = operation.release_request_id
+             join ss.alakazam_subscriptions subscription
+               on subscription.organization_id = operation.organization_id
+              and subscription.project_id = operation.project_id
+              and subscription.id = operation.subscription_id
+            where operation.id = $1
+            for update of operation, intent, request, subscription`,
+            [input.operationId]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "alakazam_fulfillment_evidence_changed",
+            "the published Alakazam fulfillment operation is unavailable",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          const expectedProviderRequestId =
+            `selfhost:publish:${row.release_request_id}`;
+          invariant(
+            row.state === "processing" &&
+              row.lease_owner === input.workerId &&
+              exactDatabaseInteger(
+                row.attempt_count,
+                "fulfillment.attemptCount"
+              ) === input.attemptCount &&
+              row.decision_digest === input.decisionDigest &&
+              input.providerResult.releaseId === row.id &&
+              input.providerResult.providerRequestId ===
+                expectedProviderRequestId &&
+              row.intent_state === "activated" &&
+              row.subscription_status === "active" &&
+              exactDatabaseInteger(
+                row.active_subscription_revision,
+                "subscription.activeRevision"
+              ) === exactDatabaseInteger(
+                row.subscription_revision,
+                "fulfillment.subscriptionRevision"
+              ) &&
+              row.artifact_digest ===
+                row.effective_artifact_digest,
+            "alakazam_fulfillment_evidence_changed",
+            "the publication result does not match the exact Alakazam operation",
+            { status: 409 }
+          );
+          const receiptFacts = {
+            schema:
+              "sitesourcery.alakazam-fulfillment-receipt/v1",
+            operationId: row.id,
+            projectId: row.project_id,
+            sourceVersionId: row.version_id,
+            artifactDigest: row.artifact_digest,
+            hostname: row.hostname,
+            subscriptionId: row.subscription_id,
+            subscriptionRevision: exactDatabaseInteger(
+              row.subscription_revision,
+              "fulfillment.subscriptionRevision"
+            ),
+            policyDigest: row.policy_digest,
+            decisionDigest: row.decision_digest,
+            manifestDigest:
+              input.providerResult.manifestDigest,
+            bindingRevision:
+              input.providerResult.bindingRevision
+          };
+          const receiptFactsDigest = digest(receiptFacts);
+          await client.query(
+            `insert into ss.provider_receipts (
+               id, organization_id, project_id,
+               provider_code, receipt_kind,
+               external_object_ref, facts,
+               facts_digest, occurred_at
+             ) values (
+               $1, $2, $3,
+               'sitesourcery-selfhost',
+               'deployment_verified',
+               $4, $5::jsonb, $6, $7
+             )
+             on conflict (
+               provider_code,
+               receipt_kind,
+               external_object_ref
+             ) do nothing`,
+            [
+              input.receiptId,
+              row.organization_id,
+              row.project_id,
+              input.providerResult.providerRequestId,
+              JSON.stringify(receiptFacts),
+              receiptFactsDigest,
+              input.completedAt
+            ]
+          );
+          const receipt = await client.query(
+            `select id, facts_digest
+               from ss.provider_receipts
+              where provider_code =
+                    'sitesourcery-selfhost'
+                and receipt_kind =
+                    'deployment_verified'
+                and external_object_ref = $1`,
+            [input.providerResult.providerRequestId]
+          );
+          invariant(
+            receipt.rowCount === 1 &&
+              receipt.rows[0].facts_digest ===
+                receiptFactsDigest,
+            "repository_conflict",
+            "the Alakazam publication receipt changed",
+            { status: 500 }
+          );
+          const current = await client.query(
+            `select current_release_id
+               from ss.project_serving_projection
+              where organization_id = $1
+                and project_id = $2
+              for update`,
+            [row.organization_id, row.project_id]
+          );
+          invariant(
+            current.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam serving projection is unavailable",
+            { status: 500 }
+          );
+          const existing = await client.query(
+            `select *
+               from ss.releases
+              where organization_id = $1
+                and project_id = $2
+                and release_request_id = $3`,
+            [
+              row.organization_id,
+              row.project_id,
+              row.release_request_id
+            ]
+          );
+          let releaseId;
+          if (existing.rowCount === 1) {
+            const release = existing.rows[0];
+            invariant(
+              release.version_id === row.version_id &&
+                release.artifact_id ===
+                  row.effective_artifact_id &&
+                release.artifact_digest ===
+                  row.artifact_digest &&
+                release.hostname === row.hostname &&
+                release.deployment_receipt_id ===
+                  receipt.rows[0].id,
+              "repository_conflict",
+              "the durable Alakazam release changed",
+              { status: 500 }
+            );
+            releaseId = release.id;
+          } else {
+            invariant(
+              existing.rowCount === 0,
+              "repository_conflict",
+              "the Alakazam release identity conflicts",
+              { status: 500 }
+            );
+            releaseId = input.releaseId;
+            await client.query(
+              `insert into ss.releases (
+                 id, organization_id, project_id,
+                 release_request_id, version_id,
+                 artifact_id, artifact_digest,
+                 hostname, deployment_receipt_id,
+                 released_at
+               ) values (
+                 $1, $2, $3, $4, $5,
+                 $6, $7, $8, $9, $10
+               )`,
+              [
+                releaseId,
+                row.organization_id,
+                row.project_id,
+                row.release_request_id,
+                row.version_id,
+                row.effective_artifact_id,
+                row.artifact_digest,
+                row.hostname,
+                receipt.rows[0].id,
+                input.completedAt
+              ]
+            );
+            await client.query(
+              `insert into ss.release_events (
+                 organization_id, project_id,
+                 release_request_id, state,
+                 provider_receipt_id, occurred_at
+               ) values (
+                 $1, $2, $3, 'released', $4, $5
+               )`,
+              [
+                row.organization_id,
+                row.project_id,
+                row.release_request_id,
+                receipt.rows[0].id,
+                input.completedAt
+              ]
+            );
+            await client.query(
+              `insert into ss.serving_events (
+                 organization_id, project_id,
+                 release_id, event_kind,
+                 source_receipt_id, occurred_at
+               ) values (
+                 $1, $2, $3, 'published', $4, $5
+               )`,
+              [
+                row.organization_id,
+                row.project_id,
+                releaseId,
+                receipt.rows[0].id,
+                input.completedAt
+              ]
+            );
+          }
+          await client.query(
+            `update ss.project_serving_projection
+                set previous_release_id = $3,
+                    current_release_id = $4,
+                    state = 'live',
+                    resume_state = 'live',
+                    updated_at = $5
+              where organization_id = $1
+                and project_id = $2`,
+            [
+              row.organization_id,
+              row.project_id,
+              current.rows[0].current_release_id,
+              releaseId,
+              input.completedAt
+            ]
+          );
+          const completed = await client.query(
+            `update ss.alakazam_fulfillment_operations
+                set state = 'published',
+                    result_release_id = $3,
+                    published_at = $4,
+                    lease_owner = null,
+                    lease_expires_at = null,
+                    failure_code = null,
+                    updated_at = $4
+              where organization_id = $1
+                and id = $2
+                and state = 'processing'
+                and lease_owner = $5
+                and attempt_count = $6
+                and decision_digest = $7
+              returning id`,
+            [
+              row.organization_id,
+              row.id,
+              releaseId,
+              input.completedAt,
+              input.workerId,
+              input.attemptCount,
+              input.decisionDigest
+            ]
+          );
+          invariant(
+            completed.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam fulfillment operation was not completed",
+            { status: 500 }
+          );
+          await client.query(
+            `update ss.alakazam_fulfillment_intents
+                set state = 'completed',
+                    completed_at = $3,
+                    updated_at = $3
+              where organization_id = $1
+                and id = $2
+                and state = 'activated'`,
+            [
+              row.organization_id,
+              row.intent_id,
+              input.completedAt
+            ]
+          );
+          await client.query(
+            `update ss.alakazam_fulfillment_projection
+                set state = 'live',
+                    current_release_id = $3,
+                    last_failure_code = null,
+                    updated_at = $4
+              where organization_id = $1
+                and project_id = $2
+                and operation_id = $5`,
+            [
+              row.organization_id,
+              row.project_id,
+              releaseId,
+              input.completedAt,
+              row.id
+            ]
+          );
+          await client.query(
+            `update ss.viewer_sessions
+                set revoked_at = $3
+              where organization_id = $1
+                and project_id = $2
+                and revoked_at is null`,
+            [
+              row.organization_id,
+              row.project_id,
+              input.completedAt
+            ]
+          );
+          await client.query(
+            `update ss.projects
+                set revision = revision + 1
+              where organization_id = $1
+                and id = $2`,
+            [row.organization_id, row.project_id]
+          );
+          return Object.freeze({
+            status: "live",
+            operationId: row.id,
+            projectId: row.project_id,
+            subscriptionId: row.subscription_id,
+            subscriptionRevision:
+              exactDatabaseInteger(
+                row.subscription_revision,
+                "fulfillment.subscriptionRevision"
+              ),
+            tierId: row.effective_tier_id,
+            hostname: row.hostname,
+            sourceVersionId: row.version_id,
+            artifactDigest: row.artifact_digest,
+            releaseId,
+            publishedAt: input.completedAt
+          });
+        })
+      );
+    },
+
+    async markFulfillmentDark(value) {
+      const input = exactFulfillmentDarkInput(value);
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await client.query(
+            `select organization_id, project_id,
+                    release_request_id
+               from ss.alakazam_fulfillment_operations
+              where id = $1
+                and state = 'processing'
+                and lease_owner = $2
+                and attempt_count = $3
+                and decision_digest = $4
+              for update`,
+            [
+              input.operationId,
+              input.workerId,
+              input.attemptCount,
+              input.decisionDigest
+            ]
+          );
+          invariant(
+            selected.rowCount === 1,
+            "alakazam_fulfillment_evidence_changed",
+            "the Alakazam fulfillment lease changed before compensation",
+            { status: 409 }
+          );
+          const row = selected.rows[0];
+          await client.query(
+            `update ss.alakazam_fulfillment_operations
+                set state = 'dark',
+                    failure_code = $3,
+                    lease_owner = null,
+                    lease_expires_at = null,
+                    updated_at = $4
+              where organization_id = $1
+                and id = $2`,
+            [
+              row.organization_id,
+              input.operationId,
+              input.failureCode,
+              input.failedAt
+            ]
+          );
+          await client.query(
+            `update ss.project_serving_projection
+                set state = 'dark',
+                    updated_at = $3
+              where organization_id = $1
+                and project_id = $2`,
+            [
+              row.organization_id,
+              row.project_id,
+              input.failedAt
+            ]
+          );
+          await client.query(
+            `update ss.alakazam_fulfillment_projection
+                set state = 'dark',
+                    current_release_id = null,
+                    last_failure_code = $3,
+                    updated_at = $4
+              where organization_id = $1
+                and project_id = $2
+                and operation_id = $5`,
+            [
+              row.organization_id,
+              row.project_id,
+              input.failureCode,
+              input.failedAt,
+              input.operationId
+            ]
+          );
+          await client.query(
+            `insert into ss.serving_events (
+               organization_id, project_id,
+               release_id, event_kind,
+               source_receipt_id, occurred_at
+             ) values (
+               $1, $2, null, 'billing_dark', null, $3
+             )`,
+            [
+              row.organization_id,
+              row.project_id,
+              input.failedAt
+            ]
+          );
+          if (row.release_request_id) {
+            await client.query(
+              `insert into ss.release_events (
+                 organization_id, project_id,
+                 release_request_id, state,
+                 reason_code, occurred_at
+               ) values (
+                 $1, $2, $3, 'failed', $4, $5
+               )`,
+              [
+                row.organization_id,
+                row.project_id,
+                row.release_request_id,
+                input.failureCode,
+                input.failedAt
+              ]
+            );
+          }
+          return Object.freeze({
+            status: "dark",
+            operationId: input.operationId,
+            projectId: row.project_id,
+            failureCode: input.failureCode,
+            retrySafe: true
           });
         })
       );

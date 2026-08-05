@@ -100,6 +100,7 @@ function validatePorts(repository, provider, clock, ids) {
       repository,
       [
         "activateStartSubscription",
+        "enqueueStartFulfillment",
         "findStartActivationBySubscription"
       ]
     ],
@@ -528,6 +529,24 @@ export function createAlakazamStartActivationService({
   );
   const authority = exactRelease(release);
 
+  async function enqueueFulfillment(resolved, activation) {
+    await ports.repository.enqueueStartFulfillment({
+      tenantId: resolved.reservation.tenantId,
+      customerId: resolved.reservation.customerId,
+      projectId: activation.projectId,
+      quoteId: activation.quoteId,
+      subscriptionId: activation.subscriptionId,
+      subscriptionRevision: activation.revision,
+      tierId: activation.tierId,
+      operationId: nextUuid(
+        ports.ids,
+        "alakazam_fulfillment_operation"
+      ),
+      enqueuedAt: exactClock(ports.clock)
+    });
+    return activation;
+  }
+
   async function readiness() {
     if (!authority.approved) {
       return deepFreeze({
@@ -610,7 +629,10 @@ export function createAlakazamStartActivationService({
       );
       exactMetadata(event.metadata, resolved.reservation);
       if (resolved.status === "active") {
-        return resolved.activation;
+        return enqueueFulfillment(
+          resolved,
+          resolved.activation
+        );
       }
       let subscription;
       try {
@@ -649,7 +671,7 @@ export function createAlakazamStartActivationService({
             "alakazam_tier_event"
           )
         });
-      return exactActivationResult(result, {
+      const activation = exactActivationResult(result, {
         projectId: resolved.reservation.projectId,
         quoteId: resolved.reservation.quoteId,
         receiptId: resolved.pending.receiptId,
@@ -659,6 +681,7 @@ export function createAlakazamStartActivationService({
         subscriptionProviderFactsDigest:
           subscription.providerFactsDigest
       });
+      return enqueueFulfillment(resolved, activation);
     }
   });
 }

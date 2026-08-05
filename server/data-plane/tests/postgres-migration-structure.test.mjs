@@ -873,3 +873,41 @@ test("Alakazam downgrade activation is one atomic boundary revision", async () =
     /create function ss\.hosted_runtime_contract_v31\(\)/iu
   );
 });
+
+test("Alakazam fulfillment freezes intent and active-revision operation evidence", async () => {
+  const all = await migrations();
+  const fulfillment = all.find(
+    ({ name }) =>
+      name ===
+      "202608040032_alakazam_fulfillment_foundation.sql"
+  );
+  assert.ok(fulfillment);
+  assert.match(
+    fulfillment.sql,
+    /create table ss\.alakazam_fulfillment_intents[\s\S]*unique \(quote_id\)/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create table ss\.alakazam_fulfillment_operations[\s\S]*unique \([\s\S]*subscription_id,[\s\S]*subscription_revision,[\s\S]*operation_kind[\s\S]*\)/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create constraint trigger alakazam_fulfillment_intents_validate[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /quote\.provider_effects_authorized[\s\S]*new\.prepared_at >= quote\.issued_at[\s\S]*new\.prepared_at < quote\.expires_at/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create or replace function ss\.validate_release_screening\(\)[\s\S]*new\.method = 'alakazam_effective_policy'[\s\S]*operation\.effective_artifact_digest[\s\S]*new\.artifact_digest/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create constraint trigger alakazam_fulfillment_operations_validate[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create function ss\.hosted_runtime_contract_v32\(\)/iu
+  );
+});

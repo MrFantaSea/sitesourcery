@@ -142,13 +142,26 @@ Integration order:
 
 ### Lane F — tier fulfillment and publication
 
-- [ ] `$25`: `sitesourcery.me` hosting and three base looks.
+- [x] `$25` backend authority: exact accepted source, active subscription
+  revision, licensed `sitesourcery.me` address, three base looks, deterministic
+  compilation, queue, screening, publication, replay, and dark compensation.
+- [ ] `$25` customer path: choose the platform label and base look, expose
+  fulfillment status in the account, and prove the authenticated desktop/mobile
+  browser journey.
 - [ ] `$35`: photo header, expanded fonts, section toggles, three-version
   history, and owner-defined modest care.
 - [ ] `$50`: Cash App/Venmo, menu, extended font/border controls, and
   owner-defined additional care.
-- [ ] Retain premium configuration while lower tiers cannot render or edit it.
-- [ ] Publish the accepted version, then prove rollback and unpublish.
+- [x] Backend compiler policy preserves configured facts while lower tiers
+  cannot render premium output; canonical `$50` authority alone enables the
+  currently implemented Cash App/Venmo fields.
+- [ ] Prove customer read/edit behavior for retained premium configuration as
+  the `$35/$50` controls are implemented.
+- [x] Publish an exact policy-derived artifact bound to the accepted source;
+  prove exact-byte replay, rollback, unpublish, and dark compensation at the
+  publication boundary.
+- [ ] Expose only the safe customer-authorized publication/rollback/unpublish
+  controls selected for launch.
 
 ### Lane G — lifecycle and reconciliation
 
@@ -216,15 +229,49 @@ Lane I launch-critical domain truth only ─┘
 | 2 | Billing commands | Lead plus bounded workers | start, upgrade, and downgrade customer flows reviewed; browser and broad regressions green; release held |
 | 2 | Fulfillment feature matrix | Fulfillment mapper | inventory complete; implementation held behind billing route slice |
 | 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
+| 3A | Fulfillment backend | Lead plus bounded compiler worker | migration 32, exact tier authority, three looks, queue, compilation, self-host publication, replay, and compensation reviewed; fresh PostgreSQL and broad regressions green; release held |
+| 3B | Customer fulfillment path | Lead with disjoint UI/HTTP workers only after contract freeze | platform-label/look controls, account status, authenticated browser journey | next; not started |
 
 ## Immediate integration target
 
-Batch 1 ends when a signed-in customer can request one project-scoped,
-customer-safe billing snapshot; the account UI can render it without browser
-authority; approved Stripe configuration has a complete but still secret-free
-environment contract; and the public-truth corrections are prioritized. The
-checkpoint remains local and held. All Batch 1 gates are green; the commit
-containing this roadmap is its sealed local integration checkpoint.
+Seal Batch 3A as the local, held fulfillment-backend checkpoint. Batch 3B ends
+when a signed-in `$25` customer can choose one available platform label and one
+of three canonical base looks through a narrow authenticated boundary, see
+customer-safe pending/live/dark truth in the existing account surface, and
+load the exact published bytes at that licensed address in desktop and mobile
+browser proof. Browser input supplies selections only; the server derives
+subscription, tier, capability, compiler policy, address authority, and
+publication evidence. `$35/$50` expansion and release remain later work.
+
+## Frozen Batch 3A fulfillment backend contract
+
+- A start Checkout freezes one prepared intent only after an accepted source
+  version and configured platform address exist. A definitely unsubmitted
+  Checkout failure supersedes that intent and removes its prepared projection;
+  ambiguous provider effects remain reconciliation-only.
+- Activation queues one semantic operation bound to the exact active
+  subscription revision. Worker replay returns the same operation and cannot
+  publish a second release.
+- The customer-accepted source and deterministic policy-derived artifact are
+  separate evidence. Publication requires exact digests and compiler
+  identities for both, exact screening and release-request bindings, the
+  licensed address, and current effective tier authority.
+- Crystal, Hearth, and Midnight are the three canonical base looks. `$25` and
+  `$35` mask unresolved premium output while preserving configured facts.
+  Canonical `$50` authority enables only the implemented Cash App/Venmo output;
+  no policy invents an unimplemented feature.
+- The worker and Alakazam webhook composition remain held by explicit release
+  capability. If publication succeeds but durable finalization fails, the
+  runtime unpublishes and records dark/retry truth.
+- Completion proof: all 32 migrations replay from zero; real PostgreSQL plus
+  real self-host journey 5/5; final focused proof 34/34; core 446/446; hosted
+  151 pass with 2 intentional environment skips; operations 52/52; self-host
+  19/19; current-site, hosted HTML, and exact 78-file public artifact checks
+  pass under Node 24. The named disposable database was idle, dropped, and
+  verified absent.
+- Not included: customer label/look controls, fulfillment account projection,
+  browser proof, unresolved `$35/$50` controls, provider release, public copy,
+  push, deploy, DNS, or production cutover.
 
 ## Frozen Batch 1 account contract
 

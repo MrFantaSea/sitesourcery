@@ -35,6 +35,9 @@ import {
   createPostgresAlakazamRepository
 } from "../alakazam-postgres.mjs";
 import {
+  createAlakazamFulfillmentWorker
+} from "../alakazam-fulfillment-worker.mjs";
+import {
   cancellationWorkerOptionsFromEnvironment,
   createCancellationWorker
 } from "../cancellation-worker.mjs";
@@ -167,6 +170,7 @@ let apiServer = null;
 let tenantServer = null;
 let cancellationWorker = null;
 let exportWorker = null;
+let alakazamFulfillmentWorker = null;
 let shutdownPromise = null;
 const shutdownController = new AbortController();
 
@@ -192,10 +196,14 @@ function shutdown() {
           : Promise.resolve(),
         exportWorker
           ? exportWorker.stop()
+          : Promise.resolve(),
+        alakazamFulfillmentWorker
+          ? alakazamFulfillmentWorker.stop()
           : Promise.resolve()
       ]);
       cancellationWorker = null;
       exportWorker = null;
+      alakazamFulfillmentWorker = null;
       await authority.close();
     })();
   }
@@ -350,6 +358,20 @@ async function start() {
   const publicationPort = createSelfHostPublicationPort({
     runtime: tenantRuntime
   });
+  alakazamFulfillmentWorker =
+    createAlakazamFulfillmentWorker({
+      repository: alakazamRepository,
+      compiler,
+      publicationPort,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids,
+      enabled:
+        alakazamComposition.mode === "approved" &&
+        publicationHeld() === false,
+      log(entry) {
+        process.stdout.write(`${JSON.stringify(entry)}\n`);
+      }
+    });
   const recoveryMailPort =
     await createConfiguredRecoveryMailPort();
   const service = createCanonicalPostgresService({
@@ -429,6 +451,9 @@ async function start() {
   exportWorker.start({
     signal: shutdownController.signal
   });
+  alakazamFulfillmentWorker.start({
+    signal: shutdownController.signal
+  });
 
   if (stripeComposition.mode === "approved_live") {
     cancellationWorker = createCancellationWorker({
@@ -463,6 +488,9 @@ async function start() {
         "held_not_started",
       exportWorker:
         exportWorker?.snapshot().state ??
+        "held_not_started",
+      alakazamFulfillmentWorker:
+        alakazamFulfillmentWorker?.snapshot().state ??
         "held_not_started"
     })}\n`
   );

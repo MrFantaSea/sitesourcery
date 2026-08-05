@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createPostgresAlakazamRepository
 } from "../alakazam-postgres.mjs";
+import { digest } from "../../commerce-v2/canonical.mjs";
 
 const TENANT_ID =
   "10000000-0000-4000-8000-000000000001";
@@ -21,6 +22,14 @@ const ENTITLEMENT_ID =
   "60000000-0000-4000-8000-000000000001";
 const SCHEDULE_ID =
   "70000000-0000-4000-8000-000000000001";
+const INTENT_ID =
+  "80000000-0000-4000-8000-000000000001";
+const OPERATION_ID =
+  "90000000-0000-4000-8000-000000000001";
+const VERSION_ID =
+  "a0000000-0000-4000-8000-000000000001";
+const ADDRESS_ID =
+  "b0000000-0000-4000-8000-000000000001";
 const ISSUED_AT = "2026-08-02T12:00:00.000Z";
 const EXPIRES_AT = "2026-08-02T12:30:00.000Z";
 const PERIOD_START = "2026-08-02T11:00:00.000Z";
@@ -205,6 +214,139 @@ function harness({
   };
 }
 
+function fulfillmentHarness({
+  selected = true,
+  subscriptionRevision = "2"
+} = {}) {
+  const preparedAt = "2026-08-02T12:05:00.000Z";
+  const artifactDigest = digest("accepted fulfillment artifact");
+  const intentFacts = {
+    schema: "sitesourcery.alakazam-fulfillment-intent/v1",
+    intentId: INTENT_ID,
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    versionId: VERSION_ID,
+    artifactDigest,
+    addressId: ADDRESS_ID,
+    hostname: "cedar.sitesourcery.me",
+    targetTierId: "alakazam_25",
+    preparedAt
+  };
+  const intentRow = {
+    id: INTENT_ID,
+    organization_id: TENANT_ID,
+    project_id: PROJECT_ID,
+    customer_user_id: CUSTOMER_ID,
+    quote_id: QUOTE_ID,
+    version_id: VERSION_ID,
+    artifact_digest: artifactDigest,
+    address_id: ADDRESS_ID,
+    hostname: "cedar.sitesourcery.me",
+    target_tier_id: "alakazam_25",
+    state: "prepared",
+    intent_digest: digest(intentFacts),
+    prepared_at: preparedAt,
+    quote_state: "applied",
+    subscription_id: SUBSCRIPTION_ID,
+    subscription_tier_id: "alakazam_25",
+    subscription_status: "active",
+    active_subscription_revision: subscriptionRevision,
+    current_period_starts_at: PERIOD_START,
+    current_period_ends_at: PERIOD_END,
+    cancel_at_period_end: false,
+    grace_ends_at: null,
+    scheduled_tier_id: null,
+    scheduled_effective_at: null
+  };
+  const state = { operation: null };
+  const calls = [];
+  const client = {
+    async query(text, values = []) {
+      const normalized = text.replace(/\s+/gu, " ").trim();
+      calls.push({
+        text: normalized,
+        values: structuredClone(values)
+      });
+      if (
+        normalized.includes(
+          "from ss.alakazam_fulfillment_operations"
+        )
+      ) {
+        return state.operation
+          ? result([state.operation])
+          : result();
+      }
+      if (
+        normalized.includes(
+          "from ss.alakazam_fulfillment_intents intent"
+        )
+      ) {
+        assert.deepEqual(values[5], [
+          "owner",
+          "admin",
+          "editor"
+        ]);
+        return selected ? result([intentRow]) : result();
+      }
+      if (
+        normalized.startsWith(
+          "update ss.alakazam_fulfillment_intents"
+        )
+      ) {
+        intentRow.state = "activated";
+        return result([{ id: INTENT_ID }]);
+      }
+      if (
+        normalized.startsWith(
+          "insert into ss.alakazam_fulfillment_operations"
+        )
+      ) {
+        state.operation = {
+          id: values[0],
+          organization_id: values[1],
+          project_id: values[2],
+          customer_user_id: values[3],
+          intent_id: values[4],
+          subscription_id: values[5],
+          subscription_revision: values[6],
+          operation_kind: "start_activation",
+          capability: "publish_accepted_project_version",
+          effective_tier_id: values[7],
+          policy_schema: values[8],
+          policy_digest: values[9],
+          state: "queued",
+          queued_at: values[10]
+        };
+        return result([state.operation]);
+      }
+      if (
+        normalized.startsWith(
+          "update ss.alakazam_fulfillment_projection"
+        )
+      ) {
+        return result([{ project_id: PROJECT_ID }]);
+      }
+      assert.fail(`Unexpected SQL: ${normalized}`);
+    }
+  };
+  const authority = {
+    async service(context, work) {
+      assert.deepEqual(context, {
+        userId: CUSTOMER_ID,
+        organizationId: TENANT_ID
+      });
+      return work(client);
+    }
+  };
+  return {
+    calls,
+    state,
+    repository: createPostgresAlakazamRepository({ authority })
+  };
+}
+
 test("PostgreSQL Alakazam start quote locks one project and applies one unused Download credit", async () => {
   const context = harness({ entitlementId: ENTITLEMENT_ID });
   const quote = await context.repository.createQuote(
@@ -363,4 +505,81 @@ test("PostgreSQL Alakazam quote refuses an existing schedule, stale billing owne
     (error) => error.code === "project_unavailable"
   );
   assert.equal(missingProject.state.insertCount, 0);
+});
+
+test("PostgreSQL Alakazam activation queues one exact policy-bound fulfillment operation", async () => {
+  const context = fulfillmentHarness();
+  const input = {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    subscriptionId: SUBSCRIPTION_ID,
+    subscriptionRevision: 2,
+    tierId: "alakazam_25",
+    operationId: OPERATION_ID,
+    enqueuedAt: "2026-08-02T12:06:00.000Z"
+  };
+  const queued =
+    await context.repository.enqueueStartFulfillment(input);
+  assert.equal(queued.status, "queued");
+  assert.equal(queued.operationId, OPERATION_ID);
+  assert.equal(queued.intentId, INTENT_ID);
+  assert.equal(queued.subscriptionRevision, 2);
+  assert.equal(queued.tierId, "alakazam_25");
+  assert.match(queued.policyDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(
+    context.calls.filter((call) =>
+      call.text.startsWith(
+        "insert into ss.alakazam_fulfillment_operations"
+      )
+    ).length,
+    1
+  );
+
+  const replay =
+    await context.repository.enqueueStartFulfillment(input);
+  assert.deepEqual(replay, queued);
+  assert.equal(
+    context.calls.filter((call) =>
+      call.text.startsWith(
+        "insert into ss.alakazam_fulfillment_operations"
+      )
+    ).length,
+    1
+  );
+});
+
+test("PostgreSQL Alakazam fulfillment rejects missing or stale active-revision evidence", async () => {
+  const base = {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    subscriptionId: SUBSCRIPTION_ID,
+    subscriptionRevision: 2,
+    tierId: "alakazam_25",
+    operationId: OPERATION_ID,
+    enqueuedAt: "2026-08-02T12:06:00.000Z"
+  };
+  const missing = fulfillmentHarness({ selected: false });
+  await assert.rejects(
+    missing.repository.enqueueStartFulfillment(base),
+    (error) =>
+      error.code ===
+        "alakazam_fulfillment_intent_unavailable" &&
+      error.status === 409
+  );
+
+  const stale = fulfillmentHarness({
+    subscriptionRevision: "3"
+  });
+  await assert.rejects(
+    stale.repository.enqueueStartFulfillment(base),
+    (error) =>
+      error.code ===
+        "alakazam_fulfillment_revision_changed" &&
+      error.status === 409
+  );
+  assert.equal(stale.state.operation, null);
 });

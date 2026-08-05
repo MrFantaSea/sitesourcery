@@ -53,6 +53,12 @@ export function clone(value) {
 }
 
 export function deepFreeze(value) {
+  // ECMAScript rejects Object.freeze() for non-empty typed-array views.
+  // Binary evidence is copied and checksum-verified at its trust boundaries;
+  // freeze the containing proof while leaving the byte view usable.
+  if (ArrayBuffer.isView(value)) {
+    return value;
+  }
   if (
     value === null ||
     typeof value !== "object" ||
