@@ -103,6 +103,7 @@ function validatePorts(repository, provider, clock, ids) {
       repository,
       [
         "activateDowngradeSubscription",
+        "enqueueTierFulfillment",
         "findDowngradeActivationBySubscription"
       ]
     ],
@@ -610,6 +611,27 @@ export function createAlakazamDowngradeActivationService({
   );
   const authority = exactRelease(release);
 
+  async function enqueueTierFulfillment(
+    resolved,
+    activation
+  ) {
+    await ports.repository.enqueueTierFulfillment({
+      tenantId: resolved.application.tenantId,
+      customerId: resolved.application.customerId,
+      projectId: activation.projectId,
+      subscriptionId: activation.subscriptionId,
+      subscriptionRevision: activation.revision,
+      priorTierId: activation.priorTierId,
+      tierId: activation.targetTierId,
+      operationId: nextUuid(
+        ports.ids,
+        "alakazam_tier_fulfillment_operation"
+      ),
+      enqueuedAt: exactClock(ports.clock)
+    });
+    return activation;
+  }
+
   async function readiness() {
     if (!authority.approved) {
       return deepFreeze({
@@ -690,7 +712,10 @@ export function createAlakazamDowngradeActivationService({
       );
       exactEventMetadata(event.metadata, resolved.application);
       if (resolved.status === "applied") {
-        return resolved.activation;
+        return enqueueTierFulfillment(
+          resolved,
+          resolved.activation
+        );
       }
 
       let subscription;
@@ -730,7 +755,7 @@ export function createAlakazamDowngradeActivationService({
             "alakazam_downgrade_activation_tier_event"
           )
         });
-      return exactActivationResult(
+      const activation = exactActivationResult(
         result,
         resolved.application,
         resolved.schedule,
@@ -738,6 +763,10 @@ export function createAlakazamDowngradeActivationService({
           subscriptionProviderFactsDigest:
             subscription.providerFactsDigest
         }
+      );
+      return enqueueTierFulfillment(
+        resolved,
+        activation
       );
     }
   });

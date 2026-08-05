@@ -938,3 +938,47 @@ base design. The additional $35/$50 controls remain task #20 work.
   version; no stack, no form refill, no focus jump). Gate has ONE
   heading (kicker deleted). ops/OPERATOR-BACKEND-SPEC.md = the
   6-call simulation's draft spec for task #21.
+
+## OWNER CUSTOM / EXISTING-SITE CONTRACT (2026-08-05 — newest ruling wins)
+
+The exact canonical scope, prices, stacking rules, held decisions, backend
+authority, and required customer/owner journeys are frozen in
+`SITESOURCERY-CUSTOM-SERVICES-COMMERCIAL-CONTRACT-2026-08-05.md`. Historical
+catalogs or copy do not override it.
+
+- A visitor may inquire without an account. Every paying client, including a
+  client with a website built elsewhere, must have a Site Sourcery account
+  before accepting a quote, receiving a payable invoice, paying, submitting
+  private access material, or opening support work.
+- No free assessment, diagnosis, takeover review, or recovery investigation.
+  The `$200` assessment is bounded to one site, five representative public
+  pages/page types, phone and desktop, and up to ten prioritized findings.
+  Larger assessments are separately quoted. Its full value credits once
+  toward a qualifying Custom base build inside the frozen credit rules.
+- Outside websites always require paid staged onboarding. The first `$200`
+  buys the supportability/takeover result. Only an accepted site pays the
+  remainder and enters monthly management; a declined site receives the
+  written result and is not charged monthly service.
+- The five additional lanes are Website Rescue and Tune-Up, Outside Website
+  Management, Business Email and Domain work, Website Move / Platform Escape,
+  and concrete Local Presence. They compose existing work and overlap keys;
+  the same assessment, inventory, DNS, backup, redirect, search, or onboarding
+  work is never sold twice under different names.
+- Rescue uses internal `$125` units with a `$250` minimum and fixed
+  customer-facing line items. Outside management uses mandatory onboarding,
+  `$125` simple/static or `$225` ordinary-CMS monthly bases, complex plans from
+  `$400`, optional two-unit `$250` or four-unit `$500` capacity, and at most
+  one-cycle rollover. It is distinct from Custom Care and Alakazam care.
+- Email/domain pricing is Connect `$200`, Move from `$500`, and Rescue
+  investigation `$300`. Website Move composes a `$200` assessment, `$500`
+  transition base, and existing build/redirect/migration/connection parts.
+  Local Presence is `$400` website foundation, `$300` Google Business Profile
+  work, or `$650` combined, with bounded page/location additions and no ranking,
+  indexing, lead, recovery, or transfer guarantee.
+- A Custom build includes only a 30-day workmanship correction window, not
+  free lifetime changes. Exact optional Custom Care plans remain held. Old
+  `$25/$69/$119/$199/$349` Care records are not authority.
+- Finish work now runs in two coordinated lanes: Build owns durable backend
+  authority and provider proof; Polish owns copy, scope clarity, responsive
+  interfaces, legal consistency, and device proof. Polish may audit ahead but
+  cannot publish an unimplemented promise.

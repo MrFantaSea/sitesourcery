@@ -425,6 +425,27 @@ test("PostgreSQL account read turns a paid subscription with no fulfillment proj
   assert.equal(account.site.updatedAt, SITE_UPDATED_AT);
 });
 
+test("PostgreSQL account read exposes attention when activation outruns tier fulfillment enqueue", async () => {
+  const context = harness({
+    selectedFulfillment: fulfillment({
+      effective_tier_id: "alakazam_25",
+      subscription_revision: "2"
+    }),
+    openChanges: [],
+    receipts: []
+  });
+  const account =
+    await context.repository.readCustomerAccount(input());
+  assert.equal(account.subscription.tierId, "alakazam_35");
+  assert.equal(account.subscription.revision, 3);
+  assert.equal(account.site.fulfillmentState, "failed");
+  assert.equal(account.site.fulfillmentTierId, "alakazam_25");
+  assert.equal(
+    account.site.fulfillmentSubscriptionRevision,
+    2
+  );
+});
+
 test("PostgreSQL account read hides unavailable projects and rejects conflicting changes", async () => {
   const missing = harness({ projectAvailable: false });
   await assert.rejects(

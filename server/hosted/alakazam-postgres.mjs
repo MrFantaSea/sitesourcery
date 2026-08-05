@@ -4903,6 +4903,57 @@ function exactFulfillmentEnqueueInput(value) {
   });
 }
 
+function exactTierFulfillmentEnqueueInput(value) {
+  exactKeys(
+    value,
+    [
+      "customerId",
+      "enqueuedAt",
+      "operationId",
+      "priorTierId",
+      "projectId",
+      "subscriptionId",
+      "subscriptionRevision",
+      "tenantId",
+      "tierId"
+    ],
+    "the Alakazam tier fulfillment enqueue input is invalid"
+  );
+  const subscriptionRevision = Number(
+    value.subscriptionRevision
+  );
+  invariant(
+    Number.isSafeInteger(subscriptionRevision) &&
+      subscriptionRevision > 2,
+    "invalid_input",
+    "subscriptionRevision is invalid"
+  );
+  const priorTier = resolveAlakazamTier(value.priorTierId);
+  const tier = resolveAlakazamTier(value.tierId);
+  invariant(
+    priorTier.tierId !== tier.tierId,
+    "invalid_input",
+    "the Alakazam tier fulfillment transition is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(value.customerId, "customerId"),
+    projectId: exactUuid(value.projectId, "projectId"),
+    subscriptionId: exactUuid(
+      value.subscriptionId,
+      "subscriptionId"
+    ),
+    subscriptionRevision,
+    priorTierId: priorTier.tierId,
+    tierId: tier.tierId,
+    operationId: exactUuid(
+      value.operationId,
+      "operationId"
+    ),
+    enqueuedAt: requiredIso(value.enqueuedAt, "enqueuedAt")
+  });
+}
+
 function fulfillmentIntentFacts(row) {
   return Object.freeze({
     schema: "sitesourcery.alakazam-fulfillment-intent/v1",
@@ -4991,6 +5042,11 @@ function exactStoredFulfillmentOperation(row) {
     intentId: exactUuid(
       row.intent_id,
       "fulfillmentOperation.intentId"
+    ),
+    operationKind: requiredText(
+      row.operation_kind,
+      "fulfillmentOperation.operationKind",
+      50
     ),
     projectId: exactUuid(
       row.project_id,
@@ -5899,6 +5955,28 @@ export function createPostgresAlakazamRepository({
               client,
               input
             );
+            if (
+              subscriptionRow &&
+              ["active", "grace"].includes(
+                subscriptionRow.status
+              ) &&
+              site.fulfillmentState !== null &&
+              (
+                site.fulfillmentState === "prepared" ||
+                site.fulfillmentTierId !==
+                  subscriptionRow.tier_id ||
+                site.fulfillmentSubscriptionRevision !==
+                  exactDatabaseInteger(
+                    subscriptionRow.revision,
+                    "subscription.revision"
+                  )
+              )
+            ) {
+              site = Object.freeze({
+                ...site,
+                fulfillmentState: "failed"
+              });
+            }
             if (
               subscriptionRow &&
               subscriptionRow.status !== "ended" &&
@@ -9719,6 +9797,8 @@ export function createPostgresAlakazamRepository({
                 );
               invariant(
                 stored.projectId === input.projectId &&
+                  stored.operationKind ===
+                    "start_activation" &&
                   stored.subscriptionId ===
                     input.subscriptionId &&
                   stored.subscriptionRevision ===
@@ -9956,6 +10036,344 @@ export function createPostgresAlakazamRepository({
                 input.enqueuedAt,
                 intent.intentId
               ]
+            );
+            return exactStoredFulfillmentOperation(
+              inserted.rows[0]
+            );
+          }
+        )
+      );
+    },
+
+    async enqueueTierFulfillment(value) {
+      const input = exactTierFulfillmentEnqueueInput(value);
+      return translated(() =>
+        database.service(
+          {
+            userId: input.customerId,
+            organizationId: input.tenantId
+          },
+          async (client) => {
+            const existing = await client.query(
+              `select *
+                 from ss.alakazam_fulfillment_operations
+                where organization_id = $1
+                  and (
+                    id = $2
+                    or (
+                      subscription_id = $3
+                      and subscription_revision = $4
+                      and operation_kind =
+                          'tier_transition'
+                    )
+                  )
+                for update`,
+              [
+                input.tenantId,
+                input.operationId,
+                input.subscriptionId,
+                input.subscriptionRevision
+              ]
+            );
+            invariant(
+              existing.rowCount <= 1,
+              "idempotency_conflict",
+              "the Alakazam tier fulfillment operation identity conflicts",
+              { status: 409 }
+            );
+            if (existing.rowCount === 1) {
+              const stored =
+                exactStoredFulfillmentOperation(
+                  existing.rows[0]
+                );
+              invariant(
+                stored.projectId === input.projectId &&
+                  stored.operationKind ===
+                    "tier_transition" &&
+                  stored.subscriptionId ===
+                    input.subscriptionId &&
+                  stored.subscriptionRevision ===
+                    input.subscriptionRevision &&
+                  stored.tierId === input.tierId,
+                "idempotency_conflict",
+                "the Alakazam tier fulfillment operation changed",
+                { status: 409 }
+              );
+              return stored;
+            }
+
+            const selected = await client.query(
+              `select
+                 intent.*,
+                 projection.state
+                   as transition_projection_state,
+                 projection.operation_id
+                   as transition_projection_operation_id,
+                 projection.effective_tier_id
+                   as transition_projection_tier_id,
+                 projection.subscription_revision
+                   as transition_projection_revision,
+                 projection.current_release_id
+                   as transition_projection_release_id,
+                 subscription.id as subscription_id,
+                 subscription.tier_id as subscription_tier_id,
+                 subscription.status as subscription_status,
+                 subscription.revision
+                   as active_subscription_revision,
+                 subscription.current_period_starts_at,
+                 subscription.current_period_ends_at,
+                 subscription.cancel_at_period_end,
+                 subscription.grace_ends_at,
+                 schedule.target_tier_id as scheduled_tier_id,
+                 schedule.effective_at as scheduled_effective_at,
+                 tier_event.event_kind
+                   as transition_event_kind,
+                 tier_event.prior_tier_id
+                   as transition_prior_tier_id,
+                 tier_event.result_tier_id
+                   as transition_result_tier_id,
+                 tier_event.result_subscription_revision
+                   as transition_result_revision,
+                 quote.change_kind
+                   as transition_change_kind,
+                 quote.state as transition_quote_state
+               from ss.alakazam_fulfillment_projection projection
+               join ss.alakazam_fulfillment_intents intent
+                 on intent.organization_id =
+                    projection.organization_id
+                and intent.project_id = projection.project_id
+                and intent.id = projection.intent_id
+               join ss.alakazam_subscriptions subscription
+                 on subscription.organization_id =
+                    projection.organization_id
+                and subscription.project_id =
+                    projection.project_id
+                and subscription.customer_user_id =
+                    intent.customer_user_id
+                and subscription.id = $4
+               join ss.projects project
+                 on project.organization_id =
+                    projection.organization_id
+                and project.id = projection.project_id
+                and project.lifecycle = 'active'
+               join ss.organization_memberships membership
+                 on membership.organization_id =
+                    projection.organization_id
+                and membership.user_id =
+                    intent.customer_user_id
+                and membership.state = 'active'
+                and membership.role = any($5::text[])
+               join ss.alakazam_tier_change_events tier_event
+                 on tier_event.organization_id =
+                    subscription.organization_id
+                and tier_event.project_id =
+                    subscription.project_id
+                and tier_event.subscription_id = subscription.id
+                and tier_event.result_subscription_revision = $6
+               join ss.alakazam_change_quotes quote
+                 on quote.organization_id =
+                    tier_event.organization_id
+                and quote.id = tier_event.quote_id
+               left join ss.alakazam_downgrade_schedules schedule
+                 on schedule.organization_id =
+                    subscription.organization_id
+                and schedule.subscription_id = subscription.id
+                and schedule.state in (
+                  'dispatching', 'scheduled',
+                  'reconciliation_required'
+                )
+              where projection.organization_id = $1
+                and projection.project_id = $2
+                and intent.customer_user_id = $3
+              for update of projection, intent,
+                subscription, project`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId,
+                input.subscriptionId,
+                PROJECT_ROLES,
+                input.subscriptionRevision
+              ]
+            );
+            invariant(
+              selected.rowCount === 1,
+              "alakazam_fulfillment_transition_unavailable",
+              "the prior live Alakazam website is unavailable for its tier transition",
+              { status: 409 }
+            );
+            const row = selected.rows[0];
+            const intent = exactStoredFulfillmentIntent(row);
+            const transitionKind =
+              row.transition_event_kind ===
+                "upgrade_applied" &&
+              row.transition_change_kind === "upgrade"
+                ? "upgrade"
+                : row.transition_event_kind ===
+                      "downgrade_applied" &&
+                    row.transition_change_kind === "downgrade"
+                  ? "downgrade"
+                  : null;
+            invariant(
+              intent.tenantId === input.tenantId &&
+                intent.customerId === input.customerId &&
+                intent.projectId === input.projectId &&
+                intent.state === "completed" &&
+                row.transition_projection_state === "live" &&
+                row.transition_projection_operation_id !== null &&
+                row.transition_projection_release_id !== null &&
+                row.transition_projection_tier_id ===
+                  input.priorTierId &&
+                exactDatabaseInteger(
+                  row.transition_projection_revision,
+                  "fulfillment.priorSubscriptionRevision"
+                ) === input.subscriptionRevision - 1 &&
+                row.subscription_id === input.subscriptionId &&
+                row.subscription_status === "active" &&
+                exactDatabaseInteger(
+                  row.active_subscription_revision,
+                  "subscription.revision"
+                ) === input.subscriptionRevision &&
+                row.subscription_tier_id === input.tierId &&
+                row.transition_prior_tier_id ===
+                  input.priorTierId &&
+                row.transition_result_tier_id === input.tierId &&
+                exactDatabaseInteger(
+                  row.transition_result_revision,
+                  "fulfillment.resultSubscriptionRevision"
+                ) === input.subscriptionRevision &&
+                row.transition_quote_state === "applied" &&
+                transitionKind !== null,
+              "alakazam_fulfillment_revision_changed",
+              "the active Alakazam tier changed before fulfillment could be queued",
+              { status: 409 }
+            );
+            const authority =
+              createAlakazamFulfillmentAuthority({
+                tenantId: input.tenantId,
+                customerId: input.customerId,
+                projectId: input.projectId,
+                subscription: {
+                  tenantId: input.tenantId,
+                  customerId: input.customerId,
+                  projectId: input.projectId,
+                  subscriptionId: input.subscriptionId,
+                  tierId: row.subscription_tier_id,
+                  status: row.subscription_status,
+                  revision: exactDatabaseInteger(
+                    row.active_subscription_revision,
+                    "subscription.revision"
+                  ),
+                  currentPeriodStartsAt:
+                    exactDatabaseIso(
+                      row.current_period_starts_at,
+                      "subscription.currentPeriodStartsAt"
+                    ),
+                  currentPeriodEndsAt:
+                    exactDatabaseIso(
+                      row.current_period_ends_at,
+                      "subscription.currentPeriodEndsAt"
+                    ),
+                  cancelAtPeriodEnd:
+                    row.cancel_at_period_end === true,
+                  graceEndsAt:
+                    row.grace_ends_at === null ||
+                    row.grace_ends_at === undefined
+                      ? null
+                      : exactDatabaseIso(
+                          row.grace_ends_at,
+                          "subscription.graceEndsAt"
+                        ),
+                  scheduledTierId:
+                    row.scheduled_tier_id ?? null,
+                  scheduledEffectiveAt:
+                    row.scheduled_effective_at === null ||
+                    row.scheduled_effective_at === undefined
+                      ? null
+                      : exactDatabaseIso(
+                          row.scheduled_effective_at,
+                          "subscription.scheduledEffectiveAt"
+                        )
+                },
+                expectedSubscriptionRevision:
+                  input.subscriptionRevision,
+                now: input.enqueuedAt
+              });
+            invariant(
+              authority.policy.tierId === input.tierId,
+              "alakazam_fulfillment_revision_changed",
+              "the effective Alakazam tier changed before fulfillment",
+              { status: 409 }
+            );
+            const inserted = await client.query(
+              `insert into ss.alakazam_fulfillment_operations (
+                 id, organization_id, project_id,
+                 customer_user_id, intent_id,
+                 subscription_id, subscription_revision,
+                 operation_kind, capability,
+                 effective_tier_id, policy_schema,
+                 policy_digest, state, attempt_count,
+                 serving_revision, queued_at, updated_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7,
+                 'tier_transition',
+                 'publish_accepted_project_version',
+                 $8, $9, $10, 'queued', 0, 0, $11, $11
+               )
+               returning *`,
+              [
+                input.operationId,
+                input.tenantId,
+                input.projectId,
+                input.customerId,
+                intent.intentId,
+                input.subscriptionId,
+                input.subscriptionRevision,
+                authority.policy.tierId,
+                authority.policy.schema,
+                authority.policyDigest,
+                input.enqueuedAt
+              ]
+            );
+            invariant(
+              inserted.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam tier fulfillment operation was not queued",
+              { status: 500 }
+            );
+            const projected = await client.query(
+              `update ss.alakazam_fulfillment_projection
+                  set operation_id = $3,
+                      state = 'pending',
+                      effective_tier_id = $4,
+                      subscription_revision = $5,
+                      last_failure_code = null,
+                      updated_at = $6
+                where organization_id = $1
+                  and project_id = $2
+                  and intent_id = $7
+                  and state = 'live'
+                  and effective_tier_id = $8
+                  and subscription_revision = $9
+                  and current_release_id is not null
+              returning project_id`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.operationId,
+                authority.policy.tierId,
+                input.subscriptionRevision,
+                input.enqueuedAt,
+                intent.intentId,
+                input.priorTierId,
+                input.subscriptionRevision - 1
+              ]
+            );
+            invariant(
+              projected.rowCount === 1,
+              "repository_conflict",
+              "the Alakazam tier fulfillment projection was not queued",
+              { status: 500 }
             );
             return exactStoredFulfillmentOperation(
               inserted.rows[0]
@@ -11013,7 +11431,18 @@ export function createPostgresAlakazamRepository({
               input.providerResult.releaseId === row.id &&
               input.providerResult.providerRequestId ===
                 expectedProviderRequestId &&
-              row.intent_state === "activated" &&
+              (
+                (
+                  row.operation_kind ===
+                    "start_activation" &&
+                  row.intent_state === "activated"
+                ) ||
+                (
+                  row.operation_kind ===
+                    "tier_transition" &&
+                  row.intent_state === "completed"
+                )
+              ) &&
               row.subscription_status === "active" &&
               exactDatabaseInteger(
                 row.active_subscription_revision,

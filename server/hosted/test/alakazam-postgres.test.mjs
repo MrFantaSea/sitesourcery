@@ -26,6 +26,12 @@ const INTENT_ID =
   "80000000-0000-4000-8000-000000000001";
 const OPERATION_ID =
   "90000000-0000-4000-8000-000000000001";
+const REPLAY_OPERATION_ID =
+  "90000000-0000-4000-8000-000000000002";
+const PRIOR_OPERATION_ID =
+  "90000000-0000-4000-8000-000000000003";
+const PRIOR_RELEASE_ID =
+  "90000000-0000-4000-8000-000000000004";
 const VERSION_ID =
   "a0000000-0000-4000-8000-000000000001";
 const ADDRESS_ID =
@@ -279,8 +285,20 @@ function harness({
 
 function fulfillmentHarness({
   selected = true,
-  subscriptionRevision = "2"
+  subscriptionRevision = "2",
+  transition = null
 } = {}) {
+  const transitionFacts = transition === null
+    ? null
+    : {
+        priorTierId: "alakazam_25",
+        tierId: "alakazam_35",
+        revision: "3",
+        projectionRevision: "2",
+        eventKind: "upgrade_applied",
+        changeKind: "upgrade",
+        ...transition
+      };
   const preparedAt = "2026-08-02T12:05:00.000Z";
   const artifactDigest = digest("accepted fulfillment artifact");
   const intentFacts = {
@@ -308,7 +326,7 @@ function fulfillmentHarness({
     address_id: ADDRESS_ID,
     hostname: "cedar.sitesourcery.me",
     target_tier_id: "alakazam_25",
-    state: "prepared",
+    state: transitionFacts ? "completed" : "prepared",
     intent_digest: digest(intentFacts),
     prepared_at: preparedAt,
     quote_state: "applied",
@@ -343,6 +361,48 @@ function fulfillmentHarness({
       }
       if (
         normalized.includes(
+          "from ss.alakazam_fulfillment_projection projection"
+        ) &&
+        normalized.includes("transition_projection_state")
+      ) {
+        if (!selected || !transitionFacts) return result();
+        return result([{
+          ...intentRow,
+          transition_projection_state: "live",
+          transition_projection_operation_id:
+            PRIOR_OPERATION_ID,
+          transition_projection_tier_id:
+            transitionFacts.priorTierId,
+          transition_projection_revision:
+            transitionFacts.projectionRevision,
+          transition_projection_release_id:
+            PRIOR_RELEASE_ID,
+          subscription_id: SUBSCRIPTION_ID,
+          subscription_tier_id: transitionFacts.tierId,
+          subscription_status: "active",
+          active_subscription_revision:
+            transitionFacts.revision,
+          current_period_starts_at: PERIOD_START,
+          current_period_ends_at: PERIOD_END,
+          cancel_at_period_end: false,
+          grace_ends_at: null,
+          scheduled_tier_id: null,
+          scheduled_effective_at: null,
+          transition_event_kind:
+            transitionFacts.eventKind,
+          transition_prior_tier_id:
+            transitionFacts.priorTierId,
+          transition_result_tier_id:
+            transitionFacts.tierId,
+          transition_result_revision:
+            transitionFacts.revision,
+          transition_change_kind:
+            transitionFacts.changeKind,
+          transition_quote_state: "applied"
+        }]);
+      }
+      if (
+        normalized.includes(
           "from ss.alakazam_fulfillment_intents intent"
         )
       ) {
@@ -366,6 +426,11 @@ function fulfillmentHarness({
           "insert into ss.alakazam_fulfillment_operations"
         )
       ) {
+        const operationKind = normalized.includes(
+          "'tier_transition'"
+        )
+          ? "tier_transition"
+          : "start_activation";
         state.operation = {
           id: values[0],
           organization_id: values[1],
@@ -374,7 +439,7 @@ function fulfillmentHarness({
           intent_id: values[4],
           subscription_id: values[5],
           subscription_revision: values[6],
-          operation_kind: "start_activation",
+          operation_kind: operationKind,
           capability: "publish_accepted_project_version",
           effective_tier_id: values[7],
           policy_schema: values[8],
@@ -645,4 +710,77 @@ test("PostgreSQL Alakazam fulfillment rejects missing or stale active-revision e
       error.status === 409
   );
   assert.equal(stale.state.operation, null);
+});
+
+test("PostgreSQL Alakazam tier transition reuses the live site and semantic revision identity", async () => {
+  const context = fulfillmentHarness({ transition: {} });
+  const input = {
+    tenantId: TENANT_ID,
+    customerId: CUSTOMER_ID,
+    projectId: PROJECT_ID,
+    subscriptionId: SUBSCRIPTION_ID,
+    subscriptionRevision: 3,
+    priorTierId: "alakazam_25",
+    tierId: "alakazam_35",
+    operationId: OPERATION_ID,
+    enqueuedAt: "2026-08-02T12:07:00.000Z"
+  };
+  const queued =
+    await context.repository.enqueueTierFulfillment(input);
+  assert.equal(queued.status, "queued");
+  assert.equal(queued.operationKind, "tier_transition");
+  assert.equal(queued.subscriptionRevision, 3);
+  assert.equal(queued.tierId, "alakazam_35");
+
+  const projectionUpdate = context.calls.find((call) =>
+    call.text.startsWith(
+      "update ss.alakazam_fulfillment_projection"
+    )
+  );
+  assert.ok(projectionUpdate);
+  assert.match(projectionUpdate.text, /state = 'pending'/u);
+  assert.doesNotMatch(
+    projectionUpdate.text,
+    /current_release_id = null/u
+  );
+
+  const replay =
+    await context.repository.enqueueTierFulfillment({
+      ...input,
+      operationId: REPLAY_OPERATION_ID,
+      enqueuedAt: "2026-08-02T12:08:00.000Z"
+    });
+  assert.deepEqual(replay, queued);
+  assert.equal(
+    context.calls.filter((call) =>
+      call.text.startsWith(
+        "insert into ss.alakazam_fulfillment_operations"
+      )
+    ).length,
+    1
+  );
+});
+
+test("PostgreSQL Alakazam tier transition rejects stale live projection evidence", async () => {
+  const context = fulfillmentHarness({
+    transition: { projectionRevision: "1" }
+  });
+  await assert.rejects(
+    context.repository.enqueueTierFulfillment({
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      subscriptionId: SUBSCRIPTION_ID,
+      subscriptionRevision: 3,
+      priorTierId: "alakazam_25",
+      tierId: "alakazam_35",
+      operationId: OPERATION_ID,
+      enqueuedAt: "2026-08-02T12:07:00.000Z"
+    }),
+    (error) =>
+      error.code ===
+        "alakazam_fulfillment_revision_changed" &&
+      error.status === 409
+  );
+  assert.equal(context.state.operation, null);
 });

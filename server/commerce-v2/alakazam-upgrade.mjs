@@ -110,6 +110,7 @@ function validatePorts(repository, provider, clock, ids) {
         "claimUpgradeApplication",
         "activateUpgradeSubscription",
         "confirmUpgradeProvider",
+        "enqueueTierFulfillment",
         "findUpgradeActivationBySubscription",
         "findUpgradeApplication",
         "markUpgradeReconciliationRequired"
@@ -788,6 +789,27 @@ export function createAlakazamUpgradeService({
   );
   const authority = exactRelease(release);
 
+  async function enqueueTierFulfillment(
+    resolved,
+    activation
+  ) {
+    await ports.repository.enqueueTierFulfillment({
+      tenantId: resolved.reservation.tenantId,
+      customerId: resolved.reservation.customerId,
+      projectId: activation.projectId,
+      subscriptionId: activation.subscriptionId,
+      subscriptionRevision: activation.revision,
+      priorTierId: activation.priorTierId,
+      tierId: activation.targetTierId,
+      operationId: nextUuid(
+        ports.ids,
+        "alakazam_tier_fulfillment_operation"
+      ),
+      enqueuedAt: exactClock(ports.clock)
+    });
+    return activation;
+  }
+
   async function readiness() {
     if (!authority.approved) {
       return deepFreeze({
@@ -932,7 +954,10 @@ export function createAlakazamUpgradeService({
         resolved.application
       );
       if (resolved.status === "applied") {
-        return resolved.activation;
+        return enqueueTierFulfillment(
+          resolved,
+          resolved.activation
+        );
       }
 
       let selected;
@@ -972,7 +997,7 @@ export function createAlakazamUpgradeService({
             "alakazam_upgrade_tier_event"
           )
         });
-      return exactUpgradeActivationResult(
+      const activation = exactUpgradeActivationResult(
         result,
         resolved.settlement,
         resolved.reservation,
@@ -981,6 +1006,10 @@ export function createAlakazamUpgradeService({
           subscriptionProviderFactsDigest:
             selected.subscription.providerFactsDigest
         }
+      );
+      return enqueueTierFulfillment(
+        resolved,
+        activation
       );
     },
 

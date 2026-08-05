@@ -27,6 +27,8 @@ const EVENT_ROW_ID =
   "20000000-0000-4000-8000-000000000002";
 const TIER_EVENT_ID =
   "20000000-0000-4000-8000-000000000003";
+const FULFILLMENT_OPERATION_ID =
+  "20000000-0000-4000-8000-000000000004";
 const PERIOD_START = "2026-08-02T12:03:00.000Z";
 const EFFECTIVE_AT = "2026-09-02T12:03:00.000Z";
 const TARGET_PERIOD_END = "2026-10-02T12:03:00.000Z";
@@ -226,6 +228,7 @@ function fixture({
     finds: [],
     reads: [],
     activations: [],
+    fulfillments: [],
     ids: []
   };
   const service = createAlakazamDowngradeActivationService({
@@ -248,6 +251,13 @@ function fixture({
           schedule,
           input.subscription
         );
+      },
+      async enqueueTierFulfillment(input) {
+        calls.fulfillments.push(structuredClone(input));
+        return {
+          status: "queued",
+          operationId: input.operationId
+        };
       }
     },
     provider: {
@@ -275,7 +285,9 @@ function fixture({
           alakazam_downgrade_subscription_event:
             EVENT_ROW_ID,
           alakazam_downgrade_activation_tier_event:
-            TIER_EVENT_ID
+            TIER_EVENT_ID,
+          alakazam_tier_fulfillment_operation:
+            FULFILLMENT_OPERATION_ID
         }[label];
       }
     },
@@ -303,10 +315,11 @@ test("Alakazam downgrade activation remains held before repository or provider w
   assert.equal(calls.readiness, 0);
   assert.deepEqual(calls.finds, []);
   assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
-test("a verified boundary event performs one read-only check and one local activation", async () => {
+test("a verified boundary event activates locally and queues one exact tier fulfillment", async () => {
   const { calls, selected, service } = fixture();
   const result = await service.ingestStripeEvent(
     downgradeEvent(selected)
@@ -315,13 +328,27 @@ test("a verified boundary event performs one read-only check and one local activ
   assert.equal(result.revision, 4);
   assert.equal(calls.reads.length, 1);
   assert.equal(calls.activations.length, 1);
+  assert.deepEqual(calls.fulfillments, [
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      subscriptionId: SUBSCRIPTION_ID,
+      subscriptionRevision: 4,
+      priorTierId: "alakazam_35",
+      tierId: "alakazam_25",
+      operationId: FULFILLMENT_OPERATION_ID,
+      enqueuedAt: VERIFIED_AT
+    }
+  ]);
   assert.deepEqual(calls.ids, [
     "alakazam_downgrade_subscription_event",
-    "alakazam_downgrade_activation_tier_event"
+    "alakazam_downgrade_activation_tier_event",
+    "alakazam_tier_fulfillment_operation"
   ]);
 });
 
-test("an applied downgrade event replay performs no provider work and allocates no ID", async () => {
+test("an applied downgrade replay performs no provider work and safely retries only fulfillment", async () => {
   const { calls, selected, service } = fixture({
     existingStatus: "applied"
   });
@@ -331,7 +358,10 @@ test("an applied downgrade event replay performs no provider work and allocates 
   assert.equal(result.status, "active");
   assert.equal(calls.reads.length, 0);
   assert.equal(calls.activations.length, 0);
-  assert.deepEqual(calls.ids, []);
+  assert.equal(calls.fulfillments.length, 1);
+  assert.deepEqual(calls.ids, [
+    "alakazam_tier_fulfillment_operation"
+  ]);
 });
 
 test("an unrelated Stripe event performs no downgrade activation work", async () => {
@@ -361,6 +391,7 @@ test("changed downgrade event metadata stops before Stripe readback", async () =
   );
   assert.equal(calls.finds.length, 1);
   assert.equal(calls.reads.length, 0);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
@@ -386,6 +417,7 @@ test("changed lower-tier provider readback grants no activation", async () => {
   );
   assert.equal(calls.reads.length, 1);
   assert.equal(calls.activations.length, 0);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 

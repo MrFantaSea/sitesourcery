@@ -911,3 +911,29 @@ test("Alakazam fulfillment freezes intent and active-revision operation evidence
     /create function ss\.hosted_runtime_contract_v32\(\)/iu
   );
 });
+
+test("Alakazam tier fulfillment reuses one site with exact applied-revision evidence", async () => {
+  const all = await migrations();
+  const fulfillment = all.find(
+    ({ name }) =>
+      name ===
+      "202608040033_alakazam_tier_fulfillment.sql"
+  );
+  assert.ok(fulfillment);
+  assert.match(
+    fulfillment.sql,
+    /operation_kind in \([\s\S]*'start_activation',[\s\S]*'tier_transition'[\s\S]*\)/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /new\.operation_kind = 'tier_transition'[\s\S]*intent\.state = 'completed'[\s\S]*tier_event\.result_subscription_revision =[\s\S]*new\.subscription_revision/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /tier_event\.event_kind = 'upgrade_applied'[\s\S]*quote\.change_kind = 'upgrade'[\s\S]*tier_event\.event_kind = 'downgrade_applied'[\s\S]*quote\.change_kind = 'downgrade'/iu
+  );
+  assert.match(
+    fulfillment.sql,
+    /create function ss\.hosted_runtime_contract_v33\(\)/iu
+  );
+});

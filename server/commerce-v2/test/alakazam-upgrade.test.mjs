@@ -29,6 +29,8 @@ const EVENT_ROW_ID =
   "20000000-0000-4000-8000-000000000002";
 const TIER_EVENT_ID =
   "20000000-0000-4000-8000-000000000003";
+const FULFILLMENT_OPERATION_ID =
+  "20000000-0000-4000-8000-000000000004";
 const CLAIMED_AT = "2026-08-04T12:10:00.000Z";
 const LEASE_EXPIRES_AT = "2026-08-04T12:12:00.000Z";
 const CONFIRMED_AT = "2026-08-04T12:11:00.000Z";
@@ -248,6 +250,7 @@ function fixture({
     marks: [],
     activationFinds: [],
     activations: [],
+    fulfillments: [],
     ids: []
   };
   let clockCalls = 0;
@@ -298,6 +301,13 @@ function fixture({
         return structuredClone(
           activation(selected, input.subscription)
         );
+      },
+      async enqueueTierFulfillment(input) {
+        calls.fulfillments.push(structuredClone(input));
+        return {
+          status: "queued",
+          operationId: input.operationId
+        };
       }
     },
     provider: {
@@ -339,7 +349,9 @@ function fixture({
           alakazam_upgrade_application: APPLICATION_ID,
           alakazam_upgrade_subscription_event:
             EVENT_ROW_ID,
-          alakazam_upgrade_tier_event: TIER_EVENT_ID
+          alakazam_upgrade_tier_event: TIER_EVENT_ID,
+          alakazam_tier_fulfillment_operation:
+            FULFILLMENT_OPERATION_ID
         }[label];
       }
     },
@@ -386,6 +398,7 @@ test("Alakazam paid upgrade remains held before repository or provider work", as
     marks: [],
     activationFinds: [],
     activations: [],
+    fulfillments: [],
     ids: []
   });
 });
@@ -405,10 +418,11 @@ test("Alakazam upgrade activation remains held before repository or provider wor
   assert.deepEqual(calls.activationFinds, []);
   assert.deepEqual(calls.reads, []);
   assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
-test("a verified upgrade event performs one read-only check and one local activation", async () => {
+test("a verified upgrade event activates locally and queues one exact tier fulfillment", async () => {
   const { calls, selected, service } = fixture();
   const event = upgradeEvent(selected);
   const result = await service.ingestStripeEvent(event);
@@ -430,9 +444,23 @@ test("a verified upgrade event performs one read-only check and one local activa
   ]);
   assert.deepEqual(calls.applies, []);
   assert.equal(calls.activations.length, 1);
+  assert.deepEqual(calls.fulfillments, [
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      subscriptionId: SUBSCRIPTION_ID,
+      subscriptionRevision: 3,
+      priorTierId: "alakazam_25",
+      tierId: "alakazam_35",
+      operationId: FULFILLMENT_OPERATION_ID,
+      enqueuedAt: CONFIRMED_AT
+    }
+  ]);
   assert.deepEqual(calls.ids, [
     "alakazam_upgrade_subscription_event",
-    "alakazam_upgrade_tier_event"
+    "alakazam_upgrade_tier_event",
+    "alakazam_tier_fulfillment_operation"
   ]);
   assert.equal(
     calls.activations[0].event.stripeEventId,
@@ -440,7 +468,7 @@ test("a verified upgrade event performs one read-only check and one local activa
   );
 });
 
-test("an applied upgrade event replay performs no provider work and allocates no ID", async () => {
+test("an applied upgrade replay performs no provider work and safely retries only fulfillment", async () => {
   const { calls, selected, service } = fixture({
     activationStatus: "applied"
   });
@@ -452,7 +480,10 @@ test("an applied upgrade event replay performs no provider work and allocates no
   assert.equal(calls.activationFinds.length, 1);
   assert.deepEqual(calls.reads, []);
   assert.deepEqual(calls.activations, []);
-  assert.deepEqual(calls.ids, []);
+  assert.equal(calls.fulfillments.length, 1);
+  assert.deepEqual(calls.ids, [
+    "alakazam_tier_fulfillment_operation"
+  ]);
 });
 
 test("an unrelated Stripe event performs no Alakazam upgrade work", async () => {
@@ -465,6 +496,7 @@ test("an unrelated Stripe event performs no Alakazam upgrade work", async () => 
   assert.equal(calls.readiness, 0);
   assert.deepEqual(calls.activationFinds, []);
   assert.deepEqual(calls.reads, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
@@ -484,6 +516,7 @@ test("changed upgrade receipt metadata stops before Stripe readback", async () =
   assert.equal(calls.activationFinds.length, 1);
   assert.deepEqual(calls.reads, []);
   assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 
@@ -502,6 +535,7 @@ test("changed upgrade provider readback grants no new tier", async () => {
   );
   assert.equal(calls.reads.length, 1);
   assert.deepEqual(calls.activations, []);
+  assert.deepEqual(calls.fulfillments, []);
   assert.deepEqual(calls.ids, []);
 });
 

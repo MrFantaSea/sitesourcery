@@ -464,22 +464,116 @@ Batch 3B sealed checkpoint gates:
 - [x] Named disposable databases are dropped and verified absent.
 - [x] Release, provider, DNS, push, and deployment holds remain unchanged.
 
+## Batch 3C frozen tier-transition fulfillment contract
+
+- Reuse the completed start fulfillment intent as the immutable accepted
+  version, configured-facts, licensed-address, and hostname anchor. A tier
+  change must not create a second site, address, or customer setup intent.
+- Migration 33 may widen the existing fulfillment operation kind only to one
+  server-only `tier_transition` value. Its deferred database proof must require
+  the exact active subscription revision and tier plus one matching
+  `upgrade_applied` or `downgrade_applied` tier event. Start-operation proof
+  remains unchanged.
+- Upgrade and downgrade activation handlers enqueue after the atomic local tier
+  activation and do the same on an already-applied webhook replay. The semantic
+  identity is subscription + result revision + operation kind, so a lost
+  response or duplicate event cannot queue a second publication.
+- A transition enqueue requires the prior fulfillment projection to be live on
+  the immediately preceding subscription revision and exact prior tier. It
+  moves that projection to pending for the new tier/revision while retaining
+  the prior release reference until replacement succeeds.
+- The existing worker compiles the retained configured facts under the new
+  effective policy and replaces the bytes at the same licensed hostname. A
+  downgrade masks higher-tier output without deleting retained configuration;
+  a later eligible upgrade may re-enable it from the same facts.
+- Another quote or tier command remains unavailable until fulfillment is live
+  on the exact current subscription tier and revision. If local activation
+  commits but enqueue fails, account truth becomes attention-required rather
+  than falsely offering another change; webhook replay may safely retry only
+  the missing enqueue.
+- Finalization advances both serving and fulfillment projections to the exact
+  new release. A post-publication persistence failure follows the existing
+  compensation contract: unpublish, record dark truth, and require safe retry
+  instead of claiming the old or new policy is live.
+- This slice adds no new customer configuration editor, care quantity,
+  lifecycle policy, Billing Portal, cancellation, invoice, registrar, provider
+  release, push, deployment, DNS, or production cutover behavior.
+
+## Batch 3C sealed checkpoint evidence
+
+- Migration 33 adds only the server-side `tier_transition` operation kind and
+  requires exact applied upgrade/downgrade event, subscription tier/revision,
+  prior live projection, and immediately preceding revision evidence.
+- Upgrade and renewal-boundary downgrade activation each queue one semantic
+  publication operation. Duplicate verified webhooks allocate retry IDs but
+  replay the existing subscription+revision operation and perform no second
+  provider mutation or publication.
+- The existing worker republishes the retained accepted version at the same
+  licensed hostname under revision 3 `$35` policy and later revision 4 `$25`
+  policy. While either replacement is pending, the account says `publishing`
+  and a competing tier Checkout is rejected; the action returns only after the
+  exact new release is live.
+- If subscription activation outruns fulfillment enqueue, the customer account
+  now fails closed to attention-required instead of falsely presenting the old
+  release as current or offering another tier change.
+- Fresh disposable database `ss_b3c_tier_20260805_codex1` replayed all 33
+  migrations and passed the complete 5/5 PostgreSQL journey, including start,
+  real self-host publication, upgrade republish, renewal downgrade republish,
+  replay, and write fencing.
+- Authoritative Node 24 broad proof passes: core 459/459; self-host 19/19;
+  hosted service 157 pass with 2 intentional environment skips; operations
+  52/52; runtime, HTML, and current-site checks; held hosted artifact; and the
+  exact 78-file public artifact.
+- The disposable database had zero active sessions, was dropped by exact name,
+  and is verified absent. No customer or production data was touched.
+- No public/browser source, provider setting, credential, push, deployment,
+  DNS, or production state changed. The July 22 public fallback remains
+  untouched.
+
+Batch 3C sealed checkpoint gates:
+
+- [x] Exact tier-transition authority and semantic replay are implemented.
+- [x] Upgrade and downgrade both recompile and republish the same site.
+- [x] Pending, failed-enqueue, and live customer/write truth fail closed.
+- [x] All 33 migrations, real PostgreSQL journey, focused, broad, and artifact
+  proof pass under Node 24.
+- [x] The named disposable database is dropped and verified absent.
+- [x] Release, provider, DNS, push, and deployment holds remain unchanged.
+
+## H0 Custom/existing-site two-lane checkpoint
+
+- The canonical commercial contract, continuity ruling, and master roadmap now
+  require an activated Site Sourcery account before quote acceptance or
+  payment, while preserving an anonymous no-diagnosis inquiry.
+- Paid outside-site onboarding is staged: the first `$200` buys the written
+  supportability/takeover result; only accepted sites can owe the remaining
+  onboarding balance or begin monthly management.
+- The Build inventory and Polish audit are complete. Both identify the same P0
+  split-brain: the public catalog charges `$200` for assessment but can grant a
+  `$350` credit, while the old pricing checker demands a `$350` assessment.
+- The direct public assessment Payment Link remains a REMOVE/HOLD until the
+  account-bound assessment, quote, invoice, payment, report, and credit journey
+  exists. No new service copy or payment was published.
+- Proposed five-business-day assessment delivery and two-business-day outside
+  management acknowledgement promises are explicitly held for owner approval;
+  they are not silently frozen into customer or legal truth.
+
 ## Live resources and workers
 
-- No Batch 3B browser verifier, local evidence server, or worker remains
-  running. All Batch 3B disposable PostgreSQL databases are absent.
+- No Batch 3C or H0 worker remains running. The exact Batch 3C disposable
+  PostgreSQL database is absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Freeze and implement Batch 3C as one vertical tier-transition fulfillment
-slice. A verified upgrade or boundary downgrade must queue one operation bound
-to the new subscription revision, compile the new effective tier policy,
-republish exact bytes at the existing licensed address, and expose pending/live
-or attention truth. Another tier change stays unavailable until that operation
-is live. Keep unresolved premium editors, lifecycle policy, invoicing, domains,
-provider release, push, deployment, and public cutover outside this slice.
+Open Lane H1. First normalize the assessment authority to `$200` charged and a
+maximum `$200` one-use eligible Custom build credit, removing the obsolete
+`$350` checker expectation. Then implement migration 34 and the first complete
+account-bound vertical: external-site asset, accepted bounded assessment quote,
+invoice/provider-confirmed payment, assessment job, delivered report, and exact
+credit ledger. Keep all five public service cards and direct payment held until
+that shared spine is proven.
 
 ## Batch 3B write scope
 

@@ -76,6 +76,32 @@ Integration order:
 5. Ledgers are updated once, then one clean local checkpoint is committed.
 6. No next batch starts from a dirty or unexplained integration state.
 
+## Two-lane completion mode
+
+From August 5 forward, unfinished Site Sourcery work moves through two
+coordinated lanes instead of one long serial queue:
+
+### Build lane
+
+The Build lane owns durable authority: account identity, PostgreSQL state,
+quotes, invoices, provider-confirmed payments, jobs, subscriptions, publication,
+monitoring, recovery, owner operations, migrations, routes, and integration
+tests. It works in vertical customer outcomes, not disconnected tables or UI
+stubs.
+
+### Polish lane
+
+The Polish lane owns customer comprehension and proof: offer hierarchy, copy,
+scope boundaries, legal consistency, responsive/account/owner interfaces,
+accessibility, failure language, device walks, and launch evidence. It may audit
+or design ahead of the Build lane, but it cannot publish, enable, or imply a
+promise until the matching durable journey is green.
+
+Both lanes share one commercial contract, catalog lineage, route/state names,
+and finish line. Each batch closes only when Build truth and Polish truth agree.
+The lanes never implement competing pricing, account, invoice, job, care,
+domain, or publication systems.
+
 ## Workstreams
 
 ### Lane A — customer billing truth and API (lead)
@@ -120,6 +146,12 @@ Integration order:
 - [x] Produce an exact keep/change/remove/hold list with file locations.
 - [x] Separate launch-critical corrections from later expansion.
 - [x] Make no customer-copy edits until the lead accepts the audit packet.
+- [ ] Complete the Custom/existing-site CHANGE / REMOVE / HOLD / KEEP audit
+  against the August 5 commercial contract.
+- [ ] Map one comprehensible account-first customer journey across assessment,
+  onboarding, quote, invoice, job, management, and receipts.
+- [ ] Identify and remove every duplicate service name or double-charge path
+  before public copy is changed.
 
 ### Lane E — customer billing commands
 
@@ -175,12 +207,93 @@ Integration order:
 
 ### Lane H — custom services and owner workbench
 
-- [ ] Custom-site intake, client, scope, estimate, and acceptance.
-- [ ] Invoice, deposit, milestone, balance, receipt, and job ledger.
-- [ ] `$200` assessment delivery and later build-credit tracking.
-- [ ] Mac/Pixel client search and account/project/payment/tier/ticket views.
-- [ ] Bounded audited repair actions; no casual mark-paid or grant-tier button.
-- [ ] Later expose the same contracts to Fantasealand Desiderata Labs HQ.
+- [x] Freeze the August 5 Custom/existing-site commercial contract, including
+  paid outside-site onboarding, account-before-pay, pricing, stacking, and
+  held decisions.
+- [ ] Reconcile stale catalog authority: the assessment is `$200`, its maximum
+  build credit cannot remain `$350`, and obsolete exact Custom Care prices must
+  not become public or payable.
+
+Account and site authority:
+
+- [ ] Require a Site Sourcery account before quote acceptance, payable invoice,
+  payment, private access request, job, or support ticket; keep a simple
+  anonymous inquiry path.
+- [ ] Add one customer-owned site asset with origin `alakazam`,
+  `sitesourcery_custom`, or `external`, plus platform, public URL, ownership,
+  supportability, and delegated-access state.
+- [ ] Prove cross-tenant/site denial and browser inability to claim price,
+  payment, credit, unit, job, or provider authority.
+
+Assessment and findings:
+
+- [ ] Implement the bounded `$200` assessment: one site, up to five
+  representative public pages/page types, phone and desktop, up to ten
+  prioritized findings, evidence, delivery, and expanded-assessment hold.
+- [ ] Implement one-use, same-project, 90-day Custom base-build credit and
+  separately record reused scope so overlapping work is not billed twice.
+- [ ] Let the customer read the delivered report and select safe findings for a
+  later fixed Rescue quote; do not turn report findings into automatic charges.
+
+Paid outside-site onboarding and management:
+
+- [ ] Implement mandatory staged onboarding: `$200` supportability/takeover
+  review first; charge the remaining `$100` simple/static or `$400` ordinary
+  CMS onboarding balance only after acceptance; complex onboarding is quoted
+  from `$900`.
+- [ ] If Site Sourcery declines the outside site, deliver the paid written
+  result and safer next options without starting or charging monthly service.
+- [ ] Establish client-owned/delegated access, supportability, baseline backup
+  where possible, monitoring, critical-backlog gate, and first monthly record.
+- [ ] Implement monthly bases of `$125` simple/static, `$225` ordinary CMS, and
+  custom from `$400` for commerce/membership/custom systems, billed in advance.
+- [ ] Implement optional two-unit `$250` and four-unit `$500` monthly capacity,
+  usage, one-cycle rollover cap, tickets, an explicitly owner-approved response
+  promise (currently held), renewal-bound plan changes, and no implied 24/7
+  emergency response.
+- [ ] Keep Outside Website Management, Custom Care, and Alakazam tier care
+  commercially distinct while reusing one ticket/capacity/receipt engine.
+
+Quotes, invoices, and jobs:
+
+- [ ] Add a versioned service catalog with fixed, banded, custom, recurring,
+  prerequisite, exclusion, provider-cost, and overlap-key rules.
+- [ ] Implement internal `$125` repair units with a `$250` Rescue minimum,
+  shared-root-cause deduplication, selected findings, fixed customer-facing
+  line items, and repair-versus-rebuild review above eight units.
+- [ ] Implement versioned estimate/quote, disclosure, expiry, acceptance,
+  assessment credit, scope reuse, and change-order authority.
+- [ ] Implement invoice, deposit/milestone/balance, provider-confirmed payment,
+  receipt, retry, replay, and uncertain-payment reconciliation.
+- [ ] Implement job, checklist, dependency, safe access request, evidence,
+  deliverable, completion, 30-day workmanship correction, and final handoff.
+
+Five existing-site revenue lanes:
+
+- [ ] Website Rescue and Tune-Up from selected paid findings.
+- [ ] Outside Website Management after mandatory paid onboarding.
+- [ ] Business Email and Domain Connect `$200`, Move from `$500`, and Rescue
+  investigation `$300`, reusing the existing connection component.
+- [ ] Website Move / Platform Escape as assessment + `$500` transition base +
+  existing build/redirect/migration/connection components.
+- [ ] Local Presence: `$400` Website Visibility Foundation, `$300` Google
+  Business Profile setup/cleanup, `$650` combined, plus reviewed page/location
+  bands and no ranking/indexing/lead guarantee.
+
+Customer and owner surfaces:
+
+- [ ] Add customer account views for assessment/onboarding result, quote,
+  acceptance, invoice, payment, job, access request, change order, handoff,
+  management plan, capacity, ticket, monthly receipt, and safe recovery state.
+- [ ] Add Mac/Pixel owner search and bounded operations for client/site,
+  findings, quote composition, invoice, payment evidence, job, access,
+  management, monitoring, backup, ticket, and reconciliation; no casual
+  mark-paid or grant-service button.
+- [ ] Prove every journey against fresh PostgreSQL, provider test mode where
+  applicable, authenticated desktop/mobile browser, replay/race/failure cases,
+  and exact customer-safe projections.
+- [ ] Later expose these same contracts to Fantasealand Desiderata Labs HQ;
+  HQ must not become a second authority.
 
 ### Lane I — domains and deferred offers
 
@@ -188,12 +301,25 @@ Integration order:
   registration, DNS, renewal, and transfer proof.
 - [ ] Remove the obsolete charge-then-refund promise.
 - [ ] Reconcile separate Custom care plans.
+- [ ] Keep the held domain storefront separate from paid email/domain
+  configuration, migration, and recovery work.
 - [ ] Keep The Responder unsellable until telephony fulfillment is real.
 - [ ] Do not let these expansion items block platform-subdomain launch.
 
 ### Lane J — release and proof
 
 - [ ] Reconcile all public copy, links, legal text, support, and pricing.
+- [ ] Replace direct assessment payment with account-bound offer, invoice, and
+  payment; show its exact five-page/ten-finding boundary and expanded hold.
+- [ ] Add one restrained "Have a website already?" section for the five
+  existing-site lanes instead of five or ten competing top-level navigation
+  entries.
+- [ ] Publish only approved starting prices and plain exclusions; explain that
+  services stack without charging the same inventory, DNS, backup, redirect,
+  search, or onboarding work twice.
+- [ ] Reconcile public terms for paid onboarding, payment milestones,
+  workmanship corrections, outside management, plan changes, provider costs,
+  and lawful cancellation without advertising a blanket refund promise.
 - [ ] Complete mobile, desktop, accessibility, performance, and security audits.
 - [ ] Run new and returning customer journeys in private staging.
 - [ ] Run owner Mac and Pixel operations journeys.
@@ -216,6 +342,19 @@ Lane D truth audit ─> public corrections ─┐
 Lane G lifecycle ─────────────────────────┼─> Lane J release proof
 Lane H minimum owner tools ───────────────┤
 Lane I launch-critical domain truth only ─┘
+
+Account + site asset
+  -> paid assessment or outside-site review
+    -> findings/supportability
+      -> deduplicated quote + acceptance
+        -> invoice + provider-confirmed payment
+          -> job/onboarding + evidence
+            -> handoff or monthly management
+              -> customer/owner receipt + recovery
+
+Lane H Build truth ───────────────┐
+                                  ├─> private end-to-end service walks
+Lane D/J Polish truth ────────────┘
 ```
 
 ## Parallel batch ledger
@@ -231,17 +370,25 @@ Lane I launch-critical domain truth only ─┘
 | 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
 | 3A | Fulfillment backend | Lead plus bounded compiler worker | migration 32, exact tier authority, three looks, queue, compilation, self-host publication, replay, and compensation reviewed; fresh PostgreSQL and broad regressions green; release held |
 | 3B | Customer fulfillment path | Lead owns account/repository/HTTP contracts; UI worker owns browser files; read-only auditor checks stale/race truth | platform-label/look controls, account status, authenticated browser journey | reviewed and sealed locally; fresh PostgreSQL, shipped-browser, and broad proof green; release held |
-| 3C | Tier-transition fulfillment | Lead with disjoint repository/worker review packets after contract freeze | queue and republish the exact new tier after upgrade/downgrade activation | next; contract freeze required |
+| 3C | Tier-transition fulfillment | Lead | migration 33, upgrade/downgrade enqueue, exact-revision republish, account/write fencing, replay, fresh PostgreSQL, and broad proof | reviewed and sealed locally; release held |
+| H0 | Custom/existing-site commercial freeze | Lead | canonical contract, master roadmap, continuity ruling, catalog-conflict list | reviewed; no public or provider effect |
+| H0 | Build-lane backend inventory | Bounded build worker | one new read-only-derived backend inventory report | completed and reviewed; no implementation-file writes |
+| H0 | Polish-lane public audit | Bounded polish worker | one new CHANGE/REMOVE/HOLD/KEEP report | completed and reviewed; no public-copy writes |
 
 ## Immediate integration target
 
-Seal Batch 3B as the local, held customer-fulfillment checkpoint, then connect
-one Batch 3C tier-transition path. A verified upgrade or renewal-boundary
-downgrade must queue exactly one fulfillment operation for the new subscription
-revision, compile the new effective tier policy, and republish at the existing
-licensed address before another tier change becomes available. This closes the
-current gap between billing authority and website capabilities without opening
-unresolved `$35/$50` editors, lifecycle policy, provider release, or cutover.
+Batch 3C and H0 are sealed. Open Lane H1 as one vertical customer outcome:
+activated account + customer-owned external-site asset + bounded `$200` paid
+assessment + delivered customer report + exact one-use `$200` Custom build
+credit. First reconcile the stale `$200` charge / `$350` credit / obsolete
+`$350` checker conflict, then add migration 34 and additive `service_*`
+authority. Do not widen legacy Download, Alakazam, domain, or old Spark billing
+tables into a pretend generic commerce system.
+
+The Polish lane may prepare private copy and responsive-state matrices in
+parallel, but no new service becomes publicly payable until the matching
+account, quote, invoice, provider-confirmed payment, job/report, credit, owner
+operation, and fresh-PostgreSQL/browser proof are green.
 
 ## Frozen Batch 3A fulfillment backend contract
 
@@ -321,6 +468,36 @@ unresolved `$35/$50` editors, lifecycle policy, provider release, or cutover.
   PostgreSQL address truth and setup readiness, and fits again at 1440x1000.
   All named disposable databases are dropped and verified absent. Provider,
   release, push, deploy, DNS, and production state remain held.
+
+## Frozen Batch 3C tier-transition fulfillment contract
+
+- The completed start fulfillment intent remains the one immutable anchor for
+  accepted version, retained configured facts, licensed address, and hostname.
+  Upgrade and downgrade fulfillment create no second customer setup authority.
+- The existing operation ledger gains only one `tier_transition` kind. Database
+  validation requires an exact active subscription revision/tier and a matching
+  `upgrade_applied` or `downgrade_applied` event; the existing start contract is
+  not loosened.
+- Both activation handlers enqueue the transition after atomic local tier
+  activation and again on safe applied-event replay. Subscription + result
+  revision + operation kind is the semantic identity, independent of newly
+  allocated retry IDs.
+- Enqueue accepts only a live prior projection bound to the immediately
+  preceding revision and prior tier. It records pending truth for the new
+  tier/revision while retaining the old release reference until exact
+  replacement succeeds.
+- The existing worker recompiles the same retained facts under the new policy
+  and republishes at the same hostname. Lower-tier compilation masks premium
+  output without deleting configuration. Successful finalization advances the
+  release and fulfillment projections together.
+- Account and write boundaries offer no further tier change until the live
+  fulfillment projection exactly matches the current subscription. An
+  activation/enqueue interruption projects attention and is repaired by safe
+  webhook replay, never by a second billing or publication effect.
+- Existing dark compensation remains authoritative after a publication effect
+  whose final local commit fails. Premium editors, lifecycle, Portal,
+  cancellation, invoicing, domains, provider release, push, deploy, DNS, and
+  production cutover stay outside Batch 3C.
 
 ## Frozen Batch 1 account contract
 

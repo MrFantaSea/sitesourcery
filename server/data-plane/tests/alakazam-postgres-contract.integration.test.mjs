@@ -1508,6 +1508,10 @@ test(
   async () => {
     const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
     const client = await pool.connect();
+    let runtimeRoot = null;
+    let runtime = null;
+    let worker = null;
+    let workerNow = null;
     try {
       await client.query("begin");
       await client.query("set constraints all deferred");
@@ -1774,110 +1778,105 @@ test(
       );
       await flushConstraints(client);
 
-      const runtimeRoot = await mkdtemp(
+      runtimeRoot = await mkdtemp(
         path.join(os.tmpdir(), "sitesourcery-alakazam-pg-")
       );
-      try {
-        const workerNow = "2026-08-02T12:06:00.000Z";
-        const runtime = await SelfHostRuntime.open({
-          root: path.join(runtimeRoot, "tenant"),
-          publicationHeld: false,
-          platformBaseDomain: "sitesourcery.me",
-          clock: () => workerNow
+      workerNow = "2026-08-02T12:06:00.000Z";
+      runtime = await SelfHostRuntime.open({
+        root: path.join(runtimeRoot, "tenant"),
+        publicationHeld: false,
+        platformBaseDomain: "sitesourcery.me",
+        clock: () => workerNow
+      });
+      worker = createAlakazamFulfillmentWorker({
+        repository: settlementRepository,
+        compiler,
+        publicationPort: createSelfHostPublicationPort({
+          runtime,
+          clock: { now: () => workerNow }
+        }),
+        clock: { now: () => workerNow },
+        ids: { next: () => randomUUID() },
+        workerId: "alakazam-postgres-contract-worker"
+      });
+      const live = await worker.runOnce();
+      assert.equal(live.status, "live");
+      assert.equal(live.operationId, fulfillmentOperationId);
+      assert.equal(live.projectId, authority.projectId);
+      assert.equal(live.subscriptionId, subscriptionId);
+      assert.equal(live.subscriptionRevision, 2);
+      assert.equal(live.tierId, "alakazam_25");
+      assert.equal(live.hostname, acceptedSite.hostname);
+      assert.equal(live.sourceVersionId, acceptedSite.versionId);
+      await flushConstraints(client);
+
+      const durable = await client.query(
+        `select
+           operation.state as operation_state,
+           projection.state as projection_state,
+           serving.state as serving_state,
+           artifact.html_bytes,
+           artifact.artifact_digest
+         from ss.alakazam_fulfillment_operations operation
+         join ss.alakazam_fulfillment_projection projection
+           on projection.organization_id = operation.organization_id
+          and projection.operation_id = operation.id
+         join ss.project_serving_projection serving
+           on serving.organization_id = operation.organization_id
+          and serving.project_id = operation.project_id
+         join ss.artifacts artifact
+           on artifact.organization_id = operation.organization_id
+          and artifact.id = operation.effective_artifact_id
+        where operation.id = $1`,
+        [fulfillmentOperationId]
+      );
+      assert.equal(durable.rowCount, 1);
+      assert.deepEqual(
+        {
+          operation: durable.rows[0].operation_state,
+          projection: durable.rows[0].projection_state,
+          serving: durable.rows[0].serving_state
+        },
+        {
+          operation: "published",
+          projection: "live",
+          serving: "live"
+        }
+      );
+      assert.equal(
+        durable.rows[0].artifact_digest,
+        live.artifactDigest
+      );
+
+      const response = await runtime.fetch(
+        new Request(`https://${acceptedSite.hostname}/`, {
+          headers: { host: acceptedSite.hostname }
+        })
+      );
+      assert.equal(response.status, 200);
+      assert.deepEqual(
+        Buffer.from(await response.arrayBuffer()),
+        Buffer.from(durable.rows[0].html_bytes)
+      );
+      assert.equal((await worker.runOnce()).status, "idle");
+
+      const enqueueReplay =
+        await settlementRepository.enqueueStartFulfillment({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId,
+          quoteId: startQuoteId,
+          subscriptionId,
+          subscriptionRevision: startActivation.revision,
+          tierId: startActivation.tierId,
+          operationId: randomUUID(),
+          enqueuedAt: "2026-08-02T12:07:00.000Z"
         });
-        const worker = createAlakazamFulfillmentWorker({
-          repository: settlementRepository,
-          compiler,
-          publicationPort: createSelfHostPublicationPort({
-            runtime,
-            clock: { now: () => workerNow }
-          }),
-          clock: { now: () => workerNow },
-          ids: { next: () => randomUUID() },
-          workerId: "alakazam-postgres-contract-worker"
-        });
-        const live = await worker.runOnce();
-        assert.equal(live.status, "live");
-        assert.equal(live.operationId, fulfillmentOperationId);
-        assert.equal(live.projectId, authority.projectId);
-        assert.equal(live.subscriptionId, subscriptionId);
-        assert.equal(live.subscriptionRevision, 2);
-        assert.equal(live.tierId, "alakazam_25");
-        assert.equal(live.hostname, acceptedSite.hostname);
-        assert.equal(live.sourceVersionId, acceptedSite.versionId);
-        await flushConstraints(client);
-
-        const durable = await client.query(
-          `select
-             operation.state as operation_state,
-             projection.state as projection_state,
-             serving.state as serving_state,
-             artifact.html_bytes,
-             artifact.artifact_digest
-           from ss.alakazam_fulfillment_operations operation
-           join ss.alakazam_fulfillment_projection projection
-             on projection.organization_id = operation.organization_id
-            and projection.operation_id = operation.id
-           join ss.project_serving_projection serving
-             on serving.organization_id = operation.organization_id
-            and serving.project_id = operation.project_id
-           join ss.artifacts artifact
-             on artifact.organization_id = operation.organization_id
-            and artifact.id = operation.effective_artifact_id
-          where operation.id = $1`,
-          [fulfillmentOperationId]
-        );
-        assert.equal(durable.rowCount, 1);
-        assert.deepEqual(
-          {
-            operation: durable.rows[0].operation_state,
-            projection: durable.rows[0].projection_state,
-            serving: durable.rows[0].serving_state
-          },
-          {
-            operation: "published",
-            projection: "live",
-            serving: "live"
-          }
-        );
-        assert.equal(
-          durable.rows[0].artifact_digest,
-          live.artifactDigest
-        );
-
-        const response = await runtime.fetch(
-          new Request(`https://${acceptedSite.hostname}/`, {
-            headers: { host: acceptedSite.hostname }
-          })
-        );
-        assert.equal(response.status, 200);
-        assert.deepEqual(
-          Buffer.from(await response.arrayBuffer()),
-          Buffer.from(durable.rows[0].html_bytes)
-        );
-        assert.equal((await worker.runOnce()).status, "idle");
-
-        const enqueueReplay =
-          await settlementRepository.enqueueStartFulfillment({
-            tenantId: authority.organizationId,
-            customerId: authority.userId,
-            projectId: authority.projectId,
-            quoteId: startQuoteId,
-            subscriptionId,
-            subscriptionRevision: startActivation.revision,
-            tierId: startActivation.tierId,
-            operationId: randomUUID(),
-            enqueuedAt: "2026-08-02T12:07:00.000Z"
-          });
-        assert.equal(
-          enqueueReplay.operationId,
-          fulfillmentOperationId
-        );
-        assert.equal(enqueueReplay.status, "published");
-      } finally {
-        await makeDirectoriesOwnerWritable(runtimeRoot);
-        await rm(runtimeRoot, { recursive: true, force: true });
-      }
+      assert.equal(
+        enqueueReplay.operationId,
+        fulfillmentOperationId
+      );
+      assert.equal(enqueueReplay.status, "published");
 
       await expectRejected(
         client,
@@ -2200,8 +2199,13 @@ test(
       let upgradeClockCalls = 0;
       const upgradeActivationIds = [
         randomUUID(),
+        randomUUID(),
+        randomUUID(),
+        randomUUID(),
         randomUUID()
       ];
+      const upgradeFulfillmentOperationId =
+        upgradeActivationIds[2];
       const upgradeService = createAlakazamUpgradeService({
         repository: settlementRepository,
         provider: {
@@ -2237,7 +2241,10 @@ test(
               "2026-08-02T12:15:04.000Z",
               "2026-08-02T12:16:05.000Z",
               "2026-08-02T12:16:06.000Z",
-              "2026-09-02T12:05:00.000Z"
+              "2026-08-02T12:16:07.000Z",
+              "2026-08-02T12:16:08.000Z",
+              "2026-09-02T12:05:00.000Z",
+              "2026-09-02T12:05:01.000Z"
             ][upgradeClockCalls - 1];
           }
         },
@@ -2247,7 +2254,8 @@ test(
             assert.ok(
               [
                 "alakazam_upgrade_subscription_event",
-                "alakazam_upgrade_tier_event"
+                "alakazam_upgrade_tier_event",
+                "alakazam_tier_fulfillment_operation"
               ].includes(label)
             );
             return upgradeActivationIds.shift();
@@ -2388,7 +2396,7 @@ test(
       assert.deepEqual(upgradeProviderCalls, {
         applies: 0,
         reads: 2,
-        ids: 2
+        ids: 3
       });
       assert.deepEqual(
         await upgradeService.ingestStripeEvent(
@@ -2399,9 +2407,28 @@ test(
       assert.deepEqual(upgradeProviderCalls, {
         applies: 0,
         reads: 2,
-        ids: 2
+        ids: 4
       });
       await flushConstraints(client);
+
+      workerNow = "2026-08-02T12:16:09.000Z";
+      const upgradedLive = await worker.runOnce();
+      assert.equal(upgradedLive.status, "live");
+      assert.equal(
+        upgradedLive.operationId,
+        upgradeFulfillmentOperationId
+      );
+      assert.equal(upgradedLive.projectId, authority.projectId);
+      assert.equal(upgradedLive.subscriptionId, subscriptionId);
+      assert.equal(upgradedLive.subscriptionRevision, 3);
+      assert.equal(upgradedLive.tierId, "alakazam_35");
+      assert.equal(upgradedLive.hostname, acceptedSite.hostname);
+      assert.equal(
+        upgradedLive.sourceVersionId,
+        acceptedSite.versionId
+      );
+      await flushConstraints(client);
+      assert.equal((await worker.runOnce()).status, "idle");
 
       const downgradeQuoteId = await insertQuote(client, authority, {
         changeKind: "downgrade",
@@ -2854,8 +2881,12 @@ test(
       };
       const downgradeActivationIds = [
         randomUUID(),
+        randomUUID(),
+        randomUUID(),
         randomUUID()
       ];
+      const downgradeFulfillmentOperationId =
+        downgradeActivationIds[2];
       const downgradeActivationService =
         createAlakazamDowngradeActivationService({
           repository: settlementRepository,
@@ -2887,7 +2918,8 @@ test(
               assert.ok(
                 [
                   "alakazam_downgrade_subscription_event",
-                  "alakazam_downgrade_activation_tier_event"
+                  "alakazam_downgrade_activation_tier_event",
+                  "alakazam_tier_fulfillment_operation"
                 ].includes(label)
               );
               return downgradeActivationIds.shift();
@@ -2925,7 +2957,7 @@ test(
       });
       assert.deepEqual(downgradeActivationCalls, {
         reads: 1,
-        ids: 2
+        ids: 3
       });
       assert.deepEqual(
         await downgradeActivationService.ingestStripeEvent(
@@ -2935,27 +2967,28 @@ test(
       );
       assert.deepEqual(downgradeActivationCalls, {
         reads: 1,
-        ids: 2
+        ids: 4
       });
       await flushConstraints(client);
 
-      const renewedAccount = await account.read(accountScope);
+      const publishingAccount = await account.read(accountScope);
       assert.deepEqual(
         {
-          state: renewedAccount.state,
+          state: publishingAccount.state,
           tierId:
-            renewedAccount.subscription.tier.tierId,
+            publishingAccount.subscription.tier.tierId,
           amountMinor:
-            renewedAccount.subscription.price.amountMinor,
-          pendingChange: renewedAccount.pendingChange,
+            publishingAccount.subscription.price.amountMinor,
+          pendingChange: publishingAccount.pendingChange,
           renewalTierId:
-            renewedAccount.nextRenewal.tierId,
+            publishingAccount.nextRenewal.tierId,
           renewalAmountMinor:
-            renewedAccount.nextRenewal.amountMinor,
+            publishingAccount.nextRenewal.amountMinor,
           renewalDueAt:
-            renewedAccount.nextRenewal.dueAt,
-          receiptCount: renewedAccount.receipts.length,
-          actions: renewedAccount.actions
+            publishingAccount.nextRenewal.dueAt,
+          receiptCount: publishingAccount.receipts.length,
+          siteState: publishingAccount.site.state,
+          actions: publishingAccount.actions
         },
         {
           state: "active",
@@ -2967,18 +3000,19 @@ test(
           renewalDueAt:
             "2026-10-02T12:03:00.000Z",
           receiptCount: 2,
+          siteState: "publishing",
           actions: {
             configureSite: false,
             start: false,
-            changeTier: true,
+            changeTier: false,
             manageBilling: false,
             cancel: false,
-            reason: "only_tier_change_composed"
+            reason: "site_publishing"
           }
         }
       );
       assert.doesNotMatch(
-        JSON.stringify(renewedAccount),
+        JSON.stringify(publishingAccount),
         /(?:cs_|cus_|in_|pi_|price_|si_|sub_)/u
       );
 
@@ -2991,7 +3025,7 @@ test(
       assert.deepEqual(upgradeProviderCalls, {
         applies: 0,
         reads: 2,
-        ids: 2
+        ids: 5
       });
 
       const proof = await client.query(
@@ -3098,6 +3132,71 @@ test(
       );
       await flushConstraints(client);
 
+      workerNow = "2026-09-02T12:08:00.000Z";
+      const downgradedLive = await worker.runOnce();
+      assert.equal(downgradedLive.status, "live");
+      assert.equal(
+        downgradedLive.operationId,
+        downgradeFulfillmentOperationId
+      );
+      assert.equal(
+        downgradedLive.projectId,
+        authority.projectId
+      );
+      assert.equal(downgradedLive.subscriptionId, subscriptionId);
+      assert.equal(downgradedLive.subscriptionRevision, 4);
+      assert.equal(downgradedLive.tierId, "alakazam_25");
+      assert.equal(downgradedLive.hostname, acceptedSite.hostname);
+      assert.equal(
+        downgradedLive.sourceVersionId,
+        acceptedSite.versionId
+      );
+      await flushConstraints(client);
+      assert.equal((await worker.runOnce()).status, "idle");
+
+      const renewedAccount = await account.read(accountScope);
+      assert.deepEqual(
+        {
+          state: renewedAccount.state,
+          tierId: renewedAccount.subscription.tier.tierId,
+          amountMinor:
+            renewedAccount.subscription.price.amountMinor,
+          pendingChange: renewedAccount.pendingChange,
+          renewalTierId: renewedAccount.nextRenewal.tierId,
+          renewalAmountMinor:
+            renewedAccount.nextRenewal.amountMinor,
+          renewalDueAt: renewedAccount.nextRenewal.dueAt,
+          receiptCount: renewedAccount.receipts.length,
+          siteState: renewedAccount.site.state,
+          siteUrl: renewedAccount.site.url,
+          actions: renewedAccount.actions
+        },
+        {
+          state: "active",
+          tierId: "alakazam_25",
+          amountMinor: 2500,
+          pendingChange: null,
+          renewalTierId: "alakazam_25",
+          renewalAmountMinor: 2500,
+          renewalDueAt: "2026-10-02T12:03:00.000Z",
+          receiptCount: 2,
+          siteState: "live",
+          siteUrl: `https://${acceptedSite.hostname}/`,
+          actions: {
+            configureSite: false,
+            start: false,
+            changeTier: true,
+            manageBilling: false,
+            cancel: false,
+            reason: "only_tier_change_composed"
+          }
+        }
+      );
+      assert.doesNotMatch(
+        JSON.stringify(renewedAccount),
+        /(?:cs_|cus_|in_|pi_|price_|si_|sub_)/u
+      );
+
       const grants = await client.query(`
         select
           has_table_privilege(
@@ -3119,6 +3218,10 @@ test(
       await client.query("rollback").catch(() => {});
       client.release();
       await pool.end();
+      if (runtimeRoot !== null) {
+        await makeDirectoriesOwnerWritable(runtimeRoot);
+        await rm(runtimeRoot, { recursive: true, force: true });
+      }
     }
   }
 );
