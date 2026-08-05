@@ -195,6 +195,7 @@ const READINESS_QUERY = `
     )
       and to_regprocedure('ss.hosted_runtime_contract_v35()') is not null
       and to_regprocedure('ss.hosted_runtime_contract_v36()') is not null
+      and to_regprocedure('ss.hosted_runtime_contract_v37()') is not null
       and to_regprocedure(
         'ss.service_operator_has_capability(uuid,text,timestamp with time zone)'
       ) is not null
@@ -205,6 +206,19 @@ const READINESS_QUERY = `
       and to_regclass('ss.service_intake_drafts') is not null
       and to_regprocedure('ss.guard_service_intake_draft_insert()') is not null
       and to_regprocedure('ss.bump_service_intake_draft_revision()') is not null
+      and (
+        select count(*) = 3
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relkind = 'r'
+           and relation.relname in (
+             'service_invoices',
+             'service_invoice_lines',
+             'service_payment_reservations'
+           )
+      )
       as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -345,8 +359,11 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ss.hosted_runtime_contract_v36() =
       'canonical-ss-v36-custom-service-customer-commands'
       as custom_service_customer_commands_contract_marker_ready,
+    ss.hosted_runtime_contract_v37() =
+      'canonical-ss-v37-custom-service-held-invoices'
+      as custom_service_invoices_contract_marker_ready,
     (
-      select count(*) = 8
+      select count(*) = 11
         and bool_and(relation.relrowsecurity)
         and bool_and(relation.relforcerowsecurity)
         and bool_and(
@@ -415,7 +432,10 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
            'service_quote_line_coverages',
            'service_quote_review_targets',
            'service_quote_installments',
-           'service_quote_acceptances'
+           'service_quote_acceptances',
+           'service_invoices',
+           'service_invoice_lines',
+           'service_payment_reservations'
          )
     ) as custom_service_quotes_security_ready,
     not exists (
@@ -434,11 +454,57 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
            'service_quote_line_coverages',
            'service_quote_review_targets',
            'service_quote_installments',
-           'service_quote_acceptances'
+           'service_quote_acceptances',
+           'service_invoices',
+           'service_invoice_lines',
+           'service_payment_reservations'
          )
          and constraint_record.contype = 'f'
          and constraint_record.confdeltype = 'c'
     ) as custom_service_quotes_retention_ready,
+    (
+      select count(*) = 3
+        and bool_and(relation.relrowsecurity)
+        and bool_and(relation.relforcerowsecurity)
+        and bool_and(
+          has_table_privilege(
+            'service_role', format('ss.%I', relation.relname), 'SELECT'
+          )
+          and not has_table_privilege(
+            'service_role', format('ss.%I', relation.relname), 'INSERT'
+          )
+          and not has_table_privilege(
+            'service_role', format('ss.%I', relation.relname), 'UPDATE'
+          )
+          and not has_table_privilege(
+            'service_role', format('ss.%I', relation.relname), 'DELETE'
+          )
+          and not has_table_privilege(
+            'authenticated', format('ss.%I', relation.relname), 'SELECT'
+          )
+        )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_invoices',
+           'service_invoice_lines',
+           'service_payment_reservations'
+         )
+    )
+      and not has_function_privilege(
+        'service_role',
+        'ss.ensure_service_assessment_invoice(uuid)',
+        'EXECUTE'
+      )
+      and not has_function_privilege(
+        'service_role',
+        'ss.materialize_service_assessment_invoice()',
+        'EXECUTE'
+      )
+      as custom_service_invoices_held_ready,
     (
       select count(*) = 2
         and bool_and(column_record.is_generated = 'ALWAYS')
@@ -890,6 +956,8 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
         Object.assign(row, customServiceQuotes.rows[0] ?? {
           custom_service_quotes_contract_marker_ready: false,
           custom_service_customer_commands_contract_marker_ready: false,
+          custom_service_invoices_contract_marker_ready: false,
+          custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
           custom_service_quotes_digests_ready: false,
@@ -902,6 +970,8 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
         Object.assign(row, {
           custom_service_quotes_contract_marker_ready: false,
           custom_service_customer_commands_contract_marker_ready: false,
+          custom_service_invoices_contract_marker_ready: false,
+          custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
           custom_service_quotes_digests_ready: false,

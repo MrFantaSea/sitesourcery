@@ -107,6 +107,14 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getAssessmentInvoice(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_SERVICES_INVOICE_HELD",
+        "Custom-services assessment invoices are held in this runtime.",
+        { status: 503 }
+      );
+    },
     async getAssessmentRequest(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -151,11 +159,19 @@ export function createHeldHostedCustomServicesAccount() {
 }
 
 export function createHostedCustomServicesAccount({
+  invoiceRepository,
   quoteRepository,
   requestRepository,
   repository,
   resolveSession
 } = {}) {
+  invariant(
+    invoiceRepository &&
+      typeof invoiceRepository.readCurrentInvoice === "function",
+    "invalid_configuration",
+    "the custom-services assessment invoice repository is required",
+    { status: 500 }
+  );
   invariant(
     repository &&
       typeof repository.readFoundationSnapshot === "function",
@@ -207,6 +223,15 @@ export function createHostedCustomServicesAccount({
       );
       const snapshot = await quoteRepository.readCurrentQuote(scope);
       return projectCustomServicesAssessmentQuote({ scope, snapshot });
+    },
+
+    async getAssessmentInvoice(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return invoiceRepository.readCurrentInvoice(scope);
     },
 
     async getAssessmentRequest(actorInput, projectIdInput) {

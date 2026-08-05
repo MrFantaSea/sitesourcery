@@ -2139,6 +2139,49 @@
     return value;
   }
 
+  function verifiedAssessmentInvoice(value) {
+    if (
+      !record(value)
+      || value.schema !==
+        "sitesourcery.custom-services-assessment-invoice/v1"
+      || !["not_available", "tax_calculation_pending"].includes(value.state)
+      || !record(value.actions)
+      || !record(value.actions.checkout)
+      || value.actions.checkout.available !== false
+    ) return null;
+    if (value.state === "not_available") {
+      return value.invoice === null ? value : null;
+    }
+    var invoice = value.invoice;
+    if (
+      !record(invoice)
+      || !UUID.test(text(invoice.invoiceId))
+      || !/^SSA-[0-9A-F]{32}$/u.test(text(invoice.invoiceNumber))
+      || invoice.purpose !== "assessment"
+      || !record(invoice.line)
+      || invoice.line.name !== "Website assessment"
+      || invoice.line.quantity !== 1
+      || !record(invoice.subtotal)
+      || invoice.subtotal.amountMinor !== 20000
+      || invoice.subtotal.currency !== "USD"
+      || invoice.subtotal.formatted !== "$200.00"
+      || !record(invoice.tax)
+      || invoice.tax.state !== "calculation_required"
+      || invoice.tax.amountMinor !== null
+      || !record(invoice.total)
+      || invoice.total.state !== "pending_tax"
+      || invoice.total.amountMinor !== null
+      || !record(invoice.payment)
+      || invoice.payment.state !== "held"
+      || invoice.payment.checkoutAvailable !== false
+      || invoice.payment.chargeOccurred !== false
+      || !SHA256.test(text(invoice.invoiceDigest))
+      || !safeIso(invoice.issuedAt)
+      || !safeIso(invoice.createdAt)
+    ) return null;
+    return value;
+  }
+
   function assessmentField(
     documentRef,
     name,
@@ -2531,11 +2574,44 @@
             "p",
             "customer-assessment-note",
             quoteState.state === "accepted"
-              ? "Accepted. Site Sourcery will issue the separate invoice next; work does not begin before payment."
+              ? "Accepted. The exact assessment invoice appears below; work does not begin before payment."
               : quoteState.actions.acceptQuote.message
           )
         );
       }
+      body.appendChild(section);
+    }
+
+    function renderInvoice(invoiceState) {
+      if (!invoiceState || invoiceState.state === "not_available") return;
+      var invoice = invoiceState.invoice;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-invoice customer-quote-review"
+      );
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Assessment invoice · " + invoice.invoiceNumber
+        )
+      );
+      var facts = accountElement(documentRef, "dl", "");
+      appendAccountFact(documentRef, facts, "Assessment", "$200.00 USD");
+      appendAccountFact(documentRef, facts, "Tax", "Calculation pending");
+      appendAccountFact(documentRef, facts, "Total", "Waiting for exact tax");
+      appendAccountFact(documentRef, facts, "Payment", "Not open");
+      section.append(
+        facts,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "No payment has been requested and no charge occurred. Secure payment will open only after the exact tax and total are recorded."
+        )
+      );
       body.appendChild(section);
     }
 
@@ -2574,7 +2650,8 @@
         }
         var request = verifiedAssessmentRequest(readState.request);
         var quote = verifiedAssessmentQuote(readState.quote);
-        if (!request || !quote) {
+        var invoice = verifiedAssessmentInvoice(readState.invoice);
+        if (!request || !quote || !invoice) {
           status.textContent =
             "The assessment response could not be verified. Nothing was changed.";
           return;
@@ -2627,6 +2704,7 @@
           body.appendChild(withdraw);
         }
         renderQuote(quote, busy);
+        renderInvoice(invoice);
       }
     });
   }
@@ -3554,6 +3632,7 @@
       phase: "idle",
       request: null,
       quote: null,
+      invoice: null,
       command: "",
       error: ""
     };
@@ -3952,6 +4031,7 @@
         phase: "loading",
         request: null,
         quote: null,
+        invoice: null,
         command: "",
         error: ""
       };
@@ -3959,6 +4039,7 @@
       if (
         typeof client.getCustomServicesAssessmentRequest !== "function"
         || typeof client.getCustomServicesAssessmentQuote !== "function"
+        || typeof client.getCustomServicesAssessmentInvoice !== "function"
       ) {
         assessmentRead.phase = "error";
         assessmentRead.error =
@@ -3968,7 +4049,8 @@
       }
       return Promise.all([
         client.getCustomServicesAssessmentRequest(selectedProjectId),
-        client.getCustomServicesAssessmentQuote(selectedProjectId)
+        client.getCustomServicesAssessmentQuote(selectedProjectId),
+        client.getCustomServicesAssessmentInvoice(selectedProjectId)
       ]).then(function (results) {
         if (!assessmentReadIsCurrent(sequence, selectedProjectId)) {
           return null;
@@ -3978,6 +4060,7 @@
           phase: "ready",
           request: results[0],
           quote: results[1],
+          invoice: results[2],
           command: "",
           error: ""
         };
@@ -3992,6 +4075,7 @@
           phase: "error",
           request: null,
           quote: null,
+          invoice: null,
           command: "",
           error: explain(
             error,
@@ -4048,6 +4132,7 @@
             phase: "idle",
             request: null,
             quote: null,
+            invoice: null,
             command: "",
             error: ""
           };
@@ -6073,6 +6158,8 @@
       expectedAlakazamQuoteChange,
     verifiedAlakazamQuote:
       verifiedAlakazamQuote,
+    verifiedAssessmentInvoice:
+      verifiedAssessmentInvoice,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote,

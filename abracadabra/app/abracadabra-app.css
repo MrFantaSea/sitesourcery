@@ -227,6 +227,8 @@
 .customer-assessment-authority{padding:.85rem;border:1px solid rgba(130,231,196,.22);border-radius:.75rem;background:rgba(130,231,196,.045)}
 .customer-assessment-quote{padding:1rem;border:1px solid rgba(241,207,137,.3);border-radius:.9rem;background:rgba(241,207,137,.045)}
 .customer-assessment-quote h4{margin:0}
+.customer-assessment-invoice{padding:1rem;border:1px solid rgba(130,231,196,.3);border-radius:.9rem;background:rgba(130,231,196,.045)}
+.customer-assessment-invoice h4{margin:0;overflow-wrap:anywhere}
 .customer-assessment-note{margin:0;padding:.8rem;border-left:3px solid var(--spark-gold);background:rgba(241,207,137,.05)}
 .customer-assessment-withdraw{justify-self:start;border-color:rgba(255,184,200,.28);color:#ffe3ea}
 .customer-owner-quote-desk{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(241,207,137,.38);border-radius:1.2rem;background:linear-gradient(145deg,rgba(241,207,137,.09),rgba(25,16,35,.76))}

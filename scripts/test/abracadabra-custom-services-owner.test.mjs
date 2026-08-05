@@ -6,6 +6,7 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const {
   ownerReviewTargets,
+  verifiedAssessmentInvoice,
   verifiedOwnerAssessmentQueue
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
@@ -158,5 +159,71 @@ test("owner quote desk stays private and exposes only the bounded quote controls
   assert.match(
     css,
     /\.customer-owner-quote-form\{grid-template-columns:1fr\}/u
+  );
+});
+
+test("customer held invoice accepts only exact no-charge truth", () => {
+  const invoice = {
+    schema: "sitesourcery.custom-services-assessment-invoice/v1",
+    state: "tax_calculation_pending",
+    invoice: {
+      invoiceId: "60000000-0000-4000-8000-000000000001",
+      invoiceNumber: "SSA-60000000000040008000000000000001",
+      purpose: "assessment",
+      quote: {},
+      line: {
+        name: "Website assessment",
+        quantity: 1,
+        unit: "assessment",
+        unitAmount: {
+          amountMinor: 20000,
+          currency: "USD",
+          formatted: "$200.00"
+        }
+      },
+      subtotal: {
+        amountMinor: 20000,
+        currency: "USD",
+        formatted: "$200.00"
+      },
+      tax: {
+        state: "calculation_required",
+        amountMinor: null,
+        message: "Tax is still being calculated, if applicable."
+      },
+      total: {
+        state: "pending_tax",
+        amountMinor: null,
+        currency: "USD",
+        formatted: null
+      },
+      payment: {
+        state: "held",
+        checkoutAvailable: false,
+        chargeOccurred: false,
+        message: "No payment has been requested and no charge occurred."
+      },
+      invoiceDigest: "a".repeat(64),
+      issuedAt: "2026-08-05T12:00:00.000Z",
+      createdAt: "2026-08-05T12:00:01.000Z"
+    },
+    actions: {
+      checkout: {
+        available: false,
+        reason: "tax_calculation_required",
+        message: "Secure payment opens only after the exact tax and total are recorded."
+      }
+    }
+  };
+  assert.equal(verifiedAssessmentInvoice(invoice), invoice);
+  assert.equal(
+    verifiedAssessmentInvoice({
+      ...invoice,
+      invoice: {
+        ...invoice.invoice,
+        payment: { ...invoice.invoice.payment, chargeOccurred: true }
+      }
+    }),
+    null
   );
 });

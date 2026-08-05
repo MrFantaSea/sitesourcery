@@ -13,6 +13,9 @@ import {
   createPostgresCustomServicesOwner
 } from "../../hosted/custom-services-owner-postgres.mjs";
 import {
+  createPostgresCustomServicesInvoiceRepository
+} from "../../hosted/custom-services-invoice-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 
@@ -332,6 +335,13 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       commandContract.rows[0].marker,
       "canonical-ss-v36-custom-service-customer-commands"
     );
+    const invoiceContract = await client.query(
+      "select ss.hosted_runtime_contract_v37() as marker"
+    );
+    assert.equal(
+      invoiceContract.rows[0].marker,
+      "canonical-ss-v37-custom-service-held-invoices"
+    );
 
     const customer = await seedAccountProject(client, "quote-customer");
     const other = await seedAccountProject(client, "other-customer");
@@ -616,7 +626,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.notEqual(first.quote_digest, first.disclosure_digest);
     assert.notEqual(first.issued_at.toISOString(), "2001-01-01T00:00:00.000Z");
 
-    const materialized = await client.query(
+    const invoiceMaterialized = await client.query(
       `select
          (select count(*)::integer from ss.service_quote_lines
            where quote_revision_id = $1) as lines,
@@ -628,7 +638,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
            where quote_revision_id = $1) as targets`,
       [first.id]
     );
-    assert.deepEqual(materialized.rows[0], {
+    assert.deepEqual(invoiceMaterialized.rows[0], {
       lines: 1,
       coverages: 4,
       installments: 1,
@@ -854,6 +864,56 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(acceptedProjection.state, "accepted");
     assert.equal(acceptedProjection.actions.acceptQuote.available, false);
 
+    const invoiceRepositoryContexts = [];
+    const invoiceRepository =
+      createPostgresCustomServicesInvoiceRepository({
+        authority: {
+          async service(context, work) {
+            invoiceRepositoryContexts.push(structuredClone(context));
+            return work(client);
+          }
+        }
+      });
+    const invoiceProjection =
+      await invoiceRepository.readCurrentInvoice(quoteScope);
+    assert.equal(
+      invoiceProjection.schema,
+      "sitesourcery.custom-services-assessment-invoice/v1"
+    );
+    assert.equal(invoiceProjection.state, "tax_calculation_pending");
+    assert.equal(invoiceProjection.invoice.subtotal.amountMinor, 20000);
+    assert.equal(invoiceProjection.invoice.tax.amountMinor, null);
+    assert.equal(invoiceProjection.invoice.total.amountMinor, null);
+    assert.equal(invoiceProjection.invoice.payment.checkoutAvailable, false);
+    assert.equal(invoiceProjection.invoice.payment.chargeOccurred, false);
+    assert.match(invoiceProjection.invoice.invoiceNumber, /^SSA-[0-9A-F]{32}$/u);
+    assert.deepEqual(invoiceRepositoryContexts, [
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId,
+        readOnly: true
+      }
+    ]);
+
+    const materialized = await client.query(
+      `select
+         (select count(*)::int from ss.service_invoices
+           where quote_id = $1) as invoices,
+         (select count(*)::int from ss.service_invoice_lines line
+           join ss.service_invoices invoice on invoice.id = line.invoice_id
+          where invoice.quote_id = $1) as lines,
+         (select count(*)::int from ss.service_payment_reservations reservation
+           join ss.service_invoices invoice on invoice.id = reservation.invoice_id
+          where invoice.quote_id = $1) as reservations`,
+      [quoteId]
+    );
+    assert.deepEqual(materialized.rows[0], {
+      invoices: 1,
+      lines: 1,
+      reservations: 1
+    });
+
     assert.deepEqual(quoteRepositoryContexts, [
       {
         actorKind: "customer",
@@ -1043,11 +1103,14 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           'service_quote_line_coverages',
           'service_quote_review_targets',
           'service_quote_installments',
-          'service_quote_acceptances'
+          'service_quote_acceptances',
+          'service_invoices',
+          'service_invoice_lines',
+          'service_payment_reservations'
         )
       order by relation.relname
     `);
-    assert.equal(security.rowCount, 8);
+    assert.equal(security.rowCount, 11);
     const directlyInsertable = new Set([
       "service_quote_acceptances",
       "service_quote_revisions",

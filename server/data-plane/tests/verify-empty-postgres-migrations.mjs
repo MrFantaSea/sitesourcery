@@ -132,6 +132,14 @@ async function verifyPlatformSchema(pool) {
         as custom_service_quotes_runtime_contract,
       to_regprocedure('ss.hosted_runtime_contract_v36()') is not null
         as custom_service_customer_commands_runtime_contract,
+      to_regclass('ss.service_invoices') is not null
+        as service_invoices,
+      to_regclass('ss.service_invoice_lines') is not null
+        as service_invoice_lines,
+      to_regclass('ss.service_payment_reservations') is not null
+        as service_payment_reservations,
+      to_regprocedure('ss.hosted_runtime_contract_v37()') is not null
+        as custom_service_invoices_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -284,8 +292,11 @@ async function verifyPlatformSchema(pool) {
       ss.hosted_runtime_contract_v36() =
         'canonical-ss-v36-custom-service-customer-commands'
         as exact_customer_commands_runtime_marker,
+      ss.hosted_runtime_contract_v37() =
+        'canonical-ss-v37-custom-service-held-invoices'
+        as exact_held_invoice_runtime_marker,
       (
-        select count(*) = 8
+        select count(*) = 11
           and bool_and(relation.relrowsecurity)
           and bool_and(relation.relforcerowsecurity)
           and bool_and(
@@ -334,7 +345,10 @@ async function verifyPlatformSchema(pool) {
              'service_quote_line_coverages',
              'service_quote_review_targets',
              'service_quote_installments',
-             'service_quote_acceptances'
+             'service_quote_acceptances',
+             'service_invoices',
+             'service_invoice_lines',
+             'service_payment_reservations'
            )
       ) as exact_security_boundary,
       not exists (
@@ -353,11 +367,53 @@ async function verifyPlatformSchema(pool) {
              'service_quote_line_coverages',
              'service_quote_review_targets',
              'service_quote_installments',
-             'service_quote_acceptances'
+             'service_quote_acceptances',
+             'service_invoices',
+             'service_invoice_lines',
+             'service_payment_reservations'
            )
            and constraint_record.contype = 'f'
            and constraint_record.confdeltype = 'c'
       ) as retention_safe_foreign_keys,
+      (
+        select count(*) = 3
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege(
+              'service_role', format('ss.%I', relation.relname), 'SELECT'
+            )
+            and not has_table_privilege(
+              'service_role', format('ss.%I', relation.relname), 'INSERT'
+            )
+            and not has_table_privilege(
+              'service_role', format('ss.%I', relation.relname), 'UPDATE'
+            )
+            and not has_table_privilege(
+              'service_role', format('ss.%I', relation.relname), 'DELETE'
+            )
+          )
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relkind = 'r'
+           and relation.relname in (
+             'service_invoices',
+             'service_invoice_lines',
+             'service_payment_reservations'
+           )
+      )
+        and not has_function_privilege(
+          'service_role',
+          'ss.ensure_service_assessment_invoice(uuid)',
+          'EXECUTE'
+        )
+        and not has_function_privilege(
+          'service_role',
+          'ss.materialize_service_assessment_invoice()',
+          'EXECUTE'
+        ) as held_invoice_authority,
       (
         select count(*) = 2
           and bool_and(column_record.is_generated = 'ALWAYS')

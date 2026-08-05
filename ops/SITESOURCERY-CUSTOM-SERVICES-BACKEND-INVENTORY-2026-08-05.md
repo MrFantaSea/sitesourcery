@@ -6,6 +6,13 @@ This is the bounded Build-lane inventory for Custom sites and the five approved
 existing-site service lanes. It is an architecture and sequencing document,
 not an implementation or release authorization.
 
+Implementation update: H1A through H1E now occupy actual migrations 34–37:
+foundation, quotes, customer commands, and the held assessment invoice. The
+numbered migration headings below preserve the original inventory and are no
+longer filename assignments. Use `SITESOURCERY-ACTIVE-RUN.md` and the canonical
+roadmap for current sequence and completion state. The held invoice now exists;
+tax, Checkout dispatch, settlement, jobs/reports, and credit remain unfinished.
+
 The unfinished Batch 3C Alakazam tier-fulfillment slice is protected. Migration
 `202608040033_alakazam_tier_fulfillment.sql` and every pre-existing worktree
 change must be reviewed and sealed before any migration proposed here is

@@ -1243,3 +1243,47 @@ test("custom-service customer commands close withdrawn quote authority", async (
   );
   assert.doesNotMatch(commands.sql, /on delete cascade|grant all privileges/iu);
 });
+
+test("custom-service held invoices materialize exact accepted assessment truth", async () => {
+  const all = await migrations();
+  const invoices = all.find(
+    ({ name }) =>
+      name === "202608050037_custom_service_held_invoices.sql"
+  );
+  assert.ok(invoices);
+
+  for (const table of [
+    "service_invoices",
+    "service_invoice_lines",
+    "service_payment_reservations"
+  ]) {
+    assert.match(
+      invoices.sql,
+      new RegExp(`create table ss\\.${table} \\(`, "iu")
+    );
+  }
+  assert.match(
+    invoices.sql,
+    /subtotal_minor bigint not null check \(subtotal_minor = 20000\)[\s\S]*tax_state text not null check \(tax_state = 'calculation_required'\)[\s\S]*tax_minor bigint check \(tax_minor is null\)[\s\S]*total_minor bigint check \(total_minor is null\)[\s\S]*state text not null check \(state = 'tax_calculation_pending'\)[\s\S]*payable boolean not null check \(payable = false\)[\s\S]*charge_occurred boolean not null check \(charge_occurred = false\)/iu
+  );
+  assert.match(
+    invoices.sql,
+    /state text not null check \(state = 'held'\)[\s\S]*hold_reason text not null check \(hold_reason = 'tax_calculation_required'\)[\s\S]*dispatch_authorized boolean not null check \(dispatch_authorized = false\)[\s\S]*provider_effect_certainty text not null[\s\S]*check \(provider_effect_certainty = 'not_submitted'\)/iu
+  );
+  assert.match(
+    invoices.sql,
+    /create trigger service_quote_acceptances_materialize_invoice[\s\S]*after insert on ss\.service_quote_acceptances[\s\S]*ensure_service_assessment_invoice/iu
+  );
+  assert.match(
+    invoices.sql,
+    /revoke all on table ss\.%I from public, anon, authenticated, service_role[\s\S]*grant select on table ss\.%I to service_role/iu
+  );
+  assert.match(
+    invoices.sql,
+    /create function ss\.hosted_runtime_contract_v37\(\)[\s\S]*select 'canonical-ss-v37-custom-service-held-invoices'::text/iu
+  );
+  assert.doesNotMatch(
+    invoices.sql,
+    /on delete cascade|grant all privileges|checkout_session|provider_checkout_url/iu
+  );
+});

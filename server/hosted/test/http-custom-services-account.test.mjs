@@ -62,6 +62,9 @@ test("custom-services account HTTP route is authenticated, project-bound, and GE
       async getAssessmentQuote() {
         throw new Error("unexpected quote read");
       },
+      async getAssessmentInvoice() {
+        throw new Error("unexpected invoice read");
+      },
       async getAssessmentRequest() {
         throw new Error("unexpected request read");
       },
@@ -125,6 +128,9 @@ test("assessment quote HTTP routes read and accept the exact customer quote", as
       async getAssessmentQuote(actor, projectId) {
         calls.push({ action: "read", actor, projectId });
         return current;
+      },
+      async getAssessmentInvoice() {
+        throw new Error("unexpected invoice read");
       },
       async acceptAssessmentQuote(actor, projectId, input) {
         calls.push({ action: "accept", actor, projectId, input });
@@ -196,6 +202,9 @@ test("assessment request HTTP routes read, save, submit, and withdraw", async ()
       },
       async getAssessmentQuote() {
         throw new Error("unexpected quote read");
+      },
+      async getAssessmentInvoice() {
+        throw new Error("unexpected invoice read");
       },
       async acceptAssessmentQuote() {
         throw new Error("unexpected quote acceptance");
@@ -284,6 +293,37 @@ test("assessment request HTTP routes read, save, submit, and withdraw", async ()
   );
 });
 
+test("assessment invoice HTTP route reads the exact customer project", async () => {
+  const calls = [];
+  const invoice = {
+    schema: "sitesourcery.custom-services-assessment-invoice/v1",
+    state: "tax_calculation_pending"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: {
+      async getSnapshot() {},
+      async getAssessmentQuote() {},
+      async getAssessmentInvoice(actor, projectId) {
+        calls.push({ actor, projectId });
+        return invoice;
+      },
+      async acceptAssessmentQuote() {},
+      async getAssessmentRequest() {},
+      async saveAssessmentRequest() {},
+      async submitAssessmentRequest() {},
+      async withdrawAssessmentRequest() {}
+    }
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-invoice`;
+  const response = await api.fetch(request({ path }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), invoice);
+  assert.deepEqual(calls, [
+    { actor: { userId: CUSTOMER_ID }, projectId: PROJECT_ID }
+  ]);
+});
+
 test("default hosted runtime keeps custom-services account reading held", async () => {
   const api = createHostedApi(service());
   const response = await api.fetch(request());
@@ -314,6 +354,14 @@ test("production composes custom-services account from canonical project and Pos
   assert.match(
     source,
     /quoteRepository:\s*customServicesAssessmentQuoteRepository/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesInvoiceRepository\(\{\s*authority\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /invoiceRepository:\s*customServicesInvoiceRepository/u
   );
   assert.match(
     source,

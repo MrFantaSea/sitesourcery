@@ -370,6 +370,8 @@ export function createHostedApi(
     typeof customServicesAccountBoundary.getSnapshot === "function" &&
       typeof customServicesAccountBoundary.getAssessmentQuote ===
         "function" &&
+      typeof customServicesAccountBoundary.getAssessmentInvoice ===
+        "function" &&
       typeof customServicesAccountBoundary.getAssessmentRequest ===
         "function" &&
       typeof customServicesAccountBoundary.saveAssessmentRequest ===
@@ -831,6 +833,24 @@ export function createHostedApi(
           );
           result =
             await customServicesAccountBoundary.getAssessmentQuote(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-invoice$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing an assessment invoice.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getAssessmentInvoice(
               actor,
               route[0]
             );

@@ -52,6 +52,7 @@ function foundationSnapshot() {
 
 function context({ scope, snapshot } = {}) {
   const calls = {
+    invoiceRead: [],
     quoteAcceptance: [],
     quoteRead: [],
     requestRead: [],
@@ -62,6 +63,23 @@ function context({ scope, snapshot } = {}) {
     resolver: []
   };
   const service = createHostedCustomServicesAccount({
+    invoiceRepository: {
+      async readCurrentInvoice(value) {
+        calls.invoiceRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-services-assessment-invoice/v1",
+          state: "not_available",
+          invoice: null,
+          actions: {
+            checkout: {
+              available: false,
+              reason: "accepted_quote_required",
+              message: "Accept the current assessment quote before an invoice exists."
+            }
+          }
+        };
+      }
+    },
     quoteRepository: {
       async acceptCurrentQuote(value) {
         calls.quoteAcceptance.push(structuredClone(value));
@@ -243,6 +261,7 @@ test("hosted custom-services account rejects missing, foreign, and expanded reso
 });
 
 test("hosted custom-services account requires exact ports and a canonical snapshot", async () => {
+  const invoiceRepository = { readCurrentInvoice() {} };
   const quoteRepository = {
     acceptCurrentQuote() {},
     readCurrentQuote() {}
@@ -266,6 +285,12 @@ test("hosted custom-services account requires exact ports and a canonical snapsh
       quoteRepository,
       requestRepository,
       repository: { readFoundationSnapshot() {} }
+    },
+    {
+      invoiceRepository,
+      quoteRepository,
+      requestRepository,
+      repository: { readFoundationSnapshot() {} }
     }
   ]) {
     assert.throws(
@@ -284,6 +309,23 @@ test("hosted custom-services account requires exact ports and a canonical snapsh
     selected.service.getSnapshot(actor(), PROJECT_ID),
     isError("repository_conflict", 500)
   );
+});
+
+test("hosted custom-services invoice read stays bound to the resolved customer project", async () => {
+  const selected = context();
+  const result = await selected.service.getAssessmentInvoice(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(result.state, "not_available");
+  assert.deepEqual(selected.calls.invoiceRead, [
+    {
+      actorId: CUSTOMER_ID,
+      customerId: CUSTOMER_ID,
+      organizationId: ORGANIZATION_ID,
+      projectId: PROJECT_ID
+    }
+  ]);
 });
 
 test("hosted custom-services quote read and acceptance stay bound to the resolved customer project", async () => {
@@ -389,6 +431,10 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.getAssessmentQuote(actor(), PROJECT_ID),
     isError("CUSTOM_SERVICES_QUOTE_HELD", 503)
+  );
+  await assert.rejects(
+    held.getAssessmentInvoice(actor(), PROJECT_ID),
+    isError("CUSTOM_SERVICES_INVOICE_HELD", 503)
   );
   await assert.rejects(
     held.acceptAssessmentQuote(actor(), PROJECT_ID, {}),

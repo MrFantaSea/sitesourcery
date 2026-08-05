@@ -25,7 +25,7 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 authenticated customer request and assessment-quote surface is the
+- The H1 held assessment-invoice surface is the
   latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
@@ -36,12 +36,11 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven customer request, owner-issued quote, and
-customer-acceptance surface: add one account-bound held invoice and one
-non-dispatchable payment reservation before tax calculation, Checkout,
+Continue H1 from the now-proven account-bound held assessment invoice: add one
+server-calculated tax result and exact payable total before one Checkout,
 provider-confirmed payment, job/report delivery, and one-use `$200` Custom
 base-build credit authority. All provider effects and public-service release
-gates remain held.
+gates remain held until each preceding local boundary is proven.
 
 ## Completed and reviewed
 
@@ -775,6 +774,42 @@ Batch 3C sealed checkpoint gates:
   release, or production mutation occurred. The July 22 fallback remains
   untouched.
 
+## H1 held assessment-invoice checkpoint evidence
+
+- Migration 37 adds only three retained `service_*` tables: one immutable
+  account-bound invoice, its exact assessment line, and one non-dispatchable
+  payment reservation. It introduces no general billing framework, Checkout
+  Session, provider URL, tax claim, receipt, job, report, or credit.
+- Exact customer quote acceptance automatically materializes one invoice from
+  the accepted quote revision and its sole full-before-work installment. The
+  database fixes subtotal at `$200.00 USD`, keeps tax and total null with
+  `tax_state=calculation_required`, fixes `payable=false` and
+  `charge_occurred=false`, and holds provider certainty at `not_submitted`.
+- Acceptance replay returns the existing accepted result and leaves exactly
+  one invoice, one line, and one reservation. Existing accepted rows are
+  idempotently backfilled when migration 37 is applied.
+- The authenticated project route
+  `GET /api/v1/projects/{projectId}/custom-services/assessment-invoice` reads
+  only the exact active customer/account/organization/project binding. The
+  browser verifies the bounded projection and plainly renders tax pending,
+  payment not open, and no charge occurred; it exposes no checkout control.
+- Production readiness now requires migration 37, all three forced-RLS tables,
+  read-only service-role access, no direct materialization privilege, retained
+  foreign keys, and the exact v37 marker.
+- Focused migration, browser/API, hosted-boundary, and readiness proof passes
+  79/79. The maintained real PostgreSQL quote-to-invoice journey passes 1/1.
+  Post-integration Node 24 proof passes: core 495/495; hosted service 233 pass
+  with 2 intentional environment skips; the hosted artifact builds and
+  verifies; syntax and `git diff --check` pass.
+- Disposable database `ss_h1_invoice_20260805_codex1` replayed all 37
+  migrations from zero, proved the exact quote-to-invoice journey, had zero
+  active sessions, was dropped by exact name, and is verified absent. It held
+  no customer or production data and is not recoverable because it was a
+  disposable test database.
+- No Stripe/provider call, push, deployment, DNS change, credential handling,
+  or production mutation occurred. Public production remains the July 22
+  predecessor.
+
 ## H1 owner assessment quote operation sealed checkpoint evidence
 
 - The production hosted runtime now composes one PostgreSQL owner boundary over
@@ -822,21 +857,19 @@ Batch 3C sealed checkpoint gates:
 
 ## Live resources and workers
 
-- No H1, Batch 3C, H0, quote-readiness, or quote-proof worker remains running.
+- No H1, Batch 3C, H0, quote-readiness, or invoice-proof worker remains running.
   The exact Batch 3C and H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add one account-bound invoice projection and one non-dispatchable payment
-reservation for the exact accepted `$200` quote. Reuse the existing accepted
-quote, legal, customer, organization, project, and idempotency authority; do
-not create a general billing framework or call Stripe yet. Tax must remain
-`calculation_required`, the invoice must remain not payable, and the customer
-must see plainly that no charge occurred. Only after that held slice and its
-fresh-PostgreSQL/customer proof are sealed should tax calculation and one exact
-Checkout dispatch be added.
+Add one server-owned tax calculation result for the exact held assessment
+invoice, producing one immutable payable total without accepting money, tax,
+address, provider, or invoice state from the browser. Keep Checkout dispatch
+held during this slice. Prove tax-required, tax-zero, stale-address, replay,
+cross-tenant, and no-charge behavior against fresh PostgreSQL before opening
+one exact Stripe Checkout command in the following slice.
 
 ## Batch 3B write scope
 

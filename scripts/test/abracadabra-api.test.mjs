@@ -704,6 +704,7 @@ test("custom-service assessment requests and quote acceptance use exact project 
   );
   await client.withdrawCustomServicesAssessmentRequest("project_1");
   await client.getCustomServicesAssessmentQuote("project_1");
+  await client.getCustomServicesAssessmentInvoice("project_1");
   await client.acceptCustomServicesAssessmentQuote("project_1", {
     acceptanceStatement: "accepted_exact_quote_and_delivery_date",
     acceptedDisclosureDigest: "b".repeat(64),
@@ -721,6 +722,7 @@ test("custom-service assessment requests and quote acceptance use exact project 
       ["POST", "/api/v1/projects/project_1/custom-services/assessment-request/submission"],
       ["POST", "/api/v1/projects/project_1/custom-services/assessment-request/withdrawal"],
       ["GET", "/api/v1/projects/project_1/custom-services/assessment-quote"],
+      ["GET", "/api/v1/projects/project_1/custom-services/assessment-invoice"],
       ["POST", "/api/v1/projects/project_1/custom-services/assessment-quote/acceptance"]
     ]
   );
@@ -741,7 +743,7 @@ test("custom-service assessment requests and quote acceptance use exact project 
     draftRevision: 1
   });
   assert.deepEqual(JSON.parse(serviceCalls[3].options.body), {});
-  assert.deepEqual(JSON.parse(serviceCalls[5].options.body), {
+  assert.deepEqual(JSON.parse(serviceCalls[6].options.body), {
     acceptanceStatement: "accepted_exact_quote_and_delivery_date",
     acceptedDisclosureDigest: "b".repeat(64),
     acceptedQuoteDigest: "a".repeat(64),

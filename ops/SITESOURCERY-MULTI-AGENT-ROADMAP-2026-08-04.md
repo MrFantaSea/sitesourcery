@@ -256,9 +256,11 @@ H1 pre-commerce foundation checkpoint:
 - [x] Connect one authenticated, project-bound, held-by-default customer read
   route to the canonical PostgreSQL account, site profile, case, offering, and
   latest-intake authority; expose no commercial or operator authority.
-- [ ] Add invoice, held payment reservation, tax/provider dispatch,
-  settlement, job/report, and one-use `$200` credit migrations and services
-  before any payment or public release.
+- [x] Add one exact account-bound assessment invoice and non-dispatchable
+  payment reservation with tax/total pending and an explicit no-charge
+  customer projection.
+- [ ] Add tax/provider dispatch, settlement, job/report, and one-use `$200`
+  credit migrations and services before any payment or public release.
 
 Assessment and findings:
 
@@ -416,18 +418,20 @@ Lane D/J Polish truth ────────────┘
 | H1B | Assessment quote and acceptance authority | Lead plus bounded readiness and customer-projection workers | migration 35, deployment-controlled operator grants, immutable exact `$200` revisions, named scope, account-bound acceptance, clean-room PostgreSQL and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, and release held |
 | H1C | Authenticated custom-services account read | Lead plus bounded PostgreSQL adapter worker | exact customer/project scope, read-only canonical repository, customer-safe projection, same-origin GET, production composition, real PostgreSQL and broad proof | reviewed and sealed locally; writes, commerce, public copy, and release held |
 | H1D | Customer request, owner quote, and acceptance surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw; deployment-authorized owner queue and exact `$200` issue; current quote read/acceptance; responsive customer and owner controls; real PostgreSQL, hosted artifact, and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, deployment grant, and release held |
+| H1E | Held assessment invoice | Lead | migration 37; automatic exact accepted-installment materialization; immutable `$200` invoice line; tax/total pending; non-dispatchable reservation; authenticated customer route and no-charge UI; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; tax, Checkout, payment, job, report, credit, deployment grant, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1D are sealed. H1D now supplies the customer
+Batch 3C, H0, and H1A through H1D are sealed. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
-surface over migrations 34 through 36. Continue Lane H1 as one outcome:
+surface; H1E adds the held account-bound invoice over migrations 34 through 37.
+Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
 request + exact accepted `$200` assessment quote + held invoice/reservation +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
-build credit. The immediate slice is the account-bound held invoice and
-non-dispatchable reservation. Migrations 34 through 36 still deliberately
-supply no invoice, payable tax total, provider dispatch, payment, job, report,
+build credit. The immediate slice is server-owned tax calculation and an exact
+payable total while Checkout remains held. Migrations 34 through 37 still
+deliberately supply no provider dispatch, payment, job, report,
 or credit.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.

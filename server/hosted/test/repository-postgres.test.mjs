@@ -101,6 +101,8 @@ function readyRow(overrides = {}) {
     custom_service_quotes_schema_ready: true,
     custom_service_quotes_contract_marker_ready: true,
     custom_service_customer_commands_contract_marker_ready: true,
+    custom_service_invoices_contract_marker_ready: true,
+    custom_service_invoices_held_ready: true,
     custom_service_quotes_security_ready: true,
     custom_service_quotes_retention_ready: true,
     custom_service_quotes_digests_ready: true,
@@ -314,12 +316,27 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
 
   authority = createCanonicalPostgresAuthority({
     pool: fakePool(
+      readyRow({
+        custom_service_invoices_contract_marker_ready: false,
+        custom_service_invoices_held_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "custom_service_invoices_contract_marker",
+    "custom_service_invoices_held"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
       readyRow({ custom_service_quotes_schema_ready: false })
     )
   });
   assert.deepEqual((await authority.readiness()).missing, [
     "custom_service_customer_commands_contract_marker",
     "custom_service_customer_commands_fences",
+    "custom_service_invoices_contract_marker",
+    "custom_service_invoices_held",
     "custom_service_quotes_acceptance",
     "custom_service_quotes_contract_marker",
     "custom_service_quotes_digests",
@@ -467,6 +484,11 @@ test("production PostgreSQL source contains no aggregate or ss_hosted persistenc
   assert.match(
     source,
     /canonical-ss-v36-custom-service-customer-commands/u
+  );
+  assert.match(source, /hosted_runtime_contract_v37/u);
+  assert.match(
+    source,
+    /canonical-ss-v37-custom-service-held-invoices/u
   );
   assert.match(source, /authoritySchema: "ss"/u);
 });

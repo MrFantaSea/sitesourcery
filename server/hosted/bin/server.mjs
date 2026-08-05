@@ -54,6 +54,9 @@ import {
   createPostgresCustomServicesAssessmentQuoteRepository
 } from "../custom-services-assessment-quote-postgres.mjs";
 import {
+  createPostgresCustomServicesInvoiceRepository
+} from "../custom-services-invoice-postgres.mjs";
+import {
   createPostgresCustomServicesRequestRepository
 } from "../custom-services-request-postgres.mjs";
 import {
@@ -295,12 +298,15 @@ async function start() {
     createPostgresCustomServicesAssessmentQuoteRepository({
       authority
     });
+  const customServicesInvoiceRepository =
+    createPostgresCustomServicesInvoiceRepository({ authority });
   const customServicesRequestRepository =
     createPostgresCustomServicesRequestRepository({ authority });
   const customServicesOwner =
     createPostgresCustomServicesOwner({ authority });
   const customServicesAccount =
     createHostedCustomServicesAccount({
+      invoiceRepository: customServicesInvoiceRepository,
       quoteRepository: customServicesAssessmentQuoteRepository,
       requestRepository: customServicesRequestRepository,
       repository: customServicesAccountRepository,

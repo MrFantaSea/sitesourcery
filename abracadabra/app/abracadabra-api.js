@@ -575,6 +575,15 @@
       );
     }
 
+    function getCustomServicesAssessmentInvoice(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-invoice",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
     function acceptCustomServicesAssessmentQuote(projectId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       return request(
@@ -1328,6 +1337,8 @@
         withdrawCustomServicesAssessmentRequest,
       getCustomServicesAssessmentQuote:
         getCustomServicesAssessmentQuote,
+      getCustomServicesAssessmentInvoice:
+        getCustomServicesAssessmentInvoice,
       acceptCustomServicesAssessmentQuote:
         acceptCustomServicesAssessmentQuote,
       listOwnerAssessmentRequests:
