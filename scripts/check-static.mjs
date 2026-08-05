@@ -66,7 +66,7 @@ const expectedCatalogIdentity = Object.freeze({
   careCatalogId: "SS-CARE-2026.5",
   professionalServiceCatalogId: "SS-PROFESSIONAL-2026.1",
   sourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
-  projectionDigest: "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
+  projectionDigest: "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
 });
 const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
 const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");

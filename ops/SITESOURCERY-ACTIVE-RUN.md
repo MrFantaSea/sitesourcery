@@ -558,6 +558,30 @@ Batch 3C sealed checkpoint gates:
   management acknowledgement promises are explicitly held for owner approval;
   they are not silently frozen into customer or legal truth.
 
+## H1 assessment catalog authority checkpoint
+
+- The candidate catalog now binds the standard assessment to the exact reviewed
+  Custom-services contract digest and records one website, five representative
+  public pages/page types, desktop plus phone, at most ten findings, and a
+  separately quoted expanded-assessment boundary.
+- Assessment money is now one exact relationship: `$200` charged and no more
+  than one `$200` noncash Custom base-build credit for the same organization and
+  project, accepted within 90 days, Card through Scale only. The obsolete
+  `$350` credit and `$350` checker expectation are gone.
+- The catalog projection digest was independently recomputed. A maintained
+  focused test recomputes the reviewed contract-file digest and fails on price,
+  scope, eligibility, window, or maximum-credit drift.
+- The stale pricing checker now validates every displayed dollar amount against
+  the catalog instead of demanding that the whole new site show only `$5`.
+  Catalog, HTML, route, hosted-artifact, and 460/460 core Node checks pass.
+- The unbounded Custom assessment Payment Link and the maker's legacy direct
+  `$5`/`$25` Payment Links were removed from candidate source. The maker now
+  enters the existing account-bound save/quote journey; assessment remains an
+  inquiry until H1 invoice/payment authority is implemented. Obsolete exact
+  Care prices were also removed from the print candidate.
+- No payment provider, public deployment, push, DNS, or production state was
+  changed.
+
 ## Live resources and workers
 
 - No Batch 3C or H0 worker remains running. The exact Batch 3C disposable
@@ -567,13 +591,11 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Open Lane H1. First normalize the assessment authority to `$200` charged and a
-maximum `$200` one-use eligible Custom build credit, removing the obsolete
-`$350` checker expectation. Then implement migration 34 and the first complete
-account-bound vertical: external-site asset, accepted bounded assessment quote,
+Continue Lane H1 with migration 34 and the first complete account-bound
+vertical: external-site asset, accepted bounded assessment quote,
 invoice/provider-confirmed payment, assessment job, delivered report, and exact
-credit ledger. Keep all five public service cards and direct payment held until
-that shared spine is proven.
+credit ledger. Keep all five public service cards and assessment payment held
+until that shared spine is proven.
 
 ## Batch 3B write scope
 

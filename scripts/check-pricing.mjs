@@ -14,7 +14,7 @@ const EXPECTED_CATALOG_IDENTITY = Object.freeze({
   careCatalogId: "SS-CARE-2026.5",
   professionalServiceCatalogId: "SS-PROFESSIONAL-2026.1",
   sourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
-  projectionDigest: "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
+  projectionDigest: "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
 });
 
 function stableStringify(value) {
@@ -171,9 +171,54 @@ for (const file of publicHtmlFiles) {
 
 const assessment = publicCatalog.professionalServices?.find((service) =>
   service.id === "website-assessment");
-if (!assessment || assessment.priceCents !== 35000) {
-  errors.push("data/public-catalog.json: website-assessment must retain the exact $350 internal record");
+if (
+  !assessment ||
+  assessment.priceCents !== 20000 ||
+  assessment.contractId !==
+    "SS-CUSTOM-SERVICES-2026-08-05.1" ||
+  assessment.contractDigest !==
+    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8" ||
+  assessment.standardScope?.maximumWebsites !== 1 ||
+  assessment.standardScope?.maximumRepresentativePagesOrTypes !== 5 ||
+  JSON.stringify(assessment.standardScope?.requiredViewports) !==
+    JSON.stringify(["desktop", "phone"]) ||
+  assessment.standardScope?.maximumFindings !== 10 ||
+  assessment.standardScope?.expandedAssessmentState !==
+    "separately_quoted" ||
+  assessment.buildCredit?.basisPoints !== 10000 ||
+  assessment.buildCredit?.maximumCents !== 20000 ||
+  assessment.buildCredit?.oneUse !== true ||
+  assessment.buildCredit?.acceptanceWindowDays !== 90 ||
+  assessment.buildCredit?.sameOrganizationRequired !== true ||
+  assessment.buildCredit?.sameProjectRequired !== true ||
+  assessment.buildCredit?.cashValue !== false ||
+  assessment.buildCredit?.eligibleSuccessor !==
+    "custom_base_build_card_through_scale"
+) {
+  errors.push(
+    "data/public-catalog.json: website-assessment must be the bounded exact $200 offer with one-use same-project $200 Custom build credit"
+  );
 } else {
+  const allowedDollarDisplays = new Set([5]);
+  const collectCatalogAmounts = (value, key = null) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectCatalogAmounts(item, key));
+      return;
+    }
+    if (value && typeof value === "object") {
+      Object.entries(value).forEach(([childKey, child]) =>
+        collectCatalogAmounts(child, childKey)
+      );
+      return;
+    }
+    if (
+      typeof value === "number" &&
+      /cents$/iu.test(key ?? "")
+    ) {
+      allowedDollarDisplays.add(value / 100);
+    }
+  };
+  collectCatalogAmounts(publicCatalog);
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
     for (const match of files[file].matchAll(/\$\s?\d[\d,.]*/gu)) {
@@ -182,10 +227,10 @@ if (!assessment || assessment.priceCents !== 35000) {
   }
   const invalidDisplays = observedDisplays.filter((entry) => {
     const amount = entry.slice(entry.lastIndexOf(":") + 1).replace(/[$,]/gu, "");
-    return Number(amount) !== 5;
+    return !allowedDollarDisplays.has(Number(amount));
   });
   if (invalidDisplays.length > 0) {
-    errors.push(`public HTML dollar displays must use only the $5 Abracadabra project proposition; received ${JSON.stringify(invalidDisplays.sort())}`);
+    errors.push(`public HTML dollar displays must match the current catalog; received ${JSON.stringify(invalidDisplays.sort())}`);
   }
   if (!files["abracadabra/index.html"].includes("$5")) {
     errors.push("abracadabra/index.html: missing the reviewed $5 project Download proposition");
@@ -201,5 +246,5 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records match the private projection; public dollar copy is limited to the $5 Abracadabra project proposition; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
+  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records and public dollar copy match the private projection; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
 }

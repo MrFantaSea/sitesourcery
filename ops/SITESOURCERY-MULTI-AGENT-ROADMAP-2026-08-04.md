@@ -146,9 +146,9 @@ domain, or publication systems.
 - [x] Produce an exact keep/change/remove/hold list with file locations.
 - [x] Separate launch-critical corrections from later expansion.
 - [x] Make no customer-copy edits until the lead accepts the audit packet.
-- [ ] Complete the Custom/existing-site CHANGE / REMOVE / HOLD / KEEP audit
+- [x] Complete the Custom/existing-site CHANGE / REMOVE / HOLD / KEEP audit
   against the August 5 commercial contract.
-- [ ] Map one comprehensible account-first customer journey across assessment,
+- [x] Map one comprehensible account-first customer journey across assessment,
   onboarding, quote, invoice, job, management, and receipts.
 - [ ] Identify and remove every duplicate service name or double-charge path
   before public copy is changed.
@@ -210,7 +210,7 @@ domain, or publication systems.
 - [x] Freeze the August 5 Custom/existing-site commercial contract, including
   paid outside-site onboarding, account-before-pay, pricing, stacking, and
   held decisions.
-- [ ] Reconcile stale catalog authority: the assessment is `$200`, its maximum
+- [x] Reconcile stale catalog authority: the assessment is `$200`, its maximum
   build credit cannot remain `$350`, and obsolete exact Custom Care prices must
   not become public or payable.
 

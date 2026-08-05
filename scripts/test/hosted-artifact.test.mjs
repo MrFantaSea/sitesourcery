@@ -542,8 +542,8 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      "Your page downloads for $5",
-      "Your page downloads for a changed amount",
+      "Create an account and save the project",
+      "Use a changed account instruction",
     ),
     "utf8",
   );

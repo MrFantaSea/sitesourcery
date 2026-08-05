@@ -343,13 +343,30 @@
       "mechanismId": "DL-02",
       "label": "Website assessment",
       "priceCents": 20000,
+      "contractId": "SS-CUSTOM-SERVICES-2026-08-05.1",
+      "contractDigest": "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8",
       "deliverable": "A written assessment of the customer\u2019s existing website with screenshot evidence and real findings ranked by severity.",
       "scopeState": "must_be_stated_before_sale",
       "turnaroundState": "must_be_stated_before_sale",
+      "standardScope": {
+        "maximumWebsites": 1,
+        "maximumRepresentativePagesOrTypes": 5,
+        "requiredViewports": [
+          "desktop",
+          "phone"
+        ],
+        "maximumFindings": 10,
+        "expandedAssessmentState": "separately_quoted"
+      },
       "buildCredit": {
         "basisPoints": 10000,
-        "maximumCents": 35000,
-        "eligibleSuccessor": "any_accepted_site_sourcery_build"
+        "maximumCents": 20000,
+        "oneUse": true,
+        "acceptanceWindowDays": 90,
+        "sameOrganizationRequired": true,
+        "sameProjectRequired": true,
+        "cashValue": false,
+        "eligibleSuccessor": "custom_base_build_card_through_scale"
       },
       "boundary": "The assessment diagnoses the existing website. Remediation is a separately accepted build or service scope.",
       "placements": [
@@ -359,7 +376,7 @@
       ]
     }
   ],
-  "projectionDigest": "17f141f964fe604d87e4021ce6b209f04562b5c174ad7e480b7b62bfc103021a",
+  "projectionDigest": "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
   "domains": {
     "id": "domain-registration",
     "label": "Domain registration",

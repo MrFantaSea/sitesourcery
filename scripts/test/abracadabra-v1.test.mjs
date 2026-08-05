@@ -666,10 +666,11 @@ test("maker prototype keeps canonical contact, legal identity, and catalog amoun
       (pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu) ?? [])
         .map((amount) => Number(amount.replace(/[^\d.]/gu, ""))),
     )].sort((left, right) => left - right),
-    [5, 25],
+    [5],
   );
   assert.equal(
     pageHtml.split("https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00").length - 1,
-    1,
+    0,
   );
+  assert.doesNotMatch(pageHtml, /https:\/\/buy\.stripe\.com\//u);
 });
