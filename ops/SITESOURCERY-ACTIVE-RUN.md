@@ -25,7 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Batch 3B is the latest reviewed local checkpoint represented by this ledger;
+- The H1 pre-commerce custom-services foundation is the latest reviewed local
+  checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
@@ -35,12 +36,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Start one narrow Batch 3C tier-transition fulfillment slice: after an upgrade
-or renewal-boundary downgrade becomes authoritative, derive and publish the
-exact new tier policy before another tier change is offered. Preserve retained
-premium configuration without exposing unresolved `$35/$50` editors. Portal,
-cancellation, lifecycle policy, owner invoicing, domains, and release remain
-separate lanes.
+Finish H1 from the now-proven request foundation: connect the customer account
+and owner workbench to one exact bounded assessment, then add accepted quote,
+invoice, provider-confirmed payment, job/report delivery, and one-use `$200`
+Custom base-build credit authority. The next database slice is quote/invoice
+authority; the Polish lane applies the frozen six-step Mac/Pixel matrix in
+parallel. All payment and public-service release gates remain held.
 
 ## Completed and reviewed
 
@@ -582,20 +583,76 @@ Batch 3C sealed checkpoint gates:
 - No payment provider, public deployment, push, DNS, or production state was
   changed.
 
+## H1 pre-commerce foundation sealed checkpoint evidence
+
+- Migration 34 adds one additive custom-services namespace over the canonical
+  organization, project, account, catalog, and legal authority. It creates ten
+  retained tables for held catalog policy, scope coverage, customer-owned site
+  profiles, held operator authority, customer cases, requested offerings,
+  typed intake snapshots, held documents, and held delegated-access requests.
+- The first policy is exactly `$200 USD` one time, one website, up to five
+  representative public pages or page types, desktop and phone, up to ten
+  findings, with larger assessments separately quoted. It is bound to one
+  exact immutable Custom-services legal document and remains `held`.
+- Migration 34 is intentionally pre-commerce. Customer cases can only be
+  `draft`, `submitted`, or `withdrawn`; requested offerings can only be
+  `requested` or `removed`; access authority can only be schema-held as
+  `drafted`. No quoted, payable, paid, active-job, completed, customer-confirmed,
+  or operator-verified state exists in this slice.
+- Every customer insert or update is tied to transaction-local customer,
+  organization, active account, active membership, active organization, and
+  active project truth. The canonical PostgreSQL repository now sets that
+  exact actor context and rejects partial customer/operator contexts before a
+  database connection is opened.
+- Customer intake is bounded typed data rather than open JSON. PostgreSQL owns
+  revision, submission timestamps, and the generated SHA-256 facts digest.
+  Credential-shaped prose and credentialed URLs are rejected; the browser
+  cannot claim its own digest or submit an arbitrary diagnosis object.
+- `service_role` receives only SELECT on all ten tables, INSERT/UPDATE on the
+  three mutable customer request tables, and INSERT on immutable intake
+  snapshots. It receives no DELETE or TRUNCATE anywhere and no mutation right
+  on operators, documents, access requests, or held catalog authority. No new
+  service foreign key cascades deletion.
+- Repository readiness now verifies all ten objects, the exact marker, exact
+  held `$200` policy/legal/scope relationship, forced RLS, browser-role denial,
+  and the minimal service-role privilege matrix instead of accepting table
+  names alone.
+- The H1 Polish lane is frozen in
+  `SITESOURCERY-H1-ASSESSMENT-POLISH-MATRIX-2026-08-05.md`: six customer steps,
+  exact no-free-diagnosis and actual-delivery-date copy, customer-safe
+  projection, Mac/Pixel owner states, accessibility, retries, replay, and no
+  invented refund benefit.
+- Fresh disposable database `ss_h1_foundation_20260805_codex1` replayed all 34
+  migrations and passed the hardened platform verifier. The real adversarial
+  PostgreSQL journey passes 1/1, including missing/mismatched actor, suspended
+  account, direct state-jump, caller digest, credential text, self-appointed
+  operator, destructive privilege, browser-role read, and retention checks.
+- Authoritative Node 24 regressions pass: core 486/486; hosted service 159 pass
+  with 2 intentional environment skips; self-host 19/19; operations 52/52;
+  current site 18 live pages and 20 redirects with 27 catalog prices and five
+  sellable rails. Migration structure passes 26/26 and repository-focused
+  proof passes 7/7.
+- The disposable database had zero active sessions, was dropped by exact name,
+  and is verified absent. `git diff --check` is clean. No customer or
+  production data was touched.
+- No push, deployment, DNS change, provider effect, credential, or release
+  mutation occurred. The July 22 production fallback remains untouched.
+
 ## Live resources and workers
 
-- No Batch 3C or H0 worker remains running. The exact Batch 3C disposable
-  PostgreSQL database is absent.
+- No Batch 3C, H0, or H1 worker remains running. The exact Batch 3C and H1
+  disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Continue Lane H1 with migration 34 and the first complete account-bound
-vertical: external-site asset, accepted bounded assessment quote,
-invoice/provider-confirmed payment, assessment job, delivered report, and exact
-credit ledger. Keep all five public service cards and assessment payment held
-until that shared spine is proven.
+Implement the next H1 Build slice: exact versioned assessment quote,
+acceptance, invoice, and provider-effect reservation authority rooted in the
+proven customer case/intake. In parallel, map those server states into the
+frozen six-step customer and Mac/Pixel owner matrix. Do not open Checkout or
+public copy until settlement, job/report delivery, credit issuance, replay,
+fresh-PostgreSQL, and responsive browser proof are all connected.
 
 ## Batch 3B write scope
 

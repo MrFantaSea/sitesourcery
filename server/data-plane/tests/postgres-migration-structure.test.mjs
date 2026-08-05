@@ -937,3 +937,132 @@ test("Alakazam tier fulfillment reuses one site with exact applied-revision evid
     /create function ss\.hosted_runtime_contract_v33\(\)/iu
   );
 });
+
+test("custom-services foundation is typed, pre-commerce, and actor-bound", async () => {
+  const all = await migrations();
+  const foundation = all.find(
+    ({ name }) =>
+      name ===
+      "202608050034_custom_services_foundation.sql"
+  );
+  assert.ok(foundation);
+
+  for (const table of [
+    "service_catalog_policies",
+    "service_catalog_coverage",
+    "service_project_profiles",
+    "operator_profiles",
+    "operator_permissions",
+    "service_cases",
+    "service_case_offerings",
+    "service_intakes",
+    "service_documents",
+    "service_access_requests"
+  ]) {
+    assert.ok(
+      foundation.sql.includes("create table ss." + table + " ("),
+      `migration 034 is missing ${table}`
+    );
+    assert.ok(
+      foundation.sql.includes("'" + table + "'"),
+      `migration 034 does not seal ${table}`
+    );
+  }
+
+  assert.match(
+    foundation.sql,
+    /'website_assessment_standard'[\s\S]*20000[\s\S]*'held'/iu
+  );
+  assert.match(
+    foundation.sql,
+    /'custom_services'[\s\S]*'SS-CUSTOM-SERVICES-2026-08-05\.1'[\s\S]*9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8/iu
+  );
+  assert.match(
+    foundation.sql,
+    /'maximumFindings', 10[\s\S]*'maximumRepresentativePagesOrTypes', 5[\s\S]*'maximumWebsites', 1[\s\S]*jsonb_build_array\('desktop', 'phone'\)/iu
+  );
+  assert.match(
+    foundation.sql,
+    /origin = 'external'[\s\S]*takeover_required[\s\S]*takeover_state = 'review_required'[\s\S]*supportability_state = 'not_reviewed'/iu
+  );
+  assert.match(
+    foundation.sql,
+    /join ss\.projects project[\s\S]*organization\.state = 'active'[\s\S]*project\.lifecycle = 'active'[\s\S]*membership\.state = 'active'[\s\S]*account_profile\.state = 'active'/iu
+  );
+  assert.match(
+    foundation.sql,
+    /create function ss\.current_service_actor_kind\(\)[\s\S]*app\.service_actor_kind/iu
+  );
+  assert.match(
+    foundation.sql,
+    /create function ss\.validate_service_account_authority\(\)[\s\S]*current_service_actor_kind\(\) <> 'customer'[\s\S]*current_service_actor_user_id\(\)[\s\S]*current_service_actor_org_id\(\)/iu
+  );
+
+  const intakeTable = foundation.sql.match(
+    /create table ss\.service_intakes \([\s\S]*?\n\);/iu
+  )?.[0];
+  const caseTable = foundation.sql.match(
+    /create table ss\.service_cases \([\s\S]*?\n\);/iu
+  )?.[0];
+  const offeringTable = foundation.sql.match(
+    /create table ss\.service_case_offerings \([\s\S]*?\n\);/iu
+  )?.[0];
+  const accessTable = foundation.sql.match(
+    /create table ss\.service_access_requests \([\s\S]*?\n\);/iu
+  )?.[0];
+  assert.ok(intakeTable);
+  assert.ok(caseTable);
+  assert.ok(offeringTable);
+  assert.ok(accessTable);
+
+  assert.match(
+    intakeTable,
+    /site_display_name text[\s\S]*public_scheme text[\s\S]*public_hostname ss\.canonical_hostname[\s\S]*primary_goal text[\s\S]*complexity_flags text\[\][\s\S]*customer_ownership_affirmed boolean/iu
+  );
+  assert.doesNotMatch(intakeTable, /\bjsonb\b/iu);
+  assert.doesNotMatch(intakeTable, /customer_asserted_facts/iu);
+  assert.match(
+    intakeTable,
+    /facts_digest ss\.sha256_hex generated always as/iu
+  );
+  assert.match(caseTable, /state in \('draft', 'submitted', 'withdrawn'\)/iu);
+  assert.doesNotMatch(caseTable, /\b(?:quoted|paid|active|completed)\b/iu);
+  assert.match(offeringTable, /state in \('requested', 'removed'\)/iu);
+  assert.doesNotMatch(offeringTable, /\b(?:accepted|quoted|paid|completed)\b/iu);
+  assert.match(accessTable, /state = 'drafted'/iu);
+  assert.doesNotMatch(
+    accessTable,
+    /\b(?:sent|customer_confirmed|operator_verified|revoked)\b/iu
+  );
+  assert.doesNotMatch(
+    accessTable,
+    /\b(?:password|passcode|secret|api_key|access_token|recovery_code|credential_payload)\s+(?:text|jsonb|bytea)\b/iu
+  );
+
+  assert.doesNotMatch(foundation.sql, /on delete cascade/iu);
+  assert.doesNotMatch(foundation.sql, /grant all privileges/iu);
+  assert.match(
+    foundation.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    foundation.sql,
+    /grant insert, update on table[\s\S]*service_project_profiles[\s\S]*service_cases[\s\S]*service_case_offerings[\s\S]*to service_role/iu
+  );
+  assert.match(
+    foundation.sql,
+    /grant insert on table ss\.service_intakes to service_role/iu
+  );
+  assert.match(
+    foundation.sql,
+    /has_table_privilege\([\s\S]*'service_role'[\s\S]*'TRUNCATE'[\s\S]*held custom-service authority is writable by service_role/iu
+  );
+  assert.match(
+    foundation.sql,
+    /'custom_services'[\s\S]*'outside_management'/iu
+  );
+  assert.match(
+    foundation.sql,
+    /create function ss\.hosted_runtime_contract_v34\(\)/iu
+  );
+});

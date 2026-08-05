@@ -225,6 +225,31 @@ Account and site authority:
 - [ ] Prove cross-tenant/site denial and browser inability to claim price,
   payment, credit, unit, job, or provider authority.
 
+H1 pre-commerce foundation checkpoint:
+
+- [x] Add migration 34 as an additive, retained custom-services namespace;
+  preserve the canonical account, organization, project, catalog, and legal
+  roots instead of creating a parallel customer system.
+- [x] Bind every customer request write to an exact transaction-local customer
+  and organization plus active account, membership, organization, and project
+  truth; prove missing, stale, cross-user, and cross-tenant denial.
+- [x] Store external-site request facts in bounded typed fields with
+  database-owned revision, timestamps, and digest; accept no open customer JSON
+  or caller-authored digest authority.
+- [x] Keep operator, document, delegated-access, quote, invoice, payment, job,
+  report, and credit authority held; grant no service-role DELETE/TRUNCATE and
+  use no cascading deletion for the new retained records.
+- [x] Verify the exact held `$200` assessment policy, legal digest, scope,
+  forced RLS, minimal privileges, and runtime marker during production
+  readiness—not merely the existence of table names.
+- [x] Replay all 34 migrations from zero and pass maintained structural,
+  repository, real-PostgreSQL adversarial, core, hosted, self-host, operations,
+  and site regressions; drop and verify the disposable database absent.
+- [ ] Connect anonymous inquiry/claim and the customer account request surface
+  to this authority.
+- [ ] Add quote, acceptance, invoice, settlement, job/report, and one-use
+  `$200` credit migrations and services before any payment or public release.
+
 Assessment and findings:
 
 - [ ] Implement the bounded `$200` assessment: one site, up to five
@@ -374,16 +399,19 @@ Lane D/J Polish truth ────────────┘
 | H0 | Custom/existing-site commercial freeze | Lead | canonical contract, master roadmap, continuity ruling, catalog-conflict list | reviewed; no public or provider effect |
 | H0 | Build-lane backend inventory | Bounded build worker | one new read-only-derived backend inventory report | completed and reviewed; no implementation-file writes |
 | H0 | Polish-lane public audit | Bounded polish worker | one new CHANGE/REMOVE/HOLD/KEEP report | completed and reviewed; no public-copy writes |
+| H1A | Custom-services pre-commerce foundation | Lead plus bounded read-only review and Polish lane | migration 34, exact held assessment policy, actor-bound request state, typed intake, minimal grants, readiness, clean-room PostgreSQL and broad proof | reviewed and sealed locally; payment and release held |
 
 ## Immediate integration target
 
-Batch 3C and H0 are sealed. Open Lane H1 as one vertical customer outcome:
-activated account + customer-owned external-site asset + bounded `$200` paid
-assessment + delivered customer report + exact one-use `$200` Custom build
-credit. First reconcile the stale `$200` charge / `$350` credit / obsolete
-`$350` checker conflict, then add migration 34 and additive `service_*`
-authority. Do not widen legacy Download, Alakazam, domain, or old Spark billing
-tables into a pretend generic commerce system.
+Batch 3C, H0, and the H1 pre-commerce foundation are sealed. Continue Lane H1
+as one vertical customer outcome: anonymous inquiry/claim + activated account
++ a customer-owned external-site request + exact accepted `$200` assessment
+quote + invoice/provider-confirmed payment + job/report delivery + exact
+one-use `$200` Custom build credit. Migration 34 supplies only the held policy
+and safe request foundation; it deliberately supplies no quote, invoice,
+payment, job, report, credit, or operator authority. Do not widen legacy
+Download, Alakazam, domain, or old Spark billing tables into a pretend generic
+commerce system.
 
 The Polish lane may prepare private copy and responsive-state matrices in
 parallel, but no new service becomes publicly payable until the matching

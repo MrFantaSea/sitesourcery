@@ -13,6 +13,7 @@ const ISOLATION_LEVELS = Object.freeze({
   "repeatable-read": "REPEATABLE READ",
   serializable: "SERIALIZABLE"
 });
+const SERVICE_ACTOR_KINDS = new Set(["customer", "operator", "system"]);
 
 const READINESS_QUERY = `
   select
@@ -149,11 +150,160 @@ const READINESS_QUERY = `
       as alakazam_fulfillment_contract_ready,
     to_regprocedure('ss.hosted_runtime_contract_v33()') is not null
       as alakazam_tier_fulfillment_contract_ready,
+    (
+      select count(*) = 10
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_catalog_policies',
+           'service_catalog_coverage',
+           'service_project_profiles',
+           'operator_profiles',
+           'operator_permissions',
+           'service_cases',
+           'service_case_offerings',
+           'service_intakes',
+           'service_documents',
+           'service_access_requests'
+         )
+    )
+      and to_regprocedure('ss.hosted_runtime_contract_v34()') is not null
+      and to_regprocedure('ss.current_service_actor_kind()') is not null
+      and to_regprocedure('ss.current_service_actor_user_id()') is not null
+      and to_regprocedure('ss.current_service_actor_org_id()') is not null
+      as custom_services_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
     to_regclass('ss.audit_events') is not null as audit_ready,
     to_regclass('ss.idempotency_keys') is not null as idempotency_ready
+`;
+
+const CUSTOM_SERVICES_READINESS_QUERY = `
+  select
+    (
+      select count(*) = 1
+        from ss.service_catalog_policies policy
+        join ss.legal_documents document
+          on document.id = policy.legal_document_id
+       where policy.id = '00000000-0000-4000-8000-000000000341'
+         and policy.catalog_version = 'SS-PROFESSIONAL-2026.1'
+         and policy.service_key = 'website_assessment_standard'
+         and policy.pricing_mode = 'fixed'
+         and policy.billing_cadence = 'one_time'
+         and policy.currency = 'USD'
+         and policy.unit_amount_minor = 20000
+         and policy.minimum_quantity = 1
+         and policy.maximum_quantity = 1
+         and policy.publication_state = 'held'
+         and policy.scope_boundary = jsonb_build_object(
+           'expandedAssessmentState', 'separately_quoted',
+           'maximumFindings', 10,
+           'maximumRepresentativePagesOrTypes', 5,
+           'maximumWebsites', 1,
+           'requiredViewports', jsonb_build_array('desktop', 'phone')
+         )
+         and policy.scope_boundary_digest =
+           ss.service_json_digest(policy.scope_boundary)
+         and document.kind = 'custom_services'
+         and document.version = 'SS-CUSTOM-SERVICES-2026-08-05.1'
+         and document.content_digest =
+           '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8'
+         and document.retired_at is null
+         and (
+           select count(*) = 4
+             from ss.service_catalog_coverage coverage
+            where coverage.policy_id = policy.id
+              and coverage.boundary_digest = policy.scope_boundary_digest
+         )
+    ) as custom_services_policy_ready,
+    (
+      select count(*) = 10
+        and bool_and(relation.relrowsecurity)
+        and bool_and(relation.relforcerowsecurity)
+        and bool_and(
+          not has_table_privilege(
+            'authenticated',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'authenticated',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          )
+          and not has_table_privilege(
+            'anon',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'anon',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          )
+          and has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'DELETE'
+          )
+          and not has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'TRUNCATE'
+          )
+          and has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          ) = (
+            relation.relname in (
+              'service_project_profiles',
+              'service_cases',
+              'service_case_offerings',
+              'service_intakes'
+            )
+          )
+          and has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'UPDATE'
+          ) = (
+            relation.relname in (
+              'service_project_profiles',
+              'service_cases',
+              'service_case_offerings'
+            )
+          )
+        )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname in (
+           'service_catalog_policies',
+           'service_catalog_coverage',
+           'service_project_profiles',
+           'operator_profiles',
+           'operator_permissions',
+           'service_cases',
+           'service_case_offerings',
+           'service_intakes',
+           'service_documents',
+           'service_access_requests'
+         )
+    ) as custom_services_security_ready,
+    ss.hosted_runtime_contract_v34() =
+      'canonical-ss-v34-custom-services-foundation'
+      as custom_services_contract_marker_ready
 `;
 
 function requiredString(value, code, message) {
@@ -186,6 +336,19 @@ function isolationLevel(value) {
     { status: 500 }
   );
   return isolation;
+}
+
+function serviceActorKind(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  invariant(
+    SERVICE_ACTOR_KINDS.has(value),
+    "DATABASE_SERVICE_ACTOR_INVALID",
+    "PostgreSQL service actor kind is invalid.",
+    { status: 500 }
+  );
+  return value;
 }
 
 async function rollback(client) {
@@ -237,6 +400,22 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           database: row?.database_name ?? null
         };
       }
+      if (row.custom_services_schema_ready) {
+        const customServices = await pool.query(
+          CUSTOM_SERVICES_READINESS_QUERY
+        );
+        Object.assign(row, customServices.rows[0] ?? {
+          custom_services_policy_ready: false,
+          custom_services_security_ready: false,
+          custom_services_contract_marker_ready: false
+        });
+      } else {
+        Object.assign(row, {
+          custom_services_policy_ready: false,
+          custom_services_security_ready: false,
+          custom_services_contract_marker_ready: false
+        });
+      }
       const missing = Object.entries(row)
         .filter(
           ([key, value]) =>
@@ -276,7 +455,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 033 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 034 are required.",
       { status: 503, details: status }
     );
     return status;
@@ -287,6 +466,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       role = "authenticated",
       userId = null,
       organizationId = null,
+      actorKind = null,
       isolation = "serializable",
       readOnly = false
     },
@@ -294,6 +474,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
   ) {
     const selectedRole = transactionRole(role);
     const selectedIsolation = isolationLevel(isolation);
+    const selectedActorKind = serviceActorKind(actorKind);
     invariant(
       typeof work === "function",
       "DATABASE_TRANSACTION_INVALID",
@@ -310,6 +491,27 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
         organizationId,
         "DATABASE_TENANT_REQUIRED",
         "An authenticated PostgreSQL organization scope is required."
+      );
+    }
+    invariant(
+      selectedActorKind === null || selectedRole === "service_role",
+      "DATABASE_SERVICE_ACTOR_INVALID",
+      "A service actor can only be used by a service-role transaction.",
+      { status: 500 }
+    );
+    if (
+      selectedActorKind === "customer" ||
+      selectedActorKind === "operator"
+    ) {
+      requiredString(
+        userId,
+        "DATABASE_SERVICE_ACTOR_REQUIRED",
+        "A customer or operator service actor requires a user principal."
+      );
+      requiredString(
+        organizationId,
+        "DATABASE_SERVICE_ACTOR_REQUIRED",
+        "A customer or operator service actor requires an organization scope."
       );
     }
 
@@ -340,6 +542,18 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       await client.query(
         "select set_config('app.organization_id', $1, true)",
         [organizationId ?? ""]
+      );
+      await client.query(
+        "select set_config('app.service_actor_kind', $1, true)",
+        [selectedActorKind ?? ""]
+      );
+      await client.query(
+        "select set_config('app.service_actor_user_id', $1, true)",
+        [selectedActorKind && userId ? userId : ""]
+      );
+      await client.query(
+        "select set_config('app.service_actor_organization_id', $1, true)",
+        [selectedActorKind && organizationId ? organizationId : ""]
       );
       const result = await work(client);
       await client.query("commit");
@@ -372,12 +586,19 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     },
 
     service(
-      { userId = null, organizationId = null, isolation, readOnly = false } = {},
+      {
+        actorKind = null,
+        userId = null,
+        organizationId = null,
+        isolation,
+        readOnly = false
+      } = {},
       work
     ) {
       return transaction(
         {
           role: "service",
+          actorKind,
           userId,
           organizationId,
           isolation,

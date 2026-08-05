@@ -89,6 +89,15 @@ function readyRow(overrides = {}) {
     alakazam_upgrade_activation_contract_ready: true,
     alakazam_downgrade_dispatch_contract_ready: true,
     alakazam_downgrade_activation_contract_ready: true,
+    alakazam_fulfillment_intents_ready: true,
+    alakazam_fulfillment_operations_ready: true,
+    alakazam_fulfillment_projection_ready: true,
+    alakazam_fulfillment_contract_ready: true,
+    alakazam_tier_fulfillment_contract_ready: true,
+    custom_services_schema_ready: true,
+    custom_services_policy_ready: true,
+    custom_services_security_ready: true,
+    custom_services_contract_marker_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -256,6 +265,21 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   ]);
 
   authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        custom_services_policy_ready: false,
+        custom_services_security_ready: false,
+        custom_services_contract_marker_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "custom_services_contract_marker",
+    "custom_services_policy",
+    "custom_services_security"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
     pool: fakePool(readyRow({ shadow_schema_absent: false }))
   });
   assert.equal((await authority.readiness()).code, "SHADOW_SCHEMA_PRESENT");
@@ -287,10 +311,70 @@ test("tenant transaction sets role and transaction-local principal before work",
       "select set_config('request.jwt.claim.sub', $1, true)",
       "select set_config('request.jwt.claims', $1, true)",
       "select set_config('app.organization_id', $1, true)",
+      "select set_config('app.service_actor_kind', $1, true)",
+      "select set_config('app.service_actor_user_id', $1, true)",
+      "select set_config('app.service_actor_organization_id', $1, true)",
       "select ss.current_user_id(), ss.current_org_id()",
       "commit",
       "release"
     ]
+  );
+});
+
+test("customer service transaction binds the exact actor locally", async () => {
+  const pool = fakePool(readyRow());
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const userId = "00000000-0000-4000-8000-000000000101";
+  const organizationId = "00000000-0000-4000-8000-000000000201";
+
+  await authority.service(
+    {
+      actorKind: "customer",
+      userId,
+      organizationId
+    },
+    async (client) => {
+      await client.query("select ss.current_service_actor_kind()");
+    }
+  );
+
+  const settings = pool.calls.filter((call) =>
+    call.text.startsWith("select set_config('app.service_actor_")
+  );
+  assert.deepEqual(settings, [
+    {
+      text: "select set_config('app.service_actor_kind', $1, true)",
+      values: ["customer"]
+    },
+    {
+      text: "select set_config('app.service_actor_user_id', $1, true)",
+      values: [userId]
+    },
+    {
+      text:
+        "select set_config('app.service_actor_organization_id', $1, true)",
+      values: [organizationId]
+    }
+  ]);
+});
+
+test("customer service actor fails before connection without full context", async () => {
+  const pool = fakePool(readyRow());
+  const authority = createCanonicalPostgresAuthority({ pool });
+
+  await assert.rejects(
+    authority.service(
+      {
+        actorKind: "customer",
+        userId: "00000000-0000-4000-8000-000000000101"
+      },
+      async () => {}
+    ),
+    (error) => error?.code === "DATABASE_SERVICE_ACTOR_REQUIRED"
+  );
+  assert.equal(
+    pool.calls.some((call) => call.text === "connect"),
+    false
   );
 });
 
