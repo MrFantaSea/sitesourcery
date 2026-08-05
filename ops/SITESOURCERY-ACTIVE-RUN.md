@@ -25,8 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 pre-commerce custom-services foundation is the latest reviewed local
-  checkpoint represented by this ledger;
+- The H1 assessment quote-and-acceptance authority is the latest reviewed
+  local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
@@ -36,12 +36,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Finish H1 from the now-proven request foundation: connect the customer account
-and owner workbench to one exact bounded assessment, then add accepted quote,
-invoice, provider-confirmed payment, job/report delivery, and one-use `$200`
-Custom base-build credit authority. The next database slice is quote/invoice
-authority; the Polish lane applies the frozen six-step Mac/Pixel matrix in
-parallel. All payment and public-service release gates remain held.
+Finish H1 from the now-proven request and accepted-quote foundation: connect
+the exact customer account read/request/acceptance boundary, then add one held
+invoice and provider-effect reservation before tax calculation, Checkout,
+provider-confirmed payment, job/report delivery, and one-use `$200` Custom
+base-build credit authority. The Polish lane applies the frozen six-step
+Mac/Pixel matrix in parallel. All payment and public-service release gates
+remain held.
 
 ## Completed and reviewed
 
@@ -638,21 +639,83 @@ Batch 3C sealed checkpoint gates:
 - No push, deployment, DNS change, provider effect, credential, or release
   mutation occurred. The July 22 production fallback remains untouched.
 
+## H1 quote and acceptance sealed checkpoint evidence
+
+- Migration 35 adds eight retained `service_*` tables for deployment-controlled
+  operator authority, one quote envelope, immutable quote revisions, exact
+  materialized lines and scope coverage, one-to-five named review targets, one
+  full-before-work installment, and exact customer acceptance. It does not add
+  an invoice, payment, Stripe Session, provider event, receipt, job, report, or
+  credit.
+- The standard assessment revision is database-owned `$200.00 USD`, one site,
+  up to five canonical public pages/page types, desktop and phone, up to ten
+  findings, expanded scope separately quoted, an operator-selected actual
+  delivery date, and `tax_state=calculation_required`. Caller-supplied money,
+  tax, credit, contract, scope limit, digest, timestamps, and author fields are
+  overwritten by canonical authority.
+- Quote and disclosure digests bind organization, project, customer, case,
+  offering, policy/scope, current site-profile revision, latest intake revision
+  and facts digest, named review targets, exact money/tax/schedule, actual
+  delivery date, expiry, and the reviewed legal contract. Material changes
+  require a new immutable revision.
+- A first-party account cannot appoint an operator. The append-only grant/revoke
+  chain is deployment-controlled, generated-digest-backed, expiry-bounded, and
+  not insertable by `service_role`. Quote work requires a current
+  `service_quote_author` grant. The quote remains organization-owned so a
+  revoked operator cannot strand it; each revision records its actual current
+  authorized author.
+- Acceptance is allowed only for the exact current, unexpired revision and
+  exact quote/disclosure digests by the transaction-local customer and
+  organization with current account, membership, site-profile, and latest
+  intake truth. It is unique and immutable. The adversarial journey caught a
+  real row-lock privilege defect; the guarded acceptance trigger now takes the
+  lock under database-owned authority without granting runtime UPDATE rights.
+- `service_role` can SELECT all eight tables and INSERT only quote envelopes,
+  revisions, and acceptances. It cannot directly insert operator events or
+  materialized line/scope/installment rows and has no UPDATE, DELETE, or
+  TRUNCATE privilege. Browser roles cannot read or write the tables, forced RLS
+  is active, and no new foreign key cascades deletion.
+- A strict customer-safe migration-34 account projection covers empty, draft,
+  submitted, withdrawn, stale, cross-tenant, malformed, credential-shaped, and
+  forbidden-authority states. All customer writes remain explicitly held; the
+  projection is not yet a route or public promise.
+- Fresh disposable database `ss_h1_quotes_20260805_codex2` replayed all 35
+  migrations with the complete production-readiness contract. The maintained
+  foundation and quote adversarial PostgreSQL journeys pass 2/2, including
+  forged money, invalid/six-target scope, stale profile/intake, cross-customer
+  acceptance, operator revoke/handoff, immutable derived rows, and destructive
+  privilege checks.
+- Authoritative Node 24 proof passes: core 418/418; hosted service 168 pass with
+  2 intentional environment skips; self-host 19/19; operations 52/52;
+  migration structure 27/27; customer projection 9/9; repository/readiness
+  7/7. `git diff --check` and changed-file syntax checks pass.
+- The authoritative and interrupted-worker disposable databases each had zero
+  active sessions, were dropped by exact name, and all three tracked H1 test
+  database names are verified absent. No customer or production data was
+  touched.
+- No push, deployment, DNS change, provider effect, credential, public copy,
+  or release mutation occurred. The July 22 production fallback remains
+  untouched.
+
 ## Live resources and workers
 
-- No Batch 3C, H0, or H1 worker remains running. The exact Batch 3C and H1
-  disposable PostgreSQL databases are absent.
+- The bounded H1 customer-account PostgreSQL snapshot worker is active only in
+  two new hosted adapter/test files. It owns no migration, route, shared
+  repository, public UI, provider, or release file.
+- No Batch 3C, H0, quote-readiness, or quote-proof worker remains running. The
+  exact Batch 3C and H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Implement the next H1 Build slice: exact versioned assessment quote,
-acceptance, invoice, and provider-effect reservation authority rooted in the
-proven customer case/intake. In parallel, map those server states into the
-frozen six-step customer and Mac/Pixel owner matrix. Do not open Checkout or
-public copy until settlement, job/report delivery, credit issuance, replay,
-fresh-PostgreSQL, and responsive browser proof are all connected.
+Review and connect the bounded customer-account PostgreSQL snapshot, then add
+the exact same-origin read/request/quote/acceptance service boundary. The next
+database authority is one held invoice plus one non-dispatchable payment
+reservation. Do not call Stripe, claim tax is zero, mark an invoice payable,
+open public copy, or begin a job until the later tax, dispatch, settlement,
+report, credit, owner-operation, replay, fresh-PostgreSQL, and responsive
+browser gates are connected.
 
 ## Batch 3B write scope
 

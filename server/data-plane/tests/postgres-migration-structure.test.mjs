@@ -1066,3 +1066,128 @@ test("custom-services foundation is typed, pre-commerce, and actor-bound", async
     /create function ss\.hosted_runtime_contract_v34\(\)/iu
   );
 });
+
+test("custom-service assessment quotes are exact, append-only, and account-bound", async () => {
+  const all = await migrations();
+  const quotes = all.find(
+    ({ name }) =>
+      name === "202608050035_custom_service_quotes.sql"
+  );
+  assert.ok(quotes);
+
+  const quoteTables = [
+    "service_operator_authority_events",
+    "service_quotes",
+    "service_quote_revisions",
+    "service_quote_lines",
+    "service_quote_line_coverages",
+    "service_quote_review_targets",
+    "service_quote_installments",
+    "service_quote_acceptances"
+  ];
+  for (const table of quoteTables) {
+    assert.ok(
+      quotes.sql.includes("create table ss." + table + " ("),
+      `migration 035 is missing ${table}`
+    );
+    assert.ok(
+      quotes.sql.includes("'" + table + "'"),
+      `migration 035 does not seal ${table}`
+    );
+  }
+
+  assert.doesNotMatch(quotes.sql, /on delete cascade/iu);
+  assert.doesNotMatch(quotes.sql, /grant all privileges/iu);
+  assert.match(
+    quotes.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    quotes.sql,
+    /grant select on table[\s\S]*service_operator_authority_events[\s\S]*service_quotes[\s\S]*service_quote_revisions[\s\S]*service_quote_lines[\s\S]*service_quote_line_coverages[\s\S]*service_quote_review_targets[\s\S]*service_quote_installments[\s\S]*service_quote_acceptances[\s\S]*to service_role/iu
+  );
+  assert.match(
+    quotes.sql,
+    /grant insert on table\s+ss\.service_quotes,\s+ss\.service_quote_revisions,\s+ss\.service_quote_acceptances\s+to service_role/iu
+  );
+  assert.match(
+    quotes.sql,
+    /has_table_privilege\([\s\S]*'service_role'[\s\S]*'UPDATE'[\s\S]*'DELETE'[\s\S]*'TRUNCATE'[\s\S]*service quote table has unsafe mutation privilege/iu
+  );
+  assert.match(
+    quotes.sql,
+    /'ss\.service_operator_authority_events'[\s\S]*'ss\.service_quote_lines'[\s\S]*'ss\.service_quote_line_coverages'[\s\S]*'ss\.service_quote_review_targets'[\s\S]*'ss\.service_quote_installments'[\s\S]*service quote derived or operator authority is directly writable/iu
+  );
+
+  const revisionTable = quotes.sql.match(
+    /create table ss\.service_quote_revisions \([\s\S]*?\n\);/iu
+  )?.[0];
+  const acceptanceTable = quotes.sql.match(
+    /create table ss\.service_quote_acceptances \([\s\S]*?\n\);/iu
+  )?.[0];
+  const authorityTable = quotes.sql.match(
+    /create table ss\.service_operator_authority_events \([\s\S]*?\n\);/iu
+  )?.[0];
+  assert.ok(revisionTable);
+  assert.ok(acceptanceTable);
+  assert.ok(authorityTable);
+
+  assert.match(
+    revisionTable,
+    /service_amount_minor bigint not null check \(service_amount_minor = 20000\)[\s\S]*subtotal_minor bigint not null check \(subtotal_minor = 20000\)[\s\S]*currency text not null check \(currency = 'USD'\)[\s\S]*tax_state text not null check \(tax_state = 'calculation_required'\)[\s\S]*payment_schedule text not null\s+check \(payment_schedule = 'full_before_work'\)/iu
+  );
+  assert.match(
+    revisionTable,
+    /maximum_websites integer not null check \(maximum_websites = 1\)[\s\S]*maximum_representative_pages_or_types integer not null\s+check \(maximum_representative_pages_or_types = 5\)[\s\S]*maximum_findings integer not null check \(maximum_findings = 10\)[\s\S]*desktop_review_included boolean not null check \(desktop_review_included\)[\s\S]*phone_review_included boolean not null check \(phone_review_included\)[\s\S]*expanded_assessment_state text not null\s+check \(expanded_assessment_state = 'separately_quoted'\)/iu
+  );
+  assert.match(
+    revisionTable,
+    /quote_digest ss\.sha256_hex generated always as \(\s*ss\.service_quote_digest\(\s*'snapshot'/iu
+  );
+  assert.match(
+    revisionTable,
+    /disclosure_digest ss\.sha256_hex generated always as \(\s*ss\.service_quote_digest\(\s*'customer_disclosure'/iu
+  );
+  assert.match(
+    quotes.sql,
+    /'website_assessment_standard'[\s\S]*'Website assessment'[\s\S]*'assessment'[\s\S]*20000[\s\S]*'full'[\s\S]*20000[\s\S]*'USD'[\s\S]*'before_work'/iu
+  );
+
+  assert.match(
+    authorityTable,
+    /event_sequence bigint not null check \(event_sequence > 0\)[\s\S]*event_kind text not null check \(event_kind in \('grant', 'revoke'\)\)[\s\S]*recorded_by_kind text not null default 'deployment_control'[\s\S]*event_digest ss\.sha256_hex generated always as/iu
+  );
+  assert.match(
+    quotes.sql,
+    /create function ss\.service_operator_has_capability\([\s\S]*operator_profile\.state = 'held'[\s\S]*permission\.capability = target_capability[\s\S]*permission\.state = 'held'[\s\S]*event\.event_kind = 'grant'[\s\S]*order by event\.event_sequence desc/iu
+  );
+  assert.match(
+    quotes.sql,
+    /current_service_actor_kind\(\) <> 'operator'[\s\S]*service_operator_has_capability\([\s\S]*'service_quote_author'/iu
+  );
+  assert.match(
+    quotes.sql,
+    /service_operator_authority_events_prepare[\s\S]*service_operator_authority_events_immutable/iu
+  );
+
+  assert.match(
+    acceptanceTable,
+    /source text not null default 'account' check \(source = 'account'\)[\s\S]*acceptance_statement text not null\s+check \(acceptance_statement = 'accepted_exact_quote_and_delivery_date'\)[\s\S]*accepted_quote_digest ss\.sha256_hex not null[\s\S]*accepted_disclosure_digest ss\.sha256_hex not null[\s\S]*check \(accepted_by_user_id = customer_user_id\)/iu
+  );
+  assert.match(
+    quotes.sql,
+    /claimed_quote_digest is distinct from revision_record\.quote_digest[\s\S]*claimed_disclosure_digest is distinct from revision_record\.disclosure_digest[\s\S]*current_service_actor_kind\(\) <> 'customer'[\s\S]*current_service_actor_user_id\(\) is distinct from\s+quote_record\.customer_user_id[\s\S]*current_service_actor_org_id\(\) is distinct from\s+quote_record\.organization_id/iu
+  );
+  assert.match(
+    quotes.sql,
+    /create function ss\.prepare_service_quote_acceptance\(\)\s+returns trigger\s+language plpgsql\s+security definer\s+set search_path = pg_catalog, ss/iu
+  );
+  assert.match(
+    quotes.sql,
+    /service_quote_acceptances_account_authority[\s\S]*execute function ss\.validate_service_account_authority\(\)/iu
+  );
+  assert.match(
+    quotes.sql,
+    /create function ss\.hosted_runtime_contract_v35\(\)[\s\S]*select 'canonical-ss-v35-custom-service-quotes'::text/iu
+  );
+});

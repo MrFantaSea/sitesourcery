@@ -36,7 +36,7 @@
     "test:hosted-service": "npm run runtime:hosted-service && node --test --test-concurrency=1 server/hosted/test/*.test.mjs",
     "test:pg:migrations": "node server/data-plane/tests/verify-empty-postgres-migrations.mjs",
     "test:pg:alakazam": "node --test --test-concurrency=1 server/data-plane/tests/alakazam-postgres-contract.integration.test.mjs",
-    "test:pg:custom-services": "node --test --test-concurrency=1 server/data-plane/tests/custom-services-foundation-postgres.integration.test.mjs",
+    "test:pg:custom-services": "node --test --test-concurrency=1 server/data-plane/tests/custom-services-foundation-postgres.integration.test.mjs server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs",
     "check:hosted-service": "npm run runtime:hosted-service && node --check server/hosted/*.mjs server/hosted/bin/*.mjs && npm run test:hosted-service",
     "test:ops": "node --test ops/test/*.test.mjs",
     "check:ops": "node --check ops/*.mjs && node --test --test-concurrency=1 ops/test/*.test.mjs",

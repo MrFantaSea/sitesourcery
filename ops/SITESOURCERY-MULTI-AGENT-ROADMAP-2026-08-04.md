@@ -247,8 +247,13 @@ H1 pre-commerce foundation checkpoint:
   and site regressions; drop and verify the disposable database absent.
 - [ ] Connect anonymous inquiry/claim and the customer account request surface
   to this authority.
-- [ ] Add quote, acceptance, invoice, settlement, job/report, and one-use
-  `$200` credit migrations and services before any payment or public release.
+- [x] Add exact versioned standard-assessment quote and account-bound
+  acceptance authority with immutable scope/money/legal digests, current
+  profile/intake binding, operator grant/revoke evidence, minimal privileges,
+  fresh-PostgreSQL adversarial proof, and no provider effect.
+- [ ] Add invoice, held payment reservation, tax/provider dispatch,
+  settlement, job/report, and one-use `$200` credit migrations and services
+  before any payment or public release.
 
 Assessment and findings:
 
@@ -400,18 +405,19 @@ Lane D/J Polish truth ────────────┘
 | H0 | Build-lane backend inventory | Bounded build worker | one new read-only-derived backend inventory report | completed and reviewed; no implementation-file writes |
 | H0 | Polish-lane public audit | Bounded polish worker | one new CHANGE/REMOVE/HOLD/KEEP report | completed and reviewed; no public-copy writes |
 | H1A | Custom-services pre-commerce foundation | Lead plus bounded read-only review and Polish lane | migration 34, exact held assessment policy, actor-bound request state, typed intake, minimal grants, readiness, clean-room PostgreSQL and broad proof | reviewed and sealed locally; payment and release held |
+| H1B | Assessment quote and acceptance authority | Lead plus bounded readiness and customer-projection workers | migration 35, deployment-controlled operator grants, immutable exact `$200` revisions, named scope, account-bound acceptance, clean-room PostgreSQL and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and the H1 pre-commerce foundation are sealed. Continue Lane H1
-as one vertical customer outcome: anonymous inquiry/claim + activated account
-+ a customer-owned external-site request + exact accepted `$200` assessment
-quote + invoice/provider-confirmed payment + job/report delivery + exact
-one-use `$200` Custom build credit. Migration 34 supplies only the held policy
-and safe request foundation; it deliberately supplies no quote, invoice,
-payment, job, report, credit, or operator authority. Do not widen legacy
-Download, Alakazam, domain, or old Spark billing tables into a pretend generic
-commerce system.
+Batch 3C, H0, H1A, and H1B are sealed. Continue Lane H1 as one vertical
+customer outcome: anonymous inquiry/claim + activated account + a
+customer-owned external-site request + exact accepted `$200` assessment quote
++ held invoice/reservation + provider-confirmed payment + job/report delivery
++ exact one-use `$200` Custom build credit. Migrations 34 and 35 supply the
+safe request and accepted-quote authority only; they deliberately supply no
+invoice, payable tax total, provider dispatch, payment, job, report, or credit.
+Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
+into a pretend generic commerce system.
 
 The Polish lane may prepare private copy and responsive-state matrices in
 parallel, but no new service becomes publicly payable until the matching

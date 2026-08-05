@@ -175,6 +175,30 @@ const READINESS_QUERY = `
       and to_regprocedure('ss.current_service_actor_user_id()') is not null
       and to_regprocedure('ss.current_service_actor_org_id()') is not null
       as custom_services_schema_ready,
+    (
+      select count(*) = 8
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_operator_authority_events',
+           'service_quotes',
+           'service_quote_revisions',
+           'service_quote_lines',
+           'service_quote_line_coverages',
+           'service_quote_review_targets',
+           'service_quote_installments',
+           'service_quote_acceptances'
+         )
+    )
+      and to_regprocedure('ss.hosted_runtime_contract_v35()') is not null
+      and to_regprocedure(
+        'ss.service_operator_has_capability(uuid,text,timestamp with time zone)'
+      ) is not null
+      and to_regprocedure('ss.prepare_service_quote_acceptance()') is not null
+      as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
@@ -306,6 +330,328 @@ const CUSTOM_SERVICES_READINESS_QUERY = `
       as custom_services_contract_marker_ready
 `;
 
+const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
+  select
+    ss.hosted_runtime_contract_v35() =
+      'canonical-ss-v35-custom-service-quotes'
+      as custom_service_quotes_contract_marker_ready,
+    (
+      select count(*) = 8
+        and bool_and(relation.relrowsecurity)
+        and bool_and(relation.relforcerowsecurity)
+        and bool_and(
+          not has_table_privilege(
+            'authenticated',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'authenticated',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          )
+          and not has_table_privilege(
+            'anon',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'anon',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          )
+          and has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'SELECT'
+          )
+          and not has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'UPDATE'
+          )
+          and not has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'DELETE'
+          )
+          and not has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'TRUNCATE'
+          )
+          and has_table_privilege(
+            'service_role',
+            format('ss.%I', relation.relname),
+            'INSERT'
+          ) = (
+            relation.relname in (
+              'service_quotes',
+              'service_quote_revisions',
+              'service_quote_acceptances'
+            )
+          )
+        )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relkind = 'r'
+         and relation.relname in (
+           'service_operator_authority_events',
+           'service_quotes',
+           'service_quote_revisions',
+           'service_quote_lines',
+           'service_quote_line_coverages',
+           'service_quote_review_targets',
+           'service_quote_installments',
+           'service_quote_acceptances'
+         )
+    ) as custom_service_quotes_security_ready,
+    not exists (
+      select 1
+        from pg_constraint constraint_record
+        join pg_class relation
+          on relation.oid = constraint_record.conrelid
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname in (
+           'service_operator_authority_events',
+           'service_quotes',
+           'service_quote_revisions',
+           'service_quote_lines',
+           'service_quote_line_coverages',
+           'service_quote_review_targets',
+           'service_quote_installments',
+           'service_quote_acceptances'
+         )
+         and constraint_record.contype = 'f'
+         and constraint_record.confdeltype = 'c'
+    ) as custom_service_quotes_retention_ready,
+    (
+      select count(*) = 2
+        and bool_and(column_record.is_generated = 'ALWAYS')
+        and bool_and(
+          column_record.generation_expression like
+            '%service_quote_digest%'
+        )
+        and bool_or(
+          column_record.column_name = 'quote_digest'
+          and column_record.generation_expression like '%snapshot%'
+        )
+        and bool_or(
+          column_record.column_name = 'disclosure_digest'
+          and column_record.generation_expression like
+            '%customer_disclosure%'
+        )
+        from information_schema.columns column_record
+       where column_record.table_schema = 'ss'
+         and column_record.table_name = 'service_quote_revisions'
+         and column_record.column_name in (
+           'quote_digest',
+           'disclosure_digest'
+         )
+    ) as custom_service_quotes_digests_ready,
+    (
+      select
+        contract.definitions ~ 'service_amount_minor = 20000'
+        and contract.definitions ~ 'subtotal_minor = 20000'
+        and contract.definitions ~ 'currency = ''USD'''
+        and contract.definitions ~
+          'tax_state = ''calculation_required'''
+        and contract.definitions ~
+          'payment_schedule = ''full_before_work'''
+        and contract.definitions ~ 'maximum_websites = 1'
+        and contract.definitions ~
+          'maximum_representative_pages_or_types = 5'
+        and contract.definitions ~ 'maximum_findings = 10'
+        and contract.definitions like
+          '%CHECK (desktop_review_included)%'
+        and contract.definitions like
+          '%CHECK (phone_review_included)%'
+        and contract.definitions ~
+          'expanded_assessment_state = ''separately_quoted'''
+        and contract.definitions ~
+          'component_key = ''website_assessment_standard'''
+        and contract.definitions ~ 'unit_amount_minor = 20000'
+        and contract.definitions ~ 'amount_minor = 20000'
+        and contract.definitions ~ 'due_trigger = ''before_work'''
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.service_amount_minor := 20000%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.tax_state := ''calculation_required''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.payment_schedule := ''full_before_work''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.maximum_websites := 1%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like
+          '%new.maximum_representative_pages_or_types := 5%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.maximum_findings := 10%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.desktop_review_included := true%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%new.phone_review_included := true%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like
+          '%new.expanded_assessment_state := ''separately_quoted''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.service_quote_review_targets_are_canonical(text[])'::regprocedure
+          )
+        ) like '%cardinality(value) between 1 and 5%'
+        from (
+          select string_agg(
+            pg_get_constraintdef(constraint_record.oid),
+            E'\n'
+            order by constraint_record.oid
+          ) as definitions
+            from pg_constraint constraint_record
+           where constraint_record.conrelid in (
+             'ss.service_quote_revisions'::regclass,
+             'ss.service_quote_lines'::regclass,
+             'ss.service_quote_installments'::regclass
+           )
+             and constraint_record.contype = 'c'
+        ) contract
+    ) as custom_service_quotes_terms_ready,
+    (
+      select
+        procedure_record.prosecdef
+        and not has_function_privilege(
+          'service_role',
+          'ss.prepare_service_operator_authority_event()',
+          'EXECUTE'
+        )
+        and lower(pg_get_functiondef(procedure_record.oid)) like
+          '%event.event_kind = ''grant''%'
+        and lower(pg_get_functiondef(procedure_record.oid)) like
+          '%order by event.event_sequence desc%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote()'::regprocedure
+          )
+        ) like '%''service_quote_author''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_revision()'::regprocedure
+          )
+        ) like '%''service_quote_author''%'
+        and exists (
+          select 1
+            from information_schema.columns column_record
+           where column_record.table_schema = 'ss'
+             and column_record.table_name =
+               'service_operator_authority_events'
+             and column_record.column_name = 'event_digest'
+             and column_record.is_generated = 'ALWAYS'
+        )
+        and exists (
+          select 1
+            from pg_trigger trigger_record
+           where trigger_record.tgrelid =
+             'ss.service_operator_authority_events'::regclass
+             and trigger_record.tgname =
+               'service_operator_authority_events_prepare'
+             and not trigger_record.tgisinternal
+        )
+        and exists (
+          select 1
+            from pg_trigger trigger_record
+           where trigger_record.tgrelid =
+             'ss.service_operator_authority_events'::regclass
+             and trigger_record.tgname =
+               'service_operator_authority_events_immutable'
+             and not trigger_record.tgisinternal
+        )
+        from pg_proc procedure_record
+       where procedure_record.oid =
+         'ss.service_operator_has_capability(uuid,text,timestamp with time zone)'::regprocedure
+    ) as custom_service_quotes_operator_authority_ready,
+    (
+      select
+        acceptance_contract.definitions ~ 'source = ''account'''
+        and acceptance_contract.definitions ~
+          'acceptance_statement = ''accepted_exact_quote_and_delivery_date'''
+        and acceptance_contract.definitions ~
+          'accepted_by_user_id = customer_user_id'
+        and (
+          select procedure_record.prosecdef
+            from pg_proc procedure_record
+           where procedure_record.oid =
+             'ss.prepare_service_quote_acceptance()'::regprocedure
+        )
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_acceptance()'::regprocedure
+          )
+        ) like
+          '%claimed_quote_digest is distinct from revision_record.quote_digest%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_acceptance()'::regprocedure
+          )
+        ) like
+          '%claimed_disclosure_digest is distinct from revision_record.disclosure_digest%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_acceptance()'::regprocedure
+          )
+        ) like '%ss.current_service_actor_kind() <> ''customer''%'
+        and exists (
+          select 1
+            from pg_trigger trigger_record
+           where trigger_record.tgrelid =
+             'ss.service_quote_acceptances'::regclass
+             and trigger_record.tgname =
+               'service_quote_acceptances_account_authority'
+             and trigger_record.tgfoid =
+               'ss.validate_service_account_authority()'::regprocedure
+             and not trigger_record.tgisinternal
+        )
+        from (
+          select string_agg(
+            pg_get_constraintdef(constraint_record.oid),
+            E'\n'
+            order by constraint_record.oid
+          ) as definitions
+            from pg_constraint constraint_record
+           where constraint_record.conrelid =
+             'ss.service_quote_acceptances'::regclass
+             and constraint_record.contype in ('c', 'u')
+        ) acceptance_contract
+    ) as custom_service_quotes_acceptance_ready
+`;
+
 function requiredString(value, code, message) {
   invariant(
     typeof value === "string" && value.length > 0,
@@ -416,6 +762,30 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_services_contract_marker_ready: false
         });
       }
+      if (row.custom_service_quotes_schema_ready) {
+        const customServiceQuotes = await pool.query(
+          CUSTOM_SERVICE_QUOTES_READINESS_QUERY
+        );
+        Object.assign(row, customServiceQuotes.rows[0] ?? {
+          custom_service_quotes_contract_marker_ready: false,
+          custom_service_quotes_security_ready: false,
+          custom_service_quotes_retention_ready: false,
+          custom_service_quotes_digests_ready: false,
+          custom_service_quotes_terms_ready: false,
+          custom_service_quotes_operator_authority_ready: false,
+          custom_service_quotes_acceptance_ready: false
+        });
+      } else {
+        Object.assign(row, {
+          custom_service_quotes_contract_marker_ready: false,
+          custom_service_quotes_security_ready: false,
+          custom_service_quotes_retention_ready: false,
+          custom_service_quotes_digests_ready: false,
+          custom_service_quotes_terms_ready: false,
+          custom_service_quotes_operator_authority_ready: false,
+          custom_service_quotes_acceptance_ready: false
+        });
+      }
       const missing = Object.entries(row)
         .filter(
           ([key, value]) =>
@@ -455,7 +825,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 034 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 035 are required.",
       { status: 503, details: status }
     );
     return status;

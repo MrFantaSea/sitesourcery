@@ -98,6 +98,14 @@ function readyRow(overrides = {}) {
     custom_services_policy_ready: true,
     custom_services_security_ready: true,
     custom_services_contract_marker_ready: true,
+    custom_service_quotes_schema_ready: true,
+    custom_service_quotes_contract_marker_ready: true,
+    custom_service_quotes_security_ready: true,
+    custom_service_quotes_retention_ready: true,
+    custom_service_quotes_digests_ready: true,
+    custom_service_quotes_terms_ready: true,
+    custom_service_quotes_operator_authority_ready: true,
+    custom_service_quotes_acceptance_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -280,6 +288,45 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
   ]);
 
   authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        custom_service_quotes_contract_marker_ready: false,
+        custom_service_quotes_security_ready: false,
+        custom_service_quotes_retention_ready: false,
+        custom_service_quotes_digests_ready: false,
+        custom_service_quotes_terms_ready: false,
+        custom_service_quotes_operator_authority_ready: false,
+        custom_service_quotes_acceptance_ready: false
+      })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "custom_service_quotes_acceptance",
+    "custom_service_quotes_contract_marker",
+    "custom_service_quotes_digests",
+    "custom_service_quotes_operator_authority",
+    "custom_service_quotes_retention",
+    "custom_service_quotes_security",
+    "custom_service_quotes_terms"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({ custom_service_quotes_schema_ready: false })
+    )
+  });
+  assert.deepEqual((await authority.readiness()).missing, [
+    "custom_service_quotes_acceptance",
+    "custom_service_quotes_contract_marker",
+    "custom_service_quotes_digests",
+    "custom_service_quotes_operator_authority",
+    "custom_service_quotes_retention",
+    "custom_service_quotes_schema",
+    "custom_service_quotes_security",
+    "custom_service_quotes_terms"
+  ]);
+
+  authority = createCanonicalPostgresAuthority({
     pool: fakePool(readyRow({ shadow_schema_absent: false }))
   });
   assert.equal((await authority.readiness()).code, "SHADOW_SCHEMA_PRESENT");
@@ -410,5 +457,7 @@ test("production PostgreSQL source contains no aggregate or ss_hosted persistenc
   assert.doesNotMatch(source, /runtime_state|runtime_revisions|payload jsonb/u);
   assert.doesNotMatch(source, /repository-memory/u);
   assert.match(source, /to_regnamespace\('ss_hosted'\) is null/u);
+  assert.match(source, /hosted_runtime_contract_v35/u);
+  assert.match(source, /canonical-ss-v35-custom-service-quotes/u);
   assert.match(source, /authoritySchema: "ss"/u);
 });
