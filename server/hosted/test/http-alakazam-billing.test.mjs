@@ -15,7 +15,10 @@ const QUOTE_ID =
   "40000000-0000-4000-8000-000000000001";
 const CHECKOUT_COMMAND_ID =
   "50000000-0000-4000-8000-000000000001";
+const DOWNGRADE_COMMAND_ID =
+  "60000000-0000-4000-8000-000000000001";
 const DISCLOSURE_DIGEST = "d".repeat(64);
+const QUOTE_DIGEST = "e".repeat(64);
 
 function service() {
   return {
@@ -57,8 +60,12 @@ function writeRequest(
   });
 }
 
-test("Alakazam quote and Checkout routes preserve route and idempotency identity", async () => {
-  const calls = { quotes: [], checkouts: [] };
+test("Alakazam quote, Checkout, and downgrade routes preserve distinct route and idempotency identity", async () => {
+  const calls = {
+    quotes: [],
+    checkouts: [],
+    downgrades: []
+  };
   const api = createHostedApi(service(), {
     alakazamBilling: {
       async readiness() {
@@ -66,6 +73,7 @@ test("Alakazam quote and Checkout routes preserve route and idempotency identity
           ready: true,
           quote: true,
           checkout: true,
+          downgrade: true,
           state: "quote_ready"
         };
       },
@@ -102,6 +110,27 @@ test("Alakazam quote and Checkout routes preserve route and idempotency identity
           projectId,
           quoteId,
           state: "ready"
+        };
+      },
+      async scheduleDowngrade(
+        actor,
+        projectId,
+        quoteId,
+        input
+      ) {
+        calls.downgrades.push({
+          actor: structuredClone(actor),
+          projectId,
+          quoteId,
+          input: structuredClone(input)
+        });
+        return {
+          schema:
+            "sitesourcery.alakazam-downgrade-scheduled/v1",
+          commandId: input.commandId,
+          projectId,
+          quoteId,
+          state: "scheduled"
         };
       }
     }
@@ -157,9 +186,72 @@ test("Alakazam quote and Checkout routes preserve route and idempotency identity
       }
     }
   ]);
+
+  const downgradeResponse = await api.fetch(
+    writeRequest(
+      `/api/v1/projects/${PROJECT_ID}` +
+        `/alakazam-quotes/${QUOTE_ID}` +
+        "/downgrade-schedule-command",
+      {
+        body: {
+          acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+          quoteDigest: QUOTE_DIGEST
+        },
+        idempotencyKey: DOWNGRADE_COMMAND_ID
+      }
+    )
+  );
+  assert.equal(downgradeResponse.status, 201);
+  assert.equal(
+    (await downgradeResponse.json()).commandId,
+    DOWNGRADE_COMMAND_ID
+  );
+  assert.deepEqual(calls.downgrades, [
+    {
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      quoteId: QUOTE_ID,
+      input: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST,
+        commandId: DOWNGRADE_COMMAND_ID
+      }
+    }
+  ]);
+  for (const extra of [
+    { commandId: DOWNGRADE_COMMAND_ID },
+    { amountMinor: 0 },
+    { targetTierId: "alakazam_25" },
+    { providerProration: false },
+    { cashRefundMinor: 0 }
+  ]) {
+    const rejected = await api.fetch(
+      writeRequest(
+        `/api/v1/projects/${PROJECT_ID}` +
+          `/alakazam-quotes/${QUOTE_ID}` +
+          "/downgrade-schedule-command",
+        {
+          body: {
+            acceptedDisclosureDigest:
+              DISCLOSURE_DIGEST,
+            quoteDigest: QUOTE_DIGEST,
+            ...extra
+          },
+          idempotencyKey: DOWNGRADE_COMMAND_ID
+        }
+      )
+    );
+    assert.equal(rejected.status, 400);
+    assert.equal(
+      (await rejected.json()).error.code,
+      "ALAKAZAM_ROUTE_BINDING_REJECTED"
+    );
+  }
+  assert.equal(calls.downgrades.length, 1);
+  assert.equal(calls.checkouts.length, 1);
 });
 
-test("Alakazam writes retain the global CSRF and idempotency fences", async () => {
+test("Alakazam downgrade scheduling retains the global CSRF and idempotency fences", async () => {
   let calls = 0;
   const boundary = {
     async readiness() {
@@ -167,6 +259,7 @@ test("Alakazam writes retain the global CSRF and idempotency fences", async () =
         ready: true,
         quote: true,
         checkout: true,
+        downgrade: true,
         state: "quote_ready"
       };
     },
@@ -177,18 +270,27 @@ test("Alakazam writes retain the global CSRF and idempotency fences", async () =
     async createCheckout() {
       calls += 1;
       return {};
+    },
+    async scheduleDowngrade() {
+      calls += 1;
+      return {};
     }
   };
   const api = createHostedApi(service(), {
     alakazamBilling: boundary
   });
   const path =
-    `/api/v1/projects/${PROJECT_ID}/alakazam-quotes`;
+    `/api/v1/projects/${PROJECT_ID}` +
+    `/alakazam-quotes/${QUOTE_ID}` +
+    "/downgrade-schedule-command";
 
   const noCsrf = await api.fetch(
     writeRequest(path, {
-      body: { targetTierId: "alakazam_25" },
-      idempotencyKey: QUOTE_ID,
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST
+      },
+      idempotencyKey: DOWNGRADE_COMMAND_ID,
       csrf: false
     })
   );
@@ -200,13 +302,33 @@ test("Alakazam writes retain the global CSRF and idempotency fences", async () =
 
   const noIdempotency = await api.fetch(
     writeRequest(path, {
-      body: { targetTierId: "alakazam_25" }
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST
+      }
     })
   );
   assert.equal(noIdempotency.status, 400);
   assert.equal(
     (await noIdempotency.json()).error.code,
     "IDEMPOTENCY_KEY_REQUIRED"
+  );
+
+  const signedOut = await api.fetch(
+    writeRequest(path, {
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST,
+        amountMinor: 0
+      },
+      idempotencyKey: DOWNGRADE_COMMAND_ID,
+      signedIn: false
+    })
+  );
+  assert.equal(signedOut.status, 401);
+  assert.equal(
+    (await signedOut.json()).error.code,
+    "AUTHENTICATION_REQUIRED"
   );
   assert.equal(calls, 0);
 });
@@ -219,6 +341,7 @@ test("Alakazam capabilities reflect only the billing boundary readiness", async 
           ready: true,
           quote: true,
           checkout: true,
+          downgrade: true,
           state: "quote_ready"
         };
       },
@@ -226,6 +349,9 @@ test("Alakazam capabilities reflect only the billing boundary readiness", async 
         throw new Error("unused");
       },
       async createCheckout() {
+        throw new Error("unused");
+      },
+      async scheduleDowngrade() {
         throw new Error("unused");
       }
     }
@@ -237,6 +363,7 @@ test("Alakazam capabilities reflect only the billing boundary readiness", async 
   const readyCapabilities = await ready.json();
   assert.equal(readyCapabilities.alakazamQuote, true);
   assert.equal(readyCapabilities.alakazamCheckout, true);
+  assert.equal(readyCapabilities.alakazamDowngrade, true);
 
   const held = await createHostedApi(service()).fetch(
     new Request(`${ORIGIN}/api/v1/capabilities`)
@@ -246,13 +373,14 @@ test("Alakazam capabilities reflect only the billing boundary readiness", async 
   assert.deepEqual(
     {
       quote: heldCapabilities.alakazamQuote,
-      checkout: heldCapabilities.alakazamCheckout
+      checkout: heldCapabilities.alakazamCheckout,
+      downgrade: heldCapabilities.alakazamDowngrade
     },
-    { quote: false, checkout: false }
+    { quote: false, checkout: false, downgrade: false }
   );
 });
 
-test("the default Alakazam billing route authenticates and remains explicitly held", async () => {
+test("the default Alakazam billing and downgrade routes authenticate and remain explicitly held", async () => {
   const api = createHostedApi(service());
   const path =
     `/api/v1/projects/${PROJECT_ID}/alakazam-quotes`;
@@ -280,16 +408,55 @@ test("the default Alakazam billing route authenticates and remains explicitly he
     (await signedOut.json()).error.code,
     "AUTHENTICATION_REQUIRED"
   );
+
+  const downgradePath =
+    `/api/v1/projects/${PROJECT_ID}` +
+    `/alakazam-quotes/${QUOTE_ID}` +
+    "/downgrade-schedule-command";
+  const heldDowngrade = await api.fetch(
+    writeRequest(downgradePath, {
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST
+      },
+      idempotencyKey: DOWNGRADE_COMMAND_ID
+    })
+  );
+  assert.equal(heldDowngrade.status, 503);
+  assert.equal(
+    (await heldDowngrade.json()).error.code,
+    "ALAKAZAM_BILLING_HELD"
+  );
+
+  const signedOutDowngrade = await api.fetch(
+    writeRequest(downgradePath, {
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+        quoteDigest: QUOTE_DIGEST
+      },
+      idempotencyKey: DOWNGRADE_COMMAND_ID,
+      signedIn: false
+    })
+  );
+  assert.equal(signedOutDowngrade.status, 401);
+  assert.equal(
+    (await signedOutDowngrade.json()).error.code,
+    "AUTHENTICATION_REQUIRED"
+  );
 });
 
-test("the production executable composes held Alakazam billing through canonical scope and PostgreSQL", async () => {
+test("the production executable composes held Alakazam billing and downgrade scheduling through canonical scope and PostgreSQL", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
   );
   assert.match(
     source,
-    /createHostedAlakazamBilling\(\{\s*billing:\s*createAlakazamBillingService\(\s*alakazamServicePorts\s*\),\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
+    /createHostedAlakazamBilling\(\{\s*billing:\s*createAlakazamBillingService\(\s*alakazamServicePorts\s*\),\s*downgrade:\s*createAlakazamDowngradeService\(\s*alakazamServicePorts\s*\),\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /createAlakazamDowngradeService,/u
   );
   assert.match(
     source,

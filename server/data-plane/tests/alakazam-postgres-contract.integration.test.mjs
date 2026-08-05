@@ -2465,7 +2465,7 @@ test(
             changeTier: true,
             manageBilling: false,
             cancel: false,
-            reason: "only_upgrade_composed"
+            reason: "only_tier_change_composed"
           }
         }
       );

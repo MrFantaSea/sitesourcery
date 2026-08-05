@@ -38,6 +38,8 @@
     "sitesourcery.alakazam-tier-change-disclosure.v1";
   var ALAKAZAM_CHECKOUT_SCHEMA =
     "sitesourcery.alakazam-checkout-ready/v1";
+  var ALAKAZAM_DOWNGRADE_SCHEMA =
+    "sitesourcery.alakazam-downgrade-scheduled/v1";
   var ALAKAZAM_ACCOUNT_STATES = [
     "available",
     "activation_pending",
@@ -392,7 +394,7 @@
       );
   }
 
-  function alakazamUpgradeEligible(account) {
+  function alakazamTierChangeEligible(account) {
     if (
       !record(account)
       || !record(account.catalog)
@@ -410,7 +412,7 @@
       && account.catalog.tiers.some(function (tier) {
         return record(tier)
           && Number.isSafeInteger(tier.rank)
-          && tier.rank > subscription.tier.rank;
+          && tier.rank !== subscription.tier.rank;
       });
   }
 
@@ -420,8 +422,8 @@
       && value.subscription === null
       && value.pendingChange === null
     );
-    var upgradeAvailable =
-      alakazamUpgradeEligible(value);
+    var tierChangeAvailable =
+      alakazamTierChangeEligible(value);
     if (
       !exactKeys(
         value,
@@ -483,14 +485,14 @@
         ]
       )
       || value.actions.start !== startAvailable
-      || value.actions.changeTier !== upgradeAvailable
+      || value.actions.changeTier !== tierChangeAvailable
       || value.actions.manageBilling !== false
       || value.actions.cancel !== false
       || value.actions.reason !== (
         startAvailable
           ? "only_start_composed"
-          : upgradeAvailable
-            ? "only_upgrade_composed"
+          : tierChangeAvailable
+            ? "only_tier_change_composed"
           : "customer_commands_not_composed"
       )
       || !verifiedAlakazamRelationships(value)
@@ -589,6 +591,11 @@
         && value.amountMinor ===
           account.subscription.price.amountMinor;
     }
+    if (changeKind === "downgrade") {
+      return Boolean(account.subscription)
+        && value.kind === "none"
+        && value.amountMinor === 0;
+    }
     return changeKind === "start"
       && (
         account.downloadCredit.available
@@ -629,10 +636,12 @@
       account.subscription
       && account.actions.changeTier === true
       && record(account.subscription.tier)
-      && target.rank > account.subscription.tier.rank
+      && target.rank !== account.subscription.tier.rank
     ) {
       return Object.freeze({
-        changeKind: "upgrade",
+        changeKind: target.rank > account.subscription.tier.rank
+          ? "upgrade"
+          : "downgrade",
         currentTierId:
           account.subscription.tier.tierId,
         target: target
@@ -659,6 +668,23 @@
     var observed = safeIso(observedAt)
       ? Date.parse(observedAt)
       : Date.now();
+    var downgrade = Boolean(
+      expected && expected.changeKind === "downgrade"
+    );
+    var expectedSubtotal = downgrade
+      ? 0
+      : expected
+        ? expected.target.price.amountMinor
+          - (value && value.appliedValue
+            ? value.appliedValue.amountMinor
+            : 0)
+        : null;
+    var expectedEffectiveAt = downgrade
+      && account
+      && account.subscription
+      && account.subscription.currentPeriod
+        ? account.subscription.currentPeriod.endsAt
+        : "after_payment_and_provider_confirmation";
     if (
       !account
       || !expected
@@ -708,10 +734,9 @@
         expected.changeKind
       )
       || value.dueNow.subtotalMinor !==
-        value.targetTier.price.amountMinor
-          - value.appliedValue.amountMinor
+        expectedSubtotal
       || value.effectiveAt !==
-        "after_payment_and_provider_confirmation"
+        expectedEffectiveAt
       || !exactKeys(
         value.nextRenewal,
         ["amountMinor", "currency", "interval", "tierId"]
@@ -722,7 +747,7 @@
         value.targetTier.price.amountMinor
       || value.nextRenewal.currency !== "USD"
       || value.nextRenewal.interval !== "month"
-      || value.noMidPeriodRefundOrProration !== false
+      || value.noMidPeriodRefundOrProration !== downgrade
       || value.premiumConfiguration !==
         "preserved_when_inactive"
       || !safeIso(value.issuedAt)
@@ -778,7 +803,7 @@
       || value.disclosure.downgrade.cashRefundMinor !== 0
       || value.disclosure.downgrade.providerProration !== false
       || value.disclosure.downgrade
-        .currentTierKeptThroughPeriod !== false
+        .currentTierKeptThroughPeriod !== downgrade
       || value.disclosure.premiumConfiguration !==
         value.premiumConfiguration
       || value.disclosure.cancellationPolicy !==
@@ -824,6 +849,90 @@
       || !safeCheckoutDestination(value)
     ) return null;
     return clone(value);
+  }
+
+  function verifiedAlakazamDowngrade(
+    value,
+    projectId,
+    quote,
+    commandId
+  ) {
+    if (
+      !quote
+      || quote.changeKind !== "downgrade"
+      || !exactKeys(
+        value,
+        [
+          "cashRefundMinor",
+          "chargeNowMinor",
+          "commandId",
+          "currentTierKeptThroughPeriod",
+          "effectiveAt",
+          "priorTierId",
+          "projectId",
+          "providerProration",
+          "quoteId",
+          "schema",
+          "state",
+          "targetTierId"
+        ]
+      )
+      || value.schema !== ALAKAZAM_DOWNGRADE_SCHEMA
+      || text(value.commandId) !== text(commandId)
+      || !UUID.test(text(value.commandId))
+      || text(value.projectId) !== text(projectId)
+      || text(value.quoteId) !== text(quote.quoteId)
+      || value.state !== "scheduled"
+      || value.priorTierId !==
+        quote.disclosure.currentTierId
+      || value.targetTierId !==
+        quote.targetTier.tierId
+      || value.effectiveAt !== quote.effectiveAt
+      || value.chargeNowMinor !== 0
+      || value.cashRefundMinor !== 0
+      || value.providerProration !== false
+      || value.currentTierKeptThroughPeriod !== true
+    ) return null;
+    return clone(value);
+  }
+
+  function confirmedAlakazamDowngradeProjection(
+    account,
+    scheduled
+  ) {
+    var subscription = account
+      && account.subscription;
+    var pending = account
+      && account.pendingChange;
+    var renewal = account
+      && account.nextRenewal;
+    return Boolean(
+      record(account)
+      && record(scheduled)
+      && text(account.projectId) ===
+        text(scheduled.projectId)
+      && record(subscription)
+      && record(subscription.tier)
+      && subscription.tier.tierId ===
+        scheduled.priorTierId
+      && record(subscription.currentPeriod)
+      && subscription.currentPeriod.endsAt ===
+        scheduled.effectiveAt
+      && record(pending)
+      && pending.changeKind === "downgrade"
+      && pending.state === "scheduled"
+      && record(pending.targetTier)
+      && pending.targetTier.tierId ===
+        scheduled.targetTierId
+      && pending.effectiveAt ===
+        scheduled.effectiveAt
+      && record(renewal)
+      && renewal.tierId ===
+        scheduled.targetTierId
+      && renewal.dueAt === scheduled.effectiveAt
+      && account.actions
+      && account.actions.changeTier === false
+    );
   }
 
   function accountElement(
@@ -933,6 +1042,7 @@
 
     var quote = selected.quote;
     var upgrade = quote.changeKind === "upgrade";
+    var downgrade = quote.changeKind === "downgrade";
     var review = accountElement(
       documentRef,
       "section",
@@ -947,9 +1057,11 @@
       documentRef,
       "h4",
       "",
-      upgrade
-        ? "Review the exact upgrade quote"
-        : "Review the exact subscription quote"
+      downgrade
+        ? "Review the exact downgrade schedule"
+        : upgrade
+          ? "Review the exact upgrade quote"
+          : "Review the exact subscription quote"
     );
     heading.id = "customer-alakazam-quote-title";
     var facts = accountElement(
@@ -957,14 +1069,17 @@
       "dl",
       "customer-alakazam-quote-facts"
     );
-    if (upgrade) {
+    if (upgrade || downgrade) {
       appendAccountFact(
         documentRef,
         facts,
         "Current tier",
         account.subscription.tier.name + " · "
           + accountMoney(account.subscription.price)
-          + " already paid this period"
+          + (downgrade
+            ? " kept through "
+              + accountDate(quote.effectiveAt)
+            : " already paid this period")
       );
     }
     appendAccountFact(
@@ -978,23 +1093,38 @@
     appendAccountFact(
       documentRef,
       facts,
-      upgrade ? "Current plan credit" : "Download credit",
-      quote.appliedValue.amountMinor > 0
-        ? "−" + accountMoney({
-          amountMinor: quote.appliedValue.amountMinor,
+      downgrade
+        ? "Cash refund now"
+        : upgrade
+          ? "Current plan credit"
+          : "Download credit",
+      downgrade
+        ? accountMoney({
+          amountMinor:
+            quote.disclosure.downgrade.cashRefundMinor,
           currency: "USD"
-        }) + (
-          upgrade
-            ? " already paid this period"
-            : " applied once"
-        )
-        : "No credit applied"
+        }) + " · no mid-period refund"
+        : quote.appliedValue.amountMinor > 0
+          ? "−" + accountMoney({
+            amountMinor: quote.appliedValue.amountMinor,
+            currency: "USD"
+          }) + (
+            upgrade
+              ? " already paid this period"
+              : " applied once"
+          )
+          : "No credit applied"
     );
     appendAccountFact(
       documentRef,
       facts,
       "Due now",
-      quote.dueNow.taxState === "automatic"
+      downgrade
+        ? accountMoney({
+          amountMinor: quote.dueNow.subtotalMinor,
+          currency: quote.dueNow.currency
+        }) + " · no charge and no proration"
+        : quote.dueNow.taxState === "automatic"
         ? accountMoney({
           amountMinor: quote.dueNow.subtotalMinor,
           currency: quote.dueNow.currency
@@ -1011,15 +1141,20 @@
       accountMoney({
         amountMinor: quote.nextRenewal.amountMinor,
         currency: quote.nextRenewal.currency
-      }) + " each month"
+      }) + " each month" + (downgrade
+        ? " beginning " + accountDate(quote.effectiveAt)
+        : "")
     );
     appendAccountFact(
       documentRef,
       facts,
-      "Starts",
-      upgrade
-        ? "After difference payment and subscription confirmation"
-        : "After payment and subscription confirmation"
+      downgrade ? "Takes effect" : "Starts",
+      downgrade
+        ? accountDate(quote.effectiveAt)
+          + " · current tier stays active until then"
+        : upgrade
+          ? "After difference payment and subscription confirmation"
+          : "After payment and subscription confirmation"
     );
     appendAccountFact(
       documentRef,
@@ -1027,6 +1162,39 @@
       "Quote expires",
       accountDate(quote.expiresAt)
     );
+
+    if (
+      downgrade
+      && selected.phase === "scheduled"
+      && record(selected.scheduled)
+    ) {
+      var confirmation = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-command-success",
+        selected.refreshState === "error"
+          ? "Downgrade scheduled for "
+            + accountDate(selected.scheduled.effectiveAt)
+            + ". $0 was charged and $0 was refunded. Updated billing details could not be loaded. Try loading billing again; the Schedule command will not be sent again."
+          : selected.refreshState === "loading"
+            ? "Downgrade scheduled for "
+              + accountDate(selected.scheduled.effectiveAt)
+              + ". $0 was charged and $0 was refunded. Refreshing billing details…"
+            : "Downgrade scheduled for "
+              + accountDate(selected.scheduled.effectiveAt)
+              + ". $0 was charged and $0 was refunded. Billing details are updated below."
+      );
+      confirmation.setAttribute(
+        "data-alakazam-downgrade-confirmation",
+        ""
+      );
+      confirmation.setAttribute("role", "status");
+      confirmation.setAttribute("aria-live", "polite");
+      confirmation.setAttribute("tabindex", "-1");
+      review.append(heading, facts, confirmation);
+      body.appendChild(review);
+      return;
+    }
 
     var acceptance = accountElement(
       documentRef,
@@ -1044,9 +1212,11 @@
       documentRef,
       "span",
       "",
-      upgrade
-        ? "I reviewed and accept the difference due now and the new monthly renewal shown above."
-        : "I reviewed and accept the amount due now and monthly renewal shown above."
+      downgrade
+        ? "I reviewed and accept $0 charged now, $0 refunded now, my current tier through the paid period, and the lower monthly renewal shown above."
+        : upgrade
+          ? "I reviewed and accept the difference due now and the new monthly renewal shown above."
+          : "I reviewed and accept the amount due now and monthly renewal shown above."
     );
     acceptance.append(checkbox, acceptanceCopy);
 
@@ -1054,40 +1224,60 @@
       documentRef,
       "button",
       "spark-button spark-button-primary",
-      selected.phase === "checkout"
-        ? "Opening secure payment…"
-        : "Continue to secure payment"
+      downgrade
+        ? selected.phase === "scheduling"
+          ? "Scheduling downgrade…"
+          : "Schedule downgrade"
+        : selected.phase === "checkout"
+          ? "Opening secure payment…"
+          : "Continue to secure payment"
     );
     continueButton.type = "button";
     continueButton.setAttribute(
-      "data-alakazam-checkout",
+      downgrade
+        ? "data-alakazam-schedule-downgrade"
+        : "data-alakazam-checkout",
       ""
     );
     function syncContinue() {
       continueButton.disabled =
         checkbox.checked !== true
-        || capabilities.alakazamCheckout !== true
-        || selected.phase === "checkout";
+        || (downgrade
+          ? capabilities.alakazamDowngrade !== true
+          : capabilities.alakazamCheckout !== true)
+        || selected.phase === "checkout"
+        || selected.phase === "scheduling";
     }
     checkbox.addEventListener("change", syncContinue);
     continueButton.addEventListener("click", function () {
       if (
         checkbox.checked === true
-        && typeof actions.checkout === "function"
-      ) actions.checkout();
+        && typeof (
+          downgrade ? actions.downgrade : actions.checkout
+        ) === "function"
+      ) {
+        if (downgrade) actions.downgrade();
+        else actions.checkout();
+      }
     });
     syncContinue();
 
     review.append(heading, facts, acceptance);
-    if (capabilities.alakazamCheckout !== true) {
+    if (
+      downgrade
+        ? capabilities.alakazamDowngrade !== true
+        : capabilities.alakazamCheckout !== true
+    ) {
       review.appendChild(
         accountElement(
           documentRef,
           "p",
           "customer-alakazam-command-state",
-          upgrade
-            ? "The exact upgrade quote is available for review, but secure upgrade payment is not open yet."
-            : "The exact quote is available for review, but secure subscription payment is not open yet."
+          downgrade
+            ? "The exact downgrade schedule is available for review, but scheduling is not open yet."
+            : upgrade
+              ? "The exact upgrade quote is available for review, but secure upgrade payment is not open yet."
+              : "The exact quote is available for review, but secure subscription payment is not open yet."
         )
       );
     }
@@ -1261,7 +1451,7 @@
 
     var commandKind = account.subscription
       ? account.actions.changeTier === true
-        ? "upgrade"
+        ? "change"
         : ""
       : account.actions.start === true
         ? "start"
@@ -1285,8 +1475,8 @@
         documentRef,
         "h4",
         "",
-        commandKind === "upgrade"
-          ? "Upgrade options"
+        commandKind === "change"
+          ? "Change tier options"
           : "Available tiers"
       );
       var tierList = accountElement(
@@ -1296,11 +1486,15 @@
       );
       tierList.setAttribute(
         "aria-label",
-        commandKind === "upgrade"
-          ? "Available Alakazam upgrades"
+        commandKind === "change"
+          ? "Available Alakazam tier changes"
           : "Available Alakazam tiers"
       );
       selectableTiers.forEach(function (tier) {
+        var tierChange = expectedAlakazamQuoteChange(
+          account,
+          tier.tierId
+        );
         var item = accountElement(
           documentRef,
           "li",
@@ -1321,8 +1515,12 @@
           command.phase === "quoting"
             && command.selectedTierId === tier.tierId
             ? "Requesting exact quote…"
-            : commandKind === "upgrade"
+            : tierChange
+              && tierChange.changeKind === "upgrade"
               ? "Review upgrade quote"
+              : tierChange
+                && tierChange.changeKind === "downgrade"
+                ? "Review downgrade schedule"
               : "Review exact quote"
         );
         quoteButton.type = "button";
@@ -1342,7 +1540,9 @@
           )
           || capabilities.alakazamQuote !== true
           || command.phase === "quoting"
-          || command.phase === "checkout";
+          || command.phase === "checkout"
+          || command.phase === "scheduling"
+          || command.phase === "scheduled";
         quoteButton.addEventListener("click", function () {
           if (typeof actions.quote === "function") {
             actions.quote(tier.tierId);
@@ -1437,8 +1637,8 @@
         account.subscription
           ? account.actions.changeTier === true
             ? capabilities.alakazamQuote === true
-              ? "Choose a higher tier, review the exact difference, and accept it before secure payment."
-              : "Upgrade quotes and checkout are not open yet. Nothing can be charged."
+              ? "Choose a different tier and review the exact terms. Upgrades use secure payment; downgrades charge and refund $0 now and take effect at renewal."
+              : "Tier-change quotes are not open yet. Nothing can be charged or scheduled."
             : "Tier changes and billing management are not available in this panel yet."
           : capabilities.alakazamQuote === true
             ? "Choose a tier, review the exact quote, and accept it before secure payment."
@@ -1485,6 +1685,7 @@
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
     status.setAttribute("data-alakazam-load-state", "");
+    status.setAttribute("tabindex", "-1");
     var body = accountElement(
       documentRef,
       "div",
@@ -1519,6 +1720,15 @@
         var selected = Boolean(
           readState && readState.projectId
         );
+        var command = readState
+          && readState.command
+          || {};
+        var confirmedDowngrade =
+          command.phase === "scheduled"
+          && record(command.scheduled);
+        var downgradeRefreshFailed =
+          confirmedDowngrade
+          && command.refreshState === "error";
         panel.hidden = !selected;
         if (!selected) {
           panel.removeAttribute("data-account-state");
@@ -1538,7 +1748,8 @@
         retryButton.disabled =
           readState.phase === "loading";
         retryButton.hidden =
-          readState.phase !== "error";
+          readState.phase !== "error"
+          && !downgradeRefreshFailed;
         if (readState.phase === "loading") {
           status.textContent =
             "Loading this project's Alakazam details…";
@@ -1565,7 +1776,16 @@
           );
           return;
         }
-        status.textContent = "Billing details loaded.";
+        status.textContent =
+          command.phase === "scheduling"
+            ? "Scheduling the accepted downgrade…"
+            : confirmedDowngrade
+              ? command.refreshState === "error"
+                ? "Downgrade scheduled. Updated billing details could not be loaded."
+                : command.refreshState === "loading"
+                  ? "Downgrade scheduled. Refreshing billing details…"
+                  : "Downgrade scheduled. Billing details updated."
+              : "Billing details loaded.";
         renderAlakazamAccountBody(
           documentRef,
           body,
@@ -1574,6 +1794,11 @@
           readState.capabilities || {},
           actions
         );
+      },
+      focusStatus: function () {
+        if (typeof status.focus === "function") {
+          status.focus();
+        }
       }
     });
   }
@@ -2020,6 +2245,7 @@
       quote: null,
       quoteCommandId: "",
       checkoutCommandId: "",
+      scheduleCommandId: "",
       error: ""
     };
     var checkoutReturn =
@@ -2034,6 +2260,7 @@
       downloadPayment: false,
       alakazamQuote: false,
       alakazamCheckout: false,
+      alakazamDowngrade: false,
       domainPurchase: false,
       publishing: false
     });
@@ -2080,7 +2307,17 @@
               lastState && lastState.project
             );
             if (lastState.account && projectId) {
-              requestAlakazamAccount(projectId);
+              if (
+                alakazamCommand.phase === "scheduled"
+                && record(alakazamCommand.scheduled)
+              ) {
+                refreshAlakazamAccountAfterDowngrade(
+                  projectId,
+                  alakazamCommand.scheduled
+                );
+              } else {
+                requestAlakazamAccount(projectId);
+              }
             }
           },
           quote: function (tierId) {
@@ -2088,6 +2325,9 @@
           },
           checkout: function () {
             requestAlakazamCheckout();
+          },
+          downgrade: function () {
+            requestAlakazamDowngrade();
           }
         }
       );
@@ -2176,6 +2416,7 @@
         quote: null,
         quoteCommandId: "",
         checkoutCommandId: "",
+        scheduleCommandId: "",
         error: ""
       };
     }
@@ -2279,6 +2520,121 @@
         });
     }
 
+    function refreshAlakazamAccountAfterDowngrade(
+      projectId,
+      scheduledInput
+    ) {
+      var selectedProjectId = text(projectId);
+      var scheduled = clone(scheduledInput);
+      if (
+        !selectedProjectId
+        || !record(scheduled)
+        || scheduled.projectId !== selectedProjectId
+      ) return Promise.resolve(null);
+      var sequence = ++alakazamReadSequence;
+      alakazamCommand = {
+        projectId: selectedProjectId,
+        selectedTierId: alakazamCommand.selectedTierId,
+        phase: "scheduled",
+        quote: alakazamCommand.quote,
+        quoteCommandId: alakazamCommand.quoteCommandId,
+        checkoutCommandId: "",
+        scheduleCommandId:
+          alakazamCommand.scheduleCommandId,
+        scheduled: scheduled,
+        refreshState: "loading",
+        error: ""
+      };
+      renderAlakazamPanel();
+      alakazamPanel.focusStatus();
+
+      function failRefresh() {
+        if (
+          !alakazamReadIsCurrent(
+            sequence,
+            selectedProjectId
+          )
+        ) return scheduled;
+        alakazamCommand = {
+          projectId: selectedProjectId,
+          selectedTierId:
+            alakazamCommand.selectedTierId,
+          phase: "scheduled",
+          quote: alakazamCommand.quote,
+          quoteCommandId:
+            alakazamCommand.quoteCommandId,
+          checkoutCommandId: "",
+          scheduleCommandId:
+            alakazamCommand.scheduleCommandId,
+          scheduled: scheduled,
+          refreshState: "error",
+          error:
+            "The downgrade is scheduled. Updated billing details could not be loaded. No second Schedule request was sent."
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return scheduled;
+      }
+
+      if (
+        !client
+        || typeof client.getAlakazamAccount !==
+          "function"
+      ) return Promise.resolve(failRefresh());
+      return client
+        .getAlakazamAccount(selectedProjectId)
+        .then(function (result) {
+          if (
+            !alakazamReadIsCurrent(
+              sequence,
+              selectedProjectId
+            )
+          ) return scheduled;
+          var presentation =
+            alakazamAccountPresentation(
+              result,
+              selectedProjectId
+            );
+          if (
+            !presentation
+            || !confirmedAlakazamDowngradeProjection(
+              presentation.account,
+              scheduled
+            )
+          ) {
+            throw new Error(
+              "The scheduled downgrade is not in the refreshed account projection."
+            );
+          }
+          alakazamRead = {
+            projectId: selectedProjectId,
+            phase: "ready",
+            presentation: presentation
+          };
+          alakazamCommand = {
+            projectId: selectedProjectId,
+            selectedTierId:
+              scheduled.targetTierId,
+            phase: "scheduled",
+            quote: alakazamCommand.quote,
+            quoteCommandId:
+              alakazamCommand.quoteCommandId,
+            checkoutCommandId: "",
+            scheduleCommandId:
+              alakazamCommand.scheduleCommandId,
+            scheduled: scheduled,
+            refreshState: "complete",
+            error: ""
+          };
+          renderAlakazamPanel();
+          alakazamPanel.focusStatus();
+          return scheduled;
+        })
+        .catch(function () {
+          return failRefresh();
+        });
+    }
+
     function requestAlakazamQuote(tierIdInput) {
       var projectId = idOf(lastState.project);
       var account = currentAlakazamAccount(projectId);
@@ -2314,6 +2670,7 @@
           quote: null,
           quoteCommandId: "",
           checkoutCommandId: "",
+          scheduleCommandId: "",
           error: explain(
             error,
             "The subscription quote could not start."
@@ -2330,6 +2687,7 @@
         quote: null,
         quoteCommandId: commandId,
         checkoutCommandId: "",
+        scheduleCommandId: "",
         error: ""
       };
       renderAlakazamPanel();
@@ -2361,6 +2719,7 @@
             quote: null,
             quoteCommandId: "",
             checkoutCommandId: "",
+            scheduleCommandId: "",
             error:
               "The subscription quote expired or could not be verified. Request a fresh quote."
           };
@@ -2374,6 +2733,7 @@
           quote: quote,
           quoteCommandId: commandId,
           checkoutCommandId: "",
+          scheduleCommandId: "",
           error: ""
         };
         renderAlakazamPanel();
@@ -2391,6 +2751,7 @@
           quote: null,
           quoteCommandId: commandId,
           checkoutCommandId: "",
+          scheduleCommandId: "",
           error: explain(
             error,
             "The subscription quote could not be loaded. Nothing was charged."
@@ -2421,6 +2782,7 @@
           quote: null,
           quoteCommandId: "",
           checkoutCommandId: "",
+          scheduleCommandId: "",
           error:
             "This subscription quote expired. Request a fresh quote before continuing."
         };
@@ -2429,6 +2791,9 @@
       }
       if (
         !quote
+        || !["start", "upgrade"].includes(
+          quote.changeKind
+        )
         || selected.phase !== "quoted"
         || capabilities.alakazamCheckout !== true
         || !client
@@ -2458,6 +2823,7 @@
         quote: quote,
         quoteCommandId: selected.quoteCommandId,
         checkoutCommandId: commandId,
+        scheduleCommandId: "",
         error: ""
       };
       renderAlakazamPanel();
@@ -2507,12 +2873,149 @@
           quote: quote,
           quoteCommandId: selected.quoteCommandId,
           checkoutCommandId: commandId,
+          scheduleCommandId: "",
           error: explain(
             error,
             "Secure payment could not open. The same request can be tried safely."
           )
         };
         renderAlakazamPanel();
+        return null;
+      });
+    }
+
+    function requestAlakazamDowngrade() {
+      var projectId = idOf(lastState.project);
+      var account = currentAlakazamAccount(projectId);
+      var selected = alakazamCommand;
+      var quote = verifiedAlakazamQuote(
+        selected.quote,
+        projectId,
+        account,
+        selected.selectedTierId,
+        new Date().toISOString()
+      );
+      if (!quote && selected.quote) {
+        alakazamCommandSequence += 1;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: selected.selectedTierId,
+          phase: "idle",
+          quote: null,
+          quoteCommandId: "",
+          checkoutCommandId: "",
+          scheduleCommandId: "",
+          error:
+            "This downgrade quote expired. Request a fresh quote before continuing."
+        };
+        renderAlakazamPanel();
+        return Promise.resolve(null);
+      }
+      if (
+        !quote
+        || quote.changeKind !== "downgrade"
+        || selected.phase !== "quoted"
+        || capabilities.alakazamDowngrade !== true
+        || !client
+        || typeof client.scheduleAlakazamDowngrade !==
+          "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = UUID.test(
+          selected.scheduleCommandId
+        )
+          ? selected.scheduleCommandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamCommand.error = explain(
+          error,
+          "The downgrade schedule could not start."
+        );
+        renderAlakazamPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = ++alakazamCommandSequence;
+      alakazamCommand = {
+        projectId: projectId,
+        selectedTierId: selected.selectedTierId,
+        phase: "scheduling",
+        quote: quote,
+        quoteCommandId: selected.quoteCommandId,
+        checkoutCommandId: "",
+        scheduleCommandId: commandId,
+        error: ""
+      };
+      renderAlakazamPanel();
+      alakazamPanel.focusStatus();
+      return client.scheduleAlakazamDowngrade(
+        projectId,
+        quote.quoteId,
+        {
+          acceptedDisclosureDigest:
+            quote.disclosureDigest,
+          quoteDigest: quote.quoteDigest
+        },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (
+          !alakazamCommandIsCurrent(
+            sequence,
+            projectId,
+            selected.selectedTierId
+          )
+          || capabilities.alakazamDowngrade !== true
+        ) return null;
+        var scheduled = verifiedAlakazamDowngrade(
+          result,
+          projectId,
+          quote,
+          commandId
+        );
+        if (!scheduled) {
+          throw new Error(
+            "The downgrade schedule could not be verified."
+          );
+        }
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: selected.selectedTierId,
+          phase: "scheduled",
+          quote: quote,
+          quoteCommandId: selected.quoteCommandId,
+          checkoutCommandId: "",
+          scheduleCommandId: commandId,
+          scheduled: scheduled,
+          refreshState: "loading",
+          error: ""
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return refreshAlakazamAccountAfterDowngrade(
+          projectId,
+          scheduled
+        );
+      }).catch(function (error) {
+        if (!alakazamCommandIsCurrent(
+          sequence,
+          projectId,
+          selected.selectedTierId
+        )) return null;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: selected.selectedTierId,
+          phase: "quoted",
+          quote: quote,
+          quoteCommandId: selected.quoteCommandId,
+          checkoutCommandId: "",
+          scheduleCommandId: commandId,
+          error: explain(
+            error,
+            "The downgrade could not be confirmed. The same request can be retried safely."
+          )
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
         return null;
       });
     }
@@ -3537,6 +4040,8 @@
                   source.alakazamQuote === true,
                 alakazamCheckout:
                   source.alakazamCheckout === true,
+                alakazamDowngrade:
+                  source.alakazamDowngrade === true,
                 domainPurchase:
                   source.domainPurchase === true,
                 publishing:
@@ -3584,6 +4089,8 @@
       acceptedProjectVersion,
     accountReceiptMoney:
       accountReceiptMoney,
+    confirmedAlakazamDowngradeProjection:
+      confirmedAlakazamDowngradeProjection,
     alakazamAccountPresentation:
       alakazamAccountPresentation,
     bindAcceptedVersion: bindAcceptedVersion,
@@ -3607,6 +4114,8 @@
       verifiedAlakazamAccount,
     verifiedAlakazamCheckout:
       verifiedAlakazamCheckout,
+    verifiedAlakazamDowngrade:
+      verifiedAlakazamDowngrade,
     expectedAlakazamQuoteChange:
       expectedAlakazamQuoteChange,
     verifiedAlakazamQuote:

@@ -25,9 +25,10 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Prior sealed checkpoint: `47ba558` (`Connect held Alakazam customer start
-  flow`). Batch 2C customer upgrade work is in flight and uncommitted; inspect
-  the exact worktree and this ledger before resuming it.
+- Prior sealed checkpoint: `c641898` (`Connect held Alakazam customer upgrade
+  flow`). The reviewed Batch 2D customer downgrade slice is the next local
+  checkpoint represented by this ledger; inspect the exact worktree before
+  assuming its commit exists.
 - Public production remains the July 22 predecessor.
 - No push, deploy, DNS change, provider write, credential capture, or release
   approval is authorized by this run.
@@ -35,13 +36,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Batch 2C connects the already-proven fixed-difference upgrade machinery to the
-customer-safe account and browser flow while release remains held: active paid
-`$25`/`$35` account → higher-tier choice only → exact difference quote → fresh
-acceptance → safe Checkout → verified settlement → durable provider
-application → Subscription event/readback → atomic local tier revision. Downgrade,
-Portal, cancellation, fulfillment, lifecycle automation, owner invoicing, and
-release remain separate later lanes.
+Seal the completed Batch 2D renewal-boundary downgrade slice as one local
+checkpoint. After that clean checkpoint, freeze and implement one narrow
+customer-visible `$25` fulfillment journey: choose one of three base looks and
+publish it to the verified `sitesourcery.me` platform address. Portal,
+cancellation, premium-tier fulfillment, lifecycle automation, owner invoicing,
+and release remain separate later slices.
 
 ## Completed and reviewed
 
@@ -256,72 +256,98 @@ Verified after the relevant repairs:
   states, and passes both sides of the PostgreSQL proof. Volta found no other
   Batch 2C blocker and is closed.
 
-Batch 1 sealed checkpoint gates:
+## Batch 2D sealed checkpoint evidence
 
-- [x] Verify the named PostgreSQL test database is idle, drop it, and verify
-  it is absent: 0 active sessions before drop, 0 matching databases after.
-- [x] Obtain an actual isolated browser/mobile/accessibility pass for the
-  current account panel using contract-valid fixtures.
-- [x] Rerun the core/artifact checks invalidated by the final UI tightening.
-- [x] Verify the recomputed hosted-truth hash after the final UI tightening.
-- [x] Reconcile roadmap and continuity wording with final evidence.
-- [x] Review the exact 25-file staged diff for scope, secrets, provider IDs,
-  release holds, and whitespace. Secret-like additions are short explicit test
-  fixtures; provider-like additions are descriptive test IDs. No real key,
-  provider object ID, or release-opening change is present.
+- Account eligibility now exposes every different canonical tier only for an
+  active, paid, non-cancelling subscription with a current period and no
+  pending change. `$35` offers one lower and one higher direction; `$50`
+  offers both lower tiers. Direction is derived from the verified tier ranks.
+- The browser uses the existing quote route and a distinct authenticated
+  downgrade Schedule route/capability. It submits only the target tier, exact
+  quote and disclosure digests, CSRF proof, and stable UUID identities. A
+  downgrade cannot enter Checkout.
+- The review and accepted command prove `$0` charged now, `$0` refunded now,
+  no provider proration, the current tier through the paid boundary, and the
+  full lower-tier renewal at that boundary. The safe response contains no
+  provider ID. Refresh keeps the current tier authoritative while separately
+  projecting the pending downgrade and lower renewal.
+- Existing durable Schedule claim/lease, ambiguity readback, provider
+  confirmation, account projection, and boundary activation remain unchanged.
+  Production composes the authenticated route while all provider/release gates
+  remain held.
+- Focused browser/API/account/backend/HTTP/provider proof passes 101/101. Fresh
+  database `ss_alakazam_downgrade_batch2d_20260804_1` replayed all 31
+  migrations and passed the full 5/5 Alakazam PostgreSQL journey. It had zero
+  active sessions, was dropped, and is verified absent; no customer or
+  production data was touched.
+- Chrome for Testing 149 passes 10/10 isolated proofs at 1440×1000 and 320×720:
+  mixed upgrade/downgrade choices, exact review money/dates, acceptance gate,
+  held zero-write state, stable Schedule retry identity, safe account refresh,
+  invalid confirmation rejection, accessibility, no overflow, no Checkout
+  writes, no external HTTP, no missing files, and no unexpected browser error.
+  It also forces a confirmed Schedule followed by a failed account refresh:
+  success remains announced and focused, stale tier controls are disabled, and
+  the recovery retry performs only a GET with no second Schedule. Eleven
+  screenshots and the report are under
+  `/private/tmp/sitesourcery-alakazam-downgrade-browser.lctWsN/`; results JSON
+  SHA-256 is
+  `447e29b2cb0f8a1b9cd194dc653cccdc96a0427ef17d5a26fc4bb8e08d1d72a6`.
+- Post-fix broad proof passes: core Node 439/439; hosted service 140 pass with
+  2 intentional environment skips; operations 52/52; self-host 19/19; current
+  site checks; hosted build/HTML validation; and rebuilt public artifact with
+  78 allowlisted files and exact source bytes. The broad pass caught one stale
+  pre-downgrade capability expectation; both expected shapes were corrected
+  and the focused HTTP file passes 9/9 before the clean broad rerun. The final
+  customer-control regression passes 11/11 after the refresh-state repair.
+- Read-only backend auditor Avicenna
+  (`019fcf2f-a5bd-7f52-9ece-72ae5520eb21`) found no missing migration,
+  provider, activation, duplicate-charge, or duplicate-schedule work and is
+  closed. Hosted worker Confucius
+  (`019fcf37-8889-7d92-baf8-815625bd660e`) completed its exclusive five-file
+  route/composition write set; the lead reviewed and reran it, and it is
+  closed.
+- Read-only polish auditor Gauss
+  (`019fcf45-ca9e-7ca0-a303-28930452b35e`) found one real UI completion
+  blocker: confirmed scheduling was discarded by the immediate refresh, so a
+  failed read could falsely claim nothing changed and lose accessible focus.
+  The repair preserves verified Schedule truth, announces/focuses every
+  completion state, disables stale actions, and retries only the account GET.
+  Gauss's three non-blocking follow-ups are preserved in the roadmap polish
+  queue; the worker is closed.
+
+Batch 2D sealed checkpoint gates:
+
+- [x] Frozen contract matches the latest owner tier and no-refund rulings.
+- [x] Focused, fresh-PostgreSQL, real-Chrome, broad, and artifact proofs pass.
+- [x] The named disposable database is dropped and verified absent.
+- [x] Customer response and browser state expose no provider identifiers.
+- [x] Release, provider, DNS, push, and deployment holds remain unchanged.
+- [x] Durable evidence and the next action are recorded before the local
+  checkpoint commit.
 
 ## Live resources and workers
 
-- Batch 2C isolated Chrome verifier Dalton,
-  `019fcf18-8f2e-7fe1-b380-ed14f165fca6`, passed 27/27 and is closed; evidence
-  is in `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/`.
-- Batch 2C read-only adversarial reviewer Volta,
-  `019fcf19-b777-7c62-aad6-f4ad68541de4`, found the second-payment claim gap,
-  verified the remaining contract, and is closed.
-
-- Batch 2C browser worker Banach,
-  `019fcf0e-07ad-7511-b9ce-20f431d4b125`, completed its exclusive two-file
-  browser write set with 8/8 focused tests and is closed.
-
-- Browser API adapter worker Ampere,
-  `019fcee7-6d6f-7d73-bd01-7a2525a764ba`, completed its exclusive
-  browser-adapter/test write set with 19/19 focused tests and is closed.
-- Fulfillment mapper Nietzsche completed its exclusive inventory document and
-  is closed.
-- Lifecycle mapper Raman completed its exclusive inventory document and is
-  closed.
-- Hosted billing boundary worker Aristotle completed its exclusive module and
-  focused test (6/6 pass) and is closed.
-- Disposable PostgreSQL database
-  `ss_alakazam_acceptance_batch2a_20260804_1` completed all 31 migrations and
-  the 5/5 acceptance-fence journey, then was dropped with 0 active sessions
-  and verified absent.
-- Batch 1 runtime visual verifier Ramanujan is closed. Current evidence is
-  under `/private/tmp/sitesourcery-alakazam-credit-verify.6NdTyI/`; the earlier
-  evidence under `/private/tmp/sitesourcery-alakazam-verify.hSUfUh/` is
-  superseded.
-- Batch 2B runtime evidence is under
-  `/private/tmp/sitesourcery-alakazam-start-browser.pJSraR/`; no verifier
-  process or localhost server remains running.
-- Disposable PostgreSQL database
-  `ss_alakazam_account_batch1_20260804_3` was idle, dropped, and verified
-  absent after its passing test.
-- No Batch 1 test process was running at the last process inspection.
-- A pre-existing unrelated Python server remains on port 4173 for an older
-  canonical-email artifact; do not mistake it for this browser harness.
+- No Batch 2D browser verifier or local evidence server remains running.
+- Batch 2D Chrome evidence is under
+  `/private/tmp/sitesourcery-alakazam-downgrade-browser.lctWsN/`.
+- The Batch 2D disposable PostgreSQL database is absent.
+- All Batch 2D workers and auditors are closed; none owns a remaining write.
+- The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
+  test resource. Public production remains untouched.
 
 ## Next action
 
-Reconcile the roadmap and continuity ledger with final Batch 2C evidence,
-inspect the exact diff for scope/secrets/release drift, stage only the reviewed
-files, and seal one local commit. Then begin the distinct customer downgrade
-slice; do not mix it into the upgrade checkpoint.
+After this local Batch 2D checkpoint is sealed, begin one narrow
+customer-visible fulfillment slice: prove the `$25` Alakazam customer can
+select one of the three base looks and publish it to the verified
+`sitesourcery.me` platform address while every premium feature remains held.
+Freeze that contract before implementation; route non-blocking visual/copy
+ideas to the polish queue instead of widening the slice.
 
-## Batch 1 write scope
+## Batch 2D write scope
 
-Lead write scope for Batch 2C: canonical roadmap/active ledger, account upgrade
-eligibility, webhook settlement-to-upgrade composition, hosted production
-composition, focused backend tests, integration/artifact/browser proof, and
-the final local commit. Banach owns only the two browser files named above.
-Migrations, downgrade controls, fulfillment, lifecycle, owner invoicing,
-provider configuration, release, push, deploy, and DNS are out of scope.
+Sixteen reviewed files cover account truth, browser API/control and tests,
+hosted Schedule boundary/composition and tests, one PostgreSQL expectation,
+hosted-truth hashes, and the two canonical ledgers. No migration, provider
+adapter, fulfillment, lifecycle, invoice, release, push, deploy, or DNS file is
+part of this checkpoint.

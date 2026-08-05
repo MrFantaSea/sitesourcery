@@ -241,6 +241,20 @@ function match(pathname, pattern) {
   return result.slice(1).map((value) => decodeURIComponent(value));
 }
 
+function exactRouteBody(value, expected, code, message) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify([...expected].sort()),
+    code,
+    message,
+    { status: 400 }
+  );
+  return value;
+}
+
 function commandId(request) {
   return request.headers.get("idempotency-key");
 }
@@ -322,6 +336,8 @@ export function createHostedApi(
       typeof alakazamBillingBoundary.createQuote ===
       "function" &&
       typeof alakazamBillingBoundary.createCheckout ===
+        "function" &&
+      typeof alakazamBillingBoundary.scheduleDowngrade ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam billing boundary is invalid.",
@@ -453,6 +469,8 @@ export function createHostedApi(
                 alakazam.quote === true,
               alakazamCheckout:
                 alakazam.checkout === true,
+              alakazamDowngrade:
+                alakazam.downgrade === true,
               domainPurchase:
                 domains.ready === true &&
                 domains.registrar === "ready",
@@ -721,6 +739,39 @@ export function createHostedApi(
             route[0],
             write
           );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam-quotes\/([^/]+)\/downgrade-schedule-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before using Alakazam billing.",
+            { status: 401 }
+          );
+          const downgradeBody = exactRouteBody(
+            body,
+            [
+              "acceptedDisclosureDigest",
+              "quoteDigest"
+            ],
+            "ALAKAZAM_ROUTE_BINDING_REJECTED",
+            "Alakazam downgrade scheduling accepts only the accepted disclosure and quote proof."
+          );
+          result =
+            await alakazamBillingBoundary.scheduleDowngrade(
+              actor,
+              route[0],
+              route[1],
+              {
+                ...downgradeBody,
+                commandId: write.commandId
+              }
+            );
           status = 201;
         } else if (
           method === "POST" &&

@@ -304,7 +304,7 @@ test("Download commerce sends only the accepted version and the reviewed server 
   }
 });
 
-test("Alakazam start commerce sends only the tier or accepted disclosure through the protected browser boundary", async () => {
+test("Alakazam tier commerce sends only target or accepted quote truth through the protected browser boundary", async () => {
   const calls = [];
   const client = createClient({
     fetch: async (url, options) => {
@@ -345,8 +345,18 @@ test("Alakazam start commerce sends only the tier or accepted disclosure through
     },
     { idempotencyKey: "alakazam-checkout-command-1" },
   );
+  await client.scheduleAlakazamDowngrade(
+    "project_1",
+    "alakazam_quote_2",
+    {
+      acceptedDisclosureDigest: "b".repeat(64),
+      quoteDigest: "c".repeat(64),
+      ignoredPresentation: { refundLabel: "$0" },
+    },
+    { idempotencyKey: "alakazam-downgrade-command-1" },
+  );
 
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.equal(calls[0].url, "/api/v1/csrf");
   assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.credentials, "include");
@@ -379,9 +389,29 @@ test("Alakazam start commerce sends only the tier or accepted disclosure through
   assert.deepEqual(JSON.parse(checkout.options.body), {
     acceptedDisclosureDigest: "a".repeat(64),
   });
+
+  const downgrade = calls[3];
+  assert.equal(
+    downgrade.url,
+    "/api/v1/projects/project_1/alakazam-quotes/alakazam_quote_2/downgrade-schedule-command",
+  );
+  assert.equal(downgrade.options.method, "POST");
+  assert.equal(downgrade.options.credentials, "include");
+  assert.equal(
+    downgrade.options.headers["X-CSRF-Token"],
+    "csrf_alakazam",
+  );
+  assert.equal(
+    downgrade.options.headers["Idempotency-Key"],
+    "alakazam-downgrade-command-1",
+  );
+  assert.deepEqual(JSON.parse(downgrade.options.body), {
+    acceptedDisclosureDigest: "b".repeat(64),
+    quoteDigest: "c".repeat(64),
+  });
 });
 
-test("Alakazam start commerce recursively rejects claimed authority before fetch", () => {
+test("Alakazam tier commerce recursively rejects claimed authority before fetch", () => {
   let fetchCalls = 0;
   const client = createClient({
     fetch: async () => {
@@ -399,6 +429,22 @@ test("Alakazam start commerce recursively rejects claimed authority before fetch
         forged: { billing: [{ amountMinor: 2000 }] },
       },
       { idempotencyKey: "forged-quote-command" },
+    ),
+    (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
+  );
+  assert.throws(
+    () => client.scheduleAlakazamDowngrade(
+      "project_1",
+      "alakazam_quote_2",
+      {
+        acceptedDisclosureDigest: "b".repeat(64),
+        quoteDigest: "c".repeat(64),
+        forged: {
+          amountMinor: 0,
+          providerReference: "sub_sched_private",
+        },
+      },
+      { idempotencyKey: "forged-downgrade-command" },
     ),
     (error) => error instanceof APIError && error.code === "OWNER_AUTHORITY_REJECTED",
   );

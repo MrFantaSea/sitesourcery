@@ -296,6 +296,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     downloadPayment: false,
     alakazamQuote: false,
     alakazamCheckout: false,
+    alakazamDowngrade: false,
     domainPurchase: false,
     publishing: false
   });
@@ -312,6 +313,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     downloadPayment: false,
     alakazamQuote: false,
     alakazamCheckout: false,
+    alakazamDowngrade: false,
     domainPurchase: false,
     publishing: false
   });

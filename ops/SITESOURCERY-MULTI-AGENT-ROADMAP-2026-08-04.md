@@ -136,7 +136,7 @@ Integration order:
   pending state, and post-application account refresh.
 - [x] Renewal-boundary downgrade quote, Schedule dispatch, and atomic
   boundary activation backend.
-- [ ] Customer-safe downgrade scheduling action and renewal review.
+- [x] Customer-safe downgrade scheduling action and renewal review.
 - [ ] Billing Portal and exact cancellation preview/confirmation.
 - [ ] Stable retry, replay, and reconciliation states in the account UI.
 
@@ -213,7 +213,7 @@ Lane I launch-critical domain truth only ─┘
 | 1 | Customer account surface | UI worker | `abracadabra/app` client/DOM/tests only | receipt/credit drift corrected; final browser runtime green |
 | 1 | Stripe configuration boundary | Provider worker | hosted Stripe configuration/tests only | reviewed; 12/12 focused green; release held |
 | 1 | Public truth audit | Audit worker | read-only report to lead | accepted; launch gates recorded below |
-| 2 | Billing commands | Lead plus bounded workers | start backend and customer flow reviewed; browser and broad regressions green; release held |
+| 2 | Billing commands | Lead plus bounded workers | start, upgrade, and downgrade customer flows reviewed; browser and broad regressions green; release held |
 | 2 | Fulfillment feature matrix | Fulfillment mapper | inventory complete; implementation held behind billing route slice |
 | 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
 
@@ -394,6 +394,74 @@ containing this roadmap is its sealed local integration checkpoint.
   `/private/tmp/sitesourcery-alakazam-upgrade-browser.FSe1PL/` with results
   SHA-256
   `f7204667d2a4736239467e139defd19d6ce87525151f08e2252f948c7ea92c40`.
+
+## Frozen Batch 2D customer downgrade contract
+
+- Batch 2D expands the existing `actions.changeTier` meaning from the sealed
+  upgrade-only slice to every now-composed tier direction. It is true only for
+  one active, paid, non-cancelling subscription with a current period and no
+  pending change, when at least one different canonical tier exists. `$25`
+  offers higher tiers, `$35` offers lower and higher tiers, and `$50` offers
+  lower tiers. Start, Portal, and cancellation remain separate actions.
+- Runtime authority remains separate from account eligibility. The quote route
+  may be available while Checkout or downgrade scheduling is held. The browser
+  requires `alakazamCheckout` for start/upgrade and a distinct
+  `alakazamDowngrade` capability for a downgrade Schedule command; it never
+  substitutes one effect for the other.
+- The existing quote route accepts only a lower canonical `targetTierId` plus
+  route, CSRF, and stable UUID command identity. A valid downgrade quote must
+  match the latest account and catalog exactly: `changeKind: downgrade`, lower
+  rank, current-tier disclosure binding, `appliedValue: none/$0`, `$0` due now,
+  `$0` cash refund, no provider proration, current tier kept through the full
+  paid period, effective time equal to that period's end, and full lower-tier
+  monthly renewal at that same boundary.
+- The review must plainly show the current tier and paid-through date, selected
+  lower tier, `$0` charged now, `$0` refunded now, no mid-period proration, the
+  exact lower monthly renewal, boundary date, and quote expiry. The customer
+  must freshly accept those exact terms before scheduling. No payment page is
+  opened for a downgrade.
+- The schedule route accepts only the route quote identity, exact quote digest,
+  accepted disclosure digest, CSRF proof, and stable UUID idempotency key. The
+  hosted response exposes only customer-safe command, project, quote, current
+  tier, target tier, effective time, and scheduled state; provider Customer,
+  Subscription, Price, and Schedule identifiers stay server-only.
+- A retry with the same quote remains one durable scheduling effect. Repository
+  claim and lease state prevent a second provider Schedule. Provider ambiguity
+  is readback-only; absent exact readback it becomes reconciliation-required,
+  never an invented success and never a fresh Schedule mutation.
+- Scheduling does not change current entitlement. The refreshed account must
+  continue to show the current tier through `currentPeriod.endsAt`, project the
+  pending lower tier and lower next renewal, and expose no second tier action.
+  Only the already-proven boundary Subscription event/readback plus atomic
+  local activation changes tier authority.
+- This slice adds no cash refund control, immediate downgrade, cancellation,
+  Billing Portal, feature grant, provider release, publication effect, or live
+  configuration. Historical receipts remain unchanged because a downgrade has
+  no payment now. Tier fulfillment remains Lane F.
+- Completion proof: focused customer/backend boundaries pass 101/101; the
+  fresh 31-migration PostgreSQL journey passes 5/5; core passes 439/439;
+  hosted service passes 140 tests with 2 intentional environment skips;
+  operations pass 52/52; self-host passes 19/19; hosted and 78-file public
+  artifacts verify. Chrome 149 passes 10/10 proofs at 1440×1000 and 320×720,
+  including a confirmed Schedule followed by a failed account refresh: the
+  success remains announced and focused, stale tier controls remain disabled,
+  and the recovery retry performs no second write. Eleven screenshots are
+  under `/private/tmp/sitesourcery-alakazam-downgrade-browser.lctWsN/`; results
+  SHA-256 is
+  `447e29b2cb0f8a1b9cd194dc653cccdc96a0427ef17d5a26fc4bb8e08d1d72a6`.
+
+### Deferred Batch 2D polish — non-blocking
+
+- [ ] Decide whether the HTTP command identity should also be passed into the
+  quote-bound durable scheduler. Current effect idempotence is already durable
+  and quote/application-bound; do not change it casually.
+- [ ] Add an application-layer defense-in-depth assertion that a projected
+  scheduled downgrade's effective time equals the current-period boundary;
+  PostgreSQL already enforces the relationship.
+- [ ] Move the successful-schedule/failed-refresh/focus Chrome scenario from
+  temporary evidence into a maintained browser harness when that harness is
+  standardized. The current source contract, pure projection regression, and
+  real-Chrome proof are green.
 
 ## Accepted launch-truth gates from Batch 1 audit
 

@@ -13,6 +13,7 @@ import {
 } from "../../selfhost/src/index.mjs";
 import {
   createAlakazamBillingService,
+  createAlakazamDowngradeService,
   createAlakazamDowngradeActivationService,
   createAlakazamAccountService,
   createAlakazamPaymentService,
@@ -273,6 +274,9 @@ async function start() {
   const alakazamBilling =
     createHostedAlakazamBilling({
       billing: createAlakazamBillingService(
+        alakazamServicePorts
+      ),
+      downgrade: createAlakazamDowngradeService(
         alakazamServicePorts
       ),
       resolveSession: commerceV2.resolveSession

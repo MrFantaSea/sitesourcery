@@ -22,11 +22,19 @@ const QUOTE_ID =
   "40000000-0000-4000-8000-000000000001";
 const COMMAND_ID =
   "50000000-0000-4000-8000-000000000001";
+const DOWNGRADE_COMMAND_ID =
+  "60000000-0000-4000-8000-000000000001";
+const SCHEDULE_ID =
+  "70000000-0000-4000-8000-000000000001";
+const SUBSCRIPTION_ID =
+  "80000000-0000-4000-8000-000000000001";
 const DISCLOSURE_DIGEST = "d".repeat(64);
-const QUOTE_DIGEST = "q".repeat(64);
+const QUOTE_DIGEST = "e".repeat(64);
 const PURPOSE_DIGEST = "p".repeat(64);
+const PROVIDER_FACTS_DIGEST = "f".repeat(64);
 const ISSUED_AT = "2026-08-04T18:00:00.000Z";
 const EXPIRES_AT = "2026-08-04T18:30:00.000Z";
+const EFFECTIVE_AT = "2026-09-04T18:00:00.000Z";
 
 const ACTOR = Object.freeze({ userId: CUSTOMER_ID });
 
@@ -170,10 +178,31 @@ function checkoutResult(overrides = {}) {
   };
 }
 
+function downgradeResult(overrides = {}) {
+  return {
+    status: "scheduled",
+    provider: "stripe",
+    scheduleId: SCHEDULE_ID,
+    stripeScheduleId: "sub_sched_private_1",
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    subscriptionId: SUBSCRIPTION_ID,
+    priorTierId: "alakazam_50",
+    targetTierId: "alakazam_25",
+    currentRevision: 4,
+    effectiveAt: EFFECTIVE_AT,
+    providerFactsDigest: PROVIDER_FACTS_DIGEST,
+    reconciliation: "confirmed",
+    next: "boundary_confirmation",
+    ...overrides
+  };
+}
+
 function context({
   resolvedScope = scope(),
   quote = quoteResult(),
   checkout = checkoutResult(),
+  downgrade = downgradeResult(),
   readiness = {
     ready: true,
     quote: true,
@@ -184,13 +213,23 @@ function context({
     provider: "stripe",
     livemode: true,
     taxMode: "disabled_by_owner"
+  },
+  downgradeReadiness = {
+    ready: true,
+    downgrade: true,
+    state: "downgrade_schedule_ready",
+    provider: "stripe",
+    livemode: true,
+    taxMode: "disabled_by_owner"
   }
 } = {}) {
   const calls = {
     resolve: [],
     readiness: 0,
+    downgradeReadiness: 0,
     quotes: [],
-    checkouts: []
+    checkouts: [],
+    downgrades: []
   };
   const hosted = createHostedAlakazamBilling({
     billing: {
@@ -207,6 +246,16 @@ function context({
         return structuredClone(checkout);
       }
     },
+    downgrade: {
+      async readiness() {
+        calls.downgradeReadiness += 1;
+        return structuredClone(downgradeReadiness);
+      },
+      async scheduleDowngrade(input) {
+        calls.downgrades.push(structuredClone(input));
+        return structuredClone(downgrade);
+      }
+    },
     async resolveSession(input) {
       calls.resolve.push(structuredClone(input));
       return structuredClone(resolvedScope);
@@ -221,12 +270,20 @@ test("held Alakazam billing authenticates first and remains effect-free", async 
     ready: false,
     quote: false,
     checkout: false,
+    downgrade: false,
     state: "held"
   });
   for (const invoke of [
     () => held.createQuote(ACTOR, PROJECT_ID, {}),
     () =>
       held.createCheckout(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {}
+      ),
+    () =>
+      held.scheduleDowngrade(
         ACTOR,
         PROJECT_ID,
         QUOTE_ID,
@@ -367,6 +424,95 @@ test("hosted Checkout maps one exact replay identity without provider leakage", 
   );
 });
 
+test("hosted downgrade scheduling binds the authenticated quote and exposes only renewal-boundary truth", async () => {
+  const { calls, hosted } = context();
+  const input = {
+    acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+    quoteDigest: QUOTE_DIGEST,
+    commandId: DOWNGRADE_COMMAND_ID
+  };
+  const first = await hosted.scheduleDowngrade(
+    ACTOR,
+    PROJECT_ID,
+    QUOTE_ID,
+    input
+  );
+  const replay = await hosted.scheduleDowngrade(
+    ACTOR,
+    PROJECT_ID,
+    QUOTE_ID,
+    input
+  );
+  assert.deepEqual(first, {
+    schema:
+      "sitesourcery.alakazam-downgrade-scheduled/v1",
+    commandId: DOWNGRADE_COMMAND_ID,
+    projectId: PROJECT_ID,
+    quoteId: QUOTE_ID,
+    state: "scheduled",
+    priorTierId: "alakazam_50",
+    targetTierId: "alakazam_25",
+    effectiveAt: EFFECTIVE_AT,
+    chargeNowMinor: 0,
+    cashRefundMinor: 0,
+    providerProration: false,
+    currentTierKeptThroughPeriod: true
+  });
+  assert.deepEqual(replay, first);
+  assert.deepEqual(calls.downgrades, [
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      quoteId: QUOTE_ID,
+      acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+      quoteDigest: QUOTE_DIGEST
+    },
+    {
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      quoteId: QUOTE_ID,
+      acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+      quoteDigest: QUOTE_DIGEST
+    }
+  ]);
+  assert.equal(calls.checkouts.length, 0);
+  assert.doesNotMatch(
+    JSON.stringify(first),
+    /tenantId|customerId|subscriptionId|scheduleId|stripeScheduleId|providerFactsDigest|reconciliation|sub_private|sub_sched_private/u
+  );
+  assert.equal(Object.isFrozen(first), true);
+});
+
+test("hosted downgrade scheduling rejects malformed or mismatched durable confirmation", async () => {
+  for (const downgrade of [
+    downgradeResult({ status: "ready" }),
+    downgradeResult({ projectId: OTHER_PROJECT_ID }),
+    downgradeResult({ targetTierId: "alakazam_50" }),
+    downgradeResult({ providerFactsDigest: "not-a-digest" }),
+    downgradeResult({ privateLeak: "must-not-pass" })
+  ]) {
+    const { hosted } = context({ downgrade });
+    await assert.rejects(
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {
+          acceptedDisclosureDigest:
+            DISCLOSURE_DIGEST,
+          quoteDigest: QUOTE_DIGEST,
+          commandId: DOWNGRADE_COMMAND_ID
+        }
+      ),
+      (error) =>
+        error.code === "ALAKAZAM_REPOSITORY_CONFLICT" &&
+        error.status === 500
+    );
+  }
+});
+
 test("cross-project or cross-customer scope fails closed before billing", async () => {
   for (const resolvedScope of [
     scope({ projectId: OTHER_PROJECT_ID }),
@@ -385,14 +531,31 @@ test("cross-project or cross-customer scope fails closed before billing", async 
         error.code === "ALAKAZAM_PROJECT_UNAVAILABLE" &&
         error.status === 404
     );
+    await assert.rejects(
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {
+          acceptedDisclosureDigest:
+            DISCLOSURE_DIGEST,
+          quoteDigest: QUOTE_DIGEST,
+          commandId: DOWNGRADE_COMMAND_ID
+        }
+      ),
+      (error) =>
+        error.code === "ALAKAZAM_PROJECT_UNAVAILABLE" &&
+        error.status === 404
+    );
     assert.equal(calls.quotes.length, 0);
     assert.equal(calls.checkouts.length, 0);
+    assert.equal(calls.downgrades.length, 0);
   }
 });
 
 test("forged bodies and malformed route identity fail before billing", async () => {
   const { calls, hosted } = context();
-  for (const extra of [
+  const forbidden = [
     { projectId: OTHER_PROJECT_ID },
     { quoteId: QUOTE_ID },
     { customerId: OTHER_CUSTOMER_ID },
@@ -404,7 +567,8 @@ test("forged bodies and malformed route identity fail before billing", async () 
     { provider: "stripe" },
     { effectiveAt: ISSUED_AT },
     { unknown: true }
-  ]) {
+  ];
+  for (const extra of forbidden) {
     await assert.rejects(
       hosted.createQuote(ACTOR, PROJECT_ID, {
         commandId: QUOTE_ID,
@@ -429,6 +593,24 @@ test("forged bodies and malformed route identity fail before billing", async () 
     (error) =>
       error.code === "ALAKAZAM_ROUTE_BINDING_REJECTED"
   );
+  for (const extra of forbidden) {
+    await assert.rejects(
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {
+          acceptedDisclosureDigest:
+            DISCLOSURE_DIGEST,
+          quoteDigest: QUOTE_DIGEST,
+          commandId: DOWNGRADE_COMMAND_ID,
+          ...extra
+        }
+      ),
+      (error) =>
+        error.code === "ALAKAZAM_ROUTE_BINDING_REJECTED"
+    );
+  }
   for (const invoke of [
     () =>
       hosted.createQuote(ACTOR, "not-a-project", {
@@ -455,6 +637,41 @@ test("forged bodies and malformed route identity fail before billing", async () 
           acceptedDisclosureDigest: "not-a-digest",
           commandId: COMMAND_ID
         }
+      ),
+    () =>
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        "not-a-quote",
+        {
+          acceptedDisclosureDigest:
+            DISCLOSURE_DIGEST,
+          quoteDigest: QUOTE_DIGEST,
+          commandId: DOWNGRADE_COMMAND_ID
+        }
+      ),
+    () =>
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {
+          acceptedDisclosureDigest: "not-a-digest",
+          quoteDigest: QUOTE_DIGEST,
+          commandId: DOWNGRADE_COMMAND_ID
+        }
+      ),
+    () =>
+      hosted.scheduleDowngrade(
+        ACTOR,
+        PROJECT_ID,
+        QUOTE_ID,
+        {
+          acceptedDisclosureDigest:
+            DISCLOSURE_DIGEST,
+          quoteDigest: "not-a-digest",
+          commandId: DOWNGRADE_COMMAND_ID
+        }
       )
   ]) {
     await assert.rejects(
@@ -464,6 +681,7 @@ test("forged bodies and malformed route identity fail before billing", async () 
   }
   assert.equal(calls.quotes.length, 0);
   assert.equal(calls.checkouts.length, 0);
+  assert.equal(calls.downgrades.length, 0);
 });
 
 test("readiness is safely projected and service errors retain hosted status", async () => {
@@ -472,12 +690,29 @@ test("readiness is safely projected and service errors retain hosted status", as
     ready: true,
     quote: true,
     checkout: true,
+    downgrade: true,
     state: "quote_ready"
   });
   assert.doesNotMatch(
     JSON.stringify(await hosted.readiness()),
     /stripe|livemode|taxMode|customerProvisioning/u
   );
+
+  const heldDowngrade = context({
+    downgradeReadiness: {
+      ready: false,
+      downgrade: false,
+      state: "held",
+      code: "alakazam_billing_release_held"
+    }
+  });
+  assert.deepEqual(await heldDowngrade.hosted.readiness(), {
+    ready: true,
+    quote: true,
+    checkout: true,
+    downgrade: false,
+    state: "quote_ready"
+  });
 
   const translated = createHostedAlakazamBilling({
     billing: {
@@ -497,6 +732,18 @@ test("readiness is safely projected and service errors retain hosted status", as
         );
       },
       async createCheckout() {
+        throw new Error("unused");
+      }
+    },
+    downgrade: {
+      async readiness() {
+        return {
+          ready: false,
+          downgrade: false,
+          state: "held"
+        };
+      },
+      async scheduleDowngrade() {
         throw new Error("unused");
       }
     },

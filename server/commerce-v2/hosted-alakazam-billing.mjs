@@ -12,6 +12,18 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CHECKOUT_READY_SCHEMA =
   "sitesourcery.alakazam-checkout-ready/v1";
+const DOWNGRADE_SCHEDULED_SCHEMA =
+  "sitesourcery.alakazam-downgrade-scheduled/v1";
+const ALAKAZAM_TIER_RANKS = new Map([
+  ["alakazam_25", 1],
+  ["alakazam_35", 2],
+  ["alakazam_50", 3]
+]);
+const SCHEDULE_ID = /^sub_sched_[A-Za-z0-9_]+$/u;
+const DOWNGRADE_RECONCILIATIONS = new Set([
+  "confirmed",
+  "readback_after_ambiguity"
+]);
 
 function requireActor(actor) {
   if (
@@ -67,6 +79,20 @@ function exactInput(value, expected, message) {
         JSON.stringify([...expected].sort()),
     "route_binding_rejected",
     message
+  );
+  return value;
+}
+
+function exactResult(value, expected, message) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify([...expected].sort()),
+    "repository_conflict",
+    message,
+    { status: 500 }
   );
   return value;
 }
@@ -212,13 +238,97 @@ function publicCheckout(value) {
   });
 }
 
-function publicReadiness(value) {
+function publicDowngrade(
+  value,
+  { commandId, projectId, quoteId }
+) {
+  exactResult(
+    value,
+    [
+      "currentRevision",
+      "effectiveAt",
+      "next",
+      "priorTierId",
+      "projectId",
+      "provider",
+      "providerFactsDigest",
+      "quoteId",
+      "reconciliation",
+      "scheduleId",
+      "status",
+      "stripeScheduleId",
+      "subscriptionId",
+      "targetTierId"
+    ],
+    "the durable Alakazam downgrade confirmation is invalid"
+  );
+  const selectedProjectId = value.projectId;
+  const selectedQuoteId = value.quoteId;
+  const priorTierId = value.priorTierId;
+  const targetTierId = value.targetTierId;
+  const effectiveAt = value.effectiveAt;
+  invariant(
+    value.status === "scheduled" &&
+      value.provider === "stripe" &&
+      UUID.test(value.scheduleId ?? "") &&
+      UUID.test(selectedProjectId ?? "") &&
+      UUID.test(selectedQuoteId ?? "") &&
+      selectedProjectId === projectId &&
+      selectedQuoteId === quoteId &&
+      UUID.test(value.subscriptionId ?? "") &&
+      SCHEDULE_ID.test(value.stripeScheduleId ?? "") &&
+      Number.isSafeInteger(value.currentRevision) &&
+      value.currentRevision > 0 &&
+      typeof effectiveAt === "string" &&
+      Number.isFinite(Date.parse(effectiveAt)) &&
+      new Date(effectiveAt).toISOString() === effectiveAt &&
+      ALAKAZAM_TIER_RANKS.has(priorTierId) &&
+      ALAKAZAM_TIER_RANKS.has(targetTierId) &&
+      ALAKAZAM_TIER_RANKS.get(priorTierId) >
+        ALAKAZAM_TIER_RANKS.get(targetTierId) &&
+      typeof value.providerFactsDigest === "string" &&
+      /^[a-f0-9]{64}$/u.test(
+        value.providerFactsDigest
+      ) &&
+      DOWNGRADE_RECONCILIATIONS.has(
+        value.reconciliation
+      ) &&
+      value.next === "boundary_confirmation",
+    "repository_conflict",
+    "the durable Alakazam downgrade confirmation changed",
+    { status: 500 }
+  );
   return deepFreeze({
-    ready: value?.ready === true,
-    quote: value?.quote === true,
-    checkout: value?.checkout === true,
+    schema: DOWNGRADE_SCHEDULED_SCHEMA,
+    commandId,
+    projectId: selectedProjectId,
+    quoteId: selectedQuoteId,
+    state: "scheduled",
+    priorTierId,
+    targetTierId,
+    effectiveAt,
+    chargeNowMinor: 0,
+    cashRefundMinor: 0,
+    providerProration: false,
+    currentTierKeptThroughPeriod: true
+  });
+}
+
+function publicReadiness(billing, downgrade) {
+  requiredText(
+    downgrade?.state,
+    "downgrade.readiness.state",
+    50
+  );
+  return deepFreeze({
+    ready: billing?.ready === true,
+    quote: billing?.quote === true,
+    checkout: billing?.checkout === true,
+    downgrade:
+      downgrade?.ready === true &&
+      downgrade?.downgrade === true,
     state: requiredText(
-      value?.state,
+      billing?.state,
       "billing.readiness.state",
       50
     )
@@ -240,16 +350,19 @@ export function createHeldHostedAlakazamBilling() {
         ready: false,
         quote: false,
         checkout: false,
+        downgrade: false,
         state: "held"
       });
     },
     createQuote: held,
-    createCheckout: held
+    createCheckout: held,
+    scheduleDowngrade: held
   });
 }
 
 export function createHostedAlakazamBilling({
   billing,
+  downgrade,
   resolveSession
 } = {}) {
   invariant(
@@ -259,6 +372,14 @@ export function createHostedAlakazamBilling({
       typeof billing.createCheckout === "function",
     "invalid_configuration",
     "the Alakazam billing service is required",
+    { status: 500 }
+  );
+  invariant(
+    downgrade &&
+      typeof downgrade.readiness === "function" &&
+      typeof downgrade.scheduleDowngrade === "function",
+    "invalid_configuration",
+    "the Alakazam downgrade service is required",
     { status: 500 }
   );
   invariant(
@@ -284,9 +405,17 @@ export function createHostedAlakazamBilling({
 
   return Object.freeze({
     async readiness() {
-      return translated(async () =>
-        publicReadiness(await billing.readiness())
-      );
+      return translated(async () => {
+        const [billingReadiness, downgradeReadiness] =
+          await Promise.all([
+            billing.readiness(),
+            downgrade.readiness()
+          ]);
+        return publicReadiness(
+          billingReadiness,
+          downgradeReadiness
+        );
+      });
     },
 
     async createQuote(actorInput, routeProjectId, input) {
@@ -361,6 +490,62 @@ export function createHostedAlakazamBilling({
             commandId,
             acceptedDisclosureDigest
           })
+        );
+      });
+    },
+
+    async scheduleDowngrade(
+      actorInput,
+      routeProjectId,
+      routeQuoteId,
+      input
+    ) {
+      return translated(async () => {
+        const actor = requireActor(actorInput);
+        const selected = exactInput(
+          input,
+          [
+            "acceptedDisclosureDigest",
+            "commandId",
+            "quoteDigest"
+          ],
+          "Alakazam downgrade scheduling accepts only the quote proof, accepted disclosure, and idempotency identity."
+        );
+        const commandId = exactUuid(
+          selected.commandId,
+          "commandId"
+        );
+        const acceptedDisclosureDigest =
+          requiredDigest(
+            selected.acceptedDisclosureDigest,
+            "acceptedDisclosureDigest"
+          );
+        const quoteDigest = requiredDigest(
+          selected.quoteDigest,
+          "quoteDigest"
+        );
+        const quoteId = exactUuid(
+          routeQuoteId,
+          "quoteId"
+        );
+        const { scope } = await sessionFor(
+          actor,
+          routeProjectId
+        );
+        return publicDowngrade(
+          await downgrade.scheduleDowngrade({
+            tenantId: scope.tenantId,
+            customerId: scope.customerId,
+            projectId: scope.projectId,
+            quoteId,
+            acceptedDisclosureDigest,
+            quoteDigest
+          }),
+          {
+            commandId,
+            projectId: scope.projectId,
+            quoteId
+          }
         );
       });
     }

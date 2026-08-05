@@ -428,7 +428,7 @@ function nextRenewal(subscription, pendingChange) {
   });
 }
 
-function upgradeAvailable(subscription, pendingChange, catalog) {
+function tierChangeAvailable(subscription, pendingChange, catalog) {
   return Boolean(
     subscription &&
       subscription.status === "active" &&
@@ -437,7 +437,7 @@ function upgradeAvailable(subscription, pendingChange, catalog) {
       subscription.cancelAtPeriodEnd === false &&
       pendingChange === null &&
       catalog.tiers.some(
-        (tier) => tier.rank > subscription.tier.rank
+        (tier) => tier.rank !== subscription.tier.rank
       )
   );
 }
@@ -495,7 +495,7 @@ export function createAlakazamAccountService({
         subscription === null;
       const startAvailable =
         subscription === null && pendingChange === null;
-      const changeTierAvailable = upgradeAvailable(
+      const changeTierAvailable = tierChangeAvailable(
         subscription,
         pendingChange,
         catalog
@@ -527,7 +527,7 @@ export function createAlakazamAccountService({
           reason: startAvailable
             ? "only_start_composed"
             : changeTierAvailable
-              ? "only_upgrade_composed"
+              ? "only_tier_change_composed"
               : "customer_commands_not_composed"
         }
       });

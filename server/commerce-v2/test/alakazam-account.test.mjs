@@ -108,10 +108,11 @@ test("an account without Alakazam exposes only the held catalog and available Do
   assert.deepEqual(context.calls, [scope()]);
 });
 
-test("active $25 and $35 accounts expose only the composed upgrade action", async () => {
+test("every active paid tier exposes the composed tier-change action", async () => {
   for (const [tierId, amountMinor] of [
     ["alakazam_25", 2500],
-    ["alakazam_35", 3500]
+    ["alakazam_35", 3500],
+    ["alakazam_50", 5000]
   ]) {
     const context = service(
       stored({
@@ -127,21 +128,13 @@ test("active $25 and $35 accounts expose only the composed upgrade action", asyn
       changeTier: true,
       manageBilling: false,
       cancel: false,
-      reason: "only_upgrade_composed"
+      reason: "only_tier_change_composed"
     });
   }
 });
 
-test("top tier, unsettled state, pending change, attention, and cancellation keep upgrade held", async () => {
+test("unsettled state, pending change, attention, and cancellation keep tier changes held", async () => {
   const cases = [
-    {
-      name: "$50 active",
-      subscription: activeSubscription({
-        tierId: "alakazam_50",
-        amountMinor: 5000
-      }),
-      pendingChange: null
-    },
     {
       name: "activation pending",
       subscription: activeSubscription({

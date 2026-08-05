@@ -681,6 +681,32 @@
       );
     }
 
+    function scheduleAlakazamDowngrade(projectId, quoteId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam-quotes/" + segment(quoteId, "Alakazam quote ID")
+          + "/downgrade-schedule-command",
+        {
+          body: {
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted Alakazam disclosure digest",
+              100
+            ),
+            quoteDigest: requiredText(
+              source.quoteDigest,
+              "Alakazam quote digest",
+              100
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function billingPortal(projectId, requestOptions) {
       return request(
         "POST",
@@ -1082,6 +1108,7 @@
       prepareDownloadCheckout: prepareDownloadCheckout,
       createAlakazamQuote: createAlakazamQuote,
       createAlakazamCheckout: createAlakazamCheckout,
+      scheduleAlakazamDowngrade: scheduleAlakazamDowngrade,
       billingPortal: billingPortal,
       subscription: subscription,
       cancellationPreview: cancellationPreview,
