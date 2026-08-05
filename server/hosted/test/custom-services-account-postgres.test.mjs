@@ -388,13 +388,31 @@ test("PostgreSQL foundation read uses one exact actor-bound read-only transactio
         "SS-CUSTOM-SERVICES-2026-08-05.1",
         "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8"
       ],
+      [ORGANIZATION_ID, PROJECT_ID],
       [ORGANIZATION_ID, PROJECT_ID, CUSTOMER_ID],
-      [ORGANIZATION_ID, PROJECT_ID, CUSTOMER_ID],
-      [ORGANIZATION_ID, PROJECT_ID, CASE_ID, CUSTOMER_ID],
+      [
+        ORGANIZATION_ID,
+        PROJECT_ID,
+        CASE_ID,
+        CUSTOMER_ID,
+        "00000000-0000-4000-8000-000000000341"
+      ],
       [ORGANIZATION_ID, PROJECT_ID, CASE_ID, CUSTOMER_ID]
     ]
   );
-  for (const call of context.calls.slice(2)) {
+  assert.match(
+    context.calls[0].text,
+    /membership\.role in \('owner', 'admin'\)/u
+  );
+  assert.doesNotMatch(
+    context.calls[2].text,
+    /profile\.customer_user_id =/u
+  );
+  assert.match(
+    context.calls[4].text,
+    /offering\.policy_id = \$5/u
+  );
+  for (const call of context.calls.slice(3)) {
     assert.match(call.text, /customer_user_id = \$[34]/u);
   }
   for (const call of context.calls) {

@@ -51,6 +51,12 @@ import {
   createPostgresCustomServicesAccountRepository
 } from "../custom-services-account-postgres.mjs";
 import {
+  createPostgresCustomServicesAssessmentQuoteRepository
+} from "../custom-services-assessment-quote-postgres.mjs";
+import {
+  createPostgresCustomServicesRequestRepository
+} from "../custom-services-request-postgres.mjs";
+import {
   assertApprovedDownloadPaymentReady,
   createConfiguredDownloadPaymentRelease
 } from "../download-payment-config.mjs";
@@ -282,8 +288,16 @@ async function start() {
     createPostgresCustomServicesAccountRepository({
       authority
     });
+  const customServicesAssessmentQuoteRepository =
+    createPostgresCustomServicesAssessmentQuoteRepository({
+      authority
+    });
+  const customServicesRequestRepository =
+    createPostgresCustomServicesRequestRepository({ authority });
   const customServicesAccount =
     createHostedCustomServicesAccount({
+      quoteRepository: customServicesAssessmentQuoteRepository,
+      requestRepository: customServicesRequestRepository,
       repository: customServicesAccountRepository,
       resolveSession: commerceV2.resolveSession
     });

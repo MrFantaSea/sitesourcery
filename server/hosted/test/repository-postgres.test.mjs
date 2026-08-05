@@ -100,12 +100,14 @@ function readyRow(overrides = {}) {
     custom_services_contract_marker_ready: true,
     custom_service_quotes_schema_ready: true,
     custom_service_quotes_contract_marker_ready: true,
+    custom_service_customer_commands_contract_marker_ready: true,
     custom_service_quotes_security_ready: true,
     custom_service_quotes_retention_ready: true,
     custom_service_quotes_digests_ready: true,
     custom_service_quotes_terms_ready: true,
     custom_service_quotes_operator_authority_ready: true,
     custom_service_quotes_acceptance_ready: true,
+    custom_service_customer_commands_fences_ready: true,
     releases_ready: true,
     exports_ready: true,
     export_grants_ready: true,
@@ -316,6 +318,8 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
     )
   });
   assert.deepEqual((await authority.readiness()).missing, [
+    "custom_service_customer_commands_contract_marker",
+    "custom_service_customer_commands_fences",
     "custom_service_quotes_acceptance",
     "custom_service_quotes_contract_marker",
     "custom_service_quotes_digests",
@@ -459,5 +463,10 @@ test("production PostgreSQL source contains no aggregate or ss_hosted persistenc
   assert.match(source, /to_regnamespace\('ss_hosted'\) is null/u);
   assert.match(source, /hosted_runtime_contract_v35/u);
   assert.match(source, /canonical-ss-v35-custom-service-quotes/u);
+  assert.match(source, /hosted_runtime_contract_v36/u);
+  assert.match(
+    source,
+    /canonical-ss-v36-custom-service-customer-commands/u
+  );
   assert.match(source, /authoritySchema: "ss"/u);
 });

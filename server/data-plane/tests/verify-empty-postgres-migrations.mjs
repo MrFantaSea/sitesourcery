@@ -129,7 +129,18 @@ async function verifyPlatformSchema(pool) {
       to_regclass('ss.service_quote_acceptances') is not null
         as service_quote_acceptances,
       to_regprocedure('ss.hosted_runtime_contract_v35()') is not null
-        as custom_service_quotes_runtime_contract
+        as custom_service_quotes_runtime_contract,
+      to_regprocedure('ss.hosted_runtime_contract_v36()') is not null
+        as custom_service_customer_commands_runtime_contract,
+      to_regprocedure(
+        'ss.validate_service_case_offering_terminal_state()'
+      ) is not null as custom_service_terminal_state_validator,
+      to_regclass('ss.service_intake_drafts') is not null
+        as service_intake_drafts,
+      to_regprocedure('ss.guard_service_intake_draft_insert()') is not null
+        as service_intake_draft_insert_guard,
+      to_regprocedure('ss.bump_service_intake_draft_revision()') is not null
+        as service_intake_draft_revision_guard
   `);
   for (const [name, exists] of Object.entries(result.rows[0])) {
     assert.equal(exists, true, `missing platform schema object: ${name}`);
@@ -270,6 +281,9 @@ async function verifyPlatformSchema(pool) {
       ss.hosted_runtime_contract_v35() =
         'canonical-ss-v35-custom-service-quotes'
         as exact_runtime_marker,
+      ss.hosted_runtime_contract_v36() =
+        'canonical-ss-v36-custom-service-customer-commands'
+        as exact_customer_commands_runtime_marker,
       (
         select count(*) = 8
           and bool_and(relation.relrowsecurity)
@@ -538,6 +552,16 @@ async function verifyPlatformSchema(pool) {
               'ss.prepare_service_quote_acceptance()'::regprocedure
             )
           ) like '%ss.current_service_actor_kind() <> ''customer''%'
+          and lower(
+            pg_get_functiondef(
+              'ss.prepare_service_quote_acceptance()'::regprocedure
+            )
+          ) like '%service_case.state = ''submitted''%'
+          and lower(
+            pg_get_functiondef(
+              'ss.prepare_service_quote_acceptance()'::regprocedure
+            )
+          ) like '%offering.state = ''requested''%'
           and exists (
             select 1
               from pg_trigger trigger_record
@@ -560,7 +584,92 @@ async function verifyPlatformSchema(pool) {
                'ss.service_quote_acceptances'::regclass
                and constraint_record.contype in ('c', 'u')
           ) acceptance_contract
-      ) as exact_account_bound_acceptance
+      ) as exact_account_bound_acceptance,
+      exists (
+        select 1
+          from pg_index index_record
+          join pg_class index_relation
+            on index_relation.oid = index_record.indexrelid
+         where index_relation.relnamespace = 'ss'::regnamespace
+           and index_relation.relname =
+             'service_cases_one_current_assessment'
+           and index_record.indrelid = 'ss.service_cases'::regclass
+           and index_record.indisunique
+           and index_record.indpred is not null
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%draft%'
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%submitted%'
+      ) as one_current_assessment_case,
+      (
+        select count(*) = 2
+          and bool_and(trigger_record.tgdeferrable)
+          and bool_and(trigger_record.tginitdeferred)
+          and bool_and(
+            trigger_record.tgfoid =
+              'ss.validate_service_case_offering_terminal_state()'::regprocedure
+          )
+          from pg_trigger trigger_record
+         where trigger_record.tgname in (
+           'service_cases_offering_terminal_state',
+           'service_case_offerings_terminal_state'
+         )
+           and not trigger_record.tgisinternal
+      ) as withdrawn_offering_fence,
+      exists (
+        select 1
+          from pg_class relation
+         where relation.oid = 'ss.service_intake_drafts'::regclass
+           and relation.relrowsecurity
+           and relation.relforcerowsecurity
+           and has_table_privilege(
+             'service_role', relation.oid, 'SELECT'
+           )
+           and has_table_privilege(
+             'service_role', relation.oid, 'INSERT'
+           )
+           and has_table_privilege(
+             'service_role', relation.oid, 'UPDATE'
+           )
+           and not has_table_privilege(
+             'service_role', relation.oid, 'DELETE'
+           )
+           and not has_table_privilege(
+             'service_role', relation.oid, 'TRUNCATE'
+           )
+           and not has_table_privilege(
+             'authenticated', relation.oid, 'SELECT'
+           )
+           and not has_table_privilege(
+             'anon', relation.oid, 'SELECT'
+           )
+      ) as intake_draft_security,
+      (
+        select count(*) = 3
+          and bool_and(not trigger_record.tgisinternal)
+          from pg_trigger trigger_record
+         where trigger_record.tgrelid =
+           'ss.service_intake_drafts'::regclass
+           and trigger_record.tgname in (
+             'service_intake_drafts_insert_guard',
+             'service_intake_drafts_revision',
+             'service_intake_drafts_account_authority'
+           )
+      ) as intake_draft_triggers,
+      exists (
+        select 1
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name = 'service_intake_drafts'
+           and column_record.column_name = 'facts_digest'
+           and column_record.is_generated = 'ALWAYS'
+           and column_record.generation_expression like
+             '%service_intake_facts_digest%'
+      ) as intake_draft_digest
   `);
   for (const [name, ready] of Object.entries(customServiceQuotes.rows[0])) {
     assert.equal(

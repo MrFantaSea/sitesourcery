@@ -351,7 +351,19 @@ export function createHostedApi(
     customServicesAccount ??
     createHeldHostedCustomServicesAccount();
   invariant(
-    typeof customServicesAccountBoundary.getSnapshot === "function",
+    typeof customServicesAccountBoundary.getSnapshot === "function" &&
+      typeof customServicesAccountBoundary.getAssessmentQuote ===
+        "function" &&
+      typeof customServicesAccountBoundary.getAssessmentRequest ===
+        "function" &&
+      typeof customServicesAccountBoundary.saveAssessmentRequest ===
+        "function" &&
+      typeof customServicesAccountBoundary.submitAssessmentRequest ===
+        "function" &&
+      typeof customServicesAccountBoundary.withdrawAssessmentRequest ===
+        "function" &&
+      typeof customServicesAccountBoundary.acceptAssessmentQuote ===
+        "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services account boundary is invalid.",
     { status: 500 }
@@ -639,6 +651,158 @@ export function createHostedApi(
             await alakazamAccountBoundary.getSnapshot(
               actor,
               route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-request$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing an assessment request.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getAssessmentRequest(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "PUT" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-request$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before saving an assessment request.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.saveAssessmentRequest(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "approximatePublicSize",
+                  "businessName",
+                  "commandId",
+                  "complexityFlags",
+                  "customerObservation",
+                  "customerOwnershipAffirmed",
+                  "expectedDraftRevision",
+                  "importantDate",
+                  "platformFamily",
+                  "primaryGoal",
+                  "publicUrl",
+                  "siteDisplayName"
+                ],
+                "INVALID_ASSESSMENT_REQUEST",
+                "The assessment request details are invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-request\/submission$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before submitting an assessment request.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.submitAssessmentRequest(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                ["commandId", "draftRevision"],
+                "INVALID_ASSESSMENT_REQUEST_SUBMISSION",
+                "The assessment request submission is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-request\/withdrawal$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before withdrawing an assessment request.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.withdrawAssessmentRequest(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                ["commandId"],
+                "INVALID_ASSESSMENT_REQUEST_WITHDRAWAL",
+                "The assessment request withdrawal is invalid."
+              )
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-quote$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing an assessment quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getAssessmentQuote(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/assessment-quote\/acceptance$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before accepting an assessment quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.acceptAssessmentQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "acceptanceStatement",
+                  "acceptedDisclosureDigest",
+                  "acceptedQuoteDigest",
+                  "commandId",
+                  "quoteId",
+                  "quoteRevision"
+                ],
+                "INVALID_ASSESSMENT_QUOTE_ACCEPTANCE",
+                "The assessment quote acceptance is invalid."
+              )
             );
         } else if (
           method === "GET" &&

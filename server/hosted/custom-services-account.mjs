@@ -438,7 +438,7 @@ function exactServiceCase(value, scope) {
   invariant(
     value.source === "account" &&
       ["draft", "submitted", "withdrawn"].includes(state) &&
-      (state === "draft" ? revision === 1 : revision >= 2) &&
+      (state === "draft" ? revision >= 1 : revision >= 2) &&
       (state === "withdrawn") === (withdrawnAt !== null) &&
       Date.parse(createdAt) <= Date.parse(updatedAt) &&
       (

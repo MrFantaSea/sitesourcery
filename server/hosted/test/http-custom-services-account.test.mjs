@@ -21,14 +21,29 @@ function service() {
   };
 }
 
-function request({ method = "GET", signedIn = true } = {}) {
+function request({
+  body,
+  method = "GET",
+  path = `/api/v1/projects/${PROJECT_ID}/custom-services`,
+  signedIn = true,
+  write = false
+} = {}) {
+  const headers = signedIn
+    ? { Cookie: `ss_session=${SESSION_TOKEN}` }
+    : {};
+  if (write) {
+    headers.Cookie += `${headers.Cookie ? "; " : ""}ss_csrf=${"c".repeat(32)}`;
+    headers.Origin = ORIGIN;
+    headers["X-CSRF-Token"] = "c".repeat(32);
+    headers["Idempotency-Key"] = "accept-command-1";
+    headers["Content-Type"] = "application/json";
+  }
   return new Request(
-    `${ORIGIN}/api/v1/projects/${PROJECT_ID}/custom-services`,
+    `${ORIGIN}${path}`,
     {
       method,
-      headers: signedIn
-        ? { Cookie: `ss_session=${SESSION_TOKEN}` }
-        : {}
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
     }
   );
 }
@@ -41,6 +56,24 @@ test("custom-services account HTTP route is authenticated, project-bound, and GE
   };
   const api = createHostedApi(service(), {
     customServicesAccount: {
+      async acceptAssessmentQuote() {
+        throw new Error("unexpected quote acceptance");
+      },
+      async getAssessmentQuote() {
+        throw new Error("unexpected quote read");
+      },
+      async getAssessmentRequest() {
+        throw new Error("unexpected request read");
+      },
+      async saveAssessmentRequest() {
+        throw new Error("unexpected request save");
+      },
+      async submitAssessmentRequest() {
+        throw new Error("unexpected request submission");
+      },
+      async withdrawAssessmentRequest() {
+        throw new Error("unexpected request withdrawal");
+      },
       async getSnapshot(actor, projectId) {
         calls.push({ actor: structuredClone(actor), projectId });
         return structuredClone(snapshot);
@@ -77,6 +110,180 @@ test("custom-services account HTTP route is authenticated, project-bound, and GE
   assert.equal(calls.length, 1);
 });
 
+test("assessment quote HTTP routes read and accept the exact customer quote", async () => {
+  const calls = [];
+  const current = {
+    schema: "sitesourcery.custom-services-assessment-quote/v1",
+    state: "review_required"
+  };
+  const accepted = { ...current, state: "accepted" };
+  const api = createHostedApi(service(), {
+    customServicesAccount: {
+      async getSnapshot() {
+        throw new Error("unexpected account read");
+      },
+      async getAssessmentQuote(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return current;
+      },
+      async acceptAssessmentQuote(actor, projectId, input) {
+        calls.push({ action: "accept", actor, projectId, input });
+        return accepted;
+      },
+      async getAssessmentRequest() {
+        throw new Error("unexpected request read");
+      },
+      async saveAssessmentRequest() {
+        throw new Error("unexpected request save");
+      },
+      async submitAssessmentRequest() {
+        throw new Error("unexpected request submission");
+      },
+      async withdrawAssessmentRequest() {
+        throw new Error("unexpected request withdrawal");
+      }
+    },
+    requestIds: {
+      next() {
+        return "request_custom_services_quote_1";
+      }
+    }
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-quote`;
+  const read = await api.fetch(request({ path }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), current);
+
+  const body = {
+    acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 1
+  };
+  const acceptance = await api.fetch(
+    request({
+      body,
+      method: "POST",
+      path: `${path}/acceptance`,
+      write: true
+    })
+  );
+  assert.equal(acceptance.status, 200);
+  assert.deepEqual(await acceptance.json(), accepted);
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "accept",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      input: { ...body, commandId: "accept-command-1" }
+    }
+  ]);
+});
+
+test("assessment request HTTP routes read, save, submit, and withdraw", async () => {
+  const calls = [];
+  const api = createHostedApi(service(), {
+    customServicesAccount: {
+      async getSnapshot() {
+        throw new Error("unexpected account read");
+      },
+      async getAssessmentQuote() {
+        throw new Error("unexpected quote read");
+      },
+      async acceptAssessmentQuote() {
+        throw new Error("unexpected quote acceptance");
+      },
+      async getAssessmentRequest(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return { state: "not_started" };
+      },
+      async saveAssessmentRequest(actor, projectId, input) {
+        calls.push({ action: "save", actor, projectId, input });
+        return { state: "draft" };
+      },
+      async submitAssessmentRequest(actor, projectId, input) {
+        calls.push({ action: "submit", actor, projectId, input });
+        return { state: "submitted" };
+      },
+      async withdrawAssessmentRequest(actor, projectId, input) {
+        calls.push({ action: "withdraw", actor, projectId, input });
+        return { state: "withdrawn" };
+      }
+    }
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}/custom-services/assessment-request`;
+  assert.deepEqual(await (await api.fetch(request({ path }))).json(), {
+    state: "not_started"
+  });
+  const saveBody = {
+    approximatePublicSize: "one_to_ten",
+    businessName: "Customer Business",
+    complexityFlags: ["forms"],
+    customerObservation: "The phone layout is crowded.",
+    customerOwnershipAffirmed: true,
+    expectedDraftRevision: 0,
+    importantDate: null,
+    platformFamily: "wordpress",
+    primaryGoal: "Make services easier to understand.",
+    publicUrl: "https://customer.example.com/",
+    siteDisplayName: "Customer Website"
+  };
+  assert.deepEqual(
+    await (
+      await api.fetch(
+        request({ body: saveBody, method: "PUT", path, write: true })
+      )
+    ).json(),
+    { state: "draft" }
+  );
+  assert.deepEqual(
+    await (
+      await api.fetch(
+        request({
+          body: { draftRevision: 1 },
+          method: "POST",
+          path: `${path}/submission`,
+          write: true
+        })
+      )
+    ).json(),
+    { state: "submitted" }
+  );
+  assert.deepEqual(
+    await (
+      await api.fetch(
+        request({
+          body: {},
+          method: "POST",
+          path: `${path}/withdrawal`,
+          write: true
+        })
+      )
+    ).json(),
+    { state: "withdrawn" }
+  );
+  assert.deepEqual(
+    calls.map(({ action, input }) => ({ action, input })),
+    [
+      { action: "read", input: undefined },
+      { action: "save", input: { ...saveBody, commandId: "accept-command-1" } },
+      {
+        action: "submit",
+        input: { draftRevision: 1, commandId: "accept-command-1" }
+      },
+      { action: "withdraw", input: { commandId: "accept-command-1" } }
+    ]
+  );
+});
+
 test("default hosted runtime keeps custom-services account reading held", async () => {
   const api = createHostedApi(service());
   const response = await api.fetch(request());
@@ -99,6 +306,22 @@ test("production composes custom-services account from canonical project and Pos
   assert.match(
     source,
     /createHostedCustomServicesAccount\(\{[\s\S]*repository:\s*customServicesAccountRepository,[\s\S]*resolveSession:\s*commerceV2\.resolveSession/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesAssessmentQuoteRepository\(\{\s*authority\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /quoteRepository:\s*customServicesAssessmentQuoteRepository/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesRequestRepository\(\{\s*authority\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /requestRepository:\s*customServicesRequestRepository/u
   );
   assert.match(
     source,

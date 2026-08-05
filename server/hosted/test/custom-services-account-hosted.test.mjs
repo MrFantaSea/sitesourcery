@@ -51,8 +51,53 @@ function foundationSnapshot() {
 }
 
 function context({ scope, snapshot } = {}) {
-  const calls = { repository: [], resolver: [] };
+  const calls = {
+    quoteAcceptance: [],
+    quoteRead: [],
+    requestRead: [],
+    requestSave: [],
+    requestSubmit: [],
+    requestWithdraw: [],
+    repository: [],
+    resolver: []
+  };
   const service = createHostedCustomServicesAccount({
+    quoteRepository: {
+      async acceptCurrentQuote(value) {
+        calls.quoteAcceptance.push(structuredClone(value));
+        return { accepted: true };
+      },
+      async readCurrentQuote(value) {
+        calls.quoteRead.push(structuredClone(value));
+        return {
+          schema:
+            "sitesourcery.custom-services-assessment-quote-snapshot/v1",
+          observedAt: "2026-08-05T18:00:00.000Z",
+          currentProfile: null,
+          currentIntake: null,
+          quote: null
+        };
+      }
+    },
+    requestRepository: {
+      async readCurrentRequest(value) {
+        calls.requestRead.push(structuredClone(value));
+        return {
+          schema:
+            "sitesourcery.custom-services-assessment-request/v1",
+          state: "not_started"
+        };
+      },
+      async saveDraft(value) {
+        calls.requestSave.push(structuredClone(value));
+      },
+      async submitCurrentRequest(value) {
+        calls.requestSubmit.push(structuredClone(value));
+      },
+      async withdrawCurrentRequest(value) {
+        calls.requestWithdraw.push(structuredClone(value));
+      }
+    },
     repository: {
       async readFoundationSnapshot(value) {
         calls.repository.push(structuredClone(value));
@@ -198,11 +243,30 @@ test("hosted custom-services account rejects missing, foreign, and expanded reso
 });
 
 test("hosted custom-services account requires exact ports and a canonical snapshot", async () => {
+  const quoteRepository = {
+    acceptCurrentQuote() {},
+    readCurrentQuote() {}
+  };
+  const requestRepository = {
+    readCurrentRequest() {},
+    saveDraft() {},
+    submitCurrentRequest() {},
+    withdrawCurrentRequest() {}
+  };
   for (const options of [
     undefined,
     {},
     { repository: {} },
-    { repository: { readFoundationSnapshot() {} } }
+    { repository: { readFoundationSnapshot() {} } },
+    {
+      quoteRepository,
+      repository: { readFoundationSnapshot() {} }
+    },
+    {
+      quoteRepository,
+      requestRepository,
+      repository: { readFoundationSnapshot() {} }
+    }
   ]) {
     assert.throws(
       () => createHostedCustomServicesAccount(options),
@@ -222,6 +286,96 @@ test("hosted custom-services account requires exact ports and a canonical snapsh
   );
 });
 
+test("hosted custom-services quote read and acceptance stay bound to the resolved customer project", async () => {
+  const selected = context();
+  const quote = await selected.service.getAssessmentQuote(
+    actor(),
+    PROJECT_ID
+  );
+  assert.deepEqual(quote, {
+    schema: "sitesourcery.custom-services-assessment-quote/v1",
+    state: "not_available",
+    quote: null,
+    actions: {
+      acceptQuote: {
+        available: false,
+        reason: "quote_not_available",
+        message: "There is no assessment quote to accept yet.",
+        acceptanceStatement: null
+      }
+    }
+  });
+
+  const acceptance = {
+    acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    commandId: "accept-command-1",
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 1
+  };
+  await selected.service.acceptAssessmentQuote(
+    actor(),
+    PROJECT_ID,
+    acceptance
+  );
+  const exactScope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.quoteRead, [exactScope, exactScope]);
+  assert.deepEqual(selected.calls.quoteAcceptance, [
+    { ...exactScope, ...acceptance }
+  ]);
+});
+
+test("hosted custom-services request commands return the freshly read customer state", async () => {
+  const selected = context();
+  const exactScope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  await selected.service.getAssessmentRequest(actor(), PROJECT_ID);
+  await selected.service.saveAssessmentRequest(actor(), PROJECT_ID, {
+    commandId: "request-save-1",
+    expectedDraftRevision: 0
+  });
+  await selected.service.submitAssessmentRequest(actor(), PROJECT_ID, {
+    commandId: "request-submit-1",
+    draftRevision: 1
+  });
+  await selected.service.withdrawAssessmentRequest(actor(), PROJECT_ID, {
+    commandId: "request-withdraw-1"
+  });
+  assert.deepEqual(selected.calls.requestRead, [
+    exactScope,
+    exactScope,
+    exactScope,
+    exactScope
+  ]);
+  assert.deepEqual(selected.calls.requestSave, [
+    {
+      commandId: "request-save-1",
+      expectedDraftRevision: 0,
+      ...exactScope
+    }
+  ]);
+  assert.deepEqual(selected.calls.requestSubmit, [
+    {
+      commandId: "request-submit-1",
+      draftRevision: 1,
+      ...exactScope
+    }
+  ]);
+  assert.deepEqual(selected.calls.requestWithdraw, [
+    { commandId: "request-withdraw-1", ...exactScope }
+  ]);
+});
+
 test("held custom-services account authenticates but exposes no read", async () => {
   const held = createHeldHostedCustomServicesAccount();
   await assert.rejects(
@@ -231,5 +385,21 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.getSnapshot(actor(), PROJECT_ID),
     isError("CUSTOM_SERVICES_ACCOUNT_HELD", 503)
+  );
+  await assert.rejects(
+    held.getAssessmentQuote(actor(), PROJECT_ID),
+    isError("CUSTOM_SERVICES_QUOTE_HELD", 503)
+  );
+  await assert.rejects(
+    held.acceptAssessmentQuote(actor(), PROJECT_ID, {}),
+    isError("CUSTOM_SERVICES_QUOTE_HELD", 503)
+  );
+  await assert.rejects(
+    held.getAssessmentRequest(actor(), PROJECT_ID),
+    isError("CUSTOM_SERVICES_REQUEST_HELD", 503)
+  );
+  await assert.rejects(
+    held.saveAssessmentRequest(actor(), PROJECT_ID, {}),
+    isError("CUSTOM_SERVICES_REQUEST_HELD", 503)
   );
 });

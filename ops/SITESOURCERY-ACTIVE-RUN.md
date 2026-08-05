@@ -25,8 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 authenticated custom-services account read is the latest reviewed
-  local checkpoint represented by this ledger;
+- The H1 authenticated customer request and assessment-quote surface is the
+  latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
@@ -36,13 +36,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Finish H1 from the now-proven account read, request, and accepted-quote
-foundation: add exact customer request writes plus customer-safe quote review
-and acceptance commands, then one held invoice and provider-effect reservation
-before tax calculation, Checkout, provider-confirmed payment, job/report
-delivery, and one-use `$200` Custom base-build credit authority. The Polish
-lane applies the frozen six-step Mac/Pixel matrix in parallel. All payment and
-public-service release gates remain held.
+Finish H1 from the now-proven customer request and accepted-quote surface: add
+the smallest owner Mac/Pixel operation that issues the bounded `$200` quote
+with its actual delivery date and named targets, then one held invoice and
+provider-effect reservation before tax calculation, Checkout,
+provider-confirmed payment, job/report delivery, and one-use `$200` Custom
+base-build credit authority. All payment and public-service release gates
+remain held.
 
 ## Completed and reviewed
 
@@ -734,24 +734,69 @@ Batch 3C sealed checkpoint gates:
   credential, public copy, or release mutation occurred. The July 22 production
   fallback remains untouched.
 
+## H1 customer request and quote surface checkpoint evidence
+
+- Migration 36 adds one retained typed intake draft, one-current-request
+  uniqueness, database-managed draft revision/digest authority, and deferred
+  terminal-state fences. A withdrawn request cannot retain an open offering;
+  an accepted quote cannot be withdrawn or detached from its submitted
+  request. No migration 37 was added.
+- Authenticated project routes now support reading and saving a bounded
+  assessment draft, exact-revision submission, withdrawal, current quote read,
+  and exact-digest quote acceptance. Every write reuses the existing CSRF and
+  idempotency boundary, resolves customer/project scope from the signed-in
+  session, and rejects browser money or provider authority.
+- The PostgreSQL request repository proves create, safe command replay,
+  stale-edit rejection, revision, submit, safe submit replay, withdrawal, safe
+  withdrawal replay, and a new post-withdrawal request. The quote repository
+  proves the current `$200` projection, exact acceptance, safe replay, and the
+  accepted customer state.
+- The hosted customer dashboard now renders the external-site form, ownership
+  affirmation, bounded `$200` scope, submit/withdraw status, separate-invoice
+  and full-before-work disclosure, quote expiry/delivery date, and exact
+  acceptance control. The browser sends no price, tax result, invoice total,
+  provider ID, or payment claim.
+- Production composition wires the canonical account, request, and quote
+  repositories into the same authenticated custom-services boundary. The
+  held/default runtime remains effect-free.
+- Focused HTTP, hosted-boundary, quote-projector, browser API, and artifact
+  tests pass. The maintained real PostgreSQL foundation/request journey passes
+  2/2 and the real quote read/acceptance journey passes 1/1 against a clean
+  replay of all 36 migrations.
+- Post-integration Node 24 proof passes: core 489/489; the complete hosted
+  service suite passes; the hosted artifact builds and verifies; relevant
+  browser/control suites and `git diff --check` pass.
+- Disposable database `ss_h1_commands_20260805_codex1` had zero active
+  sessions, was dropped by exact name, and is verified absent. No customer or
+  production data was touched.
+- One operational gap remains inside H1: quote revision authoring is protected
+  by real deployment-controlled operator authority but has no usable owner
+  Mac/Pixel command yet. Until that minimum owner action is connected, a
+  submitted customer request pauses at owner review rather than receiving its
+  quote automatically.
+- No push, deployment, DNS change, provider effect, credential, public-copy
+  release, or production mutation occurred. The July 22 fallback remains
+  untouched.
+
 ## Live resources and workers
 
-- No H1 customer-account, Batch 3C, H0, quote-readiness, or quote-proof worker
-  remains running. The exact Batch 3C and H1 disposable PostgreSQL databases
-  are absent.
+- No H1, Batch 3C, H0, quote-readiness, or quote-proof worker remains running.
+  The exact Batch 3C and H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Extend the authenticated custom-services account surface with bounded customer
-request writes, current customer-safe quote projection, and exact accepted-
-digest acceptance commands. Keep operator quote authoring out of the customer
-browser. After that boundary is proven, the next database authority is one held
-invoice plus one non-dispatchable payment reservation. Do not call Stripe,
-claim tax is zero, mark an invoice payable, open public copy, or begin a job
-until the later tax, dispatch, settlement, report, credit, owner-operation,
-replay, fresh-PostgreSQL, and responsive browser gates are connected.
+Add the smallest owner-authenticated Mac/Pixel operation needed to inspect one
+submitted assessment and issue its exact `$200` quote: actual delivery date and
+one-to-five canonical review targets only. Reuse migration-35 operator
+authority and quote revision tables; do not create a second quote system or a
+general dashboard first. Once the customer can submit, the owner can issue,
+and the customer can accept in one real journey, move to one held invoice plus
+one non-dispatchable payment reservation. Do not call Stripe, claim tax is
+zero, mark an invoice payable, open public copy, or begin a job before the
+later tax, dispatch, settlement, report, credit, owner-operation, replay,
+fresh-PostgreSQL, and responsive browser gates are connected.
 
 ## Batch 3B write scope
 

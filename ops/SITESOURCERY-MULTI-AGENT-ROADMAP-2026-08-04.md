@@ -410,16 +410,19 @@ Lane D/J Polish truth ────────────┘
 | H1A | Custom-services pre-commerce foundation | Lead plus bounded read-only review and Polish lane | migration 34, exact held assessment policy, actor-bound request state, typed intake, minimal grants, readiness, clean-room PostgreSQL and broad proof | reviewed and sealed locally; payment and release held |
 | H1B | Assessment quote and acceptance authority | Lead plus bounded readiness and customer-projection workers | migration 35, deployment-controlled operator grants, immutable exact `$200` revisions, named scope, account-bound acceptance, clean-room PostgreSQL and broad proof | reviewed and sealed locally; invoice, payment, job, report, credit, and release held |
 | H1C | Authenticated custom-services account read | Lead plus bounded PostgreSQL adapter worker | exact customer/project scope, read-only canonical repository, customer-safe projection, same-origin GET, production composition, real PostgreSQL and broad proof | reviewed and sealed locally; writes, commerce, public copy, and release held |
+| H1D | Customer request and quote surface | Lead | migration 36 typed draft and terminal fences; save/submit/withdraw routes; current quote read and acceptance; signed-in dashboard form/review; real PostgreSQL, hosted artifact, and broad proof | reviewed locally; minimum owner quote-issue command remains before the vertical journey is complete; invoice, payment, job, report, credit, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, H1A, H1B, and H1C are sealed. Continue Lane H1 as one vertical
-customer outcome: anonymous inquiry/claim + activated account + a
+Batch 3C, H0, H1A, H1B, and H1C are sealed; H1D now supplies the customer
+request and quote-review/acceptance surface over migration 36. Complete its
+vertical handoff with one minimum owner quote-issue command, then continue Lane
+H1 as one outcome: anonymous inquiry/claim + activated account + a
 customer-owned external-site request + exact accepted `$200` assessment quote
 + held invoice/reservation + provider-confirmed payment + job/report delivery
-+ exact one-use `$200` Custom build credit. Migrations 34 and 35 supply the
-safe request and accepted-quote authority only; they deliberately supply no
-invoice, payable tax total, provider dispatch, payment, job, report, or credit.
++ exact one-use `$200` Custom build credit. Migrations 34 through 36 still
+deliberately supply no invoice, payable tax total, provider dispatch, payment,
+job, report, or credit.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

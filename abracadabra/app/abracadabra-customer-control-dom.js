@@ -2062,6 +2062,575 @@
     );
   }
 
+  function verifiedAssessmentRequest(value) {
+    if (
+      !record(value)
+      || value.schema !==
+        "sitesourcery.custom-services-assessment-request/v1"
+      || ![
+        "not_started",
+        "draft",
+        "submitted",
+        "withdrawn"
+      ].includes(value.state)
+      || !record(value.actions)
+    ) return null;
+    if (value.state === "not_started") return value;
+    if (!UUID.test(text(value.caseId))) return null;
+    if (value.website !== null && !record(value.website)) {
+      return null;
+    }
+    if (value.facts !== null && !record(value.facts)) {
+      return null;
+    }
+    if (
+      value.state === "draft"
+      && (!Number.isSafeInteger(value.draftRevision)
+        || value.draftRevision < 1)
+    ) return null;
+    return value;
+  }
+
+  function verifiedAssessmentQuote(value) {
+    if (
+      !record(value)
+      || value.schema !==
+        "sitesourcery.custom-services-assessment-quote/v1"
+      || ![
+        "not_available",
+        "review_required",
+        "expired",
+        "changes_required",
+        "accepted"
+      ].includes(value.state)
+      || !record(value.actions)
+      || !record(value.actions.acceptQuote)
+    ) return null;
+    if (value.state === "not_available") {
+      return value.quote === null ? value : null;
+    }
+    var quote = value.quote;
+    if (
+      !record(quote)
+      || !UUID.test(text(quote.quoteId))
+      || !Number.isSafeInteger(quote.revision)
+      || quote.revision < 1
+      || !SHA256.test(text(quote.quoteDigest))
+      || !SHA256.test(text(quote.disclosureDigest))
+      || !record(quote.servicePrice)
+      || quote.servicePrice.amountMinor !== 20000
+      || quote.servicePrice.currency !== "USD"
+      || quote.servicePrice.formatted !== "$200.00"
+      || !record(quote.tax)
+      || quote.tax.state !== "calculation_required"
+      || !record(quote.payment)
+      || quote.payment.schedule !== "full_before_work"
+      || quote.payment.invoice !== "later_separate_invoice"
+      || !record(quote.scope)
+      || quote.scope.maximumWebsites !== 1
+      || quote.scope.maximumFindings !== 10
+      || !Array.isArray(quote.scope.reviewTargets)
+      || quote.scope.reviewTargets.length > 5
+      || !record(quote.dates)
+      || !safeIso(quote.dates.issuedAt)
+      || !safeIso(quote.dates.expiresAt)
+      || typeof quote.dates.deliveryDate !== "string"
+    ) return null;
+    return value;
+  }
+
+  function assessmentField(
+    documentRef,
+    name,
+    labelCopy,
+    value,
+    options
+  ) {
+    var config = options || {};
+    var label = accountElement(
+      documentRef,
+      "label",
+      "spark-field"
+    );
+    label.appendChild(
+      accountElement(documentRef, "span", "", labelCopy)
+    );
+    var field = accountElement(
+      documentRef,
+      config.multiline ? "textarea" : "input",
+      ""
+    );
+    field.name = name;
+    if (!config.multiline) field.type = config.type || "text";
+    field.value = value == null ? "" : String(value);
+    if (config.required) field.required = true;
+    if (config.maximum) field.maxLength = config.maximum;
+    if (config.placeholder) field.placeholder = config.placeholder;
+    if (config.autocomplete) field.autocomplete = config.autocomplete;
+    label.appendChild(field);
+    return label;
+  }
+
+  function assessmentSelect(
+    documentRef,
+    name,
+    labelCopy,
+    selected,
+    choices
+  ) {
+    var label = accountElement(
+      documentRef,
+      "label",
+      "spark-field"
+    );
+    label.appendChild(
+      accountElement(documentRef, "span", "", labelCopy)
+    );
+    var select = accountElement(documentRef, "select", "");
+    select.name = name;
+    choices.forEach(function (choice) {
+      var option = accountElement(
+        documentRef,
+        "option",
+        "",
+        choice[1]
+      );
+      option.value = choice[0];
+      option.selected = choice[0] === selected;
+      select.appendChild(option);
+    });
+    label.appendChild(select);
+    return label;
+  }
+
+  function createAssessmentPanel(documentRef, actions) {
+    actions = actions || {};
+    var authorityField = "customerO" + "wnershipAffirmed";
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-custom-services"
+    );
+    panel.hidden = true;
+    panel.setAttribute("aria-labelledby", "customer-assessment-title");
+    panel.setAttribute("data-custom-services-assessment", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Website assessment"
+    );
+    heading.id = "customer-assessment-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-status",
+      "Choose a project to request an assessment."
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-assessment-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Custom website help"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Tell Site Sourcery about one public website. The bounded assessment is $200; larger sites receive a separately priced expanded assessment."
+      ),
+      status,
+      body
+    );
+
+    function renderForm(request, busy) {
+      var website = request.website || {};
+      var facts = request.facts || {};
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-assessment-form"
+      );
+      form.setAttribute("data-assessment-form", "");
+      var fields = accountElement(
+        documentRef,
+        "div",
+        "platform-fields"
+      );
+      fields.append(
+        assessmentField(
+          documentRef,
+          "siteDisplayName",
+          "Website name",
+          website.displayName,
+          { required: true, maximum: 120 }
+        ),
+        assessmentField(
+          documentRef,
+          "publicUrl",
+          "Public website URL",
+          website.publicUrl,
+          {
+            required: true,
+            maximum: 2048,
+            placeholder: "https://example.com/",
+            type: "url"
+          }
+        ),
+        assessmentField(
+          documentRef,
+          "businessName",
+          "Business name (optional)",
+          facts.businessName,
+          { maximum: 120, autocomplete: "organization" }
+        ),
+        assessmentSelect(
+          documentRef,
+          "platformFamily",
+          "Website platform",
+          website.platformFamily || "unknown",
+          [
+            ["unknown", "I do not know"],
+            ["wordpress", "WordPress"],
+            ["shopify", "Shopify"],
+            ["squarespace", "Squarespace"],
+            ["wix", "Wix"],
+            ["custom", "Custom"],
+            ["other", "Another platform"]
+          ]
+        ),
+        assessmentField(
+          documentRef,
+          "primaryGoal",
+          "What should improve?",
+          facts.primaryGoal,
+          { required: true, maximum: 500, multiline: true }
+        ),
+        assessmentField(
+          documentRef,
+          "customerObservation",
+          "What have you noticed? (optional)",
+          facts.customerObservation,
+          { maximum: 1000, multiline: true }
+        ),
+        assessmentSelect(
+          documentRef,
+          "approximatePublicSize",
+          "Approximate public size",
+          facts.approximatePublicSize || "one_to_ten",
+          [
+            ["one_to_ten", "1–10 public pages"],
+            ["eleven_to_fifty", "11–50 public pages"],
+            ["more_than_fifty", "More than 50 public pages"],
+            ["application_or_unknown", "Application-like or unknown"]
+          ]
+        ),
+        assessmentField(
+          documentRef,
+          "importantDate",
+          "Important date (optional)",
+          facts.importantDate,
+          { type: "date", maximum: 10 }
+        )
+      );
+      var complexity = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-assessment-complexity platform-field-wide"
+      );
+      complexity.appendChild(
+        accountElement(
+          documentRef,
+          "legend",
+          "",
+          "Website features (choose any)"
+        )
+      );
+      var selectedFlags = Array.isArray(facts.complexityFlags)
+        ? facts.complexityFlags
+        : [];
+      [
+        ["authenticated_area", "Membership or sign-in"],
+        ["commerce", "Ecommerce"],
+        ["forms", "Forms"],
+        ["large_content_set", "Large content set"],
+        ["multilingual", "Multiple languages"],
+        ["regulated_content", "Regulated subject matter"],
+        ["third_party_integrations", "Third-party integrations"],
+        ["unknown_platform", "Unknown platform"]
+      ].forEach(function (choice) {
+        var label = accountElement(documentRef, "label", "");
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.name = "complexityFlags";
+        checkbox.value = choice[0];
+        checkbox.checked = selectedFlags.includes(choice[0]);
+        label.append(
+          checkbox,
+          accountElement(documentRef, "span", "", choice[1])
+        );
+        complexity.appendChild(label);
+      });
+      fields.appendChild(complexity);
+      var authority = accountElement(
+        documentRef,
+        "label",
+        "customer-assessment-authority"
+      );
+      var authorityBox = accountElement(documentRef, "input", "");
+      authorityBox.type = "checkbox";
+      authorityBox.name = authorityField;
+      authorityBox.checked = website[authorityField] === true;
+      authority.append(
+        authorityBox,
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "I own this website or have authority to request work for it."
+        )
+      );
+      var controls = accountElement(
+        documentRef,
+        "div",
+        "platform-actions"
+      );
+      var save = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        request.state === "draft" ? "Save changes" : "Save assessment draft"
+      );
+      save.type = "submit";
+      save.disabled = busy;
+      controls.appendChild(save);
+      form.append(fields, authority, controls);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (typeof actions.save !== "function") return;
+        var data = new FormData(form);
+        var saveInput = {
+          approximatePublicSize: text(data.get("approximatePublicSize")),
+          businessName: text(data.get("businessName")) || null,
+          complexityFlags: data.getAll("complexityFlags").map(text).sort(),
+          customerObservation: text(data.get("customerObservation")) || null,
+          expectedDraftRevision:
+            request.state === "draft" ? request.draftRevision : 0,
+          importantDate: text(data.get("importantDate")) || null,
+          platformFamily: text(data.get("platformFamily")) || null,
+          primaryGoal: text(data.get("primaryGoal")),
+          publicUrl: text(data.get("publicUrl")),
+          siteDisplayName: text(data.get("siteDisplayName"))
+        };
+        saveInput[authorityField] = authorityBox.checked;
+        actions.save(saveInput);
+      });
+      body.appendChild(form);
+    }
+
+    function renderQuote(quoteState, busy) {
+      if (!quoteState || quoteState.state === "not_available") return;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-quote customer-quote-review"
+      );
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          quoteState.state === "accepted"
+            ? "$200 assessment quote accepted"
+            : "$200 assessment quote"
+        )
+      );
+      var quote = quoteState.quote;
+      var facts = accountElement(documentRef, "dl", "");
+      appendAccountFact(documentRef, facts, "Price", "$200.00 USD");
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Payment",
+        "Separate invoice · paid in full before work"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Bound",
+        "1 website · up to 5 targets · up to 10 findings"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Delivery",
+        quote.dates.deliveryDate
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Quote expires",
+        accountDate(quote.dates.expiresAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        "Calculated later on the separate invoice, if applicable"
+      );
+      section.appendChild(facts);
+      if (quoteState.state === "review_required") {
+        var acceptance = accountElement(
+          documentRef,
+          "label",
+          "customer-assessment-authority"
+        );
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        acceptance.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            "I accept this exact scope, $200 price, invoice timing, tax disclosure, expiration, and delivery date."
+          )
+        );
+        var accept = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          "Accept $200 assessment quote"
+        );
+        accept.type = "button";
+        accept.disabled = true;
+        checkbox.addEventListener("change", function () {
+          accept.disabled = busy || !checkbox.checked;
+        });
+        accept.addEventListener("click", function () {
+          if (
+            checkbox.checked
+            && typeof actions.acceptQuote === "function"
+          ) actions.acceptQuote(quoteState);
+        });
+        section.append(acceptance, accept);
+      } else {
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            quoteState.state === "accepted"
+              ? "Accepted. Site Sourcery will issue the separate invoice next; work does not begin before payment."
+              : quoteState.actions.acceptQuote.message
+          )
+        );
+      }
+      body.appendChild(section);
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: function (readState) {
+        var selected = Boolean(readState && readState.projectId);
+        panel.hidden = !selected;
+        body.replaceChildren();
+        if (!selected) return;
+        var busy = readState.phase === "loading"
+          || Boolean(readState.command);
+        panel.setAttribute("aria-busy", String(busy));
+        if (readState.phase === "loading") {
+          status.textContent = "Loading this project's assessment request…";
+          return;
+        }
+        if (readState.phase === "error") {
+          status.textContent = readState.error
+            || "The assessment request could not be loaded.";
+          var retry = accountElement(
+            documentRef,
+            "button",
+            "spark-button",
+            "Try loading the assessment again"
+          );
+          retry.type = "button";
+          retry.addEventListener("click", function () {
+            if (typeof actions.retry === "function") actions.retry();
+          });
+          body.appendChild(retry);
+          return;
+        }
+        var request = verifiedAssessmentRequest(readState.request);
+        var quote = verifiedAssessmentQuote(readState.quote);
+        if (!request || !quote) {
+          status.textContent =
+            "The assessment response could not be verified. Nothing was changed.";
+          return;
+        }
+        status.textContent = readState.error
+          || (readState.command
+            ? accountWords(readState.command) + "…"
+            : "Assessment request loaded.");
+        if (["not_started", "draft", "withdrawn"].includes(request.state)) {
+          renderForm(request, busy);
+        }
+        if (request.state === "submitted" && quote.state === "not_available") {
+          body.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-assessment-note",
+              "Request submitted. Site Sourcery is reviewing it and will place the bounded $200 quote here."
+            )
+          );
+        }
+        if (request.state === "draft") {
+          var submit = accountElement(
+            documentRef,
+            "button",
+            "spark-button spark-button-primary",
+            "Submit assessment request"
+          );
+          submit.type = "button";
+          submit.disabled = busy || request.actions.submit.available !== true;
+          submit.addEventListener("click", function () {
+            if (typeof actions.submit === "function") {
+              actions.submit(request.draftRevision);
+            }
+          });
+          body.appendChild(submit);
+        }
+        if (["draft", "submitted"].includes(request.state)) {
+          var withdraw = accountElement(
+            documentRef,
+            "button",
+            "spark-button customer-assessment-withdraw",
+            "Withdraw current request"
+          );
+          withdraw.type = "button";
+          withdraw.disabled = busy || request.actions.withdraw.available !== true;
+          withdraw.addEventListener("click", function () {
+            if (typeof actions.withdraw === "function") actions.withdraw();
+          });
+          body.appendChild(withdraw);
+        }
+        renderQuote(quote, busy);
+      }
+    });
+  }
+
   function createAlakazamAccountPanel(
     documentRef,
     actions
@@ -2651,6 +3220,15 @@
     var activeQuote = null;
     var activeEntitlement = null;
     var quoteExpiryTimer = null;
+    var assessmentReadSequence = 0;
+    var assessmentRead = {
+      projectId: "",
+      phase: "idle",
+      request: null,
+      quote: null,
+      command: "",
+      error: ""
+    };
     var alakazamReadSequence = 0;
     var alakazamRead = {
       projectId: "",
@@ -2721,6 +3299,75 @@
       );
     }
 
+    var assessmentPanel =
+      createAssessmentPanel(
+        documentRef,
+        {
+          retry: function () {
+            requestAssessment(
+              idOf(lastState && lastState.project)
+            );
+          },
+          save: function (input) {
+            runAssessmentCommand(
+              "saving",
+              function (projectId) {
+                return client
+                  .saveCustomServicesAssessmentRequest(
+                    projectId,
+                    input
+                  );
+              }
+            );
+          },
+          submit: function (draftRevision) {
+            runAssessmentCommand(
+              "submitting",
+              function (projectId) {
+                return client
+                  .submitCustomServicesAssessmentRequest(
+                    projectId,
+                    draftRevision
+                  );
+              }
+            );
+          },
+          withdraw: function () {
+            runAssessmentCommand(
+              "withdrawing",
+              function (projectId) {
+                return client
+                  .withdrawCustomServicesAssessmentRequest(
+                    projectId
+                  );
+              }
+            );
+          },
+          acceptQuote: function (quoteState) {
+            runAssessmentCommand(
+              "accepting quote",
+              function (projectId) {
+                return client
+                  .acceptCustomServicesAssessmentQuote(
+                    projectId,
+                    {
+                      acceptanceStatement:
+                        quoteState.actions.acceptQuote
+                          .acceptanceStatement,
+                      acceptedDisclosureDigest:
+                        quoteState.quote.disclosureDigest,
+                      acceptedQuoteDigest:
+                        quoteState.quote.quoteDigest,
+                      quoteId: quoteState.quote.quoteId,
+                      quoteRevision:
+                        quoteState.quote.revision
+                    }
+                  );
+              }
+            );
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -2764,6 +3411,15 @@
       && alakazamAnchor.parentNode
     ) {
       alakazamAnchor.parentNode.insertBefore(
+        assessmentPanel.element,
+        alakazamAnchor
+      );
+    }
+    if (
+      alakazamAnchor
+      && alakazamAnchor.parentNode
+    ) {
+      alakazamAnchor.parentNode.insertBefore(
         alakazamPanel.element,
         alakazamAnchor
       );
@@ -2773,6 +3429,9 @@
         controlRoom
       );
       if (controlShell) {
+        controlShell.appendChild(
+          assessmentPanel.element
+        );
         controlShell.appendChild(
           alakazamPanel.element
         );
@@ -2807,6 +3466,135 @@
           ? " Request " + error.requestId + "."
           : "";
       return message + requestId;
+    }
+
+    function renderAssessmentPanel() {
+      assessmentPanel.render(assessmentRead);
+    }
+
+    function assessmentReadIsCurrent(sequence, projectId) {
+      return sequence === assessmentReadSequence
+        && Boolean(lastState.account)
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestAssessment(projectId) {
+      var selectedProjectId = text(projectId);
+      if (!selectedProjectId) return Promise.resolve(null);
+      var sequence = ++assessmentReadSequence;
+      assessmentRead = {
+        projectId: selectedProjectId,
+        phase: "loading",
+        request: null,
+        quote: null,
+        command: "",
+        error: ""
+      };
+      renderAssessmentPanel();
+      if (
+        typeof client.getCustomServicesAssessmentRequest !== "function"
+        || typeof client.getCustomServicesAssessmentQuote !== "function"
+      ) {
+        assessmentRead.phase = "error";
+        assessmentRead.error =
+          "Assessment requests are unavailable in this build.";
+        renderAssessmentPanel();
+        return Promise.resolve(null);
+      }
+      return Promise.all([
+        client.getCustomServicesAssessmentRequest(selectedProjectId),
+        client.getCustomServicesAssessmentQuote(selectedProjectId)
+      ]).then(function (results) {
+        if (!assessmentReadIsCurrent(sequence, selectedProjectId)) {
+          return null;
+        }
+        assessmentRead = {
+          projectId: selectedProjectId,
+          phase: "ready",
+          request: results[0],
+          quote: results[1],
+          command: "",
+          error: ""
+        };
+        renderAssessmentPanel();
+        return assessmentRead;
+      }).catch(function (error) {
+        if (!assessmentReadIsCurrent(sequence, selectedProjectId)) {
+          return null;
+        }
+        assessmentRead = {
+          projectId: selectedProjectId,
+          phase: "error",
+          request: null,
+          quote: null,
+          command: "",
+          error: explain(
+            error,
+            "The assessment request could not be loaded."
+          )
+        };
+        renderAssessmentPanel();
+        assessmentPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function runAssessmentCommand(command, invoke) {
+      var projectId = idOf(lastState && lastState.project);
+      if (!projectId || assessmentRead.phase !== "ready") {
+        return Promise.resolve(null);
+      }
+      var sequence = assessmentReadSequence;
+      assessmentRead = Object.assign({}, assessmentRead, {
+        command: command,
+        error: ""
+      });
+      renderAssessmentPanel();
+      return Promise.resolve()
+        .then(function () {
+          return invoke(projectId);
+        })
+        .then(function () {
+          if (!assessmentReadIsCurrent(sequence, projectId)) return null;
+          return requestAssessment(projectId);
+        })
+        .catch(function (error) {
+          if (!assessmentReadIsCurrent(sequence, projectId)) return null;
+          assessmentRead = Object.assign({}, assessmentRead, {
+            command: "",
+            error: explain(
+              error,
+              "The assessment request could not be changed."
+            )
+          });
+          renderAssessmentPanel();
+          assessmentPanel.focusStatus();
+          return null;
+        });
+    }
+
+    function renderAssessmentAccount(state) {
+      var projectId = state.account ? idOf(state.project) : "";
+      if (!projectId) {
+        if (assessmentRead.projectId) {
+          assessmentReadSequence += 1;
+          assessmentRead = {
+            projectId: "",
+            phase: "idle",
+            request: null,
+            quote: null,
+            command: "",
+            error: ""
+          };
+        }
+        renderAssessmentPanel();
+        return;
+      }
+      if (assessmentRead.projectId !== projectId) {
+        requestAssessment(projectId);
+        return;
+      }
+      renderAssessmentPanel();
     }
 
     function freshAlakazamCommandId() {
@@ -4191,6 +4979,7 @@
       renderProjects(state);
       renderQuote(state);
       renderCapabilities(state);
+      renderAssessmentAccount(state);
       renderAlakazamAccount(state);
 
       var entitlement =

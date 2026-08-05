@@ -213,6 +213,22 @@
 .customer-quote-review dl>div:nth-child(n+3){border-top:1px solid var(--spark-line)}
 .customer-quote-review dt{color:var(--spark-faint)}
 .customer-quote-review dd{margin:0;color:var(--spark-text);font-weight:750}
+.customer-custom-services{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(130,231,196,.3);border-radius:1.2rem;background:linear-gradient(145deg,rgba(130,231,196,.065),rgba(25,16,35,.72))}
+.customer-custom-services>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
+.customer-assessment-intro,.customer-assessment-status,.customer-assessment-note{color:var(--spark-muted);line-height:1.6}
+.customer-assessment-intro{max-width:48rem;margin:.35rem 0 .75rem}
+.customer-assessment-status{margin:.5rem 0 1rem;padding:.7rem .8rem;border-left:3px solid var(--spark-mint);background:rgba(130,231,196,.05)}
+.customer-assessment-body{display:grid;gap:1rem}
+.customer-assessment-form{display:grid;gap:1rem;padding:1rem;border:1px solid var(--spark-line);border-radius:.9rem;background:rgba(8,5,12,.28)}
+.customer-assessment-complexity{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;margin:0;padding:1rem;border:1px solid var(--spark-line);border-radius:.75rem}
+.customer-assessment-complexity legend{grid-column:1/-1;padding:0 .35rem;color:var(--spark-mint);font-size:.76rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.customer-assessment-complexity label,.customer-assessment-authority{display:flex;align-items:flex-start;gap:.6rem;color:var(--spark-muted);font-size:.84rem;line-height:1.5;cursor:pointer}
+.customer-assessment-complexity input,.customer-assessment-authority input{flex:0 0 auto;width:1.05rem;height:1.05rem;margin-top:.15rem;accent-color:var(--spark-mint)}
+.customer-assessment-authority{padding:.85rem;border:1px solid rgba(130,231,196,.22);border-radius:.75rem;background:rgba(130,231,196,.045)}
+.customer-assessment-quote{padding:1rem;border:1px solid rgba(241,207,137,.3);border-radius:.9rem;background:rgba(241,207,137,.045)}
+.customer-assessment-quote h4{margin:0}
+.customer-assessment-note{margin:0;padding:.8rem;border-left:3px solid var(--spark-gold);background:rgba(241,207,137,.05)}
+.customer-assessment-withdraw{justify-self:start;border-color:rgba(255,184,200,.28);color:#ffe3ea}
 .customer-alakazam-account{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(185,152,255,.3);border-radius:1.2rem;background:linear-gradient(145deg,rgba(185,152,255,.08),rgba(25,16,35,.72))}
 .customer-alakazam-account>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
 .customer-alakazam-load-state,.customer-alakazam-summary,.customer-alakazam-placeholder,.customer-alakazam-error{margin:.35rem 0 1rem;color:var(--spark-muted);line-height:1.55}
@@ -393,6 +409,8 @@
   .customer-alakazam-site-address span{padding:0 .8rem .7rem}
   .customer-alakazam-site-form>.spark-button{width:100%}
   .customer-alakazam-receipt{grid-template-columns:1fr}
+  .customer-assessment-complexity{grid-template-columns:1fr}
+  .customer-assessment-complexity legend{grid-column:auto}
   .customer-separate-help{display:grid}
   .spark-progress{grid-template-columns:repeat(3,1fr)}
   .spark-progress li:nth-child(4){border-left:0}

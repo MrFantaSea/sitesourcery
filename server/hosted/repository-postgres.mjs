@@ -194,10 +194,17 @@ const READINESS_QUERY = `
          )
     )
       and to_regprocedure('ss.hosted_runtime_contract_v35()') is not null
+      and to_regprocedure('ss.hosted_runtime_contract_v36()') is not null
       and to_regprocedure(
         'ss.service_operator_has_capability(uuid,text,timestamp with time zone)'
       ) is not null
       and to_regprocedure('ss.prepare_service_quote_acceptance()') is not null
+      and to_regprocedure(
+        'ss.validate_service_case_offering_terminal_state()'
+      ) is not null
+      and to_regclass('ss.service_intake_drafts') is not null
+      and to_regprocedure('ss.guard_service_intake_draft_insert()') is not null
+      and to_regprocedure('ss.bump_service_intake_draft_revision()') is not null
       as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -335,6 +342,9 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ss.hosted_runtime_contract_v35() =
       'canonical-ss-v35-custom-service-quotes'
       as custom_service_quotes_contract_marker_ready,
+    ss.hosted_runtime_contract_v36() =
+      'canonical-ss-v36-custom-service-customer-commands'
+      as custom_service_customer_commands_contract_marker_ready,
     (
       select count(*) = 8
         and bool_and(relation.relrowsecurity)
@@ -627,6 +637,16 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
             'ss.prepare_service_quote_acceptance()'::regprocedure
           )
         ) like '%ss.current_service_actor_kind() <> ''customer''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_acceptance()'::regprocedure
+          )
+        ) like '%service_case.state = ''submitted''%'
+        and lower(
+          pg_get_functiondef(
+            'ss.prepare_service_quote_acceptance()'::regprocedure
+          )
+        ) like '%offering.state = ''requested''%'
         and exists (
           select 1
             from pg_trigger trigger_record
@@ -649,7 +669,108 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
              'ss.service_quote_acceptances'::regclass
              and constraint_record.contype in ('c', 'u')
         ) acceptance_contract
-    ) as custom_service_quotes_acceptance_ready
+    ) as custom_service_quotes_acceptance_ready,
+    (
+      exists (
+        select 1
+          from pg_index index_record
+          join pg_class index_relation
+            on index_relation.oid = index_record.indexrelid
+         where index_relation.relnamespace = 'ss'::regnamespace
+           and index_relation.relname =
+             'service_cases_one_current_assessment'
+           and index_record.indrelid = 'ss.service_cases'::regclass
+           and index_record.indisunique
+           and index_record.indpred is not null
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%draft%'
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%submitted%'
+      )
+      and (
+        select count(*) = 2
+          and bool_and(trigger_record.tgdeferrable)
+          and bool_and(trigger_record.tginitdeferred)
+          and bool_and(
+            trigger_record.tgfoid =
+              'ss.validate_service_case_offering_terminal_state()'::regprocedure
+          )
+          from pg_trigger trigger_record
+         where trigger_record.tgname in (
+           'service_cases_offering_terminal_state',
+           'service_case_offerings_terminal_state'
+         )
+           and not trigger_record.tgisinternal
+      )
+      and exists (
+        select 1
+          from pg_class relation
+         where relation.oid = 'ss.service_intake_drafts'::regclass
+           and relation.relrowsecurity
+           and relation.relforcerowsecurity
+           and has_table_privilege(
+             'service_role',
+             relation.oid,
+             'SELECT'
+           )
+           and has_table_privilege(
+             'service_role',
+             relation.oid,
+             'INSERT'
+           )
+           and has_table_privilege(
+             'service_role',
+             relation.oid,
+             'UPDATE'
+           )
+           and not has_table_privilege(
+             'service_role',
+             relation.oid,
+             'DELETE'
+           )
+           and not has_table_privilege(
+             'service_role',
+             relation.oid,
+             'TRUNCATE'
+           )
+           and not has_table_privilege(
+             'authenticated',
+             relation.oid,
+             'SELECT'
+           )
+           and not has_table_privilege(
+             'anon',
+             relation.oid,
+             'SELECT'
+           )
+      )
+      and (
+        select count(*) = 3
+          and bool_and(not trigger_record.tgisinternal)
+          from pg_trigger trigger_record
+         where trigger_record.tgrelid =
+           'ss.service_intake_drafts'::regclass
+           and trigger_record.tgname in (
+             'service_intake_drafts_insert_guard',
+             'service_intake_drafts_revision',
+             'service_intake_drafts_account_authority'
+           )
+      )
+      and exists (
+        select 1
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name = 'service_intake_drafts'
+           and column_record.column_name = 'facts_digest'
+           and column_record.is_generated = 'ALWAYS'
+           and column_record.generation_expression like
+             '%service_intake_facts_digest%'
+      )
+    ) as custom_service_customer_commands_fences_ready
 `;
 
 function requiredString(value, code, message) {
@@ -768,22 +889,26 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
         );
         Object.assign(row, customServiceQuotes.rows[0] ?? {
           custom_service_quotes_contract_marker_ready: false,
+          custom_service_customer_commands_contract_marker_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
           custom_service_quotes_digests_ready: false,
           custom_service_quotes_terms_ready: false,
           custom_service_quotes_operator_authority_ready: false,
-          custom_service_quotes_acceptance_ready: false
+          custom_service_quotes_acceptance_ready: false,
+          custom_service_customer_commands_fences_ready: false
         });
       } else {
         Object.assign(row, {
           custom_service_quotes_contract_marker_ready: false,
+          custom_service_customer_commands_contract_marker_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
           custom_service_quotes_digests_ready: false,
           custom_service_quotes_terms_ready: false,
           custom_service_quotes_operator_authority_ready: false,
-          custom_service_quotes_acceptance_ready: false
+          custom_service_quotes_acceptance_ready: false,
+          custom_service_customer_commands_fences_ready: false
         });
       }
       const missing = Object.entries(row)
@@ -825,7 +950,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 035 are required.",
+        : "Canonical PostgreSQL migrations 000 through 015 plus migrations 017 through 036 are required.",
       { status: 503, details: status }
     );
     return status;

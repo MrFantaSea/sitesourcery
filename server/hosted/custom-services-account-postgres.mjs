@@ -563,13 +563,15 @@ async function readCaseOffering(client, input, serviceCase) {
       and offering.project_id = $2
       and offering.case_id = $3
       and offering.customer_user_id = $4
+      and offering.policy_id = $5
     order by offering.requested_at desc, offering.id desc
     limit 2`,
     [
       input.organizationId,
       input.projectId,
       serviceCase.caseId,
-      input.customerId
+      input.customerId,
+      ASSESSMENT_POLICY_ID
     ]
   );
   return offeringSnapshot(
@@ -677,6 +679,7 @@ export function createPostgresCustomServicesAccountRepository({
                 and account_user.disabled_at is null
                 and account_profile.state = 'active'
                 and membership.state = 'active'
+                and membership.role in ('owner', 'admin')
                 and organization.state = 'active'
                 and project.lifecycle = 'active'
               limit 2`,
@@ -765,12 +768,10 @@ export function createPostgresCustomServicesAccountRepository({
                from ss.service_project_profiles profile
               where profile.organization_id = $1
                 and profile.project_id = $2
-                and profile.customer_user_id = $3
               limit 2`,
               [
                 input.organizationId,
-                input.projectId,
-                input.customerId
+                input.projectId
               ]
             );
             const profile = profileSnapshot(

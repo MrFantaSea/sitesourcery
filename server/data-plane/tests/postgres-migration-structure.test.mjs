@@ -1191,3 +1191,55 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     /create function ss\.hosted_runtime_contract_v35\(\)[\s\S]*select 'canonical-ss-v35-custom-service-quotes'::text/iu
   );
 });
+
+test("custom-service customer commands close withdrawn quote authority", async () => {
+  const all = await migrations();
+  const commands = all.find(
+    ({ name }) =>
+      name === "202608050036_custom_service_customer_commands.sql"
+  );
+  assert.ok(commands);
+
+  assert.match(
+    commands.sql,
+    /create unique index service_cases_one_current_assessment[\s\S]*where state in \('draft', 'submitted'\)/iu
+  );
+  const draftTable = commands.sql.match(
+    /create table ss\.service_intake_drafts \([\s\S]*?\n\);/iu
+  )?.[0];
+  assert.ok(draftTable);
+  assert.match(
+    draftTable,
+    /site_display_name text not null[\s\S]*public_scheme text not null[\s\S]*public_hostname ss\.canonical_hostname not null[\s\S]*primary_goal text not null[\s\S]*complexity_flags text\[\] not null[\s\S]*customer_ownership_affirmed boolean not null[\s\S]*facts_digest ss\.sha256_hex generated always as/iu
+  );
+  assert.doesNotMatch(draftTable, /\bjsonb\b|on delete cascade/iu);
+  assert.match(
+    commands.sql,
+    /service_intake_drafts_insert_guard[\s\S]*service_intake_drafts_revision[\s\S]*service_intake_drafts_account_authority/iu
+  );
+  assert.match(
+    commands.sql,
+    /grant select, insert, update on table ss\.service_intake_drafts[\s\S]*to service_role/iu
+  );
+  assert.match(
+    commands.sql,
+    /create function ss\.validate_service_case_offering_terminal_state\(\)[\s\S]*service_case\.state = 'withdrawn'[\s\S]*offering\.state = 'requested'/iu
+  );
+  assert.match(
+    commands.sql,
+    /service_quote_acceptances acceptance[\s\S]*accepted service quote keeps its submitted request retained/iu
+  );
+  assert.match(
+    commands.sql,
+    /create constraint trigger service_cases_offering_terminal_state[\s\S]*deferrable initially deferred[\s\S]*create constraint trigger service_case_offerings_terminal_state[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    commands.sql,
+    /create or replace function ss\.prepare_service_quote_acceptance\(\)[\s\S]*security definer[\s\S]*service_case\.state = 'submitted'[\s\S]*offering\.id = quote_record\.offering_id[\s\S]*offering\.state = 'requested'/iu
+  );
+  assert.match(
+    commands.sql,
+    /create function ss\.hosted_runtime_contract_v36\(\)[\s\S]*select 'canonical-ss-v36-custom-service-customer-commands'::text/iu
+  );
+  assert.doesNotMatch(commands.sql, /on delete cascade|grant all privileges/iu);
+});

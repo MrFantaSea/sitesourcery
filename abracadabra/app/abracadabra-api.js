@@ -94,6 +94,17 @@
     return value;
   }
 
+  function requiredDigest(value, field) {
+    var selected = nullableDigest(value, field);
+    if (selected === null) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " is required."
+      });
+    }
+    return selected;
+  }
+
   function integerBetween(value, field, minimum, maximum) {
     var number = Number(value);
     if (!Number.isInteger(number) || number < minimum || number > maximum) {
@@ -454,6 +465,147 @@
         "GET",
         "/projects/" + segment(projectId, "Project ID") + "/alakazam",
         { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function getCustomServicesAssessmentRequest(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-request",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function saveCustomServicesAssessmentRequest(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      var allowedComplexity = [
+        "authenticated_area",
+        "commerce",
+        "forms",
+        "large_content_set",
+        "multilingual",
+        "regulated_content",
+        "third_party_integrations",
+        "unknown_platform"
+      ];
+      var complexityFlags = Array.isArray(source.complexityFlags)
+        ? source.complexityFlags.map(function (value) {
+            return oneOf(value, "Website complexity", allowedComplexity);
+          }).filter(function (value, index, rows) {
+            return rows.indexOf(value) === index;
+          }).sort()
+        : [];
+      var platformFamily = source.platformFamily == null
+        ? null
+        : oneOf(
+            source.platformFamily,
+            "Website platform",
+            ["custom", "other", "shopify", "squarespace", "unknown", "wix", "wordpress"]
+          );
+      return request(
+        "PUT",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-request",
+        {
+          body: {
+            approximatePublicSize: oneOf(
+              source.approximatePublicSize,
+              "Public website size",
+              ["one_to_ten", "eleven_to_fifty", "more_than_fifty", "application_or_unknown"]
+            ),
+            businessName: optionalText(source.businessName, 120),
+            complexityFlags: complexityFlags,
+            customerObservation: optionalText(source.customerObservation, 1000),
+            customerOwnershipAffirmed: source.customerOwnershipAffirmed === true,
+            expectedDraftRevision: integerBetween(
+              source.expectedDraftRevision == null ? 0 : source.expectedDraftRevision,
+              "Assessment draft revision",
+              0,
+              Number.MAX_SAFE_INTEGER
+            ),
+            importantDate: optionalText(source.importantDate, 10),
+            platformFamily: platformFamily,
+            primaryGoal: requiredText(source.primaryGoal, "Primary goal", 500),
+            publicUrl: requiredText(source.publicUrl, "Public website URL", 2048),
+            siteDisplayName: requiredText(source.siteDisplayName, "Website name", 120)
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function submitCustomServicesAssessmentRequest(projectId, draftRevision, requestOptions) {
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-request/submission",
+        {
+          body: {
+            draftRevision: integerBetween(
+              draftRevision,
+              "Assessment draft revision",
+              1,
+              Number.MAX_SAFE_INTEGER
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function withdrawCustomServicesAssessmentRequest(projectId, requestOptions) {
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-request/withdrawal",
+        {
+          body: {},
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
+    function getCustomServicesAssessmentQuote(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-quote",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function acceptCustomServicesAssessmentQuote(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/assessment-quote/acceptance",
+        {
+          body: {
+            acceptanceStatement: requiredText(
+              source.acceptanceStatement,
+              "Assessment quote acceptance",
+              200
+            ),
+            acceptedDisclosureDigest: requiredDigest(
+              source.acceptedDisclosureDigest,
+              "Assessment disclosure digest"
+            ),
+            acceptedQuoteDigest: requiredDigest(
+              source.acceptedQuoteDigest,
+              "Assessment quote digest"
+            ),
+            quoteId: requiredText(source.quoteId, "Assessment quote ID", 36),
+            quoteRevision: integerBetween(
+              source.quoteRevision,
+              "Assessment quote revision",
+              1,
+              Number.MAX_SAFE_INTEGER
+            )
+          },
+          idempotencyKey: requestOptions && requestOptions.idempotencyKey
+        }
       );
     }
 
@@ -1109,6 +1261,18 @@
       listProjects: listProjects,
       getProject: getProject,
       getAlakazamAccount: getAlakazamAccount,
+      getCustomServicesAssessmentRequest:
+        getCustomServicesAssessmentRequest,
+      saveCustomServicesAssessmentRequest:
+        saveCustomServicesAssessmentRequest,
+      submitCustomServicesAssessmentRequest:
+        submitCustomServicesAssessmentRequest,
+      withdrawCustomServicesAssessmentRequest:
+        withdrawCustomServicesAssessmentRequest,
+      getCustomServicesAssessmentQuote:
+        getCustomServicesAssessmentQuote,
+      acceptCustomServicesAssessmentQuote:
+        acceptCustomServicesAssessmentQuote,
       createProject: createProject,
       saveDraft: saveDraft,
       createVersion: createVersion,

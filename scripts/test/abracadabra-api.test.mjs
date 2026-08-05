@@ -671,6 +671,100 @@ test("server error envelopes retain safe request identifiers for support", async
   );
 });
 
+test("custom-service assessment requests and quote acceptance use exact project routes without browser price authority", async () => {
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_assessment" });
+      }
+      return response(200, { ok: true });
+    },
+    idempotencyFactory: () => "assessment-command-key"
+  });
+
+  await client.getCustomServicesAssessmentRequest("project_1");
+  await client.saveCustomServicesAssessmentRequest("project_1", {
+    approximatePublicSize: "one_to_ten",
+    businessName: "Customer Business",
+    complexityFlags: ["forms", "commerce", "forms"],
+    customerObservation: "The phone layout feels crowded.",
+    customerOwnershipAffirmed: true,
+    expectedDraftRevision: 0,
+    importantDate: null,
+    platformFamily: "wordpress",
+    primaryGoal: "Make services easier to understand.",
+    publicUrl: "https://customer.example.com/",
+    siteDisplayName: "Customer Website"
+  });
+  await client.submitCustomServicesAssessmentRequest(
+    "project_1",
+    1
+  );
+  await client.withdrawCustomServicesAssessmentRequest("project_1");
+  await client.getCustomServicesAssessmentQuote("project_1");
+  await client.acceptCustomServicesAssessmentQuote("project_1", {
+    acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 2
+  });
+
+  const serviceCalls = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.deepEqual(
+    serviceCalls.map(({ url, options }) => [options.method, url]),
+    [
+      ["GET", "/api/v1/projects/project_1/custom-services/assessment-request"],
+      ["PUT", "/api/v1/projects/project_1/custom-services/assessment-request"],
+      ["POST", "/api/v1/projects/project_1/custom-services/assessment-request/submission"],
+      ["POST", "/api/v1/projects/project_1/custom-services/assessment-request/withdrawal"],
+      ["GET", "/api/v1/projects/project_1/custom-services/assessment-quote"],
+      ["POST", "/api/v1/projects/project_1/custom-services/assessment-quote/acceptance"]
+    ]
+  );
+  assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
+    approximatePublicSize: "one_to_ten",
+    businessName: "Customer Business",
+    complexityFlags: ["commerce", "forms"],
+    customerObservation: "The phone layout feels crowded.",
+    customerOwnershipAffirmed: true,
+    expectedDraftRevision: 0,
+    importantDate: null,
+    platformFamily: "wordpress",
+    primaryGoal: "Make services easier to understand.",
+    publicUrl: "https://customer.example.com/",
+    siteDisplayName: "Customer Website"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[2].options.body), {
+    draftRevision: 1
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[3].options.body), {});
+  assert.deepEqual(JSON.parse(serviceCalls[5].options.body), {
+    acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 2
+  });
+  for (const call of serviceCalls.filter(
+    ({ options }) => ["PUT", "POST"].includes(options.method)
+  )) {
+    assert.equal(
+      call.options.headers["X-CSRF-Token"],
+      "csrf_assessment"
+    );
+    assert.equal(
+      call.options.headers["Idempotency-Key"],
+      "assessment-command-key"
+    );
+    const body = JSON.parse(call.options.body);
+    assert.equal(Object.hasOwn(body, "amountMinor"), false);
+    assert.equal(Object.hasOwn(body, "price"), false);
+  }
+});
+
 test("catalog discovery and release rollback use the customer API boundary", async () => {
   const calls = [];
   const client = createClient({

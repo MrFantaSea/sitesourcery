@@ -285,6 +285,23 @@ test("draft foundation projects safe website state without inventing submitted f
   }
 });
 
+test("a repeatedly saved draft retains a valid database-managed revision", () => {
+  const projection = projectCustomServicesAccount(
+    input({
+      snapshot: snapshot({
+        profile: profile(),
+        serviceCase: serviceCase({
+          revision: 2,
+          updatedAt: "2026-08-05T12:02:30.000Z"
+        })
+      })
+    })
+  );
+
+  assert.equal(projection.assessment.state, "draft");
+  assert.equal(projection.assessment.title, "Bounded website assessment");
+});
+
 test("website observation may predate its saved profile but not its latest update", () => {
   const historicObservation = projectCustomServicesAccount(
     input({

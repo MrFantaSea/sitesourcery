@@ -3,6 +3,12 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import pg from "pg";
+import {
+  createPostgresCustomServicesAccountRepository
+} from "../../hosted/custom-services-account-postgres.mjs";
+import {
+  createPostgresCustomServicesRequestRepository
+} from "../../hosted/custom-services-request-postgres.mjs";
 
 const { Pool } = pg;
 const DATABASE_URL =
@@ -280,6 +286,124 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
       source: "account",
       title: "Bounded website assessment"
     });
+    await client.query(
+      "update ss.service_cases set title = $2 where id = $1",
+      [caseId, "Bounded website assessment draft"]
+    );
+
+    const accountRepository =
+      createPostgresCustomServicesAccountRepository({
+        authority: {
+          async service(context, work) {
+            assert.deepEqual(context, {
+              actorKind: "customer",
+              userId: authority.userId,
+              organizationId: authority.organizationId,
+              readOnly: true
+            });
+            return work(client);
+          }
+        }
+      });
+    const updatedDraft =
+      await accountRepository.readFoundationSnapshot({
+        actorId: authority.userId,
+        customerId: authority.userId,
+        organizationId: authority.organizationId,
+        projectId: authority.projectId
+      });
+    assert.equal(updatedDraft.serviceCase.state, "draft");
+    assert.equal(updatedDraft.serviceCase.revision, 2);
+
+    const intakeDraft = await insertRow(client, "service_intake_drafts", {
+      organization_id: authority.organizationId,
+      project_id: authority.projectId,
+      case_id: caseId,
+      customer_user_id: authority.userId,
+      created_by_user_id: authority.userId,
+      source: "account",
+      site_display_name: "Customer Website",
+      public_scheme: "https",
+      public_hostname: "customer.example.com",
+      business_name: "Customer Business",
+      primary_goal: "Make the website easier to understand.",
+      customer_observation: "The phone layout feels crowded.",
+      platform_family: "unknown",
+      approximate_public_size: "one_to_ten",
+      complexity_flags: ["commerce", "forms"],
+      important_date: "2026-10-01",
+      customer_ownership_affirmed: false
+    });
+    assert.equal(Number(intakeDraft.rows[0].revision), 1);
+    assert.match(intakeDraft.rows[0].facts_digest, /^[0-9a-f]{64}$/u);
+    const revisedDraft = await client.query(
+      `update ss.service_intake_drafts
+          set primary_goal = $2
+        where case_id = $1
+        returning revision, facts_digest`,
+      [caseId, "Make the website and services easier to understand."]
+    );
+    assert.equal(Number(revisedDraft.rows[0].revision), 2);
+    assert.notEqual(
+      revisedDraft.rows[0].facts_digest,
+      intakeDraft.rows[0].facts_digest
+    );
+
+    await client.query("reset role");
+    await client.query(
+      `update ss.organization_memberships
+          set role = 'editor'
+        where organization_id = $1 and user_id = $2`,
+      [authority.organizationId, authority.userId]
+    );
+    await client.query("set local role service_role");
+    await setCustomerActor(client, authority);
+    await assert.rejects(
+      accountRepository.readFoundationSnapshot({
+        actorId: authority.userId,
+        customerId: authority.userId,
+        organizationId: authority.organizationId,
+        projectId: authority.projectId
+      }),
+      (error) => error?.code === "project_unavailable" && error?.status === 404
+    );
+    await client.query("reset role");
+    await client.query(
+      `update ss.organization_memberships
+          set role = 'owner'
+        where organization_id = $1 and user_id = $2`,
+      [authority.organizationId, authority.userId]
+    );
+    await insertRow(client, "organization_memberships", {
+      organization_id: authority.organizationId,
+      user_id: other.userId,
+      role: "admin",
+      state: "active",
+      accepted_at: "2026-08-05T00:00:00.000Z"
+    });
+    await client.query("set local role service_role");
+    await setCustomerActor(client, {
+      ...authority,
+      userId: other.userId
+    });
+    const otherMemberRepository =
+      createPostgresCustomServicesAccountRepository({
+        authority: {
+          async service(_context, work) {
+            return work(client);
+          }
+        }
+      });
+    await assert.rejects(
+      otherMemberRepository.readFoundationSnapshot({
+        actorId: other.userId,
+        customerId: other.userId,
+        organizationId: authority.organizationId,
+        projectId: authority.projectId
+      }),
+      (error) => error?.code === "project_unavailable" && error?.status === 404
+    );
+    await setCustomerActor(client, authority);
 
     await expectRejected(
       client,
@@ -303,6 +427,17 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
     await client.query(
       "update ss.service_cases set state = 'submitted' where id = $1",
       [caseId]
+    );
+    await expectRejected(
+      client,
+      () =>
+        client.query(
+          `update ss.service_intake_drafts
+              set primary_goal = 'Changed after submission'
+            where case_id = $1`,
+          [caseId]
+        ),
+      /immutable after submission or withdrawal/iu
     );
 
     await insertRow(client, "service_case_offerings", {
@@ -583,6 +718,147 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
       /permission denied/iu
     );
     await client.query("rollback to savepoint authenticated_denial");
+  } finally {
+    await client.query("rollback").catch(() => {});
+    client.release();
+    await pool.end();
+  }
+});
+
+test("customer assessment requests save, submit, withdraw, and restart through the PostgreSQL adapter", async () => {
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const authority = await seedAccountProject(client);
+    await client.query("set local role service_role");
+    await setCustomerActor(client, authority);
+
+    const contexts = [];
+    const repository = createPostgresCustomServicesRequestRepository({
+      authority: {
+        async service(context, work) {
+          contexts.push(structuredClone(context));
+          return work(client);
+        }
+      }
+    });
+    const scope = {
+      actorId: authority.userId,
+      customerId: authority.userId,
+      organizationId: authority.organizationId,
+      projectId: authority.projectId
+    };
+    assert.equal(
+      (await repository.readCurrentRequest(scope)).state,
+      "not_started"
+    );
+
+    const firstSave = {
+      ...scope,
+      approximatePublicSize: "one_to_ten",
+      businessName: "Customer Business",
+      commandId: `request-save-${randomUUID()}`,
+      complexityFlags: ["forms"],
+      customerObservation: "The phone layout feels crowded.",
+      customerOwnershipAffirmed: true,
+      expectedDraftRevision: 0,
+      importantDate: "2026-10-01",
+      platformFamily: "wordpress",
+      primaryGoal: "Make services easier to understand.",
+      publicUrl: "https://customer.example.com/",
+      siteDisplayName: "Customer Website"
+    };
+    const firstReceipt = await repository.saveDraft(firstSave);
+    assert.deepEqual(await repository.saveDraft(firstSave), firstReceipt);
+    const firstDraft = await repository.readCurrentRequest(scope);
+    assert.equal(firstDraft.state, "draft");
+    assert.equal(firstDraft.draftRevision, 1);
+    assert.equal(firstDraft.website.publicUrl, firstSave.publicUrl);
+    assert.equal(firstDraft.actions.submit.available, true);
+
+    await assert.rejects(
+      repository.saveDraft({
+        ...firstSave,
+        commandId: `request-stale-${randomUUID()}`
+      }),
+      (error) =>
+        error?.code === "assessment_request_changed" &&
+        error?.status === 409
+    );
+
+    const secondSave = {
+      ...firstSave,
+      commandId: `request-revise-${randomUUID()}`,
+      customerObservation:
+        "The phone layout and contact path both feel crowded.",
+      expectedDraftRevision: 1
+    };
+    await repository.saveDraft(secondSave);
+    const revisedDraft = await repository.readCurrentRequest(scope);
+    assert.equal(revisedDraft.draftRevision, 2);
+    assert.equal(
+      revisedDraft.facts.customerObservation,
+      secondSave.customerObservation
+    );
+
+    const submit = {
+      ...scope,
+      commandId: `request-submit-${randomUUID()}`,
+      draftRevision: 2
+    };
+    const submitReceipt =
+      await repository.submitCurrentRequest(submit);
+    assert.deepEqual(
+      await repository.submitCurrentRequest(submit),
+      submitReceipt
+    );
+    const submitted = await repository.readCurrentRequest(scope);
+    assert.equal(submitted.state, "submitted");
+    assert.equal(submitted.draftRevision, null);
+    assert.equal(submitted.facts.primaryGoal, firstSave.primaryGoal);
+    assert.ok(submitted.submittedAt);
+    assert.equal(submitted.actions.withdraw.available, true);
+
+    const withdraw = {
+      ...scope,
+      commandId: `request-withdraw-${randomUUID()}`
+    };
+    const withdrawReceipt =
+      await repository.withdrawCurrentRequest(withdraw);
+    assert.deepEqual(
+      await repository.withdrawCurrentRequest(withdraw),
+      withdrawReceipt
+    );
+    const withdrawn = await repository.readCurrentRequest(scope);
+    assert.equal(withdrawn.state, "withdrawn");
+    assert.ok(withdrawn.withdrawnAt);
+    assert.equal(withdrawn.actions.save.available, true);
+
+    await repository.saveDraft({
+      ...firstSave,
+      commandId: `request-restart-${randomUUID()}`
+    });
+    const restarted = await repository.readCurrentRequest(scope);
+    assert.equal(restarted.state, "draft");
+    assert.equal(restarted.draftRevision, 1);
+    assert.notEqual(restarted.caseId, withdrawn.caseId);
+
+    assert.ok(
+      contexts.some((context) => context.readOnly === true)
+    );
+    assert.ok(
+      contexts.some((context) => context.readOnly === undefined)
+    );
+    assert.equal(
+      contexts.every(
+        (context) =>
+          context.actorKind === "customer" &&
+          context.userId === authority.userId &&
+          context.organizationId === authority.organizationId
+      ),
+      true
+    );
   } finally {
     await client.query("rollback").catch(() => {});
     client.release();

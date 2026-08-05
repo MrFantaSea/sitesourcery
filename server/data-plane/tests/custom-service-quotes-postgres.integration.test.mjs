@@ -6,6 +6,12 @@ import pg from "pg";
 import {
   createPostgresCustomServicesAccountRepository
 } from "../../hosted/custom-services-account-postgres.mjs";
+import {
+  createPostgresCustomServicesAssessmentQuoteRepository
+} from "../../hosted/custom-services-assessment-quote-postgres.mjs";
+import {
+  projectCustomServicesAssessmentQuote
+} from "../../hosted/custom-services-assessment-quote.mjs";
 
 const { Pool } = pg;
 const DATABASE_URL =
@@ -316,6 +322,13 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       contract.rows[0].marker,
       "canonical-ss-v35-custom-service-quotes"
     );
+    const commandContract = await client.query(
+      "select ss.hosted_runtime_contract_v36() as marker"
+    );
+    assert.equal(
+      commandContract.rows[0].marker,
+      "canonical-ss-v36-custom-service-customer-commands"
+    );
 
     const customer = await seedAccountProject(client, "quote-customer");
     const other = await seedAccountProject(client, "other-customer");
@@ -358,6 +371,20 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(
       foundationSnapshot.intake.publicHostname,
       "customer.example.com"
+    );
+
+    await expectRejected(
+      client,
+      () =>
+        insertRow(client, "service_cases", {
+          organization_id: customer.organizationId,
+          project_id: customer.projectId,
+          customer_user_id: customer.userId,
+          created_by_user_id: customer.userId,
+          source: "account",
+          title: "Competing website assessment"
+        }),
+      /service_cases_one_current_assessment/iu
     );
 
     await expectRejected(
@@ -510,6 +537,31 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       { target_number: 3, target_kind: "page_type", target_value: "product" }
     ]);
 
+    await client.query("savepoint withdrawn_quote");
+    await setActor(client, "customer", customer);
+    await client.query(
+      "update ss.service_cases set state = 'withdrawn' where id = $1",
+      [request.caseId]
+    );
+    await client.query(
+      "update ss.service_case_offerings set state = 'removed' where id = $1",
+      [request.offeringId]
+    );
+    await expectRejected(
+      client,
+      () =>
+        insertRow(client, "service_quote_acceptances", {
+          quote_id: quoteId,
+          acceptance_statement: "accepted_exact_quote_and_delivery_date",
+          accepted_quote_digest: first.quote_digest,
+          accepted_disclosure_digest: first.disclosure_digest,
+          request_id: randomUUID()
+        }),
+      /exact current customer authority/iu
+    );
+    await client.query("rollback to savepoint withdrawn_quote");
+    await setActor(client, "operator", customer, firstOperatorId);
+
     await expectRejected(
       client,
       () =>
@@ -634,29 +686,102 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(replacement.created_by_operator_user_id, secondOperatorId);
 
     await setActor(client, "customer", customer);
-    const acceptanceRequestId = randomUUID();
-    const acceptance = await insertRow(
-      client,
-      "service_quote_acceptances",
-      {
-        organization_id: other.organizationId,
-        project_id: other.projectId,
-        case_id: randomUUID(),
-        customer_user_id: other.userId,
-        quote_id: quoteId,
-        quote_revision_id: randomUUID(),
-        quote_revision: 999,
-        accepted_by_user_id: other.userId,
-        source: "account",
-        acceptance_statement: "accepted_exact_quote_and_delivery_date",
-        accepted_quote_digest: replacement.quote_digest,
-        accepted_disclosure_digest: replacement.disclosure_digest,
-        legal_document_id: randomUUID(),
-        request_id: acceptanceRequestId,
-        accepted_at: "2001-01-01T00:00:00.000Z",
-        created_at: "2001-01-01T00:00:00.000Z"
-      }
+    const quoteRepositoryContexts = [];
+    const quoteRepository =
+      createPostgresCustomServicesAssessmentQuoteRepository({
+        authority: {
+          async service(context, work) {
+            quoteRepositoryContexts.push(structuredClone(context));
+            return work(client);
+          }
+        }
+      });
+    const quoteScope = {
+      actorId: customer.userId,
+      customerId: customer.userId,
+      organizationId: customer.organizationId,
+      projectId: customer.projectId
+    };
+    const reviewSnapshot =
+      await quoteRepository.readCurrentQuote(quoteScope);
+    const reviewProjection =
+      projectCustomServicesAssessmentQuote({
+        scope: quoteScope,
+        snapshot: reviewSnapshot
+      });
+    assert.equal(reviewProjection.state, "review_required");
+    assert.equal(reviewProjection.quote.servicePrice.amountMinor, 20000);
+    assert.equal(reviewProjection.quote.revision, 2);
+
+    const acceptanceCommandId = `quote-accept-${randomUUID()}`;
+    const acceptanceInput = {
+      ...quoteScope,
+      acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+      acceptedDisclosureDigest:
+        reviewProjection.quote.disclosureDigest,
+      acceptedQuoteDigest: reviewProjection.quote.quoteDigest,
+      commandId: acceptanceCommandId,
+      quoteId: reviewProjection.quote.quoteId,
+      quoteRevision: reviewProjection.quote.revision
+    };
+    const acceptanceReceipt =
+      await quoteRepository.acceptCurrentQuote(acceptanceInput);
+    assert.deepEqual(
+      await quoteRepository.acceptCurrentQuote(acceptanceInput),
+      acceptanceReceipt
     );
+    assert.equal(acceptanceReceipt.state, "accepted");
+    assert.equal(acceptanceReceipt.quoteId, quoteId);
+    assert.equal(acceptanceReceipt.quoteRevision, 2);
+
+    const acceptedSnapshot =
+      await quoteRepository.readCurrentQuote(quoteScope);
+    const acceptedProjection =
+      projectCustomServicesAssessmentQuote({
+        scope: quoteScope,
+        snapshot: acceptedSnapshot
+      });
+    assert.equal(acceptedProjection.state, "accepted");
+    assert.equal(acceptedProjection.actions.acceptQuote.available, false);
+
+    assert.deepEqual(quoteRepositoryContexts, [
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId,
+        readOnly: true
+      },
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId
+      },
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId
+      },
+      {
+        actorKind: "customer",
+        userId: customer.userId,
+        organizationId: customer.organizationId,
+        readOnly: true
+      }
+    ]);
+
+    const acceptance = await client.query(
+      "select * from ss.service_quote_acceptances where quote_id = $1",
+      [quoteId]
+    );
+    const acceptanceCommand = await client.query(
+      `select id from ss.idempotency_keys
+        where principal_id = $1
+          and route_key = 'custom_services.assessment_quote.accept'
+          and idempotency_key = $2`,
+      [customer.userId, acceptanceCommandId]
+    );
+    assert.equal(acceptanceCommand.rowCount, 1);
+    const acceptanceRequestId = acceptanceCommand.rows[0].id;
     assert.deepEqual(
       {
         organizationId: acceptance.rows[0].organization_id,
@@ -699,6 +824,22 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           request_id: randomUUID()
         }),
       /duplicate key|unique/iu
+    );
+
+    await expectRejected(
+      client,
+      async () => {
+        await client.query(
+          "update ss.service_cases set state = 'withdrawn' where id = $1",
+          [request.caseId]
+        );
+        await client.query(
+          "update ss.service_case_offerings set state = 'removed' where id = $1",
+          [request.offeringId]
+        );
+        await client.query("set constraints all immediate");
+      },
+      /accepted service quote keeps its submitted request retained/iu
     );
 
     await setActor(client, "operator", customer, secondOperatorId);
