@@ -17,16 +17,26 @@ import pg from "pg";
 import { buildHostedArtifact } from "../../../scripts/build-hosted.mjs";
 import { createFakeApprovedCatalog } from "../../commerce/adapters/fake.mjs";
 import {
+  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
   createCommerceV2Boundary,
   createCommerceV2Service,
+  createAlakazamAccountService,
+  createAlakazamBillingRelease,
+  createAlakazamBillingService,
+  createAlakazamSiteSetupDigest,
   createDownloadPaymentRelease,
   createDownloadPaymentService,
-  createHostedDownloadCommerce
+  createHostedAlakazamAccount,
+  createHostedDownloadCommerce,
+  digest as commerceDigest
 } from "../../commerce-v2/index.mjs";
 import { SelfHostRuntime } from "../../selfhost/src/index.mjs";
 import {
   createPostgresCommerceV2Adapter
 } from "../commerce-v2-postgres.mjs";
+import {
+  createPostgresAlakazamRepository
+} from "../alakazam-postgres.mjs";
 import {
   createPostgresDownloadPaymentRepository
 } from "../download-payment-postgres.mjs";
@@ -960,6 +970,15 @@ test(
         resolveSession: commerceV2.resolveSession,
         payment: downloadPayment
       });
+    const alakazamRepository =
+      createPostgresAlakazamRepository({ authority });
+    const alakazamAccount =
+      createHostedAlakazamAccount({
+        account: createAlakazamAccountService({
+          repository: alakazamRepository
+        }),
+        resolveSession: commerceV2.resolveSession
+      });
     const stripeWebhook = createStripeWebhookRouter({
       provider: payment.port,
       canonicalService: service,
@@ -1453,6 +1472,306 @@ test(
     assert.equal(
       reopenedVersion.artifact.html,
       compiled.html
+    );
+
+    await t.test(
+      "project idempotency cannot replay one address command across projects",
+      async () => {
+        const first = await service.createProject(
+          actor,
+          organizationId,
+          {
+            name: "Idempotency Project A",
+            acceptedTerms: true,
+            visibility: "public",
+            address: {
+              kind: "licensed",
+              label: "idempotency-project-a"
+            },
+            commandId: "project-create-idempotency-a"
+          }
+        );
+        const second = await service.createProject(
+          actor,
+          organizationId,
+          {
+            name: "Idempotency Project B",
+            acceptedTerms: true,
+            visibility: "public",
+            address: {
+              kind: "licensed",
+              label: "idempotency-project-b"
+            },
+            commandId: "project-create-idempotency-b"
+          }
+        );
+        const command = {
+          kind: "licensed",
+          label: "cross-project-idempotency-proof",
+          commandId: "address-cross-project-proof"
+        };
+        const selected = await service.selectAddress(
+          actor,
+          first.project.id,
+          command
+        );
+        assert.equal(
+          selected.project.id,
+          first.project.id
+        );
+        await assert.rejects(
+          service.selectAddress(
+            actor,
+            second.project.id,
+            command
+          ),
+          (error) =>
+            error?.code === "IDEMPOTENCY_CONFLICT"
+        );
+        const unchanged = await service.getProject(
+          actor,
+          second.project.id
+        );
+        assert.equal(
+          unchanged.project.address.label,
+          "idempotency-project-b"
+        );
+      }
+    );
+
+    await t.test(
+      "Alakazam Checkout wins one setup race and fences later site edits",
+      async () => {
+        const fenceActor = otherActor;
+        const fenceOrganizationId =
+          otherRegistered.organization.id;
+        const fenceProject = await service.createProject(
+          fenceActor,
+          fenceOrganizationId,
+          {
+            name: "Alakazam Setup Fence",
+            acceptedTerms: true,
+            visibility: "public",
+            address: {
+              kind: "licensed",
+              label: "alakazam-setup-fence"
+            },
+            commandId: "project-create-alakazam-fence"
+          }
+        );
+        const fenceProjectId = fenceProject.project.id;
+        const firstFacts = {
+          ...rawFacts,
+          businessName: "Alakazam Setup Fence",
+          summary: "The accepted setup used for a payment race proof."
+        };
+        const firstCompiled = compiler.compile(firstFacts);
+        const firstVersion = await service.createVersion(
+          fenceActor,
+          fenceProjectId,
+          {
+            rawFacts: firstFacts,
+            previewDigest: firstCompiled.artifactDigest,
+            reviewAttested: true,
+            commandId: "version-create-alakazam-fence-1"
+          }
+        );
+        await service.markVersionReady(
+          fenceActor,
+          fenceProjectId,
+          firstVersion.version.id,
+          { commandId: "version-ready-alakazam-fence-1" }
+        );
+        await service.acceptVersion(
+          fenceActor,
+          fenceProjectId,
+          firstVersion.version.id,
+          { commandId: "version-accept-alakazam-fence-1" }
+        );
+
+        const secondFacts = {
+          ...firstFacts,
+          summary: "A newer reviewed setup that must lose the payment race."
+        };
+        const secondCompiled = compiler.compile(secondFacts);
+        const secondVersion = await service.createVersion(
+          fenceActor,
+          fenceProjectId,
+          {
+            rawFacts: secondFacts,
+            previewDigest: secondCompiled.artifactDigest,
+            reviewAttested: true,
+            commandId: "version-create-alakazam-fence-2"
+          }
+        );
+        await service.markVersionReady(
+          fenceActor,
+          fenceProjectId,
+          secondVersion.version.id,
+          { commandId: "version-ready-alakazam-fence-2" }
+        );
+
+        const acceptedProject = await service.getProject(
+          fenceActor,
+          fenceProjectId
+        );
+        const siteSetupDigest =
+          createAlakazamSiteSetupDigest({
+            tenantId: fenceOrganizationId,
+            customerId: fenceActor.userId,
+            projectId: fenceProjectId,
+            acceptedVersionId: firstVersion.version.id,
+            artifactDigest: firstCompiled.artifactDigest,
+            configuredLook: firstFacts.theme,
+            addressId: acceptedProject.project.address.id,
+            addressLabel:
+              acceptedProject.project.address.label,
+            hostname:
+              acceptedProject.project.address.hostname
+          });
+        let customerProviderCalls = 0;
+        let checkoutProviderCalls = 0;
+        let signalCustomerProvider;
+        let releaseCustomerProvider;
+        const customerProviderStarted = new Promise(
+          (resolve) => {
+            signalCustomerProvider = resolve;
+          }
+        );
+        const customerProviderRelease = new Promise(
+          (resolve) => {
+            releaseCustomerProvider = resolve;
+          }
+        );
+        const alakazamClock = { now: () => NOW };
+        const alakazam = createAlakazamBillingService({
+          repository: alakazamRepository,
+          provider: {
+            async readiness() {
+              return {
+                ready: true,
+                provider: "stripe",
+                alakazam: true,
+                livemode: false,
+                taxMode: "disabled_by_owner"
+              };
+            },
+            async createAlakazamCustomer(input) {
+              customerProviderCalls += 1;
+              signalCustomerProvider();
+              await customerProviderRelease;
+              const facts = {
+                schema:
+                  ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+                stripeCustomerId:
+                  "cus_alakazam_setup_fence",
+                organizationId:
+                  input.purpose.organizationId,
+                customerId: input.purpose.customerId,
+                projectId: input.purpose.projectId,
+                quoteId: input.purpose.quoteId,
+                provisionId: input.purpose.provisionId,
+                providerCreatedAt: NOW,
+                purposeDigest: input.purposeDigest
+              };
+              return {
+                ...facts,
+                providerFactsDigest:
+                  commerceDigest(facts)
+              };
+            },
+            async createAlakazamStartCheckout() {
+              checkoutProviderCalls += 1;
+              return {
+                checkoutId:
+                  "cs_alakazam_setup_fence",
+                url:
+                  "https://checkout.stripe.com/c/pay/alakazam_setup_fence",
+                expiresAt:
+                  "2026-07-28T20:30:00.000Z"
+              };
+            },
+            async createAlakazamUpgradeCheckout() {
+              assert.fail(
+                "the setup race must not dispatch an upgrade"
+              );
+            }
+          },
+          clock: alakazamClock,
+          release: createAlakazamBillingRelease({
+            approved: true,
+            taxMode: "disabled_by_owner"
+          })
+        });
+        const quoteId = randomUUID();
+        const quote = await alakazam.createQuote({
+          tenantId: fenceOrganizationId,
+          customerId: fenceActor.userId,
+          projectId: fenceProjectId,
+          quoteId,
+          targetTierId: "alakazam_25"
+        });
+        const checkoutPromise = alakazam.createCheckout({
+          tenantId: fenceOrganizationId,
+          customerId: fenceActor.userId,
+          projectId: fenceProjectId,
+          quoteId,
+          commandId: randomUUID(),
+          acceptedDisclosureDigest:
+            quote.disclosureDigest,
+          siteSetupDigest
+        });
+        await customerProviderStarted;
+        try {
+          await assert.rejects(
+            service.acceptVersion(
+              fenceActor,
+              fenceProjectId,
+              secondVersion.version.id,
+              {
+                commandId:
+                  "version-accept-alakazam-fence-2"
+              }
+            ),
+            (error) =>
+              error?.code ===
+              "ALAKAZAM_SITE_CHANGE_UNAVAILABLE"
+          );
+          await assert.rejects(
+            service.selectAddress(
+              fenceActor,
+              fenceProjectId,
+              {
+                kind: "licensed",
+                label: "alakazam-fence-changed",
+                commandId:
+                  "address-change-alakazam-fence"
+              }
+            ),
+            (error) =>
+              error?.code ===
+              "ALAKAZAM_SITE_CHANGE_UNAVAILABLE"
+          );
+        } finally {
+          releaseCustomerProvider();
+        }
+        const checkout = await checkoutPromise;
+        assert.equal(checkout.status, "ready");
+        assert.equal(customerProviderCalls, 1);
+        assert.equal(checkoutProviderCalls, 1);
+        const fencedProject = await service.getProject(
+          fenceActor,
+          fenceProjectId
+        );
+        assert.equal(
+          fencedProject.project.serving.currentVersionId,
+          firstVersion.version.id
+        );
+        assert.equal(
+          fencedProject.project.address.label,
+          "alakazam-setup-fence"
+        );
+      }
     );
 
     const downloadQuote =
@@ -3335,6 +3654,7 @@ test(
       async () => {
         const api = createHostedApi(service, {
           downloadCommerce,
+          alakazamAccount,
           stripeWebhook
         });
         const browserServer =
@@ -3346,6 +3666,8 @@ test(
           "shipped browser correct horse battery staple";
         const projectName =
           "Shipped Browser Workshop";
+        const hostedLabel =
+          `shipped-${randomUUID()}`;
 
         try {
           reviewedBrowser = await openReviewedBrowser({
@@ -3719,6 +4041,220 @@ test(
               active_sessions: 1
             }
           );
+
+          try {
+            await waitFor(
+              `document.querySelector("[data-alakazam-account]")` +
+                `.hidden === false && ` +
+                `document.querySelector("[data-alakazam-load-state]")` +
+                `.textContent.includes("loaded") && ` +
+                `Boolean(document.querySelector(` +
+                `"[data-alakazam-site-form]"))`,
+              10000
+            );
+          } catch (error) {
+            const diagnosis = await evaluate(
+              `(() => {
+                const panel = document.querySelector(
+                  "[data-alakazam-account]"
+                );
+                return {
+                  panel: panel && {
+                    hidden: panel.hidden,
+                    state: panel.getAttribute(
+                      "data-account-state"
+                    ),
+                    busy: panel.getAttribute("aria-busy")
+                  },
+                  status: document.querySelector(
+                    "[data-alakazam-load-state]"
+                  )?.textContent.trim(),
+                  form: Boolean(document.querySelector(
+                    "[data-alakazam-site-form]"
+                  )),
+                  body: document.querySelector(
+                    "[data-alakazam-body]"
+                  )?.textContent.trim(),
+                  state: globalThis
+                    .SiteSourceryAbracadabraHostedSession
+                    .getState()
+                };
+              })()`
+            );
+            throw new Error(
+              `${error.message}; Alakazam panel ` +
+                `${JSON.stringify(diagnosis)}; API requests ` +
+                `${JSON.stringify(browserServer.apiRequests)}; ` +
+                `browser errors ${JSON.stringify(browserErrors)}`
+            );
+          }
+          async function accountLayout() {
+            return evaluate(
+              `(() => {
+                const panel = document.querySelector(
+                  "[data-alakazam-account]"
+                );
+                const input = document.querySelector(
+                  "[data-alakazam-address-label]"
+                );
+                const bounds = panel.getBoundingClientRect();
+                return {
+                  width: innerWidth,
+                  documentFits:
+                    document.documentElement.scrollWidth <=
+                    innerWidth,
+                  panelFits:
+                    bounds.left >= 0 &&
+                    bounds.right <= innerWidth + 1,
+                  setupVisible:
+                    Boolean(input) &&
+                    input.getClientRects().length > 0,
+                  setupLabelled:
+                    input?.labels?.[0]?.textContent.trim() ===
+                    "Platform address label"
+                };
+              })()`
+            );
+          }
+          assert.deepEqual(await accountLayout(), {
+            width: 390,
+            documentFits: true,
+            panelFits: true,
+            setupVisible: true,
+            setupLabelled: true
+          });
+          await cdp.send(
+            "Emulation.setDeviceMetricsOverride",
+            {
+              width: 1440,
+              height: 1000,
+              deviceScaleFactor: 1,
+              mobile: false,
+              screenWidth: 1440,
+              screenHeight: 1000
+            }
+          );
+          await cdp.send(
+            "Emulation.setTouchEmulationEnabled",
+            { enabled: false, maxTouchPoints: 1 }
+          );
+          await evaluate(
+            `new Promise((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(resolve)))`,
+            true
+          );
+          assert.deepEqual(await accountLayout(), {
+            width: 1440,
+            documentFits: true,
+            panelFits: true,
+            setupVisible: true,
+            setupLabelled: true
+          });
+          await cdp.send(
+            "Emulation.setDeviceMetricsOverride",
+            {
+              width: 390,
+              height: 844,
+              deviceScaleFactor: 1,
+              mobile: true,
+              screenWidth: 390,
+              screenHeight: 844
+            }
+          );
+          await cdp.send(
+            "Emulation.setTouchEmulationEnabled",
+            { enabled: true, maxTouchPoints: 5 }
+          );
+          await evaluate(
+            `(() => {
+              const input = document.querySelector(
+                "[data-alakazam-address-label]"
+              );
+              Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                "value"
+              ).set.call(input, ${JSON.stringify(hostedLabel)});
+              input.dispatchEvent(
+                new Event("input", { bubbles: true })
+              );
+              document.querySelector(
+                "[data-alakazam-site-form]"
+              ).requestSubmit();
+              return true;
+            })()`
+          );
+          await waitFor(
+            `document.querySelector("[data-alakazam-load-state]")` +
+              `.textContent.includes("loaded") && ` +
+              `document.querySelector("[data-alakazam-body]")` +
+              `.textContent.includes(` +
+              `${JSON.stringify(`${hostedLabel}.sitesourcery.me`)}) && ` +
+              `document.querySelector("[data-alakazam-account]")` +
+              `.getAttribute("aria-busy") === "false"`,
+            10000
+          );
+          const configuredAccount = await evaluate(
+            `(async () => {
+              const response = await fetch(
+                "/api/v1/projects/" +
+                  ${JSON.stringify(savedState.project.id)} +
+                  "/alakazam",
+                { credentials: "same-origin" }
+              );
+              return {
+                status: response.status,
+                body: await response.json()
+              };
+            })()`,
+            true
+          );
+          assert.equal(configuredAccount.status, 200);
+          assert.equal(
+            configuredAccount.body.site.state,
+            "ready_for_checkout"
+          );
+          assert.equal(
+            configuredAccount.body.site.addressLabel,
+            hostedLabel
+          );
+          assert.equal(
+            configuredAccount.body.site.hostname,
+            `${hostedLabel}.sitesourcery.me`
+          );
+          assert.match(
+            configuredAccount.body.site.setupDigest,
+            /^[a-f0-9]{64}$/u
+          );
+          assert.equal(
+            configuredAccount.body.actions.start,
+            true
+          );
+          const addressProof = await pool.query(
+            `select address.label,
+                    address.serving_hostname,
+                    address.state
+               from ss.project_address_projection projection
+               join ss.project_addresses address
+                 on address.organization_id =
+                    projection.organization_id
+                and address.project_id = projection.project_id
+                and address.id = projection.current_address_id
+              where projection.organization_id = $1
+                and projection.project_id = $2`,
+            [
+              savedState.project.organizationId,
+              savedState.project.id
+            ]
+          );
+          assert.deepEqual(addressProof.rows, [
+            {
+              label: hostedLabel,
+              serving_hostname:
+                `${hostedLabel}.sitesourcery.me`,
+              state: "configured"
+            }
+          ]);
 
           commerceV2ClockNow = new Date().toISOString();
           const browserCheckout = await evaluate(

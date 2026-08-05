@@ -26,7 +26,8 @@ import {
   createAlakazamDowngradeActivationService
 } from "../../commerce-v2/alakazam-downgrade-activation.mjs";
 import {
-  createAlakazamAccountService
+  createAlakazamAccountService,
+  createAlakazamSiteSetupDigest
 } from "../../commerce-v2/alakazam-account.mjs";
 import {
   digest as canonicalDigest
@@ -339,7 +340,22 @@ async function seedAcceptedPlatformSite(
     compiled,
     versionId,
     addressId,
+    label,
     hostname
+  });
+}
+
+function siteSetupDigestFor(authority, site) {
+  return createAlakazamSiteSetupDigest({
+    tenantId: authority.organizationId,
+    customerId: authority.userId,
+    projectId: authority.projectId,
+    acceptedVersionId: site.versionId,
+    artifactDigest: site.compiled.artifactDigest,
+    configuredLook: site.rawFacts.theme,
+    addressId: site.addressId,
+    addressLabel: site.label,
+    hostname: site.hostname
   });
 }
 
@@ -358,6 +374,11 @@ test(
       transactionOpen = true;
       await client.query("set constraints all deferred");
       const seeded = await seedAuthority(client);
+      const compiler = await createSparkCompilerPort();
+      await seedAcceptedPlatformSite(client, seeded, {
+        compiler,
+        theme: "clear"
+      });
       const repository =
         createPostgresAlakazamRepository({
           authority: {
@@ -459,6 +480,16 @@ test(
       const authority = await seedAuthority(client, {
         withStripeCustomer: false
       });
+      const compiler = await createSparkCompilerPort();
+      const acceptedSite = await seedAcceptedPlatformSite(
+        client,
+        authority,
+        { compiler, theme: "clear" }
+      );
+      const siteSetupDigest = siteSetupDigestFor(
+        authority,
+        acceptedSite
+      );
       const quoteId = await insertQuote(client, authority, {
         changeKind: "start",
         targetTierId: "alakazam_25",
@@ -492,6 +523,7 @@ test(
           quoteId,
           provisionId: unusedProvisionId,
           acceptedDisclosureDigest: "f".repeat(64),
+          siteSetupDigest,
           claimedAt: "2026-08-02T12:00:30.000Z"
         }),
         (error) => error.code === "alakazam_change_unavailable"
@@ -504,6 +536,7 @@ test(
         provisionId: unusedProvisionId,
         acceptedDisclosureDigest:
           disclosureDigestForQuote(quoteId),
+        siteSetupDigest,
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       assert.equal(unused.status, "create");
@@ -528,6 +561,7 @@ test(
         provisionId,
         acceptedDisclosureDigest:
           disclosureDigestForQuote(quoteId),
+        siteSetupDigest,
         claimedAt: "2026-08-02T12:02:00.000Z"
       });
       assert.equal(claimed.status, "create");
@@ -545,6 +579,7 @@ test(
         provisionId: randomUUID(),
         acceptedDisclosureDigest:
           disclosureDigestForQuote(quoteId),
+        siteSetupDigest,
         claimedAt: "2026-08-02T12:02:30.000Z"
       });
       assert.equal(pending.status, "pending");
@@ -690,6 +725,16 @@ test(
       const authority = await seedAuthority(client, {
         withStripeCustomer: false
       });
+      const compiler = await createSparkCompilerPort();
+      const acceptedSite = await seedAcceptedPlatformSite(
+        client,
+        authority,
+        { compiler, theme: "warm" }
+      );
+      const siteSetupDigest = siteSetupDigestFor(
+        authority,
+        acceptedSite
+      );
       const quoteId = await insertQuote(client, authority, {
         changeKind: "start",
         targetTierId: "alakazam_35",
@@ -719,6 +764,7 @@ test(
         provisionId: firstProvisionId,
         acceptedDisclosureDigest:
           disclosureDigestForQuote(quoteId),
+        siteSetupDigest,
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       assert.equal(first.status, "create");
@@ -732,6 +778,7 @@ test(
           provisionId: randomUUID(),
           acceptedDisclosureDigest:
             disclosureDigestForQuote(quoteId),
+          siteSetupDigest,
           claimedAt: "2026-08-02T12:03:00.000Z"
         });
       assert.deepEqual(interrupted, {
@@ -749,6 +796,7 @@ test(
         provisionId: randomUUID(),
         acceptedDisclosureDigest:
           disclosureDigestForQuote(quoteId),
+        siteSetupDigest,
         claimedAt: "2026-08-02T12:04:00.000Z"
       });
       assert.deepEqual(replay, interrupted);
@@ -790,10 +838,14 @@ test(
       const ambiguousAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_ambiguous"
       });
-      await seedAcceptedPlatformSite(
+      const ambiguousSite = await seedAcceptedPlatformSite(
         client,
         ambiguousAuthority,
         { compiler, theme: "clear" }
+      );
+      const ambiguousSiteSetupDigest = siteSetupDigestFor(
+        ambiguousAuthority,
+        ambiguousSite
       );
       const ambiguousQuoteId = await insertQuote(
         client,
@@ -831,9 +883,26 @@ test(
           stripeCustomerId:
             ambiguousAuthority.stripeCustomerId,
           acceptedDisclosureDigest: "f".repeat(64),
+          siteSetupDigest: ambiguousSiteSetupDigest,
           claimedAt: "2026-08-02T12:00:30.000Z"
         }),
         (error) => error.code === "alakazam_change_unavailable"
+      );
+      await assert.rejects(
+        ambiguousRepository.claimCheckoutDispatch({
+          tenantId: ambiguousAuthority.organizationId,
+          customerId: ambiguousAuthority.userId,
+          projectId: ambiguousAuthority.projectId,
+          quoteId: ambiguousQuoteId,
+          dispatchId: ambiguousDispatchId,
+          stripeCustomerId:
+            ambiguousAuthority.stripeCustomerId,
+          acceptedDisclosureDigest:
+            disclosureDigestForQuote(ambiguousQuoteId),
+          siteSetupDigest: "0".repeat(64),
+          claimedAt: "2026-08-02T12:00:45.000Z"
+        }),
+        (error) => error.code === "alakazam_site_setup_changed"
       );
       const ambiguousClaim =
         await ambiguousRepository.claimCheckoutDispatch({
@@ -846,6 +915,7 @@ test(
             ambiguousAuthority.stripeCustomerId,
           acceptedDisclosureDigest:
             disclosureDigestForQuote(ambiguousQuoteId),
+          siteSetupDigest: ambiguousSiteSetupDigest,
           claimedAt: "2026-08-02T12:01:00.000Z"
         });
       assert.equal(ambiguousClaim.status, "create");
@@ -860,6 +930,7 @@ test(
             ambiguousAuthority.stripeCustomerId,
           acceptedDisclosureDigest:
             disclosureDigestForQuote(ambiguousQuoteId),
+          siteSetupDigest: ambiguousSiteSetupDigest,
           claimedAt: "2026-08-02T12:01:30.000Z"
         });
       assert.equal(pending.status, "pending");
@@ -887,6 +958,20 @@ test(
         ).status,
         "reconciliation_required"
       );
+      const ambiguousAccount = createAlakazamAccountService({
+        repository: ambiguousRepository
+      });
+      const ambiguousAccountScope = {
+        tenantId: ambiguousAuthority.organizationId,
+        customerId: ambiguousAuthority.userId,
+        actorId: ambiguousAuthority.userId,
+        projectId: ambiguousAuthority.projectId
+      };
+      assert.equal(
+        (await ambiguousAccount.read(ambiguousAccountScope))
+          .site.state,
+        "attention_required"
+      );
       const reconciled =
         await ambiguousRepository.confirmCheckoutDispatch({
           ...ambiguousReference,
@@ -912,14 +997,23 @@ test(
         }),
         reconciled
       );
+      assert.equal(
+        (await ambiguousAccount.read(ambiguousAccountScope))
+          .site.state,
+        "attention_required"
+      );
 
       const failedAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_failed"
       });
-      await seedAcceptedPlatformSite(client, failedAuthority, {
+      const failedSite = await seedAcceptedPlatformSite(client, failedAuthority, {
         compiler,
         theme: "warm"
       });
+      const failedSiteSetupDigest = siteSetupDigestFor(
+        failedAuthority,
+        failedSite
+      );
       const failedQuoteId = await insertQuote(
         client,
         failedAuthority,
@@ -949,6 +1043,7 @@ test(
             failedAuthority.stripeCustomerId,
           acceptedDisclosureDigest:
             disclosureDigestForQuote(failedQuoteId),
+          siteSetupDigest: failedSiteSetupDigest,
           claimedAt: "2026-08-02T12:01:00.000Z"
         });
       const failed =
@@ -989,10 +1084,14 @@ test(
       const staleAuthority = await seedAuthority(client, {
         stripeCustomerId: "cus_alakazam_stale"
       });
-      await seedAcceptedPlatformSite(client, staleAuthority, {
+      const staleSite = await seedAcceptedPlatformSite(client, staleAuthority, {
         compiler,
         theme: "arcane"
       });
+      const staleSiteSetupDigest = siteSetupDigestFor(
+        staleAuthority,
+        staleSite
+      );
       const staleQuoteId = await insertQuote(
         client,
         staleAuthority,
@@ -1020,6 +1119,7 @@ test(
         stripeCustomerId: staleAuthority.stripeCustomerId,
         acceptedDisclosureDigest:
           disclosureDigestForQuote(staleQuoteId),
+        siteSetupDigest: staleSiteSetupDigest,
         claimedAt: "2026-08-02T12:01:00.000Z"
       });
       const interrupted =
@@ -1033,6 +1133,7 @@ test(
             staleAuthority.stripeCustomerId,
           acceptedDisclosureDigest:
             disclosureDigestForQuote(staleQuoteId),
+          siteSetupDigest: staleSiteSetupDigest,
           claimedAt: "2026-08-02T12:03:00.000Z"
         });
       assert.deepEqual(
@@ -1111,7 +1212,8 @@ async function openCheckout(
     creditMinor,
     suffix,
     claimedAt,
-    dispatchedAt
+    dispatchedAt,
+    siteSetupDigest
   }
 ) {
   const repository = createPostgresAlakazamRepository({
@@ -1131,6 +1233,7 @@ async function openCheckout(
     stripeCustomerId: authority.stripeCustomerId,
     acceptedDisclosureDigest:
       disclosureDigestForQuote(quoteId),
+    siteSetupDigest,
     claimedAt
   });
   assert.equal(claim.status, "create");
@@ -1465,7 +1568,11 @@ test(
           creditMinor: 0,
           suffix: "alakazam_start",
           claimedAt: "2026-08-02T12:01:00.000Z",
-          dispatchedAt: "2026-08-02T12:01:05.000Z"
+          dispatchedAt: "2026-08-02T12:01:05.000Z",
+          siteSetupDigest: siteSetupDigestFor(
+            authority,
+            acceptedSite
+          )
         }
       );
       const startResolved =
@@ -1842,7 +1949,8 @@ test(
           creditMinor: 0,
           suffix: "alakazam_upgrade_25_35",
           claimedAt: "2026-08-02T12:11:00.000Z",
-          dispatchedAt: "2026-08-02T12:11:05.000Z"
+          dispatchedAt: "2026-08-02T12:11:05.000Z",
+          siteSetupDigest: null
         }
       );
       const upgradeResolved =
@@ -1921,6 +2029,7 @@ test(
             disclosureDigestForQuote(
               competingUpgradeQuoteId
             ),
+          siteSetupDigest: null,
           claimedAt: "2026-08-02T12:12:06.000Z"
         }),
         (error) =>
@@ -2366,6 +2475,29 @@ test(
           providerFactsDigest: canonicalDigest(facts)
         };
       }
+      await expectRejected(
+        client,
+        async () => {
+          await client.query(
+            `update ss.alakazam_fulfillment_projection
+                set state = 'dark'
+              where organization_id = $1
+                and project_id = $2`,
+            [
+              authority.organizationId,
+              authority.projectId
+            ]
+          );
+          await settlementRepository
+            .claimDowngradeApplication({
+              command: downgradeCommand,
+              scheduleId: randomUUID(),
+              claimedAt:
+                "2026-08-02T12:20:29.000Z"
+            });
+        },
+        /durable Alakazam downgrade binding changed/iu
+      );
       await expectRejected(
         client,
         async () => {
@@ -2836,6 +2968,7 @@ test(
             "2026-10-02T12:03:00.000Z",
           receiptCount: 2,
           actions: {
+            configureSite: false,
             start: false,
             changeTier: true,
             manageBilling: false,
@@ -2936,23 +3069,32 @@ test(
           expiresAt: "2026-09-02T12:36:00.000Z"
         }
       );
-      const laterUpgradeClaim =
-        await settlementRepository.claimCheckoutDispatch({
-          tenantId: authority.organizationId,
-          customerId: authority.userId,
-          projectId: authority.projectId,
-          quoteId: laterUpgradeQuoteId,
-          dispatchId: randomUUID(),
-          stripeCustomerId: authority.stripeCustomerId,
-          acceptedDisclosureDigest:
-            disclosureDigestForQuote(laterUpgradeQuoteId),
-          claimedAt: "2026-09-02T12:07:00.000Z"
-        });
-      assert.equal(laterUpgradeClaim.status, "create");
+      await expectRejected(
+        client,
+        () => settlementRepository.claimCheckoutDispatch({
+            tenantId: authority.organizationId,
+            customerId: authority.userId,
+            projectId: authority.projectId,
+            quoteId: laterUpgradeQuoteId,
+            dispatchId: randomUUID(),
+            stripeCustomerId: authority.stripeCustomerId,
+            acceptedDisclosureDigest:
+              disclosureDigestForQuote(laterUpgradeQuoteId),
+            siteSetupDigest: null,
+            claimedAt: "2026-09-02T12:07:00.000Z"
+          }),
+        /finish publishing before changing tiers/iu
+      );
+      const prematureUpgradeDispatch = await client.query(
+        `select count(*)::integer as count
+           from ss.alakazam_checkout_dispatches
+          where organization_id = $1
+            and quote_id = $2`,
+        [authority.organizationId, laterUpgradeQuoteId]
+      );
       assert.equal(
-        laterUpgradeClaim.dispatch.purpose.currentSubscription
-          .revision,
-        4
+        prematureUpgradeDispatch.rows[0].count,
+        0
       );
       await flushConstraints(client);
 

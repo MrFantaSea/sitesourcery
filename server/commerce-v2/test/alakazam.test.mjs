@@ -149,6 +149,10 @@ test("Alakazam Checkout dispatch derives exact start credit and fixed upgrade pu
   assert.equal(start.purpose.targetAmountMinor, 2500);
   assert.equal(start.purpose.currentSubscription, null);
   assert.equal(
+    Object.hasOwn(start.purpose, "siteSetupDigest"),
+    false
+  );
+  assert.equal(
     start.idempotencyKey,
     "alakazam:start:checkout:50000000-0000-4000-8000-000000000001"
   );

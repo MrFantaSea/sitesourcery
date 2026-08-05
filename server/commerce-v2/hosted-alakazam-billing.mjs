@@ -461,8 +461,12 @@ export function createHostedAlakazamBilling({
         const actor = requireActor(actorInput);
         const selected = exactInput(
           input,
-          ["acceptedDisclosureDigest", "commandId"],
-          "Alakazam Checkout accepts only the accepted disclosure and idempotency identity."
+          [
+            "acceptedDisclosureDigest",
+            "commandId",
+            "siteSetupDigest"
+          ],
+          "Alakazam Checkout accepts only the accepted disclosure, website setup proof, and idempotency identity."
         );
         const commandId = exactUuid(
           selected.commandId,
@@ -473,6 +477,13 @@ export function createHostedAlakazamBilling({
             selected.acceptedDisclosureDigest,
             "acceptedDisclosureDigest"
           );
+        const siteSetupDigest =
+          selected.siteSetupDigest === null
+            ? null
+            : requiredDigest(
+                selected.siteSetupDigest,
+                "siteSetupDigest"
+              );
         const quoteId = exactUuid(
           routeQuoteId,
           "quoteId"
@@ -488,7 +499,8 @@ export function createHostedAlakazamBilling({
             projectId: scope.projectId,
             quoteId,
             commandId,
-            acceptedDisclosureDigest
+            acceptedDisclosureDigest,
+            siteSetupDigest
           })
         );
       });

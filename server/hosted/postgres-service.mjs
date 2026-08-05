@@ -807,6 +807,7 @@ export function createCanonicalPostgresService({
     {
       actor,
       organizationId,
+      projectId = null,
       routeKey,
       key,
       purpose,
@@ -814,7 +815,12 @@ export function createCanonicalPostgresService({
     }
   ) {
     const selectedKey = commandId(key);
-    const requestDigest = digest({ routeKey, purpose });
+    const requestDigest = digest({
+      organizationId,
+      projectId,
+      routeKey,
+      purpose
+    });
     const existing = await client.query(
       `select request_digest, state, response_body
          from ss.idempotency_keys
@@ -898,6 +904,7 @@ export function createCanonicalPostgresService({
           return idempotent(client, {
             actor,
             organizationId: scope.organizationId,
+            projectId: scope.projectId,
             routeKey,
             key,
             purpose,
@@ -912,6 +919,69 @@ export function createCanonicalPostgresService({
     } catch (error) {
       throw translatePostgres(error);
     }
+  }
+
+  async function assertAlakazamSiteMutable(client, scope) {
+    const selected = await client.query(
+      `select
+         project.id,
+         exists (
+           select 1
+             from ss.alakazam_fulfillment_projection projection
+            where projection.organization_id = project.organization_id
+              and projection.project_id = project.id
+         ) as has_fulfillment,
+         exists (
+           select 1
+             from ss.alakazam_subscriptions subscription
+            where subscription.organization_id = project.organization_id
+              and subscription.project_id = project.id
+              and subscription.status <> 'ended'
+         ) as has_subscription,
+         exists (
+           select 1
+             from ss.alakazam_checkout_dispatches dispatch
+            where dispatch.organization_id = project.organization_id
+              and dispatch.project_id = project.id
+              and dispatch.state not in ('failed', 'expired')
+         ) as has_checkout,
+         exists (
+           select 1
+             from ss.alakazam_customer_provisions provision
+             join ss.alakazam_change_quotes quote
+               on quote.organization_id = provision.organization_id
+              and quote.id = provision.quote_id
+            where provision.organization_id = project.organization_id
+              and provision.project_id = project.id
+              and provision.state in (
+                'reserved', 'confirmed',
+                'reconciliation_required'
+              )
+              and quote.state = 'quoted'
+              and quote.expires_at > $3
+         ) as has_customer_setup
+       from ss.projects project
+      where project.organization_id = $1
+        and project.id = $2
+        and project.lifecycle = 'active'
+      for update of project`,
+      [
+        scope.organizationId,
+        scope.projectId,
+        now(clock)
+      ]
+    );
+    const state = selected.rows[0];
+    invariant(
+      selected.rowCount === 1 &&
+        state.has_fulfillment === false &&
+        state.has_subscription === false &&
+        state.has_checkout === false &&
+        state.has_customer_setup === false,
+      "ALAKAZAM_SITE_CHANGE_UNAVAILABLE",
+      "This accepted website setup is already bound to Alakazam. Refresh the account before changing it.",
+      { status: 409 }
+    );
   }
 
   async function projectRows(client, actor, projectId) {
@@ -6458,6 +6528,7 @@ export function createCanonicalPostgresService({
         key: input.commandId,
         purpose: { versionId: selectedVersionId },
         work: async (client, scope) => {
+          await assertAlakazamSiteMutable(client, scope);
           const selected = await client.query(
             `select
                projection.state,
@@ -6555,6 +6626,7 @@ export function createCanonicalPostgresService({
         key: input.commandId,
         purpose: { address: normalized },
         work: async (client, scope) => {
+          await assertAlakazamSiteMutable(client, scope);
           const addressId = await insertAddress(client, {
             actor,
             organizationId: scope.organizationId,

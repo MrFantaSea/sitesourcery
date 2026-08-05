@@ -145,9 +145,9 @@ Integration order:
 - [x] `$25` backend authority: exact accepted source, active subscription
   revision, licensed `sitesourcery.me` address, three base looks, deterministic
   compilation, queue, screening, publication, replay, and dark compensation.
-- [ ] `$25` customer path: choose the platform label and base look, expose
+- [x] `$25` held customer path: choose the platform label and base look, expose
   fulfillment status in the account, and prove the authenticated desktop/mobile
-  browser journey.
+  browser journey. Provider release and production cutover remain Lane J.
 - [ ] `$35`: photo header, expanded fonts, section toggles, three-version
   history, and owner-defined modest care.
 - [ ] `$50`: Cash App/Venmo, menu, extended font/border controls, and
@@ -230,18 +230,18 @@ Lane I launch-critical domain truth only ─┘
 | 2 | Fulfillment feature matrix | Fulfillment mapper | inventory complete; implementation held behind billing route slice |
 | 2 | Lifecycle projection | Lifecycle mapper | inventory complete; renewal-success implementation waits for current route slice |
 | 3A | Fulfillment backend | Lead plus bounded compiler worker | migration 32, exact tier authority, three looks, queue, compilation, self-host publication, replay, and compensation reviewed; fresh PostgreSQL and broad regressions green; release held |
-| 3B | Customer fulfillment path | Lead with disjoint UI/HTTP workers only after contract freeze | platform-label/look controls, account status, authenticated browser journey | next; not started |
+| 3B | Customer fulfillment path | Lead owns account/repository/HTTP contracts; UI worker owns browser files; read-only auditor checks stale/race truth | platform-label/look controls, account status, authenticated browser journey | reviewed and sealed locally; fresh PostgreSQL, shipped-browser, and broad proof green; release held |
+| 3C | Tier-transition fulfillment | Lead with disjoint repository/worker review packets after contract freeze | queue and republish the exact new tier after upgrade/downgrade activation | next; contract freeze required |
 
 ## Immediate integration target
 
-Seal Batch 3A as the local, held fulfillment-backend checkpoint. Batch 3B ends
-when a signed-in `$25` customer can choose one available platform label and one
-of three canonical base looks through a narrow authenticated boundary, see
-customer-safe pending/live/dark truth in the existing account surface, and
-load the exact published bytes at that licensed address in desktop and mobile
-browser proof. Browser input supplies selections only; the server derives
-subscription, tier, capability, compiler policy, address authority, and
-publication evidence. `$35/$50` expansion and release remain later work.
+Seal Batch 3B as the local, held customer-fulfillment checkpoint, then connect
+one Batch 3C tier-transition path. A verified upgrade or renewal-boundary
+downgrade must queue exactly one fulfillment operation for the new subscription
+revision, compile the new effective tier policy, and republish at the existing
+licensed address before another tier change becomes available. This closes the
+current gap between billing authority and website capabilities without opening
+unresolved `$35/$50` editors, lifecycle policy, provider release, or cutover.
 
 ## Frozen Batch 3A fulfillment backend contract
 
@@ -272,6 +272,55 @@ publication evidence. `$35/$50` expansion and release remain later work.
 - Not included: customer label/look controls, fulfillment account projection,
   browser proof, unresolved `$35/$50` controls, provider release, public copy,
   push, deploy, DNS, or production cutover.
+
+## Frozen Batch 3B customer fulfillment contract
+
+- Existing primitives are mandatory reuse: the Maker creates and accepts the
+  exact content/look version; the generic authenticated project command selects
+  one licensed `label.sitesourcery.me` address; Batch 3A automatically compiles
+  and publishes after payment-backed activation. No shadow project, address,
+  version, or publication system may be added.
+- Account schema v2 adds one exact customer-safe `site` projection:
+  `acceptedVersionId`, `addressLabel`, `hostname`, public `look`, `setupDigest`,
+  `state`, `updatedAt`, and `url`. Public looks are `look_crystal` / Crystal,
+  `look_hearth` / Hearth, and `look_midnight` / Midnight. Internal theme values,
+  artifact bytes/digests, provider IDs, release IDs, leases, and raw worker
+  evidence remain server-only.
+- Customer site state is exactly `setup_required`, `ready_for_checkout`,
+  `payment_pending`, `publishing`, `live`, or `attention_required`.
+  Fulfillment `prepared`, `pending`, `live`, `dark`, and `failed` maps to the
+  final four states. Without a fulfillment row, readiness is rederived from one
+  accepted version plus the current configured licensed address.
+- `actions.configureSite` is true only with no subscription and no in-flight
+  payment. `actions.start` additionally requires `ready_for_checkout`.
+  `actions.changeTier` retains all existing paid/active/no-pending checks and
+  additionally requires `site.state === "live"`. The write repository rechecks
+  these facts; browser action flags are never authority.
+- The browser supplies a setup digest only as freshness proof. The server
+  computes it from tenant/customer/project, accepted version and artifact,
+  internal look, licensed address, and hostname. A start Checkout requires an
+  exact current digest before Stripe; a stale/cross-project digest fails.
+  Upgrade Checkout requires `null` and cannot reuse setup proof as tier
+  authority.
+- The UI displays the already accepted look, lets the customer choose only the
+  licensed platform label when needed, refreshes exact account truth after the
+  idempotent address command, and discards stale quote/Checkout review when the
+  setup digest changes. It shows safe pending/live/attention status and only a
+  verified `https://{hostname}/` link when live.
+- Publication is automatic. This slice adds no manual publish, rollback,
+  unpublish, custom-domain, `$35/$50` feature editor, Portal, cancellation,
+  lifecycle, invoice, provider release, push, deploy, DNS, or production
+  cutover behavior.
+- Completion proof: all 32 migrations replay from zero; the real Alakazam
+  lifecycle passes 5/5; the canonical service and shipped-page journey pass
+  12/12 on a fresh database; focused browser/API contracts pass 36/36; core
+  Node passes 459/459; hosted service passes 154 with 2 intentional skips;
+  self-host passes 19/19; operations pass 52/52; exact public/hosted artifacts
+  verify; and the browser audit passes 15 routes at three viewports. The real
+  account panel saves a unique platform label at 390x844, projects exact
+  PostgreSQL address truth and setup readiness, and fits again at 1440x1000.
+  All named disposable databases are dropped and verified absent. Provider,
+  release, push, deploy, DNS, and production state remain held.
 
 ## Frozen Batch 1 account contract
 

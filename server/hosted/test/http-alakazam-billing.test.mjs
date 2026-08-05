@@ -18,6 +18,7 @@ const CHECKOUT_COMMAND_ID =
 const DOWNGRADE_COMMAND_ID =
   "60000000-0000-4000-8000-000000000001";
 const DISCLOSURE_DIGEST = "d".repeat(64);
+const SITE_SETUP_DIGEST = "c".repeat(64);
 const QUOTE_DIGEST = "e".repeat(64);
 
 function service() {
@@ -164,7 +165,8 @@ test("Alakazam quote, Checkout, and downgrade routes preserve distinct route and
         `/alakazam-quotes/${QUOTE_ID}/checkout-command`,
       {
         body: {
-          acceptedDisclosureDigest: DISCLOSURE_DIGEST
+          acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+          siteSetupDigest: SITE_SETUP_DIGEST
         },
         idempotencyKey: CHECKOUT_COMMAND_ID
       }
@@ -182,7 +184,8 @@ test("Alakazam quote, Checkout, and downgrade routes preserve distinct route and
       quoteId: QUOTE_ID,
       input: {
         acceptedDisclosureDigest: DISCLOSURE_DIGEST,
-        commandId: CHECKOUT_COMMAND_ID
+        commandId: CHECKOUT_COMMAND_ID,
+        siteSetupDigest: SITE_SETUP_DIGEST
       }
     }
   ]);

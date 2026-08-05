@@ -341,6 +341,7 @@ test("Alakazam tier commerce sends only target or accepted quote truth through t
     "alakazam_quote_1",
     {
       acceptedDisclosureDigest: "a".repeat(64),
+      siteSetupDigest: "e".repeat(64),
       ignoredPresentation: { buttonLabel: "Continue" },
     },
     { idempotencyKey: "alakazam-checkout-command-1" },
@@ -388,6 +389,7 @@ test("Alakazam tier commerce sends only target or accepted quote truth through t
   );
   assert.deepEqual(JSON.parse(checkout.options.body), {
     acceptedDisclosureDigest: "a".repeat(64),
+    siteSetupDigest: "e".repeat(64),
   });
 
   const downgrade = calls[3];
@@ -454,6 +456,7 @@ test("Alakazam tier commerce recursively rejects claimed authority before fetch"
       "alakazam_quote_1",
       {
         acceptedDisclosureDigest: "a".repeat(64),
+        siteSetupDigest: "e".repeat(64),
         forged: [{ nested: { providerReference: "checkout_provider_1" } }],
       },
       { idempotencyKey: "forged-checkout-command" },

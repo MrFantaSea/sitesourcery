@@ -24,6 +24,7 @@ const QUOTE_ID =
 const PROVISION_ID =
   "50000000-0000-4000-8000-000000000001";
 const ACCEPTED_DISCLOSURE_DIGEST = "a".repeat(64);
+const SITE_SETUP_DIGEST = "d".repeat(64);
 
 function input(overrides = {}) {
   return {
@@ -45,6 +46,7 @@ function customerInput(overrides = {}) {
     provisionId: PROVISION_ID,
     acceptedDisclosureDigest:
       ACCEPTED_DISCLOSURE_DIGEST,
+    siteSetupDigest: SITE_SETUP_DIGEST,
     ...overrides
   };
 }
@@ -58,6 +60,7 @@ function checkoutInput(overrides = {}) {
     commandId: PROVISION_ID,
     acceptedDisclosureDigest:
       ACCEPTED_DISCLOSURE_DIGEST,
+    siteSetupDigest: SITE_SETUP_DIGEST,
     ...overrides
   };
 }
@@ -675,6 +678,7 @@ test("Alakazam start Checkout binds one Customer, one durable claim, and one Str
     stripeCustomerId: "cus_alakazam_customer_1",
     acceptedDisclosureDigest:
       ACCEPTED_DISCLOSURE_DIGEST,
+    siteSetupDigest: SITE_SETUP_DIGEST,
     claimedAt: NOW
   });
   assert.equal(calls.checkoutCreates.length, 1);
@@ -733,7 +737,7 @@ test("Alakazam upgrade Checkout selects only the fixed-difference provider opera
     }
   });
   const ready = await service.createCheckout(
-    checkoutInput()
+    checkoutInput({ siteSetupDigest: null })
   );
   assert.equal(ready.status, "ready");
   assert.equal(calls.customerCreates.length, 0);
@@ -841,6 +845,7 @@ test("post-create Checkout persistence uncertainty recovers a concurrently commi
     quoteId: QUOTE_ID,
     stripeCustomerId: "cus_existing_customer",
     acceptedDisclosureDigest: "a".repeat(64),
+    siteSetupDigest: SITE_SETUP_DIGEST,
     quoteDigest: "b".repeat(64),
     changeKind: "start",
     targetTierId: "alakazam_25",
@@ -940,4 +945,30 @@ test("Alakazam Checkout binds accepted disclosure before Customer or provider wo
   );
   assert.equal(malformed.calls.readiness, 0);
   assert.equal(malformed.calls.customerClaims.length, 0);
+});
+
+test("stale website setup fails before any Stripe Customer or Checkout effect", async () => {
+  const repositoryError = Object.assign(
+    new Error("accepted website setup changed"),
+    { code: "alakazam_site_setup_changed" }
+  );
+  const { service, calls } = fixture({
+    customerClaimError: repositoryError
+  });
+  const changedSetupDigest = "e".repeat(64);
+  await assert.rejects(
+    service.createCheckout(
+      checkoutInput({
+        siteSetupDigest: changedSetupDigest
+      })
+    ),
+    (error) => error === repositoryError
+  );
+  assert.equal(
+    calls.customerClaims[0].siteSetupDigest,
+    changedSetupDigest
+  );
+  assert.equal(calls.customerCreates.length, 0);
+  assert.equal(calls.checkoutClaims.length, 0);
+  assert.equal(calls.checkoutCreates.length, 0);
 });

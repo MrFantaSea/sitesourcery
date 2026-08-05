@@ -25,10 +25,9 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- Prior sealed checkpoint: `23fced6` (`Connect held Alakazam customer downgrade
-  flow`). The reviewed Batch 3A fulfillment backend is the next local
-  checkpoint represented by this ledger; inspect the exact worktree before
-  assuming its commit exists.
+- Batch 3B is the latest reviewed local checkpoint represented by this ledger;
+  use `git log -1` for its eventual checkpoint commit rather than copying a
+  hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
 - No push, deploy, DNS change, provider write, credential capture, or release
   approval is authorized by this run.
@@ -36,12 +35,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Seal the completed Batch 3A fulfillment backend as one local checkpoint. The
-next slice is the customer-visible `$25` path: choose a verified platform
-address and one of three base looks, expose fulfillment status in the account,
-and prove the authenticated browser journey. Portal, cancellation, unresolved
-premium controls, lifecycle automation, owner invoicing, and release remain
-separate later slices.
+Start one narrow Batch 3C tier-transition fulfillment slice: after an upgrade
+or renewal-boundary downgrade becomes authoritative, derive and publish the
+exact new tier policy before another tier change is offered. Preserve retained
+premium configuration without exposing unresolved `$35/$50` editors. Portal,
+cancellation, lifecycle policy, owner invoicing, domains, and release remain
+separate lanes.
 
 ## Completed and reviewed
 
@@ -387,29 +386,105 @@ Batch 3A sealed checkpoint gates:
 - [x] Customer controls are explicitly still open rather than misreported as
   complete.
 
+## Batch 3B customer fulfillment sealed checkpoint evidence
+
+- Reuse the accepted Maker version for content and look. Public labels are
+  Crystal, Hearth, and Midnight; `clear`, `warm`, and `arcane` remain internal
+  compiler values and never become billing authority.
+- Reuse the existing authenticated, project-scoped, idempotent licensed-address
+  command for `label.sitesourcery.me`. Do not create a second address table,
+  reservation service, or competing project control.
+- Bump the exact account projection to v2 with one `site` object containing the
+  accepted version, public look, licensed label/hostname, setup digest,
+  setup/publication state, safe live URL, and update time. No artifact bytes,
+  provider identifiers, release IDs, worker leases, or raw failure evidence may
+  cross the boundary.
+- Site states are exactly `setup_required`, `ready_for_checkout`,
+  `payment_pending`, `publishing`, `live`, or `attention_required`. Durable
+  fulfillment `prepared/pending/live/dark/failed` maps to those customer terms;
+  absence of a projection is derived from the exact accepted version and
+  configured licensed address.
+- `actions.configureSite` is true only before a subscription or in-flight
+  payment exists. `actions.start` additionally requires exact setup readiness.
+  Tier change requires the existing paid/active eligibility and a live site;
+  every direct API write independently rederives the same prerequisite.
+- The setup digest binds project, accepted version and artifact, internal look,
+  licensed address, and hostname. Start Checkout requires the current digest;
+  a stale or cross-project digest fails before Stripe. Upgrades carry no setup
+  digest and cannot substitute one.
+- The account panel shows the accepted look, asks only for the platform label
+  when setup is incomplete, resets stale billing review after a setup change,
+  and shows pending/live/attention truth after payment. Publication remains
+  automatic; this slice adds no casual manual publish, rollback, or unpublish
+  button.
+- Setup freshness remains separate from provider purpose. Start Checkout
+  rejects a stale setup before Customer creation and again under the locked
+  project/quote claim; upgrades require an exact null setup digest.
+- Generic command identity now includes organization and project scope.
+  Accepted-version and licensed-address writes lock the project and stop once
+  Alakazam Customer, Checkout, subscription, or fulfillment authority exists.
+  A real competing Checkout wins one setup race while both later edits fail,
+  with exactly one provider Customer and one Checkout call.
+- The account browser retries one failed initial read only when accepted-version
+  identity changed while that read was in flight. A persistent failure remains
+  stopped behind the visible retry control. Chrome 149's `v`-mode HTML pattern
+  parsing exposed an unescaped address-label hyphen; the shipped pattern is now
+  valid in both Chrome validation and the existing JavaScript validator.
+- Fresh database `ss_b3b_20260804_codex1` replayed all 32 migrations and passed
+  the complete 5/5 Alakazam lifecycle, including setup, settlement, activation,
+  publication, upgrade, downgrade, and customer account truth.
+- Fresh database `ss_b3b_service_20260804_codex11` passed the canonical service
+  journey 12/12. It proves cross-project idempotency, the Checkout/setup race,
+  export recovery, same-origin browser API behavior, and the shipped account
+  journey. The real page creates and activates an account, creates a project,
+  accepts its version, saves a unique platform label from a 390x844 mobile
+  viewport, receives `ready_for_checkout` plus a SHA-256 setup digest, and
+  confirms the exact configured address in PostgreSQL. The account panel also
+  fits and remains labelled at 1440x1000 with no horizontal overflow.
+- Final focused browser/API proof passes 36/36. Final broad Node 24 proof passes:
+  core Node 459/459; self-host 19/19; hosted service 154 pass with 2 intentional
+  environment skips; operations 52/52; current site 18 live pages, 20
+  redirects, 28 catalog prices, and 5 sellable rails; exact 78-file public
+  artifact; held hosted build plus HTML; and the current browser audit across
+  15 hosted routes at three viewports.
+- All named Batch 3B disposable databases, including the superseded
+  `ss_b3b_service_20260804_codex10` and final `codex11`, had zero active
+  sessions before exact deletion and are verified absent. No customer or
+  production data was touched.
+- No push, deployment, DNS change, provider release, or production mutation
+  occurred. The July 22 public fallback remains untouched.
+
+Batch 3B sealed checkpoint gates:
+
+- [x] Account schema v2 and exact customer-safe site states are implemented.
+- [x] Setup changes, stale proof, cross-project replay, and Checkout races are
+  fenced before duplicate provider or publication effects.
+- [x] Focused, all-migration PostgreSQL, shipped-browser, broad, artifact, and
+  responsive-layout proofs pass under the required Node 24 runtime.
+- [x] Named disposable databases are dropped and verified absent.
+- [x] Release, provider, DNS, push, and deployment holds remain unchanged.
+
 ## Live resources and workers
 
-- No Batch 3A browser verifier or local evidence server remains running.
-- The Batch 3A disposable PostgreSQL database is absent.
-- The bounded compiler worker is closed; no worker owns a remaining write.
+- No Batch 3B browser verifier, local evidence server, or worker remains
+  running. All Batch 3B disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-After this local Batch 3A checkpoint is sealed, connect one narrow
-customer-visible `$25` journey: project-scoped platform-label and base-look
-selection, customer-safe fulfillment status in the account projection, the
-authenticated HTTP boundary, and desktop/mobile browser proof through exact
-self-hosted bytes. Keep `$35/$50` unresolved controls, Portal, cancellation,
-lifecycle, invoicing, domains, push, deployment, and public cutover outside
-that slice; queue non-blocking visual/copy polish durably.
+Freeze and implement Batch 3C as one vertical tier-transition fulfillment
+slice. A verified upgrade or boundary downgrade must queue one operation bound
+to the new subscription revision, compile the new effective tier policy,
+republish exact bytes at the existing licensed address, and expose pending/live
+or attention truth. Another tier change stays unavailable until that operation
+is live. Keep unresolved premium editors, lifecycle policy, invoicing, domains,
+provider release, push, deployment, and public cutover outside this slice.
 
-## Batch 3A write scope
+## Batch 3B write scope
 
-Twenty-four reviewed implementation/test files cover the canonical compiler,
-fulfillment contract, migration 32, PostgreSQL authority, worker, publication
-adapters, production composition, and exact unit/integration proof. These two
-canonical ledgers record the checkpoint. No customer control, public copy,
-provider credential, lifecycle, invoice, registrar, push, deploy, DNS, or
-production state is changed by this checkpoint.
+Twenty-two reviewed implementation, test, and ledger files cover account
+schema v2, setup freshness, project/Checkout fencing, customer controls,
+PostgreSQL authority, production composition, and exact unit/integration proof.
+No migration, public copy, provider credential, lifecycle rule, invoice,
+registrar, push, deploy, DNS, or production state is changed by this checkpoint.

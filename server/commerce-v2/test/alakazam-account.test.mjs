@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ALAKAZAM_ACCOUNT_SCHEMA,
+  createAlakazamSiteSetupDigest,
   createAlakazamAccountService,
   createHeldHostedAlakazamAccount,
   createHostedAlakazamAccount
@@ -16,6 +17,12 @@ const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const RECEIPT_ID =
   "40000000-0000-4000-8000-000000000001";
+const VERSION_ID =
+  "50000000-0000-4000-8000-000000000001";
+const ADDRESS_ID =
+  "60000000-0000-4000-8000-000000000001";
+const ARTIFACT_DIGEST = "a".repeat(64);
+const SITE_UPDATED_AT = "2026-08-02T12:04:00.000Z";
 const PERIOD_START = "2026-08-02T12:00:00.000Z";
 const PERIOD_END = "2026-09-02T12:00:00.000Z";
 
@@ -29,8 +36,41 @@ function scope(overrides = {}) {
   };
 }
 
-function stored(overrides = {}) {
+function siteSnapshot({
+  state = null,
+  tierId = null,
+  revision = null,
+  ...overrides
+} = {}) {
   return {
+    acceptedVersionId: VERSION_ID,
+    artifactDigest: ARTIFACT_DIGEST,
+    configuredLook: "clear",
+    addressId: ADDRESS_ID,
+    addressLabel: "cedar-workshop",
+    hostname: "cedar-workshop.sitesourcery.me",
+    fulfillmentState: state,
+    fulfillmentTierId: tierId,
+    fulfillmentSubscriptionRevision: revision,
+    updatedAt: SITE_UPDATED_AT,
+    ...overrides
+  };
+}
+
+function siteForSubscription(subscription) {
+  if (!subscription) return siteSnapshot();
+  if (subscription.status === "pending") {
+    return siteSnapshot({ state: "prepared" });
+  }
+  return siteSnapshot({
+    state: "live",
+    tierId: subscription.tierId,
+    revision: subscription.revision
+  });
+}
+
+function stored(overrides = {}) {
+  const snapshot = {
     projectId: PROJECT_ID,
     downloadCreditAvailable: false,
     subscription: null,
@@ -38,6 +78,10 @@ function stored(overrides = {}) {
     receipts: [],
     ...overrides
   };
+  snapshot.site = Object.hasOwn(overrides, "site")
+    ? overrides.site
+    : siteForSubscription(snapshot.subscription);
+  return snapshot;
 }
 
 function activeSubscription(overrides = {}) {
@@ -98,7 +142,31 @@ test("an account without Alakazam exposes only the held catalog and available Do
   });
   assert.equal(result.subscription, null);
   assert.equal(result.nextRenewal, null);
+  assert.deepEqual(result.site, {
+    acceptedVersionId: VERSION_ID,
+    addressLabel: "cedar-workshop",
+    hostname: "cedar-workshop.sitesourcery.me",
+    look: {
+      lookId: "look_crystal",
+      label: "Crystal"
+    },
+    setupDigest: createAlakazamSiteSetupDigest({
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID,
+      acceptedVersionId: VERSION_ID,
+      artifactDigest: ARTIFACT_DIGEST,
+      configuredLook: "clear",
+      addressId: ADDRESS_ID,
+      addressLabel: "cedar-workshop",
+      hostname: "cedar-workshop.sitesourcery.me"
+    }),
+    state: "ready_for_checkout",
+    updatedAt: SITE_UPDATED_AT,
+    url: null
+  });
   assert.deepEqual(result.actions, {
+    configureSite: true,
     start: true,
     changeTier: false,
     manageBilling: false,
@@ -106,6 +174,183 @@ test("an account without Alakazam exposes only the held catalog and available Do
     reason: "only_start_composed"
   });
   assert.deepEqual(context.calls, [scope()]);
+});
+
+test("site setup stays configurable but cannot start until both an accepted look and platform address exist", async () => {
+  const cases = [
+    siteSnapshot({
+      acceptedVersionId: null,
+      artifactDigest: null,
+      configuredLook: null,
+      addressId: null,
+      addressLabel: null,
+      hostname: null,
+      updatedAt: null
+    }),
+    siteSnapshot({
+      addressId: null,
+      addressLabel: null,
+      hostname: null
+    })
+  ];
+  for (const site of cases) {
+    const result = await service(stored({ site }))
+      .account.read(scope());
+    assert.equal(result.site.state, "setup_required");
+    assert.equal(result.site.setupDigest, null);
+    assert.equal(result.site.url, null);
+    assert.deepEqual(result.actions, {
+      configureSite: true,
+      start: false,
+      changeTier: false,
+      manageBilling: false,
+      cancel: false,
+      reason: "site_setup_required"
+    });
+  }
+});
+
+test("the three internal Maker looks project only their stable public labels", async () => {
+  for (const [configuredLook, look] of [
+    ["clear", { lookId: "look_crystal", label: "Crystal" }],
+    ["warm", { lookId: "look_hearth", label: "Hearth" }],
+    ["arcane", { lookId: "look_midnight", label: "Midnight" }]
+  ]) {
+    const result = await service(
+      stored({ site: siteSnapshot({ configuredLook }) })
+    ).account.read(scope());
+    assert.deepEqual(result.site.look, look);
+  }
+});
+
+test("fulfillment states project payment, publication, live, and attention truth without inventing a live URL", async () => {
+  for (const entry of [
+    {
+      internal: "prepared",
+      customer: "payment_pending",
+      reason: "site_payment_pending",
+      subscription: null
+    },
+    {
+      internal: "pending",
+      customer: "publishing",
+      reason: "site_publishing",
+      subscription: activeSubscription()
+    },
+    {
+      internal: "live",
+      customer: "live",
+      reason: "only_tier_change_composed",
+      subscription: activeSubscription()
+    },
+    {
+      internal: "dark",
+      customer: "attention_required",
+      reason: "site_attention_required",
+      subscription: activeSubscription()
+    },
+    {
+      internal: "failed",
+      customer: "attention_required",
+      reason: "site_attention_required",
+      subscription: activeSubscription()
+    }
+  ]) {
+    const site = entry.internal === "prepared"
+      ? siteSnapshot({ state: entry.internal })
+      : siteSnapshot({
+          state: entry.internal,
+          tierId: "alakazam_35",
+          revision: 3
+        });
+    const result = await service(
+      stored({ subscription: entry.subscription, site })
+    ).account.read(scope());
+    assert.equal(result.site.state, entry.customer);
+    assert.equal(result.actions.reason, entry.reason);
+    assert.equal(
+      result.site.url,
+      entry.internal === "live"
+        ? "https://cedar-workshop.sitesourcery.me/"
+        : null
+    );
+  }
+});
+
+test("a paid subscription with missing website projection fails closed as attention instead of looking checkout-ready", async () => {
+  const subscription = activeSubscription();
+  const result = await service(
+    stored({
+      subscription,
+      site: siteSnapshot({
+        acceptedVersionId: null,
+        artifactDigest: null,
+        configuredLook: null,
+        addressId: null,
+        addressLabel: null,
+        hostname: null,
+        state: "failed",
+        tierId: subscription.tierId,
+        revision: subscription.revision
+      })
+    })
+  ).account.read(scope());
+  assert.equal(result.site.state, "attention_required");
+  assert.equal(result.site.setupDigest, null);
+  assert.equal(result.site.url, null);
+  assert.equal(result.actions.reason, "site_attention_required");
+  assert.equal(result.actions.start, false);
+  assert.equal(result.actions.changeTier, false);
+});
+
+test("an ambiguous pre-payment Checkout fails closed as attention without inventing paid fulfillment authority", async () => {
+  const result = await service(
+    stored({
+      site: siteSnapshot({
+        state: "failed",
+        tierId: null,
+        revision: null
+      })
+    })
+  ).account.read(scope());
+  assert.equal(result.state, "available");
+  assert.equal(result.site.state, "attention_required");
+  assert.equal(result.site.setupDigest.length, 64);
+  assert.equal(result.site.url, null);
+  assert.deepEqual(result.actions, {
+    configureSite: false,
+    start: false,
+    changeTier: false,
+    manageBilling: false,
+    cancel: false,
+    reason: "site_attention_required"
+  });
+});
+
+test("account projection fails closed when durable site bindings drift", async () => {
+  const malformed = [
+    siteSnapshot({ artifactDigest: null }),
+    siteSnapshot({ configuredLook: "unknown" }),
+    siteSnapshot({
+      hostname: "cedar-workshop.example.test"
+    }),
+    siteSnapshot({ state: "pending" }),
+    siteSnapshot({
+      state: "prepared",
+      tierId: "alakazam_25",
+      revision: 1
+    }),
+    siteSnapshot({ updatedAt: null })
+  ];
+  for (const site of malformed) {
+    await assert.rejects(
+      service(stored({ site })).account.read(scope()),
+      (error) => [
+        "invalid_input",
+        "repository_conflict"
+      ].includes(error.code)
+    );
+  }
 });
 
 test("every active paid tier exposes the composed tier-change action", async () => {
@@ -124,6 +369,7 @@ test("every active paid tier exposes the composed tier-change action", async () 
     );
     const result = await context.account.read(scope());
     assert.deepEqual(result.actions, {
+      configureSite: false,
       start: false,
       changeTier: true,
       manageBilling: false,
@@ -231,11 +477,15 @@ test("unsettled state, pending change, attention, and cancellation keep tier cha
     assert.deepEqual(
       result.actions,
       {
+        configureSite: false,
         start: false,
         changeTier: false,
         manageBilling: false,
         cancel: false,
-        reason: "customer_commands_not_composed"
+        reason:
+          entry.name === "activation pending"
+            ? "site_payment_pending"
+            : "customer_commands_not_composed"
       },
       entry.name
     );

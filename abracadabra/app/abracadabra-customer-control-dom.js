@@ -31,7 +31,7 @@
   }
 
   var ALAKAZAM_ACCOUNT_SCHEMA =
-    "sitesourcery.alakazam-account/v1";
+    "sitesourcery.alakazam-account/v2";
   var ALAKAZAM_QUOTE_SCHEMA =
     "sitesourcery.alakazam-tier-change-quote.v1";
   var ALAKAZAM_DISCLOSURE_SCHEMA =
@@ -46,6 +46,28 @@
     "active",
     "attention_required",
     "ended"
+  ];
+  var ALAKAZAM_SITE_STATES = [
+    "setup_required",
+    "ready_for_checkout",
+    "payment_pending",
+    "publishing",
+    "live",
+    "attention_required"
+  ];
+  var ALAKAZAM_PUBLIC_LOOKS = [
+    { lookId: "look_crystal", label: "Crystal" },
+    { lookId: "look_hearth", label: "Hearth" },
+    { lookId: "look_midnight", label: "Midnight" }
+  ];
+  var ALAKAZAM_ACTION_REASONS = [
+    "site_setup_required",
+    "only_start_composed",
+    "site_payment_pending",
+    "site_publishing",
+    "only_tier_change_composed",
+    "site_attention_required",
+    "customer_commands_not_composed"
   ];
   var UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -87,6 +109,115 @@
 
   function nullableIso(value) {
     return value === null || safeIso(value);
+  }
+
+  function safeAlakazamAddressLabel(value) {
+    return typeof value === "string"
+      && value.length <= 63
+      && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u
+        .test(value);
+  }
+
+  function verifiedAlakazamLook(value) {
+    if (value === null) return true;
+    if (!exactKeys(value, ["label", "lookId"])) {
+      return false;
+    }
+    return ALAKAZAM_PUBLIC_LOOKS.some(function (look) {
+      return value.lookId === look.lookId
+        && value.label === look.label;
+    });
+  }
+
+  function safeAlakazamSiteUrl(value) {
+    if (
+      !record(value)
+      || value.state !== "live"
+      || !safeAlakazamAddressLabel(value.addressLabel)
+      || value.hostname !==
+        value.addressLabel + ".sitesourcery.me"
+      || value.url !== "https://" + value.hostname + "/"
+    ) return null;
+    try {
+      var parsed = new URL(value.url);
+      return parsed.protocol === "https:"
+        && parsed.username === ""
+        && parsed.password === ""
+        && parsed.port === ""
+        && parsed.hostname === value.hostname
+        && parsed.pathname === "/"
+        && parsed.search === ""
+        && parsed.hash === ""
+        ? value.url
+        : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function verifiedAlakazamSite(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "acceptedVersionId",
+          "addressLabel",
+          "hostname",
+          "look",
+          "setupDigest",
+          "state",
+          "updatedAt",
+          "url"
+        ]
+      )
+      || !ALAKAZAM_SITE_STATES.includes(value.state)
+      || !verifiedAlakazamLook(value.look)
+    ) return false;
+    var hasVersion = value.acceptedVersionId !== null;
+    var hasAddress = value.addressLabel !== null;
+    var setupReady = hasVersion && hasAddress;
+    if (
+      hasVersion !== (value.look !== null)
+      || (
+        hasVersion
+          ? !UUID.test(text(value.acceptedVersionId))
+          : value.acceptedVersionId !== null
+      )
+      || hasAddress !== (value.hostname !== null)
+      || (
+        hasAddress
+          ? !safeAlakazamAddressLabel(value.addressLabel)
+            || value.hostname !==
+              value.addressLabel + ".sitesourcery.me"
+          : value.hostname !== null
+      )
+      || setupReady !== (value.setupDigest !== null)
+      || (
+        value.setupDigest !== null
+        && !SHA256.test(value.setupDigest)
+      )
+      || (
+        setupReady
+          ? value.state === "setup_required"
+          : ![
+              "setup_required",
+              "attention_required"
+            ].includes(value.state)
+      )
+      || (
+        hasVersion
+        || hasAddress
+        || value.state === "attention_required"
+          ? !safeIso(value.updatedAt)
+          : value.updatedAt !== null
+      )
+      || (
+        value.state === "live"
+          ? safeAlakazamSiteUrl(value) !== value.url
+          : value.url !== null
+      )
+    ) return false;
+    return true;
   }
 
   function verifiedAlakazamPrice(value) {
@@ -409,6 +540,8 @@
       && record(subscription.currentPeriod)
       && subscription.cancelAtPeriodEnd === false
       && account.pendingChange === null
+      && record(account.site)
+      && account.site.state === "live"
       && account.catalog.tiers.some(function (tier) {
         return record(tier)
           && Number.isSafeInteger(tier.rank)
@@ -416,14 +549,49 @@
       });
   }
 
-  function verifiedAlakazamAccount(value, projectId) {
-    var startAvailable = Boolean(
-      value
-      && value.subscription === null
-      && value.pendingChange === null
+  function expectedAlakazamActions(account) {
+    if (!record(account) || !record(account.site)) {
+      return null;
+    }
+    var configureSite = Boolean(
+      account.subscription === null
+      && account.pendingChange === null
+      && [
+        "setup_required",
+        "ready_for_checkout"
+      ].includes(account.site.state)
     );
-    var tierChangeAvailable =
-      alakazamTierChangeEligible(value);
+    var start = configureSite
+      && account.site.state === "ready_for_checkout";
+    var changeTier =
+      alakazamTierChangeEligible(account);
+    var reason =
+      account.site.state === "setup_required"
+      && configureSite
+        ? "site_setup_required"
+        : start
+          ? "only_start_composed"
+          : account.site.state === "payment_pending"
+            ? "site_payment_pending"
+            : account.site.state === "publishing"
+              ? "site_publishing"
+              : changeTier
+                ? "only_tier_change_composed"
+                : account.site.state ===
+                    "attention_required"
+                  ? "site_attention_required"
+                  : "customer_commands_not_composed";
+    return Object.freeze({
+      configureSite: configureSite,
+      start: start,
+      changeTier: changeTier,
+      reason: reason
+    });
+  }
+
+  function verifiedAlakazamAccount(value, projectId) {
+    var expectedActions =
+      expectedAlakazamActions(value);
     if (
       !exactKeys(
         value,
@@ -436,6 +604,7 @@
           "projectId",
           "receipts",
           "schema",
+          "site",
           "state",
           "subscription"
         ]
@@ -474,27 +643,30 @@
       || !Array.isArray(value.receipts)
       || value.receipts.length > 50
       || !value.receipts.every(verifiedAlakazamReceipt)
+      || !verifiedAlakazamSite(value.site)
+      || !expectedActions
       || !exactKeys(
         value.actions,
         [
           "cancel",
           "changeTier",
+          "configureSite",
           "manageBilling",
           "reason",
           "start"
         ]
       )
-      || value.actions.start !== startAvailable
-      || value.actions.changeTier !== tierChangeAvailable
+      || value.actions.configureSite !==
+        expectedActions.configureSite
+      || value.actions.start !== expectedActions.start
+      || value.actions.changeTier !==
+        expectedActions.changeTier
       || value.actions.manageBilling !== false
       || value.actions.cancel !== false
-      || value.actions.reason !== (
-        startAvailable
-          ? "only_start_composed"
-          : tierChangeAvailable
-            ? "only_tier_change_composed"
-          : "customer_commands_not_composed"
+      || !ALAKAZAM_ACTION_REASONS.includes(
+        value.actions.reason
       )
+      || value.actions.reason !== expectedActions.reason
       || !verifiedAlakazamRelationships(value)
     ) return null;
     var status = value.subscription
@@ -517,32 +689,50 @@
     );
     if (!account) return null;
     var copy = {
-      available: {
-        heading: "Alakazam is available for this project.",
+      setup_required: {
+        heading: "Finish your Alakazam website setup.",
         summary:
-          "There is no Alakazam subscription on this project."
+          "Use the accepted Maker look and choose its Site Sourcery address before checkout."
       },
-      activation_pending: {
-        heading: "Alakazam activation is in progress.",
+      ready_for_checkout: {
+        heading: "Your Alakazam website is ready for checkout.",
         summary:
-          "The selected Alakazam tier is waiting to become active."
+          "The accepted look and hosted address are locked into the setup shown below."
       },
-      active: {
+      payment_pending: {
+        heading: "Alakazam payment is being confirmed.",
+        summary:
+          "Your setup is saved. Site Sourcery will publish automatically after payment and activation are confirmed."
+      },
+      publishing: {
+        heading: "Your Alakazam website is publishing.",
+        summary:
+          "The accepted setup is being prepared at the hosted address shown below."
+      },
+      live: {
         heading: "Alakazam is active.",
         summary:
-          "The current plan and renewal details are shown below."
+          "Your website is live. The current plan and renewal details are shown below."
       },
       attention_required: {
+        heading: "This Alakazam website needs attention.",
+        summary:
+          "The website is not shown as live. Your saved setup and billing details remain visible below."
+      }
+    }[account.site.state];
+    if (account.state === "attention_required") {
+      copy = {
         heading: "This Alakazam account needs attention.",
         summary:
-          "The payment state and any grace date are shown below."
-      },
-      ended: {
+          "The website, payment state, and any grace date are shown below."
+      };
+    } else if (account.state === "ended") {
+      copy = {
         heading: "This Alakazam subscription has ended.",
         summary:
-          "The last recorded plan and receipts remain visible below."
-      }
-    }[account.state];
+          "The saved website setup, last plan, and receipts remain visible below."
+      };
+    }
     return Object.freeze({
       account: account,
       heading: copy.heading,
@@ -991,9 +1181,23 @@
       "div",
       "customer-alakazam-fact"
     );
+    var detail = accountElement(
+      documentRef,
+      "dd",
+      ""
+    );
+    if (
+      value
+      && typeof value === "object"
+      && typeof detail.appendChild === "function"
+    ) {
+      detail.appendChild(value);
+    } else {
+      detail.textContent = value;
+    }
     row.append(
       accountElement(documentRef, "dt", "", label),
-      accountElement(documentRef, "dd", "", value)
+      detail
     );
     list.appendChild(row);
   }
@@ -1007,6 +1211,152 @@
     return tier ? tier.name : text(tierId);
   }
 
+  function renderAlakazamSiteSetup(
+    documentRef,
+    body,
+    account,
+    command,
+    actions
+  ) {
+    if (account.actions.configureSite !== true) return;
+    var section = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-site-setup"
+    );
+    section.setAttribute(
+      "aria-labelledby",
+      "customer-alakazam-site-setup-title"
+    );
+    var heading = accountElement(
+      documentRef,
+      "h4",
+      "",
+      "Site Sourcery address"
+    );
+    heading.id = "customer-alakazam-site-setup-title";
+    var help = accountElement(
+      documentRef,
+      "p",
+      "customer-alakazam-site-help",
+      account.site.acceptedVersionId
+        ? "Choose the platform label for the accepted "
+          + (account.site.look
+            ? account.site.look.label
+            : "Maker")
+          + " look. Saving a different address clears any quote currently under review."
+        : "Accept a Maker look before choosing its hosted address."
+    );
+    help.id = "customer-alakazam-site-help";
+    var form = accountElement(
+      documentRef,
+      "form",
+      "customer-alakazam-site-form"
+    );
+    form.setAttribute("data-alakazam-site-form", "");
+    var label = accountElement(
+      documentRef,
+      "label",
+      "",
+      "Platform address label"
+    );
+    label.setAttribute(
+      "for",
+      "customer-alakazam-address-label"
+    );
+    var address = accountElement(
+      documentRef,
+      "div",
+      "customer-alakazam-site-address"
+    );
+    var input = accountElement(
+      documentRef,
+      "input",
+      ""
+    );
+    input.id = "customer-alakazam-address-label";
+    input.name = "alakazamAddressLabel";
+    input.type = "text";
+    input.value = command.setupCommandId
+      && safeAlakazamAddressLabel(command.setupLabel)
+        ? command.setupLabel
+        : account.site.addressLabel || "";
+    input.maxLength = 63;
+    input.required = true;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("autocapitalize", "none");
+    input.setAttribute("inputmode", "url");
+    input.setAttribute(
+      "pattern",
+      "[a-z0-9](?:[a-z0-9\\-]{0,61}[a-z0-9])?"
+    );
+    input.setAttribute(
+      "aria-describedby",
+      "customer-alakazam-site-suffix customer-alakazam-site-help"
+    );
+    input.setAttribute("data-alakazam-address-label", "");
+    var suffix = accountElement(
+      documentRef,
+      "span",
+      "",
+      ".sitesourcery.me"
+    );
+    suffix.id = "customer-alakazam-site-suffix";
+    var save = accountElement(
+      documentRef,
+      "button",
+      "spark-button spark-button-primary",
+      command.phase === "configuring"
+        ? "Saving address…"
+        : "Save hosted address"
+    );
+    save.type = "submit";
+    save.setAttribute("data-alakazam-save-address", "");
+    function syncSave() {
+      save.disabled =
+        !account.site.acceptedVersionId
+        || !safeAlakazamAddressLabel(
+          text(input.value)
+        )
+        || command.phase === "configuring";
+    }
+    input.addEventListener("input", syncSave);
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var addressLabel = text(input.value);
+      if (
+        !save.disabled
+        && typeof actions.configure === "function"
+      ) actions.configure(addressLabel);
+    });
+    address.append(input, suffix);
+    form.append(label, address, save);
+    section.append(heading, help, form);
+    if (command.setupCommandId && command.error) {
+      var error = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-command-error",
+        command.error
+      );
+      error.setAttribute("role", "alert");
+      section.appendChild(error);
+    } else if (command.phase === "configuring") {
+      var pending = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-command-state",
+        "Saving the address and refreshing exact website setup…"
+      );
+      pending.setAttribute("role", "status");
+      pending.setAttribute("aria-live", "polite");
+      section.appendChild(pending);
+    }
+    syncSave();
+    body.appendChild(section);
+  }
+
   function renderAlakazamQuoteReview(
     documentRef,
     body,
@@ -1016,7 +1366,7 @@
     actions
   ) {
     var selected = command || {};
-    if (selected.error) {
+    if (selected.error && !selected.setupCommandId) {
       var error = accountElement(
         documentRef,
         "p",
@@ -1315,6 +1665,51 @@
       "dl",
       "customer-alakazam-facts"
     );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Website status",
+      accountWords(account.site.state)
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Accepted look",
+      account.site.look
+        ? account.site.look.label
+        : "No accepted Maker look yet"
+    );
+    var liveUrl = safeAlakazamSiteUrl(account.site);
+    if (liveUrl) {
+      var liveLink = accountElement(
+        documentRef,
+        "a",
+        "customer-alakazam-live-link",
+        account.site.hostname
+      );
+      liveLink.href = liveUrl;
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Hosted address",
+        liveLink
+      );
+    } else {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Hosted address",
+        account.site.hostname || "Not chosen yet"
+      );
+    }
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Setup updated",
+      account.site.updatedAt
+        ? accountDate(account.site.updatedAt)
+        : "Not saved yet"
+    );
     if (account.subscription) {
       appendAccountFact(
         documentRef,
@@ -1448,6 +1843,13 @@
       }
     }
     body.appendChild(facts);
+    renderAlakazamSiteSetup(
+      documentRef,
+      body,
+      account,
+      command,
+      actions
+    );
 
     var commandKind = account.subscription
       ? account.actions.changeTier === true
@@ -1629,20 +2031,33 @@
       receipts.appendChild(receiptList);
     }
     body.appendChild(receipts);
+    var actionNote = {
+      site_setup_required:
+        "Finish the accepted Maker setup above before reviewing a subscription quote.",
+      site_payment_pending:
+        "Payment is being confirmed. Site Sourcery will not start another charge from this status panel.",
+      site_publishing:
+        "Publication is automatic. This page will show the verified live address when it is ready.",
+      site_attention_required:
+        "The saved website needs attention. No manual publish, rollback, or unpublish action is available here."
+    }[account.actions.reason];
+    if (!actionNote) {
+      actionNote = account.subscription
+        ? account.actions.changeTier === true
+          ? capabilities.alakazamQuote === true
+            ? "Choose a different tier and review the exact terms. Upgrades use secure payment; downgrades charge and refund $0 now and take effect at renewal."
+            : "Tier-change quotes are not open yet. Nothing can be charged or scheduled."
+          : "Tier changes and billing management are not available in this panel yet."
+        : capabilities.alakazamQuote === true
+          ? "Choose a tier, review the exact quote, and accept it before secure payment."
+          : "Subscription checkout is not open yet. Nothing can be charged.";
+    }
     body.appendChild(
       accountElement(
         documentRef,
         "p",
         "customer-alakazam-actions-note",
-        account.subscription
-          ? account.actions.changeTier === true
-            ? capabilities.alakazamQuote === true
-              ? "Choose a different tier and review the exact terms. Upgrades use secure payment; downgrades charge and refund $0 now and take effect at renewal."
-              : "Tier-change quotes are not open yet. Nothing can be charged or scheduled."
-            : "Tier changes and billing management are not available in this panel yet."
-          : capabilities.alakazamQuote === true
-            ? "Choose a tier, review the exact quote, and accept it before secure payment."
-            : "Subscription checkout is not open yet. Nothing can be charged."
+        actionNote
       )
     );
   }
@@ -1667,7 +2082,7 @@
       documentRef,
       "p",
       "spark-kicker",
-      "Project billing"
+      "Project website & billing"
     );
     var heading = accountElement(
       documentRef,
@@ -1696,7 +2111,7 @@
       documentRef,
       "button",
       "spark-button",
-      "Try loading billing again"
+      "Try loading website and billing again"
     );
     retryButton.type = "button";
     retryButton.hidden = true;
@@ -1743,7 +2158,10 @@
         );
         panel.setAttribute(
           "aria-busy",
-          String(readState.phase === "loading")
+          String(
+            readState.phase === "loading"
+            || command.phase === "configuring"
+          )
         );
         retryButton.disabled =
           readState.phase === "loading";
@@ -1758,14 +2176,14 @@
               documentRef,
               "p",
               "customer-alakazam-placeholder",
-              "Tier, renewal, credit, and receipt details are loading."
+              "Website setup, tier, renewal, credit, and receipt details are loading."
             )
           );
           return;
         }
         if (readState.phase === "error") {
           status.textContent =
-            "Billing details could not be loaded.";
+            "Website and billing details could not be loaded.";
           body.replaceChildren(
             accountElement(
               documentRef,
@@ -1777,7 +2195,9 @@
           return;
         }
         status.textContent =
-          command.phase === "scheduling"
+          command.phase === "configuring"
+            ? "Saving the hosted address and refreshing website setup…"
+            : command.phase === "scheduling"
             ? "Scheduling the accepted downgrade…"
             : confirmedDowngrade
               ? command.refreshState === "error"
@@ -1785,7 +2205,7 @@
                 : command.refreshState === "loading"
                   ? "Downgrade scheduled. Refreshing billing details…"
                   : "Downgrade scheduled. Billing details updated."
-              : "Billing details loaded.";
+              : "Website and billing details loaded.";
         renderAlakazamAccountBody(
           documentRef,
           body,
@@ -2237,6 +2657,7 @@
       phase: "idle",
       presentation: null
     };
+    var alakazamReadAcceptedVersionId = "";
     var alakazamCommandSequence = 0;
     var alakazamCommand = {
       projectId: "",
@@ -2246,6 +2667,8 @@
       quoteCommandId: "",
       checkoutCommandId: "",
       scheduleCommandId: "",
+      setupCommandId: "",
+      setupLabel: "",
       error: ""
     };
     var checkoutReturn =
@@ -2328,6 +2751,9 @@
           },
           downgrade: function () {
             requestAlakazamDowngrade();
+          },
+          configure: function (addressLabel) {
+            requestAlakazamSiteSetup(addressLabel);
           }
         }
       );
@@ -2417,6 +2843,8 @@
         quoteCommandId: "",
         checkoutCommandId: "",
         scheduleCommandId: "",
+        setupCommandId: "",
+        setupLabel: "",
         error: ""
       };
     }
@@ -2455,6 +2883,13 @@
 
     function requestAlakazamAccount(projectId) {
       var selectedProjectId = text(projectId);
+      var requestedAcceptedVersionId = idOf(
+        acceptedProjectVersion(
+          lastState && lastState.project
+        )
+      );
+      alakazamReadAcceptedVersionId =
+        requestedAcceptedVersionId;
       var sequence = ++alakazamReadSequence;
       resetAlakazamCommand(selectedProjectId);
       alakazamRead = {
@@ -2485,6 +2920,15 @@
               selectedProjectId
             )
           ) return null;
+          if (
+            idOf(acceptedProjectVersion(
+              lastState && lastState.project
+            )) !== requestedAcceptedVersionId
+          ) {
+            return requestAlakazamAccount(
+              selectedProjectId
+            );
+          }
           var presentation =
             alakazamAccountPresentation(
               result,
@@ -2510,6 +2954,15 @@
               selectedProjectId
             )
           ) return null;
+          if (
+            idOf(acceptedProjectVersion(
+              lastState && lastState.project
+            )) !== requestedAcceptedVersionId
+          ) {
+            return requestAlakazamAccount(
+              selectedProjectId
+            );
+          }
           alakazamRead = {
             projectId: selectedProjectId,
             phase: "error",
@@ -2518,6 +2971,218 @@
           renderAlakazamPanel();
           return null;
         });
+    }
+
+    function refreshAlakazamAccountAfterSetup(
+      projectId,
+      addressLabel,
+      acceptedVersionId,
+      priorAddressLabel,
+      priorSetupDigest
+    ) {
+      var selectedProjectId = text(projectId);
+      var selectedLabel = text(addressLabel);
+      var sequence = ++alakazamReadSequence;
+      resetAlakazamCommand(selectedProjectId);
+      alakazamRead = {
+        projectId: selectedProjectId,
+        phase: "loading",
+        presentation: null
+      };
+      renderAlakazamPanel();
+      alakazamPanel.focusStatus();
+      if (
+        !client
+        || typeof client.getAlakazamAccount !==
+          "function"
+      ) {
+        alakazamRead = {
+          projectId: selectedProjectId,
+          phase: "error",
+          presentation: null
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      return client
+        .getAlakazamAccount(selectedProjectId)
+        .then(function (result) {
+          if (
+            !alakazamReadIsCurrent(
+              sequence,
+              selectedProjectId
+            )
+          ) return null;
+          var presentation =
+            alakazamAccountPresentation(
+              result,
+              selectedProjectId
+            );
+          var refreshed = presentation
+            && presentation.account;
+          if (
+            !refreshed
+            || refreshed.site.acceptedVersionId !==
+              acceptedVersionId
+            || refreshed.site.addressLabel !==
+              selectedLabel
+            || refreshed.site.hostname !==
+              selectedLabel + ".sitesourcery.me"
+            || !SHA256.test(
+              text(refreshed.site.setupDigest)
+            )
+            || (
+              priorAddressLabel !== selectedLabel
+              && priorSetupDigest
+              && refreshed.site.setupDigest ===
+                priorSetupDigest
+            )
+          ) {
+            throw new Error(
+              "The refreshed website setup did not match the saved address."
+            );
+          }
+          alakazamRead = {
+            projectId: selectedProjectId,
+            phase: "ready",
+            presentation: presentation
+          };
+          renderAlakazamPanel();
+          alakazamPanel.focusStatus();
+          return refreshed;
+        })
+        .catch(function () {
+          if (
+            !alakazamReadIsCurrent(
+              sequence,
+              selectedProjectId
+            )
+          ) return null;
+          alakazamRead = {
+            projectId: selectedProjectId,
+            phase: "error",
+            presentation: null
+          };
+          renderAlakazamPanel();
+          alakazamPanel.focusStatus();
+          return null;
+        });
+    }
+
+    function requestAlakazamSiteSetup(addressLabelInput) {
+      var projectId = idOf(lastState.project);
+      var account = currentAlakazamAccount(projectId);
+      var addressLabel = text(addressLabelInput);
+      var accepted = acceptedProjectVersion(
+        lastState.project
+      );
+      var acceptedVersionId = idOf(accepted);
+      if (
+        !projectId
+        || !account
+        || account.actions.configureSite !== true
+        || !account.site
+        || !acceptedVersionId
+        || account.site.acceptedVersionId !==
+          acceptedVersionId
+        || !safeAlakazamAddressLabel(addressLabel)
+        || !client
+        || typeof client.selectAddress !== "function"
+      ) return Promise.resolve(null);
+
+      var canReuse =
+        alakazamCommand.projectId === projectId
+        && alakazamCommand.setupLabel === addressLabel
+        && UUID.test(alakazamCommand.setupCommandId);
+      var commandId;
+      try {
+        commandId = canReuse
+          ? alakazamCommand.setupCommandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: "",
+          phase: "idle",
+          quote: null,
+          quoteCommandId: "",
+          checkoutCommandId: "",
+          scheduleCommandId: "",
+          setupCommandId: "",
+          setupLabel: addressLabel,
+          error: explain(
+            error,
+            "The hosted address could not be saved."
+          )
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      var priorAddressLabel = account.site.addressLabel;
+      var priorSetupDigest = account.site.setupDigest;
+      var sequence = ++alakazamCommandSequence;
+      alakazamCommand = {
+        projectId: projectId,
+        selectedTierId: "",
+        phase: "configuring",
+        quote: null,
+        quoteCommandId: "",
+        checkoutCommandId: "",
+        scheduleCommandId: "",
+        setupCommandId: commandId,
+        setupLabel: addressLabel,
+        error: ""
+      };
+      renderAlakazamPanel();
+      alakazamPanel.focusStatus();
+      return client.selectAddress(
+        projectId,
+        { kind: "licensed", label: addressLabel },
+        { idempotencyKey: commandId }
+      ).then(function () {
+        var currentAccepted = acceptedProjectVersion(
+          lastState.project
+        );
+        if (
+          !alakazamCommandIsCurrent(
+            sequence,
+            projectId
+          )
+          || idOf(currentAccepted) !== acceptedVersionId
+        ) return null;
+        return refreshAlakazamAccountAfterSetup(
+          projectId,
+          addressLabel,
+          acceptedVersionId,
+          priorAddressLabel,
+          priorSetupDigest
+        );
+      }).catch(function (error) {
+        if (!alakazamCommandIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        alakazamCommand = {
+          projectId: projectId,
+          selectedTierId: "",
+          phase: "idle",
+          quote: null,
+          quoteCommandId: "",
+          checkoutCommandId: "",
+          scheduleCommandId: "",
+          setupCommandId: commandId,
+          setupLabel: addressLabel,
+          error: explain(
+            error,
+            "The hosted address could not be saved. No billing request was sent."
+          )
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return null;
+      });
     }
 
     function refreshAlakazamAccountAfterDowngrade(
@@ -2800,6 +3465,13 @@
         || typeof client.createAlakazamCheckout !==
           "function"
       ) return Promise.resolve(null);
+      var siteSetupDigest = quote.changeKind === "start"
+        ? account.site.setupDigest
+        : null;
+      if (
+        quote.changeKind === "start"
+        && !SHA256.test(text(siteSetupDigest))
+      ) return Promise.resolve(null);
       var commandId;
       try {
         commandId = UUID.test(
@@ -2832,7 +3504,8 @@
         quote.quoteId,
         {
           acceptedDisclosureDigest:
-            quote.disclosureDigest
+            quote.disclosureDigest,
+          siteSetupDigest: siteSetupDigest
         },
         { idempotencyKey: commandId }
       ).then(function (result) {
@@ -3025,6 +3698,7 @@
         ? idOf(state.project)
         : "";
       if (!projectId) {
+        alakazamReadAcceptedVersionId = "";
         if (alakazamRead.projectId) {
           alakazamReadSequence += 1;
           alakazamRead = {
@@ -3040,6 +3714,26 @@
         return;
       }
       if (alakazamRead.projectId !== projectId) {
+        requestAlakazamAccount(projectId);
+        return;
+      }
+      if (
+        alakazamRead.phase === "error"
+        && idOf(acceptedProjectVersion(state.project)) !==
+          alakazamReadAcceptedVersionId
+      ) {
+        requestAlakazamAccount(projectId);
+        return;
+      }
+      if (
+        alakazamRead.phase === "ready"
+        && alakazamRead.presentation
+        && idOf(acceptedProjectVersion(state.project)) !==
+          text(
+            alakazamRead.presentation.account.site
+              .acceptedVersionId
+          )
+      ) {
         requestAlakazamAccount(projectId);
         return;
       }
@@ -4108,6 +4802,8 @@
       registrationOutcome,
     registrationTokenFromLocation:
       registrationTokenFromLocation,
+    safeAlakazamSiteUrl:
+      safeAlakazamSiteUrl,
     safeCheckoutDestination:
       safeCheckoutDestination,
     verifiedAlakazamAccount:

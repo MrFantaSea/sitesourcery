@@ -11,6 +11,7 @@
   "use strict";
 
   var WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+  var SHA256 = /^[a-f0-9]{64}$/u;
   var FORBIDDEN_AUTHORITY_FIELDS = new Set([
     "amount",
     "amountMinor",
@@ -80,6 +81,17 @@
       throw new APIError({ code: "INVALID_INPUT", message: "A supplied value is too long." });
     }
     return text || null;
+  }
+
+  function nullableDigest(value, field) {
+    if (value === null) return null;
+    if (typeof value !== "string" || !SHA256.test(value)) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " must be an exact SHA-256 digest."
+      });
+    }
+    return value;
   }
 
   function integerBetween(value, field, minimum, maximum) {
@@ -674,6 +686,10 @@
               source.acceptedDisclosureDigest,
               "Accepted Alakazam disclosure digest",
               100
+            ),
+            siteSetupDigest: nullableDigest(
+              source.siteSetupDigest,
+              "Alakazam site setup digest"
             )
           },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey

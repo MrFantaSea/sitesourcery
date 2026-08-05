@@ -34,6 +34,9 @@ const ISSUED_AT = "2026-08-02T12:00:00.000Z";
 const EXPIRES_AT = "2026-08-02T12:30:00.000Z";
 const PERIOD_START = "2026-08-02T11:00:00.000Z";
 const PERIOD_END = "2026-09-02T11:00:00.000Z";
+const ARTIFACT_DIGEST = digest("accepted quote artifact");
+const ADDRESS_LABEL = "cedar";
+const HOSTNAME = `${ADDRESS_LABEL}.sitesourcery.me`;
 
 function result(rows = []) {
   return {
@@ -77,7 +80,8 @@ function harness({
   currentSubscription = null,
   pendingSchedule = null,
   entitlementId = null,
-  projectAvailable = true
+  projectAvailable = true,
+  siteReady = true
 } = {}) {
   const state = {
     quote: null,
@@ -117,6 +121,65 @@ function harness({
         normalized.includes("and id = $2")
       ) {
         return state.quote ? result([state.quote]) : result();
+      }
+
+      if (
+        normalized.includes(
+          "from ss.alakazam_fulfillment_projection projection"
+        )
+      ) {
+        if (!currentSubscription || !siteReady) return result();
+        return result([
+          {
+            fulfillment_state: "live",
+            effective_tier_id: currentSubscription.tier_id,
+            subscription_revision: currentSubscription.revision,
+            projection_hostname: HOSTNAME,
+            updated_at: ISSUED_AT,
+            customer_user_id:
+              currentSubscription.customer_user_id,
+            version_id: VERSION_ID,
+            artifact_digest: ARTIFACT_DIGEST,
+            address_id: ADDRESS_ID,
+            intent_hostname: HOSTNAME,
+            configured_look: "clear",
+            stored_artifact_digest: ARTIFACT_DIGEST,
+            version_state: "accepted_release",
+            address_kind: "licensed",
+            address_ownership: "licensed",
+            address_label: ADDRESS_LABEL,
+            serving_hostname: HOSTNAME,
+            address_state: "configured",
+            current_address_id: ADDRESS_ID
+          }
+        ]);
+      }
+
+      if (
+        normalized.includes("left join lateral") &&
+        normalized.includes("from ss.projects project")
+      ) {
+        return result([
+          siteReady
+            ? {
+                version_id: VERSION_ID,
+                artifact_digest: ARTIFACT_DIGEST,
+                configured_look: "clear",
+                address_id: ADDRESS_ID,
+                address_label: ADDRESS_LABEL,
+                serving_hostname: HOSTNAME,
+                updated_at: ISSUED_AT
+              }
+            : {
+                version_id: null,
+                artifact_digest: null,
+                configured_look: null,
+                address_id: null,
+                address_label: null,
+                serving_hostname: null,
+                updated_at: null
+              }
+        ]);
       }
 
       if (

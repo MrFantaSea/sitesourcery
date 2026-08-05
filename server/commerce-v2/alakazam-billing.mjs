@@ -189,6 +189,7 @@ function exactCustomerInput(value) {
       "projectId",
       "provisionId",
       "quoteId",
+      "siteSetupDigest",
       "tenantId"
     ],
     "invalid_input",
@@ -209,7 +210,14 @@ function exactCustomerInput(value) {
     acceptedDisclosureDigest: requiredDigest(
       value.acceptedDisclosureDigest,
       "acceptedDisclosureDigest"
-    )
+    ),
+    siteSetupDigest:
+      value.siteSetupDigest === null
+        ? null
+        : requiredDigest(
+            value.siteSetupDigest,
+            "siteSetupDigest"
+          )
   });
 }
 
@@ -222,6 +230,7 @@ function exactCheckoutInput(value) {
       "customerId",
       "projectId",
       "quoteId",
+      "siteSetupDigest",
       "tenantId"
     ],
     "invalid_input",
@@ -239,7 +248,14 @@ function exactCheckoutInput(value) {
     acceptedDisclosureDigest: requiredDigest(
       value.acceptedDisclosureDigest,
       "acceptedDisclosureDigest"
-    )
+    ),
+    siteSetupDigest:
+      value.siteSetupDigest === null
+        ? null
+        : requiredDigest(
+            value.siteSetupDigest,
+            "siteSetupDigest"
+          )
   });
 }
 
@@ -958,7 +974,8 @@ export function createAlakazamBillingService({
         quoteId: selected.quoteId,
         provisionId: selected.commandId,
         acceptedDisclosureDigest:
-          selected.acceptedDisclosureDigest
+          selected.acceptedDisclosureDigest,
+        siteSetupDigest: selected.siteSetupDigest
       });
       const claimedAt = exactClock(ports.clock);
       const claim = await ports.repository
@@ -971,6 +988,7 @@ export function createAlakazamBillingService({
           stripeCustomerId: binding.stripeCustomerId,
           acceptedDisclosureDigest:
             selected.acceptedDisclosureDigest,
+          siteSetupDigest: selected.siteSetupDigest,
           claimedAt
         });
       if (claim?.status === "ready") {

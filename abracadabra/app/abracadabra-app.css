@@ -225,6 +225,16 @@
 .customer-alakazam-fact:nth-child(even){border-left:1px solid var(--spark-line)}
 .customer-alakazam-fact dt{color:var(--spark-faint)}
 .customer-alakazam-fact dd{min-width:0;margin:0;overflow-wrap:anywhere;color:var(--spark-text);font-weight:750}
+.customer-alakazam-live-link{color:var(--spark-mint);text-decoration-thickness:.08em;text-underline-offset:.16em}
+.customer-alakazam-site-setup{display:grid;gap:.7rem;margin:1.2rem 0;padding:1rem;border:1px solid rgba(130,231,196,.28);border-radius:.9rem;background:rgba(130,231,196,.045)}
+.customer-alakazam-site-setup h4,.customer-alakazam-site-help{margin:0}
+.customer-alakazam-site-help{color:var(--spark-muted);font-size:.86rem;line-height:1.55}
+.customer-alakazam-site-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.55rem .75rem;align-items:end}
+.customer-alakazam-site-form>label{grid-column:1/-1;color:var(--spark-text);font-size:.8rem;font-weight:800}
+.customer-alakazam-site-address{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;overflow:hidden;border:1px solid var(--spark-line);border-radius:.7rem;background:#0d0813}
+.customer-alakazam-site-address:focus-within{border-color:var(--spark-mint);outline:3px solid rgba(130,231,196,.16);outline-offset:1px}
+.customer-alakazam-site-address input{min-width:0;min-height:46px;padding:.7rem .8rem;border:0;color:var(--spark-text);background:transparent;font:inherit;outline:0}
+.customer-alakazam-site-address span{padding-right:.8rem;color:var(--spark-faint);font-size:.8rem;white-space:nowrap}
 .customer-alakazam-tiers,.customer-alakazam-receipts{margin-top:1.2rem}
 .customer-alakazam-tiers h4,.customer-alakazam-receipts h4{margin:0 0 .65rem}
 .customer-alakazam-tier-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin:0;padding:0;list-style:none}
@@ -379,6 +389,9 @@
   .customer-alakazam-fact{grid-template-columns:1fr;gap:.25rem}
   .customer-alakazam-fact:nth-child(2){border-top:1px solid var(--spark-line)}
   .customer-alakazam-fact:nth-child(even){border-left:0}
+  .customer-alakazam-site-form,.customer-alakazam-site-address{grid-template-columns:1fr}
+  .customer-alakazam-site-address span{padding:0 .8rem .7rem}
+  .customer-alakazam-site-form>.spark-button{width:100%}
   .customer-alakazam-receipt{grid-template-columns:1fr}
   .customer-separate-help{display:grid}
   .spark-progress{grid-template-columns:repeat(3,1fr)}

@@ -1,7 +1,9 @@
 import {
   clone,
   deepFreeze,
+  digest,
   invariant,
+  requiredDigest,
   requiredIso,
   requiredText
 } from "./canonical.mjs";
@@ -10,7 +12,32 @@ import {
 } from "./alakazam.mjs";
 
 export const ALAKAZAM_ACCOUNT_SCHEMA =
-  "sitesourcery.alakazam-account/v1";
+  "sitesourcery.alakazam-account/v2";
+export const ALAKAZAM_SITE_SETUP_SCHEMA =
+  "sitesourcery.alakazam-site-setup/v1";
+
+const PLATFORM_BASE_DOMAIN = "sitesourcery.me";
+const PUBLIC_LOOKS = Object.freeze({
+  clear: Object.freeze({
+    lookId: "look_crystal",
+    label: "Crystal"
+  }),
+  warm: Object.freeze({
+    lookId: "look_hearth",
+    label: "Hearth"
+  }),
+  arcane: Object.freeze({
+    lookId: "look_midnight",
+    label: "Midnight"
+  })
+});
+const FULFILLMENT_STATES = new Set([
+  "prepared",
+  "pending",
+  "live",
+  "dark",
+  "failed"
+]);
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -64,6 +91,97 @@ function exactUuid(value, field) {
     `${field} is invalid`
   );
   return selected;
+}
+
+function exactConfiguredLook(value, field) {
+  const selected = requiredText(value, field, 20);
+  invariant(
+    Object.hasOwn(PUBLIC_LOOKS, selected),
+    "invalid_input",
+    `${field} is invalid`
+  );
+  return selected;
+}
+
+function exactAddressLabel(value, field) {
+  const selected = requiredText(value, field, 63);
+  invariant(
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(
+      selected
+    ),
+    "invalid_input",
+    `${field} is invalid`
+  );
+  return selected;
+}
+
+function exactPlatformHostname(value, label, field) {
+  const selected = requiredText(value, field, 253);
+  invariant(
+    selected === `${label}.${PLATFORM_BASE_DOMAIN}`,
+    "invalid_input",
+    `${field} is invalid`
+  );
+  return selected;
+}
+
+export function createAlakazamSiteSetupDigest(value) {
+  exactKeys(
+    value,
+    [
+      "acceptedVersionId",
+      "addressId",
+      "addressLabel",
+      "artifactDigest",
+      "configuredLook",
+      "customerId",
+      "hostname",
+      "projectId",
+      "tenantId"
+    ],
+    "siteSetup"
+  );
+  const addressLabel = exactAddressLabel(
+    value.addressLabel,
+    "siteSetup.addressLabel"
+  );
+  return digest({
+    schema: ALAKAZAM_SITE_SETUP_SCHEMA,
+    tenantId: exactUuid(
+      value.tenantId,
+      "siteSetup.tenantId"
+    ),
+    customerId: exactUuid(
+      value.customerId,
+      "siteSetup.customerId"
+    ),
+    projectId: exactUuid(
+      value.projectId,
+      "siteSetup.projectId"
+    ),
+    acceptedVersionId: exactUuid(
+      value.acceptedVersionId,
+      "siteSetup.acceptedVersionId"
+    ),
+    artifactDigest: requiredDigest(
+      value.artifactDigest,
+      "siteSetup.artifactDigest"
+    ),
+    configuredLook: exactConfiguredLook(
+      value.configuredLook,
+      "siteSetup.configuredLook"
+    ),
+    addressId: exactUuid(
+      value.addressId,
+      "siteSetup.addressId"
+    ),
+    addressLabel,
+    hostname: exactPlatformHostname(
+      value.hostname,
+      addressLabel,
+      "siteSetup.hostname"
+    )
+  });
 }
 
 function nonnegativeInteger(value, field) {
@@ -387,6 +505,184 @@ function exactReceipts(value) {
   });
 }
 
+function exactRepositorySite(value, scope, catalog) {
+  exactKeys(
+    value,
+    [
+      "acceptedVersionId",
+      "addressId",
+      "addressLabel",
+      "artifactDigest",
+      "configuredLook",
+      "fulfillmentState",
+      "fulfillmentSubscriptionRevision",
+      "fulfillmentTierId",
+      "hostname",
+      "updatedAt"
+    ],
+    "accountSnapshot.site"
+  );
+  const hasVersion = value.acceptedVersionId !== null;
+  invariant(
+    hasVersion === (value.artifactDigest !== null) &&
+      hasVersion === (value.configuredLook !== null),
+    "repository_conflict",
+    "the customer website version binding changed",
+    { status: 500 }
+  );
+  const acceptedVersionId = hasVersion
+    ? exactUuid(
+        value.acceptedVersionId,
+        "accountSnapshot.site.acceptedVersionId"
+      )
+    : null;
+  const artifactDigest = hasVersion
+    ? requiredDigest(
+        value.artifactDigest,
+        "accountSnapshot.site.artifactDigest"
+      )
+    : null;
+  const configuredLook = hasVersion
+    ? exactConfiguredLook(
+        value.configuredLook,
+        "accountSnapshot.site.configuredLook"
+      )
+    : null;
+
+  const hasAddress = value.addressId !== null;
+  invariant(
+    hasAddress === (value.addressLabel !== null) &&
+      hasAddress === (value.hostname !== null),
+    "repository_conflict",
+    "the customer website address binding changed",
+    { status: 500 }
+  );
+  const addressId = hasAddress
+    ? exactUuid(
+        value.addressId,
+        "accountSnapshot.site.addressId"
+      )
+    : null;
+  const addressLabel = hasAddress
+    ? exactAddressLabel(
+        value.addressLabel,
+        "accountSnapshot.site.addressLabel"
+      )
+    : null;
+  const hostname = hasAddress
+    ? exactPlatformHostname(
+        value.hostname,
+        addressLabel,
+        "accountSnapshot.site.hostname"
+      )
+    : null;
+
+  const hasFulfillment = value.fulfillmentState !== null;
+  const fulfillmentState = hasFulfillment
+    ? requiredText(
+        value.fulfillmentState,
+        "accountSnapshot.site.fulfillmentState",
+        50
+      )
+    : null;
+  invariant(
+    fulfillmentState === null ||
+      FULFILLMENT_STATES.has(fulfillmentState),
+    "repository_conflict",
+    "the customer website fulfillment state changed",
+    { status: 500 }
+  );
+  const hasFulfillmentAuthority =
+    value.fulfillmentTierId !== null ||
+    value.fulfillmentSubscriptionRevision !== null;
+  const hasCompleteFulfillmentAuthority =
+    value.fulfillmentTierId !== null &&
+    value.fulfillmentSubscriptionRevision !== null;
+  invariant(
+    !hasFulfillment
+      ? !hasFulfillmentAuthority
+      : fulfillmentState === "prepared"
+        ? hasVersion && hasAddress &&
+          !hasFulfillmentAuthority
+        : fulfillmentState === "failed"
+          ? !(
+              hasFulfillmentAuthority &&
+              !hasCompleteFulfillmentAuthority
+            ) &&
+            (
+              (hasVersion && hasAddress) ||
+              hasCompleteFulfillmentAuthority
+            )
+          : hasVersion && hasAddress &&
+            hasCompleteFulfillmentAuthority,
+    "repository_conflict",
+    "the customer website fulfillment binding changed",
+    { status: 500 }
+  );
+  if (hasFulfillmentAuthority) {
+    catalogTier(
+      catalog,
+      value.fulfillmentTierId,
+      "accountSnapshot.site.fulfillmentTierId"
+    );
+    positiveInteger(
+      value.fulfillmentSubscriptionRevision,
+      "accountSnapshot.site.fulfillmentSubscriptionRevision"
+    );
+  }
+  const updatedAt = nullableIso(
+    value.updatedAt,
+    "accountSnapshot.site.updatedAt"
+  );
+  invariant(
+    !(hasVersion || hasAddress || hasFulfillment) ||
+      updatedAt !== null,
+    "repository_conflict",
+    "the customer website update time changed",
+    { status: 500 }
+  );
+
+  const setupReady = hasVersion && hasAddress;
+  const setupDigest = setupReady
+    ? createAlakazamSiteSetupDigest({
+        tenantId: scope.tenantId,
+        customerId: scope.customerId,
+        projectId: scope.projectId,
+        acceptedVersionId,
+        artifactDigest,
+        configuredLook,
+        addressId,
+        addressLabel,
+        hostname
+      })
+    : null;
+  const state = hasFulfillment
+    ? {
+        prepared: "payment_pending",
+        pending: "publishing",
+        live: "live",
+        dark: "attention_required",
+        failed: "attention_required"
+      }[fulfillmentState]
+    : setupReady
+      ? "ready_for_checkout"
+      : "setup_required";
+  return Object.freeze({
+    acceptedVersionId,
+    addressLabel,
+    hostname,
+    look: configuredLook
+      ? clone(PUBLIC_LOOKS[configuredLook])
+      : null,
+    setupDigest,
+    state,
+    updatedAt,
+    url: state === "live"
+      ? `https://${hostname}/`
+      : null
+  });
+}
+
 function accountState(subscription) {
   if (!subscription) return "available";
   if (subscription.status === "pending") {
@@ -428,7 +724,12 @@ function nextRenewal(subscription, pendingChange) {
   });
 }
 
-function tierChangeAvailable(subscription, pendingChange, catalog) {
+function tierChangeAvailable(
+  subscription,
+  pendingChange,
+  catalog,
+  site
+) {
   return Boolean(
     subscription &&
       subscription.status === "active" &&
@@ -436,6 +737,7 @@ function tierChangeAvailable(subscription, pendingChange, catalog) {
       subscription.currentPeriod !== null &&
       subscription.cancelAtPeriodEnd === false &&
       pendingChange === null &&
+      site.state === "live" &&
       catalog.tiers.some(
         (tier) => tier.rank !== subscription.tier.rank
       )
@@ -450,6 +752,7 @@ function exactRepositorySnapshot(value, scope) {
       "pendingChange",
       "projectId",
       "receipts",
+      "site",
       "subscription"
     ],
     "accountSnapshot"
@@ -490,16 +793,45 @@ export function createAlakazamAccountService({
         stored.pendingChange,
         catalog
       );
+      const site = exactRepositorySite(
+        stored.site,
+        scope,
+        catalog
+      );
       const downloadCreditAvailable =
         stored.downloadCreditAvailable &&
         subscription === null;
+      const configureSiteAvailable =
+        subscription === null &&
+        pendingChange === null &&
+        [
+          "setup_required",
+          "ready_for_checkout"
+        ].includes(site.state);
       const startAvailable =
-        subscription === null && pendingChange === null;
+        configureSiteAvailable &&
+        site.state === "ready_for_checkout";
       const changeTierAvailable = tierChangeAvailable(
         subscription,
         pendingChange,
-        catalog
+        catalog,
+        site
       );
+      const actionReason =
+        site.state === "setup_required" &&
+        configureSiteAvailable
+          ? "site_setup_required"
+          : startAvailable
+            ? "only_start_composed"
+            : site.state === "payment_pending"
+              ? "site_payment_pending"
+              : site.state === "publishing"
+                ? "site_publishing"
+                : changeTierAvailable
+                  ? "only_tier_change_composed"
+                  : site.state === "attention_required"
+                    ? "site_attention_required"
+                    : "customer_commands_not_composed";
       return deepFreeze({
         schema: ALAKAZAM_ACCOUNT_SCHEMA,
         projectId: scope.projectId,
@@ -518,17 +850,15 @@ export function createAlakazamAccountService({
           subscription,
           pendingChange
         ),
+        site,
         receipts: exactReceipts(stored.receipts),
         actions: {
+          configureSite: configureSiteAvailable,
           start: startAvailable,
           changeTier: changeTierAvailable,
           manageBilling: false,
           cancel: false,
-          reason: startAvailable
-            ? "only_start_composed"
-            : changeTierAvailable
-              ? "only_tier_change_composed"
-              : "customer_commands_not_composed"
+          reason: actionReason
         }
       });
     }

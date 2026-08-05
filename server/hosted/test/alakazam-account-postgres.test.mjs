@@ -15,6 +15,12 @@ const SUBSCRIPTION_ID =
   "40000000-0000-4000-8000-000000000001";
 const RECEIPT_ID =
   "50000000-0000-4000-8000-000000000001";
+const VERSION_ID =
+  "60000000-0000-4000-8000-000000000001";
+const ADDRESS_ID =
+  "70000000-0000-4000-8000-000000000001";
+const ARTIFACT_DIGEST = "a".repeat(64);
+const SITE_UPDATED_AT = "2026-08-02T12:04:00.000Z";
 const PERIOD_START = "2026-08-02T12:00:00.000Z";
 const PERIOD_END = "2026-09-02T12:00:00.000Z";
 
@@ -48,6 +54,49 @@ function subscription(overrides = {}) {
     first_failed_at: null,
     grace_ends_at: null,
     revision: "3",
+    updated_at: SITE_UPDATED_AT,
+    ...overrides
+  };
+}
+
+function fulfillment(overrides = {}) {
+  return {
+    fulfillment_state: "live",
+    effective_tier_id: "alakazam_35",
+    subscription_revision: "3",
+    projection_hostname:
+      "cedar-workshop.sitesourcery.me",
+    updated_at: SITE_UPDATED_AT,
+    customer_user_id: CUSTOMER_ID,
+    version_id: VERSION_ID,
+    artifact_digest: ARTIFACT_DIGEST,
+    address_id: ADDRESS_ID,
+    intent_hostname:
+      "cedar-workshop.sitesourcery.me",
+    configured_look: "clear",
+    stored_artifact_digest: ARTIFACT_DIGEST,
+    version_state: "accepted_release",
+    address_kind: "licensed",
+    address_ownership: "licensed",
+    address_label: "cedar-workshop",
+    serving_hostname:
+      "cedar-workshop.sitesourcery.me",
+    address_state: "configured",
+    current_address_id: ADDRESS_ID,
+    ...overrides
+  };
+}
+
+function setup(overrides = {}) {
+  return {
+    version_id: VERSION_ID,
+    artifact_digest: ARTIFACT_DIGEST,
+    configured_look: "clear",
+    address_id: ADDRESS_ID,
+    address_label: "cedar-workshop",
+    serving_hostname:
+      "cedar-workshop.sitesourcery.me",
+    updated_at: SITE_UPDATED_AT,
     ...overrides
   };
 }
@@ -57,6 +106,8 @@ function harness({
   billingOwnerAvailable = true,
   downloadCreditAvailable = false,
   selectedSubscription = subscription(),
+  selectedFulfillment = undefined,
+  selectedSetup = setup(),
   openChanges = [
     {
       change_kind: "downgrade",
@@ -78,6 +129,17 @@ function harness({
     }
   ]
 } = {}) {
+  const fulfillmentRow =
+    selectedFulfillment === undefined
+      ? selectedSubscription
+        ? fulfillment({
+            effective_tier_id:
+              selectedSubscription.tier_id,
+            subscription_revision:
+              selectedSubscription.revision
+          })
+        : null
+      : selectedFulfillment;
   const calls = [];
   const serviceCalls = [];
   const client = {
@@ -133,6 +195,18 @@ function harness({
       ) {
         return result(receipts);
       }
+      if (
+        normalized.includes(
+          "from ss.alakazam_fulfillment_projection projection"
+        )
+      ) {
+        return fulfillmentRow
+          ? result([fulfillmentRow])
+          : result();
+      }
+      if (normalized.includes("left join lateral")) {
+        return result([selectedSetup]);
+      }
       assert.fail(`Unexpected SQL: ${normalized}`);
     }
   };
@@ -174,6 +248,18 @@ test("PostgreSQL account read projects one customer subscription, pending change
         targetTierId: "alakazam_25",
         effectiveAt: PERIOD_END,
         state: "scheduled"
+      },
+      site: {
+        acceptedVersionId: VERSION_ID,
+        artifactDigest: ARTIFACT_DIGEST,
+        configuredLook: "clear",
+        addressId: ADDRESS_ID,
+        addressLabel: "cedar-workshop",
+        hostname: "cedar-workshop.sitesourcery.me",
+        fulfillmentState: "live",
+        fulfillmentTierId: "alakazam_35",
+        fulfillmentSubscriptionRevision: 3,
+        updatedAt: SITE_UPDATED_AT
       },
       receipts: [
         {
@@ -218,6 +304,18 @@ test("PostgreSQL account read exposes an unused Download credit without inventin
       downloadCreditAvailable: true,
       subscription: null,
       pendingChange: null,
+      site: {
+        acceptedVersionId: VERSION_ID,
+        artifactDigest: ARTIFACT_DIGEST,
+        configuredLook: "clear",
+        addressId: ADDRESS_ID,
+        addressLabel: "cedar-workshop",
+        hostname: "cedar-workshop.sitesourcery.me",
+        fulfillmentState: null,
+        fulfillmentTierId: null,
+        fulfillmentSubscriptionRevision: null,
+        updatedAt: SITE_UPDATED_AT
+      },
       receipts: []
     }
   );
@@ -229,6 +327,102 @@ test("PostgreSQL account read exposes an unused Download credit without inventin
     ),
     false
   );
+});
+
+test("PostgreSQL account read preserves partial setup and prepared fulfillment without inventing live authority", async () => {
+  const partial = harness({
+    selectedSubscription: null,
+    selectedSetup: setup({
+      address_id: null,
+      address_label: null,
+      serving_hostname: null
+    }),
+    openChanges: [],
+    receipts: []
+  });
+  const partialAccount =
+    await partial.repository.readCustomerAccount(input());
+  assert.deepEqual(partialAccount.site, {
+    acceptedVersionId: VERSION_ID,
+    artifactDigest: ARTIFACT_DIGEST,
+    configuredLook: "clear",
+    addressId: null,
+    addressLabel: null,
+    hostname: null,
+    fulfillmentState: null,
+    fulfillmentTierId: null,
+    fulfillmentSubscriptionRevision: null,
+    updatedAt: SITE_UPDATED_AT
+  });
+
+  const prepared = harness({
+    selectedSubscription: null,
+    selectedFulfillment: fulfillment({
+      fulfillment_state: "prepared",
+      effective_tier_id: null,
+      subscription_revision: null
+    }),
+    openChanges: [],
+    receipts: []
+  });
+  const preparedAccount =
+    await prepared.repository.readCustomerAccount(input());
+  assert.equal(preparedAccount.site.fulfillmentState, "prepared");
+  assert.equal(preparedAccount.site.fulfillmentTierId, null);
+  assert.equal(
+    preparedAccount.site.fulfillmentSubscriptionRevision,
+    null
+  );
+  assert.equal(
+    prepared.calls.some((call) =>
+      call.text.includes("left join lateral")
+    ),
+    false
+  );
+});
+
+test("PostgreSQL account read fails closed when frozen fulfillment evidence drifts", async () => {
+  for (const selectedFulfillment of [
+    fulfillment({ stored_artifact_digest: "b".repeat(64) }),
+    fulfillment({
+      customer_user_id:
+        "20000000-0000-4000-8000-000000000002"
+    }),
+    fulfillment({
+      projection_hostname: "other.sitesourcery.me"
+    }),
+    fulfillment({
+      current_address_id:
+        "70000000-0000-4000-8000-000000000002"
+    }),
+    fulfillment({ address_state: "released" })
+  ]) {
+    const context = harness({ selectedFulfillment });
+    await assert.rejects(
+      context.repository.readCustomerAccount(input()),
+      (error) => error.code === "repository_conflict"
+    );
+  }
+});
+
+test("PostgreSQL account read turns a paid subscription with no fulfillment projection into attention state", async () => {
+  const context = harness({
+    selectedFulfillment: null,
+    openChanges: [],
+    receipts: []
+  });
+  const account =
+    await context.repository.readCustomerAccount(input());
+  assert.equal(account.site.fulfillmentState, "failed");
+  assert.equal(
+    account.site.fulfillmentTierId,
+    "alakazam_35"
+  );
+  assert.equal(
+    account.site.fulfillmentSubscriptionRevision,
+    3
+  );
+  assert.equal(account.site.updatedAt, SITE_UPDATED_AT);
 });
 
 test("PostgreSQL account read hides unavailable projects and rejects conflicting changes", async () => {

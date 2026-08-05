@@ -15,6 +15,9 @@ const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const OTHER_PROJECT_ID =
   "30000000-0000-4000-8000-000000000002";
+const ACCEPTED_VERSION_ID =
+  "31000000-0000-4000-8000-000000000001";
+const SITE_SETUP_DIGEST = "2".repeat(64);
 
 function response(status, payload) {
   return {
@@ -105,32 +108,110 @@ function subscription(
   };
 }
 
-function account(overrides = {}) {
-  const hasSubscription = overrides.subscription !== undefined
-    && overrides.subscription !== null;
+function site(
+  state = "ready_for_checkout",
+  overrides = {}
+) {
+  const setupRequired = state === "setup_required";
+  const live = state === "live";
   return {
-    schema: "sitesourcery.alakazam-account/v1",
+    acceptedVersionId: ACCEPTED_VERSION_ID,
+    addressLabel: setupRequired ? null : "moonlit-cafe",
+    hostname: setupRequired
+      ? null
+      : "moonlit-cafe.sitesourcery.me",
+    look: {
+      lookId: "look_crystal",
+      label: "Crystal",
+    },
+    setupDigest: setupRequired
+      ? null
+      : SITE_SETUP_DIGEST,
+    state,
+    updatedAt: "2026-08-04T18:00:00.000Z",
+    url: live
+      ? "https://moonlit-cafe.sitesourcery.me/"
+      : null,
+    ...overrides,
+  };
+}
+
+function account(overrides = {}) {
+  const selectedSubscription =
+    Object.hasOwn(overrides, "subscription")
+      ? overrides.subscription
+      : null;
+  const pendingChange =
+    Object.hasOwn(overrides, "pendingChange")
+      ? overrides.pendingChange
+      : null;
+  const selectedCatalog = overrides.catalog || catalog();
+  const selectedSite = overrides.site || site(
+    selectedSubscription
+      && selectedSubscription.status === "pending"
+      ? "payment_pending"
+      : selectedSubscription
+        ? "live"
+        : "ready_for_checkout"
+  );
+  const configureSite = selectedSubscription === null
+    && pendingChange === null
+    && ["setup_required", "ready_for_checkout"]
+      .includes(selectedSite.state);
+  const start = configureSite
+    && selectedSite.state === "ready_for_checkout";
+  const changeTier = Boolean(
+    selectedSubscription
+    && selectedSubscription.status === "active"
+    && selectedSubscription.paymentState === "paid"
+    && selectedSubscription.currentPeriod
+    && selectedSubscription.cancelAtPeriodEnd === false
+    && pendingChange === null
+    && selectedSite.state === "live"
+    && selectedCatalog.tiers.some(
+      (candidate) => (
+        candidate.rank !== selectedSubscription.tier.rank
+      )
+    )
+  );
+  const reason = selectedSite.state === "setup_required"
+    && configureSite
+    ? "site_setup_required"
+    : start
+      ? "only_start_composed"
+      : selectedSite.state === "payment_pending"
+        ? "site_payment_pending"
+        : selectedSite.state === "publishing"
+          ? "site_publishing"
+          : changeTier
+            ? "only_tier_change_composed"
+            : selectedSite.state === "attention_required"
+              ? "site_attention_required"
+              : "customer_commands_not_composed";
+  const inferredActions = {
+    configureSite,
+    start,
+    changeTier,
+    manageBilling: false,
+    cancel: false,
+    reason,
+  };
+  return {
+    schema: "sitesourcery.alakazam-account/v2",
     projectId: PROJECT_ID,
     state: "available",
-    catalog: catalog(),
+    catalog: selectedCatalog,
     downloadCredit: {
-      available: !hasSubscription,
-      amountMinor: hasSubscription ? 0 : 500,
+      available: selectedSubscription === null,
+      amountMinor: selectedSubscription === null ? 500 : 0,
       currency: "USD",
     },
-    subscription: null,
-    pendingChange: null,
+    subscription: selectedSubscription,
+    pendingChange,
     nextRenewal: null,
+    site: selectedSite,
     receipts: [],
-    actions: {
-      start: !hasSubscription,
-      changeTier: false,
-      manageBilling: false,
-      cancel: false,
-      reason: hasSubscription
-        ? "customer_commands_not_composed"
-        : "only_start_composed",
-    },
+    actions: inferredActions,
     ...overrides,
   };
 }
@@ -164,25 +245,6 @@ function subscribedAccount(
     cancelled: "ended",
     ended: "ended",
   }[selectedSubscription.status];
-  const hasDifferentTier = snapshotCatalog.tiers.some(
-    (candidate) => candidate.rank !== selectedTier.rank
-  );
-  const changeTier =
-    selectedSubscription.status === "active"
-    && selectedSubscription.paymentState === "paid"
-    && selectedSubscription.currentPeriod !== null
-    && selectedSubscription.cancelAtPeriodEnd === false
-    && pendingChange === null
-    && hasDifferentTier;
-  const actions = suppliedActions || {
-    start: false,
-    changeTier,
-    manageBilling: false,
-    cancel: false,
-    reason: changeTier
-      ? "only_tier_change_composed"
-      : "customer_commands_not_composed",
-  };
   let nextRenewal = suppliedRenewal;
   if (nextRenewal === undefined) {
     const renewalUnavailable =
@@ -213,15 +275,16 @@ function subscribedAccount(
       };
     }
   }
-  return account({
+  const input = {
     ...accountOverrides,
     state: suppliedState || inferredState,
     catalog: snapshotCatalog,
     subscription: selectedSubscription,
     pendingChange: structuredClone(pendingChange),
     nextRenewal: structuredClone(nextRenewal),
-    actions,
-  });
+  };
+  if (suppliedActions) input.actions = suppliedActions;
+  return account(input);
 }
 
 function changed(source, mutate) {
@@ -621,6 +684,135 @@ test("the downgrade client sends only accepted quote truth with CSRF and stable 
   assert.equal(
     calls[1].options.headers["X-CSRF-Token"],
     "csrf-proof"
+  );
+});
+
+test("the licensed-address client writes only the platform label on the existing project route", async () => {
+  const calls = [];
+  const commandId =
+    "50000000-0000-4000-8000-000000000014";
+  const client = createClient({
+    baseUrl: "/api/v1",
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf-proof" });
+      }
+      return response(200, { state: "configured" });
+    },
+  });
+
+  await client.selectAddress(
+    PROJECT_ID,
+    { kind: "licensed", label: "moonlit-cafe" },
+    { idempotencyKey: commandId }
+  );
+
+  assert.equal(calls.length, 2);
+  assert.equal(
+    calls[1].url,
+    `/api/v1/projects/${PROJECT_ID}/addresses/licensed`
+  );
+  assert.equal(calls[1].options.method, "POST");
+  assert.deepEqual(
+    JSON.parse(calls[1].options.body),
+    { label: "moonlit-cafe" }
+  );
+  assert.equal(
+    calls[1].options.headers["Idempotency-Key"],
+    commandId
+  );
+  assert.equal(
+    calls[1].options.headers["X-CSRF-Token"],
+    "csrf-proof"
+  );
+});
+
+test("Alakazam Checkout carries setup freshness only for start and exact null for upgrade", async () => {
+  const calls = [];
+  const client = createClient({
+    baseUrl: "/api/v1",
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf-proof" });
+      }
+      return response(200, { state: "ready" });
+    },
+  });
+  const startQuoteId =
+    "40000000-0000-4000-8000-000000000010";
+  const upgradeQuoteId =
+    "40000000-0000-4000-8000-000000000011";
+
+  await client.createAlakazamCheckout(
+    PROJECT_ID,
+    startQuoteId,
+    {
+      acceptedDisclosureDigest: "a".repeat(64),
+      siteSetupDigest: SITE_SETUP_DIGEST,
+    },
+    {
+      idempotencyKey:
+        "50000000-0000-4000-8000-000000000010",
+    }
+  );
+  await client.createAlakazamCheckout(
+    PROJECT_ID,
+    upgradeQuoteId,
+    {
+      acceptedDisclosureDigest: "d".repeat(64),
+      siteSetupDigest: null,
+    },
+    {
+      idempotencyKey:
+        "50000000-0000-4000-8000-000000000011",
+    }
+  );
+
+  const writes = calls.filter(
+    ({ options }) => options.method === "POST"
+  );
+  assert.equal(writes.length, 2);
+  assert.deepEqual(JSON.parse(writes[0].options.body), {
+    acceptedDisclosureDigest: "a".repeat(64),
+    siteSetupDigest: SITE_SETUP_DIGEST,
+  });
+  assert.deepEqual(JSON.parse(writes[1].options.body), {
+    acceptedDisclosureDigest: "d".repeat(64),
+    siteSetupDigest: null,
+  });
+  assert.throws(
+    () => client.createAlakazamCheckout(
+      PROJECT_ID,
+      startQuoteId,
+      {
+        acceptedDisclosureDigest: "a".repeat(64),
+        siteSetupDigest: "not-a-digest",
+      }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.createAlakazamCheckout(
+      PROJECT_ID,
+      startQuoteId,
+      {
+        acceptedDisclosureDigest: "a".repeat(64),
+        siteSetupDigest: `${SITE_SETUP_DIGEST} `,
+      }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.createAlakazamCheckout(
+      PROJECT_ID,
+      startQuoteId,
+      {
+        acceptedDisclosureDigest: "a".repeat(64),
+      }
+    ),
+    (error) => error.code === "INVALID_INPUT"
   );
 });
 
@@ -1230,6 +1422,206 @@ test("a refreshed account must confirm the exact scheduled downgrade without cha
   }
 });
 
+test("account v2 accepts every exact setup and publication state with derived customer actions", () => {
+  const setupRequired = account({
+    site: site("setup_required"),
+  });
+  const emptySetup = account({
+    site: site("setup_required", {
+      acceptedVersionId: null,
+      look: null,
+      updatedAt: null,
+    }),
+  });
+  const ready = account();
+  const pendingTier = catalog().tiers[0];
+  const pendingChange = {
+    changeKind: "start",
+    targetTier: structuredClone(pendingTier),
+    effectiveAt: null,
+    state: "activation_pending",
+  };
+  const paymentPending = account({
+    state: "activation_pending",
+    subscription: subscription(pendingTier, {
+      status: "pending",
+      paymentState: "pending",
+      currentPeriod: null,
+    }),
+    pendingChange,
+    site: site("payment_pending"),
+  });
+  const publishing = account({
+    state: "activation_pending",
+    subscription: subscription(pendingTier, {
+      status: "pending",
+      paymentState: "pending",
+      currentPeriod: null,
+    }),
+    pendingChange: structuredClone(pendingChange),
+    site: site("publishing"),
+  });
+  const live = subscribedAccount("alakazam_25");
+  const attention = subscribedAccount("alakazam_25", {
+    site: site("attention_required"),
+  });
+  const missingProjection = subscribedAccount(
+    "alakazam_25",
+    {
+      site: site("attention_required", {
+        acceptedVersionId: null,
+        addressLabel: null,
+        hostname: null,
+        look: null,
+        setupDigest: null,
+        url: null,
+      }),
+    }
+  );
+
+  for (const snapshot of [
+    setupRequired,
+    emptySetup,
+    ready,
+    paymentPending,
+    publishing,
+    live,
+    attention,
+    missingProjection,
+  ]) {
+    assert.ok(
+      customerControl.verifiedAlakazamAccount(
+        snapshot,
+        PROJECT_ID
+      ),
+      snapshot.site.state
+    );
+  }
+  assert.deepEqual(setupRequired.actions, {
+    configureSite: true,
+    start: false,
+    changeTier: false,
+    manageBilling: false,
+    cancel: false,
+    reason: "site_setup_required",
+  });
+  assert.equal(ready.actions.configureSite, true);
+  assert.equal(ready.actions.start, true);
+  assert.equal(ready.actions.reason, "only_start_composed");
+  assert.equal(paymentPending.actions.configureSite, false);
+  assert.equal(paymentPending.actions.reason, "site_payment_pending");
+  assert.equal(publishing.actions.reason, "site_publishing");
+  assert.equal(live.actions.changeTier, true);
+  assert.equal(
+    live.actions.reason,
+    "only_tier_change_composed"
+  );
+  assert.equal(
+    attention.actions.reason,
+    "site_attention_required"
+  );
+});
+
+test("account v2 rejects site shape, public-look, setup, URL, and action relationship drift", () => {
+  const ready = account();
+  const live = subscribedAccount("alakazam_25");
+  const invalid = [
+    changed(ready, (value) => {
+      value.site.releaseId = "private-release";
+    }),
+    changed(ready, (value) => {
+      delete value.site.hostname;
+    }),
+    changed(ready, (value) => {
+      value.site.acceptedVersionId =
+        "accepted-version-from-other-project";
+    }),
+    changed(ready, (value) => {
+      value.site.look = {
+        lookId: "clear",
+        label: "clear",
+      };
+    }),
+    changed(ready, (value) => {
+      value.site.look = {
+        lookId: "look_crystal",
+        label: "Hearth",
+      };
+    }),
+    changed(ready, (value) => {
+      value.site.addressLabel = "Moonlit-Cafe";
+    }),
+    changed(ready, (value) => {
+      value.site.hostname = "moonlit-cafe.example.com";
+    }),
+    changed(ready, (value) => {
+      value.site.setupDigest = null;
+    }),
+    changed(ready, (value) => {
+      value.site.state = "live";
+    }),
+    changed(ready, (value) => {
+      value.site.updatedAt = null;
+    }),
+    changed(ready, (value) => {
+      value.site.url =
+        "https://moonlit-cafe.sitesourcery.me/";
+    }),
+    changed(live, (value) => {
+      value.site.url += "?provider=private";
+    }),
+    changed(ready, (value) => {
+      value.actions.configureSite = false;
+    }),
+    changed(ready, (value) => {
+      value.actions.reason = "site_setup_required";
+    }),
+    changed(live, (value) => {
+      value.site.state = "publishing";
+      value.site.url = null;
+    }),
+  ];
+  for (const snapshot of invalid) {
+    assert.equal(
+      customerControl.verifiedAlakazamAccount(
+        snapshot,
+        PROJECT_ID
+      ),
+      null
+    );
+  }
+});
+
+test("a live website link is exposed only for the exact credential-free platform URL", () => {
+  const live = site("live");
+  assert.equal(
+    customerControl.safeAlakazamSiteUrl(live),
+    "https://moonlit-cafe.sitesourcery.me/"
+  );
+  for (const url of [
+    "http://moonlit-cafe.sitesourcery.me/",
+    "https://user@moonlit-cafe.sitesourcery.me/",
+    "https://moonlit-cafe.sitesourcery.me:444/",
+    "https://moonlit-cafe.sitesourcery.me/path",
+    "https://moonlit-cafe.sitesourcery.me/?source=account",
+    "https://moonlit-cafe.sitesourcery.me/#setup",
+  ]) {
+    assert.equal(
+      customerControl.safeAlakazamSiteUrl({
+        ...live,
+        url,
+      }),
+      null
+    );
+  }
+  assert.equal(
+    customerControl.safeAlakazamSiteUrl(
+      site("publishing")
+    ),
+    null
+  );
+});
+
 test("the customer projection preserves active, pending, attention, ended, renewal, credit, and receipt facts", () => {
   const tiers = catalog().tiers;
   const receipt = {
@@ -1308,7 +1700,7 @@ test("the customer projection preserves active, pending, attention, ended, renew
       pending,
       PROJECT_ID
     ).heading,
-    /activation is in progress/u
+    /payment is being confirmed/u
   );
 
   const attention = account({
@@ -1377,7 +1769,7 @@ test("the customer projection fails closed on cross-project, schema, action, mon
   );
   for (const changed of [
     { ...source, projectId: OTHER_PROJECT_ID },
-    { ...source, schema: "sitesourcery.alakazam-account/v2" },
+    { ...source, schema: "sitesourcery.alakazam-account/v1" },
     {
       ...source,
       actions: { ...source.actions, start: false },
@@ -1680,4 +2072,189 @@ test("the panel source declares the responsive, accessible, retry-safe quote acc
   );
   assert.match(css, /customer-alakazam-quote-review/u);
   assert.match(css, /customer-alakazam-acceptance/u);
+});
+
+test("the setup panel is accessible, stale-safe, project-bound, and reuses only licensed-address control", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const css = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-app.css",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const setupRenderStart = source.indexOf(
+    "function renderAlakazamSiteSetup"
+  );
+  const quoteRenderStart = source.indexOf(
+    "function renderAlakazamQuoteReview",
+    setupRenderStart
+  );
+  const setupRefreshStart = source.indexOf(
+    "function refreshAlakazamAccountAfterSetup"
+  );
+  const setupRequestStart = source.indexOf(
+    "function requestAlakazamSiteSetup",
+    setupRefreshStart
+  );
+  const downgradeRefreshStart = source.indexOf(
+    "function refreshAlakazamAccountAfterDowngrade",
+    setupRequestStart
+  );
+  const renderAccountStart = source.indexOf(
+    "function renderAlakazamAccount",
+    downgradeRefreshStart
+  );
+  const reducedMotionStart = source.indexOf(
+    "function reducedMotion",
+    renderAccountStart
+  );
+  assert.ok(
+    setupRenderStart >= 0
+      && quoteRenderStart > setupRenderStart
+      && setupRefreshStart > quoteRenderStart
+      && setupRequestStart > setupRefreshStart
+      && downgradeRefreshStart > setupRequestStart
+      && renderAccountStart > downgradeRefreshStart
+      && reducedMotionStart > renderAccountStart
+  );
+  const setupRender = source.slice(
+    setupRenderStart,
+    quoteRenderStart
+  );
+  const setupRefresh = source.slice(
+    setupRefreshStart,
+    setupRequestStart
+  );
+  const setupRequest = source.slice(
+    setupRequestStart,
+    downgradeRefreshStart
+  );
+  const renderAccount = source.slice(
+    renderAccountStart,
+    reducedMotionStart
+  );
+  const selectCallStart = setupRequest.indexOf(
+    "client.selectAddress("
+  );
+  const selectCallEnd = setupRequest.indexOf(
+    ").then",
+    selectCallStart
+  );
+  const selectCall = setupRequest.slice(
+    selectCallStart,
+    selectCallEnd
+  );
+
+  assert.match(setupRender, /aria-labelledby/u);
+  assert.match(
+    setupRender,
+    /label\.setAttribute\(\s*"for",\s*"customer-alakazam-address-label"/u
+  );
+  assert.match(setupRender, /aria-describedby/u);
+  assert.match(setupRender, /data-alakazam-address-label/u);
+  assert.match(setupRender, /data-alakazam-save-address/u);
+  assert.match(setupRender, /form\.addEventListener\("submit"/u);
+  assert.match(setupRender, /event\.preventDefault\(\)/u);
+  assert.match(setupRender, /role", "alert"/u);
+  assert.match(setupRender, /role", "status"/u);
+  assert.match(setupRender, /aria-live", "polite"/u);
+  assert.match(
+    setupRender,
+    /account\.site\.look\.label/u
+  );
+  assert.doesNotMatch(
+    setupRender,
+    /\b(?:clear|warm|arcane)\b/u
+  );
+
+  assert.ok(selectCallStart >= 0 && selectCallEnd > selectCallStart);
+  assert.match(
+    selectCall,
+    /\{ kind: "licensed", label: addressLabel \}/u
+  );
+  assert.match(
+    selectCall,
+    /idempotencyKey: commandId/u
+  );
+  assert.doesNotMatch(
+    selectCall,
+    /look|tier|artifact|acceptedVersion|hostname|setupDigest/iu
+  );
+  assert.match(
+    setupRequest,
+    /account\.site\.acceptedVersionId !==\s*acceptedVersionId/u
+  );
+  assert.match(
+    setupRequest,
+    /idOf\(currentAccepted\) !== acceptedVersionId/u
+  );
+  assert.ok(
+    setupRequest.indexOf("client.selectAddress(")
+      < setupRequest.indexOf(
+        "refreshAlakazamAccountAfterSetup("
+      )
+  );
+  assert.match(
+    setupRefresh,
+    /resetAlakazamCommand\(selectedProjectId\)/u
+  );
+  assert.ok(
+    setupRefresh.indexOf(
+      "resetAlakazamCommand(selectedProjectId)"
+    ) < setupRefresh.indexOf(
+      ".getAlakazamAccount(selectedProjectId)"
+    )
+  );
+  assert.match(
+    setupRefresh,
+    /priorAddressLabel !== selectedLabel[\s\S]*priorSetupDigest[\s\S]*refreshed\.site\.setupDigest/u
+  );
+  assert.match(setupRefresh, /alakazamPanel\.focusStatus\(\)/u);
+  assert.doesNotMatch(
+    setupRequest,
+    /publish|rollback|unpublish|createAlakazamQuote/iu
+  );
+
+  assert.match(
+    renderAccount,
+    /if \(!projectId\)[\s\S]*alakazamReadSequence \+= 1/u
+  );
+  assert.match(
+    renderAccount,
+    /resetAlakazamCommand\(""\)/u
+  );
+  assert.match(
+    renderAccount,
+    /alakazamRead\.projectId !== projectId[\s\S]*requestAlakazamAccount\(projectId\)/u
+  );
+  assert.match(
+    renderAccount,
+    /acceptedProjectVersion\(state\.project\)[\s\S]*acceptedVersionId/u
+  );
+  assert.match(
+    source,
+    /var siteSetupDigest = quote\.changeKind === "start"[\s\S]*account\.site\.setupDigest[\s\S]*: null/u
+  );
+  assert.match(
+    source,
+    /siteSetupDigest: siteSetupDigest/u
+  );
+  assert.match(
+    source,
+    /safeAlakazamSiteUrl\(account\.site\)/u
+  );
+  assert.match(css, /\.customer-alakazam-site-setup/u);
+  assert.match(css, /\.customer-alakazam-site-form/u);
+  assert.match(css, /\.customer-alakazam-site-address/u);
+  assert.match(
+    css,
+    /customer-alakazam-site-form,.customer-alakazam-site-address\{grid-template-columns:1fr\}/u
+  );
 });

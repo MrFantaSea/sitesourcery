@@ -29,6 +29,7 @@ const SCHEDULE_ID =
 const SUBSCRIPTION_ID =
   "80000000-0000-4000-8000-000000000001";
 const DISCLOSURE_DIGEST = "d".repeat(64);
+const SITE_SETUP_DIGEST = "c".repeat(64);
 const QUOTE_DIGEST = "e".repeat(64);
 const PURPOSE_DIGEST = "p".repeat(64);
 const PROVIDER_FACTS_DIGEST = "f".repeat(64);
@@ -373,7 +374,8 @@ test("hosted Checkout maps one exact replay identity without provider leakage", 
   const { calls, hosted } = context();
   const input = {
     acceptedDisclosureDigest: DISCLOSURE_DIGEST,
-    commandId: COMMAND_ID
+    commandId: COMMAND_ID,
+    siteSetupDigest: SITE_SETUP_DIGEST
   };
   const first = await hosted.createCheckout(
     ACTOR,
@@ -407,7 +409,8 @@ test("hosted Checkout maps one exact replay identity without provider leakage", 
       projectId: PROJECT_ID,
       quoteId: QUOTE_ID,
       commandId: COMMAND_ID,
-      acceptedDisclosureDigest: DISCLOSURE_DIGEST
+      acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+      siteSetupDigest: SITE_SETUP_DIGEST
     },
     {
       tenantId: TENANT_ID,
@@ -415,7 +418,8 @@ test("hosted Checkout maps one exact replay identity without provider leakage", 
       projectId: PROJECT_ID,
       quoteId: QUOTE_ID,
       commandId: COMMAND_ID,
-      acceptedDisclosureDigest: DISCLOSURE_DIGEST
+      acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+      siteSetupDigest: SITE_SETUP_DIGEST
     }
   ]);
   assert.doesNotMatch(
@@ -587,6 +591,7 @@ test("forged bodies and malformed route identity fail before billing", async () 
       {
         acceptedDisclosureDigest: DISCLOSURE_DIGEST,
         commandId: COMMAND_ID,
+        siteSetupDigest: SITE_SETUP_DIGEST,
         quoteId: QUOTE_ID
       }
     ),
@@ -625,7 +630,8 @@ test("forged bodies and malformed route identity fail before billing", async () 
         {
           acceptedDisclosureDigest:
             DISCLOSURE_DIGEST,
-          commandId: COMMAND_ID
+          commandId: COMMAND_ID,
+          siteSetupDigest: SITE_SETUP_DIGEST
         }
       ),
     () =>
@@ -635,7 +641,8 @@ test("forged bodies and malformed route identity fail before billing", async () 
         QUOTE_ID,
         {
           acceptedDisclosureDigest: "not-a-digest",
-          commandId: COMMAND_ID
+          commandId: COMMAND_ID,
+          siteSetupDigest: SITE_SETUP_DIGEST
         }
       ),
     () =>
