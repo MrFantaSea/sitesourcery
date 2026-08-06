@@ -1716,3 +1716,116 @@ test("paid Custom build progress stays bounded and separate from billing", async
   assert.doesNotMatch(progress.sql, /\bpercent(?:age)?\b/iu);
   assert.doesNotMatch(progress.sql, /on delete cascade|grant all privileges/iu);
 });
+
+test("Custom build change orders and completion proof are bounded before payment and handoff", async () => {
+  const changeCompletion = (await migrations()).find(
+    ({ name }) =>
+      name === "202608060044_custom_build_change_completion.sql"
+  );
+  assert.ok(
+    changeCompletion,
+    "missing migration 44 Custom build change/completion boundary"
+  );
+
+  for (const table of [
+    "service_custom_build_change_orders",
+    "service_custom_build_change_acceptances",
+    "service_custom_build_change_declines",
+    "service_custom_build_change_voids",
+    "service_custom_build_completion_evidence",
+    "service_custom_build_completion_packages"
+  ]) {
+    assert.match(
+      changeCompletion.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu"),
+      `missing ${table}`
+    );
+  }
+
+  assert.match(
+    changeCompletion.sql,
+    /'custom_build_change_unit'[\s\S]*'USD'[\s\S]*12500[\s\S]*'added-work unit'[\s\S]*1,[\s\S]*40,/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /'addedWorkOnly', true[\s\S]*'assessmentCreditApplied', false[\s\S]*'cashRefund', false[\s\S]*'negativeLine', false[\s\S]*'originalScopeRemains', true/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /create unique index service_custom_build_change_orders_one_active[\s\S]*where state in \('issued', 'accepted_payment_required'\)/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /target_completion_date >= current_effective_target_completion_date/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /expires_at <= issued_at \+ interval '14 days'/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /acceptance_statement[\s\S]*accepted_exact_change_order_and_payment_requirement[\s\S]*accepted_quote_digest[\s\S]*accepted_disclosure_digest/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /create function ss\.service_custom_build_change_has_payment_evidence[\s\S]*to_regclass\('ss\.service_custom_build_change_payment_receipts'\)[\s\S]*return false/iu
+  );
+  assert.doesNotMatch(
+    changeCompletion.sql,
+    /old\.state = 'accepted_payment_required'[\s\S]{0,500}new\.state = 'effective'/iu
+  );
+
+  assert.match(
+    changeCompletion.sql,
+    /document_kind = 'job_evidence'[\s\S]*'service_document_manage'[\s\S]*'service_job_manage'[\s\S]*\/custom-build-jobs\/[\s\S]*\/evidence\/%/iu
+  );
+  assert.doesNotMatch(
+    changeCompletion.sql,
+    /custom_build_completion_evidence'\s*,?\s*'handoff/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /cardinality\(value\) between 2 and 12/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /selected_progress\.stage <> 'checking'[\s\S]*structure_milestone <> 'done'[\s\S]*content_milestone <> 'done'[\s\S]*responsive_milestone <> 'done'[\s\S]*quality_milestone <> 'done'/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /request\.state in \('open', 'answered'\)[\s\S]*change_order\.state in \([\s\S]*'issued', 'accepted_payment_required'/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /not includes_desktop[\s\S]*not includes_phone/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /when selected_job\.final_due_minor > 0[\s\S]*'ready_for_final_payment'[\s\S]*'ready_for_delivery'/iu
+  );
+
+  assert.match(
+    changeCompletion.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /grant update on table ss\.service_custom_build_change_orders to service_role/iu
+  );
+  assert.doesNotMatch(
+    changeCompletion.sql,
+    /grant update on table ss\.service_custom_build_(?:change_acceptances|change_declines|change_voids|completion_evidence|completion_packages)/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /create function ss\.hosted_runtime_contract_v44\(\)[\s\S]*canonical-ss-v44-custom-build-change-completion[\s\S]*grant execute on function ss\.hosted_runtime_contract_v44\(\)/iu
+  );
+  assert.doesNotMatch(
+    changeCompletion.sql,
+    /create table ss\.[a-z_]*(?:checkout|stripe|payment_receipt|handoff)[a-z_]*/iu
+  );
+  assert.doesNotMatch(
+    changeCompletion.sql,
+    /on delete cascade|grant all privileges/iu
+  );
+});

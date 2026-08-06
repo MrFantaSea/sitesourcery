@@ -216,6 +216,20 @@ async function verifyPlatformSchema(pool) {
         as service_custom_build_work_requests,
       to_regprocedure('ss.hosted_runtime_contract_v43()') is not null
         as custom_build_progress_runtime_contract,
+      to_regclass('ss.service_custom_build_change_orders') is not null
+        as service_custom_build_change_orders,
+      to_regclass('ss.service_custom_build_change_acceptances') is not null
+        as service_custom_build_change_acceptances,
+      to_regclass('ss.service_custom_build_change_declines') is not null
+        as service_custom_build_change_declines,
+      to_regclass('ss.service_custom_build_change_voids') is not null
+        as service_custom_build_change_voids,
+      to_regclass('ss.service_custom_build_completion_evidence') is not null
+        as service_custom_build_completion_evidence,
+      to_regclass('ss.service_custom_build_completion_packages') is not null
+        as service_custom_build_completion_packages,
+      to_regprocedure('ss.hosted_runtime_contract_v44()') is not null
+        as custom_build_change_completion_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -1503,7 +1517,7 @@ async function verifyPlatformSchema(pool) {
                and coverage.scope_identity_kind = 'project'
           ))
           and (
-            select count(*) = 7
+            select count(*) = 8
               from ss.service_catalog_policies custom_policy
              where custom_policy.service_key like 'custom_build_%'
           )
@@ -2013,6 +2027,201 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build progress migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildChangeCompletion = await pool.query(`
+    with expected_tables(table_name, updatable) as (
+      values
+        ('service_custom_build_change_orders', true),
+        ('service_custom_build_change_acceptances', false),
+        ('service_custom_build_change_declines', false),
+        ('service_custom_build_change_voids', false),
+        ('service_custom_build_completion_evidence', false),
+        ('service_custom_build_completion_packages', false)
+    )
+    select
+      ss.hosted_runtime_contract_v44() =
+        'canonical-ss-v44-custom-build-change-completion'
+        as exact_v44_runtime_marker,
+      (
+        select count(*) = 1
+          from ss.service_catalog_policies policy
+          join ss.legal_documents document
+            on document.id = policy.legal_document_id
+         where policy.id = '00000000-0000-4000-8000-000000000441'
+           and policy.catalog_version = 'SS-PROFESSIONAL-2026.3'
+           and policy.service_key = 'custom_build_change_unit'
+           and policy.pricing_mode = 'unit'
+           and policy.billing_cadence = 'one_time'
+           and policy.currency = 'USD'
+           and policy.unit_amount_minor = 12500
+           and policy.minimum_quantity = 1
+           and policy.maximum_quantity = 40
+           and policy.publication_state = 'held'
+           and policy.scope_boundary ->> 'addedWorkOnly' = 'true'
+           and policy.scope_boundary ->> 'originalScopeRemains' = 'true'
+           and policy.scope_boundary ->> 'assessmentCreditApplied' = 'false'
+           and policy.scope_boundary ->> 'cashRefund' = 'false'
+           and policy.scope_boundary ->> 'negativeLine' = 'false'
+           and policy.scope_boundary ->> 'unitAmountMinor' = '12500'
+           and document.kind = 'custom_services'
+           and document.version = 'SS-CUSTOM-SERVICES-2026-08-05.1'
+           and document.content_digest =
+             '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8'
+           and (
+             select count(*) = 1
+               from ss.service_catalog_coverage coverage
+              where coverage.policy_id = policy.id
+                and coverage.coverage_key = 'custom_build_added_work'
+                and coverage.coverage_mode = 'includes'
+                and coverage.scope_identity_kind = 'project'
+                and coverage.boundary_digest = policy.scope_boundary_digest
+           )
+      ) as exact_held_change_unit,
+      (
+        select count(*) = 6
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege('service_role', relation.oid, 'INSERT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = expected.updatable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+          )
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+         and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      exists (
+        select 1
+        from pg_index index_record
+        join pg_class index_relation
+          on index_relation.oid = index_record.indexrelid
+        where index_relation.relnamespace = 'ss'::regnamespace
+          and index_relation.relname =
+            'service_custom_build_change_orders_one_active'
+          and index_record.indisunique
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%issued%accepted_payment_required%'
+      ) as one_active_change_order,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%unit_count not between 1 and 40%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%requested_expires_at > recorded_at + interval ''14 days''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_quote_author%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_effective_scope_snapshot%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.prepare_service_custom_build_change_order()'::regprocedure
+      ) as bounded_change_issue_authority,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%selected_change.expires_at <= recorded_at%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%accepted_exact_change_order_and_payment_requirement%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%accepted_quote_digest%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%accepted_disclosure_digest%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.prepare_service_custom_build_change_acceptance()'::regprocedure
+      ) as exact_customer_acceptance,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%return false%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_change_payment_receipts%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.service_custom_build_change_has_payment_evidence(uuid)'::regprocedure
+      ) as payment_effect_stays_held,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%document_kind = ''job_evidence''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_job_manage%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%/custom-build-jobs/%/evidence/%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '%document_kind = ''handoff''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_assessment_document()'::regprocedure
+      ) as bounded_existing_job_evidence_kind,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%selected_progress.stage <> ''checking''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%structure_milestone <> ''done''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%content_milestone <> ''done''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%responsive_milestone <> ''done''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%quality_milestone <> ''done''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%request.state in (''open'', ''answered'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%''issued'', ''accepted_payment_required''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%includes_desktop%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%includes_phone%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_completion_package()'::regprocedure
+      ) as exact_completion_gate,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          select format('ss.%I', table_name)::regclass
+          from expected_tables
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (
+    const [name, ready] of Object.entries(
+      customBuildChangeCompletion.rows[0]
+    )
+  ) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build change/completion migration contract failed: ${name}`
     );
   }
 }
