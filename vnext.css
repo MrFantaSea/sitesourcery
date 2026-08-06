@@ -4390,6 +4390,331 @@ h3 {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Domains gets its own address-world backdrop.
+
+   The main-street artwork used to float beside the opening copy while the
+   global storm remained behind it. On this page the shopfront now is the
+   setting: the address is literally the sign over the door. The intro uses
+   the homepage's soft champagne-edged frost so white type remains readable
+   without dimming the artwork across the whole viewport.
+   --------------------------------------------------------------------------- */
+
+body.vnext-page.domains-page::after {
+  background:
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.10) 0%,
+      rgba(8, 7, 12, 0.34) 56%,
+      rgba(8, 7, 12, 0.68) 100%),
+    radial-gradient(circle at 50% 28%, rgba(242, 206, 131, 0.10), transparent 40rem),
+    url("/assets/site-sourcery-main-street-v2.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.14) saturate(1.08);
+}
+
+/* The Responder's orchestration room is its environment, not another card
+   floating over the global website workshop. The illustration deliberately
+   keeps quiet space on the left for the service promise and concentrates the
+   phone/message system on the right. */
+body.vnext-page.responder-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.34) 0%,
+      rgba(8, 7, 12, 0.12) 44%,
+      rgba(8, 7, 12, 0.04) 76%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.06) 0%,
+      rgba(8, 7, 12, 0.30) 58%,
+      rgba(8, 7, 12, 0.70) 100%),
+    radial-gradient(circle at 70% 31%, rgba(111, 186, 255, 0.10), transparent 35rem),
+    url("/assets/site-sourcery-hive-orchestra-v4.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.18) saturate(1.1);
+}
+
+/* Sorcery belongs inside the arcane workshop rather than carrying a second
+   framed copy of that workshop over the global storm. The image keeps its
+   quiet shelving on the left for the promise and its working screens visible
+   on the right. */
+body.vnext-page.custom-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.74) 0%,
+      rgba(8, 7, 12, 0.50) 39%,
+      rgba(8, 7, 12, 0.10) 72%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.04) 0%,
+      rgba(8, 7, 12, 0.20) 56%,
+      rgba(8, 7, 12, 0.72) 100%),
+    radial-gradient(circle at 72% 31%, rgba(190, 122, 255, 0.14), transparent 34rem),
+    url("/assets/site-sourcery-arcane-atelier-v3.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.18) saturate(1.08);
+}
+
+.custom-page .custom-hero .hero-grid {
+  min-height: clamp(42rem, 86vh, 58rem);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.custom-page .custom-hero .hero-copy {
+  max-width: 45rem;
+  text-shadow:
+    0 2px 10px rgba(8, 7, 12, 0.96),
+    0 5px 38px rgba(8, 7, 12, 0.78);
+}
+
+.custom-hero-note {
+  max-width: 34rem;
+  margin: 1.25rem 0 0;
+  color: var(--gold-pale);
+  font-size: 0.78rem;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+  line-height: 1.55;
+  text-transform: uppercase;
+}
+
+/* The two rooms are a place the scope explanation enters, not another image
+   card. The copy occupies the darker doorway while the practical-tools room
+   remains visible across the rest of the section. */
+body.vnext-page.custom-page .custom-scope-stage {
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.90) 0%,
+      rgba(8, 7, 12, 0.72) 43%,
+      rgba(8, 7, 12, 0.26) 69%,
+      rgba(8, 7, 12, 0.12) 100%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.16) 0%,
+      rgba(8, 7, 12, 0.18) 72%,
+      rgba(8, 7, 12, 0.78) 100%),
+    url("/assets/site-sourcery-two-doors-v3.webp") center / cover no-repeat,
+    var(--void);
+}
+
+.custom-page .custom-scope-grid {
+  min-height: clamp(46rem, 82vh, 58rem);
+  grid-template-columns: minmax(0, 0.94fr) minmax(20rem, 1.06fr);
+}
+
+.custom-scope-copy {
+  position: relative;
+  z-index: 0;
+  max-width: 43rem;
+  padding: clamp(1.4rem, 3vw, 2.25rem);
+  border: 1px solid rgba(242, 206, 131, 0.18);
+  border-radius: clamp(1.2rem, 3vw, 2rem);
+  background: linear-gradient(145deg, rgba(10, 7, 16, 0.76), rgba(10, 7, 16, 0.48));
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow:
+    inset 0 0 2rem rgba(242, 206, 131, 0.035),
+    0 1.2rem 3.5rem rgba(8, 7, 12, 0.46);
+}
+
+.custom-scope-thesis {
+  max-width: 34rem;
+  margin: 0.85rem 0 1.25rem;
+  color: var(--gold-pale) !important;
+  font-family: var(--display);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.responder-page .hero-copy {
+  text-shadow:
+    0 2px 10px rgba(8, 7, 12, 0.94),
+    0 4px 34px rgba(8, 7, 12, 0.76);
+}
+
+.domains-page #domains-overview .hero-grid {
+  min-height: clamp(42rem, 86vh, 58rem);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.domains-page #domains-overview .hero-copy {
+  width: min(100%, 58rem);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.domain-hero-intro {
+  position: relative;
+  z-index: 0;
+  width: min(100%, 52rem);
+  margin-inline: auto;
+  padding: 0.25rem;
+  text-shadow:
+    0 2px 7px rgba(8, 7, 12, 0.92),
+    0 4px 28px rgba(8, 7, 12, 0.72);
+}
+
+.domain-hero-intro::before {
+  position: absolute;
+  z-index: -1;
+  inset: -2.4rem -3.5rem;
+  border: 1px solid rgba(242, 206, 131, 0.16);
+  border-radius: 4rem;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(11, 8, 17, 0.34) 0%,
+    rgba(11, 8, 17, 0.16) 56%,
+    transparent 78%
+  );
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: inset 0 0 2rem rgba(242, 206, 131, 0.05);
+  content: "";
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 54%, transparent 82%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 54%, transparent 82%);
+}
+
+.domains-page #domains-overview .eyebrow {
+  justify-content: center;
+}
+
+.domains-page #domains-overview h1,
+.domains-page #domains-overview .lede,
+.domains-page #domains-overview .domain-price-line {
+  margin-inline: auto;
+}
+
+.domains-page #domains-overview h1 {
+  max-width: 11ch;
+}
+
+.domains-page .domain-search {
+  width: min(100%, 50rem);
+  margin: 2.4rem auto 0;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+  border: 1px solid rgba(242, 206, 131, 0.34);
+  border-radius: 1.15rem;
+  background: rgba(10, 7, 16, 0.58);
+  backdrop-filter: blur(14px) saturate(1.12);
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 1rem 3rem rgba(8, 7, 12, 0.38);
+  text-align: left;
+}
+
+.domains-page #domains-overview .hero-actions {
+  justify-content: center;
+}
+
+@media (max-width: 48rem) {
+  body.vnext-page.domains-page::after {
+    background-position: 50% top;
+  }
+
+  .domains-page #domains-overview .hero-grid {
+    min-height: auto;
+    padding-block: 4.5rem 3.5rem;
+  }
+
+  .domain-hero-intro::before {
+    inset: -1.5rem -0.8rem;
+    border-radius: 2.2rem;
+  }
+
+  body.vnext-page.responder-page::after {
+    background-position: center, center, center, 69% top, center;
+    filter: brightness(1.04) saturate(1.08);
+  }
+
+  body.vnext-page.custom-page::after {
+    background-position: center, center, center, 69% top, center;
+    filter: brightness(1.04) saturate(1.06);
+  }
+
+  .custom-page .custom-hero .hero-grid {
+    min-height: auto;
+    padding-block: 4.5rem 3.5rem;
+  }
+
+  .custom-page .custom-hero .hero-copy {
+    position: relative;
+    z-index: 0;
+  }
+
+  .custom-page .custom-hero .hero-copy::before {
+    position: absolute;
+    z-index: -1;
+    inset: -1.3rem -0.8rem;
+    border: 1px solid rgba(213, 169, 255, 0.12);
+    border-radius: 2.2rem;
+    background: radial-gradient(
+      ellipse at 42% 45%,
+      rgba(8, 7, 12, 0.74) 0%,
+      rgba(8, 7, 12, 0.42) 60%,
+      transparent 86%
+    );
+    backdrop-filter: blur(12px) saturate(1.06);
+    -webkit-backdrop-filter: blur(12px) saturate(1.06);
+    content: "";
+    mask-image: radial-gradient(ellipse at 42% 50%, #000 59%, transparent 89%);
+    -webkit-mask-image: radial-gradient(ellipse at 42% 50%, #000 59%, transparent 89%);
+  }
+
+  body.vnext-page.custom-page .custom-scope-stage {
+    padding-top: 17rem;
+    background:
+      linear-gradient(180deg,
+        rgba(8, 7, 12, 0.04) 0%,
+        rgba(8, 7, 12, 0.18) 13rem,
+        rgba(8, 7, 12, 0.96) 18rem,
+        rgba(8, 7, 12, 0.98) 100%),
+      url("/assets/site-sourcery-two-doors-v3.webp") center top / auto 18rem no-repeat,
+      var(--void);
+  }
+
+  .custom-page .custom-scope-grid {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .custom-scope-copy {
+    padding: 1.1rem 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .responder-page .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .responder-page .hero-copy {
+    position: relative;
+    z-index: 0;
+  }
+
+  .responder-page .hero-copy::before {
+    position: absolute;
+    z-index: -1;
+    inset: -1.25rem -0.8rem;
+    border: 1px solid rgba(160, 209, 255, 0.12);
+    border-radius: 2.2rem;
+    background: radial-gradient(
+      ellipse at 38% 42%,
+      rgba(8, 7, 12, 0.72) 0%,
+      rgba(8, 7, 12, 0.42) 58%,
+      transparent 84%
+    );
+    backdrop-filter: blur(12px) saturate(1.08);
+    -webkit-backdrop-filter: blur(12px) saturate(1.08);
+    content: "";
+    mask-image: radial-gradient(ellipse at 42% 50%, #000 58%, transparent 88%);
+    -webkit-mask-image: radial-gradient(ellipse at 42% 50%, #000 58%, transparent 88%);
+  }
+}
+
 @media (max-width: 48rem) and (max-height: 40rem) {
   .abracadabra-hero .hero-grid {
     gap: 1.5rem;
@@ -8543,5 +8868,267 @@ li[id^="about-"]:target {
     justify-content: center;
     gap: 0;
     margin-left: 0.2rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Secondary public rooms.
+
+   These pages stay inside the established Site Sourcery atelier but no longer
+   borrow the homepage storm or place a second illustration in a card. Each
+   scene is a page-scale environment with quiet copy space designed into the
+   artwork. The information panels remain ordinary HTML above it.
+   --------------------------------------------------------------------------- */
+
+body.vnext-page.about-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.62) 0%,
+      rgba(8, 7, 12, 0.34) 42%,
+      rgba(8, 7, 12, 0.06) 72%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.04) 0%,
+      rgba(8, 7, 12, 0.24) 60%,
+      rgba(8, 7, 12, 0.76) 100%),
+    url("/assets/site-sourcery-one-person-studio-v1.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.12) saturate(1.06);
+}
+
+body.vnext-page.contact-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.70) 0%,
+      rgba(8, 7, 12, 0.42) 43%,
+      rgba(8, 7, 12, 0.07) 74%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.03) 0%,
+      rgba(8, 7, 12, 0.22) 60%,
+      rgba(8, 7, 12, 0.78) 100%),
+    radial-gradient(circle at 73% 55%, rgba(242, 206, 131, 0.12), transparent 24rem),
+    url("/assets/site-sourcery-signal-room-v1.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.13) saturate(1.05);
+}
+
+body.vnext-page.faq-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.72) 0%,
+      rgba(8, 7, 12, 0.44) 43%,
+      rgba(8, 7, 12, 0.08) 74%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.05) 0%,
+      rgba(8, 7, 12, 0.28) 62%,
+      rgba(8, 7, 12, 0.84) 100%),
+    url("/assets/site-sourcery-index-room-v1.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.08) saturate(1.02);
+}
+
+body.vnext-page.legal-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.76) 0%,
+      rgba(8, 7, 12, 0.48) 44%,
+      rgba(8, 7, 12, 0.10) 75%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.06) 0%,
+      rgba(8, 7, 12, 0.30) 62%,
+      rgba(8, 7, 12, 0.88) 100%),
+    radial-gradient(circle at 70% 64%, rgba(131, 231, 193, 0.07), transparent 18rem),
+    radial-gradient(circle at 86% 68%, rgba(242, 206, 131, 0.09), transparent 18rem),
+    url("/assets/site-sourcery-archive-room-v1.webp") center top / cover no-repeat,
+    var(--void);
+  filter: brightness(1.08) saturate(1.02);
+}
+
+body.vnext-page.privacy-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.76) 0%,
+      rgba(8, 7, 12, 0.48) 44%,
+      rgba(8, 7, 12, 0.10) 75%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.06) 0%,
+      rgba(8, 7, 12, 0.30) 62%,
+      rgba(8, 7, 12, 0.88) 100%),
+    radial-gradient(circle at 70% 64%, rgba(131, 231, 193, 0.13), transparent 20rem),
+    url("/assets/site-sourcery-archive-room-v1.webp") center top / cover no-repeat,
+    var(--void);
+}
+
+body.vnext-page.terms-page::after {
+  background:
+    linear-gradient(90deg,
+      rgba(8, 7, 12, 0.76) 0%,
+      rgba(8, 7, 12, 0.48) 44%,
+      rgba(8, 7, 12, 0.10) 75%),
+    linear-gradient(180deg,
+      rgba(8, 7, 12, 0.06) 0%,
+      rgba(8, 7, 12, 0.30) 62%,
+      rgba(8, 7, 12, 0.88) 100%),
+    radial-gradient(circle at 86% 68%, rgba(242, 206, 131, 0.15), transparent 20rem),
+    url("/assets/site-sourcery-archive-room-v1.webp") center top / cover no-repeat,
+    var(--void);
+}
+
+body.vnext-page.about-page .about-hero {
+  min-height: clamp(48rem, 92vh, 64rem);
+  padding-top: clamp(4rem, 7vw, 6rem);
+  background: linear-gradient(180deg, transparent 0%, rgba(8, 7, 12, 0.08) 70%, rgba(8, 7, 12, 0.56) 100%);
+}
+
+.about-page .about-hero-grid {
+  min-height: clamp(32rem, 58vh, 42rem);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.about-page .about-hero-copy {
+  max-width: 46rem;
+  text-shadow:
+    0 2px 10px rgba(8, 7, 12, 0.96),
+    0 5px 38px rgba(8, 7, 12, 0.78);
+}
+
+.about-page .about-fact-rail,
+.about-page .about-fact-note {
+  background: rgba(8, 7, 12, 0.48);
+  backdrop-filter: blur(12px) saturate(1.04);
+  -webkit-backdrop-filter: blur(12px) saturate(1.04);
+}
+
+.about-page .about-fact-note {
+  margin-bottom: 1.1rem;
+  border: 1px solid var(--line);
+}
+
+body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid {
+  min-height: clamp(50rem, 92vh, 64rem);
+  grid-template-columns: minmax(0, 0.9fr) minmax(22rem, 1.1fr);
+  grid-template-rows: auto auto;
+  gap: 1.35rem clamp(2rem, 6vw, 6rem);
+  align-content: center;
+}
+
+body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-copy {
+  grid-column: 1;
+  grid-row: 1;
+  text-shadow:
+    0 2px 10px rgba(8, 7, 12, 0.96),
+    0 5px 38px rgba(8, 7, 12, 0.78);
+}
+
+body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid > .quote-panel {
+  grid-column: 1;
+  grid-row: 2;
+  width: min(100%, 43rem);
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  background:
+    radial-gradient(circle at 94% 5%, rgba(242, 206, 131, 0.08), transparent 18rem),
+    rgba(8, 7, 12, 0.64);
+  backdrop-filter: blur(14px) saturate(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.06);
+}
+
+body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid > .quote-panel h2 {
+  font-size: clamp(2.15rem, 3.7vw, 3.4rem);
+  line-height: 0.96;
+}
+
+body.vnext-page.legal-page .hero h1 {
+  max-width: 11ch;
+  overflow-wrap: normal;
+  font-size: clamp(3.05rem, 6vw, 5.7rem);
+  hyphens: none;
+  word-break: normal;
+}
+
+body.vnext-page.contact-page .section-dark {
+  background: rgba(8, 7, 12, 0.84);
+}
+
+body.vnext-page:is(.faq-page, .legal-page) .section-dark {
+  background: rgba(8, 7, 12, 0.91);
+}
+
+@media (max-width: 48rem) {
+  body.vnext-page.about-page::after {
+    background-position: center, center, 70% top, center;
+    filter: brightness(1.02) saturate(1.04);
+  }
+
+  body.vnext-page.contact-page::after {
+    background-position: center, center, center, 69% top, center;
+    filter: brightness(1.02) saturate(1.04);
+  }
+
+  body.vnext-page.faq-page::after {
+    background-position: center, center, 69% top, center;
+    filter: brightness(1.01) saturate(1.01);
+  }
+
+  body.vnext-page.legal-page::after,
+  body.vnext-page.privacy-page::after,
+  body.vnext-page.terms-page::after {
+    background-position: center, center, center, center, 69% top, center;
+    filter: brightness(1.01) saturate(1.01);
+  }
+
+  body.vnext-page.privacy-page::after,
+  body.vnext-page.terms-page::after {
+    background-position: center, center, center, 69% top, center;
+  }
+
+  body.vnext-page.about-page .about-hero {
+    min-height: auto;
+    padding-top: 4.5rem;
+  }
+
+  .about-page .about-hero-grid {
+    min-height: auto;
+  }
+
+  .about-page .about-hero-copy,
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-copy {
+    position: relative;
+    z-index: 0;
+  }
+
+  .about-page .about-hero-copy::before,
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-copy::before {
+    position: absolute;
+    z-index: -1;
+    inset: -1.25rem -0.8rem;
+    border: 1px solid rgba(242, 206, 131, 0.11);
+    border-radius: 2.2rem;
+    background: radial-gradient(
+      ellipse at 40% 44%,
+      rgba(8, 7, 12, 0.76) 0%,
+      rgba(8, 7, 12, 0.46) 60%,
+      transparent 87%
+    );
+    backdrop-filter: blur(12px) saturate(1.04);
+    -webkit-backdrop-filter: blur(12px) saturate(1.04);
+    content: "";
+    mask-image: radial-gradient(ellipse at 42% 50%, #000 59%, transparent 89%);
+    -webkit-mask-image: radial-gradient(ellipse at 42% 50%, #000 59%, transparent 89%);
+  }
+
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid {
+    min-height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    padding-block: 4.5rem 3.5rem;
+  }
+
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-copy,
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid > .quote-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  body.vnext-page:is(.contact-page, .faq-page, .legal-page) .hero-grid > .quote-panel h2 {
+    font-size: clamp(2rem, 9vw, 3rem);
   }
 }
