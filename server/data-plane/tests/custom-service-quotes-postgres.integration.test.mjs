@@ -34,6 +34,9 @@ import {
   createPostgresCustomServicesCustomBuildWork
 } from "../../hosted/custom-services-custom-build-work-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildProgress
+} from "../../hosted/custom-services-custom-build-progress-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -2972,6 +2975,294 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.ok(ownerBuildJob);
     assert.deepEqual(ownerBuildJob.job, paidBuildInvoice.job);
     assert.equal(ownerBuildJob.customer.customerId, customer.userId);
+
+    const customBuildProgress =
+      createPostgresCustomServicesCustomBuildProgress({
+        authority: customBuildAuthority
+      });
+    assert.deepEqual(await customBuildProgress.readiness(), {
+      schema: "sitesourcery.custom-build-progress-readiness/v1",
+      ready: true,
+      state: "ready",
+      runtimeContract: "canonical-ss-v43-custom-build-progress"
+    });
+    const buildJobId = paidBuildInvoice.job.jobId;
+    const defaultProgress = await customBuildProgress.readOwnerProgress(
+      operatorActor,
+      buildJobId,
+      customer.organizationId
+    );
+    assert.equal(defaultProgress.status.kind, "preparing");
+    assert.equal(defaultProgress.progress.revision, 0);
+    assert.equal(defaultProgress.activeRequest, null);
+    assert.deepEqual(
+      await customBuildProgress.readCustomerProgress(customerAssessmentScope),
+      defaultProgress
+    );
+
+    const progressCommand = {
+      commandId: `custom-build-progress-${randomUUID()}`,
+      customerSummary:
+        "The approved structure is ready and the first pages are being built.",
+      expectedRevision: 0,
+      milestones: {
+        structure: "done",
+        content: "in_progress",
+        responsive: "pending",
+        quality: "pending"
+      },
+      nextStep:
+        "Apply the approved content and check the first phone layout.",
+      organizationId: customer.organizationId,
+      stage: "building"
+    };
+    const buildingProgress = await customBuildProgress.recordProgress(
+      operatorActor,
+      buildJobId,
+      progressCommand
+    );
+    assert.equal(buildingProgress.status.kind, "building");
+    assert.equal(buildingProgress.progress.revision, 1);
+    assert.equal(buildingProgress.progress.milestones[0].state, "done");
+    assert.deepEqual(
+      await customBuildProgress.recordProgress(
+        operatorActor,
+        buildJobId,
+        progressCommand
+      ),
+      buildingProgress
+    );
+    await assert.rejects(
+      customBuildProgress.recordProgress(operatorActor, buildJobId, {
+        ...progressCommand,
+        commandId: `custom-build-progress-${randomUUID()}`
+      }),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+    await assert.rejects(
+      customBuildProgress.recordProgress(operatorActor, buildJobId, {
+        ...progressCommand,
+        commandId: `custom-build-progress-${randomUUID()}`,
+        expectedRevision: 1,
+        milestones: {
+          ...progressCommand.milestones,
+          structure: "pending"
+        },
+        stage: "preparing"
+      }),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+
+    const decisionRequestCommand = {
+      access: null,
+      commandId: `custom-build-request-${randomUUID()}`,
+      customerMessage:
+        "Please choose which approved About-page paragraph should be used.",
+      expectedProgressRevision: 1,
+      organizationId: customer.organizationId,
+      requestKind: "customer_decision",
+      safeInstructions:
+        "Reply with either the first or second approved paragraph.",
+      targetDateImpact: "under_review",
+      title: "Choose the About-page paragraph"
+    };
+    const decisionRequest = await customBuildProgress.openRequest(
+      operatorActor,
+      buildJobId,
+      decisionRequestCommand
+    );
+    assert.equal(decisionRequest.status.kind, "action_needed");
+    assert.equal(decisionRequest.activeRequest.state, "open");
+    assert.equal(decisionRequest.activeRequest.revision, 1);
+    assert.deepEqual(
+      await customBuildProgress.openRequest(
+        operatorActor,
+        buildJobId,
+        decisionRequestCommand
+      ),
+      decisionRequest
+    );
+    await assert.rejects(
+      customBuildProgress.openRequest(operatorActor, buildJobId, {
+        ...decisionRequestCommand,
+        commandId: `custom-build-request-${randomUUID()}`,
+        title: "A second request must not open"
+      }),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+
+    const decisionResponseCommand = {
+      commandId: `custom-build-response-${randomUUID()}`,
+      expectedRevision: 1,
+      responseKind: "provided",
+      responseNote: "Use the second approved paragraph."
+    };
+    await assert.rejects(
+      customBuildProgress.respondToRequest(
+        { ...customerAssessmentScope, projectId: other.projectId },
+        decisionRequest.activeRequest.requestId,
+        decisionResponseCommand
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+    await assert.rejects(
+      customBuildProgress.respondToRequest(
+        customerAssessmentScope,
+        decisionRequest.activeRequest.requestId,
+        {
+          ...decisionResponseCommand,
+          commandId: `custom-build-response-${randomUUID()}`,
+          responseNote: "My access token is included here."
+        }
+      ),
+      (error) => error.code === "INVALID_CUSTOM_BUILD_PROGRESS_INPUT"
+    );
+    const answeredDecision = await customBuildProgress.respondToRequest(
+      customerAssessmentScope,
+      decisionRequest.activeRequest.requestId,
+      decisionResponseCommand
+    );
+    assert.equal(answeredDecision.status.kind, "reviewing_response");
+    assert.equal(answeredDecision.activeRequest.state, "answered");
+    assert.equal(answeredDecision.activeRequest.revision, 2);
+    assert.deepEqual(
+      await customBuildProgress.respondToRequest(
+        customerAssessmentScope,
+        decisionRequest.activeRequest.requestId,
+        decisionResponseCommand
+      ),
+      answeredDecision
+    );
+    await assert.rejects(
+      customBuildProgress.respondToRequest(
+        customerAssessmentScope,
+        decisionRequest.activeRequest.requestId,
+        {
+          ...decisionResponseCommand,
+          commandId: `custom-build-response-${randomUUID()}`
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+
+    const decisionResolutionCommand = {
+      commandId: `custom-build-resolution-${randomUUID()}`,
+      expectedRevision: 2,
+      organizationId: customer.organizationId,
+      resolutionNote:
+        "The customer selected the second approved paragraph.",
+      state: "resolved"
+    };
+    const resolvedDecision = await customBuildProgress.resolveRequest(
+      operatorActor,
+      buildJobId,
+      decisionRequest.activeRequest.requestId,
+      decisionResolutionCommand
+    );
+    assert.equal(resolvedDecision.status.kind, "building");
+    assert.equal(resolvedDecision.activeRequest, null);
+    assert.deepEqual(
+      await customBuildProgress.resolveRequest(
+        operatorActor,
+        buildJobId,
+        decisionRequest.activeRequest.requestId,
+        decisionResolutionCommand
+      ),
+      resolvedDecision
+    );
+
+    const accessExpiresAt = isoAfter({ days: 7 });
+    const accessRequest = await customBuildProgress.openRequest(
+      operatorActor,
+      buildJobId,
+      {
+        access: {
+          accountLabel: "Avery Studio domain account",
+          delegatedRole: "DNS manager",
+          expiresAt: accessExpiresAt,
+          providerLabel: "Spaceship"
+        },
+        commandId: `custom-build-request-${randomUUID()}`,
+        customerMessage:
+          "Please authorize bounded DNS management for this project.",
+        expectedProgressRevision: 1,
+        organizationId: customer.organizationId,
+        requestKind: "delegated_access",
+        safeInstructions:
+          "Use the provider delegation screen and share no private sign-in information.",
+        targetDateImpact: "under_review",
+        title: "Authorize bounded DNS management"
+      }
+    );
+    assert.equal(accessRequest.status.kind, "action_needed");
+    assert.deepEqual(accessRequest.activeRequest.access, {
+      providerLabel: "Spaceship",
+      accountLabel: "Avery Studio domain account",
+      delegatedRole: "DNS manager",
+      expiresAt: accessExpiresAt
+    });
+    const storedAccess = await pool.query(
+      `select provider_label, account_label, delegated_role,
+              reason_code, state, job_id, expires_at
+       from ss.service_access_requests
+       where organization_id = $1 and job_id = $2`,
+      [customer.organizationId, buildJobId]
+    );
+    assert.equal(storedAccess.rowCount, 1);
+    assert.deepEqual({
+      providerLabel: storedAccess.rows[0].provider_label,
+      accountLabel: storedAccess.rows[0].account_label,
+      delegatedRole: storedAccess.rows[0].delegated_role,
+      reasonCode: storedAccess.rows[0].reason_code,
+      state: storedAccess.rows[0].state,
+      jobId: storedAccess.rows[0].job_id,
+      expiresAt: new Date(storedAccess.rows[0].expires_at).toISOString()
+    }, {
+      providerLabel: "Spaceship",
+      accountLabel: "Avery Studio domain account",
+      delegatedRole: "DNS manager",
+      reasonCode: "custom_build_execution",
+      state: "sent",
+      jobId: buildJobId,
+      expiresAt: accessExpiresAt
+    });
+    const declinedAccess = await customBuildProgress.respondToRequest(
+      customerAssessmentScope,
+      accessRequest.activeRequest.requestId,
+      {
+        commandId: `custom-build-response-${randomUUID()}`,
+        expectedRevision: 1,
+        responseKind: "cannot_provide",
+        responseNote:
+          "I cannot authorize delegated access yet; please continue without it."
+      }
+    );
+    assert.equal(declinedAccess.status.kind, "reviewing_response");
+    const withdrawnAccess = await customBuildProgress.resolveRequest(
+      operatorActor,
+      buildJobId,
+      accessRequest.activeRequest.requestId,
+      {
+        commandId: `custom-build-resolution-${randomUUID()}`,
+        expectedRevision: 2,
+        organizationId: customer.organizationId,
+        resolutionNote:
+          "Delegated access was not granted; the request is closed without verification.",
+        state: "withdrawn"
+      }
+    );
+    assert.equal(withdrawnAccess.activeRequest, null);
+    assert.equal(withdrawnAccess.status.kind, "building");
     assert.equal(
       (await assessmentWork.readCustomerReport(customerAssessmentScope))
         .credit.state,

@@ -19,6 +19,8 @@ const EVIDENCE_ID =
   "50000000-0000-4000-8000-000000000001";
 const CUSTOM_BUILD_QUOTE_ID =
   "60000000-0000-4000-8000-000000000001";
+const CUSTOM_BUILD_REQUEST_ID =
+  "70000000-0000-4000-8000-000000000001";
 const WORK_DIGEST = "a".repeat(64);
 
 function service() {
@@ -541,6 +543,137 @@ test("owner paid Custom build jobs are private, authenticated, and read-only", a
   assert.equal(calls.length, 2);
 });
 
+test("owner Custom-build progress routes bind exact job, organization, updates, and requests", async () => {
+  const calls = [];
+  const progress = {
+    schema: "sitesourcery.custom-build-progress/v1",
+    state: "building",
+    revision: 1
+  };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuildProgress: {
+      async readOwnerProgress(actor, jobId, organizationId) {
+        calls.push({ action: "read", actor, jobId, organizationId });
+        return progress;
+      },
+      async recordProgress(actor, jobId, input) {
+        calls.push({ action: "progress", actor, jobId, input });
+        return { ...progress, revision: 2 };
+      },
+      async openRequest(actor, jobId, input) {
+        calls.push({ action: "request", actor, jobId, input });
+        return { ...progress, state: "action_needed", revision: 3 };
+      },
+      async resolveRequest(actor, jobId, requestId, input) {
+        calls.push({ action: "resolve", actor, jobId, requestId, input });
+        return { ...progress, state: "building", revision: 4 };
+      }
+    }
+  });
+  const root =
+    `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
+
+  const read = await api.fetch(request({
+    path: `${root}/progress?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), progress);
+
+  const progressBody = {
+    customerSummary: "The approved homepage structure is now in place.",
+    expectedRevision: 1,
+    milestones: {
+      content: "in_progress",
+      design: "in_progress",
+      launch: "not_started",
+      structure: "complete"
+    },
+    nextStep: "Apply the approved copy and check the phone layout.",
+    organizationId: ORGANIZATION_ID,
+    stage: "building"
+  };
+  const updated = await api.fetch(request({
+    body: progressBody,
+    method: "POST",
+    path: `${root}/progress`
+  }));
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).revision, 2);
+
+  const requestBody = {
+    access: null,
+    customerMessage: "Choose which approved About-page paragraph should be used.",
+    expectedProgressRevision: 2,
+    organizationId: ORGANIZATION_ID,
+    requestKind: "customer_decision",
+    safeInstructions: "Reply with first or second paragraph. Do not send passwords.",
+    targetDateImpact: "under_review",
+    title: "Choose the About-page paragraph"
+  };
+  const opened = await api.fetch(request({
+    body: requestBody,
+    method: "POST",
+    path: `${root}/requests`
+  }));
+  assert.equal(opened.status, 200);
+  assert.equal((await opened.json()).state, "action_needed");
+
+  const resolutionBody = {
+    expectedRevision: 1,
+    organizationId: ORGANIZATION_ID,
+    resolutionNote: "Customer selected the second approved paragraph.",
+    state: "resolved"
+  };
+  const resolved = await api.fetch(request({
+    body: resolutionBody,
+    method: "POST",
+    path: `${root}/requests/${CUSTOM_BUILD_REQUEST_ID}/resolution`
+  }));
+  assert.equal(resolved.status, 200);
+  assert.equal((await resolved.json()).revision, 4);
+
+  const actor = { userId: OPERATOR_ID };
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor,
+      jobId: JOB_ID,
+      organizationId: ORGANIZATION_ID
+    },
+    {
+      action: "progress",
+      actor,
+      jobId: JOB_ID,
+      input: { ...progressBody, commandId: "owner-quote-command-1" }
+    },
+    {
+      action: "request",
+      actor,
+      jobId: JOB_ID,
+      input: { ...requestBody, commandId: "owner-quote-command-1" }
+    },
+    {
+      action: "resolve",
+      actor,
+      jobId: JOB_ID,
+      requestId: CUSTOM_BUILD_REQUEST_ID,
+      input: { ...resolutionBody, commandId: "owner-quote-command-1" }
+    }
+  ]);
+
+  const expanded = await api.fetch(request({
+    body: { ...progressBody, progressPercent: 80 },
+    method: "POST",
+    path: `${root}/progress`
+  }));
+  assert.equal(expanded.status, 400);
+  assert.equal(
+    (await expanded.json()).error.code,
+    "INVALID_CUSTOM_BUILD_PROGRESS_INPUT"
+  );
+  assert.equal(calls.length, 4);
+});
+
 test("production composes PostgreSQL owner quote, assessment, and paid-build boundaries", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
@@ -577,5 +710,17 @@ test("production composes PostgreSQL owner quote, assessment, and paid-build bou
   assert.match(
     source,
     /createHostedApi\(service,\s*\{[\s\S]*customServicesCustomBuildWork,/u
+  );
+  assert.match(
+    source,
+    /const customServicesCustomBuildProgress\s*=\s*createPostgresCustomServicesCustomBuildProgress\(\{\s*authority\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /await customServicesCustomBuildProgress\.readiness\(\)/u
+  );
+  assert.match(
+    source,
+    /createHostedApi\(service,\s*\{[\s\S]*customServicesCustomBuildProgress,/u
   );
 });

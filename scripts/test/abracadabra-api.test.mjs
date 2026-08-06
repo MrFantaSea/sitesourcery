@@ -957,6 +957,249 @@ test("Custom build API rejects unsupported authority and out-of-band footprint c
   assert.equal(calls, 0);
 });
 
+test("Custom-build progress API uses exact customer and owner routes, bodies, and command IDs", async () => {
+  const calls = [];
+  const organizationId =
+    "20000000-0000-4000-8000-000000000001";
+  const jobId =
+    "80000000-0000-4000-8000-000000000001";
+  const requestId =
+    "90000000-0000-4000-8000-000000000001";
+  const commands = {
+    progress: "10000000-0000-4000-8000-000000000011",
+    request: "10000000-0000-4000-8000-000000000012",
+    resolution: "10000000-0000-4000-8000-000000000013",
+    response: "10000000-0000-4000-8000-000000000014"
+  };
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return response(
+        200,
+        url === "/api/v1/csrf"
+          ? { csrfToken: "csrf_custom_build_progress" }
+          : { ok: true }
+      );
+    },
+    idempotencyFactory: () => {
+      assert.fail("the progress command ID must fence the write header");
+    }
+  });
+
+  await client.getOwnerCustomBuildProgress(jobId, organizationId);
+  await client.recordOwnerCustomBuildProgress(jobId, {
+    commandId: commands.progress,
+    customerSummary:
+      "The approved page structure is ready for the content pass.",
+    expectedRevision: 2,
+    milestones: {
+      content: "in_progress",
+      quality: "pending",
+      responsive: "pending",
+      structure: "done"
+    },
+    nextStep: "Complete the supplied page content.",
+    organizationId,
+    stage: "building"
+  });
+  await client.openOwnerCustomBuildRequest(jobId, {
+    access: {
+      accountLabel: "Marketing website",
+      delegatedRole: "Site editor",
+      expiresAt: "2026-08-20T17:00:00.000Z",
+      providerLabel: "Example CMS"
+    },
+    commandId: commands.request,
+    customerMessage:
+      "Please share a delegated editor role for the marketing website.",
+    expectedProgressRevision: 3,
+    organizationId,
+    requestKind: "delegated_access",
+    safeInstructions:
+      "Use the provider sharing screen and invite the Site Sourcery user shown in your account.",
+    targetDateImpact: "under_review",
+    title: "Share delegated editor access"
+  });
+  await client.resolveOwnerCustomBuildRequest(
+    jobId,
+    requestId,
+    {
+      commandId: commands.resolution,
+      expectedRevision: 2,
+      organizationId,
+      resolutionNote:
+        "The delegated role was checked separately and is ready.",
+      state: "resolved"
+    }
+  );
+  await client.getCustomServicesCustomBuildProgress("project_1");
+  await client.respondToCustomServicesCustomBuildRequest(
+    "project_1",
+    requestId,
+    {
+      commandId: commands.response,
+      expectedRevision: 1,
+      responseKind: "provided",
+      responseNote:
+        "I used the provider sharing screen and sent the invitation."
+    }
+  );
+
+  const serviceCalls = calls.filter(
+    ({ url }) => url !== "/api/v1/csrf"
+  );
+  assert.deepEqual(
+    serviceCalls.map(({ url, options }) => [options.method, url]),
+    [
+      [
+        "GET",
+        `/api/v1/operator/custom-services/custom-build-jobs/${jobId}/progress?organizationId=${organizationId}`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-jobs/${jobId}/progress`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-jobs/${jobId}/requests`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-jobs/${jobId}/requests/${requestId}/resolution`
+      ],
+      [
+        "GET",
+        "/api/v1/projects/project_1/custom-services/custom-build-progress"
+      ],
+      [
+        "POST",
+        `/api/v1/projects/project_1/custom-services/custom-build-requests/${requestId}/response`
+      ]
+    ]
+  );
+  assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
+    commandId: commands.progress,
+    customerSummary:
+      "The approved page structure is ready for the content pass.",
+    expectedRevision: 2,
+    milestones: {
+      content: "in_progress",
+      quality: "pending",
+      responsive: "pending",
+      structure: "done"
+    },
+    nextStep: "Complete the supplied page content.",
+    organizationId,
+    stage: "building"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[2].options.body), {
+    access: {
+      accountLabel: "Marketing website",
+      delegatedRole: "Site editor",
+      expiresAt: "2026-08-20T17:00:00.000Z",
+      providerLabel: "Example CMS"
+    },
+    commandId: commands.request,
+    customerMessage:
+      "Please share a delegated editor role for the marketing website.",
+    expectedProgressRevision: 3,
+    organizationId,
+    requestKind: "delegated_access",
+    safeInstructions:
+      "Use the provider sharing screen and invite the Site Sourcery user shown in your account.",
+    targetDateImpact: "under_review",
+    title: "Share delegated editor access"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[3].options.body), {
+    commandId: commands.resolution,
+    expectedRevision: 2,
+    organizationId,
+    resolutionNote:
+      "The delegated role was checked separately and is ready.",
+    state: "resolved"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[5].options.body), {
+    commandId: commands.response,
+    expectedRevision: 1,
+    responseKind: "provided",
+    responseNote:
+      "I used the provider sharing screen and sent the invitation."
+  });
+  for (const [index, commandId] of [
+    [1, commands.progress],
+    [2, commands.request],
+    [3, commands.resolution],
+    [5, commands.response]
+  ]) {
+    assert.equal(
+      serviceCalls[index].options.headers["X-CSRF-Token"],
+      "csrf_custom_build_progress"
+    );
+    assert.equal(
+      serviceCalls[index].options.headers["Idempotency-Key"],
+      commandId
+    );
+  }
+});
+
+test("Custom-build progress API rejects credential text and unsupported request fields before fetch", () => {
+  let calls = 0;
+  const client = createClient({
+    fetch: async () => {
+      calls += 1;
+      return response(200, { ok: true });
+    }
+  });
+  const jobId = "80000000-0000-4000-8000-000000000001";
+  const organizationId =
+    "20000000-0000-4000-8000-000000000001";
+  assert.throws(
+    () => client.recordOwnerCustomBuildProgress(jobId, {
+      commandId: "10000000-0000-4000-8000-000000000011",
+      customerSummary: "The API key is ready to paste into this note.",
+      expectedRevision: 0,
+      milestones: {
+        content: "pending",
+        quality: "pending",
+        responsive: "pending",
+        structure: "pending"
+      },
+      nextStep: "Begin the safe project structure.",
+      organizationId,
+      stage: "preparing"
+    }),
+    /must not contain passwords/iu
+  );
+  assert.throws(
+    () => client.respondToCustomServicesCustomBuildRequest(
+      "project_1",
+      "90000000-0000-4000-8000-000000000001",
+      {
+        commandId: "10000000-0000-4000-8000-000000000014",
+        expectedRevision: 1,
+        responseKind: "provided",
+        responseNote: "My access token is shown here.",
+        verified: true
+      }
+    ),
+    /unsupported fields/iu
+  );
+  assert.throws(
+    () => client.respondToCustomServicesCustomBuildRequest(
+      "project_1",
+      "90000000-0000-4000-8000-000000000001",
+      {
+        commandId: "10000000-0000-4000-8000-000000000014",
+        expectedRevision: 1,
+        responseKind: "provided",
+        responseNote: "My access token is shown here."
+      }
+    ),
+    /must not contain passwords/iu
+  );
+  assert.equal(calls, 0);
+});
+
 test("assessment invoice checkout sends only the invoice digest with the caller's idempotency key", async () => {
   const calls = [];
   const invoiceId =

@@ -41,8 +41,14 @@ function assessmentWorkMethods() {
     async getCustomBuildInvoice() {
       throw new Error("unexpected Custom build invoice read");
     },
+    async getCustomBuildProgress() {
+      throw new Error("unexpected Custom build progress read");
+    },
     async createCustomBuildCheckout() {
       throw new Error("unexpected Custom build checkout");
+    },
+    async respondToCustomBuildRequest() {
+      throw new Error("unexpected Custom build response");
     }
   };
 }
@@ -63,8 +69,10 @@ function completeAccountBoundary(overrides = {}) {
     acceptAssessmentQuote: noOp,
     getCustomBuildQuote: noOp,
     getCustomBuildInvoice: noOp,
+    getCustomBuildProgress: noOp,
     createCustomBuildCheckout: noOp,
     acceptCustomBuildQuote: noOp,
+    respondToCustomBuildRequest: noOp,
     ...overrides
   };
 }
@@ -595,6 +603,85 @@ test("Custom build invoice HTTP routes bind exact project and invoice without br
   ]);
 });
 
+test("Custom build progress HTTP routes bind the exact project and safe customer response", async () => {
+  const calls = [];
+  const requestId =
+    "60000000-0000-4000-8000-000000000003";
+  const current = {
+    schema: "sitesourcery.custom-build-progress/v1",
+    state: "action_needed",
+    revision: 4
+  };
+  const responded = { ...current, state: "reviewing_response", revision: 5 };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildProgress(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return current;
+      },
+      async respondToCustomBuildRequest(actor, projectId, selectedRequestId, input) {
+        calls.push({
+          action: "respond",
+          actor,
+          projectId,
+          requestId: selectedRequestId,
+          input
+        });
+        return responded;
+      }
+    })
+  });
+  const root =
+    `/api/v1/projects/${PROJECT_ID}/custom-services`;
+
+  const read = await api.fetch(request({
+    path: `${root}/custom-build-progress`
+  }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), current);
+
+  const body = {
+    expectedRevision: 4,
+    responseKind: "customer_decision",
+    responseNote: "Use the approved second About-page paragraph."
+  };
+  const response = await api.fetch(request({
+    body,
+    method: "POST",
+    path: `${root}/custom-build-requests/${requestId}/response`,
+    write: true
+  }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), responded);
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "respond",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      requestId,
+      input: { ...body, commandId: "accept-command-1" }
+    }
+  ]);
+
+  const expanded = await api.fetch(request({
+    body: { ...body, password: "must-not-enter-the-system" },
+    method: "POST",
+    path: `${root}/custom-build-requests/${requestId}/response`,
+    write: true
+  }));
+  assert.equal(expanded.status, 400);
+  assert.equal(
+    (await expanded.json()).error.code,
+    "INVALID_CUSTOM_BUILD_PROGRESS_INPUT"
+  );
+  assert.equal(calls.length, 2);
+});
+
 test("assessment report and evidence routes stay customer-bound and integrity checked", async () => {
   const calls = [];
   const bytes = Buffer.from([
@@ -788,6 +875,18 @@ test("production composes custom-services account from canonical project and Pos
   assert.match(
     source,
     /requestRepository:\s*customServicesRequestRepository/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesCustomBuildProgress\(\{\s*authority\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /customBuildProgress:\s*customServicesCustomBuildProgress/u
+  );
+  assert.match(
+    source,
+    /await customServicesCustomBuildProgress\.readiness\(\)/u
   );
   assert.match(
     source,

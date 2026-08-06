@@ -48,6 +48,7 @@ const PAID_QUOTE_ID = "40000000-0000-4000-8000-000000000001";
 const PAID_INVOICE_ID = "50000000-0000-4000-8000-000000000001";
 const PAID_JOB_ID = "60000000-0000-4000-8000-000000000001";
 const PAID_CREDIT_ID = "70000000-0000-4000-8000-000000000001";
+const PAID_REQUEST_ID = "90000000-0000-4000-8000-000000000001";
 const PAID_QUOTE_DIGEST = "a".repeat(64);
 const PAID_DISCLOSURE_DIGEST = "b".repeat(64);
 const PAID_INVOICE_DIGEST = "c".repeat(64);
@@ -257,6 +258,56 @@ function ownerPaidCustomBuildJobs() {
       },
       job: paidJob(),
     }],
+  };
+}
+
+function paidCustomBuildProgress() {
+  return {
+    schema: "sitesourcery.custom-build-progress/v1",
+    state: "active",
+    jobId: PAID_JOB_ID,
+    targetCompletionDate: "2026-09-15",
+    targetDateUnderReview: false,
+    status: {
+      kind: "action_needed",
+      label: "Action needed from you",
+    },
+    progress: {
+      revision: 2,
+      stage: "building",
+      stageLabel: "Building",
+      summary:
+        "The approved structure is ready and the content pass is underway.",
+      nextStep: "Complete the supplied page content.",
+      updatedAt: "2026-08-06T15:00:00.000Z",
+      milestones: [
+        { key: "structure", label: "Plan and structure", state: "done" },
+        { key: "content", label: "Pages and content", state: "in_progress" },
+        {
+          key: "responsive",
+          label: "Phone and accessibility",
+          state: "pending",
+        },
+        { key: "quality", label: "Final checks", state: "pending" },
+      ],
+    },
+    activeRequest: {
+      requestId: PAID_REQUEST_ID,
+      revision: 1,
+      kind: "customer_decision",
+      title: "Choose the approved contact wording",
+      message:
+        "Please choose which approved contact wording should appear on the site.",
+      safeInstructions:
+        "Reply with the wording choice and any customer-safe context.",
+      targetDateImpact: "none",
+      responseRequired: true,
+      state: "open",
+      response: null,
+      access: null,
+      createdAt: "2026-08-06T15:05:00.000Z",
+      updatedAt: "2026-08-06T15:05:00.000Z",
+    },
   };
 }
 
@@ -553,6 +604,13 @@ async function startServer() {
         }
         if (
           url.pathname ===
+            `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/progress`
+        ) {
+          json(response, 200, paidCustomBuildProgress());
+          return;
+        }
+        if (
+          url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-quote`
         ) {
           json(response, 200, paidCustomBuildQuote());
@@ -563,6 +621,13 @@ async function startServer() {
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-invoice`
         ) {
           json(response, 200, paidCustomBuildInvoice());
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-progress`
+        ) {
+          json(response, 200, paidCustomBuildProgress());
           return;
         }
       }
@@ -1006,7 +1071,9 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
     await waitFor(
       cdp,
       `document.querySelector("[data-owner-custom-build-work]")?.hidden === false
-        && document.querySelectorAll("[data-paid-custom-build-job]").length === 1`,
+        && document.querySelectorAll("[data-paid-custom-build-job]").length === 1
+        && document.querySelector("[data-owner-job-progress]")?.textContent
+          .includes("Action needed from you")`,
     );
   } catch (error) {
     const diagnostic = await evaluate(
@@ -1042,7 +1109,10 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
       cdp,
       `document.querySelector("[data-custom-build-quote]")?.hidden === false
         && document.querySelector(".customer-custom-build-status")?.textContent
-          .includes("Your Custom website project is open")`,
+          .includes("Your Custom website project is open")
+        && document.querySelector("[data-customer-custom-build-progress]")?.hidden === false
+        && document.querySelector("[data-custom-build-active-request]")?.textContent
+          .includes("Choose the approved contact wording")`,
     );
   } catch (error) {
     const diagnostic = await evaluate(
@@ -1084,9 +1154,14 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
       };
       const owner = document.querySelector("[data-owner-custom-build-work]");
       const customer = document.querySelector("[data-custom-build-quote]");
+      const customerProgress = document.querySelector(
+        "[data-customer-custom-build-progress]"
+      );
+      const ownerProgress = owner.querySelector("[data-owner-job-progress]");
       const summary = owner.querySelector("summary");
       const controls = [...owner.querySelectorAll("button, summary"),
-        ...customer.querySelectorAll("button, summary")]
+        ...customer.querySelectorAll("button, summary"),
+        ...customerProgress.querySelectorAll("button, summary")]
         .filter(visible)
         .map((element) => ({
           text: element.textContent.trim().replace(/\\s+/g, " ").slice(0, 80),
@@ -1100,8 +1175,24 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
         ),
         ownerVisible: visible(owner),
         customerVisible: visible(customer),
+        customerProgressVisible: visible(customerProgress),
         ownerText: owner.textContent.replace(/\\s+/g, " ").trim(),
         customerText: customer.textContent.replace(/\\s+/g, " ").trim(),
+        ownerProgressText: ownerProgress.textContent
+          .replace(/\\s+/g, " ").trim(),
+        customerProgressText: customerProgress.textContent
+          .replace(/\\s+/g, " ").trim(),
+        customerProgressMilestones: [
+          ...customerProgress.querySelectorAll(
+            ".customer-custom-build-progress-milestone"
+          )
+        ].map((node) => node.textContent.replace(/\\s+/g, " ").trim()),
+        credentialFields: [
+          ...owner.querySelectorAll("input, textarea"),
+          ...customerProgress.querySelectorAll("input, textarea")
+        ].map((field) => field.name).filter((name) =>
+          /password|passcode|token|api.?key|secret/iu.test(name)
+        ),
         customerLabels: [...customer.querySelectorAll("dt")]
           .map((node) => node.textContent.trim()),
         summaryHeight: Math.round(summary.getBoundingClientRect().height * 10) / 10,
@@ -1281,9 +1372,16 @@ try {
       "Target completion",
       "Opened",
     ];
+    const requiredMilestones = [
+      "Plan and structure",
+      "Pages and content",
+      "Phone and accessibility",
+      "Final checks",
+    ];
     if (
       !paid.initial.ownerVisible
       || !paid.initial.customerVisible
+      || !paid.initial.customerProgressVisible
       || !paid.initial.detailsOpen
       || paid.initial.summaryHeight < 44
       || shortControls.length
@@ -1291,6 +1389,21 @@ try {
       || !paid.initial.ownerText.includes(PAID_JOB_ID)
       || paid.initial.customerText.includes(PAID_JOB_ID)
       || !paid.initial.customerText.includes("USD before Checkout tax")
+      || !paid.initial.ownerProgressText.includes(
+        "Choose the approved contact wording"
+      )
+      || !paid.initial.customerProgressText.includes("Action needed from you")
+      || !paid.initial.customerProgressText.includes(
+        "Choose the approved contact wording"
+      )
+      || paid.initial.customerProgressText.includes(PAID_JOB_ID)
+      || paid.initial.customerProgressText.includes(PAID_REQUEST_ID)
+      || paid.initial.credentialFields.length
+      || requiredMilestones.some(
+        (label) => !paid.initial.customerProgressMilestones.some(
+          (entry) => entry.startsWith(label)
+        )
+      )
       || requiredCustomerLabels.some(
         (label) => !paid.initial.customerLabels.includes(label),
       )
@@ -1300,6 +1413,9 @@ try {
           ...paid.initial,
           ownerText: paid.initial.ownerText.slice(0, 240),
           customerText: paid.initial.customerText.slice(0, 240),
+          ownerProgressText: paid.initial.ownerProgressText.slice(0, 240),
+          customerProgressText:
+            paid.initial.customerProgressText.slice(0, 240),
           shortControls,
         })}`,
       );

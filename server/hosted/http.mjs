@@ -27,6 +27,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildWork
 } from "./custom-services-custom-build-work-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildProgress
+} from "./custom-services-custom-build-progress-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -351,6 +354,7 @@ export function createHostedApi(
     customServicesAccount = null,
     customServicesAssessmentWork = null,
     customServicesCustomBuild = null,
+    customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
     stripeWebhook = null
@@ -425,6 +429,22 @@ export function createHostedApi(
     "Hosted Custom build work boundary is invalid.",
     { status: 500 }
   );
+  const customServicesCustomBuildProgressBoundary =
+    customServicesCustomBuildProgress ??
+    createHeldCustomServicesCustomBuildProgress();
+  invariant(
+    typeof customServicesCustomBuildProgressBoundary.readOwnerProgress ===
+      "function" &&
+      typeof customServicesCustomBuildProgressBoundary.recordProgress ===
+        "function" &&
+      typeof customServicesCustomBuildProgressBoundary.openRequest ===
+        "function" &&
+      typeof customServicesCustomBuildProgressBoundary.resolveRequest ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom-build progress boundary is invalid.",
+    { status: 500 }
+  );
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
   const alakazamAccountBoundary =
@@ -482,9 +502,13 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildInvoice ===
         "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildProgress ===
+        "function" &&
       typeof customServicesAccountBoundary.createCustomBuildCheckout ===
         "function" &&
       typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
+        "function" &&
+      typeof customServicesAccountBoundary.respondToCustomBuildRequest ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services account boundary is invalid.",
@@ -838,6 +862,126 @@ export function createHostedApi(
               actor,
               cursorValues[0] ?? null
             );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/progress$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom-build project tools.",
+            { status: 401 }
+          );
+          const organizationValues = url.searchParams.getAll("organizationId");
+          invariant(
+            organizationValues.length === 1 &&
+              [...url.searchParams.keys()].every(
+                (key) => key === "organizationId"
+              ),
+            "INVALID_CUSTOM_BUILD_PROGRESS_INPUT",
+            "The Custom-build organization is invalid.",
+            { status: 400 }
+          );
+          result = await customServicesCustomBuildProgressBoundary
+            .readOwnerProgress(actor, route[0], organizationValues[0]);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/progress$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before updating Custom-build progress.",
+            { status: 401 }
+          );
+          result = await customServicesCustomBuildProgressBoundary
+            .recordProgress(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "customerSummary",
+                  "expectedRevision",
+                  "milestones",
+                  "nextStep",
+                  "organizationId",
+                  "stage"
+                ],
+                "INVALID_CUSTOM_BUILD_PROGRESS_INPUT",
+                "The Custom-build progress update is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/requests$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening a Custom-build request.",
+            { status: 401 }
+          );
+          result = await customServicesCustomBuildProgressBoundary.openRequest(
+            actor,
+            route[0],
+            exactRouteBody(
+              write,
+              [
+                "access",
+                "commandId",
+                "customerMessage",
+                "expectedProgressRevision",
+                "organizationId",
+                "requestKind",
+                "safeInstructions",
+                "targetDateImpact",
+                "title"
+              ],
+              "INVALID_CUSTOM_BUILD_PROGRESS_INPUT",
+              "The Custom-build request is invalid."
+            )
+          );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/requests\/([^/]+)\/resolution$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before resolving a Custom-build request.",
+            { status: 401 }
+          );
+          result = await customServicesCustomBuildProgressBoundary.resolveRequest(
+            actor,
+            route[0],
+            route[1],
+            exactRouteBody(
+              write,
+              [
+                "commandId",
+                "expectedRevision",
+                "organizationId",
+                "resolutionNote",
+                "state"
+              ],
+              "INVALID_CUSTOM_BUILD_PROGRESS_INPUT",
+              "The Custom-build request resolution is invalid."
+            )
+          );
         } else if (
           method === "GET" &&
           pathname ===
@@ -1349,6 +1493,53 @@ export function createHostedApi(
             await customServicesAccountBoundary.getCustomBuildInvoice(
               actor,
               route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-progress$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Custom-build progress.",
+            { status: 401 }
+          );
+          result = await customServicesAccountBoundary.getCustomBuildProgress(
+            actor,
+            route[0]
+          );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-requests\/([^/]+)\/response$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before responding to a Custom-build request.",
+            { status: 401 }
+          );
+          result = await customServicesAccountBoundary
+            .respondToCustomBuildRequest(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "expectedRevision",
+                  "responseKind",
+                  "responseNote"
+                ],
+                "INVALID_CUSTOM_BUILD_PROGRESS_INPUT",
+                "The Custom-build response is invalid."
+              )
             );
         } else if (
           method === "POST" &&

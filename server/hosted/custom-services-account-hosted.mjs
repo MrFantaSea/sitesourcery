@@ -162,6 +162,14 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getCustomBuildProgress(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_PROGRESS_HELD",
+        "Custom-build progress is held in this runtime.",
+        { status: 503 }
+      );
+    },
     async getAssessmentInvoice(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -249,6 +257,14 @@ export function createHeldHostedCustomServicesAccount() {
         "Custom build quote tools are held in this runtime.",
         { status: 503 }
       );
+    },
+    async respondToCustomBuildRequest(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_PROGRESS_HELD",
+        "Custom-build progress is held in this runtime.",
+        { status: 503 }
+      );
     }
   });
 }
@@ -257,6 +273,7 @@ export function createHostedCustomServicesAccount({
   assessmentWork,
   customBuild,
   customBuildPayment,
+  customBuildProgress,
   invoiceRepository,
   payment,
   quoteRepository,
@@ -286,6 +303,14 @@ export function createHostedCustomServicesAccount({
       typeof customBuildPayment.createCheckout === "function",
     "invalid_configuration",
     "the Custom build payment boundary is required",
+    { status: 500 }
+  );
+  invariant(
+    customBuildProgress &&
+      typeof customBuildProgress.readCustomerProgress === "function" &&
+      typeof customBuildProgress.respondToRequest === "function",
+    "invalid_configuration",
+    "the Custom-build progress boundary is required",
     { status: 500 }
   );
   invariant(
@@ -370,6 +395,15 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return customBuildPayment.readCurrentInvoice(scope);
+    },
+
+    async getCustomBuildProgress(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildProgress.readCustomerProgress(scope);
     },
 
     async getAssessmentInvoice(actorInput, projectIdInput) {
@@ -521,6 +555,21 @@ export function createHostedCustomServicesAccount({
         quoteId: input.quoteId,
         quoteRevision: input.quoteRevision
       });
+    },
+
+    async respondToCustomBuildRequest(
+      actorInput,
+      projectIdInput,
+      requestIdInput,
+      value
+    ) {
+      const requestId = requireProjectId(requestIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildProgress.respondToRequest(scope, requestId, value);
     }
   });
 }

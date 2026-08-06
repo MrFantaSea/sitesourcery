@@ -1649,3 +1649,70 @@ test("Custom build quote storage is forced-RLS, minimally writable, and exactly 
     /create function ss\.hosted_runtime_contract_v41\(\)[\s\S]*select 'canonical-ss-v41-custom-build-quote-credit'::text[\s\S]*grant execute on function ss\.hosted_runtime_contract_v41\(\)[\s\S]*to service_role/iu
   );
 });
+
+test("paid Custom build progress stays bounded and separate from billing", async () => {
+  const progress = (await migrations()).find(
+    ({ name }) => name === "202608060043_custom_build_progress.sql"
+  );
+  assert.ok(progress, "missing migration 43 Custom build progress boundary");
+
+  for (const table of [
+    "service_custom_build_progress_updates",
+    "service_custom_build_work_requests"
+  ]) {
+    assert.match(
+      progress.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+
+  assert.match(
+    progress.sql,
+    /stage text not null[\s\S]*'preparing'[\s\S]*'building'[\s\S]*'checking'/iu
+  );
+  assert.match(
+    progress.sql,
+    /request_kind text not null[\s\S]*'customer_content'[\s\S]*'customer_decision'[\s\S]*'delegated_access'[\s\S]*'outside_dependency'/iu
+  );
+  assert.match(
+    progress.sql,
+    /where state in \('open', 'answered'\)/iu
+  );
+  assert.match(
+    progress.sql,
+    /create function ss\.prepare_service_custom_build_progress_update\(\)/iu
+  );
+  assert.match(
+    progress.sql,
+    /create function ss\.guard_service_custom_build_work_request\(\)/iu
+  );
+  assert.match(progress.sql, /service_text_excludes_credentials/iu);
+  assert.match(progress.sql, /service_operator_has_capability/iu);
+  assert.match(progress.sql, /'service_job_manage'/iu);
+  assert.match(progress.sql, /expected_progress_revision/iu);
+  assert.match(progress.sql, /response_command_id/iu);
+  assert.match(progress.sql, /resolution_command_id/iu);
+  assert.match(
+    progress.sql,
+    /before update or delete on ss\.service_custom_build_progress_updates[\s\S]*ss\.reject_update\(\)/iu
+  );
+  assert.match(
+    progress.sql,
+    /create function ss\.hosted_runtime_contract_v43\(\)[\s\S]*select 'canonical-ss-v43-custom-build-progress'[\s\S]*grant execute on function ss\.hosted_runtime_contract_v43\(\)[\s\S]*to service_role/iu
+  );
+
+  assert.doesNotMatch(
+    progress.sql,
+    /create table ss\.(?:workflow|workflows|tasks|task_events|kanban|gantt)/iu
+  );
+  assert.doesNotMatch(
+    progress.sql,
+    /service_custom_build_(?:invoices|checkout_attempts|payment_receipts)/iu
+  );
+  assert.doesNotMatch(
+    progress.sql,
+    /from ss\.service_custom_build_jobs[\s\S]{0,300}\bfor update\b/iu
+  );
+  assert.doesNotMatch(progress.sql, /\bpercent(?:age)?\b/iu);
+  assert.doesNotMatch(progress.sql, /on delete cascade|grant all privileges/iu);
+});

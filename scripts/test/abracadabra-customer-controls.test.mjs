@@ -8,6 +8,7 @@ const { createClient } = require(
   "../../abracadabra/app/abracadabra-api.js"
 );
 const {
+  verifiedCustomBuildProgress,
   verifiedCustomerCustomBuildCheckout,
   verifiedCustomerCustomBuildInvoice
 } = require(
@@ -160,6 +161,77 @@ function checkout() {
       },
       chargeOccurred: false
     }
+  };
+}
+
+function progressProjection(activeRequest = null) {
+  const progress = {
+    revision: 2,
+    stage: "building",
+    stageLabel: "Building",
+    summary:
+      "The approved structure is ready and the content pass is underway.",
+    nextStep: "Complete the supplied page content.",
+    updatedAt: "2026-08-06T15:00:00.000Z",
+    milestones: [
+      { key: "structure", label: "Plan and structure", state: "done" },
+      { key: "content", label: "Pages and content", state: "in_progress" },
+      {
+        key: "responsive",
+        label: "Phone and accessibility",
+        state: "pending"
+      },
+      { key: "quality", label: "Final checks", state: "pending" }
+    ]
+  };
+  let status = { kind: "building", label: "Building" };
+  if (activeRequest?.kind === "outside_dependency") {
+    status = {
+      kind: "waiting_on_dependency",
+      label: "Waiting on an outside dependency"
+    };
+  } else if (activeRequest?.state === "answered") {
+    status = {
+      kind: "reviewing_response",
+      label: "Site Sourcery is reviewing your response"
+    };
+  } else if (activeRequest) {
+    status = {
+      kind: "action_needed",
+      label: "Action needed from you"
+    };
+  }
+  return {
+    schema: "sitesourcery.custom-build-progress/v1",
+    state: "active",
+    jobId: JOB_ID,
+    targetCompletionDate: "2026-09-15",
+    targetDateUnderReview:
+      activeRequest?.targetDateImpact === "under_review",
+    status,
+    progress,
+    activeRequest
+  };
+}
+
+function workRequest(overrides = {}) {
+  return {
+    requestId: "90000000-0000-4000-8000-000000000001",
+    revision: 1,
+    kind: "customer_decision",
+    title: "Choose the approved contact wording",
+    message:
+      "Please choose which approved contact wording should appear on the site.",
+    safeInstructions:
+      "Reply with the wording choice and any customer-safe context.",
+    targetDateImpact: "none",
+    responseRequired: true,
+    state: "open",
+    response: null,
+    access: null,
+    createdAt: "2026-08-06T15:05:00.000Z",
+    updatedAt: "2026-08-06T15:05:00.000Z",
+    ...overrides
   };
 }
 
@@ -430,5 +502,194 @@ test("Custom build customer panel keeps all payment states plain and phone-frien
   assert.match(
     css,
     /\.customer-owner-assessment-job-summary\{[^}]*min-height:44px/u
+  );
+});
+
+test("Custom-build progress verifies calm stages, milestones, and each bounded request state", () => {
+  const active = progressProjection();
+  assert.equal(verifiedCustomBuildProgress(active), active);
+
+  const actionNeeded = progressProjection(workRequest());
+  assert.equal(
+    verifiedCustomBuildProgress(actionNeeded),
+    actionNeeded
+  );
+
+  const answeredRequest = workRequest({
+    revision: 2,
+    state: "answered",
+    response: {
+      kind: "provided",
+      note: "Use the shorter approved contact wording.",
+      answeredAt: "2026-08-06T15:10:00.000Z"
+    },
+    updatedAt: "2026-08-06T15:10:00.000Z"
+  });
+  const reviewing = progressProjection(answeredRequest);
+  assert.equal(verifiedCustomBuildProgress(reviewing), reviewing);
+
+  const waitingRequest = workRequest({
+    kind: "outside_dependency",
+    title: "Waiting for the provider maintenance window",
+    message:
+      "The provider maintenance window must end before final checks continue.",
+    safeInstructions:
+      "No customer response is needed while Site Sourcery monitors the provider.",
+    targetDateImpact: "under_review",
+    responseRequired: false
+  });
+  const waiting = progressProjection(waitingRequest);
+  assert.equal(verifiedCustomBuildProgress(waiting), waiting);
+
+  const delegatedRequest = workRequest({
+    kind: "delegated_access",
+    title: "Share a delegated editor role",
+    message:
+      "Please use the provider sharing screen to add the requested editor role.",
+    safeInstructions:
+      "Use delegated sharing only and reply after the invitation is sent.",
+    targetDateImpact: "under_review",
+    access: {
+      providerLabel: "Example CMS",
+      accountLabel: "Marketing website",
+      delegatedRole: "Site editor",
+      expiresAt: "2026-08-20T17:00:00.000Z"
+    }
+  });
+  const delegated = progressProjection(delegatedRequest);
+  assert.equal(verifiedCustomBuildProgress(delegated), delegated);
+
+  const notAvailable = {
+    schema: "sitesourcery.custom-build-progress/v1",
+    state: "not_available",
+    jobId: null,
+    targetCompletionDate: null,
+    targetDateUnderReview: false,
+    status: null,
+    progress: null,
+    activeRequest: null
+  };
+  assert.equal(verifiedCustomBuildProgress(notAvailable), notAvailable);
+});
+
+test("Custom-build progress rejects status, milestone, credential, and access-verification claims", () => {
+  const valid = progressProjection(workRequest());
+  assert.equal(
+    verifiedCustomBuildProgress({
+      ...valid,
+      status: { kind: "checking", label: "Checking the work" }
+    }),
+    null
+  );
+  assert.equal(
+    verifiedCustomBuildProgress({
+      ...valid,
+      progress: {
+        ...valid.progress,
+        milestones: valid.progress.milestones.map((milestone, index) =>
+          index === 0 ? { ...milestone, completion: 100 } : milestone
+        )
+      }
+    }),
+    null
+  );
+  assert.equal(
+    verifiedCustomBuildProgress({
+      ...valid,
+      progress: {
+        ...valid.progress,
+        summary: "The API key is available in this unsafe update."
+      }
+    }),
+    null
+  );
+  const delegated = progressProjection(workRequest({
+    kind: "delegated_access",
+    title: "Share a delegated editor role",
+    message:
+      "Please use the provider sharing screen to add the requested editor role.",
+    safeInstructions:
+      "Use delegated sharing only and reply after the invitation is sent.",
+    access: {
+      providerLabel: "Example CMS",
+      accountLabel: "Marketing website",
+      delegatedRole: "Site editor",
+      expiresAt: "2026-08-20T17:00:00.000Z",
+      verified: true
+    }
+  }));
+  assert.equal(verifiedCustomBuildProgress(delegated), null);
+  assert.equal(
+    verifiedCustomBuildProgress({
+      ...valid,
+      targetDateUnderReview: true
+    }),
+    null
+  );
+});
+
+test("Custom-build progress surfaces remain bounded, credential-safe, and responsive", async () => {
+  const [source, css] = await Promise.all([
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-customer-control-dom.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-app.css",
+        import.meta.url
+      ),
+      "utf8"
+    )
+  ]);
+  for (const copy of [
+    "Preparing",
+    "Building",
+    "Checking the work",
+    "Action needed from you",
+    "Site Sourcery is reviewing your response",
+    "Waiting on an outside dependency",
+    "Safe response note — no credentials",
+    "A response does not by itself confirm that provider access works.",
+    "A customer response does not verify provider access.",
+    "Post a progress update",
+    "Open one customer request",
+    "Resolved after review",
+    "Withdrawn"
+  ]) assert.ok(source.includes(copy), copy);
+  for (const control of [
+    "data-customer-custom-build-progress",
+    "data-custom-build-response-form",
+    "data-owner-progress-form",
+    "data-owner-request-form",
+    "data-owner-resolution-form"
+  ]) assert.ok(source.includes(control), control);
+  const progressUi = source.slice(
+    source.indexOf("function customBuildMilestoneStateLabel"),
+    source.indexOf("function customBuildLocalDateTime")
+  );
+  assert.doesNotMatch(progressUi, /percentage/iu);
+  assert.doesNotMatch(
+    progressUi,
+    /assessmentField\([\s\S]{0,120}"(?:password|passcode|token|apiKey|verificationCode)"/iu
+  );
+  assert.match(
+    source,
+    /customBuildCommandId\([\s\S]*?"respond"[\s\S]*?request\.requestId/u
+  );
+  assert.match(
+    source,
+    /customBuildCommandId\([\s\S]*?operation[\s\S]*?subjectId/u
+  );
+  assert.match(
+    css,
+    /\.customer-custom-build-progress-response input,[^{]+\{min-height:44px\}/u
+  );
+  assert.match(
+    css,
+    /@media\(max-width:44rem\)[\s\S]*?\.customer-custom-build-progress-facts,[^{]+\{grid-template-columns:1fr\}/u
   );
 });

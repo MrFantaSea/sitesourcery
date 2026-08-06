@@ -17,6 +17,8 @@
   var SAFE_PAGE_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/u;
   var SAFE_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
   var CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+  var CUSTOM_BUILD_CREDENTIAL =
+    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase)/iu;
   var MAXIMUM_ASSESSMENT_EVIDENCE_BYTES = 700 * 1024;
   var FORBIDDEN_AUTHORITY_FIELDS = new Set([
     "amount",
@@ -173,6 +175,18 @@
         code: "INVALID_INPUT",
         message: field + " must be between " + minimum + " and "
           + maximum + " characters."
+      });
+    }
+    return selected;
+  }
+
+  function customBuildSafeText(value, field, minimum, maximum) {
+    var selected = boundedText(value, field, minimum, maximum);
+    if (CUSTOM_BUILD_CREDENTIAL.test(selected)) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field
+          + " must not contain passwords, verification codes, API keys, tokens, or other credentials."
       });
     }
     return selected;
@@ -1187,6 +1201,314 @@
       );
     }
 
+    function getOwnerCustomBuildProgress(
+      jobId,
+      organizationId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(
+            requiredUuid(jobId, "Custom-build job ID"),
+            "Custom-build job ID"
+          )
+          + "/progress?organizationId="
+          + encodeURIComponent(
+            requiredUuid(organizationId, "Organization ID")
+          ),
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function recordOwnerCustomBuildProgress(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "commandId",
+          "customerSummary",
+          "expectedRevision",
+          "milestones",
+          "nextStep",
+          "organizationId",
+          "stage"
+        ],
+        "Custom-build progress update"
+      );
+      rejectClaimedAuthority(source);
+      var milestones = exactInput(
+        source.milestones,
+        ["content", "quality", "responsive", "structure"],
+        "Custom-build milestones"
+      );
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom-build progress command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(
+            requiredUuid(jobId, "Custom-build job ID"),
+            "Custom-build job ID"
+          )
+          + "/progress",
+        {
+          body: {
+            commandId: commandId,
+            customerSummary: customBuildSafeText(
+              source.customerSummary,
+              "Customer progress summary",
+              10,
+              500
+            ),
+            expectedRevision: integerBetween(
+              source.expectedRevision,
+              "Expected progress revision",
+              0,
+              Number.MAX_SAFE_INTEGER
+            ),
+            milestones: {
+              content: oneOf(
+                milestones.content,
+                "Content milestone",
+                ["pending", "in_progress", "done"]
+              ),
+              quality: oneOf(
+                milestones.quality,
+                "Quality milestone",
+                ["pending", "in_progress", "done"]
+              ),
+              responsive: oneOf(
+                milestones.responsive,
+                "Phone and accessibility milestone",
+                ["pending", "in_progress", "done"]
+              ),
+              structure: oneOf(
+                milestones.structure,
+                "Structure milestone",
+                ["pending", "in_progress", "done"]
+              )
+            },
+            nextStep: customBuildSafeText(
+              source.nextStep,
+              "Customer next step",
+              5,
+              500
+            ),
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            stage: oneOf(
+              source.stage,
+              "Custom-build stage",
+              ["preparing", "building", "checking"]
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
+    function ownerCustomBuildAccess(value, requestKind) {
+      if (requestKind !== "delegated_access") {
+        if (value !== null) {
+          throw new APIError({
+            code: "INVALID_INPUT",
+            message: "Delegated access details are only available for a delegated-access request."
+          });
+        }
+        return null;
+      }
+      var source = exactInput(
+        value,
+        ["accountLabel", "delegatedRole", "expiresAt", "providerLabel"],
+        "Delegated access labels"
+      );
+      return {
+        accountLabel: customBuildSafeText(
+          source.accountLabel,
+          "Safe account or user label",
+          1,
+          254
+        ),
+        delegatedRole: customBuildSafeText(
+          source.delegatedRole,
+          "Delegated role",
+          1,
+          254
+        ),
+        expiresAt: requiredIso(
+          source.expiresAt,
+          "Delegated access expiration"
+        ),
+        providerLabel: customBuildSafeText(
+          source.providerLabel,
+          "Provider label",
+          1,
+          254
+        )
+      };
+    }
+
+    function openOwnerCustomBuildRequest(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "access",
+          "commandId",
+          "customerMessage",
+          "expectedProgressRevision",
+          "organizationId",
+          "requestKind",
+          "safeInstructions",
+          "targetDateImpact",
+          "title"
+        ],
+        "Custom-build customer request"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom-build request command ID"
+      );
+      var requestKind = oneOf(
+        source.requestKind,
+        "Custom-build request kind",
+        [
+          "customer_content",
+          "customer_decision",
+          "delegated_access",
+          "outside_dependency"
+        ]
+      );
+      var targetDateImpact = oneOf(
+        source.targetDateImpact,
+        "Target-date impact",
+        ["none", "under_review"]
+      );
+      if (
+        requestKind === "outside_dependency"
+        && targetDateImpact !== "under_review"
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "An outside dependency must place the target date under review."
+        });
+      }
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(
+            requiredUuid(jobId, "Custom-build job ID"),
+            "Custom-build job ID"
+          )
+          + "/requests",
+        {
+          body: {
+            access: ownerCustomBuildAccess(source.access, requestKind),
+            commandId: commandId,
+            customerMessage: customBuildSafeText(
+              source.customerMessage,
+              "Customer request message",
+              10,
+              1000
+            ),
+            expectedProgressRevision: integerBetween(
+              source.expectedProgressRevision,
+              "Expected progress revision",
+              0,
+              Number.MAX_SAFE_INTEGER
+            ),
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            requestKind: requestKind,
+            safeInstructions: customBuildSafeText(
+              source.safeInstructions,
+              "Safe customer instructions",
+              10,
+              1000
+            ),
+            targetDateImpact: targetDateImpact,
+            title: customBuildSafeText(
+              source.title,
+              "Customer request title",
+              5,
+              120
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
+    function resolveOwnerCustomBuildRequest(
+      jobId,
+      requestId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        [
+          "commandId",
+          "expectedRevision",
+          "organizationId",
+          "resolutionNote",
+          "state"
+        ],
+        "Custom-build request resolution"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom-build resolution command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(
+            requiredUuid(jobId, "Custom-build job ID"),
+            "Custom-build job ID"
+          )
+          + "/requests/"
+          + segment(
+            requiredUuid(requestId, "Custom-build request ID"),
+            "Custom-build request ID"
+          )
+          + "/resolution",
+        {
+          body: {
+            commandId: commandId,
+            expectedRevision: integerBetween(
+              source.expectedRevision,
+              "Expected request revision",
+              1,
+              Number.MAX_SAFE_INTEGER
+            ),
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            resolutionNote: customBuildSafeText(
+              source.resolutionNote,
+              "Request resolution note",
+              5,
+              500
+            ),
+            state: oneOf(
+              source.state,
+              "Request resolution",
+              ["resolved", "withdrawn"]
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
     function issueOwnerCustomBuildQuote(jobId, input) {
       var source = exactInput(
         input,
@@ -1318,6 +1640,68 @@
         "/projects/" + segment(projectId, "Project ID")
           + "/custom-services/custom-build-invoice",
         { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function getCustomServicesCustomBuildProgress(
+      projectId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-progress",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function respondToCustomServicesCustomBuildRequest(
+      projectId,
+      requestId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "expectedRevision", "responseKind", "responseNote"],
+        "Custom-build customer response"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom-build response command ID"
+      );
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-requests/"
+          + segment(
+            requiredUuid(requestId, "Custom-build request ID"),
+            "Custom-build request ID"
+          )
+          + "/response",
+        {
+          body: {
+            commandId: commandId,
+            expectedRevision: integerBetween(
+              source.expectedRevision,
+              "Expected request revision",
+              1,
+              Number.MAX_SAFE_INTEGER
+            ),
+            responseKind: oneOf(
+              source.responseKind,
+              "Custom-build response",
+              ["provided", "cannot_provide"]
+            ),
+            responseNote: customBuildSafeText(
+              source.responseNote,
+              "Safe response note",
+              1,
+              1000
+            )
+          },
+          idempotencyKey: commandId
+        }
       );
     }
 
@@ -2092,6 +2476,14 @@
         listOwnerCustomBuildOpportunities,
       listOwnerCustomBuildJobs:
         listOwnerCustomBuildJobs,
+      getOwnerCustomBuildProgress:
+        getOwnerCustomBuildProgress,
+      recordOwnerCustomBuildProgress:
+        recordOwnerCustomBuildProgress,
+      openOwnerCustomBuildRequest:
+        openOwnerCustomBuildRequest,
+      resolveOwnerCustomBuildRequest:
+        resolveOwnerCustomBuildRequest,
       issueOwnerCustomBuildQuote:
         issueOwnerCustomBuildQuote,
       voidOwnerCustomBuildQuote:
@@ -2100,6 +2492,10 @@
         getCustomServicesCustomBuildQuote,
       getCustomServicesCustomBuildInvoice:
         getCustomServicesCustomBuildInvoice,
+      getCustomServicesCustomBuildProgress:
+        getCustomServicesCustomBuildProgress,
+      respondToCustomServicesCustomBuildRequest:
+        respondToCustomServicesCustomBuildRequest,
       createCustomServicesCustomBuildCheckout:
         createCustomServicesCustomBuildCheckout,
       acceptCustomServicesCustomBuildQuote:

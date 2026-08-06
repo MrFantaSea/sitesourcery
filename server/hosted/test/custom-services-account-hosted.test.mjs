@@ -60,6 +60,8 @@ function context({ scope, snapshot } = {}) {
     customBuildCheckout: [],
     customBuildAcceptance: [],
     customBuildInvoiceRead: [],
+    customBuildProgressRead: [],
+    customBuildProgressResponse: [],
     customBuildRead: [],
     invoiceRead: [],
     quoteAcceptance: [],
@@ -129,6 +131,30 @@ function context({ scope, snapshot } = {}) {
         return {
           schema: "sitesourcery.custom-build-start-checkout/v1",
           state: "ready"
+        };
+      }
+    },
+    customBuildProgress: {
+      async readCustomerProgress(value) {
+        calls.customBuildProgressRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-progress/v1",
+          state: "preparing",
+          revision: 0,
+          activeRequest: null
+        };
+      },
+      async respondToRequest(value, requestId, input) {
+        calls.customBuildProgressResponse.push({
+          scope: structuredClone(value),
+          requestId,
+          input: structuredClone(input)
+        });
+        return {
+          schema: "sitesourcery.custom-build-progress/v1",
+          state: "building",
+          revision: 1,
+          activeRequest: null
         };
       }
     },
@@ -495,6 +521,40 @@ test("hosted Custom build invoice and checkout send only resolved customer autho
   ]);
 });
 
+test("hosted Custom build progress read and response stay bound to the resolved project", async () => {
+  const selected = context();
+  const progress = await selected.service.getCustomBuildProgress(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(progress.state, "preparing");
+
+  const requestId = "60000000-0000-4000-8000-000000000003";
+  const input = {
+    answer: "The About page should use the second approved paragraph.",
+    commandId: "custom-build-response-command-1",
+    expectedRevision: 0
+  };
+  const responded = await selected.service.respondToCustomBuildRequest(
+    actor(),
+    PROJECT_ID,
+    requestId,
+    input
+  );
+  assert.equal(responded.state, "building");
+
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildProgressRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildProgressResponse, [
+    { scope, requestId, input }
+  ]);
+});
+
 test("hosted custom-services quote read and acceptance stay bound to the resolved customer project", async () => {
   const selected = context();
   const quote = await selected.service.getAssessmentQuote(
@@ -658,6 +718,14 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.getCustomBuildQuote(actor(), PROJECT_ID),
     isError("CUSTOM_BUILD_HELD", 503)
+  );
+  await assert.rejects(
+    held.getCustomBuildProgress(actor(), PROJECT_ID),
+    isError("CUSTOM_BUILD_PROGRESS_HELD", 503)
+  );
+  await assert.rejects(
+    held.respondToCustomBuildRequest(actor(), PROJECT_ID, OTHER_ID, {}),
+    isError("CUSTOM_BUILD_PROGRESS_HELD", 503)
   );
   await assert.rejects(
     held.acceptCustomBuildQuote(actor(), PROJECT_ID, {}),

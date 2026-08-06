@@ -69,6 +69,9 @@ import {
   createPostgresCustomServicesCustomBuildWork
 } from "../custom-services-custom-build-work-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildProgress
+} from "../custom-services-custom-build-progress-postgres.mjs";
+import {
   createPostgresCustomServicesCustomBuildPayment
 } from "../custom-services-custom-build-payment-postgres.mjs";
 import {
@@ -367,6 +370,8 @@ async function start() {
     });
   const customServicesCustomBuildWork =
     createPostgresCustomServicesCustomBuildWork({ authority });
+  const customServicesCustomBuildProgress =
+    createPostgresCustomServicesCustomBuildProgress({ authority });
   const customBuildPayment =
     createPostgresCustomServicesCustomBuildPayment({
       authority,
@@ -380,6 +385,7 @@ async function start() {
       assessmentWork: customServicesAssessmentWork,
       customBuild: customServicesCustomBuild,
       customBuildPayment,
+      customBuildProgress: customServicesCustomBuildProgress,
       invoiceRepository: customServicesInvoiceRepository,
       payment: customServicesAssessmentPayment,
       quoteRepository: customServicesAssessmentQuoteRepository,
@@ -526,6 +532,7 @@ async function start() {
     await customBuildPayment.readiness()
   );
   await customServicesCustomBuildWork.readiness();
+  await customServicesCustomBuildProgress.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -556,6 +563,7 @@ async function start() {
         customServicesAccount,
         customServicesAssessmentWork,
         customServicesCustomBuild,
+        customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,
         stripeWebhook: createStripeWebhookRouter({

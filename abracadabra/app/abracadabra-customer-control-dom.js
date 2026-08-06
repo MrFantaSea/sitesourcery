@@ -92,6 +92,21 @@
     "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
   var CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
     "00000000-0000-4000-8000-000000000342";
+  var CUSTOM_BUILD_PROGRESS_SCHEMA =
+    "sitesourcery.custom-build-progress/v1";
+  var CUSTOM_BUILD_PROGRESS_STAGES = Object.freeze({
+    preparing: "Preparing",
+    building: "Building",
+    checking: "Checking the work"
+  });
+  var CUSTOM_BUILD_PROGRESS_MILESTONES = Object.freeze([
+    Object.freeze(["structure", "Plan and structure"]),
+    Object.freeze(["content", "Pages and content"]),
+    Object.freeze(["responsive", "Phone and accessibility"]),
+    Object.freeze(["quality", "Final checks"])
+  ]);
+  var CUSTOM_BUILD_PROGRESS_CREDENTIAL =
+    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase)/iu;
   var CUSTOM_BUILD_TIERS = Object.freeze([
     Object.freeze({
       id: "card",
@@ -3122,6 +3137,177 @@
       : null;
   }
 
+  function customBuildProgressText(value, minimum, maximum) {
+    return assessmentText(value, minimum, maximum)
+      && !CUSTOM_BUILD_PROGRESS_CREDENTIAL.test(value);
+  }
+
+  function safeCustomBuildProgressRequest(value) {
+    if (value === null) return true;
+    if (
+      !exactKeys(
+        value,
+        [
+          "access",
+          "createdAt",
+          "kind",
+          "message",
+          "requestId",
+          "response",
+          "responseRequired",
+          "revision",
+          "safeInstructions",
+          "state",
+          "targetDateImpact",
+          "title",
+          "updatedAt"
+        ]
+      )
+      || !UUID.test(text(value.requestId))
+      || !Number.isSafeInteger(value.revision)
+      || value.revision < 1
+      || ![
+        "customer_content",
+        "customer_decision",
+        "delegated_access",
+        "outside_dependency"
+      ].includes(value.kind)
+      || !customBuildProgressText(value.title, 5, 120)
+      || !customBuildProgressText(value.message, 10, 1000)
+      || !customBuildProgressText(value.safeInstructions, 10, 1000)
+      || !["none", "under_review"].includes(value.targetDateImpact)
+      || typeof value.responseRequired !== "boolean"
+      || value.responseRequired !== (value.kind !== "outside_dependency")
+      || !["open", "answered"].includes(value.state)
+      || !safeIso(value.createdAt)
+      || !safeIso(value.updatedAt)
+      || Date.parse(value.updatedAt) < Date.parse(value.createdAt)
+      || (value.kind === "outside_dependency"
+        && value.targetDateImpact !== "under_review")
+    ) return false;
+    if (value.state === "open") {
+      if (value.response !== null) return false;
+    } else if (
+      !exactKeys(value.response, ["answeredAt", "kind", "note"])
+      || !["provided", "cannot_provide"].includes(value.response.kind)
+      || !customBuildProgressText(value.response.note, 1, 1000)
+      || !safeIso(value.response.answeredAt)
+    ) return false;
+    if (value.kind !== "delegated_access") {
+      return value.access === null;
+    }
+    return exactKeys(
+      value.access,
+      ["accountLabel", "delegatedRole", "expiresAt", "providerLabel"]
+    )
+      && customBuildProgressText(value.access.providerLabel, 1, 254)
+      && customBuildProgressText(value.access.accountLabel, 1, 254)
+      && customBuildProgressText(value.access.delegatedRole, 1, 254)
+      && safeIso(value.access.expiresAt);
+  }
+
+  function verifiedCustomBuildProgress(value, expectedJobId) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "activeRequest",
+          "jobId",
+          "progress",
+          "schema",
+          "state",
+          "status",
+          "targetCompletionDate",
+          "targetDateUnderReview"
+        ]
+      )
+      || value.schema !== CUSTOM_BUILD_PROGRESS_SCHEMA
+    ) return null;
+    if (value.state === "not_available") {
+      return value.jobId === null
+        && value.targetCompletionDate === null
+        && value.targetDateUnderReview === false
+        && value.status === null
+        && value.progress === null
+        && value.activeRequest === null
+        ? value
+        : null;
+    }
+    if (
+      value.state !== "active"
+      || !UUID.test(text(value.jobId))
+      || (expectedJobId && value.jobId !== expectedJobId)
+      || !assessmentDate(value.targetCompletionDate)
+      || typeof value.targetDateUnderReview !== "boolean"
+      || !exactKeys(
+        value.progress,
+        [
+          "milestones",
+          "nextStep",
+          "revision",
+          "stage",
+          "stageLabel",
+          "summary",
+          "updatedAt"
+        ]
+      )
+      || !Number.isSafeInteger(value.progress.revision)
+      || value.progress.revision < 0
+      || !Object.prototype.hasOwnProperty.call(
+        CUSTOM_BUILD_PROGRESS_STAGES,
+        value.progress.stage
+      )
+      || value.progress.stageLabel !==
+        CUSTOM_BUILD_PROGRESS_STAGES[value.progress.stage]
+      || !customBuildProgressText(value.progress.summary, 10, 500)
+      || !customBuildProgressText(value.progress.nextStep, 5, 500)
+      || !safeIso(value.progress.updatedAt)
+      || !Array.isArray(value.progress.milestones)
+      || value.progress.milestones.length !==
+        CUSTOM_BUILD_PROGRESS_MILESTONES.length
+      || !value.progress.milestones.every(function (milestone, index) {
+        var expected = CUSTOM_BUILD_PROGRESS_MILESTONES[index];
+        return exactKeys(milestone, ["key", "label", "state"])
+          && milestone.key === expected[0]
+          && milestone.label === expected[1]
+          && ["pending", "in_progress", "done"]
+            .includes(milestone.state);
+      })
+      || !safeCustomBuildProgressRequest(value.activeRequest)
+      || !exactKeys(value.status, ["kind", "label"])
+    ) return null;
+    var expectedStatus = {
+      kind: value.progress.stage,
+      label: value.progress.stageLabel
+    };
+    if (value.activeRequest) {
+      if (value.activeRequest.kind === "outside_dependency") {
+        expectedStatus = {
+          kind: "waiting_on_dependency",
+          label: "Waiting on an outside dependency"
+        };
+      } else if (value.activeRequest.state === "answered") {
+        expectedStatus = {
+          kind: "reviewing_response",
+          label: "Site Sourcery is reviewing your response"
+        };
+      } else {
+        expectedStatus = {
+          kind: "action_needed",
+          label: "Action needed from you"
+        };
+      }
+    }
+    return value.status.kind === expectedStatus.kind
+      && value.status.label === expectedStatus.label
+      && value.targetDateUnderReview === Boolean(
+        value.activeRequest
+        && value.activeRequest.targetDateImpact === "under_review"
+      )
+      ? value
+      : null;
+  }
+
   function verifiedOwnerCustomBuildQuoteReceipt(value) {
     if (
       !exactKeys(
@@ -4829,6 +5015,389 @@
     });
   }
 
+  function customBuildMilestoneStateLabel(state) {
+    return {
+      pending: "Not started",
+      in_progress: "In progress",
+      done: "Complete"
+    }[state] || "Unavailable";
+  }
+
+  function customBuildProgressMilestones(documentRef, progress) {
+    var list = accountElement(
+      documentRef,
+      "ul",
+      "customer-custom-build-progress-milestones"
+    );
+    progress.milestones.forEach(function (milestone) {
+      var item = accountElement(
+        documentRef,
+        "li",
+        "customer-custom-build-progress-milestone"
+      );
+      item.setAttribute("data-milestone-state", milestone.state);
+      item.append(
+        accountElement(documentRef, "span", "", milestone.label),
+        accountElement(
+          documentRef,
+          "strong",
+          "",
+          customBuildMilestoneStateLabel(milestone.state)
+        )
+      );
+      list.appendChild(item);
+    });
+    return list;
+  }
+
+  function customBuildProgressSummary(documentRef, snapshot) {
+    var overview = accountElement(
+      documentRef,
+      "div",
+      "customer-custom-build-progress-overview"
+    );
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-custom-build-progress-facts"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Current stage",
+      snapshot.progress.stageLabel
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Target completion",
+      snapshot.targetDateUnderReview
+        ? "Under review"
+        : snapshot.targetCompletionDate
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Latest update",
+      accountDate(snapshot.progress.updatedAt)
+    );
+    overview.append(
+      facts,
+      accountElement(
+        documentRef,
+        "h4",
+        "",
+        "Latest update"
+      ),
+      accountElement(
+        documentRef,
+        "p",
+        "customer-custom-build-progress-copy",
+        snapshot.progress.summary
+      ),
+      accountElement(
+        documentRef,
+        "h4",
+        "",
+        "Next step"
+      ),
+      accountElement(
+        documentRef,
+        "p",
+        "customer-custom-build-progress-copy",
+        snapshot.progress.nextStep
+      ),
+      accountElement(
+        documentRef,
+        "h4",
+        "",
+        "Milestones"
+      ),
+      customBuildProgressMilestones(documentRef, snapshot.progress)
+    );
+    return overview;
+  }
+
+  function createCustomerCustomBuildProgressPanel(documentRef, actions) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-custom-services customer-custom-build-progress"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-custom-build-progress-title"
+    );
+    panel.setAttribute("data-customer-custom-build-progress", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Your Custom-build project"
+    );
+    heading.id = "customer-custom-build-progress-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-status customer-custom-build-progress-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh project progress"
+    );
+    refresh.type = "button";
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-assessment-body customer-custom-build-progress-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Paid Custom build"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "See the current stage, completed milestones, latest update, and any one action Site Sourcery needs from you."
+      ),
+      status,
+      refresh,
+      body
+    );
+
+    function renderRequest(snapshot, busy) {
+      var request = snapshot.activeRequest;
+      if (!request) return null;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-progress-request"
+      );
+      section.setAttribute("data-custom-build-active-request", request.kind);
+      section.append(
+        accountElement(documentRef, "h4", "", snapshot.status.label),
+        accountElement(
+          documentRef,
+          "h5",
+          "customer-custom-build-progress-request-title",
+          request.title
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-progress-copy",
+          request.message
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          request.safeInstructions
+        )
+      );
+      if (request.access) {
+        var accessFacts = accountElement(
+          documentRef,
+          "dl",
+          "customer-custom-build-progress-access"
+        );
+        appendAccountFact(
+          documentRef,
+          accessFacts,
+          "Provider",
+          request.access.providerLabel
+        );
+        appendAccountFact(
+          documentRef,
+          accessFacts,
+          "Account or user label",
+          request.access.accountLabel
+        );
+        appendAccountFact(
+          documentRef,
+          accessFacts,
+          "Requested role",
+          request.access.delegatedRole
+        );
+        appendAccountFact(
+          documentRef,
+          accessFacts,
+          "Sharing window ends",
+          accountDate(request.access.expiresAt)
+        );
+        section.append(
+          accessFacts,
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-credential-warning",
+            "Use the provider's own sharing or delegated-user controls. Never paste passwords, verification codes, API keys, access tokens, or other credentials here."
+          )
+        );
+      }
+      if (!request.responseRequired) {
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "No response is needed right now. Site Sourcery will update this project when the outside dependency changes."
+          )
+        );
+        return section;
+      }
+      if (request.state === "answered") {
+        section.append(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Your response is saved and Site Sourcery is reviewing it. A response does not by itself confirm that provider access works."
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-progress-copy",
+            request.response.note
+          )
+        );
+        return section;
+      }
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-custom-build-progress-response"
+      );
+      form.setAttribute("data-custom-build-response-form", request.requestId);
+      var responseKind = assessmentSelect(
+        documentRef,
+        "responseKind",
+        "Response",
+        "provided",
+        [
+          ["provided", "I completed or provided this"],
+          ["cannot_provide", "I cannot provide this"]
+        ]
+      );
+      responseKind.querySelector("select").required = true;
+      var responseNote = assessmentField(
+        documentRef,
+        "responseNote",
+        "Safe response note — no credentials",
+        "",
+        {
+          required: true,
+          minimumLength: 1,
+          maximum: 1000,
+          multiline: true,
+          placeholder:
+            "Describe what you shared or why you cannot provide it."
+        }
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Saving your response…" : "Send safe response"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        responseKind,
+        responseNote,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "Do not enter passwords, verification codes, API keys, tokens, or raw credentials. Site Sourcery checks access separately after you respond."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var data = new FormData(form);
+        if (typeof actions.respond === "function") {
+          actions.respond(snapshot, {
+            responseKind: text(data.get("responseKind")),
+            responseNote: text(data.get("responseNote"))
+          });
+        }
+      });
+      section.appendChild(form);
+      return section;
+    }
+
+    function render(readState) {
+      var read = readState || {};
+      body.replaceChildren();
+      refresh.disabled = read.phase === "loading" || Boolean(read.command);
+      panel.setAttribute(
+        "aria-busy",
+        String(read.phase === "loading" || Boolean(read.command))
+      );
+      if (["idle", "not_available"].includes(read.phase)) {
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      if (read.phase === "loading") {
+        status.textContent = "Loading your Custom-build progress…";
+        return;
+      }
+      if (read.phase === "error") {
+        status.textContent = read.error
+          || "Project progress could not be loaded. Refresh and try again.";
+        return;
+      }
+      var snapshot = verifiedCustomBuildProgress(read.snapshot);
+      if (!snapshot || snapshot.state !== "active") {
+        status.textContent =
+          "Project progress could not be verified. Refresh before responding.";
+        return;
+      }
+      status.textContent = read.command
+        ? "Saving your response safely…"
+        : snapshot.status.label;
+      if (read.error) {
+        body.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            read.error
+          )
+        );
+      }
+      body.appendChild(customBuildProgressSummary(documentRef, snapshot));
+      var request = renderRequest(snapshot, Boolean(read.command));
+      if (request) body.appendChild(request);
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: render
+    });
+  }
+
   function customBuildLocalDateTime(value) {
     var date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "";
@@ -5530,7 +6099,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Open the exact paid scope, target date, first-payment facts, and final handoff balance. Nothing on this screen changes the job."
+        "Nothing on this screen changes the job's paid scope or billing facts. The controls only append one customer-safe update or manage one active request."
       ),
       status,
       refresh,
@@ -5538,7 +6107,554 @@
       nextPage
     );
 
-    function renderJob(entry) {
+    function remainingChoices(order, selected, labels) {
+      var start = Math.max(0, order.indexOf(selected));
+      return order.slice(start).map(function (value) {
+        return [value, labels[value]];
+      });
+    }
+
+    function renderProgressForm(entry, snapshot, busy) {
+      var details = accountElement(
+        documentRef,
+        "details",
+        "customer-custom-build-owner-control"
+      );
+      details.appendChild(
+        accountElement(
+          documentRef,
+          "summary",
+          "customer-owner-assessment-job-summary",
+          "Post a progress update"
+        )
+      );
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-progress-form"
+      );
+      form.setAttribute("data-owner-progress-form", entry.job.jobId);
+      var stage = assessmentSelect(
+        documentRef,
+        "stage",
+        "Customer-facing stage",
+        snapshot.progress.stage,
+        remainingChoices(
+          ["preparing", "building", "checking"],
+          snapshot.progress.stage,
+          CUSTOM_BUILD_PROGRESS_STAGES
+        )
+      );
+      var milestoneFields = {};
+      var milestoneLabels = {
+        pending: "Not started",
+        in_progress: "In progress",
+        done: "Complete"
+      };
+      snapshot.progress.milestones.forEach(function (milestone) {
+        milestoneFields[milestone.key] = assessmentSelect(
+          documentRef,
+          "milestone-" + milestone.key,
+          milestone.label,
+          milestone.state,
+          remainingChoices(
+            ["pending", "in_progress", "done"],
+            milestone.state,
+            milestoneLabels
+          )
+        );
+      });
+      var summary = assessmentField(
+        documentRef,
+        "customerSummary",
+        "Safe customer summary",
+        snapshot.progress.summary,
+        {
+          required: true,
+          minimumLength: 10,
+          maximum: 500,
+          multiline: true
+        }
+      );
+      var nextStep = assessmentField(
+        documentRef,
+        "nextStep",
+        "Next step",
+        snapshot.progress.nextStep,
+        {
+          required: true,
+          minimumLength: 5,
+          maximum: 500,
+          multiline: true
+        }
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Saving update…" : "Post progress update"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        stage,
+        milestoneFields.structure,
+        milestoneFields.content,
+        milestoneFields.responsive,
+        milestoneFields.quality,
+        summary,
+        nextStep,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "Keep this customer-safe. Do not include passwords, verification codes, API keys, tokens, or raw credentials."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var data = new FormData(form);
+        if (typeof actions.progress === "function") {
+          actions.progress(entry, snapshot, {
+            customerSummary: text(data.get("customerSummary")),
+            milestones: {
+              content: text(data.get("milestone-content")),
+              quality: text(data.get("milestone-quality")),
+              responsive: text(data.get("milestone-responsive")),
+              structure: text(data.get("milestone-structure"))
+            },
+            nextStep: text(data.get("nextStep")),
+            stage: text(data.get("stage"))
+          });
+        }
+      });
+      details.appendChild(form);
+      return details;
+    }
+
+    function renderOpenRequestForm(entry, snapshot, busy) {
+      var details = accountElement(
+        documentRef,
+        "details",
+        "customer-custom-build-owner-control"
+      );
+      details.appendChild(
+        accountElement(
+          documentRef,
+          "summary",
+          "customer-owner-assessment-job-summary",
+          "Open one customer request"
+        )
+      );
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-request-form"
+      );
+      form.setAttribute("data-owner-request-form", entry.job.jobId);
+      var kind = assessmentSelect(
+        documentRef,
+        "requestKind",
+        "Request type",
+        "customer_content",
+        [
+          ["customer_content", "Customer content"],
+          ["customer_decision", "Customer decision"],
+          ["delegated_access", "Delegated provider access"],
+          ["outside_dependency", "Outside dependency"]
+        ]
+      );
+      var kindSelect = kind.querySelector("select");
+      var title = assessmentField(
+        documentRef,
+        "title",
+        "Short request title",
+        "",
+        { required: true, minimumLength: 5, maximum: 120 }
+      );
+      var message = assessmentField(
+        documentRef,
+        "customerMessage",
+        "Customer message",
+        "",
+        {
+          required: true,
+          minimumLength: 10,
+          maximum: 1000,
+          multiline: true
+        }
+      );
+      var instructions = assessmentField(
+        documentRef,
+        "safeInstructions",
+        "Safe instructions",
+        "",
+        {
+          required: true,
+          minimumLength: 10,
+          maximum: 1000,
+          multiline: true
+        }
+      );
+      var impact = assessmentSelect(
+        documentRef,
+        "targetDateImpact",
+        "Target completion date",
+        "none",
+        [
+          ["none", "No change"],
+          ["under_review", "Under review"]
+        ]
+      );
+      var impactSelect = impact.querySelector("select");
+      var accessFields = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-custom-build-access-fields"
+      );
+      accessFields.appendChild(
+        accountElement(
+          documentRef,
+          "legend",
+          "",
+          "Safe delegated-access labels"
+        )
+      );
+      var provider = assessmentField(
+        documentRef,
+        "providerLabel",
+        "Provider",
+        "",
+        { required: true, maximum: 254 }
+      );
+      var account = assessmentField(
+        documentRef,
+        "accountLabel",
+        "Account or user label",
+        "",
+        { required: true, maximum: 254 }
+      );
+      var role = assessmentField(
+        documentRef,
+        "delegatedRole",
+        "Requested delegated role",
+        "",
+        { required: true, maximum: 254 }
+      );
+      var expires = assessmentField(
+        documentRef,
+        "accessExpiresAt",
+        "Sharing window ends",
+        customBuildLocalDateTime(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ),
+        { required: true, type: "datetime-local" }
+      );
+      var expiresInput = expires.querySelector("input");
+      expiresInput.min = customBuildLocalDateTime(
+        Date.now() + 5 * 60 * 1000
+      );
+      expiresInput.max = customBuildLocalDateTime(
+        Date.now() + 30 * 24 * 60 * 60 * 1000
+      );
+      accessFields.append(
+        provider,
+        account,
+        role,
+        expires,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "Ask the customer to use the provider's own delegated-user controls. Never request or store a password, verification code, API key, token, or raw credential."
+        )
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Opening request…" : "Open customer request"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        kind,
+        title,
+        message,
+        instructions,
+        impact,
+        accessFields,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "All request copy must be customer-safe and contain no credentials."
+        ),
+        submit
+      );
+
+      function syncRequestKind() {
+        var delegated = kindSelect.value === "delegated_access";
+        accessFields.hidden = !delegated;
+        Array.prototype.forEach.call(
+          accessFields.querySelectorAll("input"),
+          function (field) {
+            field.disabled = !delegated;
+          }
+        );
+        if (kindSelect.value === "outside_dependency") {
+          impactSelect.value = "under_review";
+          impactSelect.disabled = true;
+        } else {
+          impactSelect.disabled = false;
+        }
+      }
+      kindSelect.addEventListener("change", syncRequestKind);
+      syncRequestKind();
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        syncRequestKind();
+        if (busy || !form.reportValidity()) return;
+        var data = new FormData(form);
+        var requestKind = kindSelect.value;
+        var access = null;
+        if (requestKind === "delegated_access") {
+          var expiresAt = new Date(expiresInput.value);
+          if (!Number.isFinite(expiresAt.getTime())) return;
+          access = {
+            accountLabel: text(data.get("accountLabel")),
+            delegatedRole: text(data.get("delegatedRole")),
+            expiresAt: expiresAt.toISOString(),
+            providerLabel: text(data.get("providerLabel"))
+          };
+        }
+        if (typeof actions.request === "function") {
+          actions.request(entry, snapshot, {
+            access: access,
+            customerMessage: text(data.get("customerMessage")),
+            requestKind: requestKind,
+            safeInstructions: text(data.get("safeInstructions")),
+            targetDateImpact: requestKind === "outside_dependency"
+              ? "under_review"
+              : impactSelect.value,
+            title: text(data.get("title"))
+          });
+        }
+      });
+      details.appendChild(form);
+      return details;
+    }
+
+    function renderActiveRequest(entry, snapshot, busy) {
+      var request = snapshot.activeRequest;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-request"
+      );
+      section.setAttribute("data-owner-active-request", request.requestId);
+      section.append(
+        accountElement(documentRef, "h6", "", request.title),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-progress-copy",
+          request.message
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          request.safeInstructions
+        )
+      );
+      var facts = accountElement(documentRef, "dl", "");
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Request type",
+        accountWords(request.kind)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "State",
+        request.state === "answered" ? "Response received" : "Open"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Target date",
+        request.targetDateImpact === "under_review"
+          ? "Under review"
+          : "No change"
+      );
+      if (request.response) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Customer response",
+          request.response.note
+        );
+      }
+      if (request.access) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Delegated access",
+          request.access.providerLabel + " · "
+            + request.access.accountLabel + " · "
+            + request.access.delegatedRole
+        );
+      }
+      section.append(
+        facts,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          request.access
+            ? "A customer response does not verify provider access. Check it separately before resolving this request."
+            : "Review the customer response or outside dependency before closing this request."
+        )
+      );
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-resolution-form"
+      );
+      form.setAttribute("data-owner-resolution-form", request.requestId);
+      var state = assessmentSelect(
+        documentRef,
+        "resolutionState",
+        "Close request as",
+        "resolved",
+        [
+          ["resolved", "Resolved after review"],
+          ["withdrawn", "Withdrawn"]
+        ]
+      );
+      var note = assessmentField(
+        documentRef,
+        "resolutionNote",
+        "Safe resolution note",
+        "",
+        {
+          required: true,
+          minimumLength: 5,
+          maximum: 500,
+          multiline: true
+        }
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        busy ? "Closing request…" : "Close this request"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(state, note, submit);
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var data = new FormData(form);
+        if (typeof actions.resolve === "function") {
+          actions.resolve(entry, snapshot, {
+            resolutionNote: text(data.get("resolutionNote")),
+            state: text(data.get("resolutionState"))
+          });
+        }
+      });
+      section.appendChild(form);
+      return section;
+    }
+
+    function renderJobProgress(entry, read, globallyBusy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-progress"
+      );
+      section.setAttribute("data-owner-job-progress", entry.job.jobId);
+      var progressStatus = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-status customer-custom-build-progress-status"
+      );
+      progressStatus.setAttribute("role", "status");
+      progressStatus.setAttribute("aria-live", "polite");
+      var refreshProgress = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Refresh this project's progress"
+      );
+      refreshProgress.type = "button";
+      refreshProgress.disabled = Boolean(globallyBusy) || Boolean(
+        read && (read.phase === "loading" || read.busy)
+      );
+      refreshProgress.addEventListener("click", function () {
+        if (typeof actions.refreshProgress === "function") {
+          actions.refreshProgress(entry);
+        }
+      });
+      section.append(
+        accountElement(documentRef, "h5", "", "Project progress"),
+        progressStatus,
+        refreshProgress
+      );
+      if (!read || read.phase === "loading") {
+        progressStatus.textContent = "Loading this paid project's progress…";
+        return section;
+      }
+      if (read.phase === "error") {
+        progressStatus.textContent = read.error
+          || "Progress changed or could not be loaded. Refresh this project before trying again.";
+        return section;
+      }
+      var snapshot = verifiedCustomBuildProgress(
+        read.snapshot,
+        entry.job.jobId
+      );
+      if (!snapshot || snapshot.state !== "active") {
+        progressStatus.textContent =
+          "This paid project's progress response could not be verified. Refresh before making a change.";
+        return section;
+      }
+      var busy = Boolean(read.busy) || Boolean(globallyBusy);
+      progressStatus.textContent = read.busy
+        ? "Saving one bounded project command…"
+        : snapshot.status.label;
+      if (read.error) {
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            read.error
+          )
+        );
+      }
+      section.append(
+        customBuildProgressSummary(documentRef, snapshot),
+        renderProgressForm(entry, snapshot, busy)
+      );
+      if (snapshot.activeRequest) {
+        section.appendChild(
+          renderActiveRequest(entry, snapshot, busy)
+        );
+      } else {
+        section.appendChild(
+          renderOpenRequestForm(entry, snapshot, busy)
+        );
+      }
+      return section;
+    }
+
+    function renderJob(entry, progressRead, globallyBusy) {
       var card = accountElement(
         documentRef,
         "details",
@@ -5581,7 +6697,8 @@
       );
       card.append(
         sourceFacts,
-        customBuildJobFacts(documentRef, entry.job, { owner: true })
+        customBuildJobFacts(documentRef, entry.job, { owner: true }),
+        renderJobProgress(entry, progressRead, globallyBusy)
       );
       body.appendChild(card);
     }
@@ -5598,9 +6715,13 @@
         nextCursor = "";
         nextPage.hidden = true;
         if (!visible) return;
-        refresh.disabled = state.phase === "loading";
-        nextPage.disabled = state.phase === "loading";
-        panel.setAttribute("aria-busy", String(state.phase === "loading"));
+        var interfaceBusy = Boolean(state.busyKey);
+        refresh.disabled = state.phase === "loading" || interfaceBusy;
+        nextPage.disabled = state.phase === "loading" || interfaceBusy;
+        panel.setAttribute(
+          "aria-busy",
+          String(state.phase === "loading" || interfaceBusy)
+        );
         var jobs = verifiedOwnerCustomBuildJobs(state.jobs);
         if (!jobs) {
           status.textContent =
@@ -5625,7 +6746,14 @@
               + " open"
               + (jobs.hasMore ? " on this page." : ".");
         }
-        jobs.jobs.forEach(renderJob);
+        jobs.jobs.forEach(function (entry) {
+          renderJob(
+            entry,
+            state.progressByJob
+              && state.progressByJob[entry.job.jobId],
+            interfaceBusy
+          );
+        });
         if (jobs.hasMore) {
           nextCursor = jobs.nextCursor;
           nextPage.hidden = false;
@@ -8507,6 +9635,15 @@
       command: "",
       error: ""
     };
+    var customBuildProgressReadSequence = 0;
+    var customBuildProgressRead = {
+      accountId: "",
+      projectId: "",
+      phase: "idle",
+      snapshot: null,
+      command: "",
+      error: ""
+    };
     var ownerCustomBuildReadSequence = 0;
     var ownerCustomBuildRead = {
       accountId: "",
@@ -8521,6 +9658,8 @@
       phase: "idle",
       revealed: false,
       jobs: null,
+      progressByJob: {},
+      busyKey: "",
       pageNumber: 0,
       loadingMore: false,
       error: ""
@@ -8615,7 +9754,17 @@
           && UUID.test(text(parsed.accountId))
           && UUID.test(text(parsed.commandId))
           && UUID.test(text(parsed.subjectId))
-          && ["accept", "checkout", "issue", "void"]
+          && [
+            "accept",
+            "checkout",
+            "issue",
+            "void",
+            "progress",
+            "request",
+            "respond",
+            "resolve",
+            "withdraw"
+          ]
             .includes(parsed.operation)
           && /^[a-f0-9]{8}$/u.test(text(parsed.signature))
           ? parsed
@@ -8905,6 +10054,33 @@
               text(lastState.account && lastState.account.id),
               cursor
             );
+          },
+          refreshProgress: function (entry) {
+            return requestOwnerCustomBuildProgress(entry);
+          },
+          progress: function (entry, snapshot, input) {
+            return runOwnerCustomBuildProgressCommand(
+              "progress",
+              entry,
+              snapshot,
+              input
+            );
+          },
+          request: function (entry, snapshot, input) {
+            return runOwnerCustomBuildProgressCommand(
+              "request",
+              entry,
+              snapshot,
+              input
+            );
+          },
+          resolve: function (entry, snapshot, input) {
+            return runOwnerCustomBuildProgressCommand(
+              input.state === "withdrawn" ? "withdraw" : "resolve",
+              entry,
+              snapshot,
+              input
+            );
           }
         }
       );
@@ -8922,6 +10098,23 @@
           },
           checkout: function (invoiceState) {
             requestCustomerCustomBuildCheckout(invoiceState);
+          }
+        }
+      );
+    var customerCustomBuildProgressPanel =
+      createCustomerCustomBuildProgressPanel(
+        documentRef,
+        {
+          refresh: function () {
+            return requestCustomerCustomBuildProgress(
+              idOf(lastState && lastState.project)
+            );
+          },
+          respond: function (snapshot, input) {
+            return runCustomerCustomBuildProgressResponse(
+              snapshot,
+              input
+            );
           }
         }
       );
@@ -8991,6 +10184,10 @@
         customerCustomBuildPanel.element,
         alakazamAnchor
       );
+      alakazamAnchor.parentNode.insertBefore(
+        customerCustomBuildProgressPanel.element,
+        alakazamAnchor
+      );
     }
     if (
       alakazamAnchor
@@ -9023,6 +10220,9 @@
         );
         controlShell.appendChild(
           customerCustomBuildPanel.element
+        );
+        controlShell.appendChild(
+          customerCustomBuildProgressPanel.element
         );
         controlShell.appendChild(
           alakazamPanel.element
@@ -9788,9 +10988,337 @@
         && text(lastState.account && lastState.account.id) === accountId;
     }
 
+    function ownerCustomBuildProgressEntryIsCurrent(entry) {
+      var jobs = verifiedOwnerCustomBuildJobs(
+        ownerCustomBuildWorkRead.jobs
+      );
+      return Boolean(jobs) && jobs.jobs.some(function (candidate) {
+        return candidate.job.jobId === entry.job.jobId
+          && candidate.organizationId === entry.organizationId;
+      });
+    }
+
+    function setOwnerCustomBuildProgress(jobId, value) {
+      var next = Object.assign(
+        {},
+        ownerCustomBuildWorkRead.progressByJob || {}
+      );
+      next[jobId] = value;
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { progressByJob: next }
+      );
+      renderOwnerCustomBuildWorkPanel();
+    }
+
+    function requestOwnerCustomBuildProgress(entry) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      if (
+        !accountId
+        || !jobId
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      if (typeof client.getOwnerCustomBuildProgress !== "function") {
+        setOwnerCustomBuildProgress(jobId, {
+          phase: "error",
+          snapshot: null,
+          busy: "",
+          error: "Paid project progress is unavailable in this build."
+        });
+        return Promise.resolve(null);
+      }
+      var retained = ownerCustomBuildWorkRead.progressByJob
+        && ownerCustomBuildWorkRead.progressByJob[jobId];
+      setOwnerCustomBuildProgress(jobId, {
+        phase: "loading",
+        snapshot: retained && retained.snapshot || null,
+        busy: "",
+        error: ""
+      });
+      return client.getOwnerCustomBuildProgress(
+        jobId,
+        entry.organizationId
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var snapshot = verifiedCustomBuildProgress(result, jobId);
+        if (
+          !snapshot
+          || snapshot.state !== "active"
+          || snapshot.targetCompletionDate !==
+            entry.job.targetCompletionDate
+        ) {
+          throw new Error(
+            "The paid project's progress response could not be verified."
+          );
+        }
+        setOwnerCustomBuildProgress(jobId, {
+          phase: "ready",
+          snapshot: snapshot,
+          busy: "",
+          error: ""
+        });
+        return snapshot;
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        setOwnerCustomBuildProgress(jobId, {
+          phase: "error",
+          snapshot: retained && retained.snapshot || null,
+          busy: "",
+          error: explain(
+            error,
+            "Progress could not be loaded. Refresh this project before making a change."
+          )
+        });
+        return null;
+      });
+    }
+
+    function requestOwnerCustomBuildProgressBatch(entries) {
+      var pending = entries.slice();
+      function next() {
+        var entry = pending.shift();
+        if (!entry) return Promise.resolve(null);
+        return requestOwnerCustomBuildProgress(entry).then(next);
+      }
+      return Promise.all(
+        entries.slice(0, 4).map(function () { return next(); })
+      );
+    }
+
+    function sameCustomBuildMilestones(value, expected) {
+      return ["content", "quality", "responsive", "structure"]
+        .every(function (key) {
+          var milestone = value.progress.milestones.find(
+            function (entry) { return entry.key === key; }
+          );
+          return milestone && milestone.state === expected[key];
+        });
+    }
+
+    function runOwnerCustomBuildProgressCommand(
+      operation,
+      entry,
+      snapshotInput,
+      input
+    ) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      var read = jobId && ownerCustomBuildWorkRead.progressByJob
+        && ownerCustomBuildWorkRead.progressByJob[jobId];
+      var current = read && verifiedCustomBuildProgress(
+        read.snapshot,
+        jobId
+      );
+      var selected = verifiedCustomBuildProgress(snapshotInput, jobId);
+      if (
+        !accountId
+        || !jobId
+        || !current
+        || !selected
+        || current.progress.revision !== selected.progress.revision
+        || Boolean(read.busy)
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      var body;
+      var subjectId = jobId;
+      var invoke;
+      if (operation === "progress") {
+        body = {
+          customerSummary: input.customerSummary,
+          expectedRevision: current.progress.revision,
+          milestones: input.milestones,
+          nextStep: input.nextStep,
+          organizationId: entry.organizationId,
+          stage: input.stage
+        };
+        invoke = function (commandId) {
+          return client.recordOwnerCustomBuildProgress(
+            jobId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      } else if (operation === "request") {
+        if (current.activeRequest !== null) return Promise.resolve(null);
+        body = {
+          access: input.access,
+          customerMessage: input.customerMessage,
+          expectedProgressRevision: current.progress.revision,
+          organizationId: entry.organizationId,
+          requestKind: input.requestKind,
+          safeInstructions: input.safeInstructions,
+          targetDateImpact: input.targetDateImpact,
+          title: input.title
+        };
+        invoke = function (commandId) {
+          return client.openOwnerCustomBuildRequest(
+            jobId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      } else {
+        if (!current.activeRequest) return Promise.resolve(null);
+        subjectId = current.activeRequest.requestId;
+        body = {
+          expectedRevision: current.activeRequest.revision,
+          organizationId: entry.organizationId,
+          resolutionNote: input.resolutionNote,
+          state: operation === "withdraw" ? "withdrawn" : "resolved"
+        };
+        invoke = function (commandId) {
+          return client.resolveOwnerCustomBuildRequest(
+            jobId,
+            subjectId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      }
+      var requiredMethod = {
+        progress: "recordOwnerCustomBuildProgress",
+        request: "openOwnerCustomBuildRequest",
+        resolve: "resolveOwnerCustomBuildRequest",
+        withdraw: "resolveOwnerCustomBuildRequest"
+      }[operation];
+      if (!requiredMethod || typeof client[requiredMethod] !== "function") {
+        setOwnerCustomBuildProgress(jobId, Object.assign({}, read, {
+          error: "That paid project control is unavailable in this build."
+        }));
+        return Promise.resolve(null);
+      }
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          operation,
+          subjectId,
+          body
+        );
+      } catch (error) {
+        setOwnerCustomBuildProgress(jobId, Object.assign({}, read, {
+          error: explain(
+            error,
+            "That project command could not start safely."
+          )
+        }));
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { busyKey: jobId + ":" + operation }
+      );
+      setOwnerCustomBuildProgress(jobId, {
+        phase: "ready",
+        snapshot: current,
+        busy: operation,
+        error: ""
+      });
+      return Promise.resolve().then(function () {
+        return invoke(commandId);
+      }).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var settled = verifiedCustomBuildProgress(result, jobId);
+        if (!settled || settled.state !== "active") {
+          throw new Error(
+            "The saved project response could not be verified."
+          );
+        }
+        if (settled.targetCompletionDate !== current.targetCompletionDate) {
+          throw new Error(
+            "The saved project response changed the target date unexpectedly."
+          );
+        }
+        if (
+          operation === "progress"
+          && (
+            settled.progress.revision !== current.progress.revision + 1
+            || settled.progress.stage !== body.stage
+            || settled.progress.summary !== body.customerSummary
+            || settled.progress.nextStep !== body.nextStep
+            || !sameCustomBuildMilestones(settled, body.milestones)
+          )
+        ) {
+          throw new Error(
+            "The saved progress update did not match this command."
+          );
+        }
+        if (
+          operation === "request"
+          && (
+            !settled.activeRequest
+            || settled.activeRequest.state !== "open"
+            || settled.activeRequest.kind !== body.requestKind
+            || settled.activeRequest.title !== body.title
+          )
+        ) {
+          throw new Error(
+            "The opened customer request did not match this command."
+          );
+        }
+        if (
+          ["resolve", "withdraw"].includes(operation)
+          && settled.activeRequest !== null
+        ) {
+          throw new Error(
+            "The customer request was not confirmed closed."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildProgress(jobId, {
+          phase: "ready",
+          snapshot: settled,
+          busy: "",
+          error: ""
+        });
+        return settled;
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildProgress(jobId, {
+          phase: "ready",
+          snapshot: current,
+          busy: "",
+          error: explain(
+            error,
+            "This project may have changed. Refresh it before trying the same safe command again."
+          )
+        });
+        return null;
+      });
+    }
+
     function requestOwnerCustomBuildJobs(accountId, cursorValue) {
       var selectedAccountId = text(accountId);
       var selectedCursor = text(cursorValue);
+      if (ownerCustomBuildWorkRead.busyKey) {
+        return Promise.resolve(null);
+      }
       var sequence = ++ownerCustomBuildWorkReadSequence;
       var retainedJobs = ownerCustomBuildWorkRead.accountId ===
           selectedAccountId
@@ -9815,6 +11343,8 @@
           phase: "unavailable",
           revealed: false,
           jobs: null,
+          progressByJob: {},
+          busyKey: "",
           pageNumber: 0,
           loadingMore: false,
           error: ""
@@ -9827,6 +11357,8 @@
         phase: "loading",
         revealed: Boolean(retainedJobs),
         jobs: retainedJobs,
+        progressByJob: ownerCustomBuildWorkRead.progressByJob || {},
+        busyKey: "",
         pageNumber: retainedPageNumber,
         loadingMore: continuing,
         error: ""
@@ -9845,17 +11377,30 @@
               "The paid Custom website job response could not be verified."
             );
           }
+          var progressByJob = {};
+          result.jobs.forEach(function (entry) {
+            progressByJob[entry.job.jobId] = {
+              phase: "loading",
+              snapshot: null,
+              busy: "",
+              error: ""
+            };
+          });
           ownerCustomBuildWorkRead = {
             accountId: selectedAccountId,
             phase: "ready",
             revealed: true,
             jobs: result,
+            progressByJob: progressByJob,
+            busyKey: "",
             pageNumber: continuing ? retainedPageNumber + 1 : 1,
             loadingMore: false,
             error: ""
           };
           renderOwnerCustomBuildWorkPanel();
-          return result;
+          return requestOwnerCustomBuildProgressBatch(
+            result.jobs
+          ).then(function () { return result; });
         })
         .catch(function (error) {
           if (!ownerCustomBuildWorkReadIsCurrent(
@@ -9869,6 +11414,10 @@
             phase: unavailable ? "unavailable" : "error",
             revealed: unavailable ? false : Boolean(retainedJobs),
             jobs: unavailable ? null : retainedJobs,
+            progressByJob: unavailable
+              ? {}
+              : ownerCustomBuildWorkRead.progressByJob || {},
+            busyKey: "",
             pageNumber: unavailable ? 0 : retainedPageNumber,
             loadingMore: false,
             error: unavailable
@@ -9898,6 +11447,8 @@
             phase: "idle",
             revealed: false,
             jobs: null,
+            progressByJob: {},
+            busyKey: "",
             pageNumber: 0,
             loadingMore: false,
             error: ""
@@ -10341,6 +11892,252 @@
         return;
       }
       renderCustomerCustomBuildPanel();
+    }
+
+    function renderCustomerCustomBuildProgressPanel() {
+      customerCustomBuildProgressPanel.render(customBuildProgressRead);
+    }
+
+    function customerCustomBuildProgressReadIsCurrent(
+      sequence,
+      projectId
+    ) {
+      return sequence === customBuildProgressReadSequence
+        && customBuildProgressRead.projectId === projectId
+        && customBuildProgressRead.accountId === text(
+          lastState.account && lastState.account.id
+        )
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestCustomerCustomBuildProgress(projectId) {
+      var selectedProjectId = text(projectId);
+      var selectedAccountId = text(
+        lastState.account && lastState.account.id
+      );
+      var sequence = ++customBuildProgressReadSequence;
+      if (!selectedProjectId || !selectedAccountId) {
+        return Promise.resolve(null);
+      }
+      customBuildProgressRead = {
+        accountId: selectedAccountId,
+        projectId: selectedProjectId,
+        phase: "loading",
+        snapshot: null,
+        command: "",
+        error: ""
+      };
+      renderCustomerCustomBuildProgressPanel();
+      if (
+        typeof client.getCustomServicesCustomBuildProgress !== "function"
+      ) {
+        customBuildProgressRead.phase = "error";
+        customBuildProgressRead.error =
+          "Custom-build project progress is unavailable in this build.";
+        renderCustomerCustomBuildProgressPanel();
+        return Promise.resolve(null);
+      }
+      return client.getCustomServicesCustomBuildProgress(
+        selectedProjectId
+      ).then(function (result) {
+        if (!customerCustomBuildProgressReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        var snapshot = verifiedCustomBuildProgress(result);
+        if (!snapshot) {
+          throw new Error(
+            "The Custom-build progress response could not be verified."
+          );
+        }
+        customBuildProgressRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: snapshot.state === "not_available"
+            ? "not_available"
+            : "ready",
+          snapshot: snapshot,
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildProgressPanel();
+        return snapshot;
+      }).catch(function (error) {
+        if (!customerCustomBuildProgressReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        customBuildProgressRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: "error",
+          snapshot: null,
+          command: "",
+          error: explain(
+            error,
+            "Project progress could not be loaded. Refresh and try again."
+          )
+        };
+        renderCustomerCustomBuildProgressPanel();
+        customerCustomBuildProgressPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function runCustomerCustomBuildProgressResponse(
+      snapshotInput,
+      input
+    ) {
+      var projectId = customBuildProgressRead.projectId;
+      var accountId = customBuildProgressRead.accountId;
+      var current = verifiedCustomBuildProgress(
+        customBuildProgressRead.snapshot
+      );
+      var selected = verifiedCustomBuildProgress(snapshotInput);
+      if (
+        !projectId
+        || !accountId
+        || customBuildProgressRead.phase !== "ready"
+        || customBuildProgressRead.command
+        || !current
+        || !selected
+        || current.jobId !== selected.jobId
+        || !current.activeRequest
+        || current.activeRequest.state !== "open"
+        || !current.activeRequest.responseRequired
+        || !selected.activeRequest
+        || selected.activeRequest.requestId !==
+          current.activeRequest.requestId
+        || typeof client.respondToCustomServicesCustomBuildRequest !==
+          "function"
+      ) return Promise.resolve(null);
+      var request = current.activeRequest;
+      var body = {
+        expectedRevision: request.revision,
+        responseKind: input.responseKind,
+        responseNote: input.responseNote
+      };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "respond",
+          request.requestId,
+          body
+        );
+      } catch (error) {
+        customBuildProgressRead = Object.assign(
+          {},
+          customBuildProgressRead,
+          {
+            error: explain(
+              error,
+              "Your response could not start safely."
+            )
+          }
+        );
+        renderCustomerCustomBuildProgressPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildProgressReadSequence;
+      customBuildProgressRead = Object.assign(
+        {},
+        customBuildProgressRead,
+        { command: "respond", error: "" }
+      );
+      renderCustomerCustomBuildProgressPanel();
+      return Promise.resolve().then(function () {
+        return client.respondToCustomServicesCustomBuildRequest(
+          projectId,
+          request.requestId,
+          Object.assign({}, body, { commandId: commandId })
+        );
+      }).then(function (result) {
+        if (!customerCustomBuildProgressReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var settled = verifiedCustomBuildProgress(result);
+        if (
+          !settled
+          || settled.state !== "active"
+          || settled.jobId !== current.jobId
+          || settled.targetCompletionDate !==
+            current.targetCompletionDate
+          || !settled.activeRequest
+          || settled.activeRequest.requestId !== request.requestId
+          || settled.activeRequest.state !== "answered"
+          || settled.activeRequest.revision !== request.revision + 1
+          || settled.activeRequest.response.kind !== body.responseKind
+          || settled.activeRequest.response.note !== body.responseNote
+        ) {
+          throw new Error(
+            "The saved customer response could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        customBuildProgressRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: settled,
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildProgressPanel();
+        customerCustomBuildProgressPanel.focusStatus();
+        return settled;
+      }).catch(function (error) {
+        if (!customerCustomBuildProgressReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        customBuildProgressRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: current,
+          command: "",
+          error: explain(
+            error,
+            "This request may have changed. Refresh it before retrying the same safe response."
+          )
+        };
+        renderCustomerCustomBuildProgressPanel();
+        customerCustomBuildProgressPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function renderCustomerCustomBuildProgressAccount(state) {
+      var accountId = text(state.account && state.account.id);
+      var projectId = accountId ? idOf(state.project) : "";
+      if (!projectId) {
+        if (
+          customBuildProgressRead.projectId
+          || customBuildProgressRead.accountId
+        ) {
+          customBuildProgressReadSequence += 1;
+          customBuildProgressRead = {
+            accountId: "",
+            projectId: "",
+            phase: "idle",
+            snapshot: null,
+            command: "",
+            error: ""
+          };
+        }
+        renderCustomerCustomBuildProgressPanel();
+        return;
+      }
+      if (
+        customBuildProgressRead.accountId !== accountId
+        || customBuildProgressRead.projectId !== projectId
+      ) {
+        requestCustomerCustomBuildProgress(projectId);
+        return;
+      }
+      renderCustomerCustomBuildProgressPanel();
     }
 
     function renderAssessmentPanel() {
@@ -12141,6 +13938,7 @@
       renderCapabilities(state);
       renderAssessmentAccount(state);
       renderCustomerCustomBuildAccount(state);
+      renderCustomerCustomBuildProgressAccount(state);
       renderAlakazamAccount(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
@@ -12801,6 +14599,8 @@
       verifiedCustomerCustomBuildInvoice,
     verifiedCustomerCustomBuildCheckout:
       verifiedCustomerCustomBuildCheckout,
+    verifiedCustomBuildProgress:
+      verifiedCustomBuildProgress,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:

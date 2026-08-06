@@ -1179,21 +1179,72 @@ Batch 3C sealed checkpoint gates:
   writes, access/dependency/evidence state, change orders, the final handoff
   invoice/payment, delivery, provider release, and public release remain held.
 
+## H1L bounded Custom-build progress and customer-request checkpoint evidence
+
+- Migration 43 adds append-only, service-role-only paid-job progress with three
+  calm stages (`Preparing`, `Building`, and `Checking the work`), four fixed
+  milestones, monotonic revisions, and no percentage or invented completion
+  claim. It permits exactly one active bounded request per paid job:
+  customer content, customer decision, delegated access, or an outside
+  dependency.
+- Customer responses are revision-fenced and credential-safe. A response can
+  say provided or cannot provide, but never proves that delegated access
+  works. Only the owner can separately resolve or withdraw the request after
+  review. Delegated access reuses the existing 30-day-limited access-request
+  authority and stores only provider/account/role labels, never a password,
+  token, API key, or verification code.
+- Customer and owner PostgreSQL services, hosted composition, readiness, and
+  exact same-origin routes are complete. The customer sees only the selected
+  project's safe status and response control. The private owner workbench can
+  post one revision-fenced progress update, open one bounded request, and
+  resolve or withdraw it; no browser field carries money, billing, payment,
+  provider-effect, or mark-complete authority.
+- The hosted account UI validates exact response schemas before rendering,
+  keeps stale and cross-project responses out, uses stable command identities,
+  and remains usable at Pixel and Mac sizes. The maintained Chrome 149 audit
+  passes the customer and owner progress views at `390x844` and `1440x1000`,
+  including all four milestones, the action-needed request, 44-pixel controls,
+  exact-width layout, no customer job/request ID leakage, no credential-entry
+  fields, and no browser errors. Its complete 15-route, three-viewport and
+  maker journey also passes.
+- Fresh database `ss_h1l_progress_20260806_codex1` replayed all 43 migrations
+  and passed the full real PostgreSQL assessment-through-paid-Custom-job plus
+  progress/request lifecycle 1/1. It proves progress replay/stale rejection,
+  non-regression, one-active-request fencing, wrong-project denial, credential
+  rejection, customer response/replay, owner resolution, exact delegated
+  access, cannot-provide, and withdrawal without false verification. The test
+  uses fixed fake provider IDs and therefore must run on a fresh database; an
+  attempted repeat on populated fixture state was discarded, the database was
+  recreated, and the authoritative fresh run passed. It had zero active
+  sessions before exact-name deletion and is verified absent.
+- Authoritative Node 24.18.0 proof passes: core 544/544; hosted service 286
+  pass with 2 intentional environment skips and 0 failures; operations 52/52;
+  self-host 19/19; current site 18 live pages and 20 redirects; exact hosted
+  build and HTML validation; and the exact 78-file public artifact. The hosted
+  staging manifest binds API digest
+  `9adec54093ae53065d5e91cd7119bb1a914251068728e50ed71ba7a6a5948484`
+  and customer-control digest
+  `1339f1fd87d59260ba4d5a5386bd40a115828204392146520ff514604149f3f5`.
+- No real Stripe or registrar call, customer/production-data write, push,
+  deployment, DNS change, credential handling, or public release mutation
+  occurred. Change orders, completion evidence, final handoff invoice/payment,
+  delivery, provider release, and public release remain held.
+
 ## Live resources and workers
 
 - No implementation or redline worker remains running. The exact Batch 3C and
-  H1 disposable PostgreSQL databases are absent.
+  H1 disposable PostgreSQL databases, including the H1L database, are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add only the bounded build checklist, access, dependency, evidence,
-change-order, and final-handoff states needed to advance the now-visible paid
-job and create the exact final invoice. Prove provider-confirmed payment before
-launch or delivery. Do not add a casual mark-paid control or let the browser
-submit money, tax, credit, payment, or job authority. Keep provider release,
-push, deployment, and DNS held.
+Add the formal change-order and completion-evidence boundary needed to finish
+the now-visible paid job, then materialize and settle the exact final-handoff
+invoice before delivery or launch. Do not add a casual mark-paid or casual
+mark-complete control, and do not let the browser submit money, tax, credit,
+payment, or provider-effect authority. Keep provider release, push,
+deployment, and DNS held.
 
 ## Batch 3B write scope
 

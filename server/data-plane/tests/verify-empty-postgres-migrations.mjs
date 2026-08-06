@@ -210,6 +210,12 @@ async function verifyPlatformSchema(pool) {
         as service_custom_build_jobs,
       to_regprocedure('ss.hosted_runtime_contract_v42()') is not null
         as custom_build_start_payment_runtime_contract,
+      to_regclass('ss.service_custom_build_progress_updates') is not null
+        as service_custom_build_progress_updates,
+      to_regclass('ss.service_custom_build_work_requests') is not null
+        as service_custom_build_work_requests,
+      to_regprocedure('ss.hosted_runtime_contract_v43()') is not null
+        as custom_build_progress_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -344,10 +350,22 @@ async function verifyPlatformSchema(pool) {
         'service_role',
         'ss.service_documents',
         'INSERT'
-      ) and not has_table_privilege(
+      ) and has_table_privilege(
         'service_role',
         'ss.service_access_requests',
         'INSERT'
+      ) and not has_table_privilege(
+        'service_role',
+        'ss.service_access_requests',
+        'UPDATE'
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_access_requests'::regclass
+          and trigger_record.tgname =
+            'service_access_requests_custom_build_guard'
+          and not trigger_record.tgisinternal
       ) as held_authority_is_read_only
   `);
   for (const [name, ready] of Object.entries(customServices.rows[0])) {
@@ -1878,6 +1896,123 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build start-payment migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildProgress = await pool.query(`
+    with expected_tables(table_name, updatable) as (
+      values
+        ('service_custom_build_progress_updates', false),
+        ('service_custom_build_work_requests', true)
+    )
+    select
+      ss.hosted_runtime_contract_v43() =
+        'canonical-ss-v43-custom-build-progress'
+        as exact_v43_runtime_marker,
+      (
+        select count(*) = 2
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege('service_role', relation.oid, 'INSERT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = expected.updatable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+          )
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+         and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      exists (
+        select 1
+        from pg_index index_record
+        join pg_class index_relation
+          on index_relation.oid = index_record.indexrelid
+        where index_relation.relnamespace = 'ss'::regnamespace
+          and index_relation.relname =
+            'service_custom_build_work_requests_one_active'
+          and index_record.indisunique
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%state = ANY%open%answered%'
+      ) as one_active_customer_request,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%custom build progress cannot move backward%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%expected_revision <> coalesce(prior_update.revision, 0)%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_job_manage%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.prepare_service_custom_build_progress_update()'::regprocedure
+      ) as monotonic_progress_authority,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%current_service_actor_kind() = ''customer''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%old.state <> ''open''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.state <> ''answered''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.state in (''resolved'', ''withdrawn'')%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_work_request()'::regprocedure
+      ) as exact_request_transitions,
+      has_table_privilege(
+        'service_role', 'ss.service_access_requests', 'INSERT'
+      ) and not has_table_privilege(
+        'service_role', 'ss.service_access_requests', 'UPDATE'
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_access_requests'::regclass
+          and trigger_record.tgname =
+            'service_access_requests_custom_build_guard'
+          and trigger_record.tgfoid =
+            'ss.guard_service_custom_build_access_request()'::regprocedure
+          and not trigger_record.tgisinternal
+      ) as bounded_delegated_access_authority,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          select format('ss.%I', table_name)::regclass
+          from expected_tables
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(customBuildProgress.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build progress migration contract failed: ${name}`
     );
   }
 }
