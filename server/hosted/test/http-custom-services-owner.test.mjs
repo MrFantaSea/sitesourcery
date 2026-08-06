@@ -480,7 +480,68 @@ test("owner Custom build routes bind exact opportunities, job quotes, and quote 
   assert.equal(calls.length, 3);
 });
 
-test("production composes the PostgreSQL owner quote boundary", async () => {
+test("owner paid Custom build jobs are private, authenticated, and read-only", async () => {
+  const calls = [];
+  const jobs = {
+    schema: "sitesourcery.custom-services-owner-custom-build-jobs/v1",
+    hasMore: false,
+    nextCursor: null,
+    jobs: []
+  };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuildWork: {
+      async listJobs(actor, cursor) {
+        calls.push({ actor: structuredClone(actor), cursor });
+        return jobs;
+      }
+    },
+    requestIds: {
+      next() {
+        return "request_custom_build_work_owner_1";
+      }
+    }
+  });
+  const path =
+    "/api/v1/operator/custom-services/custom-build-jobs";
+  const response = await api.fetch(request({ path }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), jobs);
+  assert.deepEqual(calls, [{
+    actor: { userId: OPERATOR_ID },
+    cursor: null
+  }]);
+
+  const cursor =
+    "2026-09-15|2026-08-06T14:30:00.000Z|" + JOB_ID;
+  const continued = await api.fetch(request({
+    path: path + "?cursor=" + encodeURIComponent(cursor)
+  }));
+  assert.equal(continued.status, 200);
+  assert.deepEqual(calls[1], {
+    actor: { userId: OPERATOR_ID },
+    cursor
+  });
+
+  const signedOut = await api.fetch(request({ path, signedIn: false }));
+  assert.equal(signedOut.status, 401);
+  assert.equal(calls.length, 2);
+
+  const invalidCursor = await api.fetch(request({
+    path: path + "?cursor=bad&extra=1"
+  }));
+  assert.equal(invalidCursor.status, 400);
+  assert.equal(calls.length, 2);
+
+  const writeAttempt = await api.fetch(request({
+    body: {},
+    method: "POST",
+    path
+  }));
+  assert.equal(writeAttempt.status, 404);
+  assert.equal(calls.length, 2);
+});
+
+test("production composes PostgreSQL owner quote, assessment, and paid-build boundaries", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -504,5 +565,17 @@ test("production composes the PostgreSQL owner quote boundary", async () => {
   assert.match(
     source,
     /const customServicesCustomBuild\s*=\s*createPostgresCustomServicesCustomBuild\(\{[\s\S]*authority,[\s\S]*randomUUID:/u
+  );
+  assert.match(
+    source,
+    /const customServicesCustomBuildWork\s*=\s*createPostgresCustomServicesCustomBuildWork\(\{ authority \}\)/u
+  );
+  assert.match(
+    source,
+    /await customServicesCustomBuildWork\.readiness\(\)/u
+  );
+  assert.match(
+    source,
+    /createHostedApi\(service,\s*\{[\s\S]*customServicesCustomBuildWork,/u
   );
 });

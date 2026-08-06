@@ -666,6 +666,11 @@ test("H1H customer and owner reads are jointly refreshed and stale work response
   );
   assert.match(
     source,
+    /function ownerCustomBuildWorkReadIsCurrent\(sequence, accountId\)[\s\S]*?sequence === ownerCustomBuildWorkReadSequence[\s\S]*?ownerCustomBuildWorkRead\.accountId === accountId[\s\S]*?lastState\.account/u,
+    "paid Custom build responses are fenced by sequence and authenticated account",
+  );
+  assert.match(
+    source,
     /function assessmentReadIsCurrent\(sequence, projectId\)[\s\S]*?lastState\.account[\s\S]*?assessmentRead\.accountId[\s\S]*?idOf\(lastState\.project\) === projectId/u,
     "customer assessment reads are fenced by account as well as project",
   );

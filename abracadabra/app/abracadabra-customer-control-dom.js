@@ -2728,6 +2728,61 @@
       && value.state === "shown_at_checkout";
   }
 
+  function safeCustomBuildJob(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "finalHandoff",
+          "firstPayment",
+          "footprint",
+          "jobId",
+          "openedAt",
+          "scopeStatement",
+          "state",
+          "targetCompletionDate",
+          "tierId"
+        ]
+      )
+      || !UUID.test(text(value.jobId))
+      || value.state !== "open"
+      || !safeIso(value.openedAt)
+      || !assessmentText(value.scopeStatement, 20, 2000)
+      || !assessmentDate(value.targetCompletionDate)
+      || !exactKeys(
+        value.footprint,
+        [
+          "contentWords",
+          "craftedPages",
+          "sections",
+          "suppliedMedia",
+          "uniqueLayouts"
+        ]
+      )
+      || !exactKeys(
+        value.firstPayment,
+        ["creditMinor", "currency", "grossMinor", "paidSubtotalMinor"]
+      )
+      || !exactKeys(
+        value.finalHandoff,
+        ["amountMinor", "currency", "state"]
+      )
+    ) return false;
+    var estimate = customBuildPublicEstimate(
+      value.tierId,
+      value.footprint
+    );
+    return Boolean(estimate)
+      && value.firstPayment.grossMinor === estimate.startValueMinor
+      && value.firstPayment.creditMinor === estimate.startCreditMinor
+      && value.firstPayment.paidSubtotalMinor === estimate.startDueMinor
+      && value.firstPayment.currency === "USD"
+      && value.finalHandoff.amountMinor === estimate.finalDueMinor
+      && value.finalHandoff.currency === "USD"
+      && value.finalHandoff.state ===
+        (estimate.finalDueMinor === 0 ? "not_required" : "unpaid");
+  }
+
   function verifiedCustomerCustomBuildInvoice(value, expectation) {
     var states = [
       "not_available",
@@ -2876,13 +2931,16 @@
     ) return null;
     if (!paid) return value.job === null ? value : null;
     if (
-      !exactKeys(value.job, ["finalPaymentState", "jobId", "state"])
-      || !UUID.test(text(value.job.jobId))
-      || value.job.state !== "open"
-      || value.job.finalPaymentState !==
-        (expectation.finalHandoffMinor === 0
-          ? "not_required"
-          : "unpaid")
+      !safeCustomBuildJob(value.job)
+      || value.job.tierId !== expectation.tierId
+      || value.job.firstPayment.grossMinor !==
+        expectation.grossStartMinor
+      || value.job.firstPayment.creditMinor !== expectation.creditMinor
+      || value.job.firstPayment.paidSubtotalMinor !==
+        expectation.subtotalMinor
+      || value.job.finalHandoff.amountMinor !==
+        expectation.finalHandoffMinor
+      || Date.parse(value.job.openedAt) < Date.parse(invoice.issuedAt)
     ) return null;
     return value;
   }
@@ -2998,6 +3056,70 @@
       return true;
     });
     return valid ? value : null;
+  }
+
+  function verifiedOwnerCustomBuildJobs(value) {
+    if (
+      !exactKeys(value, ["hasMore", "jobs", "nextCursor", "schema"])
+      || value.schema !==
+        "sitesourcery.custom-services-owner-custom-build-jobs/v1"
+      || typeof value.hasMore !== "boolean"
+      || !Array.isArray(value.jobs)
+      || value.jobs.length > 100
+    ) return null;
+    var jobIds = new Set();
+    var valid = value.jobs.every(function (entry) {
+      if (
+        !exactKeys(
+          entry,
+          [
+            "caseId",
+            "customer",
+            "job",
+            "organizationId",
+            "organizationName",
+            "projectId",
+            "projectName"
+          ]
+        )
+        || !UUID.test(text(entry.organizationId))
+        || !assessmentText(entry.organizationName, 1, 200)
+        || !UUID.test(text(entry.projectId))
+        || !assessmentText(entry.projectName, 1, 200)
+        || !UUID.test(text(entry.caseId))
+        || !exactKeys(
+          entry.customer,
+          ["customerId", "email", "name"]
+        )
+        || !UUID.test(text(entry.customer.customerId))
+        || !assessmentText(entry.customer.name, 1, 200)
+        || !assessmentText(entry.customer.email, 3, 320)
+        || !safeCustomBuildJob(entry.job)
+        || jobIds.has(entry.job.jobId)
+      ) return false;
+      jobIds.add(entry.job.jobId);
+      return true;
+    });
+    if (!valid) return null;
+    if (!value.hasMore) {
+      return value.nextCursor === null ? value : null;
+    }
+    if (value.jobs.length !== 100 || typeof value.nextCursor !== "string") {
+      return null;
+    }
+    var cursorParts = value.nextCursor.split("|");
+    var lastJob = value.jobs[value.jobs.length - 1].job;
+    return cursorParts.length === 3
+      && assessmentDate(cursorParts[0])
+      && safeIso(cursorParts[1])
+      && UUID.test(cursorParts[2])
+      && value.nextCursor === [
+        lastJob.targetCompletionDate,
+        lastJob.openedAt,
+        lastJob.jobId
+      ].join("|")
+      ? value
+      : null;
   }
 
   function verifiedOwnerCustomBuildQuoteReceipt(value) {
@@ -4179,6 +4301,77 @@
     return review;
   }
 
+  function customBuildJobFacts(documentRef, job, options) {
+    var owner = Boolean(options && options.owner);
+    var tier = customBuildTier(job.tierId);
+    var section = accountElement(
+      documentRef,
+      "div",
+      "customer-custom-build-contract customer-custom-build-owner-review"
+    );
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-custom-build-facts"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Build",
+      tier.label
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Scope",
+      job.scopeStatement
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Bound footprint",
+      customBuildFootprintLine(job.footprint)
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Target completion",
+      job.targetCompletionDate
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Opened",
+      accountDate(job.openedAt)
+    );
+    if (owner) {
+      appendAccountFact(
+        documentRef,
+        facts,
+        "First payment subtotal",
+        customBuildMoney(job.firstPayment.paidSubtotalMinor)
+          + " USD before Checkout tax · $200 assessment credit applied"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Final handoff payment",
+        job.finalHandoff.state === "not_required"
+          ? "Not required"
+          : customBuildMoney(job.finalHandoff.amountMinor)
+            + " USD due before final launch or handoff"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Job ID",
+        job.jobId
+      );
+    }
+    section.appendChild(facts);
+    return section;
+  }
+
   function createCustomerCustomBuildPanel(documentRef, actions) {
     actions = actions || {};
     var panel = accountElement(
@@ -4320,7 +4513,8 @@
         documentRef,
         facts,
         "Net subtotal",
-        customBuildMoney(invoice.subtotal.amountMinor) + " USD"
+        customBuildMoney(invoice.subtotal.amountMinor)
+          + " USD before Checkout tax"
       );
       appendAccountFact(
         documentRef,
@@ -4423,36 +4617,15 @@
           )
         );
       } else {
-        status.textContent =
-          "Payment verified and your Custom website project is open.";
-        var jobFacts = accountElement(
-          documentRef,
-          "dl",
-          "customer-custom-build-facts"
-        );
-        appendAccountFact(
-          documentRef,
-          jobFacts,
-          "Project state",
-          accountWords(selected.job.state)
-        );
-        appendAccountFact(
-          documentRef,
-          jobFacts,
-          "Final payment",
-          selected.job.finalPaymentState === "not_required"
-            ? "Not required"
-            : customBuildMoney(invoice.finalHandoff.amountMinor)
-              + " USD due before final launch or handoff"
-        );
+        status.textContent = "Your Custom website project is open.";
         section.append(
           accountElement(
             documentRef,
             "p",
             "customer-assessment-note customer-custom-build-payment-pending",
-            "Your first payment was verified, the $200 assessment credit was applied, and the build project is open."
+            "First payment verified; the $200 assessment credit was applied."
           ),
-          jobFacts
+          customBuildJobFacts(documentRef, selected.job)
         );
       }
       return section;
@@ -5288,6 +5461,176 @@
         status.focus();
       },
       render: render
+    });
+  }
+
+  function createOwnerCustomBuildWorkPanel(documentRef, actions) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-owner-quote-desk customer-owner-custom-build"
+    );
+    panel.hidden = true;
+    panel.setAttribute("aria-labelledby", "owner-custom-build-work-title");
+    panel.setAttribute("data-owner-custom-build-work", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Paid Custom website jobs"
+    );
+    heading.id = "owner-custom-build-work-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-owner-quote-status customer-owner-custom-build-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh paid build jobs"
+    );
+    refresh.type = "button";
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var nextCursor = "";
+    var nextPage = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Open next paid jobs"
+    );
+    nextPage.type = "button";
+    nextPage.hidden = true;
+    nextPage.addEventListener("click", function () {
+      if (nextCursor && typeof actions.next === "function") {
+        actions.next(nextCursor);
+      }
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-owner-quote-body customer-owner-custom-build-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Private Site Sourcery tools"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Open the exact paid scope, target date, first-payment facts, and final handoff balance. Nothing on this screen changes the job."
+      ),
+      status,
+      refresh,
+      body,
+      nextPage
+    );
+
+    function renderJob(entry) {
+      var card = accountElement(
+        documentRef,
+        "details",
+        "customer-owner-quote-card customer-owner-custom-build-card"
+      );
+      card.setAttribute("data-paid-custom-build-job", entry.job.jobId);
+      card.style.minWidth = "0";
+      card.appendChild(
+        accountElement(
+          documentRef,
+          "summary",
+          "customer-owner-assessment-job-summary",
+          entry.projectName + " · " + entry.customer.name
+        )
+      );
+      var sourceFacts = accountElement(documentRef, "dl", "");
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Organization",
+        entry.organizationName
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Customer",
+        entry.customer.email
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Service case",
+        entry.caseId
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Project ID",
+        entry.projectId
+      );
+      card.append(
+        sourceFacts,
+        customBuildJobFacts(documentRef, entry.job, { owner: true })
+      );
+      body.appendChild(card);
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: function (state) {
+        var visible = Boolean(state && state.revealed === true);
+        panel.hidden = !visible;
+        body.replaceChildren();
+        nextCursor = "";
+        nextPage.hidden = true;
+        if (!visible) return;
+        refresh.disabled = state.phase === "loading";
+        nextPage.disabled = state.phase === "loading";
+        panel.setAttribute("aria-busy", String(state.phase === "loading"));
+        var jobs = verifiedOwnerCustomBuildJobs(state.jobs);
+        if (!jobs) {
+          status.textContent =
+            "The paid Custom website job response could not be verified. No private job details are shown.";
+          return;
+        }
+        var pageLabel = state.pageNumber > 1
+          ? "Page " + state.pageNumber + " · "
+          : "";
+        if (state.phase === "loading") {
+          status.textContent = state.loadingMore
+            ? "Opening the next paid Custom website jobs…"
+            : "Refreshing paid Custom website jobs…";
+        } else if (state.phase === "error") {
+          status.textContent = state.error
+            || "Paid Custom website jobs could not be refreshed.";
+        } else {
+          status.textContent = jobs.jobs.length === 0
+            ? "No paid Custom website jobs are open."
+            : pageLabel + jobs.jobs.length + " paid Custom website job"
+              + (jobs.jobs.length === 1 ? " is" : "s are")
+              + " open"
+              + (jobs.hasMore ? " on this page." : ".");
+        }
+        jobs.jobs.forEach(renderJob);
+        if (jobs.hasMore) {
+          nextCursor = jobs.nextCursor;
+          nextPage.hidden = false;
+        }
+      }
     });
   }
 
@@ -8172,6 +8515,16 @@
       busyKey: "",
       error: ""
     };
+    var ownerCustomBuildWorkReadSequence = 0;
+    var ownerCustomBuildWorkRead = {
+      accountId: "",
+      phase: "idle",
+      revealed: false,
+      jobs: null,
+      pageNumber: 0,
+      loadingMore: false,
+      error: ""
+    };
     var ownerEvidenceAttemptStorageKey =
       "sitesourcery.owner-assessment-evidence-attempt/v1";
     var customBuildAttemptStorageKey =
@@ -8538,6 +8891,23 @@
           }
         }
       );
+    var ownerCustomBuildWorkPanel =
+      createOwnerCustomBuildWorkPanel(
+        documentRef,
+        {
+          refresh: function () {
+            requestOwnerCustomBuildJobs(
+              text(lastState.account && lastState.account.id)
+            );
+          },
+          next: function (cursor) {
+            requestOwnerCustomBuildJobs(
+              text(lastState.account && lastState.account.id),
+              cursor
+            );
+          }
+        }
+      );
     var customerCustomBuildPanel =
       createCustomerCustomBuildPanel(
         documentRef,
@@ -8614,6 +8984,10 @@
         assessmentPanel.element
       );
       alakazamAnchor.parentNode.insertBefore(
+        ownerCustomBuildWorkPanel.element,
+        assessmentPanel.element
+      );
+      alakazamAnchor.parentNode.insertBefore(
         customerCustomBuildPanel.element,
         alakazamAnchor
       );
@@ -8640,6 +9014,9 @@
         );
         controlShell.appendChild(
           ownerCustomBuildPanel.element
+        );
+        controlShell.appendChild(
+          ownerCustomBuildWorkPanel.element
         );
         controlShell.appendChild(
           assessmentPanel.element
@@ -9398,6 +9775,139 @@
       }
       if (ownerCustomBuildRead.accountId !== nextAccountId) {
         requestOwnerCustomBuildOpportunities(nextAccountId);
+      }
+    }
+
+    function renderOwnerCustomBuildWorkPanel() {
+      ownerCustomBuildWorkPanel.render(ownerCustomBuildWorkRead);
+    }
+
+    function ownerCustomBuildWorkReadIsCurrent(sequence, accountId) {
+      return sequence === ownerCustomBuildWorkReadSequence
+        && ownerCustomBuildWorkRead.accountId === accountId
+        && text(lastState.account && lastState.account.id) === accountId;
+    }
+
+    function requestOwnerCustomBuildJobs(accountId, cursorValue) {
+      var selectedAccountId = text(accountId);
+      var selectedCursor = text(cursorValue);
+      var sequence = ++ownerCustomBuildWorkReadSequence;
+      var retainedJobs = ownerCustomBuildWorkRead.accountId ===
+          selectedAccountId
+          && ownerCustomBuildWorkRead.revealed
+        ? verifiedOwnerCustomBuildJobs(ownerCustomBuildWorkRead.jobs)
+        : null;
+      var continuing = Boolean(
+        selectedCursor
+        && retainedJobs
+        && retainedJobs.nextCursor === selectedCursor
+      );
+      if (selectedCursor && !continuing) return Promise.resolve(null);
+      var retainedPageNumber = retainedJobs
+        ? ownerCustomBuildWorkRead.pageNumber
+        : 0;
+      if (
+        !selectedAccountId
+        || typeof client.listOwnerCustomBuildJobs !== "function"
+      ) {
+        ownerCustomBuildWorkRead = {
+          accountId: selectedAccountId,
+          phase: "unavailable",
+          revealed: false,
+          jobs: null,
+          pageNumber: 0,
+          loadingMore: false,
+          error: ""
+        };
+        renderOwnerCustomBuildWorkPanel();
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = {
+        accountId: selectedAccountId,
+        phase: "loading",
+        revealed: Boolean(retainedJobs),
+        jobs: retainedJobs,
+        pageNumber: retainedPageNumber,
+        loadingMore: continuing,
+        error: ""
+      };
+      renderOwnerCustomBuildWorkPanel();
+      return client.listOwnerCustomBuildJobs(
+        selectedCursor ? { cursor: selectedCursor } : undefined
+      )
+        .then(function (result) {
+          if (!ownerCustomBuildWorkReadIsCurrent(
+            sequence,
+            selectedAccountId
+          )) return null;
+          if (!verifiedOwnerCustomBuildJobs(result)) {
+            throw new Error(
+              "The paid Custom website job response could not be verified."
+            );
+          }
+          ownerCustomBuildWorkRead = {
+            accountId: selectedAccountId,
+            phase: "ready",
+            revealed: true,
+            jobs: result,
+            pageNumber: continuing ? retainedPageNumber + 1 : 1,
+            loadingMore: false,
+            error: ""
+          };
+          renderOwnerCustomBuildWorkPanel();
+          return result;
+        })
+        .catch(function (error) {
+          if (!ownerCustomBuildWorkReadIsCurrent(
+            sequence,
+            selectedAccountId
+          )) return null;
+          var unavailable = error
+            && [401, 403, 503].includes(error.status);
+          ownerCustomBuildWorkRead = {
+            accountId: selectedAccountId,
+            phase: unavailable ? "unavailable" : "error",
+            revealed: unavailable ? false : Boolean(retainedJobs),
+            jobs: unavailable ? null : retainedJobs,
+            pageNumber: unavailable ? 0 : retainedPageNumber,
+            loadingMore: false,
+            error: unavailable
+              ? ""
+              : explain(
+                  error,
+                  "Paid Custom website jobs could not be loaded."
+                )
+          };
+          renderOwnerCustomBuildWorkPanel();
+          if (!unavailable && ownerCustomBuildWorkRead.revealed) {
+            ownerCustomBuildWorkPanel.focusStatus();
+          }
+          return null;
+        });
+    }
+
+    function syncOwnerCustomBuildWorkAccount(state) {
+      var nextAccountId = text(
+        state && state.account && state.account.id
+      );
+      if (!nextAccountId) {
+        if (ownerCustomBuildWorkRead.accountId) {
+          ownerCustomBuildWorkReadSequence += 1;
+          ownerCustomBuildWorkRead = {
+            accountId: "",
+            phase: "idle",
+            revealed: false,
+            jobs: null,
+            pageNumber: 0,
+            loadingMore: false,
+            error: ""
+          };
+          renderOwnerCustomBuildWorkPanel();
+        }
+        return;
+      }
+      if (ownerCustomBuildWorkRead.accountId !== nextAccountId) {
+        requestOwnerCustomBuildJobs(nextAccountId);
       }
     }
 
@@ -11635,6 +12145,7 @@
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
       syncOwnerCustomBuildAccount(state);
+      syncOwnerCustomBuildWorkAccount(state);
 
       var entitlement =
         downloadEntitlement(
@@ -12300,6 +12811,8 @@
       verifiedOwnerAssessmentJobs,
     verifiedOwnerCustomBuildOpportunities:
       verifiedOwnerCustomBuildOpportunities,
+    verifiedOwnerCustomBuildJobs:
+      verifiedOwnerCustomBuildJobs,
     verifiedOwnerCustomBuildQuoteReceipt:
       verifiedOwnerCustomBuildQuoteReceipt,
     versionLabel: versionLabel,

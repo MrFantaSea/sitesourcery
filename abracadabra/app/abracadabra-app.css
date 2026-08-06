@@ -236,6 +236,7 @@
 .customer-owner-quote-status{margin:.5rem 0 1rem;padding:.7rem .8rem;border-left:3px solid var(--spark-gold);color:var(--spark-muted);background:rgba(241,207,137,.05)}
 .customer-owner-quote-body{display:grid;gap:1rem}
 .customer-owner-quote-card{padding:1rem;border:1px solid rgba(241,207,137,.25);border-radius:.9rem;background:rgba(8,5,12,.3)}
+.customer-owner-assessment-job-summary{display:flex;align-items:center;min-height:44px;cursor:pointer;overflow-wrap:anywhere}
 .customer-owner-quote-card h4{margin:0;font-size:1.12rem}
 .customer-owner-quote-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}
 .customer-owner-quote-form .customer-assessment-note,.customer-owner-quote-form .customer-owner-quote-form-error,.customer-owner-quote-form .spark-button{grid-column:1/-1}

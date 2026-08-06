@@ -25,7 +25,7 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1J Custom build first-payment, credit-settlement, and job-open surface
+- The H1K paid Custom-build customer/owner visibility surface
   is the latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
@@ -36,12 +36,11 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven first-payment settlement and retained build
-job: expose that paid job in the private Mac/Pixel owner workbench, implement
-bounded build/access/dependency/evidence progress, then create and settle the
-exact final handoff invoice before delivery or launch. All real provider
-effects and public-service release gates remain held until each preceding
-local boundary is proven.
+Continue H1 from the now-visible paid build job: implement bounded
+build/access/dependency/change-order/evidence progress, expose only safe
+customer status, then create and settle the exact final handoff invoice before
+delivery or launch. All real provider effects and public-service release gates
+remain held until each preceding local boundary is proven.
 
 ## Completed and reviewed
 
@@ -1127,6 +1126,59 @@ Batch 3C sealed checkpoint gates:
   final handoff invoice/payment, delivery, provider release, and public release
   remain held.
 
+## H1K paid Custom-build visibility checkpoint evidence
+
+- The accepted paid migration-42 job now has one exact customer-safe
+  projection and one separate private owner projection. Both bind the retained
+  quote revision, acceptance, invoice, payment receipt, scope digest, tier,
+  footprint, first-payment values, `$200` settled credit, currency, target
+  date, and final handoff amount before exposing the job. Provider identifiers,
+  internal payment evidence, and customer-side mutation authority remain
+  absent.
+- `GET /api/v1/operator/custom-services/custom-build-jobs` is read-only,
+  requires an authenticated operator with `service_job_manage`, and runs
+  through the canonical transaction-local PostgreSQL authority. Results are
+  ordered by target date, opened time, and job ID; each response exposes at
+  most 100 jobs and an exact opaque seek cursor only when another page exists.
+  The held runtime authenticates first and remains unavailable without touching
+  PostgreSQL.
+- The customer account shows the paid build, exact scope and footprint, target
+  completion date, opened time, and pre-tax first-payment truth without an
+  internal job ID. The private Mac/Pixel panel adds customer/project identity,
+  the first-payment subtotal, final-handoff balance, and job ID. It stays hidden
+  until verified owner data arrives, keeps previously verified jobs visible
+  during an invalid refresh, focuses the live error status, and makes every
+  page reachable without unbounded eager rendering.
+- A real headless Chrome audit passes the authenticated customer and owner
+  journeys at `390x844` and `1440x1000`, including 44-pixel controls and
+  summaries, exact-width layout, no customer job-ID leakage, no browser errors,
+  and retained verified data after a malformed refresh. The complete audit
+  also passes 15 hosted routes at 320, 390, and 1440 pixels plus the maker
+  journey.
+- Focused work-repository proof passes 19/19; the combined owner HTTP/UI set
+  passes 23/23; customer paid-projection/control proof passes 11/11; and hosted
+  composition/control proof passes 29/29. Authoritative Node 24.18.0 proof
+  passes the complete core suite, 276 hosted tests with two intentional
+  environment skips, operations 52/52, current site checks for 18 live pages,
+  20 redirects, 27 catalog prices, and five sellable rails, plus the exact
+  hosted build and HTML validation.
+- Fresh database `ss_h1k_cursor_20260806_codex4` replayed all 42 migrations
+  from empty state and passed the complete real PostgreSQL assessment-through-
+  paid-Custom-job journey 1/1 after the stable cursor SQL was finalized. It had
+  zero active sessions before exact-name deletion and is verified absent.
+  The hosted staging manifest binds API digest
+  `5ea0eed3ee53a3a4a5aa1adc8f2fd56a3a4f11ead830e60fcecaca79de50b0a4`
+  and customer-control digest
+  `d9b3627d23733a68070abaed35b38693ea0550ce7a914b94e51fe746dcd7111b`.
+- Independent backend and Polish rechecks both report `BLOCKER: NO`: the
+  authorization, exact linkage, customer privacy, stable cursor, retained
+  refresh state, responsive controls, and authenticated browser evidence all
+  match the H1K boundary. Both reviewers are closed.
+- No real Stripe call, customer/production-data write, push, deployment, DNS
+  change, credential handling, or release mutation occurred. Build-progress
+  writes, access/dependency/evidence state, change orders, the final handoff
+  invoice/payment, delivery, provider release, and public release remain held.
+
 ## Live resources and workers
 
 - No implementation or redline worker remains running. The exact Batch 3C and
@@ -1136,13 +1188,12 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Expose the paid migration-42 Custom build job in the private Mac/Pixel owner
-workbench and customer account. Add only the bounded build checklist, access,
-dependency, evidence, change-order, and final-handoff states needed to create
-the exact final invoice and prove payment before launch or delivery. Do not add
-a casual mark-paid control or let the browser submit money, tax, credit,
-payment, or job authority. Keep provider release, push, deployment, and DNS
-held.
+Add only the bounded build checklist, access, dependency, evidence,
+change-order, and final-handoff states needed to advance the now-visible paid
+job and create the exact final invoice. Prove provider-confirmed payment before
+launch or delivery. Do not add a casual mark-paid control or let the browser
+submit money, tax, credit, payment, or job authority. Keep provider release,
+push, deployment, and DNS held.
 
 ## Batch 3B write scope
 

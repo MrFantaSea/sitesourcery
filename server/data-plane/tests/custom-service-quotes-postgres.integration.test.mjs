@@ -31,6 +31,9 @@ import {
   createPostgresCustomServicesCustomBuildPayment
 } from "../../hosted/custom-services-custom-build-payment-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildWork
+} from "../../hosted/custom-services-custom-build-work-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -2855,6 +2858,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         clock: { now: () => new Date().toISOString() },
         ids: { next: () => randomUUID() }
       });
+    const customBuildWork =
+      createPostgresCustomServicesCustomBuildWork({
+        authority: customBuildAuthority
+      });
     assert.deepEqual(await customBuildPayment.readiness(), {
       schema: "sitesourcery.custom-build-payment-readiness/v1",
       ready: true,
@@ -2942,7 +2949,29 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(paidBuildInvoice.state, "paid");
     assert.equal(paidBuildInvoice.invoice.credit.state, "settled");
     assert.equal(paidBuildInvoice.job.state, "open");
-    assert.equal(paidBuildInvoice.job.finalPaymentState, "not_required");
+    assert.equal(paidBuildInvoice.job.tierId, "card-plus");
+    assert.equal(
+      paidBuildInvoice.job.targetCompletionDate,
+      customBuildIssue.targetCompletionDate
+    );
+    assert.equal(paidBuildInvoice.job.firstPayment.creditMinor, 20000);
+    assert.equal(
+      paidBuildInvoice.job.firstPayment.paidSubtotalMinor,
+      45000
+    );
+    assert.equal(paidBuildInvoice.job.finalHandoff.state, "not_required");
+    assert.equal(paidBuildInvoice.job.finalHandoff.amountMinor, 0);
+    assert.equal(
+      Object.hasOwn(paidBuildInvoice.job, "paymentIntentId"),
+      false
+    );
+    const ownerBuildJobs = await customBuildWork.listJobs(operatorActor);
+    const ownerBuildJob = ownerBuildJobs.jobs.find(
+      (entry) => entry.job.jobId === paidBuildInvoice.job.jobId
+    );
+    assert.ok(ownerBuildJob);
+    assert.deepEqual(ownerBuildJob.job, paidBuildInvoice.job);
+    assert.equal(ownerBuildJob.customer.customerId, customer.userId);
     assert.equal(
       (await assessmentWork.readCustomerReport(customerAssessmentScope))
         .credit.state,

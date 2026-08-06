@@ -21,6 +21,7 @@ const {
   verifiedOwnerAssessmentJobs,
   verifiedOwnerAssessmentQueue,
   verifiedOwnerCustomBuildOpportunities,
+  verifiedOwnerCustomBuildJobs,
   verifiedOwnerCustomBuildQuoteReceipt
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
@@ -1237,6 +1238,61 @@ function ownerCustomBuildOpportunities(overrides = {}) {
   };
 }
 
+function paidCustomBuildJob(overrides = {}) {
+  return {
+    jobId: JOB_ID,
+    state: "open",
+    openedAt: "2026-08-05T16:00:00.000Z",
+    tierId: "site",
+    scopeStatement:
+      "Build the approved four-page Custom website from the exact accepted scope.",
+    footprint: {
+      craftedPages: 4,
+      sections: 16,
+      uniqueLayouts: 4,
+      contentWords: 1800,
+      suppliedMedia: 12
+    },
+    targetCompletionDate: "2026-09-15",
+    firstPayment: {
+      grossMinor: 60000,
+      creditMinor: 20000,
+      paidSubtotalMinor: 40000,
+      currency: "USD"
+    },
+    finalHandoff: {
+      amountMinor: 60000,
+      currency: "USD",
+      state: "unpaid"
+    },
+    ...overrides
+  };
+}
+
+function ownerCustomBuildJobs(overrides = {}) {
+  return {
+    schema: "sitesourcery.custom-services-owner-custom-build-jobs/v1",
+    hasMore: false,
+    nextCursor: null,
+    jobs: [
+      {
+        organizationId: ORGANIZATION_ID,
+        organizationName: "Customer Studio",
+        projectId: PROJECT_ID,
+        projectName: "Customer Website",
+        caseId: CASE_ID,
+        customer: {
+          customerId: CUSTOMER_ID,
+          name: "Customer Owner",
+          email: "customer@example.test"
+        },
+        job: paidCustomBuildJob(),
+        ...overrides
+      }
+    ]
+  };
+}
+
 function ownerCustomBuildReceipt(state = "issued") {
   return {
     schema:
@@ -1446,6 +1502,80 @@ test("owner Custom build opportunity and issue/void receipt schemas bind one del
   );
 });
 
+test("paid Custom build job projections expose exact work truth and reject internal or inconsistent fields", () => {
+  const valid = ownerCustomBuildJobs();
+  assert.equal(verifiedOwnerCustomBuildJobs(valid), valid);
+  assert.equal(
+    verifiedOwnerCustomBuildJobs({
+      ...valid,
+      jobs: [{
+        ...valid.jobs[0],
+        job: {
+          ...valid.jobs[0].job,
+          providerPaymentIntentId: "pi_private"
+        }
+      }]
+    }),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildJobs(ownerCustomBuildJobs({
+      job: paidCustomBuildJob({
+        firstPayment: {
+          ...paidCustomBuildJob().firstPayment,
+          paidSubtotalMinor: 1
+        }
+      })
+    })),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildJobs({
+      ...valid,
+      jobs: [valid.jobs[0], structuredClone(valid.jobs[0])]
+    }),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildJobs({ ...valid, hasMore: "no" }),
+    null
+  );
+});
+
+test("paid Custom build owner API client uses one same-origin read-only route", async () => {
+  const calls = [];
+  const response = ownerCustomBuildJobs();
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return jsonResponse(200, response);
+    }
+  });
+  assert.equal(await client.listOwnerCustomBuildJobs(), response);
+  const cursor =
+    "2026-09-15|2026-08-05T16:00:00.000Z|" + JOB_ID;
+  assert.equal(
+    await client.listOwnerCustomBuildJobs({ cursor }),
+    response
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(
+    calls[0].url,
+    "/api/v1/operator/custom-services/custom-build-jobs"
+  );
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.body, undefined);
+  assert.equal(
+    calls[1].url,
+    "/api/v1/operator/custom-services/custom-build-jobs?cursor=" +
+      encodeURIComponent(cursor)
+  );
+  assert.throws(
+    () => client.listOwnerCustomBuildJobs({ cursor: "bad" }),
+    /Paid Custom-build job cursor/iu
+  );
+});
+
 test("Custom build owner and customer panels expose bounded mobile controls and honest post-acceptance truth", async () => {
   const [source, css] = await Promise.all([
     readFile(
@@ -1477,15 +1607,21 @@ test("Custom build owner and customer panels expose bounded mobile controls and 
     "Commercial terms version",
     "Acceptance receipt retained",
     "Custom build first payment",
+    "Paid Custom website jobs",
+    "Refresh paid build jobs",
+    "Open next paid jobs",
+    "Nothing on this screen changes the job",
     "I understand this accepted quote will be voided"
   ]) assert.ok(source.includes(copy), copy);
   for (const boundary of [
     "listOwnerCustomBuildOpportunities",
+    "listOwnerCustomBuildJobs",
     "issueOwnerCustomBuildQuote",
     "voidOwnerCustomBuildQuote",
     "getCustomServicesCustomBuildQuote",
     "acceptCustomServicesCustomBuildQuote",
     "verifiedOwnerCustomBuildOpportunities",
+    "verifiedOwnerCustomBuildJobs",
     "verifiedCustomerCustomBuildQuote"
   ]) assert.ok(source.includes(boundary), boundary);
   assert.match(
@@ -1499,6 +1635,15 @@ test("Custom build owner and customer panels expose bounded mobile controls and 
   assert.match(
     css,
     /\.customer-owner-custom-build-card>dl,\.customer-custom-build-owner-review>dl\{grid-template-columns:1fr\}/u
+  );
+  assert.match(
+    css,
+    /\.customer-owner-assessment-job-summary\{[^}]*min-height:44px/u
+  );
+  assert.match(source, /state && state\.revealed === true/u);
+  assert.match(
+    source,
+    /revealed: Boolean\(retainedJobs\)[\s\S]*?jobs: retainedJobs/u
   );
 });
 

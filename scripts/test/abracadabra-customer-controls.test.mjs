@@ -111,7 +111,33 @@ function projection(state = "checkout_available") {
       reason: state === "checkout_available" ? null : state
     },
     job: paid
-      ? { jobId: JOB_ID, state: "open", finalPaymentState: "unpaid" }
+      ? {
+          jobId: JOB_ID,
+          state: "open",
+          openedAt: "2026-08-05T14:05:00.000Z",
+          tierId: "site",
+          scopeStatement:
+            "Build the approved four-page Custom website from the accepted exact scope.",
+          footprint: {
+            craftedPages: 4,
+            sections: 16,
+            uniqueLayouts: 4,
+            contentWords: 1800,
+            suppliedMedia: 12
+          },
+          targetCompletionDate: "2026-09-15",
+          firstPayment: {
+            grossMinor: 60000,
+            creditMinor: 20000,
+            paidSubtotalMinor: 40000,
+            currency: "USD"
+          },
+          finalHandoff: {
+            amountMinor: 60000,
+            currency: "USD",
+            state: "unpaid"
+          }
+        }
       : null
   };
 }
@@ -231,6 +257,19 @@ test("Custom build invoice rejects amount, credit, deadline, and provider-ID tam
       job: {
         ...projection("paid").job,
         paymentIntentId: "pi_test_must_stay_server_side"
+      }
+    }, expectation),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildInvoice({
+      ...projection("paid"),
+      job: {
+        ...projection("paid").job,
+        firstPayment: {
+          ...projection("paid").job.firstPayment,
+          paidSubtotalMinor: 1
+        }
       }
     }, expectation),
     null
@@ -372,7 +411,12 @@ test("Custom build customer panel keeps all payment states plain and phone-frien
     "Secure payment is not open yet",
     "The seven-day payment window ended",
     "Please do not try another payment",
-    "Payment verified and your Custom website project is open"
+    "Your Custom website project is open",
+    "First payment verified; the $200 assessment credit was applied",
+    "USD before Checkout tax",
+    "First payment subtotal",
+    "Scope",
+    "Bound footprint"
   ]) assert.ok(source.includes(copy), copy);
   assert.match(
     source,
@@ -382,5 +426,9 @@ test("Custom build customer panel keeps all payment states plain and phone-frien
   assert.match(
     css,
     /\.customer-owner-custom-build-card>dl,\.customer-custom-build-owner-review>dl\{grid-template-columns:1fr\}/u
+  );
+  assert.match(
+    css,
+    /\.customer-owner-assessment-job-summary\{[^}]*min-height:44px/u
   );
 });

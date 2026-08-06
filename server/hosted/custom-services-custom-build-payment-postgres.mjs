@@ -34,6 +34,15 @@ const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
 const EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
 const SAFE_CODE = /^[A-Za-z0-9._:-]{1,200}$/u;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+const CUSTOM_BUILD_TIERS = new Set([
+  "card",
+  "card-plus",
+  "site",
+  "site-plus",
+  "signature",
+  "flagship",
+  "scale"
+]);
 
 function exactKeys(value, expected, code, message, status = 400) {
   invariant(
@@ -92,6 +101,113 @@ function iso(value, field, code = "CUSTOM_BUILD_PAYMENT_CONFLICT") {
     { status: 500 }
   );
   return selected.toISOString();
+}
+
+function canonicalDate(value, field) {
+  invariant(
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value),
+    "CUSTOM_BUILD_PAYMENT_CONFLICT",
+    `${field} is invalid.`,
+    { status: 500 }
+  );
+  const selected = new Date(`${value}T00:00:00.000Z`);
+  invariant(
+    !Number.isNaN(selected.getTime()) &&
+      selected.toISOString().slice(0, 10) === value,
+    "CUSTOM_BUILD_PAYMENT_CONFLICT",
+    `${field} is invalid.`,
+    { status: 500 }
+  );
+  return value;
+}
+
+function paidJobProjection(row) {
+  if (row.job_id === null) return null;
+  invariant(
+    typeof row.job_id === "string" && UUID.test(row.job_id) &&
+      row.receipt_linkage_valid === true &&
+      row.job_linkage_valid === true &&
+      row.job_state === "open" &&
+      CUSTOM_BUILD_TIERS.has(row.job_tier_id) &&
+      row.job_tier_id === row.tier_id &&
+      typeof row.job_scope_statement === "string" &&
+      row.job_scope_statement.length >= 20 &&
+      row.job_scope_statement.length <= 2000 &&
+      ["not_required", "unpaid"].includes(row.final_payment_state) &&
+      row.job_currency === "USD" &&
+      Number(row.job_start_credit_minor) === 20_000 &&
+      Number(row.job_start_paid_subtotal_minor) ===
+        Number(row.job_start_gross_minor) -
+          Number(row.job_start_credit_minor) &&
+      Number(row.job_start_gross_minor) ===
+        Number(row.gross_start_minor) &&
+      Number(row.job_start_credit_minor) === Number(row.credit_minor) &&
+      Number(row.job_start_paid_subtotal_minor) ===
+        Number(row.subtotal_minor) &&
+      Number(row.job_final_due_minor) === Number(row.final_due_minor) &&
+      row.job_currency === row.currency &&
+      (
+        (Number(row.job_final_due_minor) === 0 &&
+          row.final_payment_state === "not_required") ||
+        (Number(row.job_final_due_minor) > 0 &&
+          row.final_payment_state === "unpaid")
+      ),
+    "CUSTOM_BUILD_PAYMENT_CONFLICT",
+    "The retained Custom build job is inconsistent.",
+    { status: 500 }
+  );
+  return deepFreeze({
+    jobId: row.job_id,
+    state: row.job_state,
+    openedAt: iso(row.job_opened_at, "Job open time"),
+    tierId: row.job_tier_id,
+    scopeStatement: row.job_scope_statement,
+    footprint: {
+      craftedPages: integer(row.job_crafted_pages, "Job crafted pages", {
+        maximum: 30
+      }),
+      sections: integer(row.job_sections, "Job sections", {
+        maximum: 120
+      }),
+      uniqueLayouts: integer(row.job_unique_layouts, "Job unique layouts", {
+        maximum: 30
+      }),
+      contentWords: integer(row.job_content_words, "Job content words", {
+        zero: true,
+        maximum: 14_500
+      }),
+      suppliedMedia: integer(row.job_supplied_media, "Job supplied media", {
+        zero: true,
+        maximum: 120
+      })
+    },
+    targetCompletionDate: canonicalDate(
+      row.job_target_completion_date,
+      "Job target completion date"
+    ),
+    firstPayment: {
+      grossMinor: integer(
+        row.job_start_gross_minor,
+        "Job first-payment gross"
+      ),
+      creditMinor: integer(
+        row.job_start_credit_minor,
+        "Job assessment credit"
+      ),
+      paidSubtotalMinor: integer(
+        row.job_start_paid_subtotal_minor,
+        "Job paid subtotal"
+      ),
+      currency: row.job_currency
+    },
+    finalHandoff: {
+      amountMinor: integer(row.job_final_due_minor, "Job final amount", {
+        zero: true
+      }),
+      currency: row.job_currency,
+      state: row.final_payment_state
+    }
+  });
 }
 
 function commandId(value) {
@@ -408,6 +524,12 @@ function invoiceProjection(row, release) {
     });
   }
   const paid = row.receipt_id !== null;
+  invariant(
+    (paid && row.job_id !== null) || (!paid && row.job_id === null),
+    "CUSTOM_BUILD_PAYMENT_CONFLICT",
+    "Custom build payment and job state are inconsistent.",
+    { status: 500 }
+  );
   const reconciliation =
     row.credit_state === "reconciliation_required" ||
     row.event_state === "reconciliation_required" ||
@@ -485,13 +607,7 @@ function invoiceProjection(row, release) {
       available: state === "checkout_available",
       reason: state === "checkout_available" ? null : state
     },
-    job: row.job_id === null
-      ? null
-      : {
-          jobId: row.job_id,
-          state: row.job_state,
-          finalPaymentState: row.final_payment_state
-        }
+    job: paidJobProjection(row)
   });
 }
 
@@ -529,11 +645,89 @@ const INVOICE_SELECT = `
     attempt.expires_at as checkout_expires_at,
     event.state as event_state,
     receipt.id as receipt_id,
+    (
+      receipt.id is not null
+      and receipt.project_id = invoice.project_id
+      and receipt.case_id = invoice.case_id
+      and receipt.customer_user_id = invoice.customer_user_id
+      and receipt.invoice_id = invoice.id
+      and receipt.checkout_attempt_id = attempt.id
+      and receipt.credit_application_id = invoice.credit_application_id
+      and receipt.provider = 'stripe'
+      and receipt.checkout_session_id = attempt.checkout_session_id
+      and receipt.payment_status = 'paid'
+      and receipt.subtotal_minor = invoice.subtotal_minor
+      and receipt.currency = invoice.currency
+      and receipt.purpose_digest = attempt.purpose_digest
+      and receipt.invoice_digest = invoice.invoice_digest
+      and receipt.accepted_quote_digest = invoice.accepted_quote_digest
+      and receipt.accepted_disclosure_digest =
+        invoice.accepted_disclosure_digest
+    ) as receipt_linkage_valid,
     job.id as job_id,
+    (
+      job.id is not null
+      and job.project_id = invoice.project_id
+      and job.case_id = invoice.case_id
+      and job.customer_user_id = invoice.customer_user_id
+      and job.invoice_id = invoice.id
+      and job.payment_receipt_id = receipt.id
+      and job.quote_id = invoice.quote_id
+      and job.quote_revision = invoice.quote_revision
+      and job.quote_revision_id = invoice.quote_revision_id
+      and job.quote_acceptance_id = invoice.quote_acceptance_id
+      and job.policy_id = invoice.policy_id
+      and job.scope_boundary_digest = invoice.scope_boundary_digest
+      and job.tier_id = invoice.tier_id
+      and job.accepted_quote_digest = invoice.accepted_quote_digest
+      and job.accepted_disclosure_digest =
+        invoice.accepted_disclosure_digest
+      and job.start_gross_minor = invoice.gross_start_minor
+      and job.start_credit_minor = invoice.credit_minor
+      and job.start_paid_subtotal_minor = invoice.subtotal_minor
+      and job.final_due_minor = invoice.final_due_minor
+      and job.currency = invoice.currency
+      and job.purpose = 'custom_build'
+      and revision.project_id = job.project_id
+      and revision.case_id = job.case_id
+      and revision.customer_user_id = job.customer_user_id
+      and revision.scope_statement = job.scope_statement
+      and revision.tier_id = job.tier_id
+      and revision.crafted_pages = job.crafted_pages
+      and revision.sections = job.sections
+      and revision.unique_layouts = job.unique_layouts
+      and revision.content_words = job.content_words
+      and revision.supplied_media = job.supplied_media
+      and revision.target_completion_date = job.target_completion_date
+      and revision.start_value_minor = job.start_gross_minor
+      and revision.start_credit_minor = job.start_credit_minor
+      and revision.start_due_minor = job.start_paid_subtotal_minor
+      and revision.final_due_minor = job.final_due_minor
+      and revision.currency = job.currency
+    ) as job_linkage_valid,
     job.state as job_state,
+    job.opened_at as job_opened_at,
+    job.tier_id as job_tier_id,
+    job.scope_statement as job_scope_statement,
+    job.crafted_pages as job_crafted_pages,
+    job.sections as job_sections,
+    job.unique_layouts as job_unique_layouts,
+    job.content_words as job_content_words,
+    job.supplied_media as job_supplied_media,
+    job.target_completion_date::text as job_target_completion_date,
+    job.start_gross_minor as job_start_gross_minor,
+    job.start_credit_minor as job_start_credit_minor,
+    job.start_paid_subtotal_minor as job_start_paid_subtotal_minor,
+    job.final_due_minor as job_final_due_minor,
+    job.currency as job_currency,
     job.final_payment_state,
     coalesce(line_rows.items, '[]'::jsonb) as lines
   from ss.service_custom_build_invoices invoice
+  join ss.service_custom_build_quote_revisions revision
+    on revision.organization_id = invoice.organization_id
+   and revision.quote_id = invoice.quote_id
+   and revision.quote_revision = invoice.quote_revision
+   and revision.id = invoice.quote_revision_id
   join ss.service_credit_applications application
     on application.organization_id = invoice.organization_id
    and application.id = invoice.credit_application_id
@@ -1400,7 +1594,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              revision.unique_layouts,
              revision.content_words,
              revision.supplied_media,
-             revision.target_completion_date,
+             revision.target_completion_date::text as target_completion_date,
              event.state as event_state,
              event.payload_digest
            from ss.service_custom_build_checkout_attempts attempt

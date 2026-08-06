@@ -355,6 +355,24 @@ function number(value, field, { zero = false } = {}) {
   return selected;
 }
 
+function storedCanonicalDate(value, field) {
+  invariant(
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value),
+    "custom_build_repository_conflict",
+    `${field} is invalid`,
+    { status: 500 }
+  );
+  const selected = new Date(`${value}T00:00:00.000Z`);
+  invariant(
+    !Number.isNaN(selected.getTime()) &&
+      selected.toISOString().slice(0, 10) === value,
+    "custom_build_repository_conflict",
+    `${field} is invalid`,
+    { status: 500 }
+  );
+  return value;
+}
+
 function quoteProjection(row) {
   if (row.quote_id === null || row.quote_id === undefined) return null;
   invariant(
@@ -467,10 +485,10 @@ function quoteProjection(row) {
       row.workmanship_correction_days,
       "workmanshipCorrectionDays"
     ),
-    targetCompletionDate:
-      row.target_completion_date instanceof Date
-        ? row.target_completion_date.toISOString().slice(0, 10)
-        : String(row.target_completion_date),
+    targetCompletionDate: storedCanonicalDate(
+      row.target_completion_date,
+      "targetCompletionDate"
+    ),
     issuedAt: iso(row.issued_at, "issuedAt"),
     expiresAt: iso(row.expires_at, "expiresAt"),
     creditAcceptanceCutoff: iso(
@@ -538,7 +556,7 @@ const QUOTE_COLUMNS = `
   revision.start_due_minor,
   revision.final_due_minor,
   revision.workmanship_correction_days,
-  revision.target_completion_date,
+  revision.target_completion_date::text as target_completion_date,
   revision.issued_at,
   revision.expires_at,
   revision.credit_acceptance_cutoff,

@@ -297,6 +297,10 @@ Assessment and findings:
   invoice; apply the reserved `$200` credit, open one automatic-tax Checkout,
   verify Session/PaymentIntent/Charge evidence, settle the credit atomically,
   and open one build job retaining the final handoff amount.
+- [x] Expose that exact paid Custom-build job read-only in the customer's
+  selected project and the capability-gated private Mac/Pixel owner workbench,
+  including paid scope, footprint, target date, first-payment facts, final
+  handoff balance, stable bounded paging, and fail-closed refresh behavior.
 - [ ] Record structured reused assessment scope/findings on later Rescue,
   Move, onboarding, and management quotes so overlapping work is not billed
   twice under another service label.
@@ -458,10 +462,11 @@ Lane D/J Polish truth ────────────┘
 | H1H | Paid assessment work, report, and credit grant | Lead plus bounded browser implementation and independent redline review | migration 40; private evidence payloads; Mac/Pixel owner workbench; target- and viewport-bound screenshots; up to ten revision-fenced findings; reviewed-work digest; immutable customer report; exact one-time `$200` same-project 90-day credit grant; account-scoped customer report/evidence reads; clean-room PostgreSQL, hosted artifact, responsive browser, and broad proof | reviewed and sealed locally; credit redemption, Custom build quote/invoice/job, deployment grant, provider effects, and release held |
 | H1I | Assessment-backed Custom build quote and credit reservation | Lead plus bounded HTTP/browser workers and independent redline review | migration 41; exact Card-through-Scale database pricing; source-report/project/customer binding; immutable base line and installments; owner issue/void; customer account read/acceptance; atomic one-use `$200` reservation; unsettled-void release; idempotent commands; production readiness/composition; clean-room PostgreSQL, hosted artifact, responsive controls, and broad proof | reviewed and sealed locally; Custom invoice, provider payment, settlement, build job/handoff, deployment grant, provider effects, and release held |
 | H1J | Custom build first payment and job open | Lead plus bounded provider, browser, release-config, and independent redline workers | migration 42; exact accepted-quote invoice and two lines; seven-day payment window; variable automatic-tax Stripe Checkout; Session/PaymentIntent/captured-Charge readback; atomic `$200` credit settlement; one retained build job/final handoff amount; account API/UI, webhook, production composition, held release, clean-room PostgreSQL and broad proof | reviewed and sealed locally; real provider effects, owner build work, final handoff payment/delivery, deployment grant, and release held |
+| H1K | Paid Custom build job visibility | Lead plus independent backend and Polish redline reviewers | migration-42 read-only customer and owner projections; exact quote/invoice/receipt/job linkage; capability-gated private owner GET; stable 100-job cursor paging; paid scope, footprint, target, first-payment, and final-handoff truth; retained verified data on malformed refresh; responsive authenticated browser, clean-room PostgreSQL, hosted artifact, and broad proof | reviewed and sealed locally; progress mutations, access/dependency/evidence state, final payment, delivery, provider effects, deployment grant, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1J are sealed locally. H1D supplies the customer
+Batch 3C, H0, and H1A through H1K are sealed locally. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
 surface; H1E adds the account-bound invoice and H1F adds one automatic-tax
 Checkout dispatch. H1G adds provider-confirmed settlement, the immutable
@@ -476,17 +481,24 @@ invoice, applies the reserved `$200` credit, verifies one automatic-tax Stripe
 payment by readback, settles the credit, and opens one retained build job with
 the exact final handoff amount over migration 42. Customer reloads preserve
 reserved, reconciliation, and paid truth without exposing provider IDs.
+H1K exposes that same retained paid job without a migration: the customer sees
+the accepted build scope and target in the selected project, while a separately
+authorized owner read lists exact open jobs on Mac or Pixel with stable bounded
+paging. Both projections fail closed on linkage or money drift, and a failed
+owner refresh retains already verified job facts rather than flashing or
+discarding them.
 Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
 request + exact accepted `$200` assessment quote + invoice/Checkout +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
 build credit + one accepted Custom build that applies the credit exactly once.
-The immediate next slice is the owner/customer build-work and final-handoff
-path: expose the paid job in the private Mac/Pixel workbench, retain bounded
-checklist/access/dependency/evidence state, create the exact final invoice only
-when the accepted handoff boundary is ready, verify its payment, and deliver or
-launch the accepted work without inventing a generic mark-paid control. Stripe
-Checkout—not a duplicate local calculator—continues to calculate tax.
+The immediate next slice is the bounded owner/customer build-progress and
+final-handoff path: retain checklist, access, dependency, change-order, and
+evidence state; let customers read only safe progress; create the exact final
+invoice only when the accepted handoff boundary is ready; verify its payment;
+then deliver or launch the accepted work without inventing a generic mark-paid
+control. Stripe Checkout—not a duplicate local calculator—continues to
+calculate tax.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

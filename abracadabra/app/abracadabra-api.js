@@ -1152,6 +1152,41 @@
       );
     }
 
+    function listOwnerCustomBuildJobs(requestOptions) {
+      var selectedCursor = requestOptions && requestOptions.cursor;
+      var path = "/operator/custom-services/custom-build-jobs";
+      if (selectedCursor != null) {
+        selectedCursor = boundedText(
+          selectedCursor,
+          "Paid Custom-build job cursor",
+          72,
+          96
+        );
+        var cursorParts = selectedCursor.split("|");
+        var cursorDate = cursorParts.length === 3
+          ? Date.parse(cursorParts[1])
+          : NaN;
+        if (
+          cursorParts.length !== 3
+          || !/^\d{4}-\d{2}-\d{2}$/u.test(cursorParts[0])
+          || !Number.isFinite(cursorDate)
+          || new Date(cursorDate).toISOString() !== cursorParts[1]
+          || !UUID.test(cursorParts[2])
+        ) {
+          throw new APIError({
+            code: "INVALID_INPUT",
+            message: "Paid Custom-build job cursor is invalid."
+          });
+        }
+        path += "?cursor=" + encodeURIComponent(selectedCursor);
+      }
+      return request(
+        "GET",
+        path,
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
     function issueOwnerCustomBuildQuote(jobId, input) {
       var source = exactInput(
         input,
@@ -2055,6 +2090,8 @@
         getCustomServicesAssessmentReport,
       listOwnerCustomBuildOpportunities:
         listOwnerCustomBuildOpportunities,
+      listOwnerCustomBuildJobs:
+        listOwnerCustomBuildJobs,
       issueOwnerCustomBuildQuote:
         issueOwnerCustomBuildQuote,
       voidOwnerCustomBuildQuote:

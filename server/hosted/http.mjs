@@ -24,6 +24,9 @@ import {
 import {
   createHeldCustomServicesCustomBuild
 } from "./custom-services-custom-build-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildWork
+} from "./custom-services-custom-build-work-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -348,6 +351,7 @@ export function createHostedApi(
     customServicesAccount = null,
     customServicesAssessmentWork = null,
     customServicesCustomBuild = null,
+    customServicesCustomBuildWork = null,
     customServicesOwner = null,
     stripeWebhook = null
   } = {}
@@ -410,6 +414,15 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Custom build boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesCustomBuildWorkBoundary =
+    customServicesCustomBuildWork ??
+    createHeldCustomServicesCustomBuildWork();
+  invariant(
+    typeof customServicesCustomBuildWorkBoundary.listJobs === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom build work boundary is invalid.",
     { status: 500 }
   );
   const stripeWebhookBoundary =
@@ -801,6 +814,30 @@ export function createHostedApi(
           );
           result =
             await customServicesAssessmentWorkBoundary.listJobs(actor);
+        } else if (
+          method === "GET" &&
+          pathname ===
+            "/api/v1/operator/custom-services/custom-build-jobs"
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening paid Custom build jobs.",
+            { status: 401 }
+          );
+          const cursorValues = url.searchParams.getAll("cursor");
+          invariant(
+            cursorValues.length <= 1 &&
+              [...url.searchParams.keys()].every((key) => key === "cursor"),
+            "INVALID_CUSTOM_BUILD_WORK_CURSOR",
+            "The paid Custom-build job cursor is invalid.",
+            { status: 400 }
+          );
+          result =
+            await customServicesCustomBuildWorkBoundary.listJobs(
+              actor,
+              cursorValues[0] ?? null
+            );
         } else if (
           method === "GET" &&
           pathname ===
