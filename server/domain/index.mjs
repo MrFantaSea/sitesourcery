@@ -4,6 +4,12 @@ export { createDomainAccountBoundary, publicDomainError } from "./account-bounda
 export { PROVIDER_FACTS, ORDER_STATES, REQUIRED_AGREEMENTS } from "./constants.mjs";
 export { DomainError, ExternalEffectError } from "./errors.mjs";
 export { createDomainOrchestrator, DomainOrchestrator } from "./service.mjs";
+export {
+  createDomainProviderContingency,
+  DOMAIN_PROVIDER_OUTCOME_SCHEMA,
+  DOMAIN_PROVIDER_PIN_SCHEMA,
+  DOMAIN_PROVIDER_ROUTE_SCHEMA
+} from "./provider-contingency.mjs";
 export { createMemoryDomainRepository } from "./adapters/memory-repository.mjs";
 export { createHeldExternalPorts } from "./adapters/held.mjs";
 export {

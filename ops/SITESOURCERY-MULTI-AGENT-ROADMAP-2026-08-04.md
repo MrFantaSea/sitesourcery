@@ -342,6 +342,13 @@ Quotes, invoices, and jobs:
   receipt, retry, replay, and uncertain-payment reconciliation.
 - [ ] Implement job, checklist, dependency, safe access request, evidence,
   deliverable, completion, 30-day workmanship correction, and final handoff.
+- [x] Implement the paid-job subset for three-stage customer-safe progress,
+  four monotonic milestones, exactly one content/decision/delegated-access/
+  outside-dependency request, customer response, and separate owner
+  resolution without credential or false access-verification claims.
+- [ ] Add formal change orders, completion evidence, final invoice/payment,
+  delivery receipt, and the 30-day workmanship-correction boundary; do not
+  fold them into the completed progress/request slice retroactively.
 
 Five existing-site revenue lanes:
 
@@ -375,6 +382,32 @@ Customer and owner surfaces:
 
 ### Lane I — domains and deferred offers
 
+- [x] Build and deterministically test the provider-neutral core contingency
+  boundary: symmetric no-charge preflight, provider selection before contact
+  preparation, no mutation fallback, original-provider reconciliation, and a
+  durable registrar-of-record pin. Hosted PostgreSQL composition, the real
+  secondary adapter, and provider-aware customer disclosure remain below.
+- [ ] Keep the registrar boundary provider-interchangeable: Spaceship may be
+  primary and one approved reseller-capable registrar may be secondary, with
+  either able to handle side-effect-free availability/pricing preflight when
+  the other is unavailable.
+- [ ] Permit automatic provider fallback for a new order only before a
+  provider-specific contact/quote or any billed mutation is in flight. An
+  unknown registration, renewal, or transfer outcome must stay held for
+  readback instead of risking a second registrar charge.
+- [ ] Persist the selected provider, exact quote route, attempt state,
+  operation ID, and immutable registrar-of-record pin. Existing domains must
+  route DNS, renewal, support, and transfer operations to that pin; changing
+  registrars is an explicit transfer, never an instantaneous fallback.
+- [ ] Keep each customer as the named registrant, disclose the registrar, and
+  charge the current upstream cost plus separately visible SiteSourcery setup
+  / stewardship fees. Renewals must be prepaid before the upstream charge,
+  and customer handoff / transfer must remain available.
+- [ ] Await Spaceship's written commercial consent request sent to
+  `support@spaceship.com` on 2026-08-06. If consent is declined or stalls, use
+  a reviewed reseller API such as Namecheap or OpenSRS for automatic checkout;
+  retain affiliate purchase plus separately billed setup/care as the
+  non-automatic contingency without duplicating the storefront.
 - [ ] Finish registrar authority, availability recheck, capture-after-
   registration, DNS, renewal, and transfer proof.
 - [ ] Remove the obsolete charge-then-refund promise.

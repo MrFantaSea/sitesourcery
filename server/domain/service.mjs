@@ -12,7 +12,11 @@ const DEFAULTS = Object.freeze({
 });
 
 export function createDomainOrchestrator({ ports, config = {} } = {}) {
-  return new DomainOrchestrator(validatePorts(ports), { ...DEFAULTS, ...config });
+  const resolvedConfig = { ...DEFAULTS, ...config };
+  return new DomainOrchestrator(
+    validatePorts(ports, { legacyRegistrarOfRecord: resolvedConfig.registrarDisplayName }),
+    resolvedConfig
+  );
 }
 
 export class DomainOrchestrator {
@@ -26,7 +30,7 @@ export class DomainOrchestrator {
       const auth = requireCustomer(input);
       const now = this.#now();
       const order = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: await this.ports.ids.next("domain_order"),
         version: 1,
         tenantId: auth.tenantId,
@@ -38,11 +42,14 @@ export class DomainOrchestrator {
         createdAt: now,
         updatedAt: now,
         registrar: {
-          provider: "spaceship",
-          registrarOfRecord: this.config.registrarDisplayName,
+          provider: null,
+          registrarOfRecord: null,
           customerIsRegistrant: true,
           siteSourceryRole: "authorized_agent_and_account_operator",
-          contactIds: null
+          contactIds: null,
+          contactProvider: null,
+          quoteRoute: null,
+          providerPin: null
         },
         consent: null,
         quote: null,
@@ -52,6 +59,8 @@ export class DomainOrchestrator {
           status: "not_started",
           attemptId: null,
           operationId: null,
+          mutationState: "not_started",
+          attemptedProvider: null,
           providerPrice: null,
           registrationDate: null,
           expirationDate: null,
@@ -64,6 +73,9 @@ export class DomainOrchestrator {
         },
         transfer: {
           status: "not_requested",
+          attemptId: null,
+          mutationState: "not_started",
+          provider: null,
           authCodeDigest: null,
           authCodeExpiresAt: null,
           deliveryReceiptId: null
@@ -77,7 +89,9 @@ export class DomainOrchestrator {
       };
       const audit = await this.#event(order, "domain.order.created", {
         actorId: auth.actorId,
-        projectId: order.projectId
+        projectId: order.projectId,
+        providerCode: null,
+        providerSelection: "unselected"
       });
       const result = publicOrder(order);
       await this.ports.repository.createOrder({
@@ -110,17 +124,21 @@ export class DomainOrchestrator {
           "registrantProfileDigest",
           128
         ),
-        registrarDisclosed: this.config.registrarDisplayName,
+        registrarDisclosed: null,
+        registrarDisclosureTiming: "selected_provider_disclosed_before_price_acceptance",
         agreements,
         recordedAt: this.#now()
       };
+      resetProviderQuoteCycle(order);
       order.quote = null;
       order.acceptedQuote = null;
       order.state = ORDER_STATES.AGENCY_CONSENTED;
       return this.#save(order, command, "domain.agency.consent_recorded", {
         actorId: auth.actorId,
         evidenceId: order.consent.evidenceId,
-        agreementKeys: agreements.map(({ key }) => key)
+        agreementKeys: agreements.map(({ key }) => key),
+        providerCode: null,
+        providerSelection: "unselected_until_quote"
       });
     });
   }
@@ -133,7 +151,39 @@ export class DomainOrchestrator {
         ORDER_STATES.FINAL_QUOTED
       ]);
       invariant(order.consent, "consent_required", "agency consent is required");
-      const contactIds = await this.ports.registrar.ensureContacts({
+
+      // FINAL_QUOTED and REQUOTE_REQUIRED are explicit fresh quote cycles. Any
+      // prior provider contacts and route are discarded before unlocked,
+      // no-charge preflight so a healthy contingency provider may be chosen.
+      if ([ORDER_STATES.FINAL_QUOTED, ORDER_STATES.REQUOTE_REQUIRED].includes(order.state)) {
+        resetProviderQuoteCycle(order, { resetRegistration: true });
+        order.quote = null;
+        order.acceptedQuote = null;
+      }
+
+      if (!order.registrar.quoteRoute) {
+        const preflight = await this.ports.registrarProviders.contingency.preflightRegistration({
+          input: registrationProviderInput(order)
+        });
+        requireAvailablePreflight(preflight);
+        applyProviderRoute(order, preflight.route);
+        order = await this.#save(
+          order,
+          command,
+          "domain.quote.provider_selected",
+          {
+            actorId: auth.actorId,
+            ...providerAudit(order),
+            preflightFallbackUsed: preflight.fallbackUsed === true,
+            contactsPrepared: false
+          },
+          { complete: false, returnInternal: true }
+        );
+      }
+
+      const route = requireProviderRoute(order);
+      const provider = this.ports.registrarProviders.get(route.providerCode);
+      const contactIds = await provider.registrar.ensureContacts({
         tenantId: order.tenantId,
         customerId: order.customerId,
         domain: order.domain,
@@ -143,36 +193,31 @@ export class DomainOrchestrator {
         customerIsRegistrant: true
       });
       validateContactIds(contactIds);
-      const preview = await this.ports.registrar.previewRegistration({
-        tenantId: order.tenantId,
-        domain: order.domain,
-        years: order.years,
-        autoRenew: false,
-        privacy: { level: "high", userConsent: true },
-        contacts: contactIds
+      const preflight = await this.ports.registrarProviders.contingency.preflightRegistration({
+        input: registrationProviderInput(order, contactIds),
+        lockedProviderCode: route.providerCode
       });
+      requireAvailablePreflight(preflight);
       invariant(
-        preview?.status === "confirmation_required",
-        "unsafe_registrar_preview",
-        "registrar did not return a no-charge confirmation preview"
+        preflight.route.providerCode === route.providerCode,
+        "domain_provider_route_mismatch",
+        "provider changed after contact preparation",
+        { status: 409 }
       );
-      const price = exactMoney(preview.price, "registration preview");
       const now = this.#now();
       order.registrar.contactIds = structuredClone(contactIds);
-      order.quote = {
-        observedAt: now,
-        expiresAt: addMs(now, this.config.quoteTtlMs),
-        price,
-        quoteId: preview.quoteId ?? null,
-        providerDoesNotReservePrice: true
-      };
+      order.registrar.contactProvider = route.providerCode;
+      applyProviderRoute(order, preflight.route);
+      order.quote = quoteFromRoute(preflight.route, now, this.config.quoteTtlMs);
       order.acceptedQuote = null;
       order.state = ORDER_STATES.FINAL_QUOTED;
       return this.#save(order, command, "domain.quote.prepared", {
         actorId: auth.actorId,
-        amountMinor: price.amountMinor,
-        currency: price.currency,
-        expiresAt: order.quote.expiresAt
+        ...providerAudit(order),
+        amountMinor: order.quote.price.amountMinor,
+        currency: order.quote.price.currency,
+        expiresAt: order.quote.expiresAt,
+        contactsPrepared: true
       });
     });
   }
@@ -181,6 +226,8 @@ export class DomainOrchestrator {
     return this.#orderCommand(input, "acceptQuote", async (order, command, auth) => {
       requireState(order, [ORDER_STATES.FINAL_QUOTED]);
       requireFresh(order.quote, this.#now());
+      const route = requireProviderRoute(order);
+      requireProviderContacts(order, route.providerCode);
       const acceptedAmountMinor = requiredInteger(input.acceptedAmountMinor, "acceptedAmountMinor");
       invariant(
         acceptedAmountMinor === order.quote.price.amountMinor,
@@ -188,6 +235,9 @@ export class DomainOrchestrator {
         "accepted amount does not match the current registrar preview"
       );
       order.acceptedQuote = {
+        providerCode: route.providerCode,
+        registrarOfRecord: route.registrarOfRecord,
+        providerRouteFingerprint: route.fingerprint,
         registrarPrice: structuredClone(order.quote.price),
         serviceFeeMinor: this.config.serviceFeeMinor,
         total: {
@@ -201,6 +251,7 @@ export class DomainOrchestrator {
       order.state = ORDER_STATES.QUOTE_ACCEPTED;
       return this.#save(order, command, "domain.quote.accepted", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         amountMinor: acceptedAmountMinor,
         serviceFeeMinor: this.config.serviceFeeMinor,
         evidenceId: order.acceptedQuote.evidenceId
@@ -231,7 +282,12 @@ export class DomainOrchestrator {
         order,
         command,
         "domain.payment.authorizing",
-        { actorId: auth.actorId, amountMinor: expected.amountMinor, purposeDigest },
+        {
+          actorId: auth.actorId,
+          ...providerAudit(order),
+          amountMinor: expected.amountMinor,
+          purposeDigest
+        },
         { complete: false, returnInternal: true }
       );
       let authorization;
@@ -260,6 +316,7 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.payment.authorization_review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           purposeDigest,
           noAutomaticRetry: true
         });
@@ -277,6 +334,7 @@ export class DomainOrchestrator {
       order.state = ORDER_STATES.PAYMENT_AUTHORIZED;
       return this.#save(order, command, "domain.payment.authorized", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         amountMinor: expected.amountMinor,
         purposeDigest
       });
@@ -287,20 +345,19 @@ export class DomainOrchestrator {
     return this.#orderCommand(input, "revalidateBeforeConfirm", async (order, command, auth) => {
       requireState(order, [ORDER_STATES.PAYMENT_AUTHORIZED]);
       requireAuthorizationFresh(order.payment, this.#now(), this.config);
-      const preview = await this.ports.registrar.previewRegistration({
-        tenantId: order.tenantId,
-        domain: order.domain,
-        years: order.years,
-        autoRenew: false,
-        privacy: { level: "high", userConsent: true },
-        contacts: order.registrar.contactIds
-      });
-      if (
-        preview?.status !== "confirmation_required" ||
-        !preview.price ||
-        preview.price.currency !== "USD" ||
-        !Number.isSafeInteger(preview.price.amountMinor)
-      ) {
+      const route = requireProviderRoute(order);
+      requireAcceptedProvider(order, route);
+      requireProviderContacts(order, route.providerCode);
+      let preflight;
+      try {
+        preflight = await this.ports.registrarProviders.contingency.preflightRegistration({
+          input: registrationProviderInput(order, order.registrar.contactIds),
+          lockedProviderCode: route.providerCode
+        });
+      } catch (error) {
+        if (!(error instanceof DomainError) || error.code !== "domain_providers_unavailable") {
+          throw error;
+        }
         return this.#voidAndRequote(
           order,
           command,
@@ -309,27 +366,39 @@ export class DomainOrchestrator {
           "registration_price_unavailable_on_revalidation"
         );
       }
-      const price = exactMoney(preview.price, "registration revalidation");
+      if (preflight.status !== "ready") {
+        return this.#voidAndRequote(
+          order,
+          command,
+          auth,
+          null,
+          "registration_unavailable_on_revalidation"
+        );
+      }
+      const replacementRoute = preflight.route;
+      invariant(
+        replacementRoute.providerCode === route.providerCode,
+        "domain_provider_route_mismatch",
+        "revalidation changed the selected provider",
+        { status: 409 }
+      );
+      const price = exactMoney(replacementRoute.expectedPrice, "registration revalidation");
       if (!sameMoney(price, order.acceptedQuote.registrarPrice)) {
         return this.#voidAndRequote(
           order,
           command,
           auth,
-          preview,
+          replacementRoute,
           "registration_price_changed_before_confirmation"
         );
       }
       const now = this.#now();
-      order.quote = {
-        observedAt: now,
-        expiresAt: addMs(now, this.config.quoteTtlMs),
-        price,
-        quoteId: preview.quoteId ?? null,
-        providerDoesNotReservePrice: true
-      };
+      applyProviderRoute(order, replacementRoute);
+      order.quote = quoteFromRoute(replacementRoute, now, this.config.quoteTtlMs);
       order.state = ORDER_STATES.READY_TO_CONFIRM;
       return this.#save(order, command, "domain.registration.revalidated", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         amountMinor: price.amountMinor
       });
     });
@@ -340,27 +409,36 @@ export class DomainOrchestrator {
       requireState(order, [ORDER_STATES.READY_TO_CONFIRM]);
       requireFresh(order.quote, this.#now());
       requireAuthorizationFresh(order.payment, this.#now(), this.config);
+      const route = requireProviderRoute(order);
+      requireAcceptedProvider(order, route);
+      requireProviderContacts(order, route.providerCode);
       requireExecutionApproval(input.executionApproval, order, this.config, "domain_registration");
 
       const attemptId = await this.ports.ids.next("registration_attempt");
       order.state = ORDER_STATES.CONFIRM_DISPATCHING;
       order.registration.status = "dispatching";
       order.registration.attemptId = attemptId;
+      order.registration.attemptedProvider = route.providerCode;
+      // Persisting `submitted` before the call is deliberate: after a crash,
+      // recovery must assume the mutation may have reached this one provider.
+      order.registration.mutationState = "submitted";
       order = await this.#save(
         order,
         command,
         "domain.registration.dispatching",
         {
           actorId: auth.actorId,
+          ...providerAudit(order),
           attemptId,
           expectedAmountMinor: order.quote.price.amountMinor
         },
         { complete: false, returnInternal: true }
       );
 
-      let response;
-      try {
-        response = await this.ports.registrar.confirmRegistration({
+      const response = await this.ports.registrarProviders.contingency.submitRegistration({
+        route,
+        mutationState: "not_started",
+        input: {
           tenantId: order.tenantId,
           attemptId,
           domain: order.domain,
@@ -369,12 +447,14 @@ export class DomainOrchestrator {
           privacy: { level: "high", userConsent: true },
           contacts: order.registrar.contactIds,
           expectedPrice: order.quote.price
-        });
-      } catch (error) {
-        if (
-          error instanceof ExternalEffectError &&
-          error.certainty === "not_submitted"
-        ) {
+        }
+      });
+
+      if (response.status === "held") {
+        order.registration.operationId = response.operationId ?? null;
+        order.registration.mutationState =
+          response.effect === "not_submitted" ? "not_started" : "uncertain";
+        if (response.effect === "not_submitted" && response.reconciliationRequired === false) {
           const voided = await this.#tryVoid(order, "registration_not_submitted");
           order.state = voided ? ORDER_STATES.REQUOTE_REQUIRED : ORDER_STATES.PAYMENT_VOID_REVIEW;
           order.registration.status = "not_submitted";
@@ -387,45 +467,36 @@ export class DomainOrchestrator {
           };
           return this.#save(order, command, "domain.registration.not_submitted", {
             actorId: auth.actorId,
+            ...providerAudit(order),
             attemptId,
-            providerCode: error.code,
+            providerErrorCode: response.providerErrorCode,
+            automaticProviderSwitch: false,
             authorizationVoided: voided
           });
         }
         order.state = ORDER_STATES.CONFIRM_UNKNOWN;
         order.registration.status = "unknown";
         order.review = {
-          reason: "ambiguous_irreversible_confirmation",
+          reason: response.reason,
           openedAt: this.#now(),
           instruction:
-            "Do not retry. Reconcile the registrar portfolio, registrant contacts, and registrar billing before payment capture or void."
+            "Do not retry or switch providers. Reconcile only the attempted registrar's operation, portfolio, registrant contacts, and billing before payment capture or void."
         };
         return this.#save(order, command, "domain.registration.unknown", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           attemptId,
-          noAutomaticRetry: true
-        });
-      }
-
-      if (typeof response?.operationId !== "string" || !response.operationId) {
-        order.state = ORDER_STATES.CONFIRM_UNKNOWN;
-        order.registration.status = "unknown";
-        order.review = {
-          reason: "confirmation_missing_operation_id",
-          openedAt: this.#now(),
-          instruction: "Do not retry the billed confirmation."
-        };
-        return this.#save(order, command, "domain.registration.unknown", {
-          actorId: auth.actorId,
-          attemptId,
+          providerErrorCode: response.providerErrorCode,
+          automaticProviderSwitch: false,
           noAutomaticRetry: true
         });
       }
 
       order.registration.operationId = response.operationId;
+      order.registration.mutationState = "submitted";
       order.registration.status = "pending";
-      order.registration.providerPrice = hasExactMoney(response.price)
-        ? exactMoney(response.price, "provider confirmation price")
+      order.registration.providerPrice = hasExactMoney(response.providerPrice)
+        ? exactMoney(response.providerPrice, "provider confirmation price")
         : null;
       const exactMatch = sameMoney(
         order.registration.providerPrice,
@@ -443,9 +514,11 @@ export class DomainOrchestrator {
           };
       return this.#save(order, command, "domain.registration.submitted", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         attemptId,
         operationId: response.operationId,
-        exactProviderPrice: exactMatch
+        exactProviderPrice: exactMatch,
+        automaticProviderSwitch: response.automaticProviderSwitch
       });
     });
   }
@@ -454,38 +527,66 @@ export class DomainOrchestrator {
     return this.#orderCommand(input, "pollRegistration", async (order, command, auth) => {
       requireState(order, [
         ORDER_STATES.REGISTRATION_PENDING,
-        ORDER_STATES.REGISTRATION_PENDING_REVIEW
+        ORDER_STATES.REGISTRATION_PENDING_REVIEW,
+        ORDER_STATES.CONFIRM_UNKNOWN
       ]);
-      const operation = await this.ports.registrar.getOperation({
-        tenantId: order.tenantId,
-        operationId: order.registration.operationId
-      });
-      invariant(
-        ["pending", "success", "failed"].includes(operation?.status),
-        "invalid_provider_response",
-        "registrar returned an unknown operation status"
+      requiredString(
+        order.registration.operationId,
+        "registration.operationId",
+        256
       );
-      if (operation.status === "pending") {
+      const route = requireProviderRoute(order);
+      invariant(
+        order.registration.attemptedProvider === route.providerCode,
+        "domain_provider_route_mismatch",
+        "registration attempt is not bound to its provider route",
+        { status: 409 }
+      );
+      const reconciliation =
+        await this.ports.registrarProviders.contingency.reconcileRegistration({
+          route,
+          operationId: order.registration.operationId,
+          expectedRegistrantContactId: order.registrar.contactIds.registrant
+        });
+      if (reconciliation.status === "pending") {
         return this.#save(order, command, "domain.registration.polled", {
           actorId: auth.actorId,
-          status: "pending"
+          ...providerAudit(order),
+          status: "pending",
+          automaticProviderSwitch: false
         });
       }
-      if (operation.status === "failed") {
-        order.state = ORDER_STATES.REGISTRATION_FAILED_REVIEW;
-        order.registration.status = "failed";
+      if (reconciliation.status === "held") {
+        const providerReportedFailure =
+          reconciliation.reason === "registration_failed_billing_requires_reconciliation";
+        const providerReportedActive = reconciliation.reason.startsWith("registered_domain_");
+        order.state = providerReportedFailure
+          ? ORDER_STATES.REGISTRATION_FAILED_REVIEW
+          : providerReportedActive
+            ? ORDER_STATES.ACTIVE_PAYMENT_REVIEW
+            : ORDER_STATES.REGISTRATION_PENDING_REVIEW;
+        order.registration.status = providerReportedFailure
+          ? "failed"
+          : providerReportedActive
+            ? "success"
+            : "pending";
         order.review = {
-          reason: "async_registration_failed_billing_unknown",
+          reason: reconciliation.reason,
           openedAt: this.#now(),
-          instruction:
-            "Reconcile registrar billing and portfolio before voiding the customer authorization."
+          instruction: providerReportedActive
+            ? "Do not capture. Reconcile this registrar's domain and customer registrant mapping."
+            : "Reconcile only the attempted registrar's operation, billing, and portfolio before payment capture or void."
         };
-        return this.#save(order, command, "domain.registration.failed_review", {
+        return this.#save(order, command, "domain.registration.reconciliation_review", {
           actorId: auth.actorId,
-          operationId: order.registration.operationId
+          ...providerAudit(order),
+          operationId: order.registration.operationId,
+          reconciliationReason: reconciliation.reason,
+          automaticProviderSwitch: false
         });
       }
 
+      installProviderPin(order, reconciliation.providerPin);
       order.state = ORDER_STATES.ACTIVE_PAYMENT_PENDING;
       order.registration.status = "success";
       order = await this.#save(
@@ -494,31 +595,37 @@ export class DomainOrchestrator {
         "domain.registration.verification_pending",
         {
           actorId: auth.actorId,
+          ...providerAudit(order),
           operationId: order.registration.operationId,
           captureStarted: false
         },
         { complete: false, returnInternal: true }
       );
-      let domain;
-      try {
-        domain = await this.ports.registrar.getDomain({
+      const readback = await this.ports.registrarProviders.contingency.readPinned({
+        pin: requireProviderPin(order),
+        operation: "getDomain",
+        input: {
           tenantId: order.tenantId,
           domain: order.domain
-        });
-      } catch {
+        }
+      });
+      if (readback.status !== "ok") {
         order.state = ORDER_STATES.ACTIVE_PAYMENT_REVIEW;
         order.review = {
-          reason: "registered_domain_readback_unavailable",
+          reason: readback.reason,
           openedAt: this.#now(),
           instruction:
-            "Do not capture. Reconcile the registered domain and customer contact mapping."
+            "Do not capture or switch providers. Reconcile the pinned registrar's domain and customer contact mapping."
         };
         return this.#save(order, command, "domain.registration.active_review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           readbackAvailable: false,
-          captureStarted: false
+          captureStarted: false,
+          automaticProviderSwitch: false
         });
       }
+      const domain = readback.result;
       if (
         domain?.name?.toLowerCase() !== order.domain ||
         domain.lifecycleStatus !== "registered" ||
@@ -533,6 +640,7 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.registration.active_review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           registrantVerified: false
         });
       }
@@ -549,6 +657,7 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.registration.active_review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           registrantVerified: true,
           providerPriceKnown: false
         });
@@ -581,6 +690,7 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.payment.capture_review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           domainRemainsCustomerOwned: true
         });
       }
@@ -597,6 +707,7 @@ export class DomainOrchestrator {
             };
       return this.#save(order, command, "domain.registration.active", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         registrantVerified: true,
         capturedAmountMinor: captureAmountMinor,
         providerAmountMinor: provider
@@ -620,6 +731,7 @@ export class DomainOrchestrator {
       };
       return this.#save(order, command, "domain.renewal.manual_review_requested", {
         actorId: auth.actorId,
+        ...providerAudit(order),
         expirationDate: order.registration.expirationDate,
         billedRenewalSubmitted: false
       });
@@ -655,7 +767,7 @@ export class DomainOrchestrator {
           order,
           command,
           "domain.refund.dispatching",
-          { actorId: auth.actorId, amountMinor },
+          { actorId: auth.actorId, ...providerAudit(order), amountMinor },
           { complete: false, returnInternal: true }
         );
 
@@ -696,6 +808,7 @@ export class DomainOrchestrator {
           }
           return this.#save(order, command, "domain.refund.review", {
             actorId: auth.actorId,
+            ...providerAudit(order),
             amountMinor,
             noAutomaticRetry: order.state === ORDER_STATES.REFUND_UNKNOWN
           });
@@ -714,6 +827,7 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.refund.settled", {
           actorId: auth.actorId,
+          ...providerAudit(order),
           amountMinor,
           operatorEvidenceId,
           domainRemainsCustomerOwned: true
@@ -727,38 +841,90 @@ export class DomainOrchestrator {
     return this.#orderCommand(input, "requestTransferOut", async (order, command, auth) => {
       requireActive(order);
       requiredString(input.transferConsentEvidenceId, "transferConsentEvidenceId", 256);
-      const assessment = await this.ports.registrar.assessTransferOut({
-        tenantId: order.tenantId,
-        domain: order.domain,
-        registrationDate: order.registration.registrationDate
+      const pin = requireProviderPin(order);
+      const assessed = await this.ports.registrarProviders.contingency.readPinned({
+        pin,
+        operation: "assessTransferOut",
+        input: {
+          tenantId: order.tenantId,
+          domain: order.domain,
+          registrationDate: order.registration.registrationDate
+        }
       });
+      invariant(
+        assessed.status === "ok",
+        "transfer_assessment_unavailable",
+        "the registrar of record could not confirm transfer eligibility",
+        { details: { providerCode: pin.providerCode, reason: assessed.reason } }
+      );
+      const assessment = assessed.result;
       invariant(
         assessment?.eligible === true,
         "transfer_not_eligible",
         "registrar or registry rules currently block transfer-out",
         { details: { reason: assessment?.reason ?? "unknown" } }
       );
+      const attemptId = await this.ports.ids.next("transfer_attempt");
       order.state = ORDER_STATES.TRANSFER_DISPATCHING;
       order.transfer.status = "dispatching";
+      order.transfer.attemptId = attemptId;
+      order.transfer.mutationState = "submitted";
+      order.transfer.provider = pin.providerCode;
       order.transfer.requestedAt = this.#now();
       order.transfer.consentEvidenceId = input.transferConsentEvidenceId;
       order = await this.#save(
         order,
         command,
         "domain.transfer.dispatching",
-        { actorId: auth.actorId },
+        { actorId: auth.actorId, ...providerAudit(order), attemptId },
         { complete: false, returnInternal: true }
       );
       try {
-        await this.ports.registrar.setTransferLock({
-          tenantId: order.tenantId,
-          domain: order.domain,
-          locked: false
+        const unlocked = await this.ports.registrarProviders.contingency.mutatePinned({
+          pin,
+          operation: "setTransferLock",
+          mutationState: "not_started",
+          input: {
+            tenantId: order.tenantId,
+            domain: order.domain,
+            locked: false,
+            attemptId
+          }
         });
-        const response = await this.ports.registrar.getAuthCode({
-          tenantId: order.tenantId,
-          domain: order.domain
+        if (unlocked.status !== "submitted") {
+          order.state = ORDER_STATES.TRANSFER_REVIEW;
+          order.transfer.status = "manual_review";
+          order.transfer.mutationState =
+            unlocked.effect === "not_submitted" ? "not_started" : "uncertain";
+          order.review = {
+            reason: unlocked.reason,
+            openedAt: this.#now(),
+            instruction:
+              "Do not retry or switch providers. Reconcile the transfer lock only with the pinned registrar."
+          };
+          return this.#save(order, command, "domain.transfer.review", {
+            actorId: auth.actorId,
+            ...providerAudit(order),
+            attemptId,
+            providerErrorCode: unlocked.providerErrorCode,
+            automaticProviderSwitch: false,
+            rawAuthCodeStored: false
+          });
+        }
+        const authCodeRead = await this.ports.registrarProviders.contingency.readPinned({
+          pin,
+          operation: "getAuthCode",
+          input: {
+            tenantId: order.tenantId,
+            domain: order.domain
+          }
         });
+        invariant(
+          authCodeRead.status === "ok",
+          "transfer_auth_code_unavailable",
+          "the registrar of record did not return a transfer auth code"
+        );
+        const response = authCodeRead.result;
         const authCode = requiredString(response.authCode, "authCode", 256);
         const expiresAt = iso(response.expiresAt, "authCodeExpiresAt");
         const delivery = await this.ports.secrets.issueOneTime({
@@ -769,6 +935,7 @@ export class DomainOrchestrator {
           expiresAt
         });
         order.transfer.status = "ready";
+        order.transfer.mutationState = "submitted";
         order.transfer.authCodeDigest = hashSecret(authCode);
         order.transfer.authCodeExpiresAt = expiresAt;
         order.transfer.deliveryReceiptId = requiredString(
@@ -780,11 +947,13 @@ export class DomainOrchestrator {
         order.review = null;
         return this.#save(order, command, "domain.transfer.ready", {
           actorId: auth.actorId,
+          ...providerAudit(order),
+          attemptId,
           authCodeExpiresAt: expiresAt,
           rawAuthCodeStored: false,
           deliveredThroughOneTimeSecretPort: true
         });
-      } catch {
+      } catch (error) {
         order.state = ORDER_STATES.TRANSFER_REVIEW;
         order.transfer.status = "manual_review";
         order.review = {
@@ -795,6 +964,11 @@ export class DomainOrchestrator {
         };
         return this.#save(order, command, "domain.transfer.review", {
           actorId: auth.actorId,
+          ...providerAudit(order),
+          attemptId,
+          providerErrorCode:
+            typeof error?.code === "string" && error.code.length <= 128 ? error.code : null,
+          automaticProviderSwitch: false,
           rawAuthCodeStored: false
         });
       }
@@ -925,20 +1099,18 @@ export class DomainOrchestrator {
     };
   }
 
-  async #voidAndRequote(order, command, auth, preview, reason) {
+  async #voidAndRequote(order, command, auth, replacementRoute, reason) {
     const voided = await this.#tryVoid(order, reason);
     const now = this.#now();
-    order.quote =
-      preview?.status === "confirmation_required" && hasExactMoney(preview.price)
-        ? {
-            observedAt: now,
-            expiresAt: addMs(now, this.config.quoteTtlMs),
-            price: exactMoney(preview.price, "replacement registration preview"),
-            quoteId: preview.quoteId ?? null,
-            providerDoesNotReservePrice: true
-          }
-        : null;
+    if (replacementRoute) {
+      applyProviderRoute(order, replacementRoute);
+      order.quote = quoteFromRoute(replacementRoute, now, this.config.quoteTtlMs);
+    } else {
+      order.registrar.quoteRoute = null;
+      order.quote = null;
+    }
     order.acceptedQuote = null;
+    resetRegistrationAttempt(order);
     order.state = voided ? ORDER_STATES.REQUOTE_REQUIRED : ORDER_STATES.PAYMENT_VOID_REVIEW;
     order.review = {
       reason: voided ? reason : "authorization_void_unknown",
@@ -947,6 +1119,7 @@ export class DomainOrchestrator {
     };
     return this.#save(order, command, "domain.registration.requote_required", {
       actorId: auth.actorId,
+      ...providerAudit(order),
       reason,
       authorizationVoided: voided,
       registrationSubmitted: false
@@ -1043,6 +1216,204 @@ function validateContactIds(value) {
   for (const role of ["registrant", "admin", "tech", "billing"]) {
     requiredString(value[role], `contacts.${role}`, 128);
   }
+}
+
+function registrationProviderInput(order, contactIds = null) {
+  return {
+    tenantId: order.tenantId,
+    domain: order.domain,
+    years: order.years,
+    autoRenew: false,
+    privacy: { level: "high", userConsent: true },
+    contacts: contactIds === null ? null : structuredClone(contactIds)
+  };
+}
+
+function requireAvailablePreflight(value) {
+  invariant(
+    value?.status === "ready" && value.route,
+    "domain_unavailable",
+    "the selected domain is unavailable for registration",
+    {
+      status: 409,
+      details: {
+        providerCode: value?.providerCode ?? null,
+        registrarOfRecord: value?.registrarOfRecord ?? null,
+        reason: value?.reason ?? "unavailable"
+      }
+    }
+  );
+  return value;
+}
+
+function applyProviderRoute(order, route) {
+  invariant(route && typeof route === "object", "domain_provider_route_required", "provider route is required", {
+    status: 409
+  });
+  const providerCode = requiredString(route.providerCode, "route.providerCode", 64);
+  const registrarOfRecord = requiredString(
+    route.registrarOfRecord,
+    "route.registrarOfRecord",
+    128
+  );
+  requiredString(route.fingerprint, "route.fingerprint", 128);
+  invariant(
+    route.domain === order.domain && route.years === order.years,
+    "domain_provider_route_mismatch",
+    "provider route does not match this domain order",
+    { status: 409 }
+  );
+  invariant(
+    !order.registrar.contactProvider || order.registrar.contactProvider === providerCode,
+    "domain_provider_contact_mismatch",
+    "provider contacts cannot move to another registrar",
+    { status: 409 }
+  );
+  order.registrar.provider = providerCode;
+  order.registrar.registrarOfRecord = registrarOfRecord;
+  order.registrar.quoteRoute = structuredClone(route);
+}
+
+function requireProviderRoute(order) {
+  const route = order.registrar?.quoteRoute;
+  invariant(route, "domain_provider_route_required", "provider quote route is required", {
+    status: 409
+  });
+  invariant(
+    route.providerCode === order.registrar.provider &&
+      route.registrarOfRecord === order.registrar.registrarOfRecord &&
+      route.domain === order.domain &&
+      route.years === order.years,
+    "domain_provider_route_mismatch",
+    "provider quote route does not match this order",
+    { status: 409 }
+  );
+  return route;
+}
+
+function requireProviderContacts(order, providerCode) {
+  validateContactIds(order.registrar?.contactIds);
+  invariant(
+    order.registrar.contactProvider === providerCode,
+    "domain_provider_contact_mismatch",
+    "registrar contacts do not belong to the selected provider",
+    { status: 409 }
+  );
+}
+
+function requireAcceptedProvider(order, route) {
+  invariant(order.acceptedQuote, "quote_required", "an accepted registrar quote is required");
+  invariant(
+    order.acceptedQuote.providerCode === route.providerCode &&
+      order.acceptedQuote.registrarOfRecord === route.registrarOfRecord &&
+      sameMoney(order.acceptedQuote.registrarPrice, route.expectedPrice),
+    "domain_provider_quote_acceptance_mismatch",
+    "customer acceptance does not match the selected provider and price",
+    { status: 409 }
+  );
+}
+
+function quoteFromRoute(route, now, quoteTtlMs) {
+  const localExpiry = Date.parse(now) + quoteTtlMs;
+  let expiresAtMs = localExpiry;
+  if (route.expiresAt !== null && route.expiresAt !== undefined) {
+    iso(route.expiresAt, "route.expiresAt");
+    const providerExpiry = Date.parse(route.expiresAt);
+    invariant(
+      providerExpiry > Date.parse(now),
+      "quote_expired",
+      "provider quote expired; request a fresh quote"
+    );
+    expiresAtMs = Math.min(expiresAtMs, providerExpiry);
+  }
+  const observedAt = route.observedAt ? iso(route.observedAt, "route.observedAt") : now;
+  return {
+    providerCode: route.providerCode,
+    registrarOfRecord: route.registrarOfRecord,
+    providerRouteFingerprint: route.fingerprint,
+    observedAt,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    price: exactMoney(route.expectedPrice, "registration preview"),
+    quoteId: requiredString(route.quoteId, "route.quoteId", 256),
+    providerDoesNotReservePrice: true
+  };
+}
+
+function resetProviderQuoteCycle(order, { resetRegistration = false } = {}) {
+  invariant(
+    !order.registrar.providerPin,
+    "domain_provider_pin_immutable",
+    "an acquired domain cannot restart registrar selection",
+    { status: 409 }
+  );
+  order.registrar.provider = null;
+  order.registrar.registrarOfRecord = null;
+  order.registrar.contactIds = null;
+  order.registrar.contactProvider = null;
+  order.registrar.quoteRoute = null;
+  if (resetRegistration) resetRegistrationAttempt(order);
+}
+
+function resetRegistrationAttempt(order) {
+  order.registration.status = "not_started";
+  order.registration.attemptId = null;
+  order.registration.operationId = null;
+  order.registration.mutationState = "not_started";
+  order.registration.attemptedProvider = null;
+  order.registration.providerPrice = null;
+  order.registration.registrationDate = null;
+  order.registration.expirationDate = null;
+  order.registration.verificationStatus = null;
+}
+
+function installProviderPin(order, pin) {
+  invariant(pin && typeof pin === "object", "domain_provider_pin_required", "provider pin is required", {
+    status: 409
+  });
+  requiredString(pin.fingerprint, "providerPin.fingerprint", 128);
+  invariant(
+    pin.providerCode === order.registrar.provider &&
+      pin.registrarOfRecord === order.registrar.registrarOfRecord &&
+      pin.domain === order.domain,
+    "domain_provider_pin_mismatch",
+    "provider pin does not match the acquired domain",
+    { status: 409 }
+  );
+  if (order.registrar.providerPin) {
+    invariant(
+      order.registrar.providerPin.fingerprint === pin.fingerprint,
+      "domain_provider_pin_immutable",
+      "registrar of record cannot change without an authoritative transfer",
+      { status: 409 }
+    );
+    return;
+  }
+  order.registrar.providerPin = structuredClone(pin);
+}
+
+function requireProviderPin(order) {
+  const pin = order.registrar?.providerPin;
+  invariant(pin, "domain_provider_pin_required", "registrar-of-record pin is required", {
+    status: 409
+  });
+  invariant(
+    pin.providerCode === order.registrar.provider &&
+      pin.registrarOfRecord === order.registrar.registrarOfRecord &&
+      pin.domain === order.domain,
+    "domain_provider_pin_mismatch",
+    "registrar-of-record pin does not match this domain",
+    { status: 409 }
+  );
+  return pin;
+}
+
+function providerAudit(order) {
+  return {
+    providerCode: order.registrar?.provider ?? null,
+    registrarOfRecord: order.registrar?.registrarOfRecord ?? null,
+    providerRouteFingerprint: order.registrar?.quoteRoute?.fingerprint ?? null,
+    providerPinFingerprint: order.registrar?.providerPin?.fingerprint ?? null
+  };
 }
 
 function requireFresh(quote, now) {
@@ -1172,10 +1543,6 @@ function hasExactMoney(value) {
   );
 }
 
-function addMs(value, milliseconds) {
-  return new Date(Date.parse(value) + milliseconds).toISOString();
-}
-
 function validateConfig(config) {
   requiredInteger(config.quoteTtlMs, "quoteTtlMs", { minimum: 1_000 });
   requiredInteger(config.minimumAuthorizationRemainingMs, "minimumAuthorizationRemainingMs", {
@@ -1248,10 +1615,13 @@ function publicOrder(order) {
     updatedAt: order.updatedAt,
     registrar: {
       provider: order.registrar.provider,
+      providerCode: order.registrar.provider,
       registrarOfRecord: order.registrar.registrarOfRecord,
       customerIsRegistrant: true,
       siteSourceryRole: order.registrar.siteSourceryRole,
-      contactsPrepared: Boolean(order.registrar.contactIds)
+      contactsPrepared: Boolean(order.registrar.contactIds),
+      quoteRouteEvidence: publicRouteEvidence(order.registrar.quoteRoute),
+      providerPinEvidence: publicPinEvidence(order.registrar.providerPin)
     },
     quote: order.quote,
     acceptedQuote: order.acceptedQuote,
@@ -1265,6 +1635,7 @@ function publicOrder(order) {
       : null,
     registration: {
       status: order.registration.status,
+      providerCode: order.registration.attemptedProvider,
       providerPrice: order.registration.providerPrice,
       registrationDate: order.registration.registrationDate,
       expirationDate: order.registration.expirationDate,
@@ -1273,6 +1644,7 @@ function publicOrder(order) {
     renewal: order.renewal,
     transfer: {
       status: order.transfer.status,
+      providerCode: order.transfer.provider,
       authCodeDigest: order.transfer.authCodeDigest,
       authCodeExpiresAt: order.transfer.authCodeExpiresAt,
       deliveryReceiptId: order.transfer.deliveryReceiptId
@@ -1289,7 +1661,7 @@ function publicOrder(order) {
 
 function custodyExport(order, audit) {
   return {
-    schema: "sitesourcery.domain-custody-export.v1",
+    schema: "sitesourcery.domain-custody-export.v2",
     exportedAt: order.updatedAt,
     tenantId: order.tenantId,
     customerId: order.customerId,
@@ -1299,9 +1671,12 @@ function custodyExport(order, audit) {
     state: order.state,
     registrar: {
       provider: order.registrar.provider,
+      providerCode: order.registrar.provider,
       registrarOfRecord: order.registrar.registrarOfRecord,
       customerIsRegistrant: true,
       siteSourceryRole: order.registrar.siteSourceryRole,
+      quoteRouteEvidence: publicRouteEvidence(order.registrar.quoteRoute),
+      providerPinEvidence: publicPinEvidence(order.registrar.providerPin),
       contactReferences: order.registrar.contactIds
         ? Object.fromEntries(
             Object.entries(order.registrar.contactIds).map(([key, value]) => [
@@ -1315,6 +1690,7 @@ function custodyExport(order, audit) {
       ? {
           evidenceId: order.consent.evidenceId,
           recordedAt: order.consent.recordedAt,
+          registrarDisclosureTiming: order.consent.registrarDisclosureTiming,
           agreements: order.consent.agreements.map(
             ({ key, documentVersion, documentDigest }) => ({
               key,
@@ -1338,6 +1714,7 @@ function custodyExport(order, audit) {
     renewal: order.renewal,
     transfer: {
       status: order.transfer.status,
+      providerCode: order.transfer.provider,
       authCodeDigest: order.transfer.authCodeDigest,
       authCodeExpiresAt: order.transfer.authCodeExpiresAt,
       rawAuthCode: null,
@@ -1350,5 +1727,26 @@ function custodyExport(order, audit) {
       occurredAt,
       detail
     }))
+  };
+}
+
+function publicRouteEvidence(route) {
+  if (!route) return null;
+  return {
+    schema: route.schema,
+    providerCode: route.providerCode,
+    registrarOfRecord: route.registrarOfRecord,
+    fingerprint: route.fingerprint
+  };
+}
+
+function publicPinEvidence(pin) {
+  if (!pin) return null;
+  return {
+    schema: pin.schema,
+    providerCode: pin.providerCode,
+    registrarOfRecord: pin.registrarOfRecord,
+    domain: pin.domain,
+    fingerprint: pin.fingerprint
   };
 }

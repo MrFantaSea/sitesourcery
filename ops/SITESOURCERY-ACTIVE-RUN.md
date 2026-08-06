@@ -1230,6 +1230,31 @@ Batch 3C sealed checkpoint gates:
   occurred. Change orders, completion evidence, final handoff invoice/payment,
   delivery, provider release, and public release remain held.
 
+## Domain provider-contingency sidecar checkpoint
+
+- The provider-neutral domain core now accepts exactly two registrar slots.
+  Side-effect-free availability/pricing preflight may use either healthy slot,
+  but provider-specific contact preparation locks the quote cycle to one.
+  Registration, renewal, DNS, and transfer mutations never jump providers;
+  uncertainty remains held for readback against the attempted registrar.
+- Successful domain/registrant readback creates a durable registrar-of-record
+  pin. Existing-domain reads and mutations route only by that stable provider
+  code; the pin preserves the historical registrar name even if its later
+  display/legal name changes. A registrar change remains an explicit transfer.
+- The core orchestrator persists provider route, contact binding, accepted
+  quote, attempt state, operation ID, and safe pin evidence before each next
+  transition. Compatibility composition keeps the present Spaceship adapter
+  primary and an unavailable held secondary until a reviewed reseller-capable
+  adapter exists.
+- Focused deterministic proof passes 67/67 across the contingency boundary,
+  integrated orchestration, legacy domain safety, and the Spaceship adapter.
+  No live provider, network, DNS, payment, or credential effect occurred.
+- The written commercial-consent request was sent to Spaceship support from
+  Desiderata Labs on 2026-08-06. Hosted PostgreSQL composition, one real
+  secondary adapter, provider-aware customer disclosure, pinned hosted DNS /
+  renewal / transfer, and fresh-quote acceptance remain unfinished and must
+  not be represented as automatic live fallback yet.
+
 ## Live resources and workers
 
 - No implementation or redline worker remains running. The exact Batch 3C and

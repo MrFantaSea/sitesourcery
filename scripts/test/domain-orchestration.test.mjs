@@ -57,13 +57,57 @@ function agreements() {
   }));
 }
 
+function twoSlotTestRegistrar(fake) {
+  function exactPreview(value, input) {
+    if (value?.status === "unavailable") {
+      return { ...structuredClone(value), domain: input.domain };
+    }
+    return {
+      ...structuredClone(value),
+      domain: input.domain,
+      years: input.years,
+      observedAt: value?.observedAt ?? fake.clock.now(),
+      expiresAt:
+        value?.expiresAt ?? new Date(Date.parse(fake.clock.now()) + 5 * 60 * 1000).toISOString(),
+      noCharge: true
+    };
+  }
+
+  return Object.freeze({
+    ...fake.registrar,
+    async quoteRegistration(input) {
+      return exactPreview(await fake.registrar.previewRegistration(input), input);
+    },
+    async previewRegistration(input) {
+      return exactPreview(await fake.registrar.previewRegistration(input), input);
+    }
+  });
+}
+
 function harness({ mutationMode = "fake" } = {}) {
   const repository = createMemoryDomainRepository();
   const fake = createFakeDomainPorts();
+  const held = createHeldExternalPorts();
   const orchestrator = createDomainOrchestrator({
     ports: {
       repository,
-      registrar: fake.registrar,
+      registrarProviders: {
+        primary: {
+          code: "spaceship",
+          registrarOfRecord: "Spaceship, Inc.",
+          configured: true,
+          healthy: true,
+          registrar: twoSlotTestRegistrar(fake)
+        },
+        secondary: {
+          code: "contingency_held",
+          registrarOfRecord: "Secondary registrar (held)",
+          configured: false,
+          healthy: false,
+          registrar: held.registrar
+        },
+        preference: ["spaceship", "contingency_held"]
+      },
       payments: fake.payments,
       secrets: fake.secrets,
       clock: fake.clock,
@@ -187,6 +231,9 @@ test("account boundary pins authority to the trusted session and isolates tenant
   });
   assert.equal(order.tenantId, TENANT);
   assert.equal(order.customerId, CUSTOMER);
+  assert.equal(order.registrar.providerCode, null);
+  assert.equal(order.registrar.registrarOfRecord, null);
+  assert.equal(order.registrar.quoteRouteEvidence, null);
 
   await assert.rejects(
     () =>
@@ -367,6 +414,8 @@ test("registration is durably dispatching before the irreversible fake call", as
   assert.equal(observed.state, ORDER_STATES.CONFIRM_DISPATCHING);
   assert.equal(observed.registration.status, "dispatching");
   assert.ok(observed.registration.attemptId);
+  assert.equal(observed.registration.attemptedProvider, "spaceship");
+  assert.equal(observed.registrar.quoteRoute.providerCode, "spaceship");
   assert.equal(submitted.state, ORDER_STATES.REGISTRATION_PENDING);
 });
 
@@ -420,7 +469,8 @@ test("registrant contact readback is mandatory before customer capture", async (
     orderId: order.id
   });
   assert.equal(order.state, ORDER_STATES.ACTIVE_PAYMENT_REVIEW);
-  assert.equal(order.review.reason, "customer_registrant_mapping_not_verified");
+  assert.equal(order.review.reason, "registered_domain_ownership_not_verified");
+  assert.equal(order.registrar.providerPinEvidence, null);
   assert.equal(context.fake.calls.capture, 0);
 });
 
@@ -444,6 +494,10 @@ test("successful registration captures only after ownership verification and nev
     ORDER_STATES.ACTIVE_RECONCILIATION
   );
   assert.equal(order.state, ORDER_STATES.ACTIVE_RECONCILIATION);
+  assert.equal(order.registrar.providerCode, "spaceship");
+  assert.equal(order.registrar.registrarOfRecord, "Spaceship, Inc.");
+  assert.equal(order.registrar.providerPinEvidence.providerCode, "spaceship");
+  assert.match(order.registrar.providerPinEvidence.fingerprint, /^[a-f0-9]{64}$/u);
   assert.equal(beforeCapture, true);
   assert.equal(context.fake.calls.capture, 1);
   assert.equal(context.fake.state.lastCapture.amountMinor, 1300);
@@ -534,6 +588,7 @@ test("transfer auth code is delivered once and absent from order, audit, outbox,
   };
   const transferred = await execute(context, customerSession(), "transfer_out", body);
   assert.equal(transferred.state, ORDER_STATES.TRANSFER_READY);
+  assert.equal(transferred.transfer.providerCode, "spaceship");
   assert.equal(context.fake.calls.secretDelivery, 1);
   assert.equal(context.fake.state.deliveredSecret, "fake-secret-epp-code");
   assert.equal(JSON.stringify(transferred).includes("fake-secret-epp-code"), false);
@@ -558,6 +613,9 @@ test("authorized custody export is redacted while audit and outbox stay tenant-s
   assert.equal(exported.tenantId, TENANT);
   assert.equal(exported.customerId, CUSTOMER);
   assert.equal(exported.registrar.customerIsRegistrant, true);
+  assert.equal(exported.registrar.providerCode, "spaceship");
+  assert.equal(exported.registrar.providerPinEvidence.providerCode, "spaceship");
+  assert.match(exported.registrar.providerPinEvidence.fingerprint, /^[a-f0-9]{64}$/u);
   assert.match(exported.registrar.contactReferences.registrant, /…/u);
   assert.equal(JSON.stringify(exported).includes("fake_authorization_1"), false);
   assert.equal(JSON.stringify(exported).includes("vault://"), false);
@@ -573,6 +631,11 @@ test("authorized custody export is redacted while audit and outbox stay tenant-s
     []
   );
   assert.equal(exported.audit.length, outbox.length);
+  assert.ok(
+    exported.audit
+      .filter((row) => row.type !== "domain.order.created")
+      .some((row) => row.detail.providerCode === "spaceship")
+  );
 });
 
 test("held external ports refuse every provider capability without plausible data", async () => {
