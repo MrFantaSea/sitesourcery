@@ -37,6 +37,9 @@ import {
   createPostgresCustomServicesCustomBuildProgress
 } from "../../hosted/custom-services-custom-build-progress-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildChangeCompletion
+} from "../../hosted/custom-services-custom-build-change-completion-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -3263,6 +3266,296 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.equal(withdrawnAccess.activeRequest, null);
     assert.equal(withdrawnAccess.status.kind, "building");
+
+    const customBuildChangeCompletion =
+      createPostgresCustomServicesCustomBuildChangeCompletion({
+        authority: customBuildAuthority
+      });
+    assert.deepEqual(await customBuildChangeCompletion.readiness(), {
+      schema: "sitesourcery.custom-build-change-completion-readiness/v1",
+      ready: true,
+      state: "ready",
+      runtimeContract:
+        "canonical-ss-v44-custom-build-change-completion"
+    });
+    const initialChangeCompletion =
+      await customBuildChangeCompletion.readOwner(
+        operatorActor,
+        buildJobId,
+        customer.organizationId
+      );
+    assert.equal(initialChangeCompletion.state, "building");
+    assert.deepEqual(initialChangeCompletion.changeOrders, []);
+    assert.deepEqual(initialChangeCompletion.evidence, []);
+    assert.equal(initialChangeCompletion.completion, null);
+
+    const changeIssue = {
+      addedScope:
+        "Add the approved event announcement block and its responsive presentation.",
+      commandId: `custom-build-change-${randomUUID()}`,
+      expiresAt: isoAfter({ days: 7 }),
+      organizationId: customer.organizationId,
+      targetCompletionDate: dateAfter(50),
+      unitCount: 2
+    };
+    const issuedChange = await customBuildChangeCompletion.issueChangeOrder(
+      operatorActor,
+      buildJobId,
+      changeIssue
+    );
+    assert.deepEqual(
+      await customBuildChangeCompletion.issueChangeOrder(
+        operatorActor,
+        buildJobId,
+        changeIssue
+      ),
+      issuedChange
+    );
+    assert.equal(issuedChange.state, "change_order_review");
+    assert.equal(issuedChange.changeOrders.length, 1);
+    const firstChange = issuedChange.changeOrders[0];
+    assert.equal(firstChange.state, "issued");
+    assert.deepEqual(firstChange.pricing, {
+      unitCount: 2,
+      unitAmountMinor: 12500,
+      subtotalMinor: 25000,
+      currency: "USD",
+      taxState: "automatic_tax_pending",
+      paymentRequirement: "due_before_changed_work"
+    });
+    const customerChange = await customBuildChangeCompletion.readCustomer(
+      customerAssessmentScope
+    );
+    assert.equal(customerChange.state, "change_order_review");
+    assert.equal(
+      customerChange.changeOrders.active.changeOrderId,
+      firstChange.changeOrderId
+    );
+    const customerChangeJson = JSON.stringify(customerChange);
+    for (const privateField of [
+      "jobId",
+      "createdByOperatorUserId",
+      "documentId",
+      "objectKey",
+      "requestDigest"
+    ]) {
+      assert.equal(customerChangeJson.includes(privateField), false);
+    }
+
+    const changeAcceptance = {
+      acceptanceStatement:
+        "accepted_exact_change_order_and_payment_requirement",
+      acceptedDisclosureDigest: firstChange.disclosureDigest,
+      acceptedQuoteDigest: firstChange.quoteDigest,
+      commandId: `custom-build-change-accept-${randomUUID()}`
+    };
+    const acceptedChange =
+      await customBuildChangeCompletion.acceptChangeOrder(
+        customerAssessmentScope,
+        firstChange.changeOrderId,
+        changeAcceptance
+      );
+    assert.equal(acceptedChange.state, "change_order_payment_required");
+    assert.equal(
+      acceptedChange.changeOrders.active.state,
+      "accepted_payment_required"
+    );
+    assert.deepEqual(
+      await customBuildChangeCompletion.acceptChangeOrder(
+        customerAssessmentScope,
+        firstChange.changeOrderId,
+        changeAcceptance
+      ),
+      acceptedChange
+    );
+
+    const changeVoid = {
+      commandId: `custom-build-change-void-${randomUUID()}`,
+      expectedQuoteDigest: firstChange.quoteDigest,
+      organizationId: customer.organizationId,
+      reason:
+        "Customer and owner agreed to remove this unpaid added-work request."
+    };
+    await assert.rejects(
+      customBuildChangeCompletion.voidChangeOrder(
+        operatorActor,
+        buildJobId,
+        firstChange.changeOrderId,
+        { ...changeVoid, expectedQuoteDigest: "0".repeat(64) }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+    const voidedChange = await customBuildChangeCompletion.voidChangeOrder(
+      operatorActor,
+      buildJobId,
+      firstChange.changeOrderId,
+      changeVoid
+    );
+    assert.equal(voidedChange.state, "building");
+    assert.equal(voidedChange.changeOrders[0].state, "voided");
+    assert.deepEqual(
+      await customBuildChangeCompletion.voidChangeOrder(
+        operatorActor,
+        buildJobId,
+        firstChange.changeOrderId,
+        changeVoid
+      ),
+      voidedChange
+    );
+
+    const declinedIssue =
+      await customBuildChangeCompletion.issueChangeOrder(
+        operatorActor,
+        buildJobId,
+        {
+          ...changeIssue,
+          addedScope:
+            "Add the optional approved footer announcement treatment to this build.",
+          commandId: `custom-build-change-${randomUUID()}`,
+          unitCount: 1
+        }
+      );
+    const secondChange = declinedIssue.changeOrders[1];
+    const declinedChange =
+      await customBuildChangeCompletion.declineChangeOrder(
+        customerAssessmentScope,
+        secondChange.changeOrderId,
+        {
+          commandId: `custom-build-change-decline-${randomUUID()}`,
+          declineStatement: "declined_exact_custom_build_change_quote",
+          declinedDisclosureDigest: secondChange.disclosureDigest,
+          declinedQuoteDigest: secondChange.quoteDigest
+        }
+      );
+    assert.equal(declinedChange.state, "building");
+    assert.equal(
+      declinedChange.changeOrders.history.at(-1).state,
+      "declined"
+    );
+
+    const completionProgress = await customBuildProgress.recordProgress(
+      operatorActor,
+      buildJobId,
+      {
+        commandId: `custom-build-progress-${randomUUID()}`,
+        customerSummary:
+          "The agreed Card Plus build is ready for final desktop and phone proof.",
+        expectedRevision: 1,
+        milestones: {
+          structure: "done",
+          content: "done",
+          responsive: "done",
+          quality: "done"
+        },
+        nextStep:
+          "Attach final desktop and phone evidence before preparing handoff.",
+        organizationId: customer.organizationId,
+        stage: "checking"
+      }
+    );
+    assert.equal(completionProgress.progress.revision, 2);
+    assert.equal(completionProgress.status.kind, "checking");
+
+    const desktopCompletion =
+      await customBuildChangeCompletion.uploadEvidence(
+        operatorActor,
+        buildJobId,
+        {
+          accessibleDescription:
+            "Final desktop view showing the complete approved Card Plus page.",
+          commandId: `custom-build-completion-evidence-${randomUUID()}`,
+          dataBase64: evidenceBytes.toString("base64"),
+          mediaType: "image/png",
+          organizationId: customer.organizationId,
+          viewport: "desktop"
+        }
+      );
+    assert.equal(desktopCompletion.evidence.length, 1);
+    const phoneCompletion =
+      await customBuildChangeCompletion.uploadEvidence(
+        operatorActor,
+        buildJobId,
+        {
+          accessibleDescription:
+            "Final phone view showing the complete approved Card Plus page.",
+          commandId: `custom-build-completion-evidence-${randomUUID()}`,
+          dataBase64: evidenceBytes.toString("base64"),
+          mediaType: "image/png",
+          organizationId: customer.organizationId,
+          viewport: "phone"
+        }
+      );
+    assert.equal(phoneCompletion.evidence.length, 2);
+    const completionEvidenceIds = phoneCompletion.evidence
+      .map((entry) => entry.evidenceId)
+      .sort();
+    const completionCommand = {
+      checks: {
+        accessibilityBasics: true,
+        contactActions: true,
+        desktop: true,
+        links: true,
+        phone: true,
+        scope: true
+      },
+      commandId: `custom-build-completion-${randomUUID()}`,
+      customerSummary:
+        "The approved Card Plus scope passed desktop, phone, links, contact, and accessibility checks.",
+      evidenceIds: completionEvidenceIds,
+      organizationId: customer.organizationId
+    };
+    const completedBuild =
+      await customBuildChangeCompletion.recordCompletion(
+        operatorActor,
+        buildJobId,
+        completionCommand
+      );
+    assert.equal(completedBuild.state, "ready_for_delivery");
+    assert.equal(completedBuild.completion.progressRevision, 2);
+    assert.equal(completedBuild.completion.evidenceIds.length, 2);
+    assert.deepEqual(
+      completedBuild.completion.effectiveChangeOrderDigests,
+      []
+    );
+    assert.deepEqual(
+      await customBuildChangeCompletion.recordCompletion(
+        operatorActor,
+        buildJobId,
+        completionCommand
+      ),
+      completedBuild
+    );
+    const customerCompletion =
+      await customBuildChangeCompletion.readCustomer(
+        customerAssessmentScope
+      );
+    assert.equal(customerCompletion.state, "ready_for_delivery");
+    assert.equal(customerCompletion.completion.evidence.length, 2);
+    const customerCompletionEvidence =
+      await customBuildChangeCompletion.readCustomerEvidence(
+        customerAssessmentScope,
+        completionEvidenceIds[0]
+      );
+    assert.deepEqual(
+      Buffer.from(customerCompletionEvidence.bytes),
+      evidenceBytes
+    );
+    await assert.rejects(
+      customBuildChangeCompletion.issueChangeOrder(
+        operatorActor,
+        buildJobId,
+        {
+          ...changeIssue,
+          commandId: `custom-build-change-${randomUUID()}`
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+
     assert.equal(
       (await assessmentWork.readCustomerReport(customerAssessmentScope))
         .credit.state,

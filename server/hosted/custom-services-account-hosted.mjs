@@ -3,6 +3,9 @@ import { projectCustomServicesAccount } from "./custom-services-account.mjs";
 import {
   projectCustomServicesAssessmentQuote
 } from "./custom-services-assessment-quote.mjs";
+import {
+  createHeldCustomServicesCustomBuildChangeCompletion
+} from "./custom-services-custom-build-change-completion-postgres.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -170,6 +173,22 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getCustomBuildChangeCompletion(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_CHANGE_COMPLETION_HELD",
+        "Custom-build change and completion tools are held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async getCustomBuildCompletionEvidence(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_CHANGE_COMPLETION_HELD",
+        "Custom-build change and completion tools are held in this runtime.",
+        { status: 503 }
+      );
+    },
     async getAssessmentInvoice(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -265,6 +284,22 @@ export function createHeldHostedCustomServicesAccount() {
         "Custom-build progress is held in this runtime.",
         { status: 503 }
       );
+    },
+    async acceptCustomBuildChangeOrder(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_CHANGE_COMPLETION_HELD",
+        "Custom-build change and completion tools are held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async declineCustomBuildChangeOrder(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_CHANGE_COMPLETION_HELD",
+        "Custom-build change and completion tools are held in this runtime.",
+        { status: 503 }
+      );
     }
   });
 }
@@ -272,6 +307,7 @@ export function createHeldHostedCustomServicesAccount() {
 export function createHostedCustomServicesAccount({
   assessmentWork,
   customBuild,
+  customBuildChangeCompletion = null,
   customBuildPayment,
   customBuildProgress,
   invoiceRepository,
@@ -281,6 +317,9 @@ export function createHostedCustomServicesAccount({
   repository,
   resolveSession
 } = {}) {
+  const customBuildChangeCompletionBoundary =
+    customBuildChangeCompletion ??
+    createHeldCustomServicesCustomBuildChangeCompletion();
   invariant(
     assessmentWork &&
       typeof assessmentWork.readCustomerReport === "function" &&
@@ -311,6 +350,18 @@ export function createHostedCustomServicesAccount({
       typeof customBuildProgress.respondToRequest === "function",
     "invalid_configuration",
     "the Custom-build progress boundary is required",
+    { status: 500 }
+  );
+  invariant(
+    typeof customBuildChangeCompletionBoundary.readCustomer === "function" &&
+      typeof customBuildChangeCompletionBoundary.readCustomerEvidence ===
+        "function" &&
+      typeof customBuildChangeCompletionBoundary.acceptChangeOrder ===
+        "function" &&
+      typeof customBuildChangeCompletionBoundary.declineChangeOrder ===
+        "function",
+    "invalid_configuration",
+    "the Custom-build change and completion boundary is required",
     { status: 500 }
   );
   invariant(
@@ -404,6 +455,32 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return customBuildProgress.readCustomerProgress(scope);
+    },
+
+    async getCustomBuildChangeCompletion(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildChangeCompletionBoundary.readCustomer(scope);
+    },
+
+    async getCustomBuildCompletionEvidence(
+      actorInput,
+      projectIdInput,
+      evidenceIdInput
+    ) {
+      const evidenceId = requireProjectId(evidenceIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildChangeCompletionBoundary.readCustomerEvidence(
+        scope,
+        evidenceId
+      );
     },
 
     async getAssessmentInvoice(actorInput, projectIdInput) {
@@ -570,6 +647,44 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return customBuildProgress.respondToRequest(scope, requestId, value);
+    },
+
+    async acceptCustomBuildChangeOrder(
+      actorInput,
+      projectIdInput,
+      changeOrderIdInput,
+      value
+    ) {
+      const changeOrderId = requireProjectId(changeOrderIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildChangeCompletionBoundary.acceptChangeOrder(
+        scope,
+        changeOrderId,
+        value
+      );
+    },
+
+    async declineCustomBuildChangeOrder(
+      actorInput,
+      projectIdInput,
+      changeOrderIdInput,
+      value
+    ) {
+      const changeOrderId = requireProjectId(changeOrderIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildChangeCompletionBoundary.declineChangeOrder(
+        scope,
+        changeOrderId,
+        value
+      );
     }
   });
 }

@@ -6,6 +6,9 @@ import {
   createHostedCustomServicesAccount
 } from "../custom-services-account-hosted.mjs";
 import {
+  createHeldCustomServicesCustomBuildChangeCompletion
+} from "../custom-services-custom-build-change-completion-postgres.mjs";
+import {
   CUSTOM_SERVICES_FOUNDATION_SNAPSHOT_SCHEMA
 } from "../custom-services-account.mjs";
 
@@ -58,6 +61,10 @@ function context({ scope, snapshot } = {}) {
     assessmentReport: [],
     checkout: [],
     customBuildCheckout: [],
+    customBuildChangeAcceptance: [],
+    customBuildChangeCompletionRead: [],
+    customBuildChangeDecline: [],
+    customBuildCompletionEvidenceRead: [],
     customBuildAcceptance: [],
     customBuildInvoiceRead: [],
     customBuildProgressRead: [],
@@ -156,6 +163,44 @@ function context({ scope, snapshot } = {}) {
           revision: 1,
           activeRequest: null
         };
+      }
+    },
+    customBuildChangeCompletion: {
+      async readCustomer(value) {
+        calls.customBuildChangeCompletionRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-change-completion/v1",
+          state: "building"
+        };
+      },
+      async readCustomerEvidence(value, evidenceId) {
+        calls.customBuildCompletionEvidenceRead.push({
+          scope: structuredClone(value),
+          evidenceId
+        });
+        return {
+          bytes: Buffer.from("completion evidence"),
+          mediaType: "image/png",
+          contentDigest: "0".repeat(64),
+          byteCount: 19,
+          accessibleDescription: "Custom-build completion evidence"
+        };
+      },
+      async acceptChangeOrder(value, changeOrderId, input) {
+        calls.customBuildChangeAcceptance.push({
+          scope: structuredClone(value),
+          changeOrderId,
+          input: structuredClone(input)
+        });
+        return { state: "accepted_payment_required" };
+      },
+      async declineChangeOrder(value, changeOrderId, input) {
+        calls.customBuildChangeDecline.push({
+          scope: structuredClone(value),
+          changeOrderId,
+          input: structuredClone(input)
+        });
+        return { state: "declined" };
       }
     },
     invoiceRepository: {
@@ -555,6 +600,82 @@ test("hosted Custom build progress read and response stay bound to the resolved 
   ]);
 });
 
+test("hosted Custom-build change and completion methods expose only canonical customer scope", async () => {
+  const selected = context();
+  const changeOrderId =
+    "60000000-0000-4000-8000-000000000001";
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  const acceptance = {
+    acceptanceStatement:
+      "accepted_exact_change_order_and_payment_requirement",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    commandId: "change-accept-command-1"
+  };
+  const decline = {
+    commandId: "change-decline-command-1",
+    declineStatement: "declined_exact_custom_build_change_quote",
+    declinedDisclosureDigest: "d".repeat(64),
+    declinedQuoteDigest: "c".repeat(64)
+  };
+
+  assert.equal(
+    (await selected.service.getCustomBuildChangeCompletion(
+      actor(),
+      PROJECT_ID
+    )).state,
+    "building"
+  );
+  assert.deepEqual(
+    (
+      await selected.service.getCustomBuildCompletionEvidence(
+        actor(),
+        PROJECT_ID,
+        EVIDENCE_ID
+      )
+    ).bytes,
+    Buffer.from("completion evidence")
+  );
+  assert.equal(
+    (
+      await selected.service.acceptCustomBuildChangeOrder(
+        actor(),
+        PROJECT_ID,
+        changeOrderId,
+        acceptance
+      )
+    ).state,
+    "accepted_payment_required"
+  );
+  assert.equal(
+    (
+      await selected.service.declineCustomBuildChangeOrder(
+        actor(),
+        PROJECT_ID,
+        changeOrderId,
+        decline
+      )
+    ).state,
+    "declined"
+  );
+
+  assert.deepEqual(selected.calls.customBuildChangeCompletionRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildCompletionEvidenceRead, [
+    { scope, evidenceId: EVIDENCE_ID }
+  ]);
+  assert.deepEqual(selected.calls.customBuildChangeAcceptance, [
+    { scope, changeOrderId, input: acceptance }
+  ]);
+  assert.deepEqual(selected.calls.customBuildChangeDecline, [
+    { scope, changeOrderId, input: decline }
+  ]);
+});
+
 test("hosted custom-services quote read and acceptance stay bound to the resolved customer project", async () => {
   const selected = context();
   const quote = await selected.service.getAssessmentQuote(
@@ -728,6 +849,22 @@ test("held custom-services account authenticates but exposes no read", async () 
     isError("CUSTOM_BUILD_PROGRESS_HELD", 503)
   );
   await assert.rejects(
+    held.getCustomBuildChangeCompletion(actor(), PROJECT_ID),
+    isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
+  );
+  await assert.rejects(
+    held.getCustomBuildCompletionEvidence(actor(), PROJECT_ID, EVIDENCE_ID),
+    isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
+  );
+  await assert.rejects(
+    held.acceptCustomBuildChangeOrder(actor(), PROJECT_ID, OTHER_ID, {}),
+    isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
+  );
+  await assert.rejects(
+    held.declineCustomBuildChangeOrder(actor(), PROJECT_ID, OTHER_ID, {}),
+    isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
+  );
+  await assert.rejects(
     held.acceptCustomBuildQuote(actor(), PROJECT_ID, {}),
     isError("CUSTOM_BUILD_HELD", 503)
   );
@@ -738,5 +875,108 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.saveAssessmentRequest(actor(), PROJECT_ID, {}),
     isError("CUSTOM_SERVICES_REQUEST_HELD", 503)
+  );
+});
+
+test("held Custom-build change/completion boundary validates exact authority before failing closed", async () => {
+  const held = createHeldCustomServicesCustomBuildChangeCompletion();
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  const changeOrderId =
+    "60000000-0000-4000-8000-000000000001";
+  const jobId = "70000000-0000-4000-8000-000000000001";
+  const pngHeader = Buffer.alloc(13);
+  pngHeader.writeUInt32BE(1, 0);
+  pngHeader.writeUInt32BE(1, 4);
+  const pngChunk = (type, payload = Buffer.alloc(0)) => {
+    const chunk = Buffer.alloc(12 + payload.length);
+    chunk.writeUInt32BE(payload.length, 0);
+    chunk.write(type, 4, 4, "ascii");
+    payload.copy(chunk, 8);
+    return chunk;
+  };
+  const dataBase64 = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", pngHeader),
+    pngChunk("IEND")
+  ]).toString("base64");
+  const heldError = isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503);
+  const operations = [
+    () => held.readCustomer(scope),
+    () => held.readCustomerEvidence(scope, EVIDENCE_ID),
+    () => held.acceptChangeOrder(scope, changeOrderId, {
+      acceptanceStatement:
+        "accepted_exact_change_order_and_payment_requirement",
+      acceptedDisclosureDigest: "b".repeat(64),
+      acceptedQuoteDigest: "a".repeat(64),
+      commandId: "change-accept-command-1"
+    }),
+    () => held.declineChangeOrder(scope, changeOrderId, {
+      commandId: "change-decline-command-1",
+      declineStatement: "declined_exact_custom_build_change_quote",
+      declinedDisclosureDigest: "d".repeat(64),
+      declinedQuoteDigest: "c".repeat(64)
+    }),
+    () => held.readOwner(actor(), jobId, ORGANIZATION_ID),
+    () => held.issueChangeOrder(actor(), jobId, {
+      addedScope: "Add the approved events page and matching navigation link.",
+      commandId: "change-issue-command-1",
+      expiresAt: "2026-08-15T12:00:00.000Z",
+      organizationId: ORGANIZATION_ID,
+      targetCompletionDate: "2026-09-15",
+      unitCount: 2
+    }),
+    () => held.voidChangeOrder(actor(), jobId, changeOrderId, {
+      commandId: "change-void-command-1",
+      expectedQuoteDigest: "a".repeat(64),
+      organizationId: ORGANIZATION_ID,
+      reason: "The customer requested a replacement change order instead."
+    }),
+    () => held.uploadEvidence(actor(), jobId, {
+      accessibleDescription: "Desktop completion view of the approved homepage.",
+      commandId: "completion-evidence-command-1",
+      dataBase64,
+      mediaType: "image/png",
+      organizationId: ORGANIZATION_ID,
+      viewport: "desktop"
+    }),
+    () => held.recordCompletion(actor(), jobId, {
+      checks: {
+        accessibilityBasics: true,
+        contactActions: true,
+        desktop: true,
+        links: true,
+        phone: true,
+        scope: true
+      },
+      commandId: "completion-command-1",
+      customerSummary:
+        "The approved scope is complete and the documented checks passed.",
+      evidenceIds: [OTHER_ID, EVIDENCE_ID],
+      organizationId: ORGANIZATION_ID
+    })
+  ];
+  for (const operation of operations) {
+    await assert.rejects(operation, heldError);
+  }
+
+  await assert.rejects(
+    held.readOwner(null, jobId, ORGANIZATION_ID),
+    isError("AUTHENTICATION_REQUIRED", 401)
+  );
+  await assert.rejects(
+    held.acceptChangeOrder(scope, changeOrderId, {
+      acceptanceStatement:
+        "accepted_exact_change_order_and_payment_requirement",
+      acceptedDisclosureDigest: "b".repeat(64),
+      acceptedQuoteDigest: "a".repeat(64),
+      commandId: "change-accept-command-1",
+      amountMinor: 1
+    }),
+    isError("INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT", 400)
   );
 });

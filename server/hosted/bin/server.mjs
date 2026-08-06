@@ -72,6 +72,9 @@ import {
   createPostgresCustomServicesCustomBuildProgress
 } from "../custom-services-custom-build-progress-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildChangeCompletion
+} from "../custom-services-custom-build-change-completion-postgres.mjs";
+import {
   createPostgresCustomServicesCustomBuildPayment
 } from "../custom-services-custom-build-payment-postgres.mjs";
 import {
@@ -372,6 +375,13 @@ async function start() {
     createPostgresCustomServicesCustomBuildWork({ authority });
   const customServicesCustomBuildProgress =
     createPostgresCustomServicesCustomBuildProgress({ authority });
+  const customServicesCustomBuildChangeCompletion =
+    createPostgresCustomServicesCustomBuildChangeCompletion({
+      authority,
+      clock: commerceV2.clock,
+      randomUUID: () =>
+        commerceV2.ids.next("custom_build_change_completion")
+    });
   const customBuildPayment =
     createPostgresCustomServicesCustomBuildPayment({
       authority,
@@ -384,6 +394,8 @@ async function start() {
     createHostedCustomServicesAccount({
       assessmentWork: customServicesAssessmentWork,
       customBuild: customServicesCustomBuild,
+      customBuildChangeCompletion:
+        customServicesCustomBuildChangeCompletion,
       customBuildPayment,
       customBuildProgress: customServicesCustomBuildProgress,
       invoiceRepository: customServicesInvoiceRepository,
@@ -533,6 +545,7 @@ async function start() {
   );
   await customServicesCustomBuildWork.readiness();
   await customServicesCustomBuildProgress.readiness();
+  await customServicesCustomBuildChangeCompletion.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -563,6 +576,7 @@ async function start() {
         customServicesAccount,
         customServicesAssessmentWork,
         customServicesCustomBuild,
+        customServicesCustomBuildChangeCompletion,
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,

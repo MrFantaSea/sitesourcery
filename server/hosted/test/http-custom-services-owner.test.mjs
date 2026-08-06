@@ -674,6 +674,193 @@ test("owner Custom-build progress routes bind exact job, organization, updates, 
   assert.equal(calls.length, 4);
 });
 
+test("owner Custom-build change/completion routes bind exact jobs, commands, and statuses", async () => {
+  const calls = [];
+  const changeOrderId =
+    "60000000-0000-4000-8000-000000000002";
+  const secondEvidenceId =
+    "50000000-0000-4000-8000-000000000002";
+  const snapshot = {
+    schema: "sitesourcery.custom-build-change-completion/v1",
+    state: "building"
+  };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuildChangeCompletion: {
+      async readOwner(actor, jobId, organizationId) {
+        calls.push({ action: "read", actor, jobId, organizationId });
+        return snapshot;
+      },
+      async issueChangeOrder(actor, jobId, input) {
+        calls.push({ action: "issue", actor, jobId, input });
+        return { ...snapshot, state: "change_order_review" };
+      },
+      async voidChangeOrder(actor, jobId, selectedChangeOrderId, input) {
+        calls.push({
+          action: "void",
+          actor,
+          jobId,
+          changeOrderId: selectedChangeOrderId,
+          input
+        });
+        return { ...snapshot, state: "building" };
+      },
+      async uploadEvidence(actor, jobId, input) {
+        calls.push({ action: "evidence", actor, jobId, input });
+        return { evidenceId: EVIDENCE_ID };
+      },
+      async recordCompletion(actor, jobId, input) {
+        calls.push({ action: "completion", actor, jobId, input });
+        return { ...snapshot, state: "ready_for_final_payment" };
+      }
+    }
+  });
+  const root =
+    `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
+
+  const read = await api.fetch(request({
+    path: `${root}/change-completion?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), snapshot);
+
+  const issueBody = {
+    addedScope: "Add the approved events page and matching navigation link.",
+    expiresAt: "2026-08-15T12:00:00.000Z",
+    organizationId: ORGANIZATION_ID,
+    targetCompletionDate: "2026-09-15",
+    unitCount: 2
+  };
+  const issued = await api.fetch(request({
+    body: issueBody,
+    method: "POST",
+    path: `${root}/change-orders`
+  }));
+  assert.equal(issued.status, 201);
+  assert.equal((await issued.json()).state, "change_order_review");
+
+  const voidBody = {
+    expectedQuoteDigest: "a".repeat(64),
+    organizationId: ORGANIZATION_ID,
+    reason: "The customer requested a replacement change order instead."
+  };
+  const voided = await api.fetch(request({
+    body: voidBody,
+    method: "POST",
+    path: `${root}/change-orders/${changeOrderId}/void`
+  }));
+  assert.equal(voided.status, 200);
+
+  const evidenceBody = {
+    accessibleDescription: "Desktop completion view of the approved homepage.",
+    dataBase64: "cG5n",
+    mediaType: "image/png",
+    organizationId: ORGANIZATION_ID,
+    viewport: "desktop"
+  };
+  const evidence = await api.fetch(request({
+    body: evidenceBody,
+    method: "POST",
+    path: `${root}/completion-evidence`
+  }));
+  assert.equal(evidence.status, 201);
+
+  const completionBody = {
+    checks: {
+      accessibilityBasics: true,
+      contactActions: true,
+      desktop: true,
+      links: true,
+      phone: true,
+      scope: true
+    },
+    customerSummary:
+      "The approved scope is complete and the documented checks passed.",
+    evidenceIds: [EVIDENCE_ID, secondEvidenceId],
+    organizationId: ORGANIZATION_ID
+  };
+  const completion = await api.fetch(request({
+    body: completionBody,
+    method: "POST",
+    path: `${root}/completion`
+  }));
+  assert.equal(completion.status, 201);
+  assert.equal((await completion.json()).state, "ready_for_final_payment");
+
+  const actor = { userId: OPERATOR_ID };
+  const commandId = "owner-quote-command-1";
+  assert.deepEqual(calls, [
+    { action: "read", actor, jobId: JOB_ID, organizationId: ORGANIZATION_ID },
+    {
+      action: "issue",
+      actor,
+      jobId: JOB_ID,
+      input: { ...issueBody, commandId }
+    },
+    {
+      action: "void",
+      actor,
+      jobId: JOB_ID,
+      changeOrderId,
+      input: { ...voidBody, commandId }
+    },
+    {
+      action: "evidence",
+      actor,
+      jobId: JOB_ID,
+      input: { ...evidenceBody, commandId }
+    },
+    {
+      action: "completion",
+      actor,
+      jobId: JOB_ID,
+      input: { ...completionBody, commandId }
+    }
+  ]);
+
+  const signedOut = await api.fetch(request({
+    path: `${root}/change-completion?organizationId=${ORGANIZATION_ID}`,
+    signedIn: false
+  }));
+  assert.equal(signedOut.status, 401);
+  assert.equal((await signedOut.json()).error.code, "AUTHENTICATION_REQUIRED");
+
+  const wrongQuery = await api.fetch(request({
+    path:
+      `${root}/change-completion?organizationId=${ORGANIZATION_ID}&extra=1`
+  }));
+  assert.equal(wrongQuery.status, 400);
+  assert.equal(
+    (await wrongQuery.json()).error.code,
+    "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT"
+  );
+
+  const expanded = await api.fetch(request({
+    body: { ...issueBody, amountMinor: 1 },
+    method: "POST",
+    path: `${root}/change-orders`
+  }));
+  assert.equal(expanded.status, 400);
+  assert.equal(
+    (await expanded.json()).error.code,
+    "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT"
+  );
+  assert.equal(calls.length, 5);
+});
+
+test("default owner Custom-build change/completion routes fail closed", async () => {
+  const api = createHostedApi(service());
+  const response = await api.fetch(request({
+    path:
+      `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}` +
+      `/change-completion?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(response.status, 503);
+  assert.equal(
+    (await response.json()).error.code,
+    "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+  );
+});
+
 test("production composes PostgreSQL owner quote, assessment, and paid-build boundaries", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),

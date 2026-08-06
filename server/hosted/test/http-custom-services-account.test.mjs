@@ -44,11 +44,23 @@ function assessmentWorkMethods() {
     async getCustomBuildProgress() {
       throw new Error("unexpected Custom build progress read");
     },
+    async getCustomBuildChangeCompletion() {
+      throw new Error("unexpected Custom build change/completion read");
+    },
+    async getCustomBuildCompletionEvidence() {
+      throw new Error("unexpected Custom build completion evidence read");
+    },
     async createCustomBuildCheckout() {
       throw new Error("unexpected Custom build checkout");
     },
     async respondToCustomBuildRequest() {
       throw new Error("unexpected Custom build response");
+    },
+    async acceptCustomBuildChangeOrder() {
+      throw new Error("unexpected Custom build change-order acceptance");
+    },
+    async declineCustomBuildChangeOrder() {
+      throw new Error("unexpected Custom build change-order decline");
     }
   };
 }
@@ -70,9 +82,13 @@ function completeAccountBoundary(overrides = {}) {
     getCustomBuildQuote: noOp,
     getCustomBuildInvoice: noOp,
     getCustomBuildProgress: noOp,
+    getCustomBuildChangeCompletion: noOp,
+    getCustomBuildCompletionEvidence: noOp,
     createCustomBuildCheckout: noOp,
     acceptCustomBuildQuote: noOp,
     respondToCustomBuildRequest: noOp,
+    acceptCustomBuildChangeOrder: noOp,
+    declineCustomBuildChangeOrder: noOp,
     ...overrides
   };
 }
@@ -682,6 +698,183 @@ test("Custom build progress HTTP routes bind the exact project and safe customer
   assert.equal(calls.length, 2);
 });
 
+test("Custom-build change/completion customer routes bind exact authority and integrity-check evidence", async () => {
+  const calls = [];
+  const changeOrderId =
+    "60000000-0000-4000-8000-000000000004";
+  const corruptEvidenceId =
+    "50000000-0000-4000-8000-000000000001";
+  const bytes = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
+  ]);
+  const contentDigest = createHash("sha256").update(bytes).digest("hex");
+  const snapshot = {
+    schema: "sitesourcery.custom-build-change-completion/v1",
+    state: "change_order_review"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildChangeCompletion(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return snapshot;
+      },
+      async getCustomBuildCompletionEvidence(actor, projectId, evidenceId) {
+        calls.push({ action: "evidence", actor, projectId, evidenceId });
+        return {
+          bytes,
+          mediaType: "image/png",
+          contentDigest:
+            evidenceId === EVIDENCE_ID ? contentDigest : "0".repeat(64),
+          byteCount: bytes.byteLength,
+          accessibleDescription: "Custom-build completion screenshot"
+        };
+      },
+      async acceptCustomBuildChangeOrder(
+        actor,
+        projectId,
+        selectedChangeOrderId,
+        input
+      ) {
+        calls.push({
+          action: "accept",
+          actor,
+          projectId,
+          changeOrderId: selectedChangeOrderId,
+          input
+        });
+        return { ...snapshot, state: "accepted_payment_required" };
+      },
+      async declineCustomBuildChangeOrder(
+        actor,
+        projectId,
+        selectedChangeOrderId,
+        input
+      ) {
+        calls.push({
+          action: "decline",
+          actor,
+          projectId,
+          changeOrderId: selectedChangeOrderId,
+          input
+        });
+        return { ...snapshot, state: "declined" };
+      }
+    })
+  });
+  const root = `/api/v1/projects/${PROJECT_ID}/custom-services`;
+
+  const read = await api.fetch(request({
+    path: `${root}/custom-build-change-completion`
+  }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), snapshot);
+
+  const evidence = await api.fetch(request({
+    path: `${root}/custom-build-completion-evidence/${EVIDENCE_ID}`
+  }));
+  assert.equal(evidence.status, 200);
+  assert.equal(evidence.headers.get("cache-control"), "private, no-store");
+  assert.equal(evidence.headers.get("content-type"), "image/png");
+  assert.equal(
+    evidence.headers.get("digest"),
+    `sha-256=${Buffer.from(contentDigest, "hex").toString("base64")}`
+  );
+  assert.deepEqual(Buffer.from(await evidence.arrayBuffer()), bytes);
+
+  const acceptanceBody = {
+    acceptanceStatement:
+      "accepted_exact_change_order_and_payment_requirement",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64)
+  };
+  const acceptance = await api.fetch(request({
+    body: acceptanceBody,
+    method: "POST",
+    path: `${root}/custom-build-change-orders/${changeOrderId}/acceptance`,
+    write: true
+  }));
+  assert.equal(acceptance.status, 200);
+  assert.equal((await acceptance.json()).state, "accepted_payment_required");
+
+  const declineBody = {
+    declineStatement: "declined_exact_custom_build_change_quote",
+    declinedDisclosureDigest: "d".repeat(64),
+    declinedQuoteDigest: "c".repeat(64)
+  };
+  const decline = await api.fetch(request({
+    body: declineBody,
+    method: "POST",
+    path: `${root}/custom-build-change-orders/${changeOrderId}/decline`,
+    write: true
+  }));
+  assert.equal(decline.status, 200);
+  assert.equal((await decline.json()).state, "declined");
+
+  const actor = { userId: CUSTOMER_ID };
+  assert.deepEqual(calls.slice(0, 4), [
+    { action: "read", actor, projectId: PROJECT_ID },
+    {
+      action: "evidence",
+      actor,
+      projectId: PROJECT_ID,
+      evidenceId: EVIDENCE_ID
+    },
+    {
+      action: "accept",
+      actor,
+      projectId: PROJECT_ID,
+      changeOrderId,
+      input: { ...acceptanceBody, commandId: "accept-command-1" }
+    },
+    {
+      action: "decline",
+      actor,
+      projectId: PROJECT_ID,
+      changeOrderId,
+      input: { ...declineBody, commandId: "accept-command-1" }
+    }
+  ]);
+
+  const signedOut = await api.fetch(request({
+    path: `${root}/custom-build-change-completion`,
+    signedIn: false
+  }));
+  assert.equal(signedOut.status, 401);
+  assert.equal((await signedOut.json()).error.code, "AUTHENTICATION_REQUIRED");
+
+  const wrongQuery = await api.fetch(request({
+    path: `${root}/custom-build-change-completion?organizationId=forbidden`
+  }));
+  assert.equal(wrongQuery.status, 400);
+  assert.equal(
+    (await wrongQuery.json()).error.code,
+    "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT"
+  );
+
+  const expanded = await api.fetch(request({
+    body: { ...acceptanceBody, amountMinor: 1 },
+    method: "POST",
+    path: `${root}/custom-build-change-orders/${changeOrderId}/acceptance`,
+    write: true
+  }));
+  assert.equal(expanded.status, 400);
+  assert.equal(
+    (await expanded.json()).error.code,
+    "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT"
+  );
+
+  const corrupt = await api.fetch(request({
+    path:
+      `${root}/custom-build-completion-evidence/${corruptEvidenceId}`
+  }));
+  assert.equal(corrupt.status, 500);
+  assert.equal(
+    (await corrupt.json()).error.code,
+    "RUNTIME_CONFIGURATION_ERROR"
+  );
+  assert.equal(calls.length, 5);
+});
+
 test("assessment report and evidence routes stay customer-bound and integrity checked", async () => {
   const calls = [];
   const bytes = Buffer.from([
@@ -780,6 +973,15 @@ test("default hosted runtime keeps custom-services account reading held", async 
   assert.equal(
     (await response.json()).error.code,
     "CUSTOM_SERVICES_ACCOUNT_HELD"
+  );
+  const changeCompletion = await api.fetch(request({
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/custom-build-change-completion`
+  }));
+  assert.equal(changeCompletion.status, 503);
+  assert.equal(
+    (await changeCompletion.json()).error.code,
+    "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
   );
 });
 

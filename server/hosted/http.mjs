@@ -30,6 +30,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildProgress
 } from "./custom-services-custom-build-progress-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildChangeCompletion
+} from "./custom-services-custom-build-change-completion-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -310,6 +313,23 @@ function exactRouteBody(value, expected, code, message) {
   return value;
 }
 
+function exactRouteQuery(url, expected, code, message) {
+  const keys = [...url.searchParams.keys()];
+  invariant(
+    keys.length === expected.length &&
+      keys.every((key) => expected.includes(key)) &&
+      expected.every((key) => url.searchParams.getAll(key).length === 1),
+    code,
+    message,
+    { status: 400 }
+  );
+  return Object.freeze(
+    Object.fromEntries(
+      expected.map((key) => [key, url.searchParams.get(key)])
+    )
+  );
+}
+
 function commandId(request) {
   return request.headers.get("idempotency-key");
 }
@@ -354,6 +374,7 @@ export function createHostedApi(
     customServicesAccount = null,
     customServicesAssessmentWork = null,
     customServicesCustomBuild = null,
+    customServicesCustomBuildChangeCompletion = null,
     customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
@@ -445,6 +466,24 @@ export function createHostedApi(
     "Hosted Custom-build progress boundary is invalid.",
     { status: 500 }
   );
+  const customServicesCustomBuildChangeCompletionBoundary =
+    customServicesCustomBuildChangeCompletion ??
+    createHeldCustomServicesCustomBuildChangeCompletion();
+  invariant(
+    typeof customServicesCustomBuildChangeCompletionBoundary.readOwner ===
+      "function" &&
+      typeof customServicesCustomBuildChangeCompletionBoundary
+        .issueChangeOrder === "function" &&
+      typeof customServicesCustomBuildChangeCompletionBoundary
+        .voidChangeOrder === "function" &&
+      typeof customServicesCustomBuildChangeCompletionBoundary
+        .uploadEvidence === "function" &&
+      typeof customServicesCustomBuildChangeCompletionBoundary
+        .recordCompletion === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom-build change and completion boundary is invalid.",
+    { status: 500 }
+  );
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
   const alakazamAccountBoundary =
@@ -504,11 +543,19 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildProgress ===
         "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildChangeCompletion ===
+        "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildCompletionEvidence ===
+        "function" &&
       typeof customServicesAccountBoundary.createCustomBuildCheckout ===
         "function" &&
       typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
         "function" &&
       typeof customServicesAccountBoundary.respondToCustomBuildRequest ===
+        "function" &&
+      typeof customServicesAccountBoundary.acceptCustomBuildChangeOrder ===
+        "function" &&
+      typeof customServicesAccountBoundary.declineCustomBuildChangeOrder ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services account boundary is invalid.",
@@ -982,6 +1029,176 @@ export function createHostedApi(
               "The Custom-build request resolution is invalid."
             )
           );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-completion$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom-build change and completion tools.",
+            { status: 401 }
+          );
+          const query = exactRouteQuery(
+            url,
+            ["organizationId"],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change and completion query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .readOwner(actor, route[0], query.organizationId);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-orders$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before issuing a Custom-build change order.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change-order query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .issueChangeOrder(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "addedScope",
+                  "commandId",
+                  "expiresAt",
+                  "organizationId",
+                  "targetCompletionDate",
+                  "unitCount"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build change order is invalid."
+              )
+            );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-orders\/([^/]+)\/void$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before voiding a Custom-build change order.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change-order query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .voidChangeOrder(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "expectedQuoteDigest",
+                  "organizationId",
+                  "reason"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build change-order void is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/completion-evidence$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before uploading Custom-build completion evidence.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build completion-evidence query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .uploadEvidence(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "accessibleDescription",
+                  "commandId",
+                  "dataBase64",
+                  "mediaType",
+                  "organizationId",
+                  "viewport"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build completion evidence is invalid."
+              )
+            );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/completion$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before recording Custom-build completion.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build completion query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .recordCompletion(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "checks",
+                  "commandId",
+                  "customerSummary",
+                  "evidenceIds",
+                  "organizationId"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build completion is invalid."
+              )
+            );
+          status = 201;
         } else if (
           method === "GET" &&
           pathname ===
@@ -1511,6 +1728,127 @@ export function createHostedApi(
             actor,
             route[0]
           );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-change-completion$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Custom-build changes and completion.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change and completion query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .getCustomBuildChangeCompletion(actor, route[0]);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-completion-evidence\/([^/]+)$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Custom-build completion evidence.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build completion-evidence query is invalid."
+          );
+          return privateEvidence(
+            await customServicesAccountBoundary
+              .getCustomBuildCompletionEvidence(
+                actor,
+                route[0],
+                route[1]
+              ),
+            requestId
+          );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-change-orders\/([^/]+)\/acceptance$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before accepting a Custom-build change order.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change-order query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .acceptCustomBuildChangeOrder(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                [
+                  "acceptanceStatement",
+                  "acceptedDisclosureDigest",
+                  "acceptedQuoteDigest",
+                  "commandId"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build change-order acceptance is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-change-orders\/([^/]+)\/decline$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before declining a Custom-build change order.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change-order query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .declineCustomBuildChangeOrder(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "declineStatement",
+                  "declinedDisclosureDigest",
+                  "declinedQuoteDigest"
+                ],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build change-order decline is invalid."
+              )
+            );
         } else if (
           method === "POST" &&
           (route = match(
