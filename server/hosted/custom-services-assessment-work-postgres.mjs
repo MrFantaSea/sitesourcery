@@ -235,7 +235,7 @@ function evidenceIds(value) {
   return Object.freeze(selected);
 }
 
-function evidenceInput(value) {
+async function evidenceInput(value) {
   exactKeys(
     value,
     [
@@ -250,7 +250,7 @@ function evidenceInput(value) {
     "assessmentEvidenceInput"
   );
   const { bytes, mediaType: selectedMediaType } =
-    validateServiceImageEvidence({
+    await validateServiceImageEvidence({
       bytesBase64: value.bytesBase64,
       mediaType: value.mediaType
     });
@@ -880,7 +880,7 @@ export function createPostgresCustomServicesAssessmentWork({
     async uploadEvidence(actor, jobIdInput, value) {
       const operatorUserId = actorId(actor);
       const jobId = uuid(jobIdInput, "jobId");
-      const input = evidenceInput(value);
+      const input = await evidenceInput(value);
       const contentDigest = sha256(input.bytes);
       const requestDigest = digest({
         route: "custom_services.owner.assessment_evidence.upload",

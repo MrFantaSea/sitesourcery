@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { buildHostedArtifact } from "./build-hosted.mjs";
 import { getBrowserSafeAlakazamCatalog } from
   "../server/commerce-v2/alakazam.mjs";
@@ -49,11 +51,33 @@ const PAID_INVOICE_ID = "50000000-0000-4000-8000-000000000001";
 const PAID_JOB_ID = "60000000-0000-4000-8000-000000000001";
 const PAID_CREDIT_ID = "70000000-0000-4000-8000-000000000001";
 const PAID_REQUEST_ID = "90000000-0000-4000-8000-000000000001";
+const PAID_CHANGE_ORDER_ID = "91000000-0000-4000-8000-000000000001";
+const PAID_DESKTOP_EVIDENCE_ID = "92000000-0000-4000-8000-000000000001";
+const PAID_PHONE_EVIDENCE_ID = "92000000-0000-4000-8000-000000000002";
+const PAID_COMPLETION_ID = "93000000-0000-4000-8000-000000000001";
+const PAID_OPERATOR_ID = "94000000-0000-4000-8000-000000000001";
 const PAID_QUOTE_DIGEST = "a".repeat(64);
 const PAID_DISCLOSURE_DIGEST = "b".repeat(64);
 const PAID_INVOICE_DIGEST = "c".repeat(64);
 const PAID_ACCEPTED_AT = "2026-08-06T15:00:00.000Z";
 const PAID_CREDIT_CUTOFF = "2026-11-04T15:00:00.000Z";
+const PAID_CHANGE_QUOTE_DIGEST = "d".repeat(64);
+const PAID_CHANGE_DISCLOSURE_DIGEST = "e".repeat(64);
+const PAID_DESKTOP_EVIDENCE_BYTES = await readFile(
+  path.join(ROOT, "assets/work-demo-bright-spark.png"),
+);
+const PAID_PHONE_EVIDENCE_BYTES = await sharp(
+  await readFile(path.join(ROOT, "assets/work-demo-bright-spark-720.webp")),
+)
+  .resize(390, 844, { fit: "cover", position: "centre" })
+  .webp({ quality: 86 })
+  .toBuffer();
+const PAID_DESKTOP_EVIDENCE_DIGEST = createHash("sha256")
+  .update(PAID_DESKTOP_EVIDENCE_BYTES)
+  .digest("hex");
+const PAID_PHONE_EVIDENCE_DIGEST = createHash("sha256")
+  .update(PAID_PHONE_EVIDENCE_BYTES)
+  .digest("hex");
 
 function paidProject() {
   return {
@@ -311,6 +335,147 @@ function paidCustomBuildProgress() {
   };
 }
 
+function paidChangeOrder(state = "issued", owner = false) {
+  const value = {
+    changeOrderId: PAID_CHANGE_ORDER_ID,
+    changeNumber: 1,
+    state,
+    addedScope:
+      "Add the approved events page and matching navigation link.",
+    pricing: {
+      unitCount: 2,
+      unitAmountMinor: 12500,
+      subtotalMinor: 25000,
+      currency: "USD",
+      taxState: "automatic_tax_pending",
+      paymentRequirement: "due_before_changed_work",
+    },
+    targetCompletionDate: "2026-09-22",
+    quoteDigest: PAID_CHANGE_QUOTE_DIGEST,
+    disclosureDigest: PAID_CHANGE_DISCLOSURE_DIGEST,
+    issuedAt: "2026-08-06T16:00:00.000Z",
+    expiresAt: "2026-08-13T16:00:00.000Z",
+    expiredAt: null,
+    acceptedAt: state === "effective"
+      ? "2026-08-07T16:00:00.000Z"
+      : null,
+    declinedAt: null,
+    void: null,
+  };
+  if (owner) value.createdByOperatorUserId = PAID_OPERATOR_ID;
+  return value;
+}
+
+function paidCompletionEvidence(id, viewport, owner = false) {
+  const desktop = viewport === "desktop";
+  const bytes = desktop
+    ? PAID_DESKTOP_EVIDENCE_BYTES
+    : PAID_PHONE_EVIDENCE_BYTES;
+  const value = {
+    evidenceId: id,
+    viewport,
+    accessibleDescription:
+      `${viewport} proof of the completed approved homepage and contact action.`,
+    mediaType: desktop ? "image/png" : "image/webp",
+    byteCount: bytes.byteLength,
+    contentDigest: desktop
+      ? PAID_DESKTOP_EVIDENCE_DIGEST
+      : PAID_PHONE_EVIDENCE_DIGEST,
+    imageWidth: desktop ? 1440 : 390,
+    imageHeight: desktop ? 1000 : 844,
+    capturedAt: "2026-08-08T15:00:00.000Z",
+  };
+  if (owner) {
+    value.progressRevision = 3;
+    value.effectiveScopeDigest = "3".repeat(64);
+    value.createdByOperatorUserId = PAID_OPERATOR_ID;
+  }
+  return value;
+}
+
+function paidChangeCompletion(mode, owner = false) {
+  const completionMode = mode === "completion";
+  const evidence = [
+    paidCompletionEvidence(
+      PAID_DESKTOP_EVIDENCE_ID,
+      "desktop",
+      owner,
+    ),
+    paidCompletionEvidence(
+      PAID_PHONE_EVIDENCE_ID,
+      "phone",
+      owner,
+    ),
+  ];
+  const completion = completionMode ? {
+    state: "ready_for_final_payment",
+    customerSummary:
+      "The approved scope is complete and every documented customer-visible check passed.",
+    checks: {
+      scope: true,
+      desktop: true,
+      phone: true,
+      links: true,
+      contactActions: true,
+      accessibilityBasics: true,
+    },
+    preparedAt: "2026-08-08T16:00:00.000Z",
+    ...(owner ? {
+      completionId: PAID_COMPLETION_ID,
+      progressRevision: 3,
+      evidenceIds: [
+        PAID_DESKTOP_EVIDENCE_ID,
+        PAID_PHONE_EVIDENCE_ID,
+      ],
+      baseScopeDigest: "2".repeat(64),
+      effectiveChangeOrderDigests: [PAID_CHANGE_QUOTE_DIGEST],
+      effectiveScopeDigest: "3".repeat(64),
+      packageDigest: "4".repeat(64),
+      createdByOperatorUserId: PAID_OPERATOR_ID,
+    } : { evidence }),
+  } : null;
+  const changeOrders = completionMode
+    ? [paidChangeOrder("effective", owner)]
+    : [paidChangeOrder("issued", owner)];
+  if (!owner) {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state: completionMode
+        ? "ready_for_final_payment"
+        : "change_order_review",
+      changeOrders: completionMode
+        ? { active: null, history: changeOrders }
+        : { active: changeOrders[0], history: [] },
+      completion,
+    };
+  }
+  return {
+    schema: "sitesourcery.custom-build-change-completion/v1",
+    state: completionMode
+      ? "ready_for_final_payment"
+      : "change_order_review",
+    job: {
+      jobId: PAID_JOB_ID,
+      organizationId: PAID_ORGANIZATION_ID,
+      projectId: PAID_PROJECT_ID,
+      caseId: "80000000-0000-4000-8000-000000000001",
+      customerId: PAID_CUSTOMER_ID,
+      state: "open",
+      targetCompletionDate: "2026-09-15",
+      finalDueMinor: 60000,
+      currency: "USD",
+      openedAt: "2026-08-06T15:05:00.000Z",
+    },
+    proofBinding: {
+      progressRevision: 3,
+      effectiveScopeDigest: "3".repeat(64),
+    },
+    changeOrders,
+    evidence: completionMode ? evidence : [],
+    completion,
+  };
+}
+
 function availableAlakazamAccount() {
   return {
     schema: "sitesourcery.alakazam-account/v2",
@@ -401,6 +566,25 @@ function json(response, status, payload) {
   response.end(bytes);
 }
 
+function privateEvidence(response, evidenceId) {
+  const desktop = evidenceId === PAID_DESKTOP_EVIDENCE_ID;
+  const bytes = desktop
+    ? PAID_DESKTOP_EVIDENCE_BYTES
+    : PAID_PHONE_EVIDENCE_BYTES;
+  const digest = desktop
+    ? PAID_DESKTOP_EVIDENCE_DIGEST
+    : PAID_PHONE_EVIDENCE_DIGEST;
+  response.writeHead(200, {
+    "Cache-Control": "private, no-store",
+    "Content-Length": bytes.byteLength,
+    "Content-Type": desktop ? "image/png" : "image/webp",
+    Digest: `sha-256=${Buffer.from(digest, "hex").toString("base64")}`,
+    "X-Content-Type-Options": "nosniff",
+    "X-Request-Id": "current-browser-audit",
+  });
+  response.end(bytes);
+}
+
 function safeArtifactPath(pathname) {
   let decoded;
   try {
@@ -427,16 +611,24 @@ async function startServer() {
   const apiRequests = [];
   const missingFiles = [];
   let paidJobReads = 0;
+  let customerChangeCompletionReads = 0;
+  let ownerChangeCompletionReads = 0;
   const server = createHttpServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (url.pathname.startsWith("/api/v1/")) {
-      const paidFixture = String(request.headers.cookie || "")
+      const paidCookie = String(request.headers.cookie || "")
         .split(";")
-        .some((entry) => entry.trim() === `${PAID_FIXTURE_COOKIE}=1`);
+        .map((entry) => entry.trim())
+        .find((entry) => entry.startsWith(`${PAID_FIXTURE_COOKIE}=`));
+      const paidMode = paidCookie
+        ? decodeURIComponent(paidCookie.split("=", 2)[1] || "")
+        : "";
+      const paidFixture = ["issued", "completion"].includes(paidMode);
       apiRequests.push({
         method: request.method || "GET",
         pathname: url.pathname,
         paidFixture,
+        paidMode,
       });
       if (request.method === "GET" && url.pathname === "/api/v1/me") {
         json(response, 200, paidFixture ? {
@@ -611,6 +803,23 @@ async function startServer() {
         }
         if (
           url.pathname ===
+            `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-completion`
+        ) {
+          ownerChangeCompletionReads += 1;
+          json(
+            response,
+            200,
+            ownerChangeCompletionReads === 1
+              ? paidChangeCompletion(paidMode, true)
+              : {
+                  ...paidChangeCompletion(paidMode, true),
+                  evidence: null,
+                },
+          );
+          return;
+        }
+        if (
+          url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-quote`
         ) {
           json(response, 200, paidCustomBuildQuote());
@@ -628,6 +837,37 @@ async function startServer() {
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-progress`
         ) {
           json(response, 200, paidCustomBuildProgress());
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-completion`
+        ) {
+          customerChangeCompletionReads += 1;
+          json(
+            response,
+            200,
+            customerChangeCompletionReads === 1
+              ? paidChangeCompletion(paidMode, false)
+              : {
+                  ...paidChangeCompletion(paidMode, false),
+                  changeOrders: null,
+                },
+          );
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-completion-evidence/${PAID_DESKTOP_EVIDENCE_ID}`
+          || url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-completion-evidence/${PAID_PHONE_EVIDENCE_ID}`
+        ) {
+          privateEvidence(
+            response,
+            url.pathname.endsWith(PAID_DESKTOP_EVIDENCE_ID)
+              ? PAID_DESKTOP_EVIDENCE_ID
+              : PAID_PHONE_EVIDENCE_ID,
+          );
           return;
         }
       }
@@ -679,8 +919,16 @@ async function startServer() {
     paidJobReadCount() {
       return paidJobReads;
     },
+    customerChangeCompletionReadCount() {
+      return customerChangeCompletionReads;
+    },
+    ownerChangeCompletionReadCount() {
+      return ownerChangeCompletionReads;
+    },
     resetPaidFixture() {
       paidJobReads = 0;
+      customerChangeCompletionReads = 0;
+      ownerChangeCompletionReads = 0;
     },
     close: () =>
       new Promise((resolve) => server.close(resolve)),
@@ -1050,7 +1298,7 @@ async function makerJourney(cdp, origin) {
   );
 }
 
-async function paidCustomBuildJourney(cdp, server, viewport) {
+async function paidCustomBuildJourney(cdp, server, viewport, mode) {
   server.resetPaidFixture();
   await cdp.send("Storage.clearDataForOrigin", {
     origin: server.origin,
@@ -1058,7 +1306,7 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
   });
   const cookie = await cdp.send("Network.setCookie", {
     name: PAID_FIXTURE_COOKIE,
-    value: "1",
+    value: mode,
     url: `${server.origin}/`,
     httpOnly: true,
     sameSite: "Strict",
@@ -1073,7 +1321,13 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
       `document.querySelector("[data-owner-custom-build-work]")?.hidden === false
         && document.querySelectorAll("[data-paid-custom-build-job]").length === 1
         && document.querySelector("[data-owner-job-progress]")?.textContent
-          .includes("Action needed from you")`,
+          .includes("Action needed from you")
+        && document.querySelector("[data-owner-job-change-completion]")?.textContent
+          .includes(${JSON.stringify(
+            mode === "completion"
+              ? "Completion prepared"
+              : "awaiting review",
+          )})`,
     );
   } catch (error) {
     const diagnostic = await evaluate(
@@ -1112,7 +1366,13 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
           .includes("Your Custom website project is open")
         && document.querySelector("[data-customer-custom-build-progress]")?.hidden === false
         && document.querySelector("[data-custom-build-active-request]")?.textContent
-          .includes("Choose the approved contact wording")`,
+          .includes("Choose the approved contact wording")
+        && document.querySelector("[data-customer-custom-build-change-completion]")?.textContent
+          .includes(${JSON.stringify(
+            mode === "completion"
+              ? "Completion proof is prepared"
+              : "ready for your review",
+          )})`,
     );
   } catch (error) {
     const diagnostic = await evaluate(
@@ -1158,10 +1418,17 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
         "[data-customer-custom-build-progress]"
       );
       const ownerProgress = owner.querySelector("[data-owner-job-progress]");
+      const customerChange = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const ownerChange = owner.querySelector(
+        "[data-owner-job-change-completion]"
+      );
       const summary = owner.querySelector("summary");
       const controls = [...owner.querySelectorAll("button, summary"),
         ...customer.querySelectorAll("button, summary"),
-        ...customerProgress.querySelectorAll("button, summary")]
+        ...customerProgress.querySelectorAll("button, summary"),
+        ...customerChange.querySelectorAll("button, a, summary")]
         .filter(visible)
         .map((element) => ({
           text: element.textContent.trim().replace(/\\s+/g, " ").slice(0, 80),
@@ -1176,11 +1443,17 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
         ownerVisible: visible(owner),
         customerVisible: visible(customer),
         customerProgressVisible: visible(customerProgress),
+        customerChangeVisible: visible(customerChange),
+        ownerChangeVisible: visible(ownerChange),
         ownerText: owner.textContent.replace(/\\s+/g, " ").trim(),
         customerText: customer.textContent.replace(/\\s+/g, " ").trim(),
         ownerProgressText: ownerProgress.textContent
           .replace(/\\s+/g, " ").trim(),
         customerProgressText: customerProgress.textContent
+          .replace(/\\s+/g, " ").trim(),
+        customerChangeText: customerChange.textContent
+          .replace(/\\s+/g, " ").trim(),
+        ownerChangeText: ownerChange.textContent
           .replace(/\\s+/g, " ").trim(),
         customerProgressMilestones: [
           ...customerProgress.querySelectorAll(
@@ -1189,15 +1462,77 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
         ].map((node) => node.textContent.replace(/\\s+/g, " ").trim()),
         credentialFields: [
           ...owner.querySelectorAll("input, textarea"),
-          ...customerProgress.querySelectorAll("input, textarea")
+          ...customerProgress.querySelectorAll("input, textarea"),
+          ...customerChange.querySelectorAll("input, textarea")
         ].map((field) => field.name).filter((name) =>
           /password|passcode|token|api.?key|secret/iu.test(name)
         ),
+        moneyOrRefundFields: [
+          ...owner.querySelectorAll("input, textarea, select"),
+          ...customerChange.querySelectorAll("input, textarea, select")
+        ].map((field) => field.name).filter((name) =>
+          /amount|price|tax|refund|credit/iu.test(name)
+        ),
+        customerIdentifierLeaks: [
+          ${JSON.stringify(PAID_JOB_ID)},
+          ${JSON.stringify(PAID_OPERATOR_ID)},
+          ${JSON.stringify(PAID_COMPLETION_ID)}
+        ].filter((identifier) => customerChange.textContent.includes(identifier)),
+        evidenceDimensions: [...customerChange.querySelectorAll("figcaption")]
+          .map((node) => node.textContent.replace(/\\s+/g, " ").trim()),
         customerLabels: [...customer.querySelectorAll("dt")]
           .map((node) => node.textContent.trim()),
         summaryHeight: Math.round(summary.getBoundingClientRect().height * 10) / 10,
         detailsOpen: summary.parentElement.open,
         controls,
+      };
+    })()`,
+  );
+  await evaluate(
+    cdp,
+    `(() => {
+      document.querySelector("[data-customer-change-completion-refresh]").click();
+      document.querySelector("[data-owner-change-completion-refresh]").click();
+      return true;
+    })()`,
+  );
+  const changeRefreshDeadline = Date.now() + 5000;
+  while (
+    (
+      server.customerChangeCompletionReadCount() < 2
+      || server.ownerChangeCompletionReadCount() < 2
+    )
+    && Date.now() < changeRefreshDeadline
+  ) {
+    await delay(25);
+  }
+  if (
+    server.customerChangeCompletionReadCount() < 2
+    || server.ownerChangeCompletionReadCount() < 2
+  ) {
+    throw new Error(
+      "Change/completion refresh did not reach the browser-audit server.",
+    );
+  }
+  await delay(250);
+  const retainedChange = await evaluate(
+    cdp,
+    `(() => {
+      const customer = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const owner = document.querySelector(
+        "[data-owner-job-change-completion]"
+      );
+      return {
+        customerText: customer.textContent.replace(/\\s+/g, " ").trim(),
+        ownerText: owner.textContent.replace(/\\s+/g, " ").trim(),
+        customerError: customer.querySelector(
+          ".customer-owner-quote-form-error"
+        )?.textContent.trim() || "",
+        ownerError: owner.querySelector(
+          ".customer-owner-quote-form-error"
+        )?.textContent.trim() || "",
       };
     })()`,
   );
@@ -1234,7 +1569,7 @@ async function paidCustomBuildJourney(cdp, server, viewport) {
     name: PAID_FIXTURE_COOKIE,
     url: `${server.origin}/`,
   });
-  return { initial, retained };
+  return { initial, retained, retainedChange };
 }
 
 await buildHostedArtifact({ root: ROOT });
@@ -1361,7 +1696,8 @@ try {
   }
 
   for (const viewport of [VIEWPORTS[1], VIEWPORTS[2]]) {
-    const paid = await paidCustomBuildJourney(cdp, server, viewport);
+    for (const mode of ["issued", "completion"]) {
+    const paid = await paidCustomBuildJourney(cdp, server, viewport, mode);
     const shortControls = paid.initial.controls.filter(
       ({ height }) => height < 44,
     );
@@ -1382,6 +1718,8 @@ try {
       !paid.initial.ownerVisible
       || !paid.initial.customerVisible
       || !paid.initial.customerProgressVisible
+      || !paid.initial.customerChangeVisible
+      || !paid.initial.ownerChangeVisible
       || !paid.initial.detailsOpen
       || paid.initial.summaryHeight < 44
       || shortControls.length
@@ -1399,6 +1737,38 @@ try {
       || paid.initial.customerProgressText.includes(PAID_JOB_ID)
       || paid.initial.customerProgressText.includes(PAID_REQUEST_ID)
       || paid.initial.credentialFields.length
+      || paid.initial.moneyOrRefundFields.length
+      || paid.initial.customerIdentifierLeaks.length
+      || (mode === "issued" && (
+        !paid.initial.customerChangeText.includes("$250.00 USD")
+        || !paid.initial.customerChangeText.includes(
+          "Your original approved scope remains in place"
+        )
+        || !paid.initial.customerChangeText.includes(
+          "does not begin until its payment is confirmed"
+        )
+        || !paid.initial.ownerChangeText.includes(
+          "2 × $125"
+        )
+      ))
+      || (mode === "completion" && (
+        !paid.initial.customerChangeText.includes(
+          "Completion proof is prepared"
+        )
+        || !paid.initial.customerChangeText.includes(
+          "Accessibility basics · Passed"
+        )
+        || !paid.initial.customerChangeText.includes(
+          "not payment, delivery, launch"
+        )
+        || !paid.initial.ownerChangeText.includes("Completion prepared")
+        || !paid.initial.evidenceDimensions.some(
+          (entry) => entry.includes("1440 × 1000 pixels")
+        )
+        || !paid.initial.evidenceDimensions.some(
+          (entry) => entry.includes("390 × 844 pixels")
+        )
+      ))
       || requiredMilestones.some(
         (label) => !paid.initial.customerProgressMilestones.some(
           (entry) => entry.startsWith(label)
@@ -1409,7 +1779,7 @@ try {
       )
     ) {
       failures.push(
-        `${viewport.label} paid Custom-build layout failed: ${JSON.stringify({
+        `${viewport.label} ${mode} paid Custom-build layout failed: ${JSON.stringify({
           ...paid.initial,
           ownerText: paid.initial.ownerText.slice(0, 240),
           customerText: paid.initial.customerText.slice(0, 240),
@@ -1418,6 +1788,22 @@ try {
             paid.initial.customerProgressText.slice(0, 240),
           shortControls,
         })}`,
+      );
+    }
+    const retainedNeedle = mode === "completion"
+      ? "Completion proof is prepared"
+      : "Added-work subtotal";
+    if (
+      !paid.retainedChange.customerError
+      || !paid.retainedChange.ownerError
+      || !paid.retainedChange.customerText.includes(retainedNeedle)
+      || !paid.retainedChange.ownerText.includes(
+        mode === "completion" ? "Completion prepared" : "2 × $125"
+      )
+    ) {
+      failures.push(
+        `${viewport.label} ${mode} change/completion refresh retention failed: `
+          + JSON.stringify(paid.retainedChange),
       );
     }
     if (
@@ -1429,9 +1815,10 @@ try {
       || !paid.retained.statusFocused
     ) {
       failures.push(
-        `${viewport.label} paid Custom-build refresh retention failed: `
+        `${viewport.label} ${mode} paid Custom-build refresh retention failed: `
           + JSON.stringify(paid.retained),
       );
+    }
     }
   }
 
@@ -1461,7 +1848,7 @@ try {
   }
   console.log(
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
-      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, and paid Custom-build customer/owner fixtures at 390×844 and 1440×1000.",
+      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, and issued-change plus ready-completion customer/owner fixtures with malformed-refresh retention at 390×844 and 1440×1000.",
   );
 } finally {
   if (cdp) cdp.close();

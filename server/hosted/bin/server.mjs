@@ -72,7 +72,7 @@ import {
   createPostgresCustomServicesCustomBuildProgress
 } from "../custom-services-custom-build-progress-postgres.mjs";
 import {
-  createPostgresCustomServicesCustomBuildChangeCompletion
+  createHeldCustomServicesCustomBuildChangeCompletion
 } from "../custom-services-custom-build-change-completion-postgres.mjs";
 import {
   createPostgresCustomServicesCustomBuildPayment
@@ -376,12 +376,7 @@ async function start() {
   const customServicesCustomBuildProgress =
     createPostgresCustomServicesCustomBuildProgress({ authority });
   const customServicesCustomBuildChangeCompletion =
-    createPostgresCustomServicesCustomBuildChangeCompletion({
-      authority,
-      clock: commerceV2.clock,
-      randomUUID: () =>
-        commerceV2.ids.next("custom_build_change_completion")
-    });
+    createHeldCustomServicesCustomBuildChangeCompletion();
   const customBuildPayment =
     createPostgresCustomServicesCustomBuildPayment({
       authority,
@@ -545,7 +540,6 @@ async function start() {
   );
   await customServicesCustomBuildWork.readiness();
   await customServicesCustomBuildProgress.readiness();
-  await customServicesCustomBuildChangeCompletion.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments

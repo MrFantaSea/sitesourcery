@@ -14,6 +14,7 @@ const READINESS_SCHEMA =
   "sitesourcery.custom-build-change-completion-readiness/v1";
 const RUNTIME_CONTRACT =
   "canonical-ss-v44-custom-build-change-completion";
+const EVIDENCE_VALIDATOR_VERSION = "service-image-evidence/v1";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -27,6 +28,7 @@ const CHANGE_STATES = new Set([
   "accepted_payment_required",
   "effective",
   "declined",
+  "expired",
   "voided"
 ]);
 const COMPLETION_STATES = new Set([
@@ -283,7 +285,23 @@ function voidInput(value) {
   });
 }
 
-function evidenceInput(value) {
+function expirationInput(value) {
+  exactKeys(
+    value,
+    ["commandId", "expectedQuoteDigest", "organizationId"],
+    "changeOrderExpiration"
+  );
+  return Object.freeze({
+    commandId: commandId(value.commandId),
+    expectedQuoteDigest: sha256(
+      value.expectedQuoteDigest,
+      "expectedQuoteDigest"
+    ),
+    organizationId: organizationInput(value.organizationId)
+  });
+}
+
+async function evidenceInput(value) {
   exactKeys(
     value,
     [
@@ -310,16 +328,26 @@ function evidenceInput(value) {
     "viewport is invalid.",
     { status: 400 }
   );
-  const image = validateServiceImageEvidence({
+  const image = await validateServiceImageEvidence({
     bytesBase64: value.dataBase64,
     mediaType: value.mediaType
   });
+  invariant(
+    (value.viewport === "desktop" && image.width >= 768) ||
+      (value.viewport === "phone" && image.width >= 240 && image.width <= 767),
+    "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+    "Evidence width does not match its viewport.",
+    { status: 400 }
+  );
   return Object.freeze({
     accessibleDescription,
     bytes: image.bytes,
     commandId: selectedCommandId,
+    imageHeight: image.height,
+    imageWidth: image.width,
     mediaType: image.mediaType,
     organizationId,
+    validatorVersion: EVIDENCE_VALIDATOR_VERSION,
     viewport: value.viewport
   });
 }
@@ -695,6 +723,7 @@ function changeOrderProjection(row, { owner = false } = {}) {
     expiresAt: storedIso(row.expires_at, "expiration time"),
     acceptedAt: storedOptionalIso(row.accepted_at, "acceptance time"),
     declinedAt: storedOptionalIso(row.declined_at, "decline time"),
+    expiredAt: storedOptionalIso(row.expired_at, "expiration sealing time"),
     void: row.voided_at === null || row.voided_at === undefined
       ? null
       : {
@@ -713,13 +742,35 @@ function changeOrderProjection(row, { owner = false } = {}) {
 
 function evidenceProjection(row, { owner = false } = {}) {
   const mediaType = storedState(row.media_type, MEDIA_TYPES, "evidence media type");
+  const viewport = storedState(
+    row.viewport,
+    new Set(["desktop", "phone"]),
+    "evidence viewport"
+  );
+  const imageWidth = storedInteger(
+    row.image_width,
+    "evidence image width",
+    240,
+    2048
+  );
+  const imageHeight = storedInteger(
+    row.image_height,
+    "evidence image height",
+    1,
+    5000
+  );
+  invariant(
+    ((viewport === "desktop" && imageWidth >= 768) ||
+      (viewport === "phone" && imageWidth <= 767)) &&
+      imageWidth * imageHeight <= 2048 * 5000 &&
+      row.validator_version === EVIDENCE_VALIDATOR_VERSION,
+    "CUSTOM_BUILD_CHANGE_COMPLETION_REPOSITORY_CONFLICT",
+    "Completion evidence viewport proof is invalid.",
+    { status: 500 }
+  );
   const projection = {
     evidenceId: storedUuid(row.id, "evidence ID"),
-    viewport: storedState(
-      row.viewport,
-      new Set(["desktop", "phone"]),
-      "evidence viewport"
-    ),
+    viewport,
     accessibleDescription: storedText(
       row.accessible_description,
       "evidence description",
@@ -727,6 +778,8 @@ function evidenceProjection(row, { owner = false } = {}) {
       500
     ),
     mediaType,
+    imageWidth,
+    imageHeight,
     byteCount: storedInteger(
       row.byte_count,
       "evidence byte count",
@@ -737,6 +790,15 @@ function evidenceProjection(row, { owner = false } = {}) {
     capturedAt: storedIso(row.captured_at, "evidence capture time")
   };
   if (owner) {
+    projection.progressRevision = storedInteger(
+      row.progress_revision,
+      "evidence progress revision",
+      1
+    );
+    projection.effectiveScopeDigest = storedDigest(
+      row.effective_scope_digest,
+      "evidence effective scope digest"
+    );
     projection.createdByOperatorUserId = storedUuid(
       row.created_by_operator_user_id,
       "evidence operator ID"
@@ -838,6 +900,7 @@ const CHANGE_ORDER_SELECT = `
     change_order.expires_at,
     acceptance.accepted_at,
     decline.declined_at,
+    expiration.expired_at,
     quote_void.reason as void_reason,
     quote_void.voided_at
   from ss.service_custom_build_change_orders change_order
@@ -847,6 +910,9 @@ const CHANGE_ORDER_SELECT = `
   left join ss.service_custom_build_change_declines decline
     on decline.organization_id = change_order.organization_id
    and decline.change_order_id = change_order.id
+  left join ss.service_custom_build_change_expirations expiration
+    on expiration.organization_id = change_order.organization_id
+   and expiration.change_order_id = change_order.id
   left join ss.service_custom_build_change_voids quote_void
     on quote_void.organization_id = change_order.organization_id
    and quote_void.change_order_id = change_order.id`;
@@ -855,16 +921,22 @@ const EVIDENCE_SELECT = `
   select
     evidence.id,
     evidence.viewport,
+    evidence.progress_revision,
+    evidence.effective_scope_digest,
     evidence.accessible_description,
+    evidence.image_width,
+    evidence.image_height,
+    evidence.validator_version,
     evidence.created_by_operator_user_id,
     evidence.captured_at,
     document.media_type,
     document.byte_count,
-    document.content_digest
+    evidence.content_digest
   from ss.service_custom_build_completion_evidence evidence
   join ss.service_documents document
     on document.organization_id = evidence.organization_id
-   and document.id = evidence.document_id`;
+   and document.id = evidence.document_id
+   and document.content_digest = evidence.content_digest`;
 
 const COMPLETION_SELECT = `
   select
@@ -1009,7 +1081,22 @@ async function ownerSnapshot(client, organizationId, jobId) {
          job.target_completion_date::text as target_completion_date,
          job.final_due_minor,
          job.currency,
-         job.opened_at
+         job.opened_at,
+         (
+           select progress.revision
+           from ss.service_custom_build_progress_updates progress
+           where progress.organization_id = job.organization_id
+             and progress.job_id = job.id
+           order by progress.revision desc
+           limit 1
+         ) as proof_progress_revision,
+         (
+           select snapshot.effective_scope_digest
+           from ss.service_custom_build_effective_scope_snapshot(
+             job.organization_id,
+             job.id
+           ) snapshot
+         ) as proof_effective_scope_digest
        from ss.service_custom_build_jobs job
        where job.organization_id = $1
          and job.id = $2
@@ -1064,6 +1151,20 @@ async function ownerSnapshot(client, organizationId, jobId) {
       currency,
       openedAt: storedIso(job.opened_at, "paid-job opened time")
     },
+    proofBinding: job.proof_progress_revision === null ||
+        job.proof_progress_revision === undefined
+      ? null
+      : {
+          progressRevision: storedInteger(
+            job.proof_progress_revision,
+            "current proof progress revision",
+            1
+          ),
+          effectiveScopeDigest: storedDigest(
+            job.proof_effective_scope_digest,
+            "current proof effective-scope digest"
+          )
+        },
     changeOrders: selected.changeOrders,
     evidence: selected.evidence,
     completion
@@ -1104,9 +1205,17 @@ function sameDecline(row, changeOrderId, input) {
     row.declined_disclosure_digest === input.declinedDisclosureDigest;
 }
 
+function sameExpiration(row, changeOrderId, input) {
+  return row.change_order_id === changeOrderId &&
+    row.expired_quote_digest === input.expectedQuoteDigest;
+}
+
 function sameEvidence(row, input, contentDigest) {
   return row.viewport === input.viewport &&
     row.accessible_description === input.accessibleDescription &&
+    Number(row.image_width) === input.imageWidth &&
+    Number(row.image_height) === input.imageHeight &&
+    row.validator_version === input.validatorVersion &&
     row.media_type === input.mediaType &&
     Number(row.byte_count) === input.bytes.byteLength &&
     row.content_digest === contentDigest;
@@ -1181,10 +1290,17 @@ export function createHeldCustomServicesCustomBuildChangeCompletion() {
       voidInput(input);
       return held();
     },
+    async expireChangeOrder(actor, jobId, changeOrderId, input) {
+      actorId(actor);
+      uuid(jobId, "jobId");
+      uuid(changeOrderId, "changeOrderId");
+      expirationInput(input);
+      return held();
+    },
     async uploadEvidence(actor, jobId, input) {
       actorId(actor);
       uuid(jobId, "jobId");
-      evidenceInput(input);
+      await evidenceInput(input);
       return held();
     },
     async recordCompletion(actor, jobId, input) {
@@ -1259,9 +1375,13 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             await client.query(
               `select
                  evidence.accessible_description,
+                 evidence.viewport,
+                 evidence.validator_version,
                  document.media_type,
                  document.content_digest,
                  document.byte_count,
+                 evidence.image_width,
+                 evidence.image_height,
                  payload.payload
                from ss.service_custom_build_completion_packages package
                join ss.service_custom_build_jobs job
@@ -1274,6 +1394,7 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
                join ss.service_documents document
                  on document.organization_id = evidence.organization_id
                 and document.id = evidence.document_id
+                and document.content_digest = evidence.content_digest
                join ss.service_document_payloads payload
                  on payload.organization_id = document.organization_id
                 and payload.document_id = document.id
@@ -1310,9 +1431,30 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             row.content_digest,
             "completion evidence content digest"
           );
+          const viewport = storedState(
+            row.viewport,
+            new Set(["desktop", "phone"]),
+            "completion evidence viewport"
+          );
+          const imageWidth = storedInteger(
+            row.image_width,
+            "completion evidence image width",
+            240,
+            2048
+          );
+          const imageHeight = storedInteger(
+            row.image_height,
+            "completion evidence image height",
+            1,
+            5000
+          );
           invariant(
             bytes.byteLength === byteCount &&
-              sha256Bytes(bytes) === contentDigest,
+              sha256Bytes(bytes) === contentDigest &&
+              row.validator_version === EVIDENCE_VALIDATOR_VERSION &&
+              ((viewport === "desktop" && imageWidth >= 768) ||
+                (viewport === "phone" && imageWidth <= 767)) &&
+              imageWidth * imageHeight <= 2048 * 5000,
             "CUSTOM_BUILD_CHANGE_COMPLETION_REPOSITORY_CONFLICT",
             "Completion evidence failed integrity verification.",
             { status: 500 }
@@ -1326,6 +1468,9 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             ),
             contentDigest,
             byteCount,
+            imageWidth,
+            imageHeight,
+            viewport,
             accessibleDescription: storedText(
               row.accessible_description,
               "completion evidence description",
@@ -1752,10 +1897,102 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
       ));
     },
 
+    async expireChangeOrder(
+      actor,
+      jobIdInput,
+      changeOrderIdInput,
+      inputValue
+    ) {
+      const operatorUserId = actorId(actor);
+      const jobId = uuid(jobIdInput, "jobId");
+      const changeOrderId = uuid(changeOrderIdInput, "changeOrderId");
+      const input = expirationInput(inputValue);
+      return translated(() => database.service(
+        {
+          actorKind: "operator",
+          userId: operatorUserId,
+          organizationId: input.organizationId
+        },
+        async (client) => {
+          await requireOperator(client, operatorUserId, "service_quote_author");
+          await lockJob(client, jobId);
+          const replay = one(
+            await client.query(
+              `select change_order_id, expired_quote_digest
+               from ss.service_custom_build_change_expirations
+               where organization_id = $1
+                 and job_id = $2
+                 and expired_by_operator_user_id = $3
+                 and command_id = $4`,
+              [
+                input.organizationId,
+                jobId,
+                operatorUserId,
+                input.commandId
+              ]
+            ),
+            "Custom-build change expiration replay",
+            { optional: true }
+          );
+          if (replay !== null) {
+            invariant(
+              sameExpiration(replay, changeOrderId, input),
+              "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED",
+              "That command ID already belongs to another change-order expiration.",
+              { status: 409 }
+            );
+            return ownerSnapshot(client, input.organizationId, jobId);
+          }
+          const current = one(
+            await client.query(
+              `select state, quote_digest,
+                      expires_at <= clock_timestamp() as is_expired
+               from ss.service_custom_build_change_orders
+               where organization_id = $1
+                 and job_id = $2
+                 and id = $3
+               for update`,
+              [input.organizationId, jobId, changeOrderId]
+            ),
+            "current owner Custom-build change order"
+          );
+          invariant(
+            current.state === "issued" &&
+              current.quote_digest === input.expectedQuoteDigest &&
+              current.is_expired === true,
+            "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED",
+            "That change order is not an issued expired quote. Refresh before trying again.",
+            { status: 409 }
+          );
+          one(
+            await client.query(
+              `insert into ss.service_custom_build_change_expirations (
+                 id,
+                 job_id,
+                 change_order_id,
+                 command_id,
+                 expired_quote_digest
+               ) values ($1, $2, $3, $4, $5)
+               returning id`,
+              [
+                generatedId(randomUUID),
+                jobId,
+                changeOrderId,
+                input.commandId,
+                input.expectedQuoteDigest
+              ]
+            ),
+            "new Custom-build change expiration"
+          );
+          return ownerSnapshot(client, input.organizationId, jobId);
+        }
+      ));
+    },
+
     async uploadEvidence(actor, jobIdInput, inputValue) {
       const operatorUserId = actorId(actor);
       const jobId = uuid(jobIdInput, "jobId");
-      const input = evidenceInput(inputValue);
+      const input = await evidenceInput(inputValue);
       const contentDigest = sha256Bytes(input.bytes);
       return translated(() => database.service(
         {
@@ -1776,6 +2013,9 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
               `select
                  evidence.viewport,
                  evidence.accessible_description,
+                 evidence.image_width,
+                 evidence.image_height,
+                 evidence.validator_version,
                  document.media_type,
                  document.byte_count,
                  document.content_digest
@@ -1875,16 +2115,24 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
                  job_id,
                  document_id,
                  viewport,
+                 image_width,
+                 image_height,
+                 validator_version,
                  accessible_description,
                  command_id,
                  captured_at
-               ) values ($1, $2, $3, $4, $5, $6, $7::timestamptz)
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz
+               )
                returning id`,
               [
                 evidenceId,
                 jobId,
                 documentId,
                 input.viewport,
+                input.imageWidth,
+                input.imageHeight,
+                input.validatorVersion,
                 input.accessibleDescription,
                 input.commandId,
                 recordedAt

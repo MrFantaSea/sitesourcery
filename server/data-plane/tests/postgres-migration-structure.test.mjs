@@ -1732,6 +1732,7 @@ test("Custom build change orders and completion proof are bounded before payment
     "service_custom_build_change_acceptances",
     "service_custom_build_change_declines",
     "service_custom_build_change_voids",
+    "service_custom_build_change_expirations",
     "service_custom_build_completion_evidence",
     "service_custom_build_completion_packages"
   ]) {
@@ -1761,6 +1762,10 @@ test("Custom build change orders and completion proof are bounded before payment
   assert.match(
     changeCompletion.sql,
     /expires_at <= issued_at \+ interval '14 days'/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /create table ss\.service_custom_build_change_expirations[\s\S]*unique \(change_order_id\)[\s\S]*create function ss\.prepare_service_custom_build_change_expiration[\s\S]*recorded_at < selected_change\.expires_at[\s\S]*set state = 'expired'/iu
   );
   assert.match(
     changeCompletion.sql,
@@ -1801,6 +1806,37 @@ test("Custom build change orders and completion proof are bounded before payment
   );
   assert.match(
     changeCompletion.sql,
+    /progress_revision bigint not null[\s\S]*effective_scope_digest ss\.sha256_hex not null[\s\S]*content_digest ss\.sha256_hex not null[\s\S]*image_width integer not null[\s\S]*image_height integer not null[\s\S]*service-image-evidence\/v1/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /document\.byte_count between 1 and 716800[\s\S]*new\.progress_revision := selected_progress\.revision[\s\S]*new\.effective_scope_digest := scope_snapshot\.effective_scope_digest/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /evidence\.progress_revision = selected_progress\.revision[\s\S]*evidence\.effective_scope_digest = scope_snapshot\.effective_scope_digest[\s\S]*phone_evidence\.content_digest = desktop_evidence\.content_digest/iu
+  );
+  assert.match(
+    changeCompletion.sql,
+    /create function ss\.guard_service_custom_build_after_completion[\s\S]*ss-custom-build-h1m:[\s\S]*service_custom_build_completion_packages[\s\S]*service_custom_build_progress_updates_completion_guard[\s\S]*service_custom_build_work_requests_completion_guard[\s\S]*service_access_requests_custom_build_completion_guard/iu
+  );
+  for (const trigger of [
+    "service_custom_build_progress_updates_completion_guard",
+    "service_custom_build_work_requests_completion_guard",
+    "service_access_requests_custom_build_completion_guard"
+  ]) {
+    assert.match(
+      changeCompletion.sql,
+      new RegExp(
+        `create trigger ${trigger}[\\s\\S]*` +
+          "execute function ss\\.guard_service_custom_build_after_completion",
+        "iu"
+      ),
+      `missing ${trigger}`
+    );
+  }
+  assert.match(
+    changeCompletion.sql,
     /when selected_job\.final_due_minor > 0[\s\S]*'ready_for_final_payment'[\s\S]*'ready_for_delivery'/iu
   );
 
@@ -1814,7 +1850,7 @@ test("Custom build change orders and completion proof are bounded before payment
   );
   assert.doesNotMatch(
     changeCompletion.sql,
-    /grant update on table ss\.service_custom_build_(?:change_acceptances|change_declines|change_voids|completion_evidence|completion_packages)/iu
+    /grant update on table ss\.service_custom_build_(?:change_acceptances|change_declines|change_voids|change_expirations|completion_evidence|completion_packages)/iu
   );
   assert.match(
     changeCompletion.sql,

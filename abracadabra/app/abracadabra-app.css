@@ -298,6 +298,40 @@
 .customer-custom-build-access-fields{display:grid;grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;margin:0;padding:1rem;border:1px solid var(--spark-line);border-radius:.8rem}
 .customer-custom-build-access-fields[hidden]{display:none}
 .customer-custom-build-access-fields legend{padding:0 .35rem;color:var(--spark-mint);font-size:.8rem;font-weight:800}
+.customer-custom-build-change-completion{border-color:rgba(241,207,137,.38);background:linear-gradient(145deg,rgba(241,207,137,.07),rgba(25,16,35,.72))}
+.customer-custom-build-change-completion>.spark-button,.customer-custom-build-owner-change-completion>.spark-button,.customer-custom-build-change-expire{justify-self:start}
+.customer-custom-build-change-completion-body,.customer-custom-build-change-card,.customer-custom-build-completion-card,.customer-custom-build-owner-change-completion,.customer-custom-build-owner-change,.customer-custom-build-owner-evidence,.customer-custom-build-owner-completion{display:grid;gap:.85rem;min-width:0}
+.customer-custom-build-change-card,.customer-custom-build-completion-card,.customer-custom-build-owner-change-completion{margin-top:.5rem;padding:1rem;border:1px solid rgba(241,207,137,.27);border-radius:.9rem;background:rgba(241,207,137,.04)}
+.customer-custom-build-owner-change,.customer-custom-build-owner-evidence,.customer-custom-build-owner-completion{padding:1rem;border:1px solid var(--spark-line);border-radius:.8rem;background:rgba(8,5,12,.2)}
+.customer-custom-build-change-card h4,.customer-custom-build-completion-card h4,.customer-custom-build-completion-card h5,.customer-custom-build-owner-change-completion h5,.customer-custom-build-owner-change h6,.customer-custom-build-owner-evidence h6,.customer-custom-build-owner-completion h6{margin:0;overflow-wrap:anywhere}
+.customer-custom-build-change-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0;border:1px solid var(--spark-line);border-radius:.8rem;overflow:hidden}
+.customer-custom-build-change-facts>div{display:grid;gap:.25rem;min-width:0;padding:.75rem .85rem}
+.customer-custom-build-change-facts>div:nth-child(even){border-left:1px solid var(--spark-line)}
+.customer-custom-build-change-facts>div:nth-child(n+3){border-top:1px solid var(--spark-line)}
+.customer-custom-build-change-facts dt{color:var(--spark-faint)}
+.customer-custom-build-change-facts dd{min-width:0;margin:0;overflow-wrap:anywhere;color:var(--spark-text);font-weight:750;white-space:pre-line}
+.customer-custom-build-change-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;align-items:start}
+.customer-custom-build-change-actions>.customer-assessment-authority{min-width:0}
+.customer-custom-build-change-actions>.spark-button{width:100%}
+.customer-custom-build-change-actions>.customer-assessment-note{grid-column:1/-1}
+.customer-custom-build-change-expired{border-color:rgba(255,184,200,.28);background:rgba(255,184,200,.035)}
+.customer-custom-build-completion-checks,.customer-custom-build-owner-evidence-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;margin:0;padding:0;list-style:none}
+.customer-custom-build-completion-checks li,.customer-custom-build-owner-evidence-list li{min-width:0;padding:.7rem .8rem;border:1px solid var(--spark-line);border-radius:.7rem;overflow-wrap:anywhere;background:rgba(8,5,12,.24)}
+.customer-custom-build-completion-checks li{color:var(--spark-mint);font-weight:800}
+.customer-custom-build-completion-evidence{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem;min-width:0}
+.customer-custom-build-completion-evidence figure{display:grid;align-content:start;gap:.65rem;min-width:0;margin:0;padding:.75rem;border:1px solid var(--spark-line);border-radius:.8rem;background:rgba(8,5,12,.24)}
+.customer-custom-build-completion-evidence img{display:block;width:100%;height:auto;max-width:100%;border-radius:.55rem}
+.customer-custom-build-completion-evidence figcaption{overflow-wrap:anywhere;color:var(--spark-muted);line-height:1.5}
+.customer-custom-build-evidence-link{min-height:44px;white-space:normal;text-align:center}
+.customer-custom-build-change-issue-form,.customer-custom-build-change-void-form,.customer-custom-build-evidence-form,.customer-custom-build-completion-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}
+.customer-custom-build-change-issue-form .spark-field:has(textarea),.customer-custom-build-change-void-form .spark-field:has(textarea),.customer-custom-build-evidence-form .spark-field:has(textarea),.customer-custom-build-completion-form .spark-field:has(textarea),.customer-custom-build-change-preview,.customer-custom-build-completion-evidence-choices,.customer-custom-build-completion-confirmations,.customer-custom-build-change-issue-form>.customer-custom-build-credential-warning,.customer-custom-build-evidence-form>.customer-custom-build-credential-warning,.customer-custom-build-completion-form>.customer-assessment-note,.customer-custom-build-change-issue-form>.spark-button,.customer-custom-build-change-void-form>.spark-button,.customer-custom-build-evidence-form>.spark-button,.customer-custom-build-completion-form>.spark-button{grid-column:1/-1}
+.customer-custom-build-change-issue-form textarea,.customer-custom-build-change-void-form textarea,.customer-custom-build-evidence-form textarea,.customer-custom-build-completion-form textarea{min-height:6rem;resize:vertical}
+.customer-custom-build-change-issue-form input,.customer-custom-build-change-issue-form select,.customer-custom-build-change-issue-form textarea,.customer-custom-build-change-void-form input,.customer-custom-build-change-void-form textarea,.customer-custom-build-evidence-form input,.customer-custom-build-evidence-form select,.customer-custom-build-evidence-form textarea,.customer-custom-build-completion-form input,.customer-custom-build-completion-form textarea{min-height:44px}
+.customer-custom-build-change-preview{margin:0;padding:.75rem .8rem;border-left:3px solid var(--spark-mint);overflow-wrap:anywhere;color:var(--spark-text);background:rgba(130,231,196,.055)}
+.customer-custom-build-completion-evidence-choices,.customer-custom-build-completion-confirmations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;min-width:0;margin:0;padding:1rem;border:1px solid var(--spark-line);border-radius:.8rem}
+.customer-custom-build-completion-evidence-choices legend,.customer-custom-build-completion-confirmations legend{padding:0 .35rem;color:var(--spark-mint);font-size:.8rem;font-weight:800}
+.customer-custom-build-completion-evidence-choices label,.customer-custom-build-completion-confirmations label{min-width:0;overflow-wrap:anywhere}
+.customer-custom-build-owner-change-completion{margin-top:1rem;border-color:rgba(241,207,137,.26)}
 .customer-alakazam-account{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(185,152,255,.3);border-radius:1.2rem;background:linear-gradient(145deg,rgba(185,152,255,.08),rgba(25,16,35,.72))}
 .customer-alakazam-account>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
 .customer-alakazam-load-state,.customer-alakazam-summary,.customer-alakazam-placeholder,.customer-alakazam-error{margin:.35rem 0 1rem;color:var(--spark-muted);line-height:1.55}
@@ -494,6 +528,12 @@
   .customer-custom-build-progress-facts>div+div,.customer-custom-build-progress-access>div:nth-child(even),.customer-custom-build-owner-request>dl>div:nth-child(even){border-left:0;border-top:1px solid var(--spark-line)}
   .customer-custom-build-progress-response .spark-field:has(textarea),.customer-custom-build-progress-form .spark-field:has(textarea),.customer-custom-build-request-form .spark-field:has(textarea),.customer-custom-build-resolution-form .spark-field:has(textarea),.customer-custom-build-progress-response>.spark-button,.customer-custom-build-progress-form>.spark-button,.customer-custom-build-request-form>.spark-button,.customer-custom-build-resolution-form>.spark-button,.customer-custom-build-credential-warning{grid-column:auto}
   .customer-custom-build-progress-response>.spark-button,.customer-custom-build-progress-form>.spark-button,.customer-custom-build-request-form>.spark-button,.customer-custom-build-resolution-form>.spark-button{width:100%}
+  .customer-custom-build-change-completion>.spark-button,.customer-custom-build-owner-change-completion>.spark-button,.customer-custom-build-change-expire{width:100%}
+  .customer-custom-build-change-facts,.customer-custom-build-change-actions,.customer-custom-build-completion-checks,.customer-custom-build-owner-evidence-list,.customer-custom-build-change-issue-form,.customer-custom-build-change-void-form,.customer-custom-build-evidence-form,.customer-custom-build-completion-form,.customer-custom-build-completion-evidence-choices,.customer-custom-build-completion-confirmations{grid-template-columns:1fr}
+  .customer-custom-build-change-facts>div:nth-child(even){border-left:0}
+  .customer-custom-build-change-facts>div:nth-child(n+2){border-top:1px solid var(--spark-line)}
+  .customer-custom-build-change-actions>.customer-assessment-note,.customer-custom-build-change-issue-form .spark-field:has(textarea),.customer-custom-build-change-void-form .spark-field:has(textarea),.customer-custom-build-evidence-form .spark-field:has(textarea),.customer-custom-build-completion-form .spark-field:has(textarea),.customer-custom-build-change-preview,.customer-custom-build-completion-evidence-choices,.customer-custom-build-completion-confirmations,.customer-custom-build-change-issue-form>.customer-custom-build-credential-warning,.customer-custom-build-evidence-form>.customer-custom-build-credential-warning,.customer-custom-build-completion-form>.customer-assessment-note,.customer-custom-build-change-issue-form>.spark-button,.customer-custom-build-change-void-form>.spark-button,.customer-custom-build-evidence-form>.spark-button,.customer-custom-build-completion-form>.spark-button{grid-column:auto}
+  .customer-custom-build-change-issue-form>.spark-button,.customer-custom-build-change-void-form>.spark-button,.customer-custom-build-evidence-form>.spark-button,.customer-custom-build-completion-form>.spark-button{width:100%}
   .customer-separate-help{display:grid}
   .spark-progress{grid-template-columns:repeat(3,1fr)}
   .spark-progress li:nth-child(4){border-left:0}

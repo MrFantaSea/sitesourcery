@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { deflateSync } from "node:zlib";
 
 import {
   CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA,
@@ -52,6 +53,8 @@ function ownerJob(overrides = {}) {
     final_due_minor: "20000",
     currency: "USD",
     opened_at: "2026-08-05T12:00:00.000Z",
+    proof_progress_revision: "4",
+    proof_effective_scope_digest: DIGEST_C,
     ...overrides
   };
 }
@@ -76,6 +79,7 @@ function changeOrder(overrides = {}) {
     expires_at: "2026-08-15T14:00:00.000Z",
     accepted_at: null,
     declined_at: null,
+    expired_at: null,
     void_reason: null,
     voided_at: null,
     issue_request_digest: "f".repeat(64),
@@ -88,7 +92,12 @@ function evidence(overrides = {}) {
   return {
     id: EVIDENCE_ID,
     viewport: "desktop",
+    progress_revision: "4",
+    effective_scope_digest: DIGEST_C,
     accessible_description: "Desktop completion view of the approved homepage.",
+    image_width: "1440",
+    image_height: "1000",
+    validator_version: "service-image-evidence/v1",
     created_by_operator_user_id: OPERATOR_ID,
     captured_at: CAPTURED_AT,
     media_type: "image/png",
@@ -226,21 +235,43 @@ function allKeys(value, selected = new Set()) {
   return selected;
 }
 
-function png(width = 1, height = 1) {
+function png(width = 1440, height = 1000) {
   const signature = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
   ]);
+  const crc32 = (bytes) => {
+    let crc = 0xffffffff;
+    for (const byte of bytes) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit += 1) {
+        crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+      }
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  };
   const chunk = (type, payload = Buffer.alloc(0)) => {
     const value = Buffer.alloc(12 + payload.length);
     value.writeUInt32BE(payload.length, 0);
     value.write(type, 4, 4, "ascii");
     payload.copy(value, 8);
+    value.writeUInt32BE(
+      crc32(value.subarray(4, 8 + payload.length)),
+      8 + payload.length
+    );
     return value;
   };
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
-  return Buffer.concat([signature, chunk("IHDR", header), chunk("IEND")]);
+  header[8] = 8;
+  header[9] = 0;
+  const rows = Buffer.alloc((width + 1) * height);
+  return Buffer.concat([
+    signature,
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND")
+  ]);
 }
 
 function issueInput(overrides = {}) {
@@ -476,6 +507,9 @@ test("customer completion exposes only evidence selected into the immutable pack
       evidence({
         id: EVIDENCE_TWO_ID,
         viewport: "phone",
+        image_width: "390",
+        image_height: "844",
+        content_digest: DIGEST_D,
         accessible_description: "Phone completion view of the approved homepage.",
         captured_at: "2026-08-06T15:01:00.000Z"
       }),
@@ -508,6 +542,9 @@ test("owner projection is capability-gated and includes exact paid-job work auth
       evidence({
         id: EVIDENCE_TWO_ID,
         viewport: "phone",
+        image_width: "390",
+        image_height: "844",
+        content_digest: DIGEST_D,
         accessible_description: "Phone completion view of the approved homepage."
       })
     ],
@@ -567,7 +604,11 @@ test("customer evidence read is package-bound and verifies exact bytes", async (
     return result([{
       accessible_description:
         "Desktop completion view of the approved homepage.",
+      viewport: "desktop",
+      validator_version: "service-image-evidence/v1",
       media_type: "image/png",
+      image_width: 1440,
+      image_height: 1000,
       content_digest: digest,
       byte_count: bytes.byteLength,
       payload: bytes
@@ -607,7 +648,11 @@ test("customer evidence read fails closed on absent or corrupt package evidence"
   const corrupt = authority(() => result([{
     accessible_description:
       "Desktop completion view of the approved homepage.",
+    viewport: "desktop",
+    validator_version: "service-image-evidence/v1",
     media_type: "image/png",
+    image_width: 1440,
+    image_height: 1000,
     content_digest: DIGEST_A,
     byte_count: bytes.byteLength,
     payload: bytes
@@ -1065,6 +1110,107 @@ test("voidChangeOrder rejects a stale digest and preserves replay authority", as
   );
 });
 
+test("expireChangeOrder seals an elapsed issued quote once and frees active work", async () => {
+  const state = fixtures({ changes: [changeOrder()] });
+  let expiration = null;
+  let allocations = 0;
+  const database = authority((text, values) => {
+    if (/service_operator_has_capability/u.test(text)) {
+      return result([{ authorized: true }]);
+    }
+    if (/pg_advisory_xact_lock/u.test(text)) return result([{}]);
+    if (/from ss\.service_custom_build_change_expirations/u.test(text)) {
+      return result(expiration === null ? [] : [expiration]);
+    }
+    if (/expires_at <= clock_timestamp\(\) as is_expired/u.test(text)) {
+      return result([{
+        state: "issued",
+        quote_digest: DIGEST_A,
+        is_expired: true
+      }]);
+    }
+    if (/insert into ss\.service_custom_build_change_expirations/u.test(text)) {
+      expiration = {
+        change_order_id: CHANGE_ID,
+        expired_quote_digest: values[4]
+      };
+      state.changes[0] = changeOrder({
+        state: "expired",
+        expired_at: CAPTURED_AT
+      });
+      return result([{ id: values[0] }]);
+    }
+    const selected = snapshotQuery(text, values, state);
+    if (selected.matched) return selected.value;
+    throw new Error(`Unexpected query: ${text}`);
+  });
+  const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    authority: database.value,
+    randomUUID: () => {
+      allocations += 1;
+      return COMMAND_RECORD_ID;
+    }
+  });
+  const input = {
+    commandId: "change-expiration-command-1",
+    expectedQuoteDigest: DIGEST_A,
+    organizationId: ORGANIZATION_ID
+  };
+  const first = await service.expireChangeOrder(
+    { userId: OPERATOR_ID },
+    JOB_ID,
+    CHANGE_ID,
+    input
+  );
+  const replay = await service.expireChangeOrder(
+    { userId: OPERATOR_ID },
+    JOB_ID,
+    CHANGE_ID,
+    input
+  );
+  assert.equal(first.changeOrders[0].state, "expired");
+  assert.equal(first.changeOrders[0].expiredAt, CAPTURED_AT);
+  assert.equal(replay.changeOrders[0].state, "expired");
+  assert.equal(allocations, 1);
+  assert.equal(
+    database.queries.filter(({ text }) =>
+      /insert into ss\.service_custom_build_change_expirations/u.test(text)
+    ).length,
+    1
+  );
+
+  const notElapsed = authority((text) => {
+    if (/service_operator_has_capability/u.test(text)) {
+      return result([{ authorized: true }]);
+    }
+    if (/pg_advisory_xact_lock/u.test(text)) return result([{}]);
+    if (/from ss\.service_custom_build_change_expirations/u.test(text)) {
+      return result([]);
+    }
+    if (/expires_at <= clock_timestamp\(\) as is_expired/u.test(text)) {
+      return result([{
+        state: "issued",
+        quote_digest: DIGEST_A,
+        is_expired: false
+      }]);
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+  await assert.rejects(
+    () => createPostgresCustomServicesCustomBuildChangeCompletion({
+      authority: notElapsed.value
+    }).expireChangeOrder(
+      { userId: OPERATOR_ID },
+      JOB_ID,
+      CHANGE_ID,
+      input
+    ),
+    (error) =>
+      error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+      error.status === 409
+  );
+});
+
 test("uploadEvidence writes exact image bytes and identity in one locked transaction", async () => {
   const bytes = png();
   const digest = createHash("sha256").update(bytes).digest("hex");
@@ -1099,8 +1245,11 @@ test("uploadEvidence writes exact image bytes and identity in one locked transac
       state.evidence.push(evidence({
         id: values[0],
         viewport: values[3],
-        accessible_description: values[4],
-        captured_at: values[6],
+        image_width: String(values[4]),
+        image_height: String(values[5]),
+        validator_version: values[6],
+        accessible_description: values[7],
+        captured_at: values[9],
         media_type: "image/png",
         byte_count: String(bytes.byteLength),
         content_digest: digest
@@ -1201,6 +1350,9 @@ test("uploadEvidence replay is stable and conflicting bytes cannot reuse a comma
     viewport: "desktop",
     accessible_description:
       "Desktop completion view of the approved homepage.",
+    image_width: 1440,
+    image_height: 1000,
+    validator_version: "service-image-evidence/v1",
     media_type: "image/png",
     byte_count: bytes.byteLength,
     content_digest: digest
@@ -1226,7 +1378,7 @@ test("uploadEvidence replay is stable and conflicting bytes cannot reuse a comma
     false
   );
 
-  const differentBytes = png(2, 1);
+  const differentBytes = png(1441, 1000);
   const conflict = replayAuthority(prior);
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
@@ -1249,6 +1401,9 @@ test("recordCompletion derives the latest progress revision and leaves scope, mo
       evidence({
         id: EVIDENCE_TWO_ID,
         viewport: "phone",
+        image_width: "390",
+        image_height: "844",
+        content_digest: DIGEST_D,
         accessible_description: "Phone completion view of the approved homepage."
       })
     ]

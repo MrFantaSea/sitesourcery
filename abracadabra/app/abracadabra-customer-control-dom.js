@@ -94,6 +94,17 @@
     "00000000-0000-4000-8000-000000000342";
   var CUSTOM_BUILD_PROGRESS_SCHEMA =
     "sitesourcery.custom-build-progress/v1";
+  var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
+    "sitesourcery.custom-build-change-completion/v1";
+  var CUSTOM_BUILD_CHANGE_UNIT_MINOR = 12500;
+  var CUSTOM_BUILD_COMPLETION_CHECKS = Object.freeze([
+    Object.freeze(["scope", "Approved scope"]),
+    Object.freeze(["desktop", "Desktop view"]),
+    Object.freeze(["phone", "Phone view"]),
+    Object.freeze(["links", "Links"]),
+    Object.freeze(["contactActions", "Contact actions"]),
+    Object.freeze(["accessibilityBasics", "Accessibility basics"])
+  ]);
   var CUSTOM_BUILD_PROGRESS_STAGES = Object.freeze({
     preparing: "Preparing",
     building: "Building",
@@ -3308,6 +3319,514 @@
       : null;
   }
 
+  function safeCustomBuildChangeOrder(value, owner) {
+    var expectedKeys = [
+      "acceptedAt",
+      "addedScope",
+      "changeNumber",
+      "changeOrderId",
+      "declinedAt",
+      "disclosureDigest",
+      "expiredAt",
+      "expiresAt",
+      "issuedAt",
+      "pricing",
+      "quoteDigest",
+      "state",
+      "targetCompletionDate",
+      "void"
+    ];
+    if (owner) expectedKeys.push("createdByOperatorUserId");
+    if (
+      !exactKeys(value, expectedKeys)
+      || !UUID.test(text(value.changeOrderId))
+      || !Number.isSafeInteger(value.changeNumber)
+      || value.changeNumber < 1
+      || ![
+        "issued",
+        "accepted_payment_required",
+        "effective",
+        "declined",
+        "expired",
+        "voided"
+      ].includes(value.state)
+      || !customBuildProgressText(value.addedScope, 20, 2000)
+      || !exactKeys(
+        value.pricing,
+        [
+          "currency",
+          "paymentRequirement",
+          "subtotalMinor",
+          "taxState",
+          "unitAmountMinor",
+          "unitCount"
+        ]
+      )
+      || !Number.isSafeInteger(value.pricing.unitCount)
+      || value.pricing.unitCount < 1
+      || value.pricing.unitCount > 40
+      || value.pricing.unitAmountMinor !== CUSTOM_BUILD_CHANGE_UNIT_MINOR
+      || value.pricing.subtotalMinor !==
+        value.pricing.unitCount * CUSTOM_BUILD_CHANGE_UNIT_MINOR
+      || value.pricing.currency !== "USD"
+      || value.pricing.taxState !== "automatic_tax_pending"
+      || value.pricing.paymentRequirement !==
+        "due_before_changed_work"
+      || !assessmentDate(value.targetCompletionDate)
+      || !SHA256.test(text(value.quoteDigest))
+      || !SHA256.test(text(value.disclosureDigest))
+      || !safeIso(value.issuedAt)
+      || !safeIso(value.expiresAt)
+      || Date.parse(value.expiresAt) <= Date.parse(value.issuedAt)
+      || !nullableIso(value.acceptedAt)
+      || !nullableIso(value.declinedAt)
+      || !nullableIso(value.expiredAt)
+      || (owner && !UUID.test(text(value.createdByOperatorUserId)))
+    ) return false;
+    if (
+      value.void !== null
+      && (
+        !exactKeys(value.void, ["reason", "voidedAt"])
+        || !customBuildProgressText(value.void.reason, 20, 500)
+        || !safeIso(value.void.voidedAt)
+      )
+    ) return false;
+    if (value.state === "issued") {
+      return value.acceptedAt === null
+        && value.declinedAt === null
+        && value.void === null
+        && value.expiredAt === null;
+    }
+    if (
+      value.state === "accepted_payment_required"
+      || value.state === "effective"
+    ) {
+      return safeIso(value.acceptedAt)
+        && value.declinedAt === null
+        && value.void === null
+        && value.expiredAt === null;
+    }
+    if (value.state === "declined") {
+      return value.acceptedAt === null
+        && safeIso(value.declinedAt)
+        && value.void === null
+        && value.expiredAt === null;
+    }
+    if (value.state === "expired") {
+      return value.acceptedAt === null
+        && value.declinedAt === null
+        && value.void === null
+        && safeIso(value.expiredAt)
+        && Date.parse(value.expiredAt) >= Date.parse(value.expiresAt);
+    }
+    return value.expiredAt === null
+      && value.declinedAt === null
+      && value.void !== null;
+  }
+
+  function safeCustomBuildCompletionEvidence(value, owner) {
+    var expectedKeys = [
+      "accessibleDescription",
+      "byteCount",
+      "capturedAt",
+      "contentDigest",
+      "evidenceId",
+      "imageHeight",
+      "imageWidth",
+      "mediaType",
+      "viewport"
+    ];
+    if (owner) {
+      expectedKeys.push(
+        "createdByOperatorUserId",
+        "effectiveScopeDigest",
+        "progressRevision"
+      );
+    }
+    return exactKeys(value, expectedKeys)
+      && UUID.test(text(value.evidenceId))
+      && ["desktop", "phone"].includes(value.viewport)
+      && customBuildProgressText(
+        value.accessibleDescription,
+        10,
+        500
+      )
+      && ["image/jpeg", "image/png", "image/webp"]
+        .includes(value.mediaType)
+      && Number.isSafeInteger(value.byteCount)
+      && value.byteCount >= 1
+      && value.byteCount <= ASSESSMENT_MAXIMUM_EVIDENCE_BYTES
+      && SHA256.test(text(value.contentDigest))
+      && Number.isSafeInteger(value.imageWidth)
+      && value.imageWidth >= 240
+      && value.imageWidth <= 2048
+      && Number.isSafeInteger(value.imageHeight)
+      && value.imageHeight >= 1
+      && value.imageHeight <= 5000
+      && (
+        (value.viewport === "desktop" && value.imageWidth >= 768)
+        || (value.viewport === "phone" && value.imageWidth <= 767)
+      )
+      && value.imageWidth * value.imageHeight <= 2048 * 5000
+      && safeIso(value.capturedAt)
+      && (
+        !owner
+        || (
+          UUID.test(text(value.createdByOperatorUserId))
+          && Number.isSafeInteger(value.progressRevision)
+          && value.progressRevision >= 1
+          && SHA256.test(text(value.effectiveScopeDigest))
+        )
+      );
+  }
+
+  function safeCustomBuildCompletion(value, owner, evidence) {
+    if (value === null) return true;
+    var expectedKeys = [
+      "checks",
+      "customerSummary",
+      "preparedAt",
+      "state"
+    ];
+    if (owner) {
+      expectedKeys.push(
+        "baseScopeDigest",
+        "completionId",
+        "createdByOperatorUserId",
+        "effectiveChangeOrderDigests",
+        "effectiveScopeDigest",
+        "evidenceIds",
+        "packageDigest",
+        "progressRevision"
+      );
+    } else {
+      expectedKeys.push("evidence");
+    }
+    if (
+      !exactKeys(value, expectedKeys)
+      || ![
+        "ready_for_final_payment",
+        "ready_for_delivery"
+      ].includes(value.state)
+      || !customBuildProgressText(value.customerSummary, 20, 1000)
+      || !exactKeys(
+        value.checks,
+        CUSTOM_BUILD_COMPLETION_CHECKS.map(function (entry) {
+          return entry[0];
+        })
+      )
+      || !CUSTOM_BUILD_COMPLETION_CHECKS.every(function (entry) {
+        return value.checks[entry[0]] === true;
+      })
+      || !safeIso(value.preparedAt)
+    ) return false;
+    if (!owner) {
+      return Array.isArray(value.evidence)
+        && value.evidence.length >= 2
+        && value.evidence.length <= 12
+        && value.evidence.every(function (entry) {
+          return safeCustomBuildCompletionEvidence(entry, false);
+        })
+        && new Set(value.evidence.map(function (entry) {
+          return entry.evidenceId;
+        })).size === value.evidence.length
+        && JSON.stringify(value.evidence.map(function (entry) {
+          return entry.evidenceId;
+        })) === JSON.stringify(value.evidence.map(function (entry) {
+          return entry.evidenceId;
+        }).slice().sort())
+        && ["desktop", "phone"].every(function (viewport) {
+          return value.evidence.some(function (entry) {
+            return entry.viewport === viewport;
+          });
+        })
+        && !value.evidence.some(function (desktop) {
+          return desktop.viewport === "desktop"
+            && value.evidence.some(function (phone) {
+              return phone.viewport === "phone"
+                && phone.contentDigest === desktop.contentDigest;
+            });
+        });
+    }
+    if (
+      !UUID.test(text(value.completionId))
+      || !Number.isSafeInteger(value.progressRevision)
+      || value.progressRevision < 1
+      || !Array.isArray(value.evidenceIds)
+      || value.evidenceIds.length < 2
+      || value.evidenceIds.length > 12
+      || !value.evidenceIds.every(function (id) {
+        return UUID.test(text(id));
+      })
+      || JSON.stringify(value.evidenceIds) !==
+        JSON.stringify(value.evidenceIds.slice().sort())
+      || new Set(value.evidenceIds).size !== value.evidenceIds.length
+      || !SHA256.test(text(value.baseScopeDigest))
+      || !Array.isArray(value.effectiveChangeOrderDigests)
+      || !value.effectiveChangeOrderDigests.every(function (digest) {
+        return SHA256.test(text(digest));
+      })
+      || !SHA256.test(text(value.effectiveScopeDigest))
+      || !SHA256.test(text(value.packageDigest))
+      || !UUID.test(text(value.createdByOperatorUserId))
+    ) return false;
+    var evidenceById = new Map(evidence.map(function (entry) {
+      return [entry.evidenceId, entry];
+    }));
+    var selected = value.evidenceIds.map(function (id) {
+      return evidenceById.get(id);
+    });
+    return selected.every(Boolean)
+      && selected.every(function (entry) {
+        return entry.progressRevision === value.progressRevision
+          && entry.effectiveScopeDigest === value.effectiveScopeDigest;
+      })
+      && ["desktop", "phone"].every(function (viewport) {
+        return selected.some(function (entry) {
+          return entry.viewport === viewport;
+        });
+      })
+      && !selected.some(function (desktop) {
+        return desktop.viewport === "desktop"
+          && selected.some(function (phone) {
+            return phone.viewport === "phone"
+              && phone.contentDigest === desktop.contentDigest;
+          });
+      });
+  }
+
+  function customBuildChangeCompletionState(active, completion) {
+    if (completion) return completion.state;
+    if (active && active.state === "issued") {
+      return "change_order_review";
+    }
+    if (active && active.state === "accepted_payment_required") {
+      return "change_order_payment_required";
+    }
+    return "building";
+  }
+
+  function verifiedCustomerCustomBuildChangeCompletion(value) {
+    if (
+      !exactKeys(
+        value,
+        ["changeOrders", "completion", "schema", "state"]
+      )
+      || value.schema !== CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA
+      || ![
+        "not_available",
+        "building",
+        "change_order_review",
+        "change_order_payment_required",
+        "ready_for_final_payment",
+        "ready_for_delivery"
+      ].includes(value.state)
+      || !exactKeys(value.changeOrders, ["active", "history"])
+      || !Array.isArray(value.changeOrders.history)
+      || value.changeOrders.history.length > 100
+      || !value.changeOrders.history.every(function (entry) {
+        return safeCustomBuildChangeOrder(entry, false)
+          && !["issued", "accepted_payment_required"]
+            .includes(entry.state);
+      })
+      || new Set(value.changeOrders.history.map(function (entry) {
+        return entry.changeOrderId;
+      })).size !== value.changeOrders.history.length
+      || (
+        value.changeOrders.active !== null
+        && !safeCustomBuildChangeOrder(
+          value.changeOrders.active,
+          false
+        )
+      )
+      || (
+        value.changeOrders.active !== null
+        && !["issued", "accepted_payment_required"]
+          .includes(value.changeOrders.active.state)
+      )
+      || !safeCustomBuildCompletion(value.completion, false, [])
+    ) return null;
+    var active = value.changeOrders.active;
+    var ids = value.changeOrders.history.map(function (entry) {
+      return entry.changeOrderId;
+    });
+    if (active && ids.includes(active.changeOrderId)) return null;
+    if (value.state === "not_available") {
+      return active === null
+        && value.changeOrders.history.length === 0
+        && value.completion === null
+        ? value
+        : null;
+    }
+    return value.state === customBuildChangeCompletionState(
+      active,
+      value.completion
+    )
+      && (!value.completion || active === null)
+      ? value
+      : null;
+  }
+
+  function verifiedOwnerCustomBuildChangeCompletion(
+    value,
+    expectedEntry
+  ) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "changeOrders",
+          "completion",
+          "evidence",
+          "job",
+          "proofBinding",
+          "schema",
+          "state"
+        ]
+      )
+      || value.schema !== CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA
+      || !record(value.job)
+      || !exactKeys(
+        value.job,
+        [
+          "caseId",
+          "currency",
+          "customerId",
+          "finalDueMinor",
+          "jobId",
+          "openedAt",
+          "organizationId",
+          "projectId",
+          "state",
+          "targetCompletionDate"
+        ]
+      )
+      || !UUID.test(text(value.job.jobId))
+      || !UUID.test(text(value.job.organizationId))
+      || !UUID.test(text(value.job.projectId))
+      || !UUID.test(text(value.job.caseId))
+      || !UUID.test(text(value.job.customerId))
+      || value.job.state !== "open"
+      || !assessmentDate(value.job.targetCompletionDate)
+      || !safeMinor(value.job.finalDueMinor)
+      || value.job.currency !== "USD"
+      || !safeIso(value.job.openedAt)
+      || !Array.isArray(value.changeOrders)
+      || value.changeOrders.length > 100
+      || !value.changeOrders.every(function (entry, index, entries) {
+        return safeCustomBuildChangeOrder(entry, true)
+          && (
+            index === 0
+            || entries[index - 1].changeNumber < entry.changeNumber
+          );
+      })
+      || new Set(value.changeOrders.map(function (entry) {
+        return entry.changeOrderId;
+      })).size !== value.changeOrders.length
+      || value.changeOrders.filter(function (entry) {
+        return ["issued", "accepted_payment_required"]
+          .includes(entry.state);
+      }).length > 1
+      || !Array.isArray(value.evidence)
+      || value.evidence.length > 12
+      || !value.evidence.every(function (entry) {
+        return safeCustomBuildCompletionEvidence(entry, true);
+      })
+      || new Set(value.evidence.map(function (entry) {
+        return entry.evidenceId;
+      })).size !== value.evidence.length
+      || !safeCustomBuildCompletion(
+        value.completion,
+        true,
+        value.evidence
+      )
+    ) return null;
+    if (
+      value.proofBinding !== null
+      && (
+        !exactKeys(
+          value.proofBinding,
+          ["effectiveScopeDigest", "progressRevision"]
+        )
+        || !Number.isSafeInteger(value.proofBinding.progressRevision)
+        || value.proofBinding.progressRevision < 1
+        || !SHA256.test(text(value.proofBinding.effectiveScopeDigest))
+      )
+    ) return null;
+    if (
+      expectedEntry
+      && (
+        value.job.jobId !== text(expectedEntry.job && expectedEntry.job.jobId)
+        || value.job.organizationId !== text(expectedEntry.organizationId)
+        || value.job.projectId !== text(expectedEntry.projectId)
+        || value.job.caseId !== text(expectedEntry.caseId)
+        || value.job.customerId !== text(
+          expectedEntry.customer && expectedEntry.customer.customerId
+        )
+        || value.job.targetCompletionDate !== text(
+          expectedEntry.job && expectedEntry.job.targetCompletionDate
+        )
+      )
+    ) return null;
+    var active = value.changeOrders.find(function (entry) {
+      return ["issued", "accepted_payment_required"]
+        .includes(entry.state);
+    }) || null;
+    if (
+      value.completion
+      && (
+        value.proofBinding === null
+        || value.completion.progressRevision !==
+          value.proofBinding.progressRevision
+        || value.completion.effectiveScopeDigest !==
+          value.proofBinding.effectiveScopeDigest
+      )
+    ) return null;
+    return value.state === customBuildChangeCompletionState(
+      active,
+      value.completion
+    )
+      && (!value.completion || active === null)
+      ? value
+      : null;
+  }
+
+  function currentOwnerCustomBuildCompletionEvidence(snapshot, progressRead) {
+    var progress = progressRead && verifiedCustomBuildProgress(
+      progressRead.snapshot
+    );
+    var binding = snapshot && snapshot.proofBinding;
+    if (
+      !progress
+      || !binding
+      || !progress.progress
+      || progress.progress.revision !== binding.progressRevision
+    ) return [];
+    return snapshot.evidence.filter(function (entryEvidence) {
+      return entryEvidence.progressRevision === binding.progressRevision
+        && entryEvidence.effectiveScopeDigest === binding.effectiveScopeDigest;
+    });
+  }
+
+  function customerCustomBuildCompletionEvidenceUrl(
+    projectId,
+    evidenceId
+  ) {
+    if (!UUID.test(text(projectId)) || !UUID.test(text(evidenceId))) {
+      return null;
+    }
+    return "/api/v1/projects/" + projectId
+      + "/custom-services/custom-build-completion-evidence/"
+      + evidenceId;
+  }
+
+  function customBuildEvidenceDimensions(value) {
+    return Number.isSafeInteger(value && value.imageWidth)
+      && Number.isSafeInteger(value && value.imageHeight)
+      ? value.imageWidth + " × " + value.imageHeight + " pixels"
+      : "";
+  }
+
   function verifiedOwnerCustomBuildQuoteReceipt(value) {
     if (
       !exactKeys(
@@ -5398,6 +5917,517 @@
     });
   }
 
+  function prepareCustomBuildCompletionEvidenceFile(file, environment) {
+    var runtime = environment || (
+      typeof globalThis === "object" ? globalThis : {}
+    );
+    if (
+      !file
+      || !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+      || !Number.isSafeInteger(file.size)
+      || file.size < 1
+      || file.size > ASSESSMENT_MAXIMUM_EVIDENCE_BYTES
+      || typeof runtime.FileReader !== "function"
+    ) {
+      return Promise.reject(new Error(
+        "Choose a JPEG, PNG, or WebP screenshot no larger than 700 KiB."
+      ));
+    }
+    return new Promise(function (resolve, reject) {
+      var reader = new runtime.FileReader();
+      reader.onerror = function () {
+        reject(new Error("That completion screenshot could not be read."));
+      };
+      reader.onload = function () {
+        var result = typeof reader.result === "string"
+          ? reader.result
+          : "";
+        var prefix = "data:" + file.type + ";base64,";
+        var dataBase64 = result.startsWith(prefix)
+          ? result.slice(prefix.length)
+          : "";
+        if (
+          !dataBase64
+          || dataBase64.length > Math.ceil(
+            ASSESSMENT_MAXIMUM_EVIDENCE_BYTES / 3
+          ) * 4 + 4
+          || !/^[A-Za-z0-9+/]+={0,2}$/u.test(dataBase64)
+        ) {
+          reject(new Error(
+            "That completion screenshot could not be prepared safely."
+          ));
+          return;
+        }
+        resolve(Object.freeze({
+          dataBase64: dataBase64,
+          mediaType: file.type
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function createCustomerCustomBuildChangeCompletionPanel(
+    documentRef,
+    actions
+  ) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-custom-services customer-custom-build-change-completion"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-custom-build-change-completion-title"
+    );
+    panel.setAttribute(
+      "data-customer-custom-build-change-completion",
+      ""
+    );
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Added work and completion proof"
+    );
+    heading.id = "customer-custom-build-change-completion-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-status customer-custom-build-change-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh added work and completion proof"
+    );
+    refresh.type = "button";
+    refresh.setAttribute("data-customer-change-completion-refresh", "");
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-custom-build-change-completion-body"
+    );
+    panel.append(
+      accountElement(documentRef, "p", "spark-kicker", "Your paid project"),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Review added work separately from the original scope, then see the bounded proof Site Sourcery prepared when the approved work is ready."
+      ),
+      status,
+      refresh,
+      body
+    );
+
+    function renderChangeOrder(order, busy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-change-card"
+      );
+      section.setAttribute("data-customer-change-order", order.state);
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Added scope",
+        order.addedScope
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Added-work units",
+        String(order.pricing.unitCount) + " of 40"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Price per unit",
+        customBuildMoney(order.pricing.unitAmountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Added-work subtotal",
+        customBuildMoney(order.pricing.subtotalMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        "Calculated before payment"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Payment timing",
+        "Due before changed work begins"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Updated target date",
+        order.targetCompletionDate
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Review by",
+        accountDate(order.expiresAt)
+      );
+      section.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Added-work change " + order.changeNumber
+        ),
+        facts,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "Your original approved scope remains in place. This change covers added work only, and that added work does not begin until its payment is confirmed."
+        )
+      );
+      if (order.state !== "issued") return section;
+      var expired = Date.parse(order.expiresAt) <= Date.now();
+      var controls = accountElement(
+        documentRef,
+        "div",
+        "customer-custom-build-change-actions"
+      );
+      var acceptLabel = accountElement(
+        documentRef,
+        "label",
+        "customer-assessment-authority"
+      );
+      var acceptCheck = accountElement(documentRef, "input", "");
+      acceptCheck.type = "checkbox";
+      acceptCheck.disabled = busy || expired;
+      acceptLabel.append(
+        acceptCheck,
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "I accept this exact added scope, unit count, subtotal, target date, and the requirement to pay before changed work begins."
+        )
+      );
+      var accept = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Saving exact decision…" : "Accept exact added work"
+      );
+      accept.type = "button";
+      accept.disabled = true;
+      acceptCheck.addEventListener("change", function () {
+        accept.disabled = busy || expired || !acceptCheck.checked;
+      });
+      accept.addEventListener("click", function () {
+        if (
+          acceptCheck.checked
+          && !expired
+          && typeof actions.accept === "function"
+        ) actions.accept(order);
+      });
+      var declineLabel = accountElement(
+        documentRef,
+        "label",
+        "customer-assessment-authority"
+      );
+      var declineCheck = accountElement(documentRef, "input", "");
+      declineCheck.type = "checkbox";
+      declineCheck.disabled = busy;
+      declineLabel.append(
+        declineCheck,
+        accountElement(
+          documentRef,
+          "span",
+          "",
+          "I decline this exact added-work change. My original approved scope remains in place."
+        )
+      );
+      var decline = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        busy ? "Saving exact decision…" : "Decline added work"
+      );
+      decline.type = "button";
+      decline.disabled = true;
+      declineCheck.addEventListener("change", function () {
+        decline.disabled = busy || !declineCheck.checked;
+      });
+      decline.addEventListener("click", function () {
+        if (
+          declineCheck.checked
+          && typeof actions.decline === "function"
+        ) actions.decline(order);
+      });
+      controls.append(acceptLabel, accept, declineLabel, decline);
+      if (expired) {
+        controls.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "This review window has ended. Ask Site Sourcery for a current change order before accepting added work."
+        ));
+      }
+      section.appendChild(controls);
+      return section;
+    }
+
+    function renderCompletion(completion, projectId, busy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-completion-card"
+      );
+      section.setAttribute("data-customer-custom-build-completion", "");
+      var checks = accountElement(
+        documentRef,
+        "ul",
+        "customer-custom-build-completion-checks"
+      );
+      CUSTOM_BUILD_COMPLETION_CHECKS.forEach(function (entry) {
+        checks.appendChild(accountElement(
+          documentRef,
+          "li",
+          "",
+          entry[1] + " · Passed"
+        ));
+      });
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Prepared",
+        accountDate(completion.preparedAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Next step",
+        completion.state === "ready_for_final_payment"
+          ? "Final payment is required before delivery"
+          : "Ready for delivery"
+      );
+      var evidence = accountElement(
+        documentRef,
+        "div",
+        "customer-custom-build-completion-evidence"
+      );
+      completion.evidence.forEach(function (entry) {
+        var url = customerCustomBuildCompletionEvidenceUrl(
+          projectId,
+          entry.evidenceId
+        );
+        var figure = accountElement(documentRef, "figure", "");
+        var image = accountElement(documentRef, "img", "");
+        image.src = url;
+        image.alt = entry.accessibleDescription;
+        image.loading = "lazy";
+        image.decoding = "async";
+        var open = accountElement(
+          documentRef,
+          "a",
+          "spark-button customer-custom-build-evidence-link",
+          "Open authenticated " + entry.viewport + " proof"
+        );
+        open.href = url;
+        open.target = "_blank";
+        open.rel = "noopener noreferrer";
+        open.setAttribute("data-completion-evidence-control", entry.viewport);
+        if (typeof actions.evidence === "function") {
+          open.addEventListener("click", function (event) {
+            event.preventDefault();
+            if (!busy) actions.evidence(entry, url);
+          });
+        }
+        figure.append(
+          image,
+          accountElement(
+            documentRef,
+            "figcaption",
+            "",
+            accountWords(entry.viewport) + " · "
+              + entry.accessibleDescription
+              + (customBuildEvidenceDimensions(entry)
+                ? " · " + customBuildEvidenceDimensions(entry)
+                : "")
+          ),
+          open
+        );
+        evidence.appendChild(figure);
+      });
+      section.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Completion proof is prepared"
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-progress-copy",
+          completion.customerSummary
+        ),
+        facts,
+        accountElement(documentRef, "h5", "", "Checks completed"),
+        checks,
+        evidence,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "This proof records completed checks. It is not payment, delivery, launch, or the start of the 30-day workmanship-correction clock."
+        )
+      );
+      return section;
+    }
+
+    function render(readState) {
+      var read = readState || {};
+      var snapshot = verifiedCustomerCustomBuildChangeCompletion(
+        read.snapshot
+      );
+      body.replaceChildren();
+      panel.hidden = read.phase === "idle";
+      if (read.phase === "idle") return;
+      refresh.disabled = read.phase === "loading" || Boolean(read.command);
+      panel.setAttribute(
+        "aria-busy",
+        String(read.phase === "loading" || Boolean(read.command))
+      );
+      if (!snapshot) {
+        status.textContent = read.phase === "loading"
+          ? "Loading added work and completion proof…"
+          : read.error
+            || "Added work and completion proof could not be verified. Refresh before deciding anything.";
+        return;
+      }
+      if (read.error) {
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-owner-quote-form-error",
+          read.error
+        ));
+      }
+      if (read.phase === "loading") {
+        status.textContent =
+          "Refreshing added work and completion proof. The last verified information remains below.";
+      } else if (read.command) {
+        status.textContent = "Saving one exact added-work decision…";
+      } else {
+        status.textContent = {
+          not_available: "No paid Custom build is open for this project.",
+          building: "Your approved Custom build is in progress.",
+          change_order_review: "An added-work change is ready for your review.",
+          change_order_payment_required:
+            "The added work is accepted and waiting for confirmed payment.",
+          ready_for_final_payment:
+            "Completion proof is ready; final payment comes before delivery.",
+          ready_for_delivery: "Completion proof is ready for delivery."
+        }[snapshot.state];
+      }
+      if (snapshot.changeOrders.active) {
+        body.appendChild(renderChangeOrder(
+          snapshot.changeOrders.active,
+          Boolean(read.command)
+        ));
+      } else if (snapshot.state === "building") {
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "There is no added-work decision waiting for you. Your original approved scope remains the active build."
+        ));
+      } else if (snapshot.state === "not_available") {
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "This project does not currently have paid Custom-build change or completion records."
+        ));
+      }
+      snapshot.changeOrders.history.filter(function (order) {
+        return order.state === "expired";
+      }).forEach(function (order) {
+        var expired = accountElement(
+          documentRef,
+          "section",
+          "customer-custom-build-change-card customer-custom-build-change-expired"
+        );
+        expired.setAttribute("data-customer-expired-change-order", "");
+        expired.append(
+          accountElement(
+            documentRef,
+            "h4",
+            "",
+            "Added-work change " + order.changeNumber + " · Expired"
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-progress-copy",
+            order.addedScope
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Its review window ended " + accountDate(order.expiresAt)
+              + (order.expiredAt
+                ? " and expiration was recorded "
+                  + accountDate(order.expiredAt)
+                : "")
+              + ". It did not add work or change your original approved scope."
+          )
+        );
+        body.appendChild(expired);
+      });
+      if (snapshot.completion) {
+        body.appendChild(renderCompletion(
+          snapshot.completion,
+          read.projectId,
+          Boolean(read.command)
+        ));
+      }
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: render
+    });
+  }
+
   function customBuildLocalDateTime(value) {
     var date = new Date(value);
     if (!Number.isFinite(date.getTime())) return "";
@@ -6654,7 +7684,811 @@
       return section;
     }
 
-    function renderJob(entry, progressRead, globallyBusy) {
+    function ownerCompletionProgressReady(read) {
+      var snapshot = read && verifiedCustomBuildProgress(
+        read.snapshot
+      );
+      return Boolean(snapshot)
+        && snapshot.state === "active"
+        && snapshot.progress.stage === "checking"
+        && snapshot.activeRequest === null
+        && snapshot.progress.milestones.every(function (milestone) {
+          return milestone.state === "done";
+        });
+    }
+
+    function renderOwnerChangeOrder(entry, order, busy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-change"
+      );
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(documentRef, facts, "State", accountWords(order.state));
+      appendAccountFact(documentRef, facts, "Added scope", order.addedScope);
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Units",
+        String(order.pricing.unitCount) + " × $125"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Server subtotal",
+        customBuildMoney(order.pricing.subtotalMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        "Automatic calculation pending"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Target completion",
+        order.targetCompletionDate
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Expires",
+        accountDate(order.expiresAt)
+      );
+      section.append(
+        accountElement(
+          documentRef,
+          "h6",
+          "",
+          "Active added-work change " + order.changeNumber
+        ),
+        facts,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          order.state === "accepted_payment_required"
+            ? "Accepted added work remains paused until its payment is confirmed."
+            : "Added work remains separate from the original scope and cannot begin before customer acceptance and confirmed payment."
+        )
+      );
+      if (
+        order.state === "issued"
+        && Date.parse(order.expiresAt) <= Date.now()
+      ) {
+        var expire = accountElement(
+          documentRef,
+          "button",
+          "spark-button customer-custom-build-change-expire",
+          busy ? "Recording expiration…" : "Record this change as expired"
+        );
+        expire.type = "button";
+        expire.disabled = busy;
+        expire.setAttribute("data-owner-change-order-expire", "");
+        expire.addEventListener("click", function () {
+          if (typeof actions.expireChange === "function") {
+            actions.expireChange(entry, order);
+          }
+        });
+        section.append(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "The recorded review deadline has passed. Expiring it confirms that no added work became effective and does not alter the original scope."
+          ),
+          expire
+        );
+      }
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-change-void-form"
+      );
+      form.setAttribute("data-owner-change-order-void", order.state);
+      var reason = assessmentField(
+        documentRef,
+        "changeVoidReason",
+        "Bounded reason for voiding this change",
+        "",
+        {
+          required: true,
+          minimumLength: 20,
+          maximum: 500,
+          multiline: true,
+          placeholder:
+            "Explain why this exact added-work change is being withdrawn or replaced."
+        }
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        busy ? "Voiding exact change…" : "Void this exact change"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        reason,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "The retained server quote digest identifies the exact change. This control cannot alter money, tax, credit, or the original scope."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        if (typeof actions.voidChange === "function") {
+          var data = new FormData(form);
+          actions.voidChange(entry, order, {
+            reason: text(data.get("changeVoidReason"))
+          });
+        }
+      });
+      section.appendChild(form);
+      return section;
+    }
+
+    function renderOwnerChangeIssue(entry, snapshot, busy) {
+      var details = accountElement(
+        documentRef,
+        "details",
+        "customer-custom-build-owner-control"
+      );
+      details.appendChild(accountElement(
+        documentRef,
+        "summary",
+        "customer-owner-assessment-job-summary",
+        "Issue one added-work change"
+      ));
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-change-issue-form"
+      );
+      form.setAttribute("data-owner-change-order-form", entry.job.jobId);
+      var addedScope = assessmentField(
+        documentRef,
+        "addedScope",
+        "Added scope only",
+        "",
+        {
+          required: true,
+          minimumLength: 20,
+          maximum: 2000,
+          multiline: true,
+          placeholder:
+            "Describe only the work being added; do not rewrite the accepted base scope."
+        }
+      );
+      var units = assessmentField(
+        documentRef,
+        "unitCount",
+        "Added-work units",
+        "1",
+        {
+          required: true,
+          type: "number",
+          minimumValue: 1,
+          maximumValue: 40,
+          step: 1
+        }
+      );
+      var target = assessmentField(
+        documentRef,
+        "changeTargetCompletionDate",
+        "Updated target completion date",
+        entry.job.targetCompletionDate,
+        { required: true, type: "date" }
+      );
+      var targetInput = target.querySelector("input");
+      targetInput.min = entry.job.targetCompletionDate;
+      targetInput.max = customBuildFutureDate(730);
+      var defaultExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      var expiry = assessmentField(
+        documentRef,
+        "changeExpiresAt",
+        "Customer review window ends",
+        customBuildLocalDateTime(defaultExpiry),
+        { required: true, type: "datetime-local" }
+      );
+      var expiryInput = expiry.querySelector("input");
+      expiryInput.min = customBuildLocalDateTime(
+        Date.now() + 5 * 60 * 1000
+      );
+      expiryInput.max = customBuildLocalDateTime(
+        Date.now() + 14 * 24 * 60 * 60 * 1000
+      );
+      var preview = accountElement(
+        documentRef,
+        "p",
+        "customer-custom-build-change-preview"
+      );
+      function updatePreview() {
+        var count = Number(units.querySelector("input").value);
+        preview.textContent = Number.isInteger(count)
+          && count >= 1
+          && count <= 40
+          ? count + " × $125 = "
+            + customBuildMoney(count * CUSTOM_BUILD_CHANGE_UNIT_MINOR)
+            + " USD before tax. The database derives the authoritative subtotal."
+          : "Choose between 1 and 40 added-work units.";
+      }
+      units.querySelector("input").addEventListener("input", updatePreview);
+      updatePreview();
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Issuing exact change…" : "Issue exact added-work change"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        addedScope,
+        units,
+        target,
+        expiry,
+        preview,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "Keep the added scope customer-safe. Do not include passwords, verification codes, API keys, tokens, or raw credentials."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var data = new FormData(form);
+        var expiresAt = new Date(expiryInput.value);
+        if (!Number.isFinite(expiresAt.getTime())) return;
+        if (typeof actions.issueChange === "function") {
+          actions.issueChange(entry, snapshot, {
+            addedScope: text(data.get("addedScope")),
+            expiresAt: expiresAt.toISOString(),
+            targetCompletionDate: text(
+              data.get("changeTargetCompletionDate")
+            ),
+            unitCount: Number(data.get("unitCount"))
+          });
+        }
+      });
+      details.appendChild(form);
+      return details;
+    }
+
+    function renderOwnerCompletionEvidence(entry, snapshot, busy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-evidence"
+      );
+      section.appendChild(accountElement(
+        documentRef,
+        "h6",
+        "",
+        "Desktop and phone completion evidence"
+      ));
+      if (snapshot.evidence.length) {
+        var list = accountElement(
+          documentRef,
+          "ul",
+          "customer-custom-build-owner-evidence-list"
+        );
+        snapshot.evidence.forEach(function (entryEvidence) {
+          var current = snapshot.proofBinding
+            && entryEvidence.progressRevision ===
+              snapshot.proofBinding.progressRevision
+            && entryEvidence.effectiveScopeDigest ===
+              snapshot.proofBinding.effectiveScopeDigest;
+          list.appendChild(accountElement(
+            documentRef,
+            "li",
+            "",
+            (current ? "Current proof · " : "Older proof · ")
+              + accountWords(entryEvidence.viewport) + " · "
+              + entryEvidence.accessibleDescription + " · "
+              + (customBuildEvidenceDimensions(entryEvidence)
+                ? customBuildEvidenceDimensions(entryEvidence) + " · "
+                : "")
+              + accountDate(entryEvidence.capturedAt)
+          ));
+        });
+        section.appendChild(list);
+      }
+      if (snapshot.completion) return section;
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-evidence-form"
+      );
+      form.setAttribute("data-owner-completion-evidence-form", entry.job.jobId);
+      var file = assessmentField(
+        documentRef,
+        "completionEvidenceFile",
+        "JPEG, PNG, or WebP proof",
+        "",
+        { required: true, type: "file" }
+      );
+      var fileInput = file.querySelector("input");
+      fileInput.accept = "image/jpeg,image/png,image/webp";
+      var viewport = assessmentSelect(
+        documentRef,
+        "completionEvidenceViewport",
+        "Viewport",
+        "desktop",
+        [["desktop", "Desktop"], ["phone", "Phone"]]
+      );
+      var description = assessmentField(
+        documentRef,
+        "completionEvidenceDescription",
+        "Safe evidence description",
+        "",
+        {
+          required: true,
+          minimumLength: 10,
+          maximum: 500,
+          multiline: true,
+          placeholder:
+            "Describe the customer-visible screen and what it proves."
+        }
+      );
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        busy ? "Uploading proof…" : "Upload completion proof"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        file,
+        viewport,
+        description,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          "Upload only customer-visible proof. Never include passwords, codes, keys, tokens, private dashboards, or raw credentials."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var selectedFile = fileInput.files && fileInput.files[0];
+        submit.disabled = true;
+        submit.textContent = "Preparing proof…";
+        prepareCustomBuildCompletionEvidenceFile(selectedFile)
+          .then(function (prepared) {
+            if (typeof actions.evidence === "function") {
+              var data = new FormData(form);
+              return actions.evidence(entry, snapshot, {
+                accessibleDescription: text(
+                  data.get("completionEvidenceDescription")
+                ),
+                dataBase64: prepared.dataBase64,
+                mediaType: prepared.mediaType,
+                viewport: text(data.get("completionEvidenceViewport"))
+              });
+            }
+            return null;
+          })
+          .catch(function (error) {
+            if (typeof actions.localError === "function") {
+              actions.localError(entry, error);
+            }
+          })
+          .finally(function () {
+            if (submit.isConnected) {
+              submit.disabled = busy;
+              submit.textContent = "Upload completion proof";
+            }
+          });
+      });
+      section.appendChild(form);
+      return section;
+    }
+
+    function renderOwnerCompletionForm(
+      entry,
+      snapshot,
+      progressRead,
+      busy
+    ) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-completion"
+      );
+      section.setAttribute("data-owner-completion-control", entry.job.jobId);
+      if (snapshot.completion) {
+        var selected = new Map(snapshot.evidence.map(function (entryEvidence) {
+          return [entryEvidence.evidenceId, entryEvidence];
+        }));
+        var proof = accountElement(
+          documentRef,
+          "ul",
+          "customer-custom-build-owner-evidence-list"
+        );
+        snapshot.completion.evidenceIds.forEach(function (id) {
+          var evidence = selected.get(id);
+          if (evidence) {
+            proof.appendChild(accountElement(
+              documentRef,
+              "li",
+              "",
+              accountWords(evidence.viewport) + " · "
+                + evidence.accessibleDescription
+                + (customBuildEvidenceDimensions(evidence)
+                  ? " · " + customBuildEvidenceDimensions(evidence)
+                  : "")
+            ));
+          }
+        });
+        section.append(
+          accountElement(documentRef, "h6", "", "Completion prepared"),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-progress-copy",
+            snapshot.completion.customerSummary
+          ),
+          proof,
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Completion proof is immutable. It is not payment, delivery, launch, handoff, or the start of the 30-day workmanship-correction clock."
+          )
+        );
+        return section;
+      }
+      var progressReady = ownerCompletionProgressReady(progressRead);
+      var eligibleEvidence = currentOwnerCustomBuildCompletionEvidence(
+        snapshot,
+        progressRead
+      );
+      var hasActiveChange = snapshot.changeOrders.some(function (order) {
+        return ["issued", "accepted_payment_required"].includes(order.state);
+      });
+      var hasDesktop = eligibleEvidence.some(function (entryEvidence) {
+        return entryEvidence.viewport === "desktop";
+      });
+      var hasPhone = eligibleEvidence.some(function (entryEvidence) {
+        return entryEvidence.viewport === "phone";
+      });
+      var hasDistinctViewportProof = eligibleEvidence.some(function (desktop) {
+        return desktop.viewport === "desktop"
+          && eligibleEvidence.some(function (phone) {
+            return phone.viewport === "phone"
+              && phone.contentDigest !== desktop.contentDigest;
+          });
+      });
+      var eligible = progressReady
+        && !hasActiveChange
+        && hasDesktop
+        && hasPhone
+        && hasDistinctViewportProof
+        && eligibleEvidence.length >= 2;
+      section.appendChild(accountElement(
+        documentRef,
+        "h6",
+        "",
+        "Prepare immutable completion proof"
+      ));
+      if (!eligible) {
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          hasActiveChange
+            ? "Resolve the active added-work change before preparing completion."
+            : !progressReady
+              ? "Completion requires Checking the work, all four milestones complete, and no active customer request."
+              : "Upload current, distinct desktop and phone proof before preparing completion."
+        ));
+        return section;
+      }
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-custom-build-completion-form"
+      );
+      form.setAttribute("data-owner-completion-form", entry.job.jobId);
+      var evidenceChoices = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-custom-build-completion-evidence-choices"
+      );
+      evidenceChoices.appendChild(accountElement(
+        documentRef,
+        "legend",
+        "",
+        "Canonical customer proof"
+      ));
+      eligibleEvidence.forEach(function (entryEvidence) {
+        var label = accountElement(
+          documentRef,
+          "label",
+          "customer-assessment-authority"
+        );
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.name = "completionEvidenceId";
+        checkbox.value = entryEvidence.evidenceId;
+        label.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            accountWords(entryEvidence.viewport) + " · "
+              + entryEvidence.accessibleDescription
+          )
+        );
+        evidenceChoices.appendChild(label);
+      });
+      var summary = assessmentField(
+        documentRef,
+        "completionCustomerSummary",
+        "Customer completion summary",
+        "",
+        {
+          required: true,
+          minimumLength: 20,
+          maximum: 1000,
+          multiline: true,
+          placeholder:
+            "Summarize the approved work and the completed customer-visible checks."
+        }
+      );
+      var confirmations = accountElement(
+        documentRef,
+        "fieldset",
+        "customer-custom-build-completion-confirmations"
+      );
+      confirmations.appendChild(accountElement(
+        documentRef,
+        "legend",
+        "",
+        "Confirm every completed check"
+      ));
+      CUSTOM_BUILD_COMPLETION_CHECKS.forEach(function (entryCheck) {
+        var label = accountElement(
+          documentRef,
+          "label",
+          "customer-assessment-authority"
+        );
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.name = "completionCheck" + entryCheck[0];
+        checkbox.required = true;
+        label.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            entryCheck[1] + " passed"
+          )
+        );
+        confirmations.appendChild(label);
+      });
+      var submit = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy ? "Preparing completion…" : "Prepare exact completion proof"
+      );
+      submit.type = "submit";
+      submit.disabled = busy;
+      form.append(
+        evidenceChoices,
+        summary,
+        confirmations,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "This records proof only. It cannot claim payment, delivery, launch, handoff, job completion, or start the 30-day clock."
+        ),
+        submit
+      );
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (busy || !form.reportValidity()) return;
+        var selectedIds = Array.prototype.map.call(
+          form.querySelectorAll(
+            'input[name="completionEvidenceId"]:checked'
+          ),
+          function (field) { return field.value; }
+        ).sort();
+        var selectedEvidence = eligibleEvidence.filter(function (entryEvidence) {
+          return selectedIds.includes(entryEvidence.evidenceId);
+        });
+        if (
+          selectedIds.length < 2
+          || selectedIds.length > 12
+          || !["desktop", "phone"].every(function (viewportValue) {
+            return selectedEvidence.some(function (entryEvidence) {
+              return entryEvidence.viewport === viewportValue;
+            });
+          })
+          || selectedEvidence.some(function (desktop) {
+            return desktop.viewport === "desktop"
+              && selectedEvidence.some(function (phone) {
+                return phone.viewport === "phone"
+                  && phone.contentDigest === desktop.contentDigest;
+              });
+          })
+        ) return;
+        if (typeof actions.complete === "function") {
+          var data = new FormData(form);
+          actions.complete(entry, snapshot, {
+            checks: {
+              accessibilityBasics: true,
+              contactActions: true,
+              desktop: true,
+              links: true,
+              phone: true,
+              scope: true
+            },
+            customerSummary: text(data.get("completionCustomerSummary")),
+            evidenceIds: selectedIds
+          });
+        }
+      });
+      section.appendChild(form);
+      return section;
+    }
+
+    function renderJobChangeCompletion(
+      entry,
+      read,
+      progressRead,
+      globallyBusy
+    ) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-change-completion"
+      );
+      section.setAttribute("data-owner-job-change-completion", entry.job.jobId);
+      var changeStatus = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-status customer-custom-build-change-status"
+      );
+      changeStatus.setAttribute("role", "status");
+      changeStatus.setAttribute("aria-live", "polite");
+      var refreshChange = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Refresh added work and completion"
+      );
+      refreshChange.type = "button";
+      refreshChange.setAttribute("data-owner-change-completion-refresh", "");
+      refreshChange.disabled = Boolean(globallyBusy)
+        || Boolean(read && (read.phase === "loading" || read.busy));
+      refreshChange.addEventListener("click", function () {
+        if (typeof actions.refreshChangeCompletion === "function") {
+          actions.refreshChangeCompletion(entry);
+        }
+      });
+      section.append(
+        accountElement(documentRef, "h5", "", "Added work and completion"),
+        changeStatus,
+        refreshChange
+      );
+      var snapshot = read && verifiedOwnerCustomBuildChangeCompletion(
+        read.snapshot,
+        entry
+      );
+      if (!snapshot) {
+        changeStatus.textContent = read && read.phase === "error"
+          ? read.error
+            || "Added work and completion could not be verified."
+          : "Loading this paid project's added work and completion…";
+        return section;
+      }
+      var busy = Boolean(globallyBusy) || Boolean(read.busy);
+      changeStatus.textContent = read.phase === "loading"
+        ? "Refreshing this project. Last verified change and completion data remains below."
+        : read.busy
+          ? "Saving one exact change or completion command…"
+          : {
+              building: "No added-work decision is waiting.",
+              change_order_review: "One added-work change is awaiting review.",
+              change_order_payment_required:
+                "One accepted change is awaiting confirmed payment.",
+              ready_for_final_payment:
+                "Completion proof is ready for final payment.",
+              ready_for_delivery: "Completion proof is ready for delivery."
+            }[snapshot.state];
+      if (read.error) {
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-owner-quote-form-error",
+          read.error
+        ));
+      }
+      var active = snapshot.changeOrders.find(function (order) {
+        return ["issued", "accepted_payment_required"].includes(order.state);
+      });
+      if (active) {
+        section.appendChild(renderOwnerChangeOrder(entry, active, busy));
+      } else if (!snapshot.completion) {
+        section.appendChild(renderOwnerChangeIssue(entry, snapshot, busy));
+      }
+      snapshot.changeOrders.filter(function (order) {
+        return order.state === "expired";
+      }).forEach(function (order) {
+        var expired = accountElement(
+          documentRef,
+          "section",
+          "customer-custom-build-owner-change customer-custom-build-change-expired"
+        );
+        expired.setAttribute("data-owner-expired-change-order", "");
+        expired.append(
+          accountElement(
+            documentRef,
+            "h6",
+            "",
+            "Added-work change " + order.changeNumber + " · Expired"
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-progress-copy",
+            order.addedScope
+          ),
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "The review window ended " + accountDate(order.expiresAt)
+              + (order.expiredAt
+                ? " and expiration was recorded "
+                  + accountDate(order.expiredAt)
+                : "")
+              + ". No added work became effective, and the base scope remains unchanged."
+          )
+        );
+        section.appendChild(expired);
+      });
+      section.appendChild(renderOwnerCompletionEvidence(
+        entry,
+        snapshot,
+        busy
+      ));
+      section.appendChild(renderOwnerCompletionForm(
+        entry,
+        snapshot,
+        progressRead,
+        busy
+      ));
+      return section;
+    }
+
+    function renderJob(
+      entry,
+      progressRead,
+      changeCompletionRead,
+      globallyBusy
+    ) {
       var card = accountElement(
         documentRef,
         "details",
@@ -6698,7 +8532,13 @@
       card.append(
         sourceFacts,
         customBuildJobFacts(documentRef, entry.job, { owner: true }),
-        renderJobProgress(entry, progressRead, globallyBusy)
+        renderJobProgress(entry, progressRead, globallyBusy),
+        renderJobChangeCompletion(
+          entry,
+          changeCompletionRead,
+          progressRead,
+          globallyBusy
+        )
       );
       body.appendChild(card);
     }
@@ -6751,6 +8591,8 @@
             entry,
             state.progressByJob
               && state.progressByJob[entry.job.jobId],
+            state.changeCompletionByJob
+              && state.changeCompletionByJob[entry.job.jobId],
             interfaceBusy
           );
         });
@@ -9644,6 +11486,15 @@
       command: "",
       error: ""
     };
+    var customBuildChangeCompletionReadSequence = 0;
+    var customBuildChangeCompletionRead = {
+      accountId: "",
+      projectId: "",
+      phase: "idle",
+      snapshot: null,
+      command: "",
+      error: ""
+    };
     var ownerCustomBuildReadSequence = 0;
     var ownerCustomBuildRead = {
       accountId: "",
@@ -9659,6 +11510,7 @@
       revealed: false,
       jobs: null,
       progressByJob: {},
+      changeCompletionByJob: {},
       busyKey: "",
       pageNumber: 0,
       loadingMore: false,
@@ -10081,6 +11933,52 @@
               snapshot,
               input
             );
+          },
+          refreshChangeCompletion: function (entry) {
+            return requestOwnerCustomBuildChangeCompletion(entry);
+          },
+          issueChange: function (entry, snapshot, input) {
+            return runOwnerCustomBuildChangeCompletionCommand(
+              "issue-change",
+              entry,
+              snapshot,
+              input
+            );
+          },
+          voidChange: function (entry, order, input) {
+            return runOwnerCustomBuildChangeCompletionCommand(
+              "void-change",
+              entry,
+              null,
+              Object.assign({}, input, { order: order })
+            );
+          },
+          expireChange: function (entry, order) {
+            return runOwnerCustomBuildChangeCompletionCommand(
+              "expire-change",
+              entry,
+              null,
+              { order: order }
+            );
+          },
+          evidence: function (entry, snapshot, input) {
+            return runOwnerCustomBuildChangeCompletionCommand(
+              "evidence",
+              entry,
+              snapshot,
+              input
+            );
+          },
+          complete: function (entry, snapshot, input) {
+            return runOwnerCustomBuildChangeCompletionCommand(
+              "complete",
+              entry,
+              snapshot,
+              input
+            );
+          },
+          localError: function (entry, error) {
+            setOwnerCustomBuildChangeCompletionError(entry, error);
           }
         }
       );
@@ -10114,6 +12012,35 @@
             return runCustomerCustomBuildProgressResponse(
               snapshot,
               input
+            );
+          }
+        }
+      );
+    var customerCustomBuildChangeCompletionPanel =
+      createCustomerCustomBuildChangeCompletionPanel(
+        documentRef,
+        {
+          refresh: function () {
+            return requestCustomerCustomBuildChangeCompletion(
+              idOf(lastState && lastState.project)
+            );
+          },
+          accept: function (order) {
+            return runCustomerCustomBuildChangeDecision(
+              "accept",
+              order
+            );
+          },
+          decline: function (order) {
+            return runCustomerCustomBuildChangeDecision(
+              "decline",
+              order
+            );
+          },
+          evidence: function (entry, fallbackUrl) {
+            return openCustomerCustomBuildCompletionEvidence(
+              entry,
+              fallbackUrl
             );
           }
         }
@@ -10188,6 +12115,10 @@
         customerCustomBuildProgressPanel.element,
         alakazamAnchor
       );
+      alakazamAnchor.parentNode.insertBefore(
+        customerCustomBuildChangeCompletionPanel.element,
+        alakazamAnchor
+      );
     }
     if (
       alakazamAnchor
@@ -10223,6 +12154,9 @@
         );
         controlShell.appendChild(
           customerCustomBuildProgressPanel.element
+        );
+        controlShell.appendChild(
+          customerCustomBuildChangeCompletionPanel.element
         );
         controlShell.appendChild(
           alakazamPanel.element
@@ -11095,6 +13029,130 @@
       );
     }
 
+    function setOwnerCustomBuildChangeCompletion(jobId, value) {
+      var next = Object.assign(
+        {},
+        ownerCustomBuildWorkRead.changeCompletionByJob || {}
+      );
+      next[jobId] = value;
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { changeCompletionByJob: next }
+      );
+      renderOwnerCustomBuildWorkPanel();
+    }
+
+    function setOwnerCustomBuildChangeCompletionError(entry, error) {
+      if (!ownerCustomBuildProgressEntryIsCurrent(entry)) return;
+      var jobId = entry.job.jobId;
+      var read = ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      setOwnerCustomBuildChangeCompletion(jobId, {
+        phase: read && read.snapshot ? "ready" : "error",
+        snapshot: read && read.snapshot || null,
+        busy: "",
+        error: explain(
+          error,
+          "That completion proof could not be prepared safely."
+        )
+      });
+    }
+
+    function requestOwnerCustomBuildChangeCompletion(entry) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      if (
+        !accountId
+        || !jobId
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      var retainedRead = ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      var retained = retainedRead
+        && verifiedOwnerCustomBuildChangeCompletion(
+          retainedRead.snapshot,
+          entry
+        );
+      if (
+        typeof client.getOwnerCustomBuildChangeCompletion !== "function"
+      ) {
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "error",
+          snapshot: retained,
+          busy: "",
+          error:
+            "Added-work and completion controls are unavailable in this build."
+        });
+        return Promise.resolve(null);
+      }
+      setOwnerCustomBuildChangeCompletion(jobId, {
+        phase: "loading",
+        snapshot: retained,
+        busy: "",
+        error: ""
+      });
+      return client.getOwnerCustomBuildChangeCompletion(
+        jobId,
+        entry.organizationId
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var snapshot = verifiedOwnerCustomBuildChangeCompletion(
+          result,
+          entry
+        );
+        if (!snapshot) {
+          throw new Error(
+            "The paid project's added-work and completion response could not be verified."
+          );
+        }
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "ready",
+          snapshot: snapshot,
+          busy: "",
+          error: ""
+        });
+        return snapshot;
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var held = text(error && error.code) ===
+          "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+          || Number(error && error.status) === 503;
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "error",
+          snapshot: retained,
+          busy: "",
+          error: held
+            ? "Added-work and completion tools are held or unavailable. Nothing changed and no action is available."
+            : explain(
+                error,
+                "Added work and completion could not be loaded. The last verified information remains available."
+              )
+        });
+        return null;
+      });
+    }
+
+    function requestOwnerCustomBuildChangeCompletionBatch(entries) {
+      var pending = entries.slice();
+      function next() {
+        var entry = pending.shift();
+        if (!entry) return Promise.resolve(null);
+        return requestOwnerCustomBuildChangeCompletion(entry).then(next);
+      }
+      return Promise.all(
+        entries.slice(0, 4).map(function () { return next(); })
+      );
+    }
+
     function sameCustomBuildMilestones(value, expected) {
       return ["content", "quality", "responsive", "structure"]
         .every(function (key) {
@@ -11313,6 +13371,278 @@
       });
     }
 
+    function runOwnerCustomBuildChangeCompletionCommand(
+      operation,
+      entry,
+      snapshotInput,
+      input
+    ) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      var read = jobId
+        && ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      var current = read && verifiedOwnerCustomBuildChangeCompletion(
+        read.snapshot,
+        entry
+      );
+      var selected = snapshotInput
+        && verifiedOwnerCustomBuildChangeCompletion(snapshotInput, entry);
+      if (
+        !accountId
+        || !jobId
+        || !current
+        || Boolean(read.busy)
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        || (snapshotInput && selected !== current)
+      ) return Promise.resolve(null);
+      var source = input || {};
+      var subjectId = jobId;
+      var body;
+      var invoke;
+      var order = null;
+      if (operation === "issue-change") {
+        if (
+          current.completion
+          || current.changeOrders.some(function (candidate) {
+            return ["issued", "accepted_payment_required"]
+              .includes(candidate.state);
+          })
+        ) return Promise.resolve(null);
+        body = {
+          addedScope: source.addedScope,
+          expiresAt: source.expiresAt,
+          organizationId: entry.organizationId,
+          targetCompletionDate: source.targetCompletionDate,
+          unitCount: source.unitCount
+        };
+        invoke = function (commandId) {
+          return client.issueOwnerCustomBuildChangeOrder(
+            jobId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      } else if (
+        operation === "void-change"
+        || operation === "expire-change"
+      ) {
+        var suppliedOrder = source.order;
+        order = suppliedOrder && current.changeOrders.find(
+          function (candidate) {
+            return candidate.changeOrderId === suppliedOrder.changeOrderId
+              && candidate.quoteDigest === suppliedOrder.quoteDigest;
+          }
+        );
+        if (
+          !order
+          || !["issued", "accepted_payment_required"].includes(order.state)
+          || (
+            operation === "expire-change"
+            && (
+              order.state !== "issued"
+              || Date.parse(order.expiresAt) > Date.now()
+            )
+          )
+        ) return Promise.resolve(null);
+        subjectId = order.changeOrderId;
+        body = {
+          expectedQuoteDigest: order.quoteDigest,
+          organizationId: entry.organizationId
+        };
+        if (operation === "void-change") body.reason = source.reason;
+        invoke = operation === "expire-change"
+          ? function (commandId) {
+              return client.expireOwnerCustomBuildChangeOrder(
+                jobId,
+                order.changeOrderId,
+                Object.assign({}, body, { commandId: commandId })
+              );
+            }
+          : function (commandId) {
+              return client.voidOwnerCustomBuildChangeOrder(
+                jobId,
+                order.changeOrderId,
+                Object.assign({}, body, { commandId: commandId })
+              );
+            };
+      } else if (operation === "evidence") {
+        if (current.completion) return Promise.resolve(null);
+        body = {
+          accessibleDescription: source.accessibleDescription,
+          dataBase64: source.dataBase64,
+          mediaType: source.mediaType,
+          organizationId: entry.organizationId,
+          viewport: source.viewport
+        };
+        invoke = function (commandId) {
+          return client.uploadOwnerCustomBuildCompletionEvidence(
+            jobId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      } else if (operation === "complete") {
+        if (current.completion) return Promise.resolve(null);
+        body = {
+          checks: source.checks,
+          customerSummary: source.customerSummary,
+          evidenceIds: source.evidenceIds,
+          organizationId: entry.organizationId
+        };
+        invoke = function (commandId) {
+          return client.recordOwnerCustomBuildCompletion(
+            jobId,
+            Object.assign({}, body, { commandId: commandId })
+          );
+        };
+      } else {
+        return Promise.resolve(null);
+      }
+      var requiredMethod = {
+        "issue-change": "issueOwnerCustomBuildChangeOrder",
+        "void-change": "voidOwnerCustomBuildChangeOrder",
+        "expire-change": "expireOwnerCustomBuildChangeOrder",
+        evidence: "uploadOwnerCustomBuildCompletionEvidence",
+        complete: "recordOwnerCustomBuildCompletion"
+      }[operation];
+      if (typeof client[requiredMethod] !== "function") {
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "ready",
+          snapshot: current,
+          busy: "",
+          error: operation === "expire-change"
+            ? "The bounded Expire action is unavailable in this build. Nothing changed."
+            : "That added-work or completion control is unavailable in this build. Nothing changed."
+        });
+        return Promise.resolve(null);
+      }
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          operation,
+          subjectId,
+          body
+        );
+      } catch (error) {
+        setOwnerCustomBuildChangeCompletionError(entry, error);
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { busyKey: jobId + ":" + operation }
+      );
+      setOwnerCustomBuildChangeCompletion(jobId, {
+        phase: "ready",
+        snapshot: current,
+        busy: operation,
+        error: ""
+      });
+      return Promise.resolve().then(function () {
+        return invoke(commandId);
+      }).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var settled = verifiedOwnerCustomBuildChangeCompletion(
+          result,
+          entry
+        );
+        if (!settled) {
+          throw new Error(
+            "The saved added-work or completion response could not be verified."
+          );
+        }
+        if (operation === "issue-change") {
+          var issued = settled.changeOrders.find(function (candidate) {
+            return candidate.state === "issued";
+          });
+          if (
+            !issued
+            || issued.addedScope !== body.addedScope
+            || issued.pricing.unitCount !== body.unitCount
+            || issued.pricing.subtotalMinor !==
+              body.unitCount * CUSTOM_BUILD_CHANGE_UNIT_MINOR
+            || issued.targetCompletionDate !== body.targetCompletionDate
+            || issued.expiresAt !== body.expiresAt
+          ) throw new Error("The issued added-work change did not match.");
+        } else if (
+          operation === "void-change"
+          || operation === "expire-change"
+        ) {
+          var closed = settled.changeOrders.find(function (candidate) {
+            return candidate.changeOrderId === order.changeOrderId;
+          });
+          var expectedState = operation === "expire-change"
+            ? "expired"
+            : "voided";
+          if (
+            !closed
+            || closed.state !== expectedState
+            || closed.quoteDigest !== order.quoteDigest
+          ) throw new Error("The exact change was not confirmed closed.");
+        } else if (operation === "evidence") {
+          var added = settled.evidence.find(function (candidate) {
+            return candidate.accessibleDescription ===
+                body.accessibleDescription
+              && candidate.mediaType === body.mediaType
+              && candidate.viewport === body.viewport;
+          });
+          if (!added) {
+            throw new Error("The uploaded completion proof did not match.");
+          }
+        } else if (
+          !settled.completion
+          || settled.completion.customerSummary !== body.customerSummary
+          || JSON.stringify(settled.completion.evidenceIds) !==
+            JSON.stringify(body.evidenceIds)
+        ) {
+          throw new Error("The exact completion proof did not match.");
+        }
+        clearCustomBuildAttempt(commandId);
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "ready",
+          snapshot: settled,
+          busy: "",
+          error: ""
+        });
+        return settled;
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        var held = text(error && error.code) ===
+          "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+          || Number(error && error.status) === 503;
+        setOwnerCustomBuildChangeCompletion(jobId, {
+          phase: "ready",
+          snapshot: current,
+          busy: "",
+          error: held
+            ? "Added-work and completion tools are held or unavailable. Nothing changed and no action was taken."
+            : explain(
+                error,
+                "This project may have changed. Refresh it before retrying the same exact command."
+              )
+        });
+        return null;
+      });
+    }
+
     function requestOwnerCustomBuildJobs(accountId, cursorValue) {
       var selectedAccountId = text(accountId);
       var selectedCursor = text(cursorValue);
@@ -11344,6 +13674,7 @@
           revealed: false,
           jobs: null,
           progressByJob: {},
+          changeCompletionByJob: {},
           busyKey: "",
           pageNumber: 0,
           loadingMore: false,
@@ -11358,6 +13689,8 @@
         revealed: Boolean(retainedJobs),
         jobs: retainedJobs,
         progressByJob: ownerCustomBuildWorkRead.progressByJob || {},
+        changeCompletionByJob:
+          ownerCustomBuildWorkRead.changeCompletionByJob || {},
         busyKey: "",
         pageNumber: retainedPageNumber,
         loadingMore: continuing,
@@ -11378,8 +13711,15 @@
             );
           }
           var progressByJob = {};
+          var changeCompletionByJob = {};
           result.jobs.forEach(function (entry) {
             progressByJob[entry.job.jobId] = {
+              phase: "loading",
+              snapshot: null,
+              busy: "",
+              error: ""
+            };
+            changeCompletionByJob[entry.job.jobId] = {
               phase: "loading",
               snapshot: null,
               busy: "",
@@ -11392,15 +13732,17 @@
             revealed: true,
             jobs: result,
             progressByJob: progressByJob,
+            changeCompletionByJob: changeCompletionByJob,
             busyKey: "",
             pageNumber: continuing ? retainedPageNumber + 1 : 1,
             loadingMore: false,
             error: ""
           };
           renderOwnerCustomBuildWorkPanel();
-          return requestOwnerCustomBuildProgressBatch(
-            result.jobs
-          ).then(function () { return result; });
+          return Promise.all([
+            requestOwnerCustomBuildProgressBatch(result.jobs),
+            requestOwnerCustomBuildChangeCompletionBatch(result.jobs)
+          ]).then(function () { return result; });
         })
         .catch(function (error) {
           if (!ownerCustomBuildWorkReadIsCurrent(
@@ -11417,6 +13759,9 @@
             progressByJob: unavailable
               ? {}
               : ownerCustomBuildWorkRead.progressByJob || {},
+            changeCompletionByJob: unavailable
+              ? {}
+              : ownerCustomBuildWorkRead.changeCompletionByJob || {},
             busyKey: "",
             pageNumber: unavailable ? 0 : retainedPageNumber,
             loadingMore: false,
@@ -11448,6 +13793,7 @@
             revealed: false,
             jobs: null,
             progressByJob: {},
+            changeCompletionByJob: {},
             busyKey: "",
             pageNumber: 0,
             loadingMore: false,
@@ -12138,6 +14484,376 @@
         return;
       }
       renderCustomerCustomBuildProgressPanel();
+    }
+
+    function renderCustomerCustomBuildChangeCompletionPanel() {
+      customerCustomBuildChangeCompletionPanel.render(
+        customBuildChangeCompletionRead
+      );
+    }
+
+    function customerCustomBuildChangeCompletionReadIsCurrent(
+      sequence,
+      projectId
+    ) {
+      return sequence === customBuildChangeCompletionReadSequence
+        && customBuildChangeCompletionRead.projectId === projectId
+        && customBuildChangeCompletionRead.accountId === text(
+          lastState.account && lastState.account.id
+        )
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestCustomerCustomBuildChangeCompletion(projectId) {
+      var selectedProjectId = text(projectId);
+      var selectedAccountId = text(
+        lastState.account && lastState.account.id
+      );
+      if (!selectedProjectId || !selectedAccountId) {
+        return Promise.resolve(null);
+      }
+      var sequence = ++customBuildChangeCompletionReadSequence;
+      var retained = customBuildChangeCompletionRead.accountId ===
+          selectedAccountId
+          && customBuildChangeCompletionRead.projectId === selectedProjectId
+        ? verifiedCustomerCustomBuildChangeCompletion(
+            customBuildChangeCompletionRead.snapshot
+          )
+        : null;
+      customBuildChangeCompletionRead = {
+        accountId: selectedAccountId,
+        projectId: selectedProjectId,
+        phase: "loading",
+        snapshot: retained,
+        command: "",
+        error: ""
+      };
+      renderCustomerCustomBuildChangeCompletionPanel();
+      if (
+        typeof client.getCustomServicesCustomBuildChangeCompletion !==
+          "function"
+      ) {
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          {
+            phase: "error",
+            error:
+              "Added-work and completion tools are unavailable in this build. Nothing changed."
+          }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return Promise.resolve(null);
+      }
+      return client.getCustomServicesCustomBuildChangeCompletion(
+        selectedProjectId
+      ).then(function (result) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        var snapshot = verifiedCustomerCustomBuildChangeCompletion(result);
+        if (!snapshot) {
+          throw new Error(
+            "The added-work and completion response could not be verified."
+          );
+        }
+        customBuildChangeCompletionRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: "ready",
+          snapshot: snapshot,
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return snapshot;
+      }).catch(function (error) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        var held = text(error && error.code) ===
+          "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+          || Number(error && error.status) === 503;
+        customBuildChangeCompletionRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: "error",
+          snapshot: retained,
+          command: "",
+          error: held
+            ? "Added-work and completion tools are held or unavailable. Nothing changed and no action is available."
+            : explain(
+                error,
+                "Added work and completion could not be refreshed. The last verified information remains below."
+              )
+        };
+        renderCustomerCustomBuildChangeCompletionPanel();
+        customerCustomBuildChangeCompletionPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function runCustomerCustomBuildChangeDecision(operation, orderInput) {
+      var projectId = customBuildChangeCompletionRead.projectId;
+      var accountId = customBuildChangeCompletionRead.accountId;
+      var current = verifiedCustomerCustomBuildChangeCompletion(
+        customBuildChangeCompletionRead.snapshot
+      );
+      var order = current && current.changeOrders.active;
+      if (
+        !projectId
+        || !accountId
+        || customBuildChangeCompletionRead.command
+        || !current
+        || !order
+        || order !== orderInput
+        || order.state !== "issued"
+        || (operation === "accept" && Date.parse(order.expiresAt) <= Date.now())
+      ) return Promise.resolve(null);
+      var method = operation === "accept"
+        ? "acceptCustomServicesCustomBuildChangeOrder"
+        : "declineCustomServicesCustomBuildChangeOrder";
+      if (typeof client[method] !== "function") {
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          {
+            error: "That exact decision is unavailable in this build. Nothing changed."
+          }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return Promise.resolve(null);
+      }
+      var body = operation === "accept"
+        ? {
+            acceptanceStatement:
+              "accepted_exact_change_order_and_payment_requirement",
+            acceptedDisclosureDigest: order.disclosureDigest,
+            acceptedQuoteDigest: order.quoteDigest
+          }
+        : {
+            declineStatement:
+              "declined_exact_custom_build_change_quote",
+            declinedDisclosureDigest: order.disclosureDigest,
+            declinedQuoteDigest: order.quoteDigest
+          };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "change-" + operation,
+          order.changeOrderId,
+          body
+        );
+      } catch (error) {
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          { error: explain(error, "That decision could not start safely.") }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildChangeCompletionReadSequence;
+      customBuildChangeCompletionRead = Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        { command: operation, error: "" }
+      );
+      renderCustomerCustomBuildChangeCompletionPanel();
+      return client[method](
+        projectId,
+        order.changeOrderId,
+        Object.assign({}, body, { commandId: commandId })
+      ).then(function (result) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var settled = verifiedCustomerCustomBuildChangeCompletion(result);
+        if (!settled) {
+          throw new Error("The saved exact decision could not be verified.");
+        }
+        if (operation === "accept") {
+          if (
+            settled.state !== "change_order_payment_required"
+            || !settled.changeOrders.active
+            || settled.changeOrders.active.changeOrderId !== order.changeOrderId
+            || settled.changeOrders.active.quoteDigest !== order.quoteDigest
+            || settled.changeOrders.active.state !==
+              "accepted_payment_required"
+          ) throw new Error("The exact acceptance was not confirmed.");
+        } else {
+          var declined = settled.changeOrders.history.find(function (entry) {
+            return entry.changeOrderId === order.changeOrderId;
+          });
+          if (!declined || declined.state !== "declined") {
+            throw new Error("The exact decline was not confirmed.");
+          }
+        }
+        clearCustomBuildAttempt(commandId);
+        customBuildChangeCompletionRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: settled,
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildChangeCompletionPanel();
+        customerCustomBuildChangeCompletionPanel.focusStatus();
+        return settled;
+      }).catch(function (error) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var held = text(error && error.code) ===
+          "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+          || Number(error && error.status) === 503;
+        customBuildChangeCompletionRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: current,
+          command: "",
+          error: held
+            ? "Added-work decisions are held or unavailable. Nothing changed and no action was taken."
+            : explain(
+                error,
+                "This change may have been updated. Refresh before retrying the same exact decision."
+              )
+        };
+        renderCustomerCustomBuildChangeCompletionPanel();
+        customerCustomBuildChangeCompletionPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function openCustomerCustomBuildCompletionEvidence(
+      evidenceInput,
+      fallbackUrl
+    ) {
+      var projectId = customBuildChangeCompletionRead.projectId;
+      var current = verifiedCustomerCustomBuildChangeCompletion(
+        customBuildChangeCompletionRead.snapshot
+      );
+      var evidence = current && current.completion
+        && current.completion.evidence.find(function (entry) {
+          return entry === evidenceInput;
+        });
+      if (
+        !projectId
+        || !evidence
+        || fallbackUrl !== customerCustomBuildCompletionEvidenceUrl(
+          projectId,
+          evidence.evidenceId
+        )
+        || typeof client.getCustomServicesCustomBuildCompletionEvidence !==
+          "function"
+      ) return Promise.resolve(null);
+      var sequence = customBuildChangeCompletionReadSequence;
+      customBuildChangeCompletionRead = Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        { command: "evidence", error: "" }
+      );
+      renderCustomerCustomBuildChangeCompletionPanel();
+      return client.getCustomServicesCustomBuildCompletionEvidence(
+        projectId,
+        evidence.evidenceId
+      ).then(function (result) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        if (
+          !result
+          || !result.blob
+          || result.mediaType !== evidence.mediaType
+          || result.byteCount !== evidence.byteCount
+          || result.contentDigest !== evidence.contentDigest
+        ) throw new Error("The private completion proof did not match.");
+        var URLRef = windowRef.URL;
+        if (!URLRef || typeof URLRef.createObjectURL !== "function") {
+          throw new Error("This browser cannot open private completion proof.");
+        }
+        var objectUrl = URLRef.createObjectURL(result.blob);
+        var link = documentRef.createElement("a");
+        link.href = objectUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.hidden = true;
+        documentRef.body.appendChild(link);
+        link.click();
+        link.remove();
+        windowRef.setTimeout(function () {
+          URLRef.revokeObjectURL(objectUrl);
+        }, 60000);
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          { command: "", error: "" }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return result;
+      }).catch(function (error) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var held = text(error && error.code) ===
+          "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+          || Number(error && error.status) === 503;
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          {
+            command: "",
+            error: held
+              ? "Private completion proof is held or unavailable. Nothing changed."
+              : explain(
+                  error,
+                  "Private completion proof could not be opened safely."
+                )
+          }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return null;
+      });
+    }
+
+    function renderCustomerCustomBuildChangeCompletionAccount(state) {
+      var accountId = text(state.account && state.account.id);
+      var projectId = accountId ? idOf(state.project) : "";
+      if (!projectId) {
+        if (
+          customBuildChangeCompletionRead.projectId
+          || customBuildChangeCompletionRead.accountId
+        ) {
+          customBuildChangeCompletionReadSequence += 1;
+          customBuildChangeCompletionRead = {
+            accountId: "",
+            projectId: "",
+            phase: "idle",
+            snapshot: null,
+            command: "",
+            error: ""
+          };
+        }
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return;
+      }
+      if (
+        customBuildChangeCompletionRead.accountId !== accountId
+        || customBuildChangeCompletionRead.projectId !== projectId
+      ) {
+        requestCustomerCustomBuildChangeCompletion(projectId);
+        return;
+      }
+      renderCustomerCustomBuildChangeCompletionPanel();
     }
 
     function renderAssessmentPanel() {
@@ -13939,6 +16655,7 @@
       renderAssessmentAccount(state);
       renderCustomerCustomBuildAccount(state);
       renderCustomerCustomBuildProgressAccount(state);
+      renderCustomerCustomBuildChangeCompletionAccount(state);
       renderAlakazamAccount(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
@@ -14550,6 +17267,10 @@
     boot: boot,
     customBuildPublicEstimate:
       customBuildPublicEstimate,
+    currentOwnerCustomBuildCompletionEvidence:
+      currentOwnerCustomBuildCompletionEvidence,
+    customerCustomBuildCompletionEvidenceUrl:
+      customerCustomBuildCompletionEvidenceUrl,
     downloadCheckoutReturnFromLocation:
       downloadCheckoutReturnFromLocation,
     downloadEntitlement:
@@ -14566,6 +17287,8 @@
       ownerAssessmentEvidenceUrl,
     prepareAssessmentEvidenceFile:
       prepareAssessmentEvidenceFile,
+    prepareCustomBuildCompletionEvidenceFile:
+      prepareCustomBuildCompletionEvidenceFile,
     recoveryOutcome: recoveryOutcome,
     recoveryTokenFromLocation:
       recoveryTokenFromLocation,
@@ -14601,6 +17324,10 @@
       verifiedCustomerCustomBuildCheckout,
     verifiedCustomBuildProgress:
       verifiedCustomBuildProgress,
+    verifiedCustomerCustomBuildChangeCompletion:
+      verifiedCustomerCustomBuildChangeCompletion,
+    verifiedOwnerCustomBuildChangeCompletion:
+      verifiedOwnerCustomBuildChangeCompletion,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:

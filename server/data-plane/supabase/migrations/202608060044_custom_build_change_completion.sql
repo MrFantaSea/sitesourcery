@@ -224,6 +224,7 @@ create table ss.service_custom_build_change_orders (
       'accepted_payment_required',
       'effective',
       'declined',
+      'expired',
       'voided'
     )
   ),
@@ -409,6 +410,36 @@ create table ss.service_custom_build_change_voids (
   check (created_at = voided_at)
 );
 
+-- Expiration is an immutable fact, not an inferred UI label. Any currently
+-- authorized quote author may seal an untouched issued quote after its exact
+-- deadline so one stale quote cannot block the paid job forever.
+create table ss.service_custom_build_change_expirations (
+  id uuid primary key default extensions.gen_random_uuid(),
+  organization_id uuid not null,
+  job_id uuid not null,
+  change_order_id uuid not null,
+  change_number integer not null check (change_number > 0),
+  expired_by_operator_user_id uuid not null
+    references ss.operator_profiles(user_id),
+  command_id text not null check (
+    char_length(command_id) between 8 and 200
+    and command_id !~ '[[:cntrl:]]'
+  ),
+  request_digest ss.sha256_hex not null,
+  expired_quote_digest ss.sha256_hex not null,
+  expired_disclosure_digest ss.sha256_hex not null,
+  expired_at timestamptz not null,
+  created_at timestamptz not null default clock_timestamp(),
+  foreign key (organization_id, job_id, change_order_id)
+    references ss.service_custom_build_change_orders(
+      organization_id, job_id, id
+    ),
+  unique (organization_id, id),
+  unique (change_order_id),
+  unique (expired_by_operator_user_id, job_id, command_id),
+  check (created_at = expired_at)
+);
+
 create table ss.service_custom_build_completion_evidence (
   id uuid primary key default extensions.gen_random_uuid(),
   organization_id uuid not null,
@@ -418,6 +449,14 @@ create table ss.service_custom_build_completion_evidence (
   job_id uuid not null,
   document_id uuid not null,
   viewport text not null check (viewport in ('desktop', 'phone')),
+  progress_revision bigint not null check (progress_revision > 0),
+  effective_scope_digest ss.sha256_hex not null,
+  content_digest ss.sha256_hex not null,
+  image_width integer not null check (image_width between 240 and 2048),
+  image_height integer not null check (image_height between 1 and 5000),
+  validator_version text not null check (
+    validator_version = 'service-image-evidence/v1'
+  ),
   accessible_description text not null check (
     char_length(accessible_description) between 10 and 500
     and ss.service_text_excludes_credentials(accessible_description)
@@ -443,6 +482,11 @@ create table ss.service_custom_build_completion_evidence (
   unique (organization_id, job_id, id),
   unique (document_id),
   unique (created_by_operator_user_id, job_id, command_id),
+  check (
+    (viewport = 'desktop' and image_width between 768 and 2048)
+    or (viewport = 'phone' and image_width between 240 and 767)
+  ),
+  check (image_width::bigint * image_height::bigint <= 10240000::bigint),
   check (created_at >= captured_at)
 );
 
@@ -523,6 +567,51 @@ create table ss.service_custom_build_completion_packages (
   ),
   check (created_at = prepared_at)
 );
+
+-- Completion is a terminal work-state boundary. The same advisory lock used
+-- by completion serializes every later progress/request attempt, including a
+-- customer response racing the package insert.
+create function ss.guard_service_custom_build_after_completion()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, ss
+as $$
+declare
+  selected_job_id uuid := new.job_id;
+  selected_organization_id uuid := new.organization_id;
+begin
+  if tg_table_name = 'service_access_requests' then
+    if
+      selected_job_id is null
+      or new.reason_code <> 'custom_build_execution'
+    then
+      return new;
+    end if;
+  end if;
+
+  if selected_job_id is null or selected_organization_id is null then
+    return new;
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'ss-custom-build-h1m:' || selected_job_id::text,
+      0
+    )
+  );
+
+  if exists (
+    select 1
+    from ss.service_custom_build_completion_packages package
+    where package.organization_id = selected_organization_id
+      and package.job_id = selected_job_id
+  ) then
+    raise exception 'Custom build work is closed by its completion package'
+      using errcode = '23514';
+  end if;
+  return new;
+end
+$$;
 
 create function ss.service_custom_build_effective_scope_snapshot(
   selected_organization_id uuid,
@@ -680,7 +769,7 @@ begin
   where job.organization_id = ss.current_service_actor_org_id()
     and job.id = new.job_id;
 
-  if not found
+  if selected_job.id is null
     or selected_job.state <> 'open'
     or exists (
       select 1
@@ -870,6 +959,24 @@ begin
     where decline.change_order_id = old.id
       and decline.declined_quote_digest = old.quote_digest
       and decline.declined_disclosure_digest = old.disclosure_digest;
+    if transition_at is not null then
+      new.updated_at := transition_at;
+      return new;
+    end if;
+  end if;
+
+  if old.state = 'issued'
+    and new.state = 'expired'
+    and ss.current_service_actor_kind() = 'operator'
+    and ss.current_service_actor_org_id() = old.organization_id
+  then
+    select expiration.expired_at into transition_at
+    from ss.service_custom_build_change_expirations expiration
+    where expiration.change_order_id = old.id
+      and expiration.expired_by_operator_user_id =
+        ss.current_service_actor_user_id()
+      and expiration.expired_quote_digest = old.quote_digest
+      and expiration.expired_disclosure_digest = old.disclosure_digest;
     if transition_at is not null then
       new.updated_at := transition_at;
       return new;
@@ -1191,6 +1298,94 @@ begin
 end
 $$;
 
+create function ss.prepare_service_custom_build_change_expiration()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, ss
+as $$
+declare
+  selected_change record;
+  recorded_at timestamptz := clock_timestamp();
+  claimed_quote_digest ss.sha256_hex := new.expired_quote_digest;
+begin
+  if new.job_id is null then
+    raise exception 'Custom build change expiration lacks a paid job'
+      using errcode = '23514';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'ss-custom-build-h1m:' || new.job_id::text,
+      0
+    )
+  );
+
+  select change_order.* into selected_change
+  from ss.service_custom_build_change_orders change_order
+  where change_order.id = new.change_order_id
+  for update;
+
+  if not found
+    or selected_change.organization_id is distinct from
+      ss.current_service_actor_org_id()
+    or selected_change.job_id is distinct from new.job_id
+    or selected_change.state <> 'issued'
+    or recorded_at < selected_change.expires_at
+    or claimed_quote_digest is distinct from selected_change.quote_digest
+    or ss.current_service_actor_kind() <> 'operator'
+    or not ss.service_operator_has_capability(
+      ss.current_service_actor_user_id(),
+      'service_quote_author',
+      recorded_at
+    )
+  then
+    raise exception 'Custom build change expiration lacks exact expired quote evidence'
+      using errcode = '42501';
+  end if;
+
+  new.organization_id := selected_change.organization_id;
+  new.job_id := selected_change.job_id;
+  new.change_number := selected_change.change_number;
+  new.expired_by_operator_user_id := ss.current_service_actor_user_id();
+  new.expired_quote_digest := selected_change.quote_digest;
+  new.expired_disclosure_digest := selected_change.disclosure_digest;
+  new.request_digest := ss.service_json_digest(jsonb_build_object(
+    'changeNumber', selected_change.change_number,
+    'changeOrderId', selected_change.id,
+    'commandId', new.command_id,
+    'expiredByOperatorUserId', new.expired_by_operator_user_id,
+    'expiredDisclosureDigest', selected_change.disclosure_digest,
+    'expiredQuoteDigest', selected_change.quote_digest,
+    'jobId', selected_change.job_id,
+    'schema', 'sitesourcery.custom-build-change-expiration-command/v1'
+  ));
+  new.expired_at := recorded_at;
+  new.created_at := recorded_at;
+  return new;
+end
+$$;
+
+create function ss.materialize_service_custom_build_change_expiration()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, ss
+as $$
+begin
+  update ss.service_custom_build_change_orders
+  set state = 'expired'
+  where id = new.change_order_id
+    and state = 'issued';
+
+  if not found then
+    raise exception 'Custom build change expiration could not seal quote state'
+      using errcode = '55000';
+  end if;
+  return new;
+end
+$$;
+
 -- Keep the original assessment path exact. Add only bounded job_evidence for
 -- an open paid Custom-build job; handoff and every other held kind stay blocked.
 create or replace function ss.guard_service_assessment_document()
@@ -1342,6 +1537,30 @@ create trigger service_custom_build_change_voids_immutable
 before update or delete on ss.service_custom_build_change_voids
 for each row execute function ss.reject_update();
 
+create trigger service_custom_build_change_expirations_prepare
+before insert on ss.service_custom_build_change_expirations
+for each row execute function ss.prepare_service_custom_build_change_expiration();
+
+create trigger service_custom_build_change_expirations_materialize
+after insert on ss.service_custom_build_change_expirations
+for each row execute function ss.materialize_service_custom_build_change_expiration();
+
+create trigger service_custom_build_change_expirations_immutable
+before update or delete on ss.service_custom_build_change_expirations
+for each row execute function ss.reject_update();
+
+create trigger service_custom_build_progress_updates_completion_guard
+before insert on ss.service_custom_build_progress_updates
+for each row execute function ss.guard_service_custom_build_after_completion();
+
+create trigger service_custom_build_work_requests_completion_guard
+before insert or update on ss.service_custom_build_work_requests
+for each row execute function ss.guard_service_custom_build_after_completion();
+
+create trigger service_access_requests_custom_build_completion_guard
+before insert on ss.service_access_requests
+for each row execute function ss.guard_service_custom_build_after_completion();
+
 -- The original payload guard still protects assessment bytes. This additional
 -- guard narrows only job_evidence payloads to the exact document author and
 -- paid-job capabilities.
@@ -1358,6 +1577,7 @@ begin
     'service_custom_build_change_acceptances',
     'service_custom_build_change_declines',
     'service_custom_build_change_voids',
+    'service_custom_build_change_expirations',
     'service_custom_build_completion_evidence',
     'service_custom_build_completion_packages'
   ]
@@ -1387,6 +1607,7 @@ begin
       and procedure.proname in (
         'service_custom_build_change_quote_digest',
         'service_custom_build_completion_evidence_ids_are_canonical',
+        'guard_service_custom_build_after_completion',
         'service_custom_build_effective_scope_snapshot',
         'service_custom_build_change_has_payment_evidence',
         'prepare_service_custom_build_change_order',
@@ -1397,6 +1618,8 @@ begin
         'materialize_service_custom_build_change_decline',
         'prepare_service_custom_build_change_void',
         'materialize_service_custom_build_change_void',
+        'prepare_service_custom_build_change_expiration',
+        'materialize_service_custom_build_change_expiration',
         'guard_service_assessment_document',
         'guard_service_custom_build_completion_payload',
         'guard_service_custom_build_completion_evidence',
@@ -1421,6 +1644,7 @@ begin
     'service_custom_build_change_acceptances',
     'service_custom_build_change_declines',
     'service_custom_build_change_voids',
+    'service_custom_build_change_expirations',
     'service_custom_build_completion_evidence',
     'service_custom_build_completion_packages'
   ]
@@ -1446,6 +1670,8 @@ begin
   ) or has_table_privilege(
     'service_role', 'ss.service_custom_build_change_voids', 'UPDATE'
   ) or has_table_privilege(
+    'service_role', 'ss.service_custom_build_change_expirations', 'UPDATE'
+  ) or has_table_privilege(
     'service_role', 'ss.service_custom_build_completion_evidence', 'UPDATE'
   ) or has_table_privilege(
     'service_role', 'ss.service_custom_build_completion_packages', 'UPDATE'
@@ -1464,6 +1690,8 @@ as $$
 declare
   selected_job record;
   selected_document record;
+  selected_progress record;
+  scope_snapshot record;
   recorded_at timestamptz := clock_timestamp();
   prior_evidence_count integer;
 begin
@@ -1497,11 +1725,34 @@ begin
   where job.organization_id = ss.current_service_actor_org_id()
     and job.id = new.job_id;
 
-  if not found
+  select progress.* into selected_progress
+  from ss.service_custom_build_progress_updates progress
+  where progress.organization_id = selected_job.organization_id
+    and progress.job_id = selected_job.id
+  order by progress.revision desc
+  limit 1;
+
+  if selected_job.id is null
     or selected_job.state <> 'open'
+    or selected_progress.id is null
+    or selected_progress.stage <> 'checking'
     or new.viewport not in ('desktop', 'phone')
-    or new.captured_at < selected_job.opened_at
+    or new.captured_at < selected_progress.recorded_at
     or new.captured_at > recorded_at
+    or new.validator_version <> 'service-image-evidence/v1'
+    or new.image_width is null
+    or new.image_height is null
+    or new.image_height not between 1 and 5000
+    or new.image_width::bigint * new.image_height::bigint >
+      10240000::bigint
+    or (
+      new.viewport = 'desktop'
+      and new.image_width not between 768 and 2048
+    )
+    or (
+      new.viewport = 'phone'
+      and new.image_width not between 240 and 767
+    )
     or exists (
       select 1
       from ss.service_custom_build_completion_packages package
@@ -1531,6 +1782,7 @@ begin
     and document.created_by_kind = 'operator'
     and document.created_by_user_id = ss.current_service_actor_user_id()
     and document.media_type in ('image/jpeg', 'image/png', 'image/webp')
+    and document.byte_count between 1 and 716800
     and document.object_key like
       'service-documents/' || selected_job.organization_id::text || '/' ||
       selected_job.project_id::text || '/custom-build-jobs/' ||
@@ -1551,19 +1803,34 @@ begin
       using errcode = '23514';
   end if;
 
+  select snapshot.* into scope_snapshot
+  from ss.service_custom_build_effective_scope_snapshot(
+    selected_job.organization_id,
+    selected_job.id
+  ) snapshot;
+
   new.organization_id := selected_job.organization_id;
   new.project_id := selected_job.project_id;
   new.case_id := selected_job.case_id;
   new.customer_user_id := selected_job.customer_user_id;
+  new.progress_revision := selected_progress.revision;
+  new.effective_scope_digest := scope_snapshot.effective_scope_digest;
+  new.content_digest := selected_document.content_digest;
   new.created_by_operator_user_id := ss.current_service_actor_user_id();
   new.request_digest := ss.service_json_digest(jsonb_build_object(
     'accessibleDescription', new.accessible_description,
     'capturedAt', new.captured_at,
     'commandId', new.command_id,
+    'contentDigest', new.content_digest,
     'documentId', new.document_id,
+    'effectiveScopeDigest', new.effective_scope_digest,
+    'imageHeight', new.image_height,
+    'imageWidth', new.image_width,
     'jobId', new.job_id,
     'operatorUserId', new.created_by_operator_user_id,
+    'progressRevision', new.progress_revision,
     'schema', 'sitesourcery.custom-build-completion-evidence-command/v1',
+    'validatorVersion', new.validator_version,
     'viewport', new.viewport
   ));
   new.created_at := recorded_at;
@@ -1690,6 +1957,12 @@ begin
       using errcode = '23514';
   end if;
 
+  select snapshot.* into scope_snapshot
+  from ss.service_custom_build_effective_scope_snapshot(
+    selected_job.organization_id,
+    selected_job.id
+  ) snapshot;
+
   select
     count(*)::integer,
     coalesce(bool_or(evidence.viewport = 'desktop'), false),
@@ -1701,22 +1974,32 @@ begin
     and evidence.case_id = selected_job.case_id
     and evidence.customer_user_id = selected_job.customer_user_id
     and evidence.job_id = selected_job.id
+    and evidence.progress_revision = selected_progress.revision
+    and evidence.effective_scope_digest = scope_snapshot.effective_scope_digest
     and evidence.id = any(new.evidence_ids);
 
   if selected_evidence_count <> cardinality(new.evidence_ids)
     or not includes_desktop
     or not includes_phone
+    or exists (
+      select 1
+      from ss.service_custom_build_completion_evidence desktop_evidence
+      join ss.service_custom_build_completion_evidence phone_evidence
+        on phone_evidence.organization_id = desktop_evidence.organization_id
+       and phone_evidence.job_id = desktop_evidence.job_id
+       and phone_evidence.content_digest = desktop_evidence.content_digest
+      where desktop_evidence.organization_id = selected_job.organization_id
+        and desktop_evidence.job_id = selected_job.id
+        and desktop_evidence.viewport = 'desktop'
+        and phone_evidence.viewport = 'phone'
+        and desktop_evidence.id = any(new.evidence_ids)
+        and phone_evidence.id = any(new.evidence_ids)
+    )
   then
     raise exception
-      'Custom build completion package lacks desktop and phone job evidence'
+      'Custom build completion package lacks current distinct desktop and phone job evidence'
       using errcode = '23514';
   end if;
-
-  select snapshot.* into scope_snapshot
-  from ss.service_custom_build_effective_scope_snapshot(
-    selected_job.organization_id,
-    selected_job.id
-  ) snapshot;
 
   new.organization_id := selected_job.organization_id;
   new.project_id := selected_job.project_id;

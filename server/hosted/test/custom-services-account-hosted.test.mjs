@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -889,21 +890,9 @@ test("held Custom-build change/completion boundary validates exact authority bef
   const changeOrderId =
     "60000000-0000-4000-8000-000000000001";
   const jobId = "70000000-0000-4000-8000-000000000001";
-  const pngHeader = Buffer.alloc(13);
-  pngHeader.writeUInt32BE(1, 0);
-  pngHeader.writeUInt32BE(1, 4);
-  const pngChunk = (type, payload = Buffer.alloc(0)) => {
-    const chunk = Buffer.alloc(12 + payload.length);
-    chunk.writeUInt32BE(payload.length, 0);
-    chunk.write(type, 4, 4, "ascii");
-    payload.copy(chunk, 8);
-    return chunk;
-  };
-  const dataBase64 = Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk("IHDR", pngHeader),
-    pngChunk("IEND")
-  ]).toString("base64");
+  const dataBase64 = readFileSync(
+    new URL("../../../assets/work-demo-bright-spark.png", import.meta.url)
+  ).toString("base64");
   const heldError = isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503);
   const operations = [
     () => held.readCustomer(scope),

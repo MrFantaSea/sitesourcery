@@ -224,6 +224,8 @@ async function verifyPlatformSchema(pool) {
         as service_custom_build_change_declines,
       to_regclass('ss.service_custom_build_change_voids') is not null
         as service_custom_build_change_voids,
+      to_regclass('ss.service_custom_build_change_expirations') is not null
+        as service_custom_build_change_expirations,
       to_regclass('ss.service_custom_build_completion_evidence') is not null
         as service_custom_build_completion_evidence,
       to_regclass('ss.service_custom_build_completion_packages') is not null
@@ -2037,6 +2039,7 @@ async function verifyPlatformSchema(pool) {
         ('service_custom_build_change_acceptances', false),
         ('service_custom_build_change_declines', false),
         ('service_custom_build_change_voids', false),
+        ('service_custom_build_change_expirations', false),
         ('service_custom_build_completion_evidence', false),
         ('service_custom_build_completion_packages', false)
     )
@@ -2080,7 +2083,7 @@ async function verifyPlatformSchema(pool) {
            )
       ) as exact_held_change_unit,
       (
-        select count(*) = 6
+        select count(*) = 7
           and bool_and(relation.relrowsecurity)
           and bool_and(relation.relforcerowsecurity)
           and bool_and(
@@ -2157,6 +2160,18 @@ async function verifyPlatformSchema(pool) {
       (
         select
           lower(pg_get_functiondef(procedure_record.oid)) like
+            '%recorded_at < selected_change.expires_at%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_quote_author%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%expired_quote_digest%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.prepare_service_custom_build_change_expiration()'::regprocedure
+      ) as exact_expiration_authority,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
             '%return false%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
             '%service_custom_build_change_payment_receipts%'
@@ -2183,6 +2198,50 @@ async function verifyPlatformSchema(pool) {
           lower(pg_get_functiondef(procedure_record.oid)) like
             '%selected_progress.stage <> ''checking''%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%document.byte_count between 1 and 716800%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.progress_revision := selected_progress.revision%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.effective_scope_digest := scope_snapshot.effective_scope_digest%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service-image-evidence/v1%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_completion_evidence()'::regprocedure
+      ) as current_bounded_completion_evidence,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%ss-custom-build-h1m:%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_completion_packages%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_after_completion()'::regprocedure
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgname =
+          'service_custom_build_progress_updates_completion_guard'
+          and not trigger_record.tgisinternal
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgname =
+          'service_custom_build_work_requests_completion_guard'
+          and not trigger_record.tgisinternal
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgname =
+          'service_access_requests_custom_build_completion_guard'
+          and not trigger_record.tgisinternal
+      ) as completion_closes_work_writes,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%selected_progress.stage <> ''checking''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
             '%structure_milestone <> ''done''%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
             '%content_milestone <> ''done''%'
@@ -2198,6 +2257,10 @@ async function verifyPlatformSchema(pool) {
             '%includes_desktop%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
             '%includes_phone%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%evidence.progress_revision = selected_progress.revision%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%phone_evidence.content_digest = desktop_evidence.content_digest%'
         from pg_proc procedure_record
         where procedure_record.oid =
           'ss.guard_service_custom_build_completion_package()'::regprocedure

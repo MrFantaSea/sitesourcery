@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { deflateSync } from "node:zlib";
 
 import pg from "pg";
 import {
@@ -68,6 +69,48 @@ const APPROVED_ASSESSMENT_PAYMENT_RELEASE = Object.freeze({
   taxMode: "automatic"
 });
 
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, payload = Buffer.alloc(0)) {
+  const chunk = Buffer.alloc(12 + payload.length);
+  chunk.writeUInt32BE(payload.length, 0);
+  chunk.write(type, 4, 4, "ascii");
+  payload.copy(chunk, 8);
+  chunk.writeUInt32BE(
+    pngCrc32(chunk.subarray(4, 8 + payload.length)),
+    8 + payload.length
+  );
+  return chunk;
+}
+
+function completionPng(width, height, shade) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 0;
+  const rows = Buffer.alloc((width + 1) * height);
+  for (let row = 0; row < height; row += 1) {
+    const start = row * (width + 1);
+    rows.fill(shade, start + 1, start + width + 1);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(rows)),
+    pngChunk("IEND")
+  ]);
+}
+
 async function insertRow(client, table, row) {
   assert.match(table, /^[a-z0-9_]+$/u);
   const entries = Object.entries(row);
@@ -125,6 +168,25 @@ async function within(promise, message, milliseconds = 5000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function waitForDatabaseLock(client, backendPid) {
+  for (let observation = 0; observation < 500; observation += 1) {
+    // This observer intentionally stays inside the transaction that owns the
+    // test's advisory lock. PostgreSQL can retain one statistics snapshot for
+    // that transaction, so clear it before looking for a waiter that started
+    // after the preceding completion waiter.
+    await client.query("select pg_stat_clear_snapshot()");
+    const activity = await client.query(
+      `select wait_event_type
+         from pg_stat_activity
+        where pid = $1`,
+      [backendPid]
+    );
+    if (activity.rows[0]?.wait_event_type === "Lock") return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
 }
 
 async function seedAccountProject(client, label) {
@@ -3435,6 +3497,52 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       "declined"
     );
 
+    const expiresAt = new Date(Date.now() + 15_000).toISOString();
+    const expiringChange = await customBuildChangeCompletion.issueChangeOrder(
+      operatorActor,
+      buildJobId,
+      {
+        ...changeIssue,
+        addedScope:
+          "Add the optional approved launch-note treatment if accepted before its short deadline.",
+        commandId: `custom-build-change-${randomUUID()}`,
+        expiresAt,
+        unitCount: 1
+      }
+    );
+    const thirdChange = expiringChange.changeOrders.at(-1);
+    assert.equal(thirdChange.state, "issued");
+    const expirationWaitMilliseconds = Math.max(
+      0,
+      Date.parse(expiresAt) - Date.now() + 250
+    );
+    await new Promise((resolve) =>
+      setTimeout(resolve, expirationWaitMilliseconds)
+    );
+    const expirationCommand = {
+      commandId: `custom-build-change-expiration-${randomUUID()}`,
+      expectedQuoteDigest: thirdChange.quoteDigest,
+      organizationId: customer.organizationId
+    };
+    const expiredChange = await customBuildChangeCompletion.expireChangeOrder(
+      operatorActor,
+      buildJobId,
+      thirdChange.changeOrderId,
+      expirationCommand
+    );
+    assert.equal(expiredChange.state, "building");
+    assert.equal(expiredChange.changeOrders.at(-1).state, "expired");
+    assert.ok(expiredChange.changeOrders.at(-1).expiredAt >= expiresAt);
+    assert.deepEqual(
+      await customBuildChangeCompletion.expireChangeOrder(
+        operatorActor,
+        buildJobId,
+        thirdChange.changeOrderId,
+        expirationCommand
+      ),
+      expiredChange
+    );
+
     const completionProgress = await customBuildProgress.recordProgress(
       operatorActor,
       buildJobId,
@@ -3458,6 +3566,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(completionProgress.progress.revision, 2);
     assert.equal(completionProgress.status.kind, "checking");
 
+    const initialDesktopBytes = completionPng(1440, 1000, 16);
+    const initialPhoneBytes = completionPng(390, 844, 32);
     const desktopCompletion =
       await customBuildChangeCompletion.uploadEvidence(
         operatorActor,
@@ -3466,7 +3576,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           accessibleDescription:
             "Final desktop view showing the complete approved Card Plus page.",
           commandId: `custom-build-completion-evidence-${randomUUID()}`,
-          dataBase64: evidenceBytes.toString("base64"),
+          dataBase64: initialDesktopBytes.toString("base64"),
           mediaType: "image/png",
           organizationId: customer.organizationId,
           viewport: "desktop"
@@ -3481,58 +3591,270 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           accessibleDescription:
             "Final phone view showing the complete approved Card Plus page.",
           commandId: `custom-build-completion-evidence-${randomUUID()}`,
-          dataBase64: evidenceBytes.toString("base64"),
+          dataBase64: initialPhoneBytes.toString("base64"),
           mediaType: "image/png",
           organizationId: customer.organizationId,
           viewport: "phone"
         }
       );
     assert.equal(phoneCompletion.evidence.length, 2);
-    const completionEvidenceIds = phoneCompletion.evidence
+    assert.deepEqual(
+      phoneCompletion.evidence.map((entry) => [
+        entry.viewport,
+        entry.imageWidth,
+        entry.imageHeight,
+        entry.progressRevision
+      ]),
+      [
+        ["desktop", 1440, 1000, 2],
+        ["phone", 390, 844, 2]
+      ]
+    );
+    const staleEvidenceIds = phoneCompletion.evidence
+      .map((entry) => entry.evidenceId)
+      .sort();
+    const finalVerificationProgress =
+      await customBuildProgress.recordProgress(
+        operatorActor,
+        buildJobId,
+        {
+          commandId: `custom-build-progress-${randomUUID()}`,
+          customerSummary:
+            "A final verification pass refreshed the completed Card Plus proof state.",
+          expectedRevision: 2,
+          milestones: {
+            structure: "done",
+            content: "done",
+            responsive: "done",
+            quality: "done"
+          },
+          nextStep:
+            "Attach proof captured after this final verification revision.",
+          organizationId: customer.organizationId,
+          stage: "checking"
+        }
+      );
+    assert.equal(finalVerificationProgress.progress.revision, 3);
+    const completionChecks = {
+      accessibilityBasics: true,
+      contactActions: true,
+      desktop: true,
+      links: true,
+      phone: true,
+      scope: true
+    };
+    await assert.rejects(
+      customBuildChangeCompletion.recordCompletion(
+        operatorActor,
+        buildJobId,
+        {
+          checks: completionChecks,
+          commandId: `custom-build-completion-${randomUUID()}`,
+          customerSummary:
+            "This stale proof must not complete a newer final verification revision.",
+          evidenceIds: staleEvidenceIds,
+          organizationId: customer.organizationId
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+    const finalDesktopBytes = completionPng(1441, 1001, 48);
+    const finalPhoneBytes = completionPng(391, 845, 64);
+    const finalDesktop = await customBuildChangeCompletion.uploadEvidence(
+      operatorActor,
+      buildJobId,
+      {
+        accessibleDescription:
+          "Final desktop proof captured after the last verification revision.",
+        commandId: `custom-build-completion-evidence-${randomUUID()}`,
+        dataBase64: finalDesktopBytes.toString("base64"),
+        mediaType: "image/png",
+        organizationId: customer.organizationId,
+        viewport: "desktop"
+      }
+    );
+    const finalPhone = await customBuildChangeCompletion.uploadEvidence(
+      operatorActor,
+      buildJobId,
+      {
+        accessibleDescription:
+          "Final phone proof captured after the last verification revision.",
+        commandId: `custom-build-completion-evidence-${randomUUID()}`,
+        dataBase64: finalPhoneBytes.toString("base64"),
+        mediaType: "image/png",
+        organizationId: customer.organizationId,
+        viewport: "phone"
+      }
+    );
+    assert.equal(finalDesktop.evidence.length, 3);
+    assert.equal(finalPhone.evidence.length, 4);
+    const completionEvidence = finalPhone.evidence.filter(
+      (entry) => entry.progressRevision === 3
+    );
+    assert.equal(completionEvidence.length, 2);
+    const completionEvidenceIds = completionEvidence
       .map((entry) => entry.evidenceId)
       .sort();
     const completionCommand = {
-      checks: {
-        accessibilityBasics: true,
-        contactActions: true,
-        desktop: true,
-        links: true,
-        phone: true,
-        scope: true
-      },
+      checks: completionChecks,
       commandId: `custom-build-completion-${randomUUID()}`,
       customerSummary:
         "The approved Card Plus scope passed desktop, phone, links, contact, and accessibility checks.",
       evidenceIds: completionEvidenceIds,
       organizationId: customer.organizationId
     };
-    const completedBuild =
-      await customBuildChangeCompletion.recordCompletion(
+    const completionRaceEntered = deferred();
+    const progressRaceEntered = deferred();
+    const raceAuthority = (entered, blockingQuery) => ({
+      async service(context, work) {
+        const transactionClient = await pool.connect();
+        try {
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          await setActor(
+            transactionClient,
+            context.actorKind,
+            { organizationId: context.organizationId },
+            context.userId
+          );
+          const backend = await transactionClient.query(
+            "select pg_backend_pid()::int as pid"
+          );
+          const backendPid = backend.rows[0].pid;
+          const value = await work({
+            query(text, values) {
+              if (blockingQuery.test(String(text))) {
+                entered.resolve(backendPid);
+              }
+              return transactionClient.query(text, values);
+            }
+          });
+          await transactionClient.query("commit");
+          return value;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    });
+    const completionRaceService =
+      createPostgresCustomServicesCustomBuildChangeCompletion({
+        authority: raceAuthority(
+          completionRaceEntered,
+          /pg_advisory_xact_lock/u
+        )
+      });
+    const progressRaceService =
+      createPostgresCustomServicesCustomBuildProgress({
+        authority: raceAuthority(
+          progressRaceEntered,
+          /insert into ss\.service_custom_build_progress_updates/u
+        )
+      });
+    let completionLockHeld = false;
+    await client.query("begin");
+    try {
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+         )`,
+        [buildJobId]
+      );
+      completionLockHeld = true;
+      const completionPromise = completionRaceService.recordCompletion(
         operatorActor,
         buildJobId,
         completionCommand
       );
-    assert.equal(completedBuild.state, "ready_for_delivery");
-    assert.equal(completedBuild.completion.progressRevision, 2);
-    assert.equal(completedBuild.completion.evidenceIds.length, 2);
-    assert.deepEqual(
-      completedBuild.completion.effectiveChangeOrderDigests,
-      []
-    );
-    assert.deepEqual(
-      await customBuildChangeCompletion.recordCompletion(
-        operatorActor,
-        buildJobId,
-        completionCommand
-      ),
-      completedBuild
-    );
+      completionPromise.catch(() => {});
+      const completionBackendPid = await within(
+        completionRaceEntered.promise,
+        "Custom-build completion race transaction did not start"
+      );
+      assert.equal(
+        await waitForDatabaseLock(client, completionBackendPid),
+        true,
+        "completion did not wait on the shared H1M advisory lock"
+      );
+      const progressRejection = assert.rejects(
+        progressRaceService.recordProgress(
+          operatorActor,
+          buildJobId,
+          {
+            commandId: `custom-build-progress-${randomUUID()}`,
+            customerSummary:
+              "This racing progress write must not cross the completion boundary.",
+            expectedRevision: 3,
+            milestones: {
+              structure: "done",
+              content: "done",
+              responsive: "done",
+              quality: "done"
+            },
+            nextStep:
+              "The immutable completion package must remain the final work state.",
+            organizationId: customer.organizationId,
+            stage: "checking"
+          }
+        ),
+        (error) =>
+          error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+          error.status === 409
+      );
+      const progressBackendPid = await within(
+        progressRaceEntered.promise,
+        "Custom-build progress race transaction did not start"
+      );
+      assert.equal(
+        await waitForDatabaseLock(client, progressBackendPid),
+        true,
+        "progress did not wait behind completion on the shared H1M lock"
+      );
+      await client.query("commit");
+      completionLockHeld = false;
+      const completedBuild = await within(
+        completionPromise,
+        "Custom-build completion did not win the queued finality race"
+      );
+      await within(
+        progressRejection,
+        "Racing Custom-build progress did not close after completion"
+      );
+      assert.equal(completedBuild.state, "ready_for_delivery");
+      assert.equal(completedBuild.completion.progressRevision, 3);
+      assert.equal(completedBuild.completion.evidenceIds.length, 2);
+      assert.deepEqual(
+        completedBuild.completion.effectiveChangeOrderDigests,
+        []
+      );
+      assert.deepEqual(
+        await customBuildChangeCompletion.recordCompletion(
+          operatorActor,
+          buildJobId,
+          completionCommand
+        ),
+        completedBuild
+      );
+    } finally {
+      if (completionLockHeld) {
+        await client.query("rollback").catch(() => {});
+      }
+    }
     const customerCompletion =
       await customBuildChangeCompletion.readCustomer(
         customerAssessmentScope
       );
     assert.equal(customerCompletion.state, "ready_for_delivery");
     assert.equal(customerCompletion.completion.evidence.length, 2);
+    const selectedEvidenceProjection =
+      customerCompletion.completion.evidence.find(
+        (entry) => entry.evidenceId === completionEvidenceIds[0]
+      );
+    assert.ok(selectedEvidenceProjection);
     const customerCompletionEvidence =
       await customBuildChangeCompletion.readCustomerEvidence(
         customerAssessmentScope,
@@ -3540,7 +3862,17 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       );
     assert.deepEqual(
       Buffer.from(customerCompletionEvidence.bytes),
-      evidenceBytes
+      selectedEvidenceProjection.viewport === "desktop"
+        ? finalDesktopBytes
+        : finalPhoneBytes
+    );
+    assert.equal(
+      customerCompletionEvidence.imageWidth,
+      selectedEvidenceProjection.imageWidth
+    );
+    assert.equal(
+      customerCompletionEvidence.imageHeight,
+      selectedEvidenceProjection.imageHeight
     );
     await assert.rejects(
       customBuildChangeCompletion.issueChangeOrder(
@@ -3553,6 +3885,79 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       ),
       (error) =>
         error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+    await assert.rejects(
+      customBuildProgress.recordProgress(
+        operatorActor,
+        buildJobId,
+        {
+          commandId: `custom-build-progress-${randomUUID()}`,
+          customerSummary:
+            "A completed build must reject any later progress mutation.",
+          expectedRevision: 3,
+          milestones: {
+            structure: "done",
+            content: "done",
+            responsive: "done",
+            quality: "done"
+          },
+          nextStep: "No later work-state mutation is permitted.",
+          organizationId: customer.organizationId,
+          stage: "checking"
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+    await assert.rejects(
+      customBuildProgress.openRequest(
+        operatorActor,
+        buildJobId,
+        {
+          access: null,
+          commandId: `custom-build-request-${randomUUID()}`,
+          customerMessage:
+            "This request must not reopen a completed Custom build.",
+          expectedProgressRevision: 3,
+          organizationId: customer.organizationId,
+          requestKind: "customer_decision",
+          safeInstructions:
+            "No response is required because completion is already sealed.",
+          targetDateImpact: "none",
+          title: "Do not reopen completed work"
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
+        error.status === 409
+    );
+    await assert.rejects(
+      customBuildProgress.openRequest(
+        operatorActor,
+        buildJobId,
+        {
+          access: {
+            accountLabel: "Avery Studio domain account",
+            delegatedRole: "DNS manager",
+            expiresAt: isoAfter({ days: 7 }),
+            providerLabel: "Spaceship"
+          },
+          commandId: `custom-build-request-${randomUUID()}`,
+          customerMessage:
+            "A completed build must not create a delegated-access request.",
+          expectedProgressRevision: 3,
+          organizationId: customer.organizationId,
+          requestKind: "delegated_access",
+          safeInstructions:
+            "No access action is permitted after the completion package.",
+          targetDateImpact: "none",
+          title: "Do not reopen access after completion"
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_PROGRESS_CHANGED" &&
         error.status === 409
     );
 

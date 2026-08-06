@@ -20,6 +20,33 @@
   var CUSTOM_BUILD_CREDENTIAL =
     /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase)/iu;
   var MAXIMUM_ASSESSMENT_EVIDENCE_BYTES = 700 * 1024;
+  var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
+    "sitesourcery.custom-build-change-completion/v1";
+  var CUSTOM_BUILD_CHANGE_COMPLETION_STATES = [
+    "not_available",
+    "building",
+    "change_order_review",
+    "change_order_payment_required",
+    "ready_for_final_payment",
+    "ready_for_delivery"
+  ];
+  var CUSTOM_BUILD_CHANGE_ORDER_STATES = [
+    "issued",
+    "accepted_payment_required",
+    "effective",
+    "declined",
+    "expired",
+    "voided"
+  ];
+  var CUSTOM_BUILD_COMPLETION_STATES = [
+    "ready_for_final_payment",
+    "ready_for_delivery"
+  ];
+  var CUSTOM_BUILD_EVIDENCE_MEDIA_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
   var FORBIDDEN_AUTHORITY_FIELDS = new Set([
     "amount",
     "amountMinor",
@@ -376,6 +403,700 @@
     return value;
   }
 
+  function invalidCustomBuildChangeCompletionResponse() {
+    return new APIError({
+      code: "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_RESPONSE",
+      message:
+        "Site Sourcery returned an invalid Custom-build update. Refresh before replacing the information already shown.",
+      retryable: true
+    });
+  }
+
+  function projectionInvariant(condition) {
+    if (!condition) {
+      throw invalidCustomBuildChangeCompletionResponse();
+    }
+  }
+
+  function projectionObject(value, expected) {
+    projectionInvariant(
+      isObject(value)
+      && (Object.getPrototypeOf(value) === Object.prototype
+        || Object.getPrototypeOf(value) === null)
+      && JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify(expected.slice().sort())
+    );
+    return value;
+  }
+
+  function projectionArray(value, minimum, maximum) {
+    projectionInvariant(
+      Array.isArray(value)
+      && value.length >= minimum
+      && value.length <= maximum
+    );
+    return value;
+  }
+
+  function projectionText(value, minimum, maximum, safe) {
+    projectionInvariant(
+      typeof value === "string"
+      && value === value.trim()
+      && value.length >= minimum
+      && value.length <= maximum
+      && !CONTROL_CHARACTER.test(value)
+      && (safe !== true || !CUSTOM_BUILD_CREDENTIAL.test(value))
+    );
+    return value;
+  }
+
+  function projectionUuid(value) {
+    projectionInvariant(typeof value === "string" && UUID.test(value));
+    return value;
+  }
+
+  function projectionDigest(value) {
+    projectionInvariant(typeof value === "string" && SHA256.test(value));
+    return value;
+  }
+
+  function projectionInteger(value, minimum, maximum) {
+    projectionInvariant(
+      typeof value === "number"
+      && Number.isSafeInteger(value)
+      && value >= minimum
+      && value <= maximum
+    );
+    return value;
+  }
+
+  function projectionDate(value) {
+    var parsed = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value)
+      ? new Date(value + "T00:00:00.000Z")
+      : null;
+    projectionInvariant(
+      parsed !== null
+      && Number.isFinite(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === value
+    );
+    return value;
+  }
+
+  function projectionIso(value) {
+    var parsed = typeof value === "string" ? new Date(value) : null;
+    projectionInvariant(
+      parsed !== null
+      && Number.isFinite(parsed.getTime())
+      && parsed.toISOString() === value
+    );
+    return value;
+  }
+
+  function projectionNullableIso(value) {
+    return value === null ? null : projectionIso(value);
+  }
+
+  function deepFreezeProjection(value) {
+    if (!value || (typeof value !== "object" && typeof value !== "function")) {
+      return value;
+    }
+    Object.keys(value).forEach(function (key) {
+      deepFreezeProjection(value[key]);
+    });
+    return Object.freeze(value);
+  }
+
+  function base64FromBytes(value) {
+    var alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    var output = "";
+    for (var index = 0; index < value.length; index += 3) {
+      var first = value[index];
+      var second = index + 1 < value.length ? value[index + 1] : 0;
+      var third = index + 2 < value.length ? value[index + 2] : 0;
+      output += alphabet[first >> 2];
+      output += alphabet[((first & 3) << 4) | (second >> 4)];
+      output += index + 1 < value.length
+        ? alphabet[((second & 15) << 2) | (third >> 6)]
+        : "=";
+      output += index + 2 < value.length ? alphabet[third & 63] : "=";
+    }
+    return output;
+  }
+
+  function hexFromBytes(value) {
+    return Array.from(value, function (entry) {
+      return entry.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  function customBuildChangePricingProjection(value) {
+    var source = projectionObject(value, [
+      "currency",
+      "paymentRequirement",
+      "subtotalMinor",
+      "taxState",
+      "unitAmountMinor",
+      "unitCount"
+    ]);
+    var unitCount = projectionInteger(source.unitCount, 1, 40);
+    var unitAmountMinor = projectionInteger(
+      source.unitAmountMinor,
+      12500,
+      12500
+    );
+    var subtotalMinor = projectionInteger(
+      source.subtotalMinor,
+      12500,
+      40 * 12500
+    );
+    projectionInvariant(
+      subtotalMinor === unitCount * unitAmountMinor
+      && source.currency === "USD"
+      && source.taxState === "automatic_tax_pending"
+      && source.paymentRequirement === "due_before_changed_work"
+    );
+    return {
+      unitCount: unitCount,
+      unitAmountMinor: unitAmountMinor,
+      subtotalMinor: subtotalMinor,
+      currency: "USD",
+      taxState: "automatic_tax_pending",
+      paymentRequirement: "due_before_changed_work"
+    };
+  }
+
+  function customBuildChangeOrderProjection(value, owner) {
+    var fields = [
+      "acceptedAt",
+      "addedScope",
+      "changeNumber",
+      "changeOrderId",
+      "declinedAt",
+      "disclosureDigest",
+      "expiredAt",
+      "expiresAt",
+      "issuedAt",
+      "pricing",
+      "quoteDigest",
+      "state",
+      "targetCompletionDate",
+      "void"
+    ];
+    if (owner) fields.push("createdByOperatorUserId");
+    var source = projectionObject(value, fields);
+    var state = projectionText(source.state, 1, 80, false);
+    projectionInvariant(CUSTOM_BUILD_CHANGE_ORDER_STATES.includes(state));
+    var issuedAt = projectionIso(source.issuedAt);
+    var expiresAt = projectionIso(source.expiresAt);
+    var acceptedAt = projectionNullableIso(source.acceptedAt);
+    var declinedAt = projectionNullableIso(source.declinedAt);
+    var expiredAt = projectionNullableIso(source.expiredAt);
+    var selectedVoid = null;
+    if (source.void !== null) {
+      var voidSource = projectionObject(source.void, ["reason", "voidedAt"]);
+      selectedVoid = {
+        reason: projectionText(voidSource.reason, 20, 500, true),
+        voidedAt: projectionIso(voidSource.voidedAt)
+      };
+    }
+    projectionInvariant(Date.parse(expiresAt) > Date.parse(issuedAt));
+    if (state === "issued") {
+      projectionInvariant(
+        acceptedAt === null && declinedAt === null && expiredAt === null
+        && selectedVoid === null
+      );
+    } else if (
+      state === "accepted_payment_required" || state === "effective"
+    ) {
+      projectionInvariant(
+        acceptedAt !== null && declinedAt === null && expiredAt === null
+        && selectedVoid === null
+      );
+    } else if (state === "declined") {
+      projectionInvariant(
+        acceptedAt === null && declinedAt !== null && expiredAt === null
+        && selectedVoid === null
+      );
+    } else if (state === "voided") {
+      projectionInvariant(
+        declinedAt === null && expiredAt === null && selectedVoid !== null
+      );
+    } else if (state === "expired") {
+      projectionInvariant(
+        acceptedAt === null && declinedAt === null && expiredAt !== null
+        && Date.parse(expiredAt) >= Date.parse(expiresAt)
+        && selectedVoid === null
+      );
+    }
+    [acceptedAt, declinedAt, expiredAt, selectedVoid && selectedVoid.voidedAt]
+      .filter(Boolean)
+      .forEach(function (recordedAt) {
+        projectionInvariant(Date.parse(recordedAt) >= Date.parse(issuedAt));
+      });
+    var selected = {
+      changeOrderId: projectionUuid(source.changeOrderId),
+      changeNumber: projectionInteger(
+        source.changeNumber,
+        1,
+        Number.MAX_SAFE_INTEGER
+      ),
+      state: state,
+      addedScope: projectionText(source.addedScope, 20, 2000, true),
+      pricing: customBuildChangePricingProjection(source.pricing),
+      targetCompletionDate: projectionDate(source.targetCompletionDate),
+      quoteDigest: projectionDigest(source.quoteDigest),
+      disclosureDigest: projectionDigest(source.disclosureDigest),
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      acceptedAt: acceptedAt,
+      declinedAt: declinedAt,
+      expiredAt: expiredAt,
+      void: selectedVoid
+    };
+    if (owner) {
+      selected.createdByOperatorUserId = projectionUuid(
+        source.createdByOperatorUserId
+      );
+    }
+    return selected;
+  }
+
+  function customBuildCompletionEvidenceProjection(value, owner) {
+    var fields = [
+      "accessibleDescription",
+      "byteCount",
+      "capturedAt",
+      "contentDigest",
+      "evidenceId",
+      "imageHeight",
+      "imageWidth",
+      "mediaType",
+      "viewport"
+    ];
+    if (owner) {
+      fields.push(
+        "createdByOperatorUserId",
+        "effectiveScopeDigest",
+        "progressRevision"
+      );
+    }
+    var source = projectionObject(value, fields);
+    var selected = {
+      evidenceId: projectionUuid(source.evidenceId),
+      viewport: projectionText(source.viewport, 1, 20, false),
+      accessibleDescription: projectionText(
+        source.accessibleDescription,
+        10,
+        500,
+        true
+      ),
+      mediaType: projectionText(source.mediaType, 1, 80, false),
+      byteCount: projectionInteger(
+        source.byteCount,
+        1,
+        MAXIMUM_ASSESSMENT_EVIDENCE_BYTES
+      ),
+      contentDigest: projectionDigest(source.contentDigest),
+      imageWidth: projectionInteger(source.imageWidth, 240, 2048),
+      imageHeight: projectionInteger(source.imageHeight, 1, 5000),
+      capturedAt: projectionIso(source.capturedAt)
+    };
+    projectionInvariant(
+      ["desktop", "phone"].includes(selected.viewport)
+      && CUSTOM_BUILD_EVIDENCE_MEDIA_TYPES.includes(selected.mediaType)
+      && (
+        (selected.viewport === "desktop" && selected.imageWidth >= 768)
+        || (selected.viewport === "phone" && selected.imageWidth <= 767)
+      )
+      && selected.imageWidth * selected.imageHeight <= 2048 * 5000
+    );
+    if (owner) {
+      selected.progressRevision = projectionInteger(
+        source.progressRevision,
+        1,
+        Number.MAX_SAFE_INTEGER
+      );
+      selected.effectiveScopeDigest = projectionDigest(
+        source.effectiveScopeDigest
+      );
+      selected.createdByOperatorUserId = projectionUuid(
+        source.createdByOperatorUserId
+      );
+    }
+    return selected;
+  }
+
+  function customBuildCompletionChecksProjection(value) {
+    var source = projectionObject(value, [
+      "accessibilityBasics",
+      "contactActions",
+      "desktop",
+      "links",
+      "phone",
+      "scope"
+    ]);
+    projectionInvariant(Object.keys(source).every(function (key) {
+      return source[key] === true;
+    }));
+    return {
+      scope: true,
+      desktop: true,
+      phone: true,
+      links: true,
+      contactActions: true,
+      accessibilityBasics: true
+    };
+  }
+
+  function customBuildCustomerCompletionProjection(value) {
+    if (value === null) return null;
+    var source = projectionObject(value, [
+      "checks",
+      "customerSummary",
+      "evidence",
+      "preparedAt",
+      "state"
+    ]);
+    var evidence = projectionArray(source.evidence, 2, 12).map(function (entry) {
+      return customBuildCompletionEvidenceProjection(entry, false);
+    });
+    var evidenceIds = evidence.map(function (entry) {
+      return entry.evidenceId;
+    });
+    projectionInvariant(
+      new Set(evidenceIds).size === evidenceIds.length
+      && JSON.stringify(evidenceIds) ===
+        JSON.stringify(evidenceIds.slice().sort())
+      && evidence.some(function (entry) { return entry.viewport === "desktop"; })
+      && evidence.some(function (entry) { return entry.viewport === "phone"; })
+      && !evidence.some(function (desktop) {
+        return desktop.viewport === "desktop"
+          && evidence.some(function (phone) {
+            return phone.viewport === "phone"
+              && phone.contentDigest === desktop.contentDigest;
+          });
+      })
+    );
+    var state = projectionText(source.state, 1, 80, false);
+    projectionInvariant(CUSTOM_BUILD_COMPLETION_STATES.includes(state));
+    return {
+      state: state,
+      customerSummary: projectionText(
+        source.customerSummary,
+        20,
+        1000,
+        true
+      ),
+      checks: customBuildCompletionChecksProjection(source.checks),
+      preparedAt: projectionIso(source.preparedAt),
+      evidence: evidence
+    };
+  }
+
+  function customBuildOwnerCompletionProjection(value, evidence) {
+    if (value === null) return null;
+    var source = projectionObject(value, [
+      "baseScopeDigest",
+      "checks",
+      "completionId",
+      "createdByOperatorUserId",
+      "customerSummary",
+      "effectiveChangeOrderDigests",
+      "effectiveScopeDigest",
+      "evidenceIds",
+      "packageDigest",
+      "preparedAt",
+      "progressRevision",
+      "state"
+    ]);
+    var evidenceIds = projectionArray(source.evidenceIds, 2, 12)
+      .map(projectionUuid);
+    projectionInvariant(
+      new Set(evidenceIds).size === evidenceIds.length
+      && JSON.stringify(evidenceIds) ===
+        JSON.stringify(evidenceIds.slice().sort())
+    );
+    var selectedEvidence = new Map(evidence.map(function (entry) {
+      return [entry.evidenceId, entry];
+    }));
+    projectionInvariant(evidenceIds.every(function (id) {
+      return selectedEvidence.has(id);
+    }));
+    var packagedEvidence = evidenceIds.map(function (id) {
+      return selectedEvidence.get(id);
+    });
+    projectionInvariant(
+      packagedEvidence.some(function (entry) { return entry.viewport === "desktop"; })
+      && packagedEvidence.some(function (entry) { return entry.viewport === "phone"; })
+      && !packagedEvidence.some(function (desktop) {
+        return desktop.viewport === "desktop"
+          && packagedEvidence.some(function (phone) {
+            return phone.viewport === "phone"
+              && phone.contentDigest === desktop.contentDigest;
+          });
+      })
+    );
+    var state = projectionText(source.state, 1, 80, false);
+    projectionInvariant(CUSTOM_BUILD_COMPLETION_STATES.includes(state));
+    return {
+      state: state,
+      customerSummary: projectionText(
+        source.customerSummary,
+        20,
+        1000,
+        true
+      ),
+      checks: customBuildCompletionChecksProjection(source.checks),
+      preparedAt: projectionIso(source.preparedAt),
+      completionId: projectionUuid(source.completionId),
+      progressRevision: projectionInteger(
+        source.progressRevision,
+        1,
+        Number.MAX_SAFE_INTEGER
+      ),
+      evidenceIds: evidenceIds,
+      baseScopeDigest: projectionDigest(source.baseScopeDigest),
+      effectiveChangeOrderDigests: projectionArray(
+        source.effectiveChangeOrderDigests,
+        0,
+        Number.MAX_SAFE_INTEGER
+      ).map(projectionDigest),
+      effectiveScopeDigest: projectionDigest(source.effectiveScopeDigest),
+      packageDigest: projectionDigest(source.packageDigest),
+      createdByOperatorUserId: projectionUuid(
+        source.createdByOperatorUserId
+      )
+    };
+  }
+
+  function validateCustomBuildCustomerChangeCompletion(value) {
+    var source = projectionObject(value, [
+      "changeOrders",
+      "completion",
+      "schema",
+      "state"
+    ]);
+    projectionInvariant(source.schema === CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA);
+    var state = projectionText(source.state, 1, 80, false);
+    projectionInvariant(CUSTOM_BUILD_CHANGE_COMPLETION_STATES.includes(state));
+    var orderSource = projectionObject(source.changeOrders, ["active", "history"]);
+    var active = orderSource.active === null
+      ? null
+      : customBuildChangeOrderProjection(orderSource.active, false);
+    var history = projectionArray(
+      orderSource.history,
+      0,
+      Number.MAX_SAFE_INTEGER
+    ).map(function (entry) {
+      return customBuildChangeOrderProjection(entry, false);
+    });
+    var completion = customBuildCustomerCompletionProjection(source.completion);
+    var allOrders = history.concat(active === null ? [] : [active]);
+    var orderIds = allOrders.map(function (entry) { return entry.changeOrderId; });
+    var changeNumbers = allOrders.map(function (entry) { return entry.changeNumber; });
+    projectionInvariant(
+      new Set(orderIds).size === orderIds.length
+      && new Set(changeNumbers).size === changeNumbers.length
+      && history.every(function (entry) {
+        return !["issued", "accepted_payment_required"].includes(entry.state);
+      })
+    );
+    if (state === "not_available") {
+      projectionInvariant(
+        active === null && history.length === 0 && completion === null
+      );
+    } else if (state === "building") {
+      projectionInvariant(active === null && completion === null);
+    } else if (state === "change_order_review") {
+      projectionInvariant(
+        active !== null && active.state === "issued" && completion === null
+      );
+    } else if (state === "change_order_payment_required") {
+      projectionInvariant(
+        active !== null
+        && active.state === "accepted_payment_required"
+        && completion === null
+      );
+    } else {
+      projectionInvariant(
+        active === null && completion !== null && completion.state === state
+      );
+    }
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA,
+      state: state,
+      changeOrders: { active: active, history: history },
+      completion: completion
+    });
+  }
+
+  function validateCustomBuildOwnerChangeCompletion(
+    value,
+    expectedJobId,
+    expectedOrganizationId
+  ) {
+    var source = projectionObject(value, [
+      "changeOrders",
+      "completion",
+      "evidence",
+      "job",
+      "proofBinding",
+      "schema",
+      "state"
+    ]);
+    projectionInvariant(source.schema === CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA);
+    var state = projectionText(source.state, 1, 80, false);
+    projectionInvariant(
+      CUSTOM_BUILD_CHANGE_COMPLETION_STATES.includes(state)
+      && state !== "not_available"
+    );
+    var jobSource = projectionObject(source.job, [
+      "caseId",
+      "currency",
+      "customerId",
+      "finalDueMinor",
+      "jobId",
+      "openedAt",
+      "organizationId",
+      "projectId",
+      "state",
+      "targetCompletionDate"
+    ]);
+    var job = {
+      jobId: projectionUuid(jobSource.jobId),
+      organizationId: projectionUuid(jobSource.organizationId),
+      projectId: projectionUuid(jobSource.projectId),
+      caseId: projectionUuid(jobSource.caseId),
+      customerId: projectionUuid(jobSource.customerId),
+      state: projectionText(jobSource.state, 1, 40, false),
+      targetCompletionDate: projectionDate(jobSource.targetCompletionDate),
+      finalDueMinor: projectionInteger(
+        jobSource.finalDueMinor,
+        0,
+        Number.MAX_SAFE_INTEGER
+      ),
+      currency: projectionText(jobSource.currency, 3, 3, false),
+      openedAt: projectionIso(jobSource.openedAt)
+    };
+    projectionInvariant(
+      job.jobId === expectedJobId
+      && job.organizationId === expectedOrganizationId
+      && job.state === "open"
+      && job.currency === "USD"
+    );
+    var proofBinding = null;
+    if (source.proofBinding !== null) {
+      var bindingSource = projectionObject(source.proofBinding, [
+        "effectiveScopeDigest",
+        "progressRevision"
+      ]);
+      proofBinding = {
+        progressRevision: projectionInteger(
+          bindingSource.progressRevision,
+          1,
+          Number.MAX_SAFE_INTEGER
+        ),
+        effectiveScopeDigest: projectionDigest(
+          bindingSource.effectiveScopeDigest
+        )
+      };
+    }
+    var changeOrders = projectionArray(
+      source.changeOrders,
+      0,
+      Number.MAX_SAFE_INTEGER
+    ).map(function (entry) {
+      return customBuildChangeOrderProjection(entry, true);
+    });
+    var evidence = projectionArray(source.evidence, 0, 12).map(function (entry) {
+      return customBuildCompletionEvidenceProjection(entry, true);
+    });
+    for (var index = 1; index < changeOrders.length; index += 1) {
+      projectionInvariant(
+        changeOrders[index - 1].changeNumber < changeOrders[index].changeNumber
+      );
+    }
+    for (var evidenceIndex = 1; evidenceIndex < evidence.length; evidenceIndex += 1) {
+      var prior = evidence[evidenceIndex - 1];
+      var current = evidence[evidenceIndex];
+      projectionInvariant(
+        prior.capturedAt < current.capturedAt
+        || (
+          prior.capturedAt === current.capturedAt
+          && prior.evidenceId < current.evidenceId
+        )
+      );
+    }
+    projectionInvariant(
+      new Set(changeOrders.map(function (entry) {
+        return entry.changeOrderId;
+      })).size === changeOrders.length
+      && new Set(evidence.map(function (entry) {
+        return entry.evidenceId;
+      })).size === evidence.length
+      && changeOrders.filter(function (entry) {
+        return ["issued", "accepted_payment_required"].includes(entry.state);
+      }).length <= 1
+    );
+    var completion = customBuildOwnerCompletionProjection(
+      source.completion,
+      evidence
+    );
+    var active = changeOrders.find(function (entry) {
+      return ["issued", "accepted_payment_required"].includes(entry.state);
+    }) || null;
+    if (completion !== null) {
+      var effectiveDigests = changeOrders
+        .filter(function (entry) { return entry.state === "effective"; })
+        .map(function (entry) { return entry.quoteDigest; });
+      projectionInvariant(
+        JSON.stringify(completion.effectiveChangeOrderDigests) ===
+          JSON.stringify(effectiveDigests)
+        && proofBinding !== null
+        && completion.progressRevision === proofBinding.progressRevision
+        && completion.effectiveScopeDigest ===
+          proofBinding.effectiveScopeDigest
+        && completion.evidenceIds.every(function (evidenceId) {
+          var selectedEvidence = evidence.find(function (entry) {
+            return entry.evidenceId === evidenceId;
+          });
+          return selectedEvidence
+            && selectedEvidence.progressRevision ===
+              proofBinding.progressRevision
+            && selectedEvidence.effectiveScopeDigest ===
+              proofBinding.effectiveScopeDigest;
+        })
+      );
+    }
+    if (state === "building") {
+      projectionInvariant(active === null && completion === null);
+    } else if (state === "change_order_review") {
+      projectionInvariant(
+        active !== null && active.state === "issued" && completion === null
+      );
+    } else if (state === "change_order_payment_required") {
+      projectionInvariant(
+        active !== null
+        && active.state === "accepted_payment_required"
+        && completion === null
+      );
+    } else {
+      projectionInvariant(
+        active === null && completion !== null && completion.state === state
+      );
+    }
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA,
+      state: state,
+      job: job,
+      proofBinding: proofBinding,
+      changeOrders: changeOrders,
+      evidence: evidence,
+      completion: completion
+    });
+  }
+
   function rejectClaimedAuthority(source) {
     if (Array.isArray(source)) {
       source.forEach(rejectClaimedAuthority);
@@ -409,6 +1130,8 @@
   function createClient(options) {
     var config = options || {};
     var fetchImpl = config.fetch || (typeof globalThis === "object" && globalThis.fetch);
+    var cryptoImpl = config.crypto
+      || (typeof globalThis === "object" && globalThis.crypto);
     if (typeof fetchImpl !== "function") {
       throw new APIError({ code: "FETCH_UNAVAILABLE", message: "A secure network client is required." });
     }
@@ -618,6 +1341,137 @@
         .replace(/[^a-z0-9._-]+/giu, "-")
         .slice(0, 160);
       return Object.freeze({ blob: blob, filename: filename });
+    }
+
+    async function requestPrivateEvidence(path, requestOptions) {
+      var response;
+      try {
+        response = await fetchImpl(baseUrl + path, {
+          method: "GET",
+          headers: {
+            Accept: CUSTOM_BUILD_EVIDENCE_MEDIA_TYPES.join(", ")
+          },
+          credentials: "include",
+          redirect: "error",
+          signal: requestOptions && requestOptions.signal
+        });
+      } catch (_error) {
+        throw new APIError({
+          code: "NETWORK_ERROR",
+          message: "Site Sourcery could not reach its secure service. Check the connection and try again.",
+          retryable: true
+        });
+      }
+      var requestId = response.headers && response.headers.get
+        ? response.headers.get("x-request-id")
+        : null;
+      var contentTypeHeader = response.headers && response.headers.get
+        ? String(response.headers.get("content-type") || "").toLowerCase()
+        : "";
+      if (!response.ok) {
+        var payload = null;
+        if (contentTypeHeader.includes("application/json")) {
+          try {
+            payload = await response.json();
+          } catch (_error) {
+            payload = null;
+          }
+        }
+        var errorBody = payload && isObject(payload.error)
+          ? payload.error
+          : payload;
+        var serverMessage = errorBody && typeof errorBody.message === "string"
+          ? errorBody.message.replace(/[\u0000-\u001f\u007f]/gu, " ").trim().slice(0, 500)
+          : "";
+        throw new APIError({
+          status: response.status,
+          code: errorBody && errorBody.code,
+          message: serverMessage
+            || "The Custom-build completion evidence could not be opened.",
+          requestId: (errorBody && errorBody.requestId) || requestId,
+          retryable:
+            response.status === 409
+            || response.status === 429
+            || response.status >= 500
+        });
+      }
+      var mediaType = contentTypeHeader.split(";", 1)[0].trim();
+      var lengthHeader = response.headers && response.headers.get
+        ? String(response.headers.get("content-length") || "")
+        : "";
+      var digestHeader = response.headers && response.headers.get
+        ? String(response.headers.get("digest") || "")
+        : "";
+      var cacheControl = response.headers && response.headers.get
+        ? String(response.headers.get("cache-control") || "").toLowerCase()
+        : "";
+      var contentTypeOptions = response.headers && response.headers.get
+        ? String(response.headers.get("x-content-type-options") || "").toLowerCase()
+        : "";
+      var byteCount = /^\d+$/u.test(lengthHeader)
+        ? Number(lengthHeader)
+        : NaN;
+      if (
+        !CUSTOM_BUILD_EVIDENCE_MEDIA_TYPES.includes(mediaType)
+        || !Number.isSafeInteger(byteCount)
+        || byteCount < 1
+        || byteCount > MAXIMUM_ASSESSMENT_EVIDENCE_BYTES
+        || !/^sha-256=[A-Za-z0-9+/]{43}=$/u.test(digestHeader)
+        || !cacheControl.split(",").map(function (entry) {
+          return entry.trim();
+        }).includes("private")
+        || !cacheControl.split(",").map(function (entry) {
+          return entry.trim();
+        }).includes("no-store")
+        || contentTypeOptions !== "nosniff"
+      ) {
+        throw invalidCustomBuildChangeCompletionResponse();
+      }
+      var blob;
+      try {
+        blob = await response.blob();
+      } catch (_error) {
+        throw invalidCustomBuildChangeCompletionResponse();
+      }
+      projectionInvariant(
+        blob
+        && Number.isSafeInteger(blob.size)
+        && blob.size === byteCount
+      );
+      var bytes;
+      try {
+        bytes = new Uint8Array(await blob.arrayBuffer());
+      } catch (_error) {
+        throw invalidCustomBuildChangeCompletionResponse();
+      }
+      if (
+        !cryptoImpl
+        || !cryptoImpl.subtle
+        || typeof cryptoImpl.subtle.digest !== "function"
+      ) {
+        throw new APIError({
+          code: "EVIDENCE_INTEGRITY_UNAVAILABLE",
+          message:
+            "This browser cannot verify private completion evidence. Update the browser and try again."
+        });
+      }
+      var calculated;
+      try {
+        calculated = new Uint8Array(
+          await cryptoImpl.subtle.digest("SHA-256", bytes)
+        );
+      } catch (_error) {
+        throw invalidCustomBuildChangeCompletionResponse();
+      }
+      projectionInvariant(
+        digestHeader === "sha-256=" + base64FromBytes(calculated)
+      );
+      return Object.freeze({
+        blob: blob,
+        mediaType: mediaType,
+        byteCount: byteCount,
+        contentDigest: hexFromBytes(calculated)
+      });
     }
 
     function register(input, requestOptions) {
@@ -1655,6 +2509,547 @@
       );
     }
 
+    function getCustomServicesCustomBuildChangeCompletion(
+      projectId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-change-completion",
+        { signal: requestOptions && requestOptions.signal }
+      ).then(validateCustomBuildCustomerChangeCompletion);
+    }
+
+    function getCustomServicesCustomBuildCompletionEvidence(
+      projectId,
+      evidenceId,
+      requestOptions
+    ) {
+      return requestPrivateEvidence(
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-completion-evidence/"
+          + segment(
+            requiredUuid(evidenceId, "Custom-build completion evidence ID"),
+            "Custom-build completion evidence ID"
+          ),
+        requestOptions
+      );
+    }
+
+    function customBuildChangeCommandId(value, field) {
+      return customBuildSafeText(value, field, 8, 200);
+    }
+
+    function customBuildCompletionEvidenceBase64(value) {
+      if (
+        typeof value !== "string"
+        || value.length < 4
+        || value.length % 4 !== 0
+        || value.length >
+          Math.ceil(MAXIMUM_ASSESSMENT_EVIDENCE_BYTES / 3) * 4 + 4
+        || !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "Custom-build completion evidence is invalid or larger than 700 KiB."
+        });
+      }
+      var padding = value.endsWith("==")
+        ? 2
+        : value.endsWith("=") ? 1 : 0;
+      var byteCount = Math.floor(value.length * 3 / 4) - padding;
+      if (
+        byteCount < 1
+        || byteCount > MAXIMUM_ASSESSMENT_EVIDENCE_BYTES
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "Custom-build completion evidence is invalid or larger than 700 KiB."
+        });
+      }
+      return value;
+    }
+
+    function canonicalCustomBuildCompletionEvidenceIds(value) {
+      if (!Array.isArray(value) || value.length < 2 || value.length > 12) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Choose between two and twelve completion evidence images."
+        });
+      }
+      var selected = value.map(function (entry) {
+        return requiredUuid(entry, "Custom-build completion evidence ID");
+      });
+      if (
+        new Set(selected).size !== selected.length
+        || JSON.stringify(selected) !== JSON.stringify(selected.slice().sort())
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "Completion evidence must be unique and kept in canonical order."
+        });
+      }
+      return selected;
+    }
+
+    function acceptCustomServicesCustomBuildChangeOrder(
+      projectId,
+      changeOrderId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        [
+          "acceptanceStatement",
+          "acceptedDisclosureDigest",
+          "acceptedQuoteDigest",
+          "commandId"
+        ],
+        "Custom-build change-order acceptance"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change-order acceptance command ID"
+      );
+      if (
+        source.acceptanceStatement !==
+          "accepted_exact_change_order_and_payment_requirement"
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Custom-build change-order acceptance is invalid."
+        });
+      }
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-change-orders/"
+          + segment(
+            requiredUuid(changeOrderId, "Custom-build change-order ID"),
+            "Custom-build change-order ID"
+          )
+          + "/acceptance",
+        {
+          body: {
+            acceptanceStatement:
+              "accepted_exact_change_order_and_payment_requirement",
+            acceptedDisclosureDigest: requiredDigest(
+              source.acceptedDisclosureDigest,
+              "Accepted change-order disclosure digest"
+            ),
+            acceptedQuoteDigest: requiredDigest(
+              source.acceptedQuoteDigest,
+              "Accepted change-order quote digest"
+            ),
+            commandId: commandId
+          },
+          idempotencyKey: commandId
+        }
+      ).then(validateCustomBuildCustomerChangeCompletion);
+    }
+
+    function declineCustomServicesCustomBuildChangeOrder(
+      projectId,
+      changeOrderId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        [
+          "commandId",
+          "declineStatement",
+          "declinedDisclosureDigest",
+          "declinedQuoteDigest"
+        ],
+        "Custom-build change-order decline"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change-order decline command ID"
+      );
+      if (
+        source.declineStatement !==
+          "declined_exact_custom_build_change_quote"
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Custom-build change-order decline is invalid."
+        });
+      }
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-change-orders/"
+          + segment(
+            requiredUuid(changeOrderId, "Custom-build change-order ID"),
+            "Custom-build change-order ID"
+          )
+          + "/decline",
+        {
+          body: {
+            commandId: commandId,
+            declineStatement: "declined_exact_custom_build_change_quote",
+            declinedDisclosureDigest: requiredDigest(
+              source.declinedDisclosureDigest,
+              "Declined change-order disclosure digest"
+            ),
+            declinedQuoteDigest: requiredDigest(
+              source.declinedQuoteDigest,
+              "Declined change-order quote digest"
+            )
+          },
+          idempotencyKey: commandId
+        }
+      ).then(validateCustomBuildCustomerChangeCompletion);
+    }
+
+    function getOwnerCustomBuildChangeCompletion(
+      jobId,
+      organizationId,
+      requestOptions
+    ) {
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedOrganizationId = requiredUuid(
+        organizationId,
+        "Organization ID"
+      );
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-completion?organizationId="
+          + encodeURIComponent(selectedOrganizationId),
+        { signal: requestOptions && requestOptions.signal }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          selectedOrganizationId
+        );
+      });
+    }
+
+    function issueOwnerCustomBuildChangeOrder(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "addedScope",
+          "commandId",
+          "expiresAt",
+          "organizationId",
+          "targetCompletionDate",
+          "unitCount"
+        ],
+        "Custom-build change order"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var organizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change-order command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-orders",
+        {
+          body: {
+            addedScope: customBuildSafeText(
+              source.addedScope,
+              "Added Custom-build scope",
+              20,
+              2000
+            ),
+            commandId: commandId,
+            expiresAt: requiredIso(
+              source.expiresAt,
+              "Custom-build change-order expiration"
+            ),
+            organizationId: organizationId,
+            targetCompletionDate: requiredDate(
+              source.targetCompletionDate,
+              "Custom-build target completion date"
+            ),
+            unitCount: integerBetween(
+              source.unitCount,
+              "Custom-build change-work units",
+              1,
+              40
+            )
+          },
+          idempotencyKey: commandId
+        }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          organizationId
+        );
+      });
+    }
+
+    function voidOwnerCustomBuildChangeOrder(
+      jobId,
+      changeOrderId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "expectedQuoteDigest", "organizationId", "reason"],
+        "Custom-build change-order void"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedChangeOrderId = requiredUuid(
+        changeOrderId,
+        "Custom-build change-order ID"
+      );
+      var organizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change-order void command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-orders/"
+          + segment(selectedChangeOrderId, "Custom-build change-order ID")
+          + "/void",
+        {
+          body: {
+            commandId: commandId,
+            expectedQuoteDigest: requiredDigest(
+              source.expectedQuoteDigest,
+              "Expected change-order quote digest"
+            ),
+            organizationId: organizationId,
+            reason: customBuildSafeText(
+              source.reason,
+              "Custom-build change-order void reason",
+              20,
+              500
+            )
+          },
+          idempotencyKey: commandId
+        }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          organizationId
+        );
+      });
+    }
+
+    function expireOwnerCustomBuildChangeOrder(
+      jobId,
+      changeOrderId,
+      input
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "expectedQuoteDigest", "organizationId"],
+        "Custom-build change-order expiration"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedChangeOrderId = requiredUuid(
+        changeOrderId,
+        "Custom-build change-order ID"
+      );
+      var organizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change-order expiration command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-orders/"
+          + segment(selectedChangeOrderId, "Custom-build change-order ID")
+          + "/expiration",
+        {
+          body: {
+            commandId: commandId,
+            expectedQuoteDigest: requiredDigest(
+              source.expectedQuoteDigest,
+              "Expected change-order quote digest"
+            ),
+            organizationId: organizationId
+          },
+          idempotencyKey: commandId
+        }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          organizationId
+        );
+      });
+    }
+
+    function uploadOwnerCustomBuildCompletionEvidence(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "accessibleDescription",
+          "commandId",
+          "dataBase64",
+          "mediaType",
+          "organizationId",
+          "viewport"
+        ],
+        "Custom-build completion evidence"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var organizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build completion-evidence command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/completion-evidence",
+        {
+          body: {
+            accessibleDescription: customBuildSafeText(
+              source.accessibleDescription,
+              "Accessible completion-evidence description",
+              10,
+              500
+            ),
+            commandId: commandId,
+            dataBase64: customBuildCompletionEvidenceBase64(
+              source.dataBase64
+            ),
+            mediaType: oneOf(
+              source.mediaType,
+              "Completion evidence image type",
+              CUSTOM_BUILD_EVIDENCE_MEDIA_TYPES
+            ),
+            organizationId: organizationId,
+            viewport: oneOf(
+              source.viewport,
+              "Completion evidence viewport",
+              ["desktop", "phone"]
+            )
+          },
+          idempotencyKey: commandId
+        }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          organizationId
+        );
+      });
+    }
+
+    function recordOwnerCustomBuildCompletion(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "checks",
+          "commandId",
+          "customerSummary",
+          "evidenceIds",
+          "organizationId"
+        ],
+        "Custom-build completion"
+      );
+      rejectClaimedAuthority(source);
+      var checks = exactInput(
+        source.checks,
+        [
+          "accessibilityBasics",
+          "contactActions",
+          "desktop",
+          "links",
+          "phone",
+          "scope"
+        ],
+        "Custom-build completion checks"
+      );
+      if (!Object.keys(checks).every(function (key) {
+        return checks[key] === true;
+      })) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Every Custom-build completion check must be confirmed."
+        });
+      }
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var organizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build completion command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/completion",
+        {
+          body: {
+            checks: {
+              accessibilityBasics: true,
+              contactActions: true,
+              desktop: true,
+              links: true,
+              phone: true,
+              scope: true
+            },
+            commandId: commandId,
+            customerSummary: customBuildSafeText(
+              source.customerSummary,
+              "Custom-build completion summary",
+              20,
+              1000
+            ),
+            evidenceIds: canonicalCustomBuildCompletionEvidenceIds(
+              source.evidenceIds
+            ),
+            organizationId: organizationId
+          },
+          idempotencyKey: commandId
+        }
+      ).then(function (value) {
+        return validateCustomBuildOwnerChangeCompletion(
+          value,
+          selectedJobId,
+          organizationId
+        );
+      });
+    }
+
     function respondToCustomServicesCustomBuildRequest(
       projectId,
       requestId,
@@ -2494,6 +3889,26 @@
         getCustomServicesCustomBuildInvoice,
       getCustomServicesCustomBuildProgress:
         getCustomServicesCustomBuildProgress,
+      getCustomServicesCustomBuildChangeCompletion:
+        getCustomServicesCustomBuildChangeCompletion,
+      getCustomServicesCustomBuildCompletionEvidence:
+        getCustomServicesCustomBuildCompletionEvidence,
+      acceptCustomServicesCustomBuildChangeOrder:
+        acceptCustomServicesCustomBuildChangeOrder,
+      declineCustomServicesCustomBuildChangeOrder:
+        declineCustomServicesCustomBuildChangeOrder,
+      getOwnerCustomBuildChangeCompletion:
+        getOwnerCustomBuildChangeCompletion,
+      issueOwnerCustomBuildChangeOrder:
+        issueOwnerCustomBuildChangeOrder,
+      voidOwnerCustomBuildChangeOrder:
+        voidOwnerCustomBuildChangeOrder,
+      expireOwnerCustomBuildChangeOrder:
+        expireOwnerCustomBuildChangeOrder,
+      uploadOwnerCustomBuildCompletionEvidence:
+        uploadOwnerCustomBuildCompletionEvidence,
+      recordOwnerCustomBuildCompletion:
+        recordOwnerCustomBuildCompletion,
       respondToCustomServicesCustomBuildRequest:
         respondToCustomServicesCustomBuildRequest,
       createCustomServicesCustomBuildCheckout:

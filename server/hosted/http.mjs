@@ -477,6 +477,8 @@ export function createHostedApi(
       typeof customServicesCustomBuildChangeCompletionBoundary
         .voidChangeOrder === "function" &&
       typeof customServicesCustomBuildChangeCompletionBoundary
+        .expireChangeOrder === "function" &&
+      typeof customServicesCustomBuildChangeCompletionBoundary
         .uploadEvidence === "function" &&
       typeof customServicesCustomBuildChangeCompletionBoundary
         .recordCompletion === "function",
@@ -1122,6 +1124,37 @@ export function createHostedApi(
                 ],
                 "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
                 "The Custom-build change-order void is invalid."
+              )
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-orders\/([^/]+)\/expiration$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before expiring a Custom-build change order.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+            "The Custom-build change-order expiration query is invalid."
+          );
+          result = await customServicesCustomBuildChangeCompletionBoundary
+            .expireChangeOrder(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                ["commandId", "expectedQuoteDigest", "organizationId"],
+                "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT",
+                "The Custom-build change-order expiration is invalid."
               )
             );
         } else if (

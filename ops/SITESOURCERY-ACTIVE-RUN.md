@@ -25,10 +25,10 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1K paid Custom-build customer/owner visibility surface
-  is the latest reviewed local checkpoint represented by this ledger;
-  use `git log -1` for its eventual checkpoint commit rather than copying a
-  hash into the commit that creates it.
+- The H1M Custom-build change/completion correction has complete local proof
+  and an independent `BLOCKER: NO`. Its exact backend/Abracadabra/integration
+  files are separated from the aesthetic lane; use `git log -1` for the local
+  checkpoint hash rather than copying a hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
 - No push, deploy, DNS change, provider write, credential capture, or release
   approval is authorized by this run.
@@ -36,11 +36,46 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-visible paid build job: implement bounded
-build/access/dependency/change-order/evidence progress, expose only safe
-customer status, then create and settle the exact final handoff invoice before
-delivery or launch. All real provider effects and public-service release gates
-remain held until each preceding local boundary is proven.
+Continue H1 from the sealed change/completion boundary. H1N first invoices and
+settles each accepted change order into `effective`, then derives and settles
+the separate completion-bound final obligation before immutable handoff and
+the database-derived 30-day workmanship window. All real provider effects and
+public-service release gates remain held until each preceding local boundary
+is proven.
+
+## Owner visual rulings captured 2026-08-06
+
+- `/domains/` must use `site-sourcery-main-street-v2.webp` as that page's
+  background instead of showing the same global wizard/storm background plus
+  a separate floating copy of the address graphic.
+- The opening “Four ways to have an address” copy must use the homepage's
+  soft champagne/frosted readability treatment so white words survive bright
+  background detail without dimming the entire image.
+- Each major public page should ultimately have its own memorable background
+  in the same Site Sourcery visual universe. Treat this as a deliberate visual
+  inventory and polish lane, not permission to swap every page at once or use
+  unrelated art. Domains is the first page-specific conversion.
+
+## Active lane ownership captured 2026-08-06
+
+- Build owns server code, data-plane migrations and PostgreSQL tests, hosted
+  composition, Abracadabra customer runtime and controls, backend operations,
+  this active-run ledger, and backend-only commits.
+- The aesthetic lead owns `vnext.css`, visual assets, and public presentation
+  for Domains, Custom/Sorcery, Responder, Work/Spell Book, About, Contact, FAQ,
+  and Legal. The homepage is design-locked. Build must not edit those files.
+- The preserved aesthetic handoff is currently dirty and uncommitted:
+  `domains/index.html` plus `vnext.css` make
+  `site-sourcery-main-street-v2.webp` the Domains background, remove its
+  floating hero image, and add a frosted intro; `responder/index.html` removes
+  its floating hero and interactive ten-minute picker in favor of one visible
+  five-step flow; `work/index.html` and `work/work.css` contain the preserved
+  in-flight portfolio simplification. Do not discard or mix any of those files
+  into a backend checkpoint.
+- Completion reporting now comes only from
+  `ops/SITESOURCERY-100-PERCENT-COMPLETION-MATRIX-2026-08-06.md`, with Core
+  Launch and Expansion calculated separately. Do not report an informal
+  percentage.
 
 ## Completed and reviewed
 
@@ -1255,21 +1290,143 @@ Batch 3C sealed checkpoint gates:
   renewal / transfer, and fresh-quote acceptance remain unfinished and must
   not be represented as automatic live fallback yet.
 
+## H1M redline correction sealed locally
+
+- Independent reviewer Averroes initially returned `BLOCKER: YES`. Every named
+  code and proof defect is now corrected: hosted/browser exact schemas,
+  current-progress/current-scope owner evidence selection, complete image
+  decoding with real and adversarial fixtures, a real two-session completion
+  race, and delegated-access finality denial. A fresh independent reviewer
+  inspected the resulting code, test evidence, cleanup, manifest, production
+  hold, and lane split and returned `BLOCKER: NO`.
+
+- A change order can add work only. The owner selects 1-40 bounded work units;
+  storage derives `$125` per unit and never accepts a browser-supplied price,
+  discount, refund, assessment credit, negative amount, or rewrite of the
+  originally accepted scope. Only one unresolved change order may exist per
+  paid job.
+- The owner must state the added scope, a same-or-later target date, and an
+  expiration no more than 14 days away. The customer may accept or decline the
+  exact digest. Acceptance makes payment required; it does not authorize the
+  added work until later provider-confirmed settlement makes the order
+  effective. No uncertain payment may be treated as effective.
+- Completion requires the latest progress stage to be `checking`, all four
+  milestones done, no active customer request, and no issued or accepted-but-
+  unpaid change order. It binds 2-12 immutable customer-visible JPEG, PNG, or
+  WebP records, including desktop and phone proof, to six explicit checks:
+  scope, desktop, phone, links, contact actions, and accessibility basics.
+- The immutable completion snapshot derives effective scope from the original
+  scope plus later paid/effective changes. It can become
+  `ready_for_final_payment` or `ready_for_delivery`; it is not itself payment,
+  launch, delivery, job completion, or authority to start the 30-day
+  workmanship clock.
+- An independent redline found four launch blockers in the first checkpoint:
+  progress or request writes could race completion, screenshot proof could be
+  stale or unrelated to the latest verified scope, an elapsed issued change
+  could strand the job, and production exposed H1M before final-payment H1N
+  existed. All four are corrected at the storage and composition boundaries,
+  not merely hidden in the browser.
+- Change-order expiration is now an append-only, digest-bound owner command
+  that uses the database clock and the same paid-job lock as issue, decision,
+  evidence, and completion. An elapsed issued order becomes `expired`, replay
+  is stable, and a different command or quote digest cannot inherit it.
+- Every completion image stores validated width, height, media type, byte
+  digest, latest progress revision, and current effective-scope digest.
+  Desktop and phone dimensions are enforced separately; proof captured before
+  the latest Checking revision, proof from another scope, and identical image
+  bytes for both viewports cannot complete the job.
+- JPEG, PNG, and WebP acceptance now includes a complete server-side pixel
+  decode through pinned `sharp@0.35.3` with strict warning failure and bounded
+  input pixels. The existing format/metadata scanner remains in front of that
+  decoder. Adversarial tests prove that structurally plausible garbage JPEG
+  and VP8 streams are rejected; a production-dependency audit reports zero
+  known vulnerabilities.
+- Completion and all later progress, work-request, and delegated-access writes
+  share one transaction lock. Once the immutable completion package exists,
+  those writes fail instead of racing or silently reopening the work. The
+  customer can read only package-selected authenticated evidence.
+- The responsive customer and owner controls now cover issue, accept, decline,
+  void, expiration, evidence upload, completion proof, malformed refresh,
+  held state, and exact `$125`-unit arithmetic. Browser input still cannot
+  claim price, tax, credit, payment, provider, progress, scope, or completion
+  state. Production deliberately composes the H1M boundary as held until H1N
+  has provider-confirmed final settlement or exact zero-balance clearance.
+- Disposable databases `ss_h1m_redline_final_20260806_codex11` and `codex12`
+  each replayed all 44 migrations and reached the real queued race, but the
+  observer transaction retained one PostgreSQL statistics snapshot and could
+  not see the second waiter. Both runs left the correct product state — one
+  immutable package and progress revision 3 — and both databases had zero
+  sessions before exact-name deletion and are verified absent. The observer
+  now calls `pg_stat_clear_snapshot()` before each `pg_stat_activity` read.
+- Fresh database `ss_h1m_redline_final_20260806_codex13` replayed all 44
+  migrations and passed the complete assessment-through-report, `$200` credit,
+  paid Card Plus job, progress/request/access, `$125`-unit change lifecycle,
+  stale-proof rejection, real desktop/phone evidence, actual queued completion
+  versus progress race, package-bound customer evidence, and all
+  post-completion progress/request/delegated-access denials 1/1. It had zero
+  active sessions before exact-name deletion and is verified absent.
+- Authoritative Node 24.18.0 proof passes: focused H1M set 146/146 and one
+  uninterrupted `npm test` release run. That run passed runtime, source HTML,
+  18 live pages and 20 redirects, core tests, self-host, hosted service,
+  operations 52/52, exact 78-file artifact, hosted build and HTML, and Chrome
+  149 across 15 routes at three widths. Its issued-change and
+  ready-completion customer/owner journeys use real `390x844` and `1440x1000`
+  image evidence, malformed-refresh retention, exact-width layout, and no
+  browser failures.
+- The hosted staging manifest binds API digest
+  `23777c44f9d4a175269f49282489a7e0d655ad715acce42dc0fc646146e61b88`
+  and customer-control digest
+  `64d2e1227130503725a8356d72c3d6c01a7998358440156172b40cc9a7aec80e`.
+  No real Stripe or registrar call, production/customer-data write, push,
+  deployment, DNS change, credential handling, or release mutation occurred.
+
+## H1N change-payment, final-payment, and handoff inventory
+
+- Reuse the accepted quote/installments, payment receipt, immutable paid job,
+  progress/request history, `service_documents`, digest-bound document
+  payloads, advisory/idempotency fences, retained Checkout attempts, append-
+  only Stripe events, and readback reconciliation patterns already present.
+- H1N has two ordered financial purposes. First, every accepted change order
+  deliberately left at `accepted_payment_required` by migration 44 needs an
+  exact change-order invoice and lines, its own Checkout/Stripe purpose and
+  append-only event ledger, provider-confirmed receipt, and an atomic
+  transition to `effective`. Changed work cannot start before that transition.
+- Only after every accepted change is effective may completion derive the
+  exact final obligation, final invoice and lines, separate final Checkout /
+  Stripe purpose and event ledger, provider-confirmed final receipt or
+  explicit zero-balance clearance, immutable handoff receipt, customer and
+  owner projections, and a database-derived 30-day workmanship start/end
+  clock.
+- Final state must remain derived from append-only records because the paid job
+  itself is immutable. Handoff must also close later progress/request writes.
+  The current document guard must be narrowed to permit matching paid-job
+  evidence now and matching handoff documents only in the later handoff slice.
+- Safe sequence is accepted-change invoice, verified change settlement,
+  effective change, completion snapshot, exact final obligation, verified
+  final payment or zero-balance clearance, immutable handoff, then
+  customer/owner projections. The workmanship clock starts from evidenced
+  final handoff, not merely from an owner progress update or an unverified
+  launch claim.
+- `npm test` does not currently create a fresh PostgreSQL database or run the
+  migration/custom-services integration journeys. Before Core Launch can be
+  100%, one exact release command must provision an exact disposable database,
+  replay every migration, run the launch-critical PostgreSQL journeys, verify
+  zero sessions, delete that exact database, verify absence, and then run the
+  existing Node/browser/artifact gates.
+
 ## Live resources and workers
 
-- No implementation or redline worker remains running. The exact Batch 3C and
-  H1 disposable PostgreSQL databases, including the H1L database, are absent.
+- No H1M worker remains open. All exact H1M and prior H1 disposable PostgreSQL
+  databases, including the H1L database, are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add the formal change-order and completion-evidence boundary needed to finish
-the now-visible paid job, then materialize and settle the exact final-handoff
-invoice before delivery or launch. Do not add a casual mark-paid or casual
-mark-complete control, and do not let the browser submit money, tax, credit,
-payment, or provider-effect authority. Keep provider release, push,
-deployment, and DNS held.
+Begin H1N with the accepted-change-order invoice and verified settlement
+boundary before the separate completion-bound final obligation. Preserve the
+H1M backend checkpoint, leave every aesthetic file to its owner, and keep
+provider release, push, deployment, and DNS held.
 
 ## Batch 3B write scope
 

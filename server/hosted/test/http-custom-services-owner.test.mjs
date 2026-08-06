@@ -704,6 +704,16 @@ test("owner Custom-build change/completion routes bind exact jobs, commands, and
         });
         return { ...snapshot, state: "building" };
       },
+      async expireChangeOrder(actor, jobId, selectedChangeOrderId, input) {
+        calls.push({
+          action: "expire",
+          actor,
+          jobId,
+          changeOrderId: selectedChangeOrderId,
+          input
+        });
+        return { ...snapshot, state: "building" };
+      },
       async uploadEvidence(actor, jobId, input) {
         calls.push({ action: "evidence", actor, jobId, input });
         return { evidenceId: EVIDENCE_ID };
@@ -749,6 +759,17 @@ test("owner Custom-build change/completion routes bind exact jobs, commands, and
     path: `${root}/change-orders/${changeOrderId}/void`
   }));
   assert.equal(voided.status, 200);
+
+  const expirationBody = {
+    expectedQuoteDigest: "a".repeat(64),
+    organizationId: ORGANIZATION_ID
+  };
+  const expired = await api.fetch(request({
+    body: expirationBody,
+    method: "POST",
+    path: `${root}/change-orders/${changeOrderId}/expiration`
+  }));
+  assert.equal(expired.status, 200);
 
   const evidenceBody = {
     accessibleDescription: "Desktop completion view of the approved homepage.",
@@ -804,6 +825,13 @@ test("owner Custom-build change/completion routes bind exact jobs, commands, and
       input: { ...voidBody, commandId }
     },
     {
+      action: "expire",
+      actor,
+      jobId: JOB_ID,
+      changeOrderId,
+      input: { ...expirationBody, commandId }
+    },
+    {
       action: "evidence",
       actor,
       jobId: JOB_ID,
@@ -844,7 +872,7 @@ test("owner Custom-build change/completion routes bind exact jobs, commands, and
     (await expanded.json()).error.code,
     "INVALID_CUSTOM_BUILD_CHANGE_COMPLETION_INPUT"
   );
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 6);
 });
 
 test("default owner Custom-build change/completion routes fail closed", async () => {

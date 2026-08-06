@@ -8,9 +8,14 @@ const { createClient } = require(
   "../../abracadabra/app/abracadabra-api.js"
 );
 const {
+  customerCustomBuildCompletionEvidenceUrl,
+  currentOwnerCustomBuildCompletionEvidence,
+  prepareCustomBuildCompletionEvidenceFile,
+  verifiedCustomerCustomBuildChangeCompletion,
   verifiedCustomBuildProgress,
   verifiedCustomerCustomBuildCheckout,
-  verifiedCustomerCustomBuildInvoice
+  verifiedCustomerCustomBuildInvoice,
+  verifiedOwnerCustomBuildChangeCompletion
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
@@ -26,6 +31,14 @@ const CHECKOUT_EXPIRES_AT = "2026-08-06T14:00:00.000Z";
 const INVOICE_DIGEST = "c".repeat(64);
 const QUOTE_DIGEST = "a".repeat(64);
 const DISCLOSURE_DIGEST = "b".repeat(64);
+const CHANGE_ORDER_ID = "81000000-0000-4000-8000-000000000001";
+const DESKTOP_EVIDENCE_ID = "82000000-0000-4000-8000-000000000001";
+const PHONE_EVIDENCE_ID = "82000000-0000-4000-8000-000000000002";
+const COMPLETION_ID = "83000000-0000-4000-8000-000000000001";
+const ORGANIZATION_ID = "20000000-0000-4000-8000-000000000001";
+const CASE_ID = "84000000-0000-4000-8000-000000000001";
+const CUSTOMER_ID = "10000000-0000-4000-8000-000000000001";
+const OPERATOR_ID = "85000000-0000-4000-8000-000000000001";
 
 const expectation = Object.freeze({
   acceptedDisclosureDigest: DISCLOSURE_DIGEST,
@@ -232,6 +245,201 @@ function workRequest(overrides = {}) {
     createdAt: "2026-08-06T15:05:00.000Z",
     updatedAt: "2026-08-06T15:05:00.000Z",
     ...overrides
+  };
+}
+
+function changeOrder(state = "issued", owner = false, overrides = {}) {
+  const value = {
+    changeOrderId: CHANGE_ORDER_ID,
+    changeNumber: 1,
+    state,
+    addedScope:
+      "Add the approved events page and its matching navigation link.",
+    pricing: {
+      unitCount: 2,
+      unitAmountMinor: 12500,
+      subtotalMinor: 25000,
+      currency: "USD",
+      taxState: "automatic_tax_pending",
+      paymentRequirement: "due_before_changed_work"
+    },
+    targetCompletionDate: "2026-09-22",
+    quoteDigest: "d".repeat(64),
+    disclosureDigest: "e".repeat(64),
+    issuedAt: "2026-08-06T15:00:00.000Z",
+    expiresAt: "2026-08-13T15:00:00.000Z",
+    expiredAt: state === "expired"
+      ? "2026-08-13T15:05:00.000Z"
+      : null,
+    acceptedAt: state === "accepted_payment_required"
+      || state === "effective"
+      ? "2026-08-07T15:00:00.000Z"
+      : null,
+    declinedAt: state === "declined"
+      ? "2026-08-07T15:00:00.000Z"
+      : null,
+    void: state === "voided"
+      ? {
+          reason:
+            "The customer requested a corrected replacement change order.",
+          voidedAt: "2026-08-07T15:00:00.000Z"
+        }
+      : null,
+    ...overrides
+  };
+  if (owner) {
+    value.createdByOperatorUserId = OPERATOR_ID;
+  }
+  return value;
+}
+
+function completionEvidence(id, viewport, owner = false, overrides = {}) {
+  const value = {
+    evidenceId: id,
+    viewport,
+    accessibleDescription:
+      `${viewport} view of the completed approved homepage and contact action.`,
+    mediaType: "image/png",
+    byteCount: 2048,
+    contentDigest: viewport === "desktop"
+      ? "f".repeat(64)
+      : "1".repeat(64),
+    imageWidth: viewport === "desktop" ? 1440 : 390,
+    imageHeight: viewport === "desktop" ? 1000 : 844,
+    capturedAt: "2026-08-08T15:00:00.000Z",
+    ...overrides
+  };
+  if (owner) {
+    value.progressRevision = 3;
+    value.effectiveScopeDigest = "3".repeat(64);
+    value.createdByOperatorUserId = OPERATOR_ID;
+  }
+  return value;
+}
+
+const completionChecks = Object.freeze({
+  scope: true,
+  desktop: true,
+  phone: true,
+  links: true,
+  contactActions: true,
+  accessibilityBasics: true
+});
+
+function customerCompletion(state = "ready_for_final_payment") {
+  return {
+    state,
+    customerSummary:
+      "The approved scope is complete and every documented customer-visible check passed.",
+    checks: completionChecks,
+    preparedAt: "2026-08-08T16:00:00.000Z",
+    evidence: [
+      completionEvidence(DESKTOP_EVIDENCE_ID, "desktop"),
+      completionEvidence(PHONE_EVIDENCE_ID, "phone")
+    ]
+  };
+}
+
+function customerChangeCompletion(state = "change_order_review") {
+  if (state === "not_available") {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state,
+      changeOrders: { active: null, history: [] },
+      completion: null
+    };
+  }
+  if (["ready_for_final_payment", "ready_for_delivery"].includes(state)) {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state,
+      changeOrders: {
+        active: null,
+        history: [changeOrder("effective")]
+      },
+      completion: customerCompletion(state)
+    };
+  }
+  if (state === "building") {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state,
+      changeOrders: {
+        active: null,
+        history: [changeOrder("expired")]
+      },
+      completion: null
+    };
+  }
+  return {
+    schema: "sitesourcery.custom-build-change-completion/v1",
+    state,
+    changeOrders: {
+      active: changeOrder(
+        state === "change_order_review"
+          ? "issued"
+          : "accepted_payment_required"
+      ),
+      history: []
+    },
+    completion: null
+  };
+}
+
+function ownerEntry() {
+  return {
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    caseId: CASE_ID,
+    customer: { customerId: CUSTOMER_ID },
+    job: {
+      jobId: JOB_ID,
+      targetCompletionDate: "2026-09-15"
+    }
+  };
+}
+
+function ownerChangeCompletion(state = "ready_for_final_payment") {
+  const evidence = [
+    completionEvidence(DESKTOP_EVIDENCE_ID, "desktop", true),
+    completionEvidence(PHONE_EVIDENCE_ID, "phone", true)
+  ];
+  return {
+    schema: "sitesourcery.custom-build-change-completion/v1",
+    state,
+    job: {
+      jobId: JOB_ID,
+      organizationId: ORGANIZATION_ID,
+      projectId: PROJECT_ID,
+      caseId: CASE_ID,
+      customerId: CUSTOMER_ID,
+      state: "open",
+      targetCompletionDate: "2026-09-15",
+      finalDueMinor: 60000,
+      currency: "USD",
+      openedAt: "2026-08-06T14:00:00.000Z"
+    },
+    proofBinding: {
+      progressRevision: 3,
+      effectiveScopeDigest: "3".repeat(64)
+    },
+    changeOrders: [changeOrder("effective", true)],
+    evidence,
+    completion: {
+      state,
+      customerSummary:
+        "The approved scope is complete and every documented customer-visible check passed.",
+      checks: completionChecks,
+      preparedAt: "2026-08-08T16:00:00.000Z",
+      completionId: COMPLETION_ID,
+      progressRevision: 3,
+      evidenceIds: [DESKTOP_EVIDENCE_ID, PHONE_EVIDENCE_ID],
+      baseScopeDigest: "2".repeat(64),
+      effectiveChangeOrderDigests: ["d".repeat(64)],
+      effectiveScopeDigest: "3".repeat(64),
+      packageDigest: "4".repeat(64),
+      createdByOperatorUserId: OPERATOR_ID
+    }
   };
 }
 
@@ -691,5 +899,329 @@ test("Custom-build progress surfaces remain bounded, credential-safe, and respon
   assert.match(
     css,
     /@media\(max-width:44rem\)[\s\S]*?\.customer-custom-build-progress-facts,[^{]+\{grid-template-columns:1fr\}/u
+  );
+});
+
+test("Custom-build change and completion customer projections keep exact commercial truth", () => {
+  for (const state of [
+    "not_available",
+    "building",
+    "change_order_review",
+    "change_order_payment_required",
+    "ready_for_final_payment",
+    "ready_for_delivery"
+  ]) {
+    const value = customerChangeCompletion(state);
+    assert.equal(
+      verifiedCustomerCustomBuildChangeCompletion(value),
+      value,
+      state
+    );
+  }
+
+  const issued = customerChangeCompletion();
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion({
+      ...issued,
+      changeOrders: {
+        ...issued.changeOrders,
+        active: {
+          ...issued.changeOrders.active,
+          pricing: {
+            ...issued.changeOrders.active.pricing,
+            unitAmountMinor: 10000
+          }
+        }
+      }
+    }),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion({
+      ...issued,
+      jobId: JOB_ID
+    }),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion({
+      ...issued,
+      changeOrders: {
+        ...issued.changeOrders,
+        active: {
+          ...issued.changeOrders.active,
+          addedScope: "Use the API key from the private account."
+        }
+      }
+    }),
+    null
+  );
+});
+
+test("expired change orders and required verified image dimensions stay display-safe", () => {
+  const expired = customerChangeCompletion("building");
+  assert.equal(
+    expired.changeOrders.history[0].state,
+    "expired"
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion(expired),
+    expired
+  );
+
+  const ready = customerChangeCompletion("ready_for_final_payment");
+  const withoutDimensions = {
+    ...ready,
+    completion: {
+      ...ready.completion,
+      evidence: ready.completion.evidence.map((entry) => {
+        const { imageHeight, imageWidth, ...rest } = entry;
+        assert.ok(imageHeight && imageWidth);
+        return rest;
+      })
+    }
+  };
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion(withoutDimensions),
+    null
+  );
+  const malformed = structuredClone(ready);
+  malformed.completion.evidence[0].imageWidth = 0;
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCompletion(malformed),
+    null
+  );
+});
+
+test("owner change/completion projection is bound to the exact paid job and organization", () => {
+  const value = ownerChangeCompletion();
+  assert.equal(
+    verifiedOwnerCustomBuildChangeCompletion(value, ownerEntry()),
+    value
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangeCompletion(
+      value,
+      {
+        ...ownerEntry(),
+        organizationId: "20000000-0000-4000-8000-000000000099"
+      }
+    ),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangeCompletion({
+      ...value,
+      completion: {
+        ...value.completion,
+        evidenceIds: [PHONE_EVIDENCE_ID, DESKTOP_EVIDENCE_ID]
+      }
+    }, ownerEntry()),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangeCompletion({
+      ...value,
+      evidence: value.evidence.map((entry, index) => index === 0
+        ? { ...entry, providerReference: "must-not-leak" }
+        : entry)
+    }, ownerEntry()),
+    null
+  );
+});
+
+test("owner completion selection excludes stale progress and scope evidence", () => {
+  const value = ownerChangeCompletion();
+  value.state = "building";
+  value.changeOrders = [];
+  value.completion = null;
+  const staleDesktop = {
+    ...completionEvidence(
+      "82000000-0000-4000-8000-000000000003",
+      "desktop",
+      true,
+      { contentDigest: "5".repeat(64) }
+    ),
+    progressRevision: 2,
+    effectiveScopeDigest: "2".repeat(64)
+  };
+  const stalePhone = {
+    ...completionEvidence(
+      "82000000-0000-4000-8000-000000000004",
+      "phone",
+      true,
+      { contentDigest: "6".repeat(64) }
+    ),
+    progressRevision: 2,
+    effectiveScopeDigest: "2".repeat(64)
+  };
+  value.evidence = [staleDesktop, stalePhone, ...value.evidence];
+  assert.equal(
+    verifiedOwnerCustomBuildChangeCompletion(value, ownerEntry()),
+    value
+  );
+  const progress = progressProjection();
+  progress.status = { kind: "checking", label: "Checking the work" };
+  progress.progress = {
+    ...progress.progress,
+    revision: 3,
+    stage: "checking",
+    stageLabel: "Checking the work",
+    milestones: progress.progress.milestones.map((milestone) => ({
+      ...milestone,
+      state: "done"
+    }))
+  };
+  assert.deepEqual(
+    currentOwnerCustomBuildCompletionEvidence(
+      value,
+      { snapshot: progress }
+    ).map((entry) => entry.evidenceId),
+    [DESKTOP_EVIDENCE_ID, PHONE_EVIDENCE_ID]
+  );
+  assert.deepEqual(
+    currentOwnerCustomBuildCompletionEvidence(
+      value,
+      {
+        snapshot: {
+          ...progress,
+          progress: { ...progress.progress, revision: 2 }
+        }
+      }
+    ),
+    []
+  );
+});
+
+test("completion evidence FileReader preparation is bounded and base64-only", async () => {
+  class TestFileReader {
+    readAsDataURL(file) {
+      this.result = `data:${file.type};base64,iVBORw0KGgo=`;
+      this.onload();
+    }
+  }
+  const prepared = await prepareCustomBuildCompletionEvidenceFile(
+    { type: "image/png", size: 8 },
+    { FileReader: TestFileReader }
+  );
+  assert.deepEqual(prepared, {
+    dataBase64: "iVBORw0KGgo=",
+    mediaType: "image/png"
+  });
+  await assert.rejects(
+    prepareCustomBuildCompletionEvidenceFile(
+      { type: "image/svg+xml", size: 8 },
+      { FileReader: TestFileReader }
+    ),
+    /JPEG, PNG, or WebP/u
+  );
+  await assert.rejects(
+    prepareCustomBuildCompletionEvidenceFile(
+      { type: "image/png", size: 700 * 1024 + 1 },
+      { FileReader: TestFileReader }
+    ),
+    /700 KiB/u
+  );
+});
+
+test("completion evidence URL is exact, authenticated, and same-origin", () => {
+  assert.equal(
+    customerCustomBuildCompletionEvidenceUrl(
+      PROJECT_ID,
+      DESKTOP_EVIDENCE_ID
+    ),
+    `/api/v1/projects/${PROJECT_ID}/custom-services/`
+      + `custom-build-completion-evidence/${DESKTOP_EVIDENCE_ID}`
+  );
+  assert.equal(
+    customerCustomBuildCompletionEvidenceUrl(
+      PROJECT_ID,
+      "../outside"
+    ),
+    null
+  );
+});
+
+test("change-order and completion UI is bounded, responsive, held-safe, and authority-free", async () => {
+  const [source, css] = await Promise.all([
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-customer-control-dom.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-app.css",
+        import.meta.url
+      ),
+      "utf8"
+    )
+  ]);
+  for (const copy of [
+    "Your original approved scope remains in place.",
+    "Due before changed work begins",
+    "Calculated before payment",
+    "Completion proof is prepared",
+    "It is not payment, delivery, launch",
+    "Record this change as expired",
+    "Nothing changed and no action is available.",
+    "pixels"
+  ]) assert.ok(source.includes(copy), copy);
+  for (const method of [
+    "getCustomServicesCustomBuildChangeCompletion",
+    "getCustomServicesCustomBuildCompletionEvidence",
+    "acceptCustomServicesCustomBuildChangeOrder",
+    "declineCustomServicesCustomBuildChangeOrder",
+    "getOwnerCustomBuildChangeCompletion",
+    "issueOwnerCustomBuildChangeOrder",
+    "voidOwnerCustomBuildChangeOrder",
+    "expireOwnerCustomBuildChangeOrder",
+    "uploadOwnerCustomBuildCompletionEvidence",
+    "recordOwnerCustomBuildCompletion"
+  ]) assert.ok(source.includes(method), method);
+  for (const control of [
+    "data-customer-custom-build-change-completion",
+    "data-customer-change-order",
+    "data-customer-expired-change-order",
+    "data-owner-job-change-completion",
+    "data-owner-change-order-form",
+    "data-owner-change-order-expire",
+    "data-owner-completion-evidence-form",
+    "data-owner-completion-form"
+  ]) assert.ok(source.includes(control), control);
+
+  const customerUi = source.slice(
+    source.indexOf("function createCustomerCustomBuildChangeCompletionPanel"),
+    source.indexOf("function customBuildLocalDateTime")
+  );
+  assert.doesNotMatch(
+    customerUi,
+    /(?:Job|Operator|Document|Provider) ID/u
+  );
+  assert.doesNotMatch(
+    customerUi,
+    /assessmentField\([\s\S]{0,120}"(?:amount|price|tax|refund|credit|password|token|secret)"/iu
+  );
+  assert.match(
+    source,
+    /body = \{\s*addedScope: source\.addedScope,\s*expiresAt: source\.expiresAt,\s*organizationId: entry\.organizationId,\s*targetCompletionDate: source\.targetCompletionDate,\s*unitCount: source\.unitCount\s*\}/u
+  );
+  assert.match(
+    source,
+    /operation === "expire-change"[\s\S]*?Date\.parse\(order\.expiresAt\) > Date\.now\(\)/u
+  );
+  assert.match(
+    css,
+    /\.customer-custom-build-change-issue-form input,[^{]+\{min-height:44px\}/u
+  );
+  assert.match(
+    css,
+    /\.customer-custom-build-evidence-link\{[^}]*min-height:44px/u
+  );
+  assert.match(
+    css,
+    /@media\(max-width:44rem\)[\s\S]*?\.customer-custom-build-change-facts,[^{]+\{grid-template-columns:1fr\}/u
   );
 });
