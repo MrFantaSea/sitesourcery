@@ -27,6 +27,7 @@ function fixture(
   {
     downloadResult = { status: "download" },
     assessmentResult = { status: "assessment" },
+    customBuildResult = { status: "custom_build" },
     alakazamResult = { status: "alakazam" }
   } = {}
 ) {
@@ -35,6 +36,7 @@ function fixture(
     canonical: [],
     download: [],
     assessment: [],
+    customBuild: [],
     alakazam: []
   };
   const router = createStripeWebhookRouter({
@@ -60,6 +62,12 @@ function fixture(
       async ingestStripeEvent(input) {
         calls.assessment.push(structuredClone(input));
         return structuredClone(assessmentResult);
+      }
+    },
+    customBuildCommerce: {
+      async ingestStripeEvent(input) {
+        calls.customBuild.push(structuredClone(input));
+        return structuredClone(customBuildResult);
       }
     },
     alakazamCommerce: {
@@ -110,6 +118,27 @@ test("shared webhook router sends assessment Checkout events to exact settlement
   assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.assessment[0], selected);
+});
+
+test("shared webhook router sends Custom build Checkout events to exact settlement", async () => {
+  const selected = event({
+    schema: "sitesourcery_custom_build_start_checkout_v1"
+  });
+  const context = fixture(selected);
+  assert.deepEqual(
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from("custom-build-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "custom_build" }
+  );
+  assert.equal(context.calls.verify.length, 1);
+  assert.equal(context.calls.customBuild.length, 1);
+  assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.alakazam.length, 0);
+  assert.equal(context.calls.canonical.length, 0);
+  assert.deepEqual(context.calls.customBuild[0], selected);
 });
 
 test("shared webhook router sends verified Alakazam events to one held runtime branch", async () => {

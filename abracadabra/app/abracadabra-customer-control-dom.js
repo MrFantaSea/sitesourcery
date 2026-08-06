@@ -2654,12 +2654,280 @@
     ) return null;
     if (
       value.state === "accepted"
-      && value.credit.state !== "reserved"
+      && ![
+        "reserved",
+        "reconciliation_required",
+        "settled"
+      ].includes(value.credit.state)
     ) return null;
     if (
       value.state === "voided"
       && !["available", "released", "expired"]
         .includes(value.credit.state)
+    ) return null;
+    return value;
+  }
+
+  function customBuildInvoiceExpectation(snapshot) {
+    var selected = verifiedCustomerCustomBuildQuote(
+      snapshot,
+      snapshot && snapshot.projectId
+    );
+    if (
+      !selected
+      || selected.state !== "accepted"
+      || !selected.quote.acceptance
+    ) return null;
+    return Object.freeze({
+      acceptedDisclosureDigest:
+        selected.quote.disclosureDigest,
+      acceptedQuoteDigest: selected.quote.quoteDigest,
+      creditMinor: selected.quote.pricing.startCreditMinor,
+      finalHandoffMinor: selected.quote.pricing.finalDueMinor,
+      grossStartMinor: selected.quote.pricing.startValueMinor,
+      issuedAt: selected.quote.acceptance.acceptedAt,
+      quoteId: selected.quote.quoteId,
+      subtotalMinor: selected.quote.pricing.startDueMinor,
+      tierId: selected.quote.tier.id
+    });
+  }
+
+  function safeCustomBuildInvoiceExpectation(value) {
+    return exactKeys(
+      value,
+      [
+        "acceptedDisclosureDigest",
+        "acceptedQuoteDigest",
+        "creditMinor",
+        "finalHandoffMinor",
+        "grossStartMinor",
+        "issuedAt",
+        "quoteId",
+        "subtotalMinor",
+        "tierId"
+      ]
+    )
+      && SHA256.test(text(value.acceptedDisclosureDigest))
+      && SHA256.test(text(value.acceptedQuoteDigest))
+      && value.creditMinor === 20000
+      && safeMinor(value.finalHandoffMinor)
+      && safeMinor(value.grossStartMinor)
+      && value.grossStartMinor > value.creditMinor
+      && safeIso(value.issuedAt)
+      && UUID.test(text(value.quoteId))
+      && safeMinor(value.subtotalMinor)
+      && value.subtotalMinor ===
+        value.grossStartMinor - value.creditMinor
+      && Boolean(customBuildTier(value.tierId));
+  }
+
+  function safeCustomBuildPendingMoney(value, currency) {
+    return exactKeys(value, ["amountMinor", "currency", "state"])
+      && value.amountMinor === null
+      && value.currency === currency
+      && value.state === "shown_at_checkout";
+  }
+
+  function verifiedCustomerCustomBuildInvoice(value, expectation) {
+    var states = [
+      "not_available",
+      "checkout_available",
+      "checkout_ready",
+      "payment_held",
+      "payment_window_expired",
+      "reconciliation_required",
+      "paid"
+    ];
+    if (
+      !exactKeys(value, ["action", "invoice", "job", "schema", "state"])
+      || value.schema !== "sitesourcery.custom-build-start-invoice/v1"
+      || !states.includes(value.state)
+      || !exactKeys(value.action, ["available", "reason"])
+    ) return null;
+    if (value.state === "not_available") {
+      return value.invoice === null
+        && value.job === null
+        && value.action.available === false
+        && value.action.reason === "invoice_not_available"
+        ? value
+        : null;
+    }
+    if (!safeCustomBuildInvoiceExpectation(expectation)) return null;
+    var invoice = value.invoice;
+    if (
+      !exactKeys(
+        invoice,
+        [
+          "acceptedDisclosureDigest",
+          "acceptedQuoteDigest",
+          "credit",
+          "finalHandoff",
+          "invoiceDigest",
+          "invoiceId",
+          "invoiceNumber",
+          "issuedAt",
+          "lines",
+          "payment",
+          "paymentDeadline",
+          "quoteId",
+          "subtotal",
+          "tax",
+          "tierId",
+          "total"
+        ]
+      )
+      || !UUID.test(text(invoice.invoiceId))
+      || !/^SSCB-[0-9A-F]{32}$/u.test(text(invoice.invoiceNumber))
+      || !SHA256.test(text(invoice.invoiceDigest))
+      || invoice.quoteId !== expectation.quoteId
+      || invoice.tierId !== expectation.tierId
+      || invoice.acceptedQuoteDigest !==
+        expectation.acceptedQuoteDigest
+      || invoice.acceptedDisclosureDigest !==
+        expectation.acceptedDisclosureDigest
+      || invoice.issuedAt !== expectation.issuedAt
+      || !safeIso(invoice.paymentDeadline)
+      || Date.parse(invoice.paymentDeadline) !==
+        Date.parse(invoice.issuedAt) + 7 * 24 * 60 * 60 * 1000
+      || !Array.isArray(invoice.lines)
+      || invoice.lines.length !== 2
+    ) return null;
+    var gross = invoice.lines[0];
+    var creditLine = invoice.lines[1];
+    if (
+      !exactKeys(
+        gross,
+        [
+          "amountMinor",
+          "componentKey",
+          "currency",
+          "displayName",
+          "lineNumber"
+        ]
+      )
+      || gross.lineNumber !== 1
+      || gross.componentKey !== "custom_build_start"
+      || !assessmentText(gross.displayName, 3, 120)
+      || gross.amountMinor !== expectation.grossStartMinor
+      || gross.currency !== "USD"
+      || !exactKeys(
+        creditLine,
+        [
+          "amountMinor",
+          "componentKey",
+          "currency",
+          "displayName",
+          "lineNumber"
+        ]
+      )
+      || creditLine.lineNumber !== 2
+      || creditLine.componentKey !== "assessment_build_credit"
+      || creditLine.displayName !== "Website assessment build credit"
+      || creditLine.amountMinor !== -expectation.creditMinor
+      || creditLine.currency !== "USD"
+      || !exactKeys(invoice.subtotal, ["amountMinor", "currency"])
+      || invoice.subtotal.amountMinor !== expectation.subtotalMinor
+      || invoice.subtotal.currency !== "USD"
+      || invoice.subtotal.amountMinor !==
+        gross.amountMinor + creditLine.amountMinor
+      || !exactKeys(invoice.tax, ["amountMinor", "state"])
+      || invoice.tax.amountMinor !== null
+      || invoice.tax.state !== "calculated_at_checkout"
+      || !safeCustomBuildPendingMoney(invoice.total, "USD")
+      || !exactKeys(invoice.credit, ["amountMinor", "state"])
+      || invoice.credit.amountMinor !== expectation.creditMinor
+      || !exactKeys(invoice.finalHandoff, ["amountMinor", "state"])
+      || invoice.finalHandoff.amountMinor !==
+        expectation.finalHandoffMinor
+      || invoice.finalHandoff.state !==
+        (expectation.finalHandoffMinor === 0
+          ? "not_required"
+          : "due_before_handoff")
+      || !exactKeys(
+        invoice.payment,
+        ["chargeOccurred", "checkoutExpiresAt", "checkoutUrl"]
+      )
+    ) return null;
+    var paid = value.state === "paid";
+    var ready = value.state === "checkout_ready";
+    var expectedCreditStates = paid
+      ? ["settled"]
+      : value.state === "reconciliation_required"
+        ? ["reserved", "reconciliation_required"]
+        : ["reserved"];
+    if (
+      !expectedCreditStates.includes(invoice.credit.state)
+      || invoice.payment.chargeOccurred !== paid
+      || value.action.available !==
+        (value.state === "checkout_available")
+      || value.action.reason !==
+        (value.state === "checkout_available" ? null : value.state)
+    ) return null;
+    if (ready) {
+      if (
+        safeCheckoutDestination({
+          checkoutUrl: invoice.payment.checkoutUrl
+        }) !== invoice.payment.checkoutUrl
+        || !safeIso(invoice.payment.checkoutExpiresAt)
+      ) return null;
+    } else if (
+      invoice.payment.checkoutUrl !== null
+      || invoice.payment.checkoutExpiresAt !== null
+    ) return null;
+    if (!paid) return value.job === null ? value : null;
+    if (
+      !exactKeys(value.job, ["finalPaymentState", "jobId", "state"])
+      || !UUID.test(text(value.job.jobId))
+      || value.job.state !== "open"
+      || value.job.finalPaymentState !==
+        (expectation.finalHandoffMinor === 0
+          ? "not_required"
+          : "unpaid")
+    ) return null;
+    return value;
+  }
+
+  function verifiedCustomerCustomBuildCheckout(
+    value,
+    invoice,
+    nowInput
+  ) {
+    var now = safeIso(nowInput) ? Date.parse(nowInput) : Date.now();
+    if (
+      !exactKeys(value, ["checkout", "schema", "state"])
+      || value.schema !== "sitesourcery.custom-build-start-checkout/v1"
+      || value.state !== "ready"
+      || !record(invoice)
+      || !exactKeys(
+        value.checkout,
+        [
+          "chargeOccurred",
+          "expiresAt",
+          "invoiceId",
+          "invoiceNumber",
+          "subtotal",
+          "tax",
+          "total",
+          "url"
+        ]
+      )
+    ) return null;
+    var checkout = value.checkout;
+    if (
+      checkout.invoiceId !== invoice.invoiceId
+      || checkout.invoiceNumber !== invoice.invoiceNumber
+      || safeCheckoutDestination({ checkoutUrl: checkout.url }) !==
+        checkout.url
+      || !safeIso(checkout.expiresAt)
+      || Date.parse(checkout.expiresAt) <= now
+      || !exactKeys(checkout.subtotal, ["amountMinor", "currency"])
+      || checkout.subtotal.amountMinor !== invoice.subtotal.amountMinor
+      || checkout.subtotal.currency !== "USD"
+      || !exactKeys(checkout.tax, ["amountMinor", "state"])
+      || checkout.tax.amountMinor !== null
+      || checkout.tax.state !== "calculated_at_checkout"
+      || !safeCustomBuildPendingMoney(checkout.total, "USD")
+      || checkout.chargeOccurred !== false
     ) return null;
     return value;
   }
@@ -3963,6 +4231,233 @@
       body
     );
 
+    function renderAcceptedInvoice(snapshot, read, busy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-invoice customer-quote-review customer-custom-build-owner-review"
+      );
+      section.setAttribute("data-custom-build-invoice", "");
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Custom build first payment"
+        )
+      );
+      if (!read.invoice) {
+        status.textContent = read.command === "loading first-payment invoice"
+          ? "Preparing your exact first-payment invoice…"
+          : "Your exact Custom website quote is accepted.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            read.command === "loading first-payment invoice"
+              ? "The accepted quote is saved. Loading its exact payment details now; nothing has been charged and work has not started."
+              : "The accepted quote is saved, but its payment details could not be shown yet. Nothing has been charged and work has not started."
+          )
+        );
+        return section;
+      }
+      var selected = verifiedCustomerCustomBuildInvoice(
+        read.invoice,
+        customBuildInvoiceExpectation(snapshot)
+      );
+      if (!selected) {
+        status.textContent =
+          "The first-payment invoice response could not be verified.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            "Payment details were hidden because they did not match your accepted quote. Nothing was charged."
+          )
+        );
+        return section;
+      }
+      if (selected.state === "not_available") {
+        status.textContent =
+          "Your quote is accepted, but payment is not available yet.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "Your accepted quote is safe. The first-payment invoice is not available yet; nothing was charged and work has not started."
+          )
+        );
+        return section;
+      }
+      var invoice = selected.invoice;
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Invoice",
+        invoice.invoiceNumber
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Gross first installment",
+        customBuildMoney(invoice.lines[0].amountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Assessment credit",
+        "−" + customBuildMoney(invoice.credit.amountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Net subtotal",
+        customBuildMoney(invoice.subtotal.amountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        "Calculated securely at Checkout"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Payment deadline",
+        accountDate(invoice.paymentDeadline)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Final handoff amount",
+        invoice.finalHandoff.state === "not_required"
+          ? "No final payment required"
+          : customBuildMoney(invoice.finalHandoff.amountMinor)
+            + " USD · due before final launch or handoff"
+      );
+      section.appendChild(facts);
+      if (selected.state === "checkout_available") {
+        status.textContent =
+          "Your exact first-payment invoice is ready.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Review the net subtotal above. Stripe will calculate any applicable tax and show the exact total before payment."
+          )
+        );
+        var start = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          "Continue to secure payment"
+        );
+        start.type = "button";
+        start.disabled = busy;
+        start.addEventListener("click", function () {
+          if (typeof actions.checkout === "function") {
+            actions.checkout(selected);
+          }
+        });
+        section.appendChild(start);
+      } else if (selected.state === "checkout_ready") {
+        status.textContent = "Your secure payment page is ready.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "A secure payment page is already reserved for this invoice. No new payment request is needed. It expires "
+              + accountDate(invoice.payment.checkoutExpiresAt) + "."
+          )
+        );
+        var destination = safeCheckoutDestination({
+          checkoutUrl: invoice.payment.checkoutUrl
+        });
+        var retained = accountElement(
+          documentRef,
+          "a",
+          "spark-button spark-button-primary",
+          "Open retained secure payment page"
+        );
+        retained.href = destination;
+        retained.rel = "noopener noreferrer";
+        section.appendChild(retained);
+      } else if (selected.state === "payment_held") {
+        status.textContent = "Secure payment is not open yet.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "Nothing has been charged, and work has not started. Site Sourcery will open secure payment when this invoice is ready."
+          )
+        );
+      } else if (selected.state === "payment_window_expired") {
+        status.textContent = "This payment window has ended.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "The seven-day payment window ended before payment was verified. Contact Site Sourcery for the next step; do not send payment from an old link."
+          )
+        );
+      } else if (selected.state === "reconciliation_required") {
+        status.textContent = "Site Sourcery is confirming payment status.";
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "Please do not try another payment. Site Sourcery is checking the earlier attempt first and will help if anything else is needed."
+          )
+        );
+      } else {
+        status.textContent =
+          "Payment verified and your Custom website project is open.";
+        var jobFacts = accountElement(
+          documentRef,
+          "dl",
+          "customer-custom-build-facts"
+        );
+        appendAccountFact(
+          documentRef,
+          jobFacts,
+          "Project state",
+          accountWords(selected.job.state)
+        );
+        appendAccountFact(
+          documentRef,
+          jobFacts,
+          "Final payment",
+          selected.job.finalPaymentState === "not_required"
+            ? "Not required"
+            : customBuildMoney(invoice.finalHandoff.amountMinor)
+              + " USD due before final launch or handoff"
+        );
+        section.append(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "Your first payment was verified, the $200 assessment credit was applied, and the build project is open."
+          ),
+          jobFacts
+        );
+      }
+      return section;
+    }
+
     function render(readState) {
       var read = readState || {};
       body.replaceChildren();
@@ -4132,15 +4627,8 @@
         });
         review.append(acceptance, accept);
       } else if (snapshot.state === "accepted") {
-        status.textContent =
-          "Your exact Custom website quote is accepted.";
         review.appendChild(
-          accountElement(
-            documentRef,
-            "p",
-            "customer-assessment-note customer-custom-build-payment-pending",
-            "Accepted. Nothing was charged by accepting this quote. No Custom build invoice or checkout is available yet, and work has not started."
-          )
+          renderAcceptedInvoice(snapshot, read, busy)
         );
       } else {
         status.textContent = "This Custom website quote was voided.";
@@ -7672,6 +8160,7 @@
       projectId: "",
       phase: "idle",
       snapshot: null,
+      invoice: null,
       command: "",
       error: ""
     };
@@ -7773,7 +8262,8 @@
           && UUID.test(text(parsed.accountId))
           && UUID.test(text(parsed.commandId))
           && UUID.test(text(parsed.subjectId))
-          && ["accept", "issue", "void"].includes(parsed.operation)
+          && ["accept", "checkout", "issue", "void"]
+            .includes(parsed.operation)
           && /^[a-f0-9]{8}$/u.test(text(parsed.signature))
           ? parsed
           : emptyCustomBuildAttempt();
@@ -8059,6 +8549,9 @@
           },
           accept: function (snapshot) {
             runCustomerCustomBuildAcceptance(snapshot);
+          },
+          checkout: function (invoiceState) {
+            requestCustomerCustomBuildCheckout(invoiceState);
           }
         }
       );
@@ -8921,6 +9414,85 @@
         && idOf(lastState.project) === projectId;
     }
 
+    function requestCustomerCustomBuildInvoice(
+      sequence,
+      projectId,
+      accountId,
+      snapshot
+    ) {
+      if (
+        !customerCustomBuildReadIsCurrent(sequence, projectId)
+        || !customBuildInvoiceExpectation(snapshot)
+      ) return Promise.resolve(null);
+      if (
+        typeof client.getCustomServicesCustomBuildInvoice !== "function"
+      ) {
+        customBuildRead = Object.assign({}, customBuildRead, {
+          invoice: null,
+          command: "",
+          error: "Custom website payment details are unavailable in this build."
+        });
+        renderCustomerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      customBuildRead = Object.assign({}, customBuildRead, {
+        invoice: null,
+        command: "loading first-payment invoice",
+        error: ""
+      });
+      renderCustomerCustomBuildPanel();
+      return client.getCustomServicesCustomBuildInvoice(projectId)
+        .then(function (result) {
+          if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+            return null;
+          }
+          var current = verifiedCustomerCustomBuildQuote(
+            customBuildRead.snapshot,
+            projectId
+          );
+          if (
+            !current
+            || current.state !== "accepted"
+            || current.quote.quoteId !== snapshot.quote.quoteId
+            || !verifiedCustomerCustomBuildInvoice(
+              result,
+              customBuildInvoiceExpectation(current)
+            )
+          ) {
+            throw new Error(
+              "The Custom website first-payment invoice response could not be verified."
+            );
+          }
+          customBuildRead = {
+            accountId: accountId,
+            projectId: projectId,
+            phase: "ready",
+            snapshot: current,
+            invoice: result,
+            command: "",
+            error: ""
+          };
+          renderCustomerCustomBuildPanel();
+          return result;
+        })
+        .catch(function (error) {
+          if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+            return null;
+          }
+          customBuildRead = Object.assign({}, customBuildRead, {
+            invoice: null,
+            command: "",
+            error: explain(
+              error,
+              "The Custom website first-payment invoice could not be loaded."
+            )
+          });
+          renderCustomerCustomBuildPanel();
+          customerCustomBuildPanel.focusStatus();
+          return null;
+        });
+    }
+
     function requestCustomerCustomBuildQuote(projectId) {
       var selectedProjectId = text(projectId);
       var selectedAccountId = text(
@@ -8935,6 +9507,7 @@
         projectId: selectedProjectId,
         phase: "loading",
         snapshot: null,
+        invoice: null,
         command: "",
         error: ""
       };
@@ -8967,10 +9540,19 @@
             projectId: selectedProjectId,
             phase: "ready",
             snapshot: result,
+            invoice: null,
             command: "",
             error: ""
           };
           renderCustomerCustomBuildPanel();
+          if (result.state === "accepted") {
+            return requestCustomerCustomBuildInvoice(
+              sequence,
+              selectedProjectId,
+              selectedAccountId,
+              result
+            );
+          }
           return customBuildRead;
         })
         .catch(function (error) {
@@ -8983,6 +9565,7 @@
             projectId: selectedProjectId,
             phase: "error",
             snapshot: null,
+            invoice: null,
             command: "",
             error: explain(
               error,
@@ -9080,11 +9663,22 @@
           projectId: projectId,
           phase: "ready",
           snapshot: settled,
+          invoice: null,
           command: "",
           error: ""
         };
         renderCustomerCustomBuildPanel();
         customerCustomBuildPanel.focusStatus();
+        if (settled.state === "accepted") {
+          return requestCustomerCustomBuildInvoice(
+            sequence,
+            projectId,
+            accountId,
+            settled
+          ).then(function () {
+            return settled;
+          });
+        }
         return settled;
       }).catch(function (error) {
         if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
@@ -9095,6 +9689,113 @@
           error: explain(
             error,
             "The quote was not confirmed accepted. The same command can be retried safely."
+          )
+        });
+        renderCustomerCustomBuildPanel();
+        customerCustomBuildPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function requestCustomerCustomBuildCheckout(invoiceState) {
+      var projectId = customBuildRead.projectId;
+      var accountId = customBuildRead.accountId;
+      var expectation = customBuildInvoiceExpectation(
+        customBuildRead.snapshot
+      );
+      var selected = verifiedCustomerCustomBuildInvoice(
+        invoiceState,
+        expectation
+      );
+      var current = verifiedCustomerCustomBuildInvoice(
+        customBuildRead.invoice,
+        expectation
+      );
+      if (
+        !projectId
+        || !accountId
+        || customBuildRead.phase !== "ready"
+        || customBuildRead.command
+        || !selected
+        || !current
+        || selected.state !== "checkout_available"
+        || current.state !== "checkout_available"
+        || selected.invoice.invoiceId !== current.invoice.invoiceId
+        || selected.invoice.invoiceDigest !== current.invoice.invoiceDigest
+      ) return Promise.resolve(null);
+      var input = { invoiceDigest: current.invoice.invoiceDigest };
+      var commandId;
+      try {
+        if (
+          typeof client.createCustomServicesCustomBuildCheckout !==
+            "function"
+        ) {
+          throw new Error(
+            "Custom website secure payment is unavailable in this build."
+          );
+        }
+        commandId = customBuildCommandId(
+          accountId,
+          "checkout",
+          current.invoice.invoiceId,
+          input
+        );
+      } catch (error) {
+        customBuildRead = Object.assign({}, customBuildRead, {
+          command: "",
+          error: explain(
+            error,
+            "Custom website secure payment could not start."
+          )
+        });
+        renderCustomerCustomBuildPanel();
+        customerCustomBuildPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildReadSequence;
+      customBuildRead = Object.assign({}, customBuildRead, {
+        command: "opening secure payment",
+        error: ""
+      });
+      renderCustomerCustomBuildPanel();
+      return client.createCustomServicesCustomBuildCheckout(
+        projectId,
+        current.invoice.invoiceId,
+        input,
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        var checkout = verifiedCustomerCustomBuildCheckout(
+          result,
+          current.invoice,
+          new Date().toISOString()
+        );
+        var destination = safeCheckoutDestination(checkout);
+        if (!checkout || !destination) {
+          throw new Error(
+            "The Custom website secure payment destination could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        windowRef.location.assign(destination);
+        return checkout;
+      }).catch(function (error) {
+        if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        if (
+          [
+            "CUSTOM_BUILD_PAYMENT_UNAVAILABLE",
+            "CUSTOM_BUILD_CHECKOUT_REQUIRES_NEW_COMMAND"
+          ].includes(text(error && error.code))
+        ) clearCustomBuildAttempt(commandId);
+        customBuildRead = Object.assign({}, customBuildRead, {
+          command: "",
+          error: explain(
+            error,
+            "Custom website secure payment could not open. The same request can be tried safely."
           )
         });
         renderCustomerCustomBuildPanel();
@@ -9114,6 +9815,7 @@
             projectId: "",
             phase: "idle",
             snapshot: null,
+            invoice: null,
             command: "",
             error: ""
           };
@@ -11584,6 +12286,10 @@
       verifiedCustomerAssessmentReport,
     verifiedCustomerCustomBuildQuote:
       verifiedCustomerCustomBuildQuote,
+    verifiedCustomerCustomBuildInvoice:
+      verifiedCustomerCustomBuildInvoice,
+    verifiedCustomerCustomBuildCheckout:
+      verifiedCustomerCustomBuildCheckout,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:

@@ -75,6 +75,8 @@ const PORTAL_HOSTS = new Set(["billing.stripe.com"]);
 const PROVIDER_ID = /^(bpc|bps|ch|cs|cus|in|pi|price|prod|re|si|sub_sched|sub|txn)_[A-Za-z0-9_]+$/u;
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9._:-]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const OFFICIAL_CLIENTS = new WeakSet();
 const DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA =
   "sitesourcery.abracadabra-checkout-purpose.v2";
@@ -90,6 +92,14 @@ const STRIPE_SERVICE_ASSESSMENT_PAYMENT_SCHEMA =
   "sitesourcery.stripe-service-assessment-payment-facts/v1";
 const STRIPE_SERVICE_ASSESSMENT_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-service-assessment-checkout-lifecycle/v1";
+export const STRIPE_CUSTOM_BUILD_START_PURPOSE_SCHEMA =
+  "sitesourcery.custom-build-start-checkout-purpose/v1";
+const STRIPE_CUSTOM_BUILD_START_METADATA_SCHEMA =
+  "sitesourcery_custom_build_start_checkout_v1";
+const STRIPE_CUSTOM_BUILD_START_PAYMENT_SCHEMA =
+  "sitesourcery.stripe-custom-build-start-payment-facts/v1";
+const STRIPE_CUSTOM_BUILD_START_LIFECYCLE_SCHEMA =
+  "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1";
 export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
   ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA;
 export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
@@ -298,6 +308,35 @@ function serviceAssessmentReturnUrl(template, validated) {
         "{CHECKOUT_SESSION_ID}"
       ),
     "Assessment success URL",
+    { checkoutSessionPlaceholder: true }
+  );
+}
+
+function customBuildStartReturnUrl(template, validated) {
+  const parsed = new URL(template);
+  invariant(
+    !parsed.searchParams.has("custom_build_project") &&
+      !parsed.searchParams.has("custom_build_invoice"),
+    "stripe_redirect_invalid",
+    "Custom-build return URL already contains invoice identity",
+    { status: 500 }
+  );
+  parsed.searchParams.set(
+    "custom_build_project",
+    validated.identity.projectId
+  );
+  parsed.searchParams.set(
+    "custom_build_invoice",
+    validated.identity.invoiceId
+  );
+  return exactUrl(
+    parsed
+      .toString()
+      .replace(
+        "%7BCHECKOUT_SESSION_ID%7D",
+        "{CHECKOUT_SESSION_ID}"
+      ),
+    "Custom-build success URL",
     { checkoutSessionPlaceholder: true }
   );
 }
@@ -1999,6 +2038,415 @@ function serviceAssessmentCheckoutLifecycle(
   return Object.freeze({
     schema:
       STRIPE_SERVICE_ASSESSMENT_LIFECYCLE_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    purposeDigest: validated.purposeDigest,
+    state
+  });
+}
+
+function validateCustomBuildStartPurpose(
+  request,
+  { retrieval = false } = {}
+) {
+  const requestFields = retrieval
+    ? [
+        "checkoutSessionId",
+        "purpose",
+        "purposeDigest"
+      ]
+    : [
+        "idempotencyKey",
+        "purpose",
+        "purposeDigest",
+        ...(request?.stripeCustomerId === undefined
+          ? []
+          : ["stripeCustomerId"])
+      ];
+  invariant(
+    exactObjectKeys(request, requestFields) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "acceptedQuoteDigest",
+        "creditApplicationId",
+        "customerId",
+        "invoiceDigest",
+        "invoiceId",
+        "invoiceNumber",
+        "price",
+        "projectId",
+        "quoteAcceptanceId",
+        "quoteId",
+        "quoteRevisionId",
+        "schema",
+        "tenantId"
+      ]),
+    "stripe_custom_build_start_checkout_invalid",
+    "Custom-build Checkout requires the exact accepted quote and invoice purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const identity = {};
+  for (const field of [
+    "tenantId",
+    "customerId",
+    "projectId",
+    "quoteId",
+    "quoteRevisionId",
+    "quoteAcceptanceId",
+    "creditApplicationId",
+    "invoiceId",
+    "invoiceNumber"
+  ]) {
+    identity[field] = safeMetadataValue(
+      purpose[field],
+      `purpose.${field}`
+    );
+  }
+  invariant(
+    purpose.schema ===
+      STRIPE_CUSTOM_BUILD_START_PURPOSE_SCHEMA &&
+      [
+        identity.quoteId,
+        identity.quoteRevisionId,
+        identity.quoteAcceptanceId,
+        identity.creditApplicationId,
+        identity.invoiceId
+      ].every((value) => UUID.test(value)) &&
+      /^SSCB-[0-9A-F]{32}$/u.test(
+        identity.invoiceNumber
+      ) &&
+      exactObjectKeys(purpose.price, [
+        "amountMinor",
+        "billing",
+        "currency",
+        "taxBehavior"
+      ]) &&
+      Number.isSafeInteger(purpose.price.amountMinor) &&
+      purpose.price.amountMinor > 0 &&
+      purpose.price.amountMinor <= 99_999_999 &&
+      purpose.price.currency === "USD" &&
+      purpose.price.billing === "one_time" &&
+      purpose.price.taxBehavior ===
+        "automatic_exclusive",
+    "stripe_custom_build_start_checkout_invalid",
+    "Custom-build Checkout permits only the exact positive first-installment invoice",
+    { status: 500 }
+  );
+  const acceptedQuoteDigest = safeMetadataValue(
+    purpose.acceptedQuoteDigest,
+    "purpose.acceptedQuoteDigest"
+  );
+  const acceptedDisclosureDigest = safeMetadataValue(
+    purpose.acceptedDisclosureDigest,
+    "purpose.acceptedDisclosureDigest"
+  );
+  const invoiceDigest = safeMetadataValue(
+    purpose.invoiceDigest,
+    "purpose.invoiceDigest"
+  );
+  invariant(
+    [
+      acceptedQuoteDigest,
+      acceptedDisclosureDigest,
+      invoiceDigest
+    ].every((value) => SHA256.test(value)),
+    "stripe_custom_build_start_checkout_invalid",
+    "Custom-build Checkout quote and invoice authority is invalid",
+    { status: 500 }
+  );
+  const purposeDigest = digest(purpose);
+  invariant(
+    request.purposeDigest === purposeDigest &&
+      SHA256.test(request.purposeDigest),
+    "stripe_custom_build_start_checkout_invalid",
+    "Custom-build Checkout purpose digest changed",
+    { status: 500 }
+  );
+  return Object.freeze({
+    purpose,
+    identity,
+    acceptedQuoteDigest,
+    acceptedDisclosureDigest,
+    invoiceDigest,
+    purposeDigest,
+    stripeCustomerId:
+      retrieval ||
+      request.stripeCustomerId === undefined
+        ? null
+        : providerId(
+            request.stripeCustomerId,
+            "cus",
+            "stripeCustomerId"
+          ),
+    idempotencyKey: retrieval
+      ? null
+      : requiredText(
+          request.idempotencyKey,
+          "idempotencyKey",
+          255
+        )
+  });
+}
+
+function customBuildStartMetadata(validated) {
+  return Object.freeze({
+    schema: STRIPE_CUSTOM_BUILD_START_METADATA_SCHEMA,
+    tenant_id: validated.identity.tenantId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    quote_id: validated.identity.quoteId,
+    quote_revision_id:
+      validated.identity.quoteRevisionId,
+    quote_acceptance_id:
+      validated.identity.quoteAcceptanceId,
+    credit_application_id:
+      validated.identity.creditApplicationId,
+    invoice_id: validated.identity.invoiceId,
+    invoice_number: validated.identity.invoiceNumber,
+    accepted_quote_digest:
+      validated.acceptedQuoteDigest,
+    accepted_disclosure_digest:
+      validated.acceptedDisclosureDigest,
+    invoice_digest: validated.invoiceDigest,
+    purpose_digest: validated.purposeDigest
+  });
+}
+
+function customBuildStartCheckoutResponse(
+  value,
+  config,
+  expectedExpiresAt,
+  validated,
+  expectedMetadata
+) {
+  const checkout = checkoutResponse(
+    value,
+    config,
+    expectedExpiresAt
+  );
+  const metadata = value?.metadata;
+  invariant(
+    value?.client_reference_id ===
+      validated.identity.invoiceId &&
+      value?.mode === "payment" &&
+      value?.currency === "usd" &&
+      value?.amount_subtotal ===
+        validated.purpose.price.amountMinor &&
+      value?.automatic_tax?.enabled === true &&
+      value?.status === "open" &&
+      value?.payment_status === "unpaid" &&
+      exactObjectKeys(
+        metadata,
+        Object.keys(expectedMetadata)
+      ) &&
+      Object.entries(expectedMetadata).every(
+        ([key, expected]) => metadata[key] === expected
+      ),
+    "stripe_custom_build_start_checkout_response_invalid",
+    "Stripe Custom-build Checkout did not preserve the exact invoice purpose",
+    { status: 502 }
+  );
+  return checkout;
+}
+
+function customBuildStartPaymentFacts(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_custom_build_start_payment_mismatch";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Custom-build Checkout Session ID"
+  );
+  const expectedMetadata =
+    customBuildStartMetadata(validated);
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    expectedMetadata,
+    code,
+    "Stripe Custom-build payment metadata changed"
+  );
+  const taxMinor = serviceAssessmentProviderMinor(
+    value?.total_details?.amount_tax,
+    "Stripe Custom-build tax amount",
+    code
+  );
+  const subtotalMinor =
+    validated.purpose.price.amountMinor;
+  const totalMinor = subtotalMinor + taxMinor;
+  const customerId = providerReferenceId(
+    value?.customer,
+    "cus",
+    "Stripe Custom-build Checkout Customer ID"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === subtotalMinor &&
+      value.amount_total === totalMinor &&
+      value.automatic_tax?.enabled === true &&
+      value.automatic_tax?.status === "complete" &&
+      value.total_details?.amount_discount === 0 &&
+      value.total_details?.amount_shipping === 0 &&
+      value.status === "complete" &&
+      value.payment_status === "paid",
+    code,
+    "Stripe did not confirm the exact paid Custom-build first-installment Checkout",
+    { status: 502 }
+  );
+  const intent = serviceAssessmentProviderObject(
+    value.payment_intent,
+    "pi",
+    "Stripe Custom-build PaymentIntent",
+    code
+  );
+  validateServiceAssessmentMetadata(
+    intent.metadata,
+    expectedMetadata,
+    code,
+    "Stripe Custom-build PaymentIntent metadata changed"
+  );
+  invariant(
+    intent.livemode === config.livemode &&
+      intent.status === "succeeded" &&
+      intent.currency === "usd" &&
+      intent.amount === totalMinor &&
+      intent.amount_received === totalMinor &&
+      intent.amount_capturable === 0 &&
+      providerReferenceId(
+        intent.customer,
+        "cus",
+        "Stripe Custom-build PaymentIntent Customer ID"
+      ) === customerId,
+    code,
+    "Stripe did not confirm the exact succeeded Custom-build PaymentIntent",
+    { status: 502 }
+  );
+  const charge = serviceAssessmentProviderObject(
+    intent.latest_charge,
+    "ch",
+    "Stripe Custom-build Charge",
+    code
+  );
+  invariant(
+    charge.livemode === config.livemode &&
+      charge.status === "succeeded" &&
+      charge.paid === true &&
+      charge.captured === true &&
+      charge.refunded === false &&
+      charge.currency === "usd" &&
+      charge.amount === totalMinor &&
+      charge.amount_captured === totalMinor &&
+      charge.amount_refunded === 0 &&
+      providerReferenceId(
+        charge.customer,
+        "cus",
+        "Stripe Custom-build Charge Customer ID"
+      ) === customerId &&
+      providerReferenceId(
+        charge.payment_intent,
+        "pi",
+        "Stripe Custom-build Charge PaymentIntent ID"
+      ) === intent.id,
+    code,
+    "Stripe did not confirm the exact captured Custom-build Charge",
+    { status: 502 }
+  );
+  const facts = {
+    schema: STRIPE_CUSTOM_BUILD_START_PAYMENT_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    paymentIntentId: intent.id,
+    customerId,
+    paymentStatus: "paid",
+    subtotalMinor,
+    taxMinor,
+    totalMinor,
+    taxMode: "automatic",
+    currency: "USD",
+    purposeDigest: validated.purposeDigest,
+    providerPaymentTime:
+      serviceAssessmentProviderTime(
+        charge.created,
+        "Stripe Custom-build payment time",
+        code
+      )
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
+  });
+}
+
+function customBuildStartCheckoutLifecycle(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_custom_build_start_checkout_lifecycle_invalid";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Custom-build Checkout Session ID"
+  );
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    customBuildStartMetadata(validated),
+    code,
+    "Stripe Custom-build Checkout lifecycle metadata changed"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal ===
+        validated.purpose.price.amountMinor &&
+      value.automatic_tax?.enabled === true,
+    code,
+    "Stripe did not return the exact Custom-build Checkout lifecycle",
+    { status: 502 }
+  );
+  let state;
+  if (
+    value.status === "open" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "open";
+  } else if (
+    value.status === "expired" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "expired";
+  } else if (
+    value.status === "complete" &&
+    value.payment_status === "paid" &&
+    value.automatic_tax?.status === "complete"
+  ) {
+    state = "paid";
+  } else {
+    invariant(
+      false,
+      code,
+      "Stripe returned an unsafe Custom-build Checkout lifecycle",
+      { status: 502 }
+    );
+  }
+  return Object.freeze({
+    schema: STRIPE_CUSTOM_BUILD_START_LIFECYCLE_SCHEMA,
     provider: "stripe",
     checkoutSessionId: checkoutId,
     purposeDigest: validated.purposeDigest,
@@ -3735,6 +4183,9 @@ export function createStripeProviderAdapter(options = {}) {
       createServiceAssessmentCheckout: reject,
       retrieveServiceAssessmentPayment: reject,
       retrieveServiceAssessmentCheckoutLifecycle: reject,
+      createCustomBuildStartCheckout: reject,
+      retrieveCustomBuildStartPayment: reject,
+      retrieveCustomBuildStartCheckoutLifecycle: reject,
       createAlakazamCustomer: reject,
       retrieveAlakazamCustomer: reject,
       createAlakazamStartCheckout: reject,
@@ -5348,6 +5799,211 @@ export function createStripeProviderAdapter(options = {}) {
         );
       }
       return serviceAssessmentCheckoutLifecycle(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async createCustomBuildStartCheckout(request) {
+      let validated;
+      let providerMetadata;
+      let expiresAt;
+      let params;
+      let stripeIdempotencyKey;
+      try {
+        requireCapability("checkout:create");
+        invariant(
+          config.taxMode === "automatic",
+          "stripe_custom_build_start_tax_required",
+          "Custom-build Checkout requires automatic tax",
+          { status: 503 }
+        );
+        validated =
+          validateCustomBuildStartPurpose(request);
+        providerMetadata =
+          customBuildStartMetadata(validated);
+        expiresAt =
+          Math.floor(Date.parse(clock.now()) / 1000) +
+          config.checkoutTtlSeconds;
+        invariant(
+          Number.isSafeInteger(expiresAt),
+          "stripe_clock_invalid",
+          "Stripe checkout clock is invalid",
+          { status: 500 }
+        );
+        params = {
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount:
+                  validated.purpose.price.amountMinor,
+                tax_behavior: "exclusive",
+                product_data: {
+                  name: "Site Sourcery Custom build — first installment"
+                }
+              },
+              quantity: 1
+            }
+          ],
+          success_url: customBuildStartReturnUrl(
+            config.successUrl,
+            validated
+          ),
+          cancel_url: config.cancelUrl,
+          client_reference_id:
+            validated.identity.invoiceId,
+          metadata: providerMetadata,
+          expires_at: expiresAt,
+          automatic_tax: { enabled: true },
+          billing_address_collection: "required",
+          ...(validated.stripeCustomerId
+            ? {
+                customer: validated.stripeCustomerId,
+                customer_update: { address: "auto" }
+              }
+            : { customer_creation: "always" }),
+          payment_intent_data: {
+            metadata: providerMetadata
+          }
+        };
+        stripeIdempotencyKey = providerIdempotencyKey(
+          "custom_build_start_checkout",
+          validated.idempotencyKey,
+          validated.purposeDigest
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw noEffect(
+          typeof error?.code === "string"
+            ? error.code
+            : "stripe_custom_build_start_checkout_not_submitted",
+          "Custom-build Checkout was rejected before Stripe submission"
+        );
+      }
+      let response;
+      try {
+        response = await client.checkout.sessions.create(
+          params,
+          { idempotencyKey: stripeIdempotencyKey }
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_custom_build_start_checkout_effect_unknown",
+          "Stripe Custom-build Checkout creation requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      try {
+        return customBuildStartCheckoutResponse(
+          response,
+          config,
+          expiresAt,
+          validated,
+          providerMetadata
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw ambiguous(
+          "stripe_custom_build_start_checkout_response_invalid",
+          "Stripe Custom-build Checkout returned unsafe evidence that requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+    },
+
+    async retrieveCustomBuildStartPayment(request) {
+      requireCapability("checkout:read");
+      const validated =
+        validateCustomBuildStartPurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Custom-build settlement requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId,
+            {
+              expand: ["payment_intent.latest_charge"]
+            }
+          );
+      } catch {
+        throw noEffect(
+          "stripe_custom_build_start_payment_read_unavailable",
+          "Stripe Custom-build payment could not be read for reconciliation",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return customBuildStartPaymentFacts(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async retrieveCustomBuildStartCheckoutLifecycle(
+      request
+    ) {
+      requireCapability("checkout:read");
+      const validated =
+        validateCustomBuildStartPurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Custom-build lifecycle requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId
+          );
+      } catch {
+        throw noEffect(
+          "stripe_custom_build_start_checkout_lifecycle_unavailable",
+          "Stripe Custom-build Checkout lifecycle could not be read",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return customBuildStartCheckoutLifecycle(
         response,
         config,
         validated,

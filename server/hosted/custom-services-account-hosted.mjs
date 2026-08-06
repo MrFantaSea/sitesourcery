@@ -111,7 +111,7 @@ function exactCheckoutCommand(value) {
       JSON.stringify(Object.keys(value).sort()) ===
         JSON.stringify(expected.sort()),
     "invalid_input",
-    "The assessment invoice checkout request is invalid.",
+    "The custom-services invoice checkout request is invalid.",
     { status: 400 }
   );
   return value;
@@ -154,6 +154,14 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getCustomBuildInvoice(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_PAYMENT_HELD",
+        "Custom build payment is held in this runtime.",
+        { status: 503 }
+      );
+    },
     async getAssessmentInvoice(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -183,6 +191,14 @@ export function createHeldHostedCustomServicesAccount() {
       throw new HostedError(
         "CUSTOM_SERVICES_PAYMENT_HELD",
         "Custom-services assessment payment is held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async createCustomBuildCheckout(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_PAYMENT_HELD",
+        "Custom build payment is held in this runtime.",
         { status: 503 }
       );
     },
@@ -240,6 +256,7 @@ export function createHeldHostedCustomServicesAccount() {
 export function createHostedCustomServicesAccount({
   assessmentWork,
   customBuild,
+  customBuildPayment,
   invoiceRepository,
   payment,
   quoteRepository,
@@ -261,6 +278,14 @@ export function createHostedCustomServicesAccount({
       typeof customBuild.acceptCurrentQuote === "function",
     "invalid_configuration",
     "the Custom build quote boundary is required",
+    { status: 500 }
+  );
+  invariant(
+    customBuildPayment &&
+      typeof customBuildPayment.readCurrentInvoice === "function" &&
+      typeof customBuildPayment.createCheckout === "function",
+    "invalid_configuration",
+    "the Custom build payment boundary is required",
     { status: 500 }
   );
   invariant(
@@ -338,6 +363,15 @@ export function createHostedCustomServicesAccount({
       return customBuild.readCurrentQuote(scope);
     },
 
+    async getCustomBuildInvoice(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildPayment.readCurrentInvoice(scope);
+    },
+
     async getAssessmentInvoice(actorInput, projectIdInput) {
       const { scope } = await projectScope(
         resolveSession,
@@ -384,6 +418,27 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return payment.createCheckout({
+        ...scope,
+        commandId: input.commandId,
+        invoiceDigest: input.invoiceDigest,
+        invoiceId
+      });
+    },
+
+    async createCustomBuildCheckout(
+      actorInput,
+      projectIdInput,
+      invoiceIdInput,
+      value
+    ) {
+      const input = exactCheckoutCommand(value);
+      const invoiceId = requireProjectId(invoiceIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildPayment.createCheckout({
         ...scope,
         commandId: input.commandId,
         invoiceDigest: input.invoiceDigest,

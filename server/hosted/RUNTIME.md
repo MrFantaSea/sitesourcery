@@ -212,12 +212,19 @@ The `$200` custom-services assessment has a separate release switch:
 accepts only `held` or `approved`. `approved` refuses startup unless the shared
 Stripe adapter is ready with automatic tax and the assessment-specific webhook,
 readback, and atomic-settlement boundary reports its exact readiness schema.
-That settlement boundary is not present in the Checkout-dispatch checkpoint,
-so `approved` is deliberately impossible until the next settlement slice is
-composed. The invoice projection and payment command consume the same immutable
-release object, so a held runtime exposes no pay button and performs no database
-or provider payment effect. This switch does not authorize a deployment, public
-release, DNS change, or production credential change.
+The invoice projection and payment command consume the same immutable release
+object, so a held runtime exposes no pay button and performs no provider payment
+effect.
+
+The accepted Custom-build first installment has its own release switch:
+`SITESOURCERY_CUSTOM_BUILD_PAYMENT_MODE` also defaults to `held` and accepts only
+`held` or `approved`. Approved startup requires ready automatic-tax Stripe,
+Custom-build quote storage, and the exact payment boundary that verifies Stripe
+readback, atomically settles the reserved `$200` assessment credit, and opens one
+build job. The customer submits only the retained invoice digest; subtotal,
+credit, deadline, tax policy, and final handoff amount remain server-owned.
+Neither switch authorizes a deployment, public release, DNS change, or production
+credential change.
 
 ## Durable worker inventory
 

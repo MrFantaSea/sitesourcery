@@ -28,6 +28,9 @@ import {
   createPostgresCustomServicesCustomBuild
 } from "../../hosted/custom-services-custom-build-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildPayment
+} from "../../hosted/custom-services-custom-build-payment-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -2535,14 +2538,24 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       (error) => error.code === "project_unavailable"
     );
 
-    const customBuild = createPostgresCustomServicesCustomBuild({
-      authority: {
+    const customBuildAuthority = {
         async service(context, work) {
           const transactionClient = await pool.connect();
           try {
             await transactionClient.query("begin");
             await transactionClient.query("set local role service_role");
-            if (context.userId) {
+            if (context.actorKind === "system") {
+              await setActor(
+                transactionClient,
+                "system",
+                {
+                  organizationId:
+                    context.organizationId ?? customer.organizationId,
+                  userId: customer.userId
+                },
+                customer.userId
+              );
+            } else if (context.userId) {
               await setActor(
                 transactionClient,
                 context.userId === secondOperatorId
@@ -2565,7 +2578,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             transactionClient.release();
           }
         }
-      },
+      };
+    const customBuild = createPostgresCustomServicesCustomBuild({
+      authority: customBuildAuthority,
       randomUUID
     });
     assert.deepEqual(await customBuild.readiness(), {
@@ -2762,6 +2777,194 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(replacementBuild.quote.pricing.finalDueMinor, 0);
     assert.equal(replacementBuild.credit.state, "available");
 
+    const replacementCustomerQuote = await customBuild.readCurrentQuote(
+      customerAssessmentScope
+    );
+    const replacementAccepted = await customBuild.acceptCurrentQuote({
+      ...customerAssessmentScope,
+      acceptanceStatement: "accepted_exact_custom_build_quote",
+      acceptedDisclosureDigest:
+        replacementCustomerQuote.quote.disclosureDigest,
+      acceptedQuoteDigest: replacementCustomerQuote.quote.quoteDigest,
+      commandId: `custom-build-accept-${randomUUID()}`,
+      quoteId: replacementCustomerQuote.quote.quoteId,
+      quoteRevision: replacementCustomerQuote.quote.quoteRevision
+    });
+    assert.equal(replacementAccepted.state, "accepted");
+    assert.equal(replacementAccepted.credit.state, "reserved");
+
+    let retainedBuildPurpose = null;
+    const buildCheckoutId = "cs_test_custom_build_start_1";
+    const buildCustomerId = "cus_test_service_assessment_settlement";
+    const buildPaymentIntentId = "pi_test_custom_build_start_1";
+    const customBuildPaymentProvider = {
+      async createCustomBuildStartCheckout(input) {
+        retainedBuildPurpose = structuredClone(input.purpose);
+        assert.equal(input.purpose.price.amountMinor, 45000);
+        assert.equal(input.purpose.quoteId, replacementBuild.quote.quoteId);
+        return {
+          checkoutId: buildCheckoutId,
+          url: "https://checkout.stripe.com/c/pay/custom_build_start_1",
+          expiresAt: isoAfter({ hours: 1 })
+        };
+      },
+      async retrieveCustomBuildStartPayment(input) {
+        assert.deepEqual(input.purpose, retainedBuildPurpose);
+        const facts = {
+          schema:
+            "sitesourcery.stripe-custom-build-start-payment-facts/v1",
+          provider: "stripe",
+          checkoutSessionId: buildCheckoutId,
+          paymentIntentId: buildPaymentIntentId,
+          customerId: buildCustomerId,
+          paymentStatus: "paid",
+          subtotalMinor: 45000,
+          taxMinor: 3600,
+          totalMinor: 48600,
+          taxMode: "automatic",
+          currency: "USD",
+          purposeDigest: input.purposeDigest,
+          providerPaymentTime: isoAfter()
+        };
+        return Object.freeze({
+          ...facts,
+          providerFactsDigest: digest(facts)
+        });
+      },
+      async retrieveCustomBuildStartCheckoutLifecycle(input) {
+        return {
+          schema:
+            "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1",
+          provider: "stripe",
+          checkoutSessionId: input.checkoutSessionId,
+          purposeDigest: input.purposeDigest,
+          state: "expired"
+        };
+      }
+    };
+    const customBuildPayment =
+      createPostgresCustomServicesCustomBuildPayment({
+        authority: customBuildAuthority,
+        provider: customBuildPaymentProvider,
+        release: {
+          approved: true,
+          currency: "USD",
+          paymentWindowDays: 7,
+          taxMode: "automatic"
+        },
+        clock: { now: () => new Date().toISOString() },
+        ids: { next: () => randomUUID() }
+      });
+    assert.deepEqual(await customBuildPayment.readiness(), {
+      schema: "sitesourcery.custom-build-payment-readiness/v1",
+      ready: true,
+      state: "approved",
+      runtimeContract: "canonical-ss-v42-custom-build-start-payment",
+      automaticTax: true,
+      stripeReadback: true,
+      atomicCreditSettlement: true,
+      opensBuildJob: true
+    });
+    const buildInvoice = await customBuildPayment.readCurrentInvoice(
+      customerAssessmentScope
+    );
+    assert.equal(buildInvoice.state, "checkout_available");
+    assert.equal(buildInvoice.invoice.subtotal.amountMinor, 45000);
+    assert.equal(buildInvoice.invoice.credit.amountMinor, 20000);
+    assert.equal(buildInvoice.invoice.finalHandoff.amountMinor, 0);
+    assert.equal(buildInvoice.invoice.lines.length, 2);
+    assert.equal(
+      buildInvoice.invoice.lines.reduce(
+        (total, line) => total + line.amountMinor,
+        0
+      ),
+      45000
+    );
+    const buildCheckoutInput = {
+      ...customerAssessmentScope,
+      commandId: `custom-build-checkout-${randomUUID()}`,
+      invoiceId: buildInvoice.invoice.invoiceId,
+      invoiceDigest: buildInvoice.invoice.invoiceDigest
+    };
+    const buildCheckout = await customBuildPayment.createCheckout(
+      buildCheckoutInput
+    );
+    assert.equal(buildCheckout.state, "ready");
+    assert.equal(buildCheckout.checkout.subtotal.amountMinor, 45000);
+    assert.deepEqual(
+      await customBuildPayment.createCheckout(buildCheckoutInput),
+      buildCheckout
+    );
+    assert.ok(retainedBuildPurpose);
+    const buildPurposeDigest = digest(retainedBuildPurpose);
+    const buildMetadata = {
+      schema: "sitesourcery_custom_build_start_checkout_v1",
+      tenant_id: retainedBuildPurpose.tenantId,
+      customer_id: retainedBuildPurpose.customerId,
+      project_id: retainedBuildPurpose.projectId,
+      quote_id: retainedBuildPurpose.quoteId,
+      quote_revision_id: retainedBuildPurpose.quoteRevisionId,
+      quote_acceptance_id: retainedBuildPurpose.quoteAcceptanceId,
+      credit_application_id: retainedBuildPurpose.creditApplicationId,
+      invoice_id: retainedBuildPurpose.invoiceId,
+      invoice_number: retainedBuildPurpose.invoiceNumber,
+      accepted_quote_digest: retainedBuildPurpose.acceptedQuoteDigest,
+      accepted_disclosure_digest:
+        retainedBuildPurpose.acceptedDisclosureDigest,
+      invoice_digest: retainedBuildPurpose.invoiceDigest,
+      purpose_digest: buildPurposeDigest
+    };
+    const buildStripeEvent = {
+      id: "evt_test_custom_build_start_1",
+      type: "checkout.session.completed",
+      livemode: false,
+      api_version: "2026-06-24.dahlia",
+      created: Math.floor(Date.now() / 1000) - 1,
+      data: {
+        object: {
+          id: buildCheckoutId,
+          metadata: buildMetadata
+        }
+      }
+    };
+    const buildSettlement = await customBuildPayment.ingestStripeEvent(
+      buildStripeEvent
+    );
+    assert.equal(buildSettlement.status, "payment_settled");
+    assert.equal(buildSettlement.next, "custom_build_work");
+    assert.deepEqual(
+      await customBuildPayment.ingestStripeEvent(buildStripeEvent),
+      buildSettlement
+    );
+    const paidBuildInvoice = await customBuildPayment.readCurrentInvoice(
+      customerAssessmentScope
+    );
+    assert.equal(paidBuildInvoice.state, "paid");
+    assert.equal(paidBuildInvoice.invoice.credit.state, "settled");
+    assert.equal(paidBuildInvoice.job.state, "open");
+    assert.equal(paidBuildInvoice.job.finalPaymentState, "not_required");
+    assert.equal(
+      (await assessmentWork.readCustomerReport(customerAssessmentScope))
+        .credit.state,
+      "settled"
+    );
+    await assert.rejects(
+      customBuild.voidQuote(
+        operatorActor,
+        replacementBuild.quote.quoteId,
+        {
+          commandId: `custom-build-void-${randomUUID()}`,
+          organizationId: customer.organizationId,
+          reason:
+            "A paid Custom build must never release its consumed assessment credit."
+        }
+      ),
+      (error) =>
+        error.code === "custom_build_changed" ||
+        error.code === "custom_build_repository_conflict" ||
+        error.code === "CUSTOM_BUILD_PAYMENT_REPOSITORY_CONFLICT"
+    );
+
     const customBuildCounts = await pool.query(
       `select
          (select count(*)::int
@@ -2780,13 +2983,20 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           where quote.source_job_id = $1
             and application.state in (
               'reserved', 'settled', 'reconciliation_required'
-            )) as active_credits`,
+            )) as active_credits,
+         (select count(*)::int
+          from ss.service_custom_build_jobs job
+          join ss.service_custom_build_quotes quote
+            on quote.id = job.quote_id
+          where quote.source_job_id = $1
+            and job.state = 'open') as build_jobs`,
       [paidJob.jobId]
     );
     assert.deepEqual(customBuildCounts.rows[0], {
       quotes: 2,
       released_credits: 1,
-      active_credits: 0
+      active_credits: 1,
+      build_jobs: 1
     });
 
     await assert.rejects(

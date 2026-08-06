@@ -399,6 +399,163 @@ function serviceAssessmentCheckoutReadback({
   };
 }
 
+function customBuildStartPurpose(overrides = {}) {
+  return {
+    schema:
+      "sitesourcery.custom-build-start-checkout-purpose/v1",
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    quoteId:
+      "50000000-0000-4000-8000-000000000001",
+    quoteRevisionId:
+      "51000000-0000-4000-8000-000000000001",
+    quoteAcceptanceId:
+      "52000000-0000-4000-8000-000000000001",
+    creditApplicationId:
+      "53000000-0000-4000-8000-000000000001",
+    invoiceId:
+      "60000000-0000-4000-8000-000000000002",
+    invoiceNumber:
+      "SSCB-60000000000040008000000000000002",
+    acceptedQuoteDigest: "1".repeat(64),
+    acceptedDisclosureDigest: "2".repeat(64),
+    invoiceDigest: "3".repeat(64),
+    price: {
+      amountMinor: 12500,
+      currency: "USD",
+      billing: "one_time",
+      taxBehavior: "automatic_exclusive"
+    },
+    ...overrides
+  };
+}
+
+function customBuildStartRequest(overrides = {}) {
+  const purpose = customBuildStartPurpose(
+    overrides.purpose
+  );
+  return {
+    idempotencyKey:
+      "custom-build:start-checkout-command-1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function customBuildStartMetadata(
+  purpose = customBuildStartPurpose()
+) {
+  return {
+    schema:
+      "sitesourcery_custom_build_start_checkout_v1",
+    tenant_id: purpose.tenantId,
+    customer_id: purpose.customerId,
+    project_id: purpose.projectId,
+    quote_id: purpose.quoteId,
+    quote_revision_id: purpose.quoteRevisionId,
+    quote_acceptance_id: purpose.quoteAcceptanceId,
+    credit_application_id: purpose.creditApplicationId,
+    invoice_id: purpose.invoiceId,
+    invoice_number: purpose.invoiceNumber,
+    accepted_quote_digest:
+      purpose.acceptedQuoteDigest,
+    accepted_disclosure_digest:
+      purpose.acceptedDisclosureDigest,
+    invoice_digest: purpose.invoiceDigest,
+    purpose_digest: digest(purpose)
+  };
+}
+
+function customBuildStartReadRequest(overrides = {}) {
+  const purpose = customBuildStartPurpose(
+    overrides.purpose
+  );
+  return {
+    checkoutSessionId:
+      "cs_test_custom_build_start_1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function customBuildStartCheckoutReadback({
+  purpose = customBuildStartPurpose(),
+  taxMinor = 0,
+  status = "complete",
+  paymentStatus = "paid",
+  overrides = {}
+} = {}) {
+  const subtotalMinor = purpose.price.amountMinor;
+  const totalMinor = subtotalMinor + taxMinor;
+  const metadata = customBuildStartMetadata(purpose);
+  const customerId = "cus_test_custom_build_start_1";
+  const paymentIntentId =
+    "pi_test_custom_build_start_1";
+  return {
+    id: "cs_test_custom_build_start_1",
+    client_reference_id: purpose.invoiceId,
+    livemode: false,
+    mode: "payment",
+    currency: "usd",
+    amount_subtotal: subtotalMinor,
+    amount_total: totalMinor,
+    automatic_tax: {
+      enabled: true,
+      status: status === "complete" ? "complete" : null
+    },
+    total_details: {
+      amount_discount: 0,
+      amount_shipping: 0,
+      amount_tax: taxMinor
+    },
+    status,
+    payment_status: paymentStatus,
+    customer: customerId,
+    metadata,
+    payment_intent: {
+      id: paymentIntentId,
+      livemode: false,
+      status: "succeeded",
+      currency: "usd",
+      amount: totalMinor,
+      amount_received: totalMinor,
+      amount_capturable: 0,
+      customer: customerId,
+      metadata,
+      latest_charge: {
+        id: "ch_test_custom_build_start_1",
+        livemode: false,
+        status: "succeeded",
+        paid: true,
+        captured: true,
+        refunded: false,
+        currency: "usd",
+        amount: totalMinor,
+        amount_captured: totalMinor,
+        amount_refunded: 0,
+        customer: customerId,
+        payment_intent: paymentIntentId,
+        created: 1785672000
+      }
+    },
+    ...overrides
+  };
+}
+
 function alakazamCurrent({
   tierId = "alakazam_25",
   stripePriceId = ALAKAZAM_PRICE_IDS[tierId]
@@ -1493,6 +1650,9 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "createServiceAssessmentCheckout",
     "retrieveServiceAssessmentPayment",
     "retrieveServiceAssessmentCheckoutLifecycle",
+    "createCustomBuildStartCheckout",
+    "retrieveCustomBuildStartPayment",
+    "retrieveCustomBuildStartCheckoutLifecycle",
     "createAlakazamCustomer",
     "retrieveAlakazamCustomer",
     "createAlakazamStartCheckout",
@@ -3129,6 +3289,358 @@ test("assessment lifecycle readback projects only open, expired, or paid", async
     (error) =>
       error.code ===
         "stripe_service_assessment_checkout_lifecycle_invalid" &&
+      error.status === 502
+  );
+});
+
+test("Custom-build first installment creates one exact variable automatic-tax Checkout", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const { adapter, calls } = adapterFixture({ config });
+  const request = customBuildStartRequest();
+  const result =
+    await adapter.createCustomBuildStartCheckout(request);
+  assert.deepEqual(result, {
+    checkoutId: "cs_test_checkout_1",
+    url: "https://checkout.stripe.com/c/pay/test_1",
+    expiresAt: "2026-07-28T12:30:00.000Z"
+  });
+  assert.equal(calls.checkouts.length, 1);
+  const [{ params, requestOptions }] = calls.checkouts;
+  assert.equal(params.mode, "payment");
+  assert.deepEqual(params.payment_method_types, ["card"]);
+  assert.deepEqual(params.line_items, [
+    {
+      price_data: {
+        currency: "usd",
+        unit_amount: request.purpose.price.amountMinor,
+        tax_behavior: "exclusive",
+        product_data: {
+          name: "Site Sourcery Custom build — first installment"
+        }
+      },
+      quantity: 1
+    }
+  ]);
+  assert.deepEqual(params.automatic_tax, {
+    enabled: true
+  });
+  assert.equal(params.billing_address_collection, "required");
+  assert.equal(params.customer_creation, "always");
+  assert.equal(
+    params.client_reference_id,
+    request.purpose.invoiceId
+  );
+  assert.equal(
+    params.success_url,
+    config.successUrl
+      + "&custom_build_project="
+      + encodeURIComponent(request.purpose.projectId)
+      + "&custom_build_invoice="
+      + encodeURIComponent(request.purpose.invoiceId)
+  );
+  assert.deepEqual(
+    params.metadata,
+    customBuildStartMetadata(request.purpose)
+  );
+  assert.deepEqual(
+    params.payment_intent_data.metadata,
+    params.metadata
+  );
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:custom_build_start_checkout:[a-f0-9]{64}$/u
+  );
+});
+
+test("Custom-build Checkout rejects purpose tampering before Stripe and response tampering as ambiguous", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const invalidRequests = [
+    customBuildStartRequest({
+      purpose: { amountFromBrowser: 12500 }
+    }),
+    customBuildStartRequest({
+      purpose: { quoteRevisionId: "not-a-uuid" }
+    }),
+    customBuildStartRequest({
+      purpose: {
+        invoiceNumber:
+          "SSCB-6000000000004000800000000000000g"
+      }
+    }),
+    customBuildStartRequest({
+      purpose: {
+        price: {
+          amountMinor: 0,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    customBuildStartRequest({
+      purpose: {
+        price: {
+          amountMinor: 100_000_000,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    {
+      ...customBuildStartRequest(),
+      purposeDigest: "0".repeat(64)
+    }
+  ];
+  for (const request of invalidRequests) {
+    const fixture = adapterFixture({ config });
+    await assert.rejects(
+      fixture.adapter.createCustomBuildStartCheckout(
+        request
+      ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_start_checkout_invalid" &&
+        error.certainty === "not_submitted"
+    );
+    assert.equal(fixture.calls.checkouts.length, 0);
+  }
+
+  const heldByTax = adapterFixture();
+  await assert.rejects(
+    heldByTax.adapter.createCustomBuildStartCheckout(
+      customBuildStartRequest()
+    ),
+    (error) =>
+      error.code ===
+        "stripe_custom_build_start_tax_required" &&
+      error.certainty === "not_submitted"
+  );
+  assert.equal(heldByTax.calls.checkouts.length, 0);
+
+  for (const drift of [
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        quote_acceptance_id:
+          "52000000-0000-4000-8000-000000000099"
+      }
+    }),
+    () => ({ amount_subtotal: 12499 }),
+    () => ({ automatic_tax: { enabled: false } }),
+    () => ({ status: "complete" })
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutResponse: drift
+    });
+    const fixture = adapterFixture({ config, fake });
+    await assert.rejects(
+      fixture.adapter.createCustomBuildStartCheckout(
+        customBuildStartRequest()
+      ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_start_checkout_response_invalid" &&
+        error.certainty === "ambiguous"
+    );
+    assert.equal(fixture.calls.checkouts.length, 1);
+  }
+});
+
+test("Custom-build settlement returns frozen exact facts for variable subtotal and computed tax", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  for (const [amountMinor, taxMinor] of [
+    [12500, 0],
+    [45000, 3263]
+  ]) {
+    const purpose = customBuildStartPurpose({
+      price: {
+        amountMinor,
+        currency: "USD",
+        billing: "one_time",
+        taxBehavior: "automatic_exclusive"
+      }
+    });
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        customBuildStartCheckoutReadback({
+          purpose,
+          taxMinor
+        })
+    });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    const facts =
+      await adapter.retrieveCustomBuildStartPayment(
+        customBuildStartReadRequest({ purpose })
+      );
+    const {
+      providerFactsDigest,
+      ...factsWithoutDigest
+    } = facts;
+    assert.deepEqual(factsWithoutDigest, {
+      schema:
+        "sitesourcery.stripe-custom-build-start-payment-facts/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_custom_build_start_1",
+      paymentIntentId:
+        "pi_test_custom_build_start_1",
+      customerId: "cus_test_custom_build_start_1",
+      paymentStatus: "paid",
+      subtotalMinor: amountMinor,
+      taxMinor,
+      totalMinor: amountMinor + taxMinor,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: digest(purpose),
+      providerPaymentTime:
+        "2026-08-02T12:00:00.000Z"
+    });
+    assert.equal(
+      providerFactsDigest,
+      digest(factsWithoutDigest)
+    );
+    assert.equal(Object.isFrozen(facts), true);
+    assert.equal("chargeId" in facts, false);
+    assert.deepEqual(calls.checkoutReads, [
+      {
+        id: "cs_test_custom_build_start_1",
+        params: {
+          expand: ["payment_intent.latest_charge"]
+        }
+      }
+    ]);
+  }
+});
+
+test("Custom-build settlement rejects metadata, money, customer, tax, and Charge drift", async () => {
+  const purpose = customBuildStartPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const mutate of [
+    (response) => {
+      response.metadata.invoice_digest = "0".repeat(64);
+    },
+    (response) => {
+      response.amount_subtotal -= 1;
+    },
+    (response) => {
+      response.total_details.amount_tax += 1;
+    },
+    (response) => {
+      response.automatic_tax.status = null;
+    },
+    (response) => {
+      response.payment_intent.metadata.purpose_digest =
+        "0".repeat(64);
+    },
+    (response) => {
+      response.payment_intent.amount_received -= 1;
+    },
+    (response) => {
+      response.payment_intent.customer =
+        "cus_test_custom_build_other";
+    },
+    (response) => {
+      response.payment_intent.latest_charge.captured =
+        false;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.refunded =
+        true;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.customer =
+        "cus_test_custom_build_other";
+    }
+  ]) {
+    const response =
+      customBuildStartCheckoutReadback({ purpose });
+    mutate(response);
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.retrieveCustomBuildStartPayment(
+          customBuildStartReadRequest({ purpose })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_start_payment_mismatch" &&
+        error.status === 502
+    );
+  }
+});
+
+test("Custom-build lifecycle projects only open, expired, or paid exact Sessions", async () => {
+  const purpose = customBuildStartPurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const [status, paymentStatus, state] of [
+    ["open", "unpaid", "open"],
+    ["expired", "unpaid", "expired"],
+    ["complete", "paid", "paid"]
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        customBuildStartCheckoutReadback({
+          purpose,
+          status,
+          paymentStatus
+        })
+    });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    const lifecycle =
+      await adapter
+        .retrieveCustomBuildStartCheckoutLifecycle(
+          customBuildStartReadRequest({ purpose })
+        );
+    assert.deepEqual(lifecycle, {
+      schema:
+        "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_custom_build_start_1",
+      purposeDigest: digest(purpose),
+      state
+    });
+    assert.equal(Object.isFrozen(lifecycle), true);
+    assert.deepEqual(calls.checkoutReads, [
+      {
+        id: "cs_test_custom_build_start_1",
+        params: undefined
+      }
+    ]);
+  }
+
+  const response = customBuildStartCheckoutReadback({
+    purpose,
+    status: "complete",
+    paymentStatus: "unpaid"
+  });
+  response.metadata.credit_application_id =
+    "53000000-0000-4000-8000-000000000099";
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse: response
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake })
+      .adapter.retrieveCustomBuildStartCheckoutLifecycle(
+        customBuildStartReadRequest({ purpose })
+      ),
+    (error) =>
+      error.code ===
+        "stripe_custom_build_start_checkout_lifecycle_invalid" &&
       error.status === 502
   );
 });

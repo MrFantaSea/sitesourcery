@@ -196,6 +196,20 @@ async function verifyPlatformSchema(pool) {
         as service_custom_build_quote_voids,
       to_regprocedure('ss.hosted_runtime_contract_v41()') is not null
         as custom_build_quote_credit_runtime_contract,
+      to_regclass('ss.service_custom_build_invoices') is not null
+        as service_custom_build_invoices,
+      to_regclass('ss.service_custom_build_invoice_lines') is not null
+        as service_custom_build_invoice_lines,
+      to_regclass('ss.service_custom_build_checkout_attempts') is not null
+        as service_custom_build_checkout_attempts,
+      to_regclass('ss.service_custom_build_stripe_events') is not null
+        as service_custom_build_stripe_events,
+      to_regclass('ss.service_custom_build_payment_receipts') is not null
+        as service_custom_build_payment_receipts,
+      to_regclass('ss.service_custom_build_jobs') is not null
+        as service_custom_build_jobs,
+      to_regprocedure('ss.hosted_runtime_contract_v42()') is not null
+        as custom_build_start_payment_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -1192,16 +1206,16 @@ async function verifyPlatformSchema(pool) {
 
   const customBuildQuoteCredit = await pool.query(`
     with
-    expected_tables(table_name, directly_insertable) as (
+    expected_tables(table_name, directly_insertable, directly_updatable) as (
       values
-        ('service_custom_build_quotes', true),
-        ('service_custom_build_quote_revisions', true),
-        ('service_custom_build_quote_base_lines', false),
-        ('service_custom_build_quote_installments', false),
-        ('service_custom_build_quote_commands', true),
-        ('service_custom_build_quote_acceptances', true),
-        ('service_credit_applications', false),
-        ('service_custom_build_quote_voids', true)
+        ('service_custom_build_quotes', true, false),
+        ('service_custom_build_quote_revisions', true, false),
+        ('service_custom_build_quote_base_lines', false, false),
+        ('service_custom_build_quote_installments', false, false),
+        ('service_custom_build_quote_commands', true, false),
+        ('service_custom_build_quote_acceptances', true, false),
+        ('service_credit_applications', false, true),
+        ('service_custom_build_quote_voids', true, false)
     ),
     expected_functions(function_signature, service_role_execute) as (
       values
@@ -1246,6 +1260,7 @@ async function verifyPlatformSchema(pool) {
         ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_prepare', 'ss.prepare_service_custom_build_quote_acceptance()', false),
         ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_account_authority', 'ss.validate_service_account_authority()', false),
         ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_materialize', 'ss.materialize_service_custom_build_acceptance()', false),
+        ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_payment_invoice', 'ss.materialize_service_custom_build_invoice()', false),
         ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_immutable', 'ss.reject_update()', false),
         ('service_credit_applications', 'service_credit_applications_guard', 'ss.guard_service_credit_application()', false),
         ('service_custom_build_quote_voids', 'service_custom_build_quote_voids_prepare', 'ss.prepare_service_custom_build_quote_void()', false),
@@ -1289,9 +1304,9 @@ async function verifyPlatformSchema(pool) {
             and has_table_privilege(
               'service_role', relation.oid, 'INSERT'
             ) = expected.directly_insertable
-            and not has_table_privilege(
+            and has_table_privilege(
               'service_role', relation.oid, 'UPDATE'
-            )
+            ) = expected.directly_updatable
             and not has_table_privilege(
               'service_role', relation.oid, 'DELETE'
             )
@@ -1352,7 +1367,7 @@ async function verifyPlatformSchema(pool) {
               to_regprocedure(expected.function_signature)
       ) as exact_function_boundary,
       (
-        select count(*) = 20
+        select count(*) = 21
           and bool_and(not trigger_record.tgisinternal)
           and bool_and(
             trigger_record.tgdeferrable = expected.is_deferrable
@@ -1370,7 +1385,7 @@ async function verifyPlatformSchema(pool) {
                  )::regclass
                    from expected_tables table_record
                )
-          ) = 20
+          ) = 21
           from expected_triggers expected
           join pg_trigger trigger_record
             on trigger_record.tgrelid = format(
@@ -1695,6 +1710,174 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `custom build quote/credit migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildStartPayment = await pool.query(`
+    with expected_tables(table_name, insertable, updatable) as (
+      values
+        ('service_custom_build_invoices', false, false),
+        ('service_custom_build_invoice_lines', false, false),
+        ('service_custom_build_checkout_attempts', true, true),
+        ('service_custom_build_stripe_events', true, true),
+        ('service_custom_build_payment_receipts', true, false),
+        ('service_custom_build_jobs', true, false)
+    )
+    select
+      ss.hosted_runtime_contract_v42() =
+        'canonical-ss-v42-custom-build-start-payment'
+        as exact_v42_runtime_marker,
+      (
+        select count(*) = 6
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            ) = expected.insertable
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = expected.updatable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+          )
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+         and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      not has_function_privilege(
+        'service_role',
+        'ss.ensure_service_custom_build_invoice(uuid)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'service_role',
+        'ss.materialize_service_custom_build_invoice()',
+        'EXECUTE'
+      ) as materialization_not_directly_callable,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%revision.start_due_minor > 0%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%application.state = ''reserved''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%accepted.accepted_at + interval ''7 days''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_invoice_lines%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.ensure_service_custom_build_invoice(uuid)'::regprocedure
+      ) as exact_invoice_materialization,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_custom_build_quote_acceptances'::regclass
+          and trigger_record.tgname =
+            'service_custom_build_quote_acceptances_payment_invoice'
+          and trigger_record.tgfoid =
+            'ss.materialize_service_custom_build_invoice()'::regprocedure
+          and not trigger_record.tgisinternal
+      ) as acceptance_materializes_invoice,
+      exists (
+        select 1
+        from pg_index index_record
+        join pg_class index_relation
+          on index_relation.oid = index_record.indexrelid
+        where index_relation.relnamespace = 'ss'::regnamespace
+          and index_relation.relname =
+            'service_custom_build_checkout_one_active'
+          and index_record.indisunique
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%provider_pending%'
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%persistence_unknown%'
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%paid%'
+      ) as one_active_checkout,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%current_service_actor_kind() <> ''customer''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%invoice.payment_deadline > clock_timestamp()%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%old.state = ''ready''%new.state = ''paid''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_checkout_attempt()'::regprocedure
+      ) as exact_checkout_transition_guard,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.state = ''settled''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_payment_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.state = ''reconciliation_required''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_stripe_events%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_credit_application()'::regprocedure
+      ) as exact_credit_payment_transitions,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_checkout_attempts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%attempt.state not in (''failed'', ''expired'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_payment_receipts%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.prepare_service_custom_build_quote_void()'::regprocedure
+      ) as provider_effect_blocks_credit_release,
+      exists (
+        select 1 from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_jobs'::regclass
+          and constraint_record.contype = 'c'
+          and pg_get_constraintdef(constraint_record.oid) like
+            '%final_due_minor%final_payment_state%'
+      ) as job_retains_final_handoff_amount,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          select format('ss.%I', table_name)::regclass
+          from expected_tables
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(customBuildStartPayment.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build start-payment migration contract failed: ${name}`
     );
   }
 }

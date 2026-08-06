@@ -63,8 +63,15 @@ import {
   createPostgresCustomServicesAssessmentWork
 } from "../custom-services-assessment-work-postgres.mjs";
 import {
-  createHeldCustomServicesCustomBuild
+  createPostgresCustomServicesCustomBuild
 } from "../custom-services-custom-build-postgres.mjs";
+import {
+  createPostgresCustomServicesCustomBuildPayment
+} from "../custom-services-custom-build-payment-postgres.mjs";
+import {
+  assertApprovedCustomBuildPaymentReady,
+  createConfiguredCustomBuildPaymentRelease
+} from "../custom-services-custom-build-payment-config.mjs";
 import {
   assertApprovedCustomServicesAssessmentPaymentReady,
   createConfiguredCustomServicesAssessmentPaymentRelease
@@ -272,6 +279,8 @@ async function start() {
     createConfiguredDownloadPaymentRelease();
   const customServicesAssessmentPaymentComposition =
     createConfiguredCustomServicesAssessmentPaymentRelease();
+  const customBuildPaymentComposition =
+    createConfiguredCustomBuildPaymentRelease();
   const alakazamComposition =
     createConfiguredAlakazamRelease();
   const downloadPayment =
@@ -349,11 +358,23 @@ async function start() {
       randomUUID: () => commerceV2.ids.next("assessment_work")
     });
   const customServicesCustomBuild =
-    createHeldCustomServicesCustomBuild();
+    createPostgresCustomServicesCustomBuild({
+      authority,
+      randomUUID: () => commerceV2.ids.next("custom_build")
+    });
+  const customBuildPayment =
+    createPostgresCustomServicesCustomBuildPayment({
+      authority,
+      provider: stripeComposition.adapter,
+      release: customBuildPaymentComposition.release,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
   const customServicesAccount =
     createHostedCustomServicesAccount({
       assessmentWork: customServicesAssessmentWork,
       customBuild: customServicesCustomBuild,
+      customBuildPayment,
       invoiceRepository: customServicesInvoiceRepository,
       payment: customServicesAssessmentPayment,
       quoteRepository: customServicesAssessmentQuoteRepository,
@@ -493,6 +514,12 @@ async function start() {
     readiness.payments,
     await customServicesAssessmentSettlement.readiness()
   );
+  assertApprovedCustomBuildPaymentReady(
+    customBuildPaymentComposition,
+    readiness.payments,
+    await customServicesCustomBuild.readiness(),
+    await customBuildPayment.readiness()
+  );
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -530,6 +557,7 @@ async function start() {
           downloadCommerce,
           assessmentCommerce:
             customServicesAssessmentSettlement,
+          customBuildCommerce: customBuildPayment,
           alakazamCommerce
         })
       })

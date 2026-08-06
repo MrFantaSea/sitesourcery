@@ -467,6 +467,10 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildQuote ===
         "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildInvoice ===
+        "function" &&
+      typeof customServicesAccountBoundary.createCustomBuildCheckout ===
+        "function" &&
       typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
@@ -1020,6 +1024,33 @@ export function createHostedApi(
               );
           status = 201;
         } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-invoices\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before paying a Custom build invoice.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary
+              .createCustomBuildCheckout(
+                actor,
+                route[0],
+                route[1],
+                exactRouteBody(
+                  write,
+                  ["commandId", "invoiceDigest"],
+                  "INVALID_CUSTOM_BUILD_CHECKOUT",
+                  "The Custom build invoice checkout request is invalid."
+                )
+              );
+          status = 201;
+        } else if (
           method === "GET" &&
           (route = match(
             pathname,
@@ -1261,6 +1292,24 @@ export function createHostedApi(
           );
           result =
             await customServicesAccountBoundary.getCustomBuildQuote(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-invoice$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing a Custom build invoice.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getCustomBuildInvoice(
               actor,
               route[0]
             );

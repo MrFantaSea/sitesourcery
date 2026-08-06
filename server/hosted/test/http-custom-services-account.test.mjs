@@ -37,6 +37,12 @@ function assessmentWorkMethods() {
     },
     async getCustomBuildQuote() {
       throw new Error("unexpected Custom build quote read");
+    },
+    async getCustomBuildInvoice() {
+      throw new Error("unexpected Custom build invoice read");
+    },
+    async createCustomBuildCheckout() {
+      throw new Error("unexpected Custom build checkout");
     }
   };
 }
@@ -56,6 +62,8 @@ function completeAccountBoundary(overrides = {}) {
     withdrawAssessmentRequest: noOp,
     acceptAssessmentQuote: noOp,
     getCustomBuildQuote: noOp,
+    getCustomBuildInvoice: noOp,
+    createCustomBuildCheckout: noOp,
     acceptCustomBuildQuote: noOp,
     ...overrides
   };
@@ -516,6 +524,77 @@ test("assessment checkout HTTP route binds project, invoice, digest, and command
   ]);
 });
 
+test("Custom build invoice HTTP routes bind exact project and invoice without browser money", async () => {
+  const calls = [];
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000002";
+  const invoice = {
+    schema: "sitesourcery.custom-build-start-invoice/v1",
+    state: "checkout_available"
+  };
+  const checkout = {
+    schema: "sitesourcery.custom-build-start-checkout/v1",
+    state: "ready"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildInvoice(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return invoice;
+      },
+      async createCustomBuildCheckout(
+        actor,
+        projectId,
+        selectedInvoiceId,
+        input
+      ) {
+        calls.push({
+          action: "checkout",
+          actor,
+          projectId,
+          invoiceId: selectedInvoiceId,
+          input
+        });
+        return checkout;
+      }
+    })
+  });
+  const root =
+    `/api/v1/projects/${PROJECT_ID}/custom-services`;
+  const read = await api.fetch(request({
+    path: `${root}/custom-build-invoice`
+  }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), invoice);
+
+  const pay = await api.fetch(request({
+    method: "POST",
+    path:
+      `${root}/custom-build-invoices/${invoiceId}/checkout-command`,
+    body: { invoiceDigest: "e".repeat(64) },
+    write: true
+  }));
+  assert.equal(pay.status, 201);
+  assert.deepEqual(await pay.json(), checkout);
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "checkout",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      invoiceId,
+      input: {
+        commandId: "accept-command-1",
+        invoiceDigest: "e".repeat(64)
+      }
+    }
+  ]);
+});
+
 test("assessment report and evidence routes stay customer-bound and integrity checked", async () => {
   const calls = [];
   const bytes = Buffer.from([
@@ -677,6 +756,30 @@ test("production composes custom-services account from canonical project and Pos
   assert.match(
     source,
     /assessmentWork:\s*customServicesAssessmentWork/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesCustomBuild\(\{[\s\S]*authority,[\s\S]*randomUUID:/u
+  );
+  assert.match(
+    source,
+    /createConfiguredCustomBuildPaymentRelease\(\)/u
+  );
+  assert.match(
+    source,
+    /createPostgresCustomServicesCustomBuildPayment\(\{[\s\S]*provider:\s*stripeComposition\.adapter,[\s\S]*release:\s*customBuildPaymentComposition\.release[\s\S]*\}\)/u
+  );
+  assert.match(
+    source,
+    /customBuildPayment,/u
+  );
+  assert.match(
+    source,
+    /assertApprovedCustomBuildPaymentReady\([\s\S]*customBuildPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesCustomBuild\.readiness\(\),[\s\S]*customBuildPayment\.readiness\(\)[\s\S]*\)/u
+  );
+  assert.match(
+    source,
+    /customBuildCommerce:\s*customBuildPayment/u
   );
   assert.match(
     source,

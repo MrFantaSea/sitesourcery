@@ -57,7 +57,9 @@ function context({ scope, snapshot } = {}) {
     assessmentEvidence: [],
     assessmentReport: [],
     checkout: [],
+    customBuildCheckout: [],
     customBuildAcceptance: [],
+    customBuildInvoiceRead: [],
     customBuildRead: [],
     invoiceRead: [],
     quoteAcceptance: [],
@@ -110,6 +112,23 @@ function context({ scope, snapshot } = {}) {
           schema: "sitesourcery.custom-services-custom-build-quote/v1",
           state: "not_available",
           quote: null
+        };
+      }
+    },
+    customBuildPayment: {
+      async readCurrentInvoice(value) {
+        calls.customBuildInvoiceRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-start-invoice/v1",
+          state: "not_available",
+          invoice: null
+        };
+      },
+      async createCheckout(value) {
+        calls.customBuildCheckout.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-start-checkout/v1",
+          state: "ready"
         };
       }
     },
@@ -435,6 +454,42 @@ test("hosted assessment checkout sends only resolved customer and invoice author
       projectId: PROJECT_ID,
       commandId: "assessment-checkout-command-1",
       invoiceDigest: "c".repeat(64),
+      invoiceId
+    }
+  ]);
+});
+
+test("hosted Custom build invoice and checkout send only resolved customer authority", async () => {
+  const selected = context();
+  const invoice = await selected.service.getCustomBuildInvoice(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(invoice.state, "not_available");
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000002";
+  const checkout = await selected.service.createCustomBuildCheckout(
+    actor(),
+    PROJECT_ID,
+    invoiceId,
+    {
+      commandId: "custom-build-checkout-command-1",
+      invoiceDigest: "d".repeat(64)
+    }
+  );
+  assert.equal(checkout.state, "ready");
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildInvoiceRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildCheckout, [
+    {
+      ...scope,
+      commandId: "custom-build-checkout-command-1",
+      invoiceDigest: "d".repeat(64),
       invoiceId
     }
   ]);

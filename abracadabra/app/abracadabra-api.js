@@ -1274,6 +1274,49 @@
       );
     }
 
+    function getCustomServicesCustomBuildInvoice(
+      projectId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-invoice",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function createCustomServicesCustomBuildCheckout(
+      projectId,
+      invoiceId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["invoiceDigest"],
+        "Custom website payment"
+      );
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-invoices/"
+          + segment(invoiceId, "Custom website invoice ID")
+          + "/checkout-command",
+        {
+          body: {
+            invoiceDigest: requiredDigest(
+              source.invoiceDigest,
+              "Custom website invoice digest"
+            )
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function acceptCustomServicesCustomBuildQuote(projectId, input) {
       var source = exactInput(
         input,
@@ -2018,6 +2061,10 @@
         voidOwnerCustomBuildQuote,
       getCustomServicesCustomBuildQuote:
         getCustomServicesCustomBuildQuote,
+      getCustomServicesCustomBuildInvoice:
+        getCustomServicesCustomBuildInvoice,
+      createCustomServicesCustomBuildCheckout:
+        createCustomServicesCustomBuildCheckout,
       acceptCustomServicesCustomBuildQuote:
         acceptCustomServicesCustomBuildQuote,
       createProject: createProject,

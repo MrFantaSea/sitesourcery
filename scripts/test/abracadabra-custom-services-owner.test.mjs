@@ -1332,6 +1332,14 @@ test("Custom build public estimates match every server-authority pricing rule wi
 test("customer Custom build snapshots fail closed around exact money, credit, footprint, and lifecycle truth", () => {
   const issued = customerCustomBuildSnapshot();
   const accepted = customerCustomBuildSnapshot("accepted");
+  const acceptedReconciliation = customerCustomBuildSnapshot(
+    "accepted",
+    { credit: customBuildCredit("reconciliation_required") }
+  );
+  const acceptedSettled = customerCustomBuildSnapshot(
+    "accepted",
+    { credit: customBuildCredit("settled") }
+  );
   const voided = customerCustomBuildSnapshot("voided", {
     credit: customBuildCredit("released")
   });
@@ -1345,6 +1353,17 @@ test("customer Custom build snapshots fail closed around exact money, credit, fo
   assert.equal(
     verifiedCustomerCustomBuildQuote(accepted, PROJECT_ID),
     accepted
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(
+      acceptedReconciliation,
+      PROJECT_ID
+    ),
+    acceptedReconciliation
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(acceptedSettled, PROJECT_ID),
+    acceptedSettled
   );
   assert.equal(
     verifiedCustomerCustomBuildQuote(voided, PROJECT_ID),
@@ -1370,6 +1389,13 @@ test("customer Custom build snapshots fail closed around exact money, credit, fo
     verifiedCustomerCustomBuildQuote({
       ...issued,
       credit: customBuildCredit("reserved")
+    }, PROJECT_ID),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote({
+      ...accepted,
+      credit: customBuildCredit("available")
     }, PROJECT_ID),
     null
   );
@@ -1450,7 +1476,7 @@ test("Custom build owner and customer panels expose bounded mobile controls and 
     "Terms included in this exact quote",
     "Commercial terms version",
     "Acceptance receipt retained",
-    "No Custom build invoice or checkout is available yet",
+    "Custom build first payment",
     "I understand this accepted quote will be voided"
   ]) assert.ok(source.includes(copy), copy);
   for (const boundary of [

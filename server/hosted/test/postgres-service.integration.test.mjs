@@ -988,6 +988,11 @@ test(
           return { status: "not_assessment" };
         }
       },
+      customBuildCommerce: {
+        async ingestStripeEvent() {
+          return { status: "not_custom_build" };
+        }
+      },
       alakazamCommerce: {
         async ingestStripeEvent() {
           return { status: "not_alakazam" };

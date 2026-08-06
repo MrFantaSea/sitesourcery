@@ -25,8 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1I assessment-backed Custom build quote and one-use credit reservation
-  surface is the latest reviewed local checkpoint represented by this ledger;
+- The H1J Custom build first-payment, credit-settlement, and job-open surface
+  is the latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
@@ -36,13 +36,12 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven assessment-backed Custom build quote and
-credit reservation: materialize the accepted quote's exact remaining first
-installment into a Custom invoice, reserve one automatic-tax Checkout before
-provider work, verify settlement by readback, settle the one-use credit only
-with that payment, and open one bounded build job carrying the final handoff
-amount. All real provider effects and public-service release gates remain held
-until each preceding local boundary is proven.
+Continue H1 from the now-proven first-payment settlement and retained build
+job: expose that paid job in the private Mac/Pixel owner workbench, implement
+bounded build/access/dependency/evidence progress, then create and settle the
+exact final handoff invoice before delivery or launch. All real provider
+effects and public-service release gates remain held until each preceding
+local boundary is proven.
 
 ## Completed and reviewed
 
@@ -1080,6 +1079,54 @@ Batch 3C sealed checkpoint gates:
   The Custom invoice, payment settlement, build job/handoff, provider release,
   and public release remain held.
 
+## H1J Custom build first-payment and job-open checkpoint evidence
+
+- Migration 42 materializes exactly one invoice from an accepted migration-41
+  quote. Its two immutable lines are the quoted gross first installment and
+  the negative `$200` assessment credit; subtotal, seven-day deadline, quote /
+  disclosure digests, and final handoff amount remain server authority.
+- Checkout is reserved before any provider effect, permits one active Session,
+  uses variable server-owned subtotal with Stripe automatic tax, safely replays
+  one retained destination, and never retries ambiguous provider or persistence
+  outcomes automatically. The browser submits only the invoice digest through
+  the authenticated project route and sees no raw provider identity.
+- A signed webhook is only a wake-up. Settlement reads back the exact Stripe
+  Session, PaymentIntent, captured/unrefunded Charge, Customer, subtotal, tax,
+  total, metadata, and purpose. One transaction writes the receipt, settles the
+  reserved credit, marks the Checkout paid, and opens one build job carrying
+  the exact accepted scope and final handoff amount. Replay cannot open another
+  charge, credit application, receipt, or job.
+- Production now composes the PostgreSQL quote/payment boundaries and shared
+  webhook router behind `SITESOURCERY_CUSTOM_BUILD_PAYMENT_MODE`, which defaults
+  to `held`. Approved startup requires exact Stripe, quote-storage, settlement,
+  credit, and job readiness; it does not authorize push, deploy, DNS, or provider
+  credentials by itself.
+- Customer controls cover not available, checkout available, retained Checkout,
+  held, expired, reconciliation, and paid/job-open truth. Independent redline
+  review found one reload blocker: accepted-quote verification still required a
+  reserved credit after the backend had moved it to reconciliation or settled.
+  The validator and focused regressions now accept only the three valid accepted
+  states (`reserved`, `reconciliation_required`, `settled`); recheck reports no
+  remaining blocker.
+- Fresh empty database `ss_h1j_migrations_20260805_codex8` replayed all 42
+  migrations and reported the canonical platform schema. Fresh cloned database
+  `ss_h1j_payment_20260805_codex7` passed the full assessment-through-report,
+  replacement Custom quote, `$450` first-payment invoice, Checkout, verified
+  settlement, settled credit, one open job, replay, and post-payment void-denial
+  journey 1/1.
+- Authoritative Node 24 proof passes: core 536/536; hosted service 250 pass with
+  2 intentional environment skips and 0 failures; focused responsive customer /
+  owner controls 20/20; operations 52/52; current site 18 live pages and 20
+  redirects; exact hosted build and HTML validation; all 42 migrations from
+  empty; and the real PostgreSQL journey 1/1. The hosted staging manifest binds
+  API digest `6f6be27acd421a1520cff801fd26135e9cfbc5b44a9b6f9e9f3c480f1ed32eaf`
+  and customer-control digest
+  `912f9c6406045ca734791d544bca556c151d11d8cf3ce1c7ad716cc9d5ce8ece`.
+- No real Stripe call, customer/production-data write, push, deployment, DNS
+  change, credential handling, or release mutation occurred. Owner build-work,
+  final handoff invoice/payment, delivery, provider release, and public release
+  remain held.
+
 ## Live resources and workers
 
 - No implementation or redline worker remains running. The exact Batch 3C and
@@ -1089,12 +1136,13 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Carry only the accepted migration-41 quote's exact remaining first installment
-into a Custom invoice and automatic-tax Checkout reservation. Verify payment
-through exact Stripe Session/PaymentIntent/Charge readback, atomically settle
-the reserved assessment credit, and open one Custom build job that retains the
-final handoff amount. Do not let the browser submit money, tax, credit, payment,
-or job state. Keep provider release, push, deployment, and DNS held.
+Expose the paid migration-42 Custom build job in the private Mac/Pixel owner
+workbench and customer account. Add only the bounded build checklist, access,
+dependency, evidence, change-order, and final-handoff states needed to create
+the exact final invoice and prove payment before launch or delivery. Do not add
+a casual mark-paid control or let the browser submit money, tax, credit,
+payment, or job authority. Keep provider release, push, deployment, and DNS
+held.
 
 ## Batch 3B write scope
 

@@ -503,10 +503,6 @@ test("production composes the PostgreSQL owner quote boundary", async () => {
   );
   assert.match(
     source,
-    /const customServicesCustomBuild\s*=\s*createHeldCustomServicesCustomBuild\(\)/u
-  );
-  assert.doesNotMatch(
-    source,
-    /createPostgresCustomServicesCustomBuild\(/u
+    /const customServicesCustomBuild\s*=\s*createPostgresCustomServicesCustomBuild\(\{[\s\S]*authority,[\s\S]*randomUUID:/u
   );
 });
