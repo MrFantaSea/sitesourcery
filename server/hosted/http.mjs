@@ -21,6 +21,9 @@ import {
 import {
   createHeldCustomServicesAssessmentWork
 } from "./custom-services-assessment-work-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuild
+} from "./custom-services-custom-build-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -344,6 +347,7 @@ export function createHostedApi(
     alakazamBilling = null,
     customServicesAccount = null,
     customServicesAssessmentWork = null,
+    customServicesCustomBuild = null,
     customServicesOwner = null,
     stripeWebhook = null
   } = {}
@@ -390,6 +394,22 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services assessment work boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesCustomBuildBoundary =
+    customServicesCustomBuild ??
+    createHeldCustomServicesCustomBuild();
+  invariant(
+    typeof customServicesCustomBuildBoundary.listOpportunities ===
+      "function" &&
+      typeof customServicesCustomBuildBoundary.issueQuote === "function" &&
+      typeof customServicesCustomBuildBoundary.voidQuote === "function" &&
+      typeof customServicesCustomBuildBoundary.readCurrentQuote ===
+        "function" &&
+      typeof customServicesCustomBuildBoundary.acceptCurrentQuote ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom build boundary is invalid.",
     { status: 500 }
   );
   const stripeWebhookBoundary =
@@ -444,6 +464,10 @@ export function createHostedApi(
       typeof customServicesAccountBoundary.withdrawAssessmentRequest ===
         "function" &&
       typeof customServicesAccountBoundary.acceptAssessmentQuote ===
+        "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildQuote ===
+        "function" &&
+      typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services account boundary is invalid.",
@@ -773,6 +797,80 @@ export function createHostedApi(
           );
           result =
             await customServicesAssessmentWorkBoundary.listJobs(actor);
+        } else if (
+          method === "GET" &&
+          pathname ===
+            "/api/v1/operator/custom-services/custom-build-opportunities"
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom build quote tools.",
+            { status: 401 }
+          );
+          result =
+            await customServicesCustomBuildBoundary.listOpportunities(actor);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/assessment-jobs\/([^/]+)\/custom-build-quote$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before issuing a Custom build quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesCustomBuildBoundary.issueQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "contentWords",
+                  "craftedPages",
+                  "expiresAt",
+                  "organizationId",
+                  "scopeStatement",
+                  "sections",
+                  "suppliedMedia",
+                  "targetCompletionDate",
+                  "tierId",
+                  "uniqueLayouts"
+                ],
+                "INVALID_CUSTOM_BUILD_QUOTE",
+                "The Custom build quote is invalid."
+              )
+            );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-quotes\/([^/]+)\/void$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before voiding a Custom build quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesCustomBuildBoundary.voidQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                ["commandId", "organizationId", "reason"],
+                "INVALID_CUSTOM_BUILD_QUOTE_VOID",
+                "The Custom build quote void request is invalid."
+              )
+            );
         } else if (
           method === "GET" &&
           (route = match(
@@ -1146,6 +1244,55 @@ export function createHostedApi(
                 ],
                 "INVALID_ASSESSMENT_QUOTE_ACCEPTANCE",
                 "The assessment quote acceptance is invalid."
+              )
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-quote$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing a Custom build quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.getCustomBuildQuote(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-quote\/acceptance$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before accepting a Custom build quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesAccountBoundary.acceptCustomBuildQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "acceptanceStatement",
+                  "acceptedDisclosureDigest",
+                  "acceptedQuoteDigest",
+                  "commandId",
+                  "quoteId",
+                  "quoteRevision"
+                ],
+                "INVALID_CUSTOM_BUILD_QUOTE_ACCEPTANCE",
+                "The Custom build quote acceptance is invalid."
               )
             );
         } else if (

@@ -57,6 +57,8 @@ function context({ scope, snapshot } = {}) {
     assessmentEvidence: [],
     assessmentReport: [],
     checkout: [],
+    customBuildAcceptance: [],
+    customBuildRead: [],
     invoiceRead: [],
     quoteAcceptance: [],
     quoteRead: [],
@@ -90,6 +92,24 @@ function context({ scope, snapshot } = {}) {
           contentDigest: "0".repeat(64),
           byteCount: 8,
           accessibleDescription: "Assessment evidence"
+        };
+      }
+    },
+    customBuild: {
+      async acceptCurrentQuote(value) {
+        calls.customBuildAcceptance.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-services-custom-build-quote/v1",
+          state: "accepted",
+          quote: { quoteId: value.quoteId }
+        };
+      },
+      async readCurrentQuote(value) {
+        calls.customBuildRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-services-custom-build-quote/v1",
+          state: "not_available",
+          quote: null
         };
       }
     },
@@ -465,6 +485,50 @@ test("hosted custom-services quote read and acceptance stay bound to the resolve
   ]);
 });
 
+test("hosted Custom build read and acceptance use only the resolved customer project", async () => {
+  const selected = context();
+  const current = await selected.service.getCustomBuildQuote(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(current.state, "not_available");
+
+  const acceptance = {
+    acceptanceStatement: "accepted_exact_custom_build_quote",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    commandId: "custom-build-accept-command-1",
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 1
+  };
+  const accepted = await selected.service.acceptCustomBuildQuote(
+    actor(),
+    PROJECT_ID,
+    acceptance
+  );
+  assert.equal(accepted.state, "accepted");
+
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildAcceptance, [
+    { ...scope, ...acceptance }
+  ]);
+
+  await assert.rejects(
+    selected.service.acceptCustomBuildQuote(actor(), PROJECT_ID, {
+      ...acceptance,
+      amountMinor: 20000
+    }),
+    isError("invalid_input", 400)
+  );
+  assert.equal(selected.calls.customBuildAcceptance.length, 1);
+});
+
 test("hosted custom-services request commands return the freshly read customer state", async () => {
   const selected = context();
   const exactScope = {
@@ -535,6 +599,14 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.acceptAssessmentQuote(actor(), PROJECT_ID, {}),
     isError("CUSTOM_SERVICES_QUOTE_HELD", 503)
+  );
+  await assert.rejects(
+    held.getCustomBuildQuote(actor(), PROJECT_ID),
+    isError("CUSTOM_BUILD_HELD", 503)
+  );
+  await assert.rejects(
+    held.acceptCustomBuildQuote(actor(), PROJECT_ID, {}),
+    isError("CUSTOM_BUILD_HELD", 503)
   );
   await assert.rejects(
     held.getAssessmentRequest(actor(), PROJECT_ID),

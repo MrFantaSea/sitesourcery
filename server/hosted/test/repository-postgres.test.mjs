@@ -363,8 +363,12 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
     )
   });
   assert.deepEqual((await authority.readiness()).missing, [
+    "custom_build_quote_credit",
+    "custom_build_quote_credit_contract_marker",
     "custom_service_assessment_checkout",
     "custom_service_assessment_checkout_contract_marker",
+    "custom_service_assessment_delivery",
+    "custom_service_assessment_delivery_contract_marker",
     "custom_service_assessment_settlement",
     "custom_service_assessment_settlement_contract_marker",
     "custom_service_customer_commands_contract_marker",

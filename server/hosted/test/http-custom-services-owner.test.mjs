@@ -17,6 +17,8 @@ const JOB_ID =
   "40000000-0000-4000-8000-000000000001";
 const EVIDENCE_ID =
   "50000000-0000-4000-8000-000000000001";
+const CUSTOM_BUILD_QUOTE_ID =
+  "60000000-0000-4000-8000-000000000001";
 const WORK_DIGEST = "a".repeat(64);
 
 function service() {
@@ -350,6 +352,134 @@ test("owner assessment work routes bind exact commands and private evidence", as
   assert.equal(calls.length, 5);
 });
 
+test("owner Custom build routes bind exact opportunities, job quotes, and quote voids", async () => {
+  const calls = [];
+  const opportunities = {
+    schema:
+      "sitesourcery.custom-services-owner-custom-build-opportunities/v1",
+    opportunities: []
+  };
+  const issuedReceipt = {
+    schema: "sitesourcery.custom-services-owner-custom-build-quote/v1",
+    state: "issued",
+    quoteId: CUSTOM_BUILD_QUOTE_ID
+  };
+  const voidedReceipt = { ...issuedReceipt, state: "voided" };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuild: {
+      async listOpportunities(actor) {
+        calls.push({ action: "list", actor });
+        return opportunities;
+      },
+      async issueQuote(actor, jobId, input) {
+        calls.push({ action: "issue", actor, jobId, input });
+        return issuedReceipt;
+      },
+      async voidQuote(actor, quoteId, input) {
+        calls.push({ action: "void", actor, quoteId, input });
+        return voidedReceipt;
+      },
+      async readCurrentQuote() {
+        throw new Error("unexpected customer Custom build read");
+      },
+      async acceptCurrentQuote() {
+        throw new Error("unexpected customer Custom build acceptance");
+      }
+    },
+    requestIds: {
+      next() {
+        return "request_custom_build_owner_1";
+      }
+    }
+  });
+
+  const listPath =
+    "/api/v1/operator/custom-services/custom-build-opportunities";
+  const listed = await api.fetch(request({ path: listPath }));
+  assert.equal(listed.status, 200);
+  assert.deepEqual(await listed.json(), opportunities);
+
+  const issueBody = {
+    organizationId: ORGANIZATION_ID,
+    tierId: "site-plus",
+    craftedPages: 7,
+    sections: 28,
+    uniqueLayouts: 4,
+    contentWords: 2800,
+    suppliedMedia: 18,
+    scopeStatement:
+      "Build the approved seven-page custom website from the delivered assessment.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-20T18:00:00.000Z"
+  };
+  const issued = await api.fetch(request({
+    body: issueBody,
+    method: "POST",
+    path:
+      `/api/v1/operator/custom-services/assessment-jobs/${JOB_ID}` +
+      "/custom-build-quote"
+  }));
+  assert.equal(issued.status, 201);
+  assert.deepEqual(await issued.json(), issuedReceipt);
+
+  const voidBody = {
+    organizationId: ORGANIZATION_ID,
+    reason: "Customer requested a corrected project scope before checkout."
+  };
+  const voided = await api.fetch(request({
+    body: voidBody,
+    method: "POST",
+    path:
+      "/api/v1/operator/custom-services/custom-build-quotes/" +
+      `${CUSTOM_BUILD_QUOTE_ID}/void`
+  }));
+  assert.equal(voided.status, 200);
+  assert.deepEqual(await voided.json(), voidedReceipt);
+
+  assert.deepEqual(calls, [
+    { action: "list", actor: { userId: OPERATOR_ID } },
+    {
+      action: "issue",
+      actor: { userId: OPERATOR_ID },
+      jobId: JOB_ID,
+      input: {
+        ...issueBody,
+        commandId: "owner-quote-command-1"
+      }
+    },
+    {
+      action: "void",
+      actor: { userId: OPERATOR_ID },
+      quoteId: CUSTOM_BUILD_QUOTE_ID,
+      input: {
+        ...voidBody,
+        commandId: "owner-quote-command-1"
+      }
+    }
+  ]);
+
+  const monetary = await api.fetch(request({
+    body: { ...issueBody, amountMinor: 1 },
+    method: "POST",
+    path:
+      `/api/v1/operator/custom-services/assessment-jobs/${JOB_ID}` +
+      "/custom-build-quote"
+  }));
+  assert.equal(monetary.status, 400);
+  assert.equal(
+    (await monetary.json()).error.code,
+    "INVALID_CUSTOM_BUILD_QUOTE"
+  );
+  assert.equal(calls.length, 3);
+
+  const signedOut = await api.fetch(request({
+    path: listPath,
+    signedIn: false
+  }));
+  assert.equal(signedOut.status, 401);
+  assert.equal(calls.length, 3);
+});
+
 test("production composes the PostgreSQL owner quote boundary", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
@@ -370,5 +500,13 @@ test("production composes the PostgreSQL owner quote boundary", async () => {
   assert.match(
     source,
     /createHostedApi\(service,\s*\{[\s\S]*customServicesAssessmentWork,/u
+  );
+  assert.match(
+    source,
+    /const customServicesCustomBuild\s*=\s*createHeldCustomServicesCustomBuild\(\)/u
+  );
+  assert.doesNotMatch(
+    source,
+    /createPostgresCustomServicesCustomBuild\(/u
   );
 });

@@ -6,11 +6,12 @@ This is the bounded Build-lane inventory for Custom sites and the five approved
 existing-site service lanes. It is an architecture and sequencing document,
 not an implementation or release authorization.
 
-Implementation update: H1A through H1H now occupy actual migrations 34–40:
+Implementation update: H1A through H1I now occupy actual migrations 34–41:
 foundation, quotes, customer commands, the assessment invoice, its exact
 automatic-tax Stripe Checkout dispatch, provider-confirmed settlement, and one
 bounded assessment job, private evidence/finding work, immutable customer
-report, and atomic `$200` same-project credit grant. The
+report, atomic `$200` same-project credit grant, and assessment-backed Custom
+base-build quote acceptance with one-use credit reservation/release. The
 numbered migration headings below preserve the original inventory and are no
 longer filename assignments. Use `SITESOURCERY-ACTIVE-RUN.md` and the canonical
 roadmap for current sequence and completion state. Checkout now collects the
@@ -21,10 +22,12 @@ crosses the browser boundary. A verified webhook is only a wake-up signal;
 exact read-only Stripe Session, PaymentIntent, captured-Charge, Customer,
 subtotal, tax, total, and metadata evidence precedes one immutable receipt and
 one atomic job open. The paid assessment can now be completed and delivered;
-credit reservation/application to an accepted Custom build remains unfinished.
+its credit can be reserved exactly once by an accepted Card-through-Scale base
+build and safely released only when that unsettled quote is voided. The Custom
+build invoice, payment settlement, job, and handoff remain unfinished.
 
 Batch 3C Alakazam tier fulfillment is sealed in migration 33. H1 migrations
-34–40 remain additive and must not widen or reinterpret that authority.
+34–41 remain additive and must not widen or reinterpret that authority.
 Nothing in this document authorizes a push, deploy, DNS/provider change,
 provider object, credential read, payment effect, or public promise.
 
@@ -67,9 +70,10 @@ external-site intake, deployment-authorized owner quote operation, exact
 customer acceptance, immutable assessment invoice, safely replayable
 automatic-tax Checkout destination, exact provider-confirmed receipt, and one
 bounded assessment job through private evidence, bounded findings, immutable
-report delivery, and one exact service-credit grant. The standard assessment
-lifecycle is locally complete. The broader system is not yet complete:
-credit redemption into a Custom quote, Custom invoice/payment/job/handoff,
+report delivery, one exact service-credit grant, and a customer-accepted
+Custom base-build quote that reserves that credit exactly once. The standard
+assessment lifecycle and Custom quote/credit boundary are locally complete.
+The broader system is not yet complete: Custom invoice/payment/job/handoff,
 outside-site takeover, recurring management ledger, and the broader owner
 workbench remain.
 

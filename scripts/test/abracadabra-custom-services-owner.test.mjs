@@ -5,6 +5,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const {
+  customBuildPublicEstimate,
   ownerAssessmentCoverageComplete,
   ownerAssessmentEvidenceUrl,
   ownerReviewTargets,
@@ -13,11 +14,14 @@ const {
   verifiedAssessmentCheckout,
   verifiedAssessmentInvoice,
   verifiedCustomerAssessmentReport,
+  verifiedCustomerCustomBuildQuote,
   verifiedOwnerAssessmentDelivery,
   verifiedOwnerAssessmentEvidence,
   verifiedOwnerAssessmentFinding,
   verifiedOwnerAssessmentJobs,
-  verifiedOwnerAssessmentQueue
+  verifiedOwnerAssessmentQueue,
+  verifiedOwnerCustomBuildOpportunities,
+  verifiedOwnerCustomBuildQuoteReceipt
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
@@ -759,6 +763,20 @@ test("customer assessment report fails closed and exposes only delivered evidenc
     verifiedCustomerAssessmentReport(delivered, PROJECT_ID),
     delivered
   );
+  for (const state of [
+    "reserved",
+    "settled",
+    "reconciliation_required"
+  ]) {
+    const applied = {
+      ...delivered,
+      credit: { ...delivered.credit, state }
+    };
+    assert.equal(
+      verifiedCustomerAssessmentReport(applied, PROJECT_ID),
+      applied
+    );
+  }
   const daylightSavingCutoff = new Date(
     Date.parse(ACCEPTANCE_CUTOFF) + 60 * 60 * 1000
   ).toISOString();
@@ -1056,6 +1074,406 @@ test("browser evidence preparation decodes, strips metadata, and bounds every sc
   assert.equal(closed, 2);
   assert.equal(draw[3], 2048);
   assert.equal(draw[4], 4608);
+});
+
+function customBuildCredit(state = "available") {
+  return {
+    creditId: CREDIT_ID,
+    amountMinor: 20000,
+    currency: "USD",
+    state,
+    acceptanceCutoff: ACCEPTANCE_CUTOFF
+  };
+}
+
+const CUSTOM_BUILD_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
+const CUSTOM_BUILD_CONTRACT_DIGEST =
+  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+const CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
+  "00000000-0000-4000-8000-000000000342";
+
+function customBuildTerms() {
+  return {
+    schema: "sitesourcery.custom-build-quote-terms/v1",
+    commercialContractId: CUSTOM_BUILD_CONTRACT_ID,
+    commercialContractDigest: CUSTOM_BUILD_CONTRACT_DIGEST,
+    legalDocumentId: CUSTOM_BUILD_LEGAL_DOCUMENT_ID,
+    rules: [
+      "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
+      "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
+      "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.",
+      "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
+      "Build work does not begin until the required first payment is verified.",
+      "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management."
+    ]
+  };
+}
+
+function customBuildAcceptance() {
+  return {
+    schema: "sitesourcery.custom-build-quote-acceptance-receipt/v1",
+    acceptedAt: "2026-08-06T15:00:00.000Z",
+    acceptedQuoteDigest: "a".repeat(64),
+    acceptedDisclosureDigest: "b".repeat(64),
+    commercialContractId: CUSTOM_BUILD_CONTRACT_ID,
+    commercialContractDigest: CUSTOM_BUILD_CONTRACT_DIGEST,
+    legalDocumentId: CUSTOM_BUILD_LEGAL_DOCUMENT_ID
+  };
+}
+
+function customBuildQuote(overrides = {}) {
+  return {
+    acceptance: null,
+    quoteId: QUOTE_ID,
+    quoteRevision: 1,
+    quoteDigest: "a".repeat(64),
+    disclosureDigest: "b".repeat(64),
+    state: "issued",
+    tier: {
+      id: "site",
+      label: "Site",
+      scaleUnits: null,
+      footprint: {
+        craftedPages: 4,
+        sections: 16,
+        uniqueLayouts: 4,
+        contentWords: 1800,
+        suppliedMedia: 12
+      }
+    },
+    scopeStatement:
+      "Build four crafted pages with the listed sections, supplied content, responsive review, and exact handoff boundary.",
+    terms: customBuildTerms(),
+    pricing: {
+      serviceAmountMinor: 120000,
+      creditAmountMinor: 20000,
+      customerAmountMinor: 100000,
+      currency: "USD",
+      taxState: "calculation_required",
+      paymentSchedule: "half_before_work_half_before_handoff",
+      startValueMinor: 60000,
+      startCreditMinor: 20000,
+      startDueMinor: 40000,
+      finalDueMinor: 60000,
+      installments: [
+        {
+          number: 1,
+          kind: "start",
+          grossValueMinor: 60000,
+          creditAmountMinor: 20000,
+          amountDueMinor: 40000,
+          dueTrigger: "before_work"
+        },
+        {
+          number: 2,
+          kind: "final",
+          grossValueMinor: 60000,
+          creditAmountMinor: 0,
+          amountDueMinor: 60000,
+          dueTrigger: "before_handoff"
+        }
+      ]
+    },
+    workmanshipCorrectionDays: 30,
+    targetCompletionDate: "2026-09-15",
+    issuedAt: "2026-08-05T15:00:00.000Z",
+    expiresAt: "2026-08-19T15:00:00.000Z",
+    creditAcceptanceCutoff: ACCEPTANCE_CUTOFF,
+    ...overrides
+  };
+}
+
+function customerCustomBuildSnapshot(
+  state = "issued",
+  overrides = {}
+) {
+  return {
+    schema:
+      "sitesourcery.custom-services-custom-build-quote/v1",
+    state,
+    projectId: PROJECT_ID,
+    customerId: CUSTOMER_ID,
+    credit: customBuildCredit(
+      state === "accepted" ? "reserved" : "available"
+    ),
+    quote: state === "not_available"
+      ? null
+      : customBuildQuote({
+          state,
+          acceptance: state === "accepted"
+            ? customBuildAcceptance()
+            : null
+        }),
+    ...overrides
+  };
+}
+
+function ownerCustomBuildOpportunities(overrides = {}) {
+  return {
+    schema:
+      "sitesourcery.custom-services-owner-custom-build-opportunities/v1",
+    opportunities: [
+      {
+        organizationId: ORGANIZATION_ID,
+        organizationName: "Customer Studio",
+        projectId: PROJECT_ID,
+        projectName: "Customer Website",
+        caseId: CASE_ID,
+        customer: {
+          customerId: CUSTOMER_ID,
+          name: "Customer Owner",
+          email: "customer@example.test"
+        },
+        assessment: {
+          jobId: JOB_ID,
+          reportId: REPORT_ID,
+          deliveredAt: DELIVERED_AT
+        },
+        credit: customBuildCredit(),
+        currentQuote: customBuildQuote(),
+        ...overrides
+      }
+    ]
+  };
+}
+
+function ownerCustomBuildReceipt(state = "issued") {
+  return {
+    schema:
+      "sitesourcery.custom-services-owner-custom-build-quote/v1",
+    state,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    caseId: CASE_ID,
+    customerId: CUSTOMER_ID,
+    jobId: JOB_ID,
+    reportId: REPORT_ID,
+    credit: customBuildCredit(
+      state === "voided" ? "released" : "available"
+    ),
+    quote: customBuildQuote({ state })
+  };
+}
+
+test("Custom build public estimates match every server-authority pricing rule without becoming request authority", () => {
+  for (const [tierId, footprint, amountMinor] of [
+    ["card", [1, 5, 1, 500, 2], 40000],
+    ["card-plus", [1, 8, 1, 900, 8], 65000],
+    ["site", [4, 16, 4, 1800, 12], 120000],
+    ["site-plus", [7, 28, 7, 3000, 24], 180000],
+    ["signature", [10, 40, 10, 4500, 36], 280000],
+    ["flagship", [15, 60, 15, 7000, 60], 400000]
+  ]) {
+    const estimate = customBuildPublicEstimate(tierId, {
+      craftedPages: footprint[0],
+      sections: footprint[1],
+      uniqueLayouts: footprint[2],
+      contentWords: footprint[3],
+      suppliedMedia: footprint[4]
+    });
+    assert.equal(estimate.serviceAmountMinor, amountMinor, tierId);
+    assert.equal(estimate.creditAmountMinor, 20000, tierId);
+    assert.equal(
+      estimate.customerAmountMinor,
+      amountMinor - 20000,
+      tierId
+    );
+  }
+  assert.deepEqual(
+    { ...customBuildPublicEstimate("card", {
+      craftedPages: 1,
+      sections: 5,
+      uniqueLayouts: 1,
+      contentWords: 500,
+      suppliedMedia: 2
+    }) },
+    {
+      serviceAmountMinor: 40000,
+      creditAmountMinor: 20000,
+      customerAmountMinor: 20000,
+      paymentSchedule: "full_before_work",
+      scaleUnits: null,
+      startValueMinor: 40000,
+      startCreditMinor: 20000,
+      startDueMinor: 20000,
+      finalDueMinor: 0
+    }
+  );
+  const scale = customBuildPublicEstimate("scale", {
+    craftedPages: 16,
+    sections: 64,
+    uniqueLayouts: 16,
+    contentWords: 7500,
+    suppliedMedia: 64
+  });
+  assert.equal(scale.scaleUnits, 1);
+  assert.equal(scale.serviceAmountMinor, 427000);
+  assert.equal(scale.customerAmountMinor, 407000);
+  assert.equal(scale.startDueMinor, 193500);
+  assert.equal(scale.finalDueMinor, 213500);
+  assert.equal(customBuildPublicEstimate("scale", {
+    craftedPages: 15,
+    sections: 60,
+    uniqueLayouts: 15,
+    contentWords: 7000,
+    suppliedMedia: 60
+  }), null);
+  const maximum = customBuildPublicEstimate("scale", {
+    craftedPages: 30,
+    sections: 120,
+    uniqueLayouts: 30,
+    contentWords: 14500,
+    suppliedMedia: 120
+  });
+  assert.equal(maximum.scaleUnits, 15);
+  assert.equal(maximum.serviceAmountMinor, 805000);
+});
+
+test("customer Custom build snapshots fail closed around exact money, credit, footprint, and lifecycle truth", () => {
+  const issued = customerCustomBuildSnapshot();
+  const accepted = customerCustomBuildSnapshot("accepted");
+  const voided = customerCustomBuildSnapshot("voided", {
+    credit: customBuildCredit("released")
+  });
+  const notAvailable = customerCustomBuildSnapshot(
+    "not_available"
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(issued, PROJECT_ID),
+    issued
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(accepted, PROJECT_ID),
+    accepted
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(voided, PROJECT_ID),
+    voided
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(notAvailable, PROJECT_ID),
+    notAvailable
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote({
+      ...issued,
+      quote: customBuildQuote({
+        pricing: {
+          ...issued.quote.pricing,
+          customerAmountMinor: 999
+        }
+      })
+    }, PROJECT_ID),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote({
+      ...issued,
+      credit: customBuildCredit("reserved")
+    }, PROJECT_ID),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(issued, ORGANIZATION_ID),
+    null
+  );
+});
+
+test("owner Custom build opportunity and issue/void receipt schemas bind one delivered report and same-project credit", () => {
+  const opportunities = ownerCustomBuildOpportunities();
+  const issued = ownerCustomBuildReceipt();
+  const voided = ownerCustomBuildReceipt("voided");
+  assert.equal(
+    verifiedOwnerCustomBuildOpportunities(opportunities),
+    opportunities
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildQuoteReceipt(issued),
+    issued
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildQuoteReceipt(voided),
+    voided
+  );
+  const replacementReady = ownerCustomBuildOpportunities({
+    credit: customBuildCredit("released"),
+    currentQuote: customBuildQuote({ state: "voided" })
+  });
+  assert.equal(
+    verifiedOwnerCustomBuildOpportunities(replacementReady),
+    replacementReady
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildOpportunities(
+      ownerCustomBuildOpportunities({
+        projectId: "not-a-project"
+      })
+    ),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildQuoteReceipt({
+      ...issued,
+      amountMinor: 1
+    }),
+    null
+  );
+});
+
+test("Custom build owner and customer panels expose bounded mobile controls and honest post-acceptance truth", async () => {
+  const [source, css] = await Promise.all([
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-customer-control-dom.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-app.css",
+        import.meta.url
+      ),
+      "utf8"
+    )
+  ]);
+  for (const copy of [
+    "Owner Custom website quote desk",
+    "Issue exact Custom website quote",
+    "Safely void Custom build quote",
+    "Safe void is confirmed",
+    "Scale is $4,000 + $270 per computed capacity unit (1–15)",
+    "Accept exact Custom website quote",
+    "Assessment credit",
+    "Amount remaining",
+    "Workmanship correction",
+    "Terms included in this exact quote",
+    "Commercial terms version",
+    "Acceptance receipt retained",
+    "No Custom build invoice or checkout is available yet",
+    "I understand this accepted quote will be voided"
+  ]) assert.ok(source.includes(copy), copy);
+  for (const boundary of [
+    "listOwnerCustomBuildOpportunities",
+    "issueOwnerCustomBuildQuote",
+    "voidOwnerCustomBuildQuote",
+    "getCustomServicesCustomBuildQuote",
+    "acceptCustomServicesCustomBuildQuote",
+    "verifiedOwnerCustomBuildOpportunities",
+    "verifiedCustomerCustomBuildQuote"
+  ]) assert.ok(source.includes(boundary), boundary);
+  assert.match(
+    source,
+    /\[401, 403, 503\]\.includes\(error\.status\)[\s\S]*?"unavailable"/u
+  );
+  assert.match(
+    css,
+    /\.customer-owner-quote-form\{grid-template-columns:1fr\}/u
+  );
+  assert.match(
+    css,
+    /\.customer-owner-custom-build-card>dl,\.customer-custom-build-owner-review>dl\{grid-template-columns:1fr\}/u
+  );
 });
 
 test("owner workbench is private, phone-friendly, evidence-bound, and delivery-gated", async () => {

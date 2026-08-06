@@ -219,6 +219,14 @@ Account and site authority:
 - [ ] Require a Site Sourcery account before quote acceptance, payable invoice,
   payment, private access request, job, or support ticket; keep a simple
   anonymous inquiry path.
+- [ ] Add owner-assisted account invitation/claim for an in-person customer;
+  assistance may shorten onboarding but never creates an accountless payer or
+  lets the owner choose or retain the customer's password.
+- [ ] Let the owner open the same account-bound quote or invoice from Mac or
+  Pixel and present a secure customer link/QR for payment. Treat physical
+  tap/swipe as a later Stripe Terminal integration, and treat cash/check/
+  approved wallet payments as manual evidence requiring explicit owner
+  authority and reconciliation—not a browser `mark paid` control.
 - [ ] Add one customer-owned site asset with origin `alakazam`,
   `sitesourcery_custom`, or `external`, plus platform, public URL, ownership,
   supportability, and delegated-access state.
@@ -282,9 +290,15 @@ Assessment and findings:
   prioritized findings, evidence, delivery, and expanded-assessment hold.
 - [x] Issue exactly one non-cash, same-project, 90-day Custom base-build
   credit only with immutable report delivery.
-- [ ] Implement atomic one-use credit reservation/application during Custom
-  quote acceptance and separately record reused scope so overlapping work is
-  not billed twice.
+- [x] Implement atomic one-use credit reservation/application during Custom
+  quote acceptance, with release only for an unsettled void and no cash or
+  cross-project reuse.
+- [ ] Record structured reused assessment scope/findings on later Rescue,
+  Move, onboarding, and management quotes so overlapping work is not billed
+  twice under another service label.
+- [ ] Add an optional evidence-bound AI first draft for the assessment report;
+  the owner must review, edit as needed, explicitly approve, and deliver it.
+  No model output may become a customer diagnosis or report automatically.
 - [ ] Let the customer read the delivered report and select safe findings for a
   later fixed Rescue quote; do not turn report findings into automatic charges.
 
@@ -438,28 +452,31 @@ Lane D/J Polish truth ────────────┘
 | H1F | Automatic-tax assessment Checkout dispatch | Lead plus bounded browser worker and read-only audit | migration 38; durable reserve-before-effect; unique provider Session binding; exact `$200` Stripe purpose and returned-Session purpose validation; Stripe-hosted address/tax calculation; separate default-held release that cannot start approved without settlement readiness; account-bound command and responsive customer control without raw provider IDs; exact command-before-attempt locking; replay, expiry, concurrency, tamper, and ambiguity fences; clean-room PostgreSQL, hosted artifact, and broad proof | reviewed locally; real provider effects, settlement, job, report, credit, deployment grant, and release held |
 | H1G | Assessment payment settlement and job open | Lead plus bounded provider and architecture review | migration 39; webhook-as-wakeup routing; exact Stripe Session, PaymentIntent, Charge, Customer, subtotal, tax, total, metadata, and purpose readback; immutable receipt; one exact bounded assessment job; safe replay/alias handling; mismatch and transient-read states; expired unpaid Checkout reconciliation; paid customer projection and return polling; clean-room PostgreSQL, hosted artifact, browser, and broad proof | reviewed locally; real provider effects, findings, report, credit, deployment grant, and release held |
 | H1H | Paid assessment work, report, and credit grant | Lead plus bounded browser implementation and independent redline review | migration 40; private evidence payloads; Mac/Pixel owner workbench; target- and viewport-bound screenshots; up to ten revision-fenced findings; reviewed-work digest; immutable customer report; exact one-time `$200` same-project 90-day credit grant; account-scoped customer report/evidence reads; clean-room PostgreSQL, hosted artifact, responsive browser, and broad proof | reviewed and sealed locally; credit redemption, Custom build quote/invoice/job, deployment grant, provider effects, and release held |
+| H1I | Assessment-backed Custom build quote and credit reservation | Lead plus bounded HTTP/browser workers and independent redline review | migration 41; exact Card-through-Scale database pricing; source-report/project/customer binding; immutable base line and installments; owner issue/void; customer account read/acceptance; atomic one-use `$200` reservation; unsettled-void release; idempotent commands; production readiness/composition; clean-room PostgreSQL, hosted artifact, responsive controls, and broad proof | reviewed and sealed locally; Custom invoice, provider payment, settlement, build job/handoff, deployment grant, provider effects, and release held |
 
 ## Immediate integration target
 
-Batch 3C, H0, and H1A through H1H are sealed locally. H1D supplies the customer
+Batch 3C, H0, and H1A through H1I are sealed locally. H1D supplies the customer
 request, deployment-authorized owner quote issue, and exact customer acceptance
 surface; H1E adds the account-bound invoice and H1F adds one automatic-tax
 Checkout dispatch. H1G adds provider-confirmed settlement, the immutable
 receipt, expired-unpaid reconciliation, one bounded assessment job, and safe
 customer payment/return truth over migrations 34 through 39. H1H adds the
 private owner workbench, exact evidence and finding boundary, immutable
-customer report, and atomic credit grant in migration 40.
+customer report, and atomic credit grant in migration 40. H1I adds the exact
+Card-through-Scale base-build quote, customer acceptance, and one-use credit
+reservation/release boundary in migration 41.
 Continue Lane H1 as one outcome:
 anonymous inquiry/claim + activated account + a customer-owned external-site
 request + exact accepted `$200` assessment quote + invoice/Checkout +
 provider-confirmed payment + job/report delivery + exact one-use `$200` Custom
 build credit + one accepted Custom build that applies the credit exactly once.
-The immediate slice is the Custom build quote/acceptance ledger: reserve an
-available same-project credit atomically, apply it only to the Custom base
-build, release only an unsettled reservation when its quote is voided, and
-carry the exact remaining start/final installment values into invoice,
-Checkout, settlement, and the build job. Stripe Checkout—not a duplicate local
-calculator—continues to calculate tax.
+The immediate slice is the Custom build invoice and first-installment payment:
+materialize only the accepted migration-41 quote and its exact remaining start
+amount, create one automatic-tax Checkout reservation before any provider
+effect, verify provider settlement by readback, settle the reserved credit only
+with that payment, and open one build job carrying the final handoff amount.
+Stripe Checkout—not a duplicate local calculator—continues to calculate tax.
 Do not widen legacy Download, Alakazam, domain, or old Spark billing tables
 into a pretend generic commerce system.
 

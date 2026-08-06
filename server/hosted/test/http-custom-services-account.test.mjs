@@ -26,11 +26,17 @@ function service() {
 
 function assessmentWorkMethods() {
   return {
+    async acceptCustomBuildQuote() {
+      throw new Error("unexpected Custom build acceptance");
+    },
     async getAssessmentReport() {
       throw new Error("unexpected assessment report read");
     },
     async getAssessmentEvidence() {
       throw new Error("unexpected assessment evidence read");
+    },
+    async getCustomBuildQuote() {
+      throw new Error("unexpected Custom build quote read");
     }
   };
 }
@@ -49,6 +55,8 @@ function completeAccountBoundary(overrides = {}) {
     submitAssessmentRequest: noOp,
     withdrawAssessmentRequest: noOp,
     acceptAssessmentQuote: noOp,
+    getCustomBuildQuote: noOp,
+    acceptCustomBuildQuote: noOp,
     ...overrides
   };
 }
@@ -231,6 +239,84 @@ test("assessment quote HTTP routes read and accept the exact customer quote", as
       input: { ...body, commandId: "accept-command-1" }
     }
   ]);
+});
+
+test("Custom build quote HTTP routes read and accept the exact project quote without monetary input", async () => {
+  const calls = [];
+  const current = {
+    schema: "sitesourcery.custom-services-custom-build-quote/v1",
+    state: "review_required"
+  };
+  const accepted = { ...current, state: "accepted" };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildQuote(actor, projectId) {
+        calls.push({ action: "read", actor, projectId });
+        return current;
+      },
+      async acceptCustomBuildQuote(actor, projectId, input) {
+        calls.push({ action: "accept", actor, projectId, input });
+        return accepted;
+      }
+    }),
+    requestIds: {
+      next() {
+        return "request_custom_build_quote_1";
+      }
+    }
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}/custom-services/custom-build-quote`;
+
+  const read = await api.fetch(request({ path }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), current);
+
+  const body = {
+    acceptanceStatement: "accepted_exact_custom_build_quote",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    quoteId: "50000000-0000-4000-8000-000000000001",
+    quoteRevision: 1
+  };
+  const acceptance = await api.fetch(request({
+    body,
+    method: "POST",
+    path: `${path}/acceptance`,
+    write: true
+  }));
+  assert.equal(acceptance.status, 200);
+  assert.deepEqual(await acceptance.json(), accepted);
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "accept",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      input: { ...body, commandId: "accept-command-1" }
+    }
+  ]);
+
+  const monetary = await api.fetch(request({
+    body: { ...body, amountMinor: 20000 },
+    method: "POST",
+    path: `${path}/acceptance`,
+    write: true
+  }));
+  assert.equal(monetary.status, 400);
+  assert.equal(
+    (await monetary.json()).error.code,
+    "INVALID_CUSTOM_BUILD_QUOTE_ACCEPTANCE"
+  );
+  assert.equal(calls.length, 2);
+
+  const signedOut = await api.fetch(request({ path, signedIn: false }));
+  assert.equal(signedOut.status, 401);
+  assert.equal(calls.length, 2);
 });
 
 test("assessment request HTTP routes read, save, submit, and withdraw", async () => {

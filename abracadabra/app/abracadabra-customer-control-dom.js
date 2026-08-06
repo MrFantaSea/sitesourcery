@@ -86,6 +86,63 @@
     "flagship",
     "scale"
   ];
+  var CUSTOM_BUILD_COMMERCIAL_CONTRACT_ID =
+    "SS-CUSTOM-SERVICES-2026-08-05.1";
+  var CUSTOM_BUILD_COMMERCIAL_CONTRACT_DIGEST =
+    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  var CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
+    "00000000-0000-4000-8000-000000000342";
+  var CUSTOM_BUILD_TIERS = Object.freeze([
+    Object.freeze({
+      id: "card",
+      label: "Card",
+      amountMinor: 40000,
+      defaults: [1, 5, 1, 500, 2],
+      maxima: [1, 5, 1, 500, 2]
+    }),
+    Object.freeze({
+      id: "card-plus",
+      label: "Card Plus",
+      amountMinor: 65000,
+      defaults: [1, 8, 1, 900, 8],
+      maxima: [1, 8, 1, 900, 8]
+    }),
+    Object.freeze({
+      id: "site",
+      label: "Site",
+      amountMinor: 120000,
+      defaults: [4, 16, 4, 1800, 12],
+      maxima: [4, 16, 4, 1800, 12]
+    }),
+    Object.freeze({
+      id: "site-plus",
+      label: "Site Plus",
+      amountMinor: 180000,
+      defaults: [7, 28, 7, 3000, 24],
+      maxima: [7, 28, 7, 3000, 24]
+    }),
+    Object.freeze({
+      id: "signature",
+      label: "Signature",
+      amountMinor: 280000,
+      defaults: [10, 40, 10, 4500, 36],
+      maxima: [10, 40, 10, 4500, 36]
+    }),
+    Object.freeze({
+      id: "flagship",
+      label: "Flagship",
+      amountMinor: 400000,
+      defaults: [15, 60, 15, 7000, 60],
+      maxima: [15, 60, 15, 7000, 60]
+    }),
+    Object.freeze({
+      id: "scale",
+      label: "Scale",
+      amountMinor: null,
+      defaults: [16, 64, 16, 7500, 64],
+      maxima: [30, 120, 30, 14500, 120]
+    })
+  ]);
   var ASSESSMENT_SEVERITIES = [
     "critical",
     "high",
@@ -2192,13 +2249,527 @@
         value.deliveredAt,
         value.acceptanceCutoff
       )
-      || !["available", "expired"].includes(value.state)
+      || ![
+        "available",
+        "expired",
+        "reserved",
+        "settled",
+        "reconciliation_required"
+      ].includes(value.state)
       || !SHA256.test(text(value.creditDigest))
     ) return false;
     return (!expectation.deliveredAt
         || value.deliveredAt === expectation.deliveredAt)
       && (!expectation.acceptanceCutoff
         || value.acceptanceCutoff === expectation.acceptanceCutoff);
+  }
+
+  function customBuildTier(tierId) {
+    return CUSTOM_BUILD_TIERS.find(function (tier) {
+      return tier.id === tierId;
+    }) || null;
+  }
+
+  function customBuildScaleUnits(footprint) {
+    if (!record(footprint)) return null;
+    var values = [
+      footprint.craftedPages,
+      footprint.sections,
+      footprint.uniqueLayouts,
+      footprint.contentWords,
+      footprint.suppliedMedia
+    ];
+    if (!values.every(Number.isSafeInteger)) return null;
+    return Math.max(
+      Math.max(footprint.craftedPages - 15, 0),
+      Math.ceil(Math.max(footprint.sections - 60, 0) / 4),
+      Math.max(footprint.uniqueLayouts - 15, 0),
+      Math.ceil(Math.max(footprint.contentWords - 7000, 0) / 500),
+      Math.ceil(Math.max(footprint.suppliedMedia - 60, 0) / 4)
+    );
+  }
+
+  function customBuildPublicEstimate(tierId, footprint) {
+    var tier = customBuildTier(tierId);
+    if (
+      !tier
+      || !exactKeys(
+        footprint,
+        [
+          "contentWords",
+          "craftedPages",
+          "sections",
+          "suppliedMedia",
+          "uniqueLayouts"
+        ]
+      )
+    ) return null;
+    var values = [
+      footprint.craftedPages,
+      footprint.sections,
+      footprint.uniqueLayouts,
+      footprint.contentWords,
+      footprint.suppliedMedia
+    ];
+    var minima = [1, 1, 1, 0, 0];
+    if (!values.every(function (value, index) {
+      return Number.isSafeInteger(value)
+        && value >= minima[index]
+        && value <= tier.maxima[index];
+    })) return null;
+    var scaleUnits = tier.id === "scale"
+      ? customBuildScaleUnits(footprint)
+      : null;
+    if (
+      tier.id === "scale"
+      && (!Number.isSafeInteger(scaleUnits)
+        || scaleUnits < 1
+        || scaleUnits > 15)
+    ) return null;
+    var serviceAmountMinor = tier.id === "scale"
+      ? 400000 + scaleUnits * 27000
+      : tier.amountMinor;
+    var paymentSchedule = ["card", "card-plus"]
+      .includes(tier.id)
+      ? "full_before_work"
+      : "half_before_work_half_before_handoff";
+    var startValueMinor = paymentSchedule === "full_before_work"
+      ? serviceAmountMinor
+      : Math.floor(serviceAmountMinor / 2);
+    return Object.freeze({
+      serviceAmountMinor: serviceAmountMinor,
+      creditAmountMinor: 20000,
+      customerAmountMinor: serviceAmountMinor - 20000,
+      paymentSchedule: paymentSchedule,
+      scaleUnits: scaleUnits,
+      startValueMinor: startValueMinor,
+      startCreditMinor: 20000,
+      startDueMinor: startValueMinor - 20000,
+      finalDueMinor: serviceAmountMinor - startValueMinor
+    });
+  }
+
+  function customBuildTermsRules(paymentSchedule) {
+    var paymentRule = paymentSchedule === "full_before_work"
+      ? "The remaining balance is due before build work begins."
+      : "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.";
+    return [
+      "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
+      "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
+      paymentRule,
+      "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
+      "Build work does not begin until the required first payment is verified.",
+      "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management."
+    ];
+  }
+
+  function safeCustomBuildCredit(value) {
+    return exactKeys(
+      value,
+      [
+        "acceptanceCutoff",
+        "amountMinor",
+        "creditId",
+        "currency",
+        "state"
+      ]
+    )
+      && UUID.test(text(value.creditId))
+      && value.amountMinor === 20000
+      && value.currency === "USD"
+      && [
+        "available",
+        "reserved",
+        "released",
+        "settled",
+        "expired",
+        "reconciliation_required"
+      ].includes(value.state)
+      && safeIso(value.acceptanceCutoff);
+  }
+
+  function safeCustomBuildInstallments(value, estimate) {
+    var expected = [{
+      number: 1,
+      kind: "start",
+      grossValueMinor: estimate.startValueMinor,
+      creditAmountMinor: estimate.startCreditMinor,
+      amountDueMinor: estimate.startDueMinor,
+      dueTrigger: "before_work"
+    }];
+    if (estimate.finalDueMinor > 0) {
+      expected.push({
+        number: 2,
+        kind: "final",
+        grossValueMinor: estimate.finalDueMinor,
+        creditAmountMinor: 0,
+        amountDueMinor: estimate.finalDueMinor,
+        dueTrigger: "before_handoff"
+      });
+    }
+    return Array.isArray(value)
+      && value.length === expected.length
+      && value.every(function (entry, index) {
+        var exact = expected[index];
+        return exactKeys(
+          entry,
+          [
+            "amountDueMinor",
+            "creditAmountMinor",
+            "dueTrigger",
+            "grossValueMinor",
+            "kind",
+            "number"
+          ]
+        )
+          && entry.number === exact.number
+          && entry.kind === exact.kind
+          && entry.grossValueMinor === exact.grossValueMinor
+          && entry.creditAmountMinor === exact.creditAmountMinor
+          && entry.amountDueMinor === exact.amountDueMinor
+          && entry.dueTrigger === exact.dueTrigger;
+      });
+  }
+
+  function safeCustomBuildTerms(value, paymentSchedule) {
+    return exactKeys(
+      value,
+      [
+        "commercialContractDigest",
+        "commercialContractId",
+        "legalDocumentId",
+        "rules",
+        "schema"
+      ]
+    )
+      && value.schema === "sitesourcery.custom-build-quote-terms/v1"
+      && value.commercialContractId ===
+        CUSTOM_BUILD_COMMERCIAL_CONTRACT_ID
+      && value.commercialContractDigest ===
+        CUSTOM_BUILD_COMMERCIAL_CONTRACT_DIGEST
+      && value.legalDocumentId === CUSTOM_BUILD_LEGAL_DOCUMENT_ID
+      && sameAssessmentList(
+        value.rules,
+        customBuildTermsRules(paymentSchedule)
+      );
+  }
+
+  function safeCustomBuildAcceptance(value, quote) {
+    return exactKeys(
+      value,
+      [
+        "acceptedAt",
+        "acceptedDisclosureDigest",
+        "acceptedQuoteDigest",
+        "commercialContractDigest",
+        "commercialContractId",
+        "legalDocumentId",
+        "schema"
+      ]
+    )
+      && value.schema ===
+        "sitesourcery.custom-build-quote-acceptance-receipt/v1"
+      && safeIso(value.acceptedAt)
+      && value.acceptedQuoteDigest === quote.quoteDigest
+      && value.acceptedDisclosureDigest === quote.disclosureDigest
+      && value.commercialContractId ===
+        quote.terms.commercialContractId
+      && value.commercialContractDigest ===
+        quote.terms.commercialContractDigest
+      && value.legalDocumentId === quote.terms.legalDocumentId;
+  }
+
+  function safeCustomBuildQuote(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "acceptance",
+          "creditAcceptanceCutoff",
+          "disclosureDigest",
+          "expiresAt",
+          "issuedAt",
+          "pricing",
+          "quoteDigest",
+          "quoteId",
+          "quoteRevision",
+          "scopeStatement",
+          "state",
+          "targetCompletionDate",
+          "terms",
+          "tier",
+          "workmanshipCorrectionDays"
+        ]
+      )
+      || !UUID.test(text(value.quoteId))
+      || !Number.isSafeInteger(value.quoteRevision)
+      || value.quoteRevision < 1
+      || !SHA256.test(text(value.quoteDigest))
+      || !SHA256.test(text(value.disclosureDigest))
+      || !["issued", "accepted", "voided"].includes(value.state)
+      || !assessmentText(value.scopeStatement, 20, 2000)
+      || value.workmanshipCorrectionDays !== 30
+      || !assessmentDate(value.targetCompletionDate)
+      || !safeIso(value.issuedAt)
+      || !safeIso(value.expiresAt)
+      || !safeIso(value.creditAcceptanceCutoff)
+      || Date.parse(value.expiresAt) <= Date.parse(value.issuedAt)
+      || Date.parse(value.expiresAt) >
+        Date.parse(value.creditAcceptanceCutoff)
+      || Date.parse(value.expiresAt) >
+        Date.parse(value.issuedAt) + 30 * 24 * 60 * 60 * 1000
+      || Date.parse(value.targetCompletionDate + "T00:00:00.000Z") <=
+        Date.parse(value.issuedAt.slice(0, 10) + "T00:00:00.000Z")
+      || Date.parse(value.targetCompletionDate + "T00:00:00.000Z") >
+        Date.parse(value.issuedAt.slice(0, 10) + "T00:00:00.000Z")
+          + 730 * 24 * 60 * 60 * 1000
+      || !exactKeys(
+        value.tier,
+        ["footprint", "id", "label", "scaleUnits"]
+      )
+      || !exactKeys(
+        value.tier.footprint,
+        [
+          "contentWords",
+          "craftedPages",
+          "sections",
+          "suppliedMedia",
+          "uniqueLayouts"
+        ]
+      )
+    ) return false;
+    var tier = customBuildTier(value.tier.id);
+    var estimate = customBuildPublicEstimate(
+      value.tier.id,
+      value.tier.footprint
+    );
+    if (
+      !tier
+      || !estimate
+      || value.tier.label !== tier.label
+      || value.tier.scaleUnits !== estimate.scaleUnits
+      || !exactKeys(
+        value.pricing,
+        [
+          "creditAmountMinor",
+          "currency",
+          "customerAmountMinor",
+          "finalDueMinor",
+          "installments",
+          "paymentSchedule",
+          "serviceAmountMinor",
+          "startCreditMinor",
+          "startDueMinor",
+          "startValueMinor",
+          "taxState"
+        ]
+      )
+      || value.pricing.serviceAmountMinor !==
+        estimate.serviceAmountMinor
+      || value.pricing.creditAmountMinor !==
+        estimate.creditAmountMinor
+      || value.pricing.customerAmountMinor !==
+        estimate.customerAmountMinor
+      || value.pricing.currency !== "USD"
+      || value.pricing.taxState !== "calculation_required"
+      || value.pricing.paymentSchedule !==
+        estimate.paymentSchedule
+      || value.pricing.startValueMinor !==
+        estimate.startValueMinor
+      || value.pricing.startCreditMinor !==
+        estimate.startCreditMinor
+      || value.pricing.startDueMinor !==
+        estimate.startDueMinor
+      || value.pricing.finalDueMinor !==
+        estimate.finalDueMinor
+      || !safeCustomBuildInstallments(
+        value.pricing.installments,
+        estimate
+      )
+      || !safeCustomBuildTerms(
+        value.terms,
+        value.pricing.paymentSchedule
+      )
+    ) return false;
+    if (value.state === "issued" && value.acceptance !== null) {
+      return false;
+    }
+    if (
+      value.state === "accepted"
+      && !safeCustomBuildAcceptance(value.acceptance, value)
+    ) return false;
+    if (
+      value.state === "voided"
+      && value.acceptance !== null
+      && !safeCustomBuildAcceptance(value.acceptance, value)
+    ) return false;
+    return true;
+  }
+
+  function verifiedCustomerCustomBuildQuote(
+    value,
+    expectedProjectId
+  ) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "credit",
+          "customerId",
+          "projectId",
+          "quote",
+          "schema",
+          "state"
+        ]
+      )
+      || value.schema !==
+        "sitesourcery.custom-services-custom-build-quote/v1"
+      || ![
+        "not_available",
+        "issued",
+        "accepted",
+        "voided"
+      ].includes(value.state)
+      || !UUID.test(text(value.projectId))
+      || (expectedProjectId && value.projectId !== expectedProjectId)
+      || !UUID.test(text(value.customerId))
+      || (value.credit !== null
+        && !safeCustomBuildCredit(value.credit))
+    ) return null;
+    if (value.state === "not_available") {
+      return value.quote === null ? value : null;
+    }
+    if (
+      !safeCustomBuildQuote(value.quote)
+      || value.quote.state !== value.state
+      || !safeCustomBuildCredit(value.credit)
+      || value.quote.creditAcceptanceCutoff !==
+        value.credit.acceptanceCutoff
+      || value.quote.pricing.creditAmountMinor !==
+        value.credit.amountMinor
+    ) return null;
+    if (
+      value.state === "issued"
+      && !["available", "expired"].includes(value.credit.state)
+    ) return null;
+    if (
+      value.state === "accepted"
+      && value.credit.state !== "reserved"
+    ) return null;
+    if (
+      value.state === "voided"
+      && !["available", "released", "expired"]
+        .includes(value.credit.state)
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerCustomBuildOpportunities(value) {
+    if (
+      !exactKeys(value, ["opportunities", "schema"])
+      || value.schema !==
+        "sitesourcery.custom-services-owner-custom-build-opportunities/v1"
+      || !Array.isArray(value.opportunities)
+      || value.opportunities.length > 100
+    ) return null;
+    var jobIds = new Set();
+    var valid = value.opportunities.every(function (entry) {
+      if (
+        !exactKeys(
+          entry,
+          [
+            "assessment",
+            "caseId",
+            "credit",
+            "currentQuote",
+            "customer",
+            "organizationId",
+            "organizationName",
+            "projectId",
+            "projectName"
+          ]
+        )
+        || !UUID.test(text(entry.organizationId))
+        || !assessmentText(entry.organizationName, 1, 200)
+        || !UUID.test(text(entry.projectId))
+        || !assessmentText(entry.projectName, 1, 200)
+        || !UUID.test(text(entry.caseId))
+        || !exactKeys(
+          entry.assessment,
+          ["deliveredAt", "jobId", "reportId"]
+        )
+        || !UUID.test(text(entry.assessment.jobId))
+        || jobIds.has(entry.assessment.jobId)
+        || !UUID.test(text(entry.assessment.reportId))
+        || !safeIso(entry.assessment.deliveredAt)
+        || !exactKeys(
+          entry.customer,
+          ["customerId", "email", "name"]
+        )
+        || !UUID.test(text(entry.customer.customerId))
+        || !assessmentText(entry.customer.name, 1, 200)
+        || !assessmentText(entry.customer.email, 3, 320)
+        || !safeCustomBuildCredit(entry.credit)
+        || (entry.currentQuote !== null
+          && !safeCustomBuildQuote(entry.currentQuote))
+        || (entry.currentQuote
+          && entry.currentQuote.creditAcceptanceCutoff !==
+            entry.credit.acceptanceCutoff)
+        || (entry.currentQuote
+          && entry.currentQuote.state === "accepted"
+          && entry.credit.state !== "reserved")
+        || (entry.currentQuote
+          && entry.currentQuote.state === "issued"
+          && !["available", "expired"].includes(entry.credit.state))
+        || (entry.currentQuote
+          && entry.currentQuote.state === "voided"
+          && !["available", "released", "expired"]
+            .includes(entry.credit.state))
+      ) return false;
+      jobIds.add(entry.assessment.jobId);
+      return true;
+    });
+    return valid ? value : null;
+  }
+
+  function verifiedOwnerCustomBuildQuoteReceipt(value) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "credit",
+          "caseId",
+          "customerId",
+          "jobId",
+          "organizationId",
+          "projectId",
+          "quote",
+          "reportId",
+          "schema",
+          "state"
+        ]
+      )
+      || value.schema !==
+        "sitesourcery.custom-services-owner-custom-build-quote/v1"
+      || !["issued", "voided"].includes(value.state)
+      || !UUID.test(text(value.organizationId))
+      || !UUID.test(text(value.projectId))
+      || !UUID.test(text(value.caseId))
+      || !UUID.test(text(value.customerId))
+      || !UUID.test(text(value.jobId))
+      || !UUID.test(text(value.reportId))
+      || !safeCustomBuildCredit(value.credit)
+      || !safeCustomBuildQuote(value.quote)
+      || value.quote.creditAcceptanceCutoff !==
+        value.credit.acceptanceCutoff
+      || value.quote.state !== value.state
+      || (value.state === "issued"
+        && !["available", "expired"].includes(value.credit.state))
+      || (value.state === "voided"
+        && !["available", "released", "expired"]
+          .includes(value.credit.state))
+    ) return null;
+    return value;
   }
 
   function safeOwnerAssessmentEvidence(value, expectedJobId) {
@@ -3144,6 +3715,10 @@
     field.value = value == null ? "" : String(value);
     if (config.required) field.required = true;
     if (config.maximum) field.maxLength = config.maximum;
+    if (config.minimumLength) field.minLength = config.minimumLength;
+    if (config.minimumValue != null) field.min = String(config.minimumValue);
+    if (config.maximumValue != null) field.max = String(config.maximumValue);
+    if (config.step != null) field.step = String(config.step);
     if (config.placeholder) field.placeholder = config.placeholder;
     if (config.autocomplete) field.autocomplete = config.autocomplete;
     label.appendChild(field);
@@ -3180,6 +3755,1052 @@
     });
     label.appendChild(select);
     return label;
+  }
+
+  function customBuildMoney(amountMinor) {
+    if (!safeMinor(amountMinor)) return "—";
+    var fixed = (amountMinor / 100).toFixed(2).split(".");
+    return "$" + fixed[0].replace(
+      /\B(?=(\d{3})+(?!\d))/gu,
+      ","
+    ) + "." + fixed[1];
+  }
+
+  function customBuildFootprintLine(footprint) {
+    return footprint.craftedPages + " crafted page"
+      + (footprint.craftedPages === 1 ? "" : "s")
+      + " · " + footprint.sections + " sections"
+      + " · " + footprint.uniqueLayouts + " unique layout"
+      + (footprint.uniqueLayouts === 1 ? "" : "s")
+      + " · up to " + footprint.contentWords + " content words"
+      + " · " + footprint.suppliedMedia + " supplied media items";
+  }
+
+  function customBuildScheduleLine(pricing) {
+    return pricing.paymentSchedule === "full_before_work"
+      ? customBuildMoney(pricing.startDueMinor)
+        + " due before work begins after the $200 assessment credit"
+      : customBuildMoney(pricing.startDueMinor)
+        + " due before work begins after the $200 assessment credit; "
+        + customBuildMoney(pricing.finalDueMinor)
+        + " due before final handoff";
+  }
+
+  function customBuildQuoteFacts(documentRef, quote) {
+    var review = accountElement(
+      documentRef,
+      "div",
+      "customer-custom-build-contract"
+    );
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-custom-build-facts"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Build",
+      quote.tier.label
+        + (quote.tier.scaleUnits === null
+          ? ""
+          : " · " + quote.tier.scaleUnits + " capacity unit"
+            + (quote.tier.scaleUnits === 1 ? "" : "s"))
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Gross price",
+      customBuildMoney(quote.pricing.serviceAmountMinor) + " USD"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Assessment credit",
+      "−" + customBuildMoney(quote.pricing.creditAmountMinor)
+        + " · one use · non-cash"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Amount remaining",
+      customBuildMoney(quote.pricing.customerAmountMinor) + " before tax"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Payment timing",
+      customBuildScheduleLine(quote.pricing)
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Tax",
+      "Calculated later at secure checkout, if applicable"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Bound footprint",
+      customBuildFootprintLine(quote.tier.footprint)
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Workmanship correction",
+      quote.workmanshipCorrectionDays
+        + " days for in-scope workmanship corrections"
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Target completion",
+      quote.targetCompletionDate
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Quote expires",
+      accountDate(quote.expiresAt)
+    );
+    appendAccountFact(
+      documentRef,
+      facts,
+      "Credit deadline",
+      accountDate(quote.creditAcceptanceCutoff)
+    );
+    var termsHeading = accountElement(
+      documentRef,
+      "h5",
+      "customer-custom-build-terms-heading",
+      "Terms included in this exact quote"
+    );
+    var terms = accountElement(
+      documentRef,
+      "ul",
+      "customer-custom-build-terms"
+    );
+    quote.terms.rules.forEach(function (rule) {
+      terms.appendChild(accountElement(documentRef, "li", "", rule));
+    });
+    review.append(
+      facts,
+      termsHeading,
+      terms,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-note customer-custom-build-contract-version",
+        "Commercial terms version "
+          + quote.terms.commercialContractId
+          + " is bound to this quote and retained with its acceptance receipt."
+      )
+    );
+    if (quote.acceptance) {
+      review.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note customer-custom-build-acceptance-receipt",
+          "Acceptance receipt retained · accepted "
+            + accountDate(quote.acceptance.acceptedAt)
+            + " · exact quote and disclosure digests recorded."
+        )
+      );
+    }
+    return review;
+  }
+
+  function createCustomerCustomBuildPanel(documentRef, actions) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-custom-services customer-custom-build-quote"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-custom-build-title"
+    );
+    panel.setAttribute("data-custom-build-quote", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Custom website quote"
+    );
+    heading.id = "customer-custom-build-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-status customer-custom-build-status",
+      "Choose a project to review its Custom website quote."
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-assessment-body customer-custom-build-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Assessment-backed Custom build"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "After your assessment report is delivered, review one exact Custom website quote here. The server—not this browser—sets the price, credit, installments, and tax state."
+      ),
+      status,
+      body
+    );
+
+    function render(readState) {
+      var read = readState || {};
+      body.replaceChildren();
+      panel.hidden = read.phase === "idle";
+      if (read.phase === "idle") {
+        status.textContent =
+          "Choose a project to review its Custom website quote.";
+        return;
+      }
+      if (read.phase === "loading") {
+        status.textContent = "Loading this project's Custom website quote…";
+        return;
+      }
+      if (read.phase === "error") {
+        status.textContent = read.error
+          || "The Custom website quote could not be loaded.";
+        var retry = accountElement(
+          documentRef,
+          "button",
+          "spark-button",
+          "Try loading the Custom quote again"
+        );
+        retry.type = "button";
+        retry.addEventListener("click", function () {
+          if (typeof actions.retry === "function") actions.retry();
+        });
+        body.appendChild(retry);
+        return;
+      }
+      var snapshot = verifiedCustomerCustomBuildQuote(
+        read.snapshot,
+        read.projectId
+      );
+      if (!snapshot) {
+        status.textContent =
+          "The Custom website quote response could not be verified. Nothing was accepted.";
+        return;
+      }
+      var busy = Boolean(read.command);
+      if (read.error) {
+        body.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            read.error
+          )
+        );
+      }
+      if (snapshot.state === "not_available") {
+        status.textContent = snapshot.credit
+          ? "Your assessment credit is ready, but no Custom website quote has been issued yet."
+          : "No assessment-backed Custom website quote is available yet.";
+        if (snapshot.credit) {
+          var creditFacts = accountElement(documentRef, "dl", "");
+          appendAccountFact(
+            documentRef,
+            creditFacts,
+            "Assessment credit",
+            customBuildMoney(snapshot.credit.amountMinor)
+              + " · " + accountWords(snapshot.credit.state)
+          );
+          appendAccountFact(
+            documentRef,
+            creditFacts,
+            "Accept a quote by",
+            accountDate(snapshot.credit.acceptanceCutoff)
+          );
+          var creditSection = accountElement(
+            documentRef,
+            "section",
+            "customer-assessment-invoice customer-quote-review"
+          );
+          creditSection.append(
+            accountElement(
+              documentRef,
+              "h4",
+              "",
+              "$200 Custom base-build credit"
+            ),
+            creditFacts,
+            accountElement(
+              documentRef,
+              "p",
+              "customer-assessment-note",
+              "This same-project credit is one use and non-cash. Site Sourcery will apply it only to an accepted eligible Custom base-build quote."
+            )
+          );
+          body.appendChild(creditSection);
+        }
+        var check = accountElement(
+          documentRef,
+          "button",
+          "spark-button",
+          "Check for a Custom website quote"
+        );
+        check.type = "button";
+        check.addEventListener("click", function () {
+          if (typeof actions.retry === "function") actions.retry();
+        });
+        body.appendChild(check);
+        return;
+      }
+
+      var quote = snapshot.quote;
+      var review = accountElement(
+        documentRef,
+        "section",
+        "customer-assessment-invoice customer-quote-review customer-custom-build-review"
+      );
+      review.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          quote.tier.label + " Custom website build"
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note customer-custom-build-scope",
+          quote.scopeStatement
+        ),
+        customBuildQuoteFacts(documentRef, quote)
+      );
+      if (snapshot.state === "issued") {
+        var expired = Date.parse(quote.expiresAt) <= Date.now();
+        status.textContent = busy
+          ? "Accepting the exact Custom website quote…"
+          : expired
+            ? "This Custom website quote has expired. Ask Site Sourcery for a fresh quote."
+            : "Review the exact scope, money, timing, and credit before accepting.";
+        var acceptance = accountElement(
+          documentRef,
+          "label",
+          "customer-assessment-authority customer-custom-build-acceptance"
+        );
+        var checkbox = accountElement(documentRef, "input", "");
+        checkbox.type = "checkbox";
+        checkbox.disabled = busy || expired;
+        acceptance.append(
+          checkbox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            "I reviewed and accept the exact scope, footprint, price, credit, payment schedule, dates, and terms shown above."
+          )
+        );
+        var accept = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          "Accept exact Custom website quote"
+        );
+        accept.type = "button";
+        accept.disabled = true;
+        checkbox.addEventListener("change", function () {
+          accept.disabled = busy || expired || !checkbox.checked;
+        });
+        accept.addEventListener("click", function () {
+          if (
+            checkbox.checked
+            && !expired
+            && typeof actions.accept === "function"
+          ) actions.accept(snapshot);
+        });
+        review.append(acceptance, accept);
+      } else if (snapshot.state === "accepted") {
+        status.textContent =
+          "Your exact Custom website quote is accepted.";
+        review.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note customer-custom-build-payment-pending",
+            "Accepted. Nothing was charged by accepting this quote. No Custom build invoice or checkout is available yet, and work has not started."
+          )
+        );
+      } else {
+        status.textContent = "This Custom website quote was voided.";
+        review.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            snapshot.credit.state === "available"
+              || snapshot.credit.state === "released"
+              ? "The quote is no longer active. Its unconsumed $200 assessment credit is available for a replacement eligible quote before the credit deadline."
+              : "The quote is no longer active. The credit status shown here is authoritative."
+          )
+        );
+      }
+      body.appendChild(review);
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        status.focus();
+      },
+      render: render
+    });
+  }
+
+  function customBuildLocalDateTime(value) {
+    var date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    function two(number) {
+      return String(number).padStart(2, "0");
+    }
+    return date.getFullYear() + "-"
+      + two(date.getMonth() + 1) + "-"
+      + two(date.getDate()) + "T"
+      + two(date.getHours()) + ":"
+      + two(date.getMinutes());
+  }
+
+  function customBuildFutureDate(days) {
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  function createOwnerCustomBuildPanel(documentRef, actions) {
+    actions = actions || {};
+    var issueDrafts = new Map();
+    var voidDrafts = new Map();
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-owner-quote-desk customer-owner-custom-build"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "owner-custom-build-title"
+    );
+    panel.setAttribute("data-owner-custom-build", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Owner Custom website quote desk"
+    );
+    heading.id = "owner-custom-build-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-owner-quote-status customer-owner-custom-build-status",
+      "Private Site Sourcery tools."
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh Custom build opportunities"
+    );
+    refresh.type = "button";
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-owner-quote-body customer-owner-custom-build-body"
+    );
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Private Site Sourcery tools"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "After an assessment report is delivered, bind one exact Custom base-build scope to its same-project $200 credit. The browser shows a public estimate; the server remains the only monetary authority."
+      ),
+      status,
+      refresh,
+      body
+    );
+
+    function numericField(name, labelCopy, value, maximum) {
+      return assessmentField(
+        documentRef,
+        name,
+        labelCopy,
+        value,
+        {
+          required: true,
+          type: "number",
+          minimumValue: ["contentWords", "suppliedMedia"]
+            .includes(name) ? 0 : 1,
+          maximumValue: maximum,
+          step: 1
+        }
+      );
+    }
+
+    function renderQuote(entry, busy) {
+      var quote = entry.currentQuote;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-review customer-quote-review"
+      );
+      section.append(
+        accountElement(
+          documentRef,
+          "h5",
+          "",
+          (quote.state === "voided" ? "Previous " : "Current ")
+            + quote.tier.label + " quote · "
+            + accountWords(quote.state)
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          quote.scopeStatement
+        ),
+        customBuildQuoteFacts(documentRef, quote)
+      );
+      if (quote.state === "voided") {
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "Safe void is confirmed. An unconsumed released credit may be used on one corrected replacement quote before its deadline."
+          )
+        );
+        return section;
+      }
+      var voidForm = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-custom-build-void"
+      );
+      var reason = assessmentField(
+        documentRef,
+        "voidReason",
+        "Reason for safely voiding this quote",
+        voidDrafts.get(quote.quoteId) || "",
+        {
+          required: true,
+          minimumLength: 10,
+          maximum: 500,
+          multiline: true,
+          placeholder:
+            "Explain why this exact quote is being replaced or withdrawn."
+        }
+      );
+      var note = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-note",
+        "Safe void asks the server to release only an unconsumed assessment credit. The server must refuse if payment is settled or uncertain."
+      );
+      var button = accountElement(
+        documentRef,
+        "button",
+        "spark-button customer-custom-build-void-button",
+        "Safely void Custom build quote"
+      );
+      button.type = "submit";
+      var acceptedConfirmation = null;
+      if (quote.state === "accepted") {
+        acceptedConfirmation = accountElement(
+          documentRef,
+          "label",
+          "customer-assessment-authority customer-custom-build-void-confirmation"
+        );
+        var acceptedConfirmationBox = accountElement(
+          documentRef,
+          "input",
+          ""
+        );
+        acceptedConfirmationBox.type = "checkbox";
+        acceptedConfirmationBox.disabled = busy;
+        acceptedConfirmation.append(
+          acceptedConfirmationBox,
+          accountElement(
+            documentRef,
+            "span",
+            "",
+            "I understand this accepted quote will be voided and only an unsettled credit reservation may be released."
+          )
+        );
+        acceptedConfirmationBox.addEventListener(
+          "change",
+          function () {
+            button.disabled = busy || !acceptedConfirmationBox.checked;
+          }
+        );
+      }
+      button.disabled = busy || Boolean(acceptedConfirmation);
+      reason.querySelector("textarea").addEventListener(
+        "input",
+        function (event) {
+          voidDrafts.set(quote.quoteId, event.target.value);
+        }
+      );
+      voidForm.append(reason, note);
+      if (acceptedConfirmation) {
+        voidForm.appendChild(acceptedConfirmation);
+      }
+      voidForm.appendChild(button);
+      voidForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (
+          acceptedConfirmation
+          && !acceptedConfirmation.querySelector("input").checked
+        ) return;
+        if (typeof actions.void !== "function") return;
+        var data = new FormData(voidForm);
+        actions.void(entry, text(data.get("voidReason")));
+      });
+      section.appendChild(voidForm);
+      return section;
+    }
+
+    function renderIssueForm(entry, busy) {
+      var draftKey = entry.assessment.jobId;
+      var savedDraft = issueDrafts.get(draftKey) || null;
+      var startingTier = customBuildTier(
+        savedDraft && savedDraft.tierId
+      ) || CUSTOM_BUILD_TIERS[0];
+      var form = accountElement(
+        documentRef,
+        "form",
+        "customer-owner-quote-form customer-owner-custom-build-form"
+      );
+      form.setAttribute(
+        "data-owner-custom-build-form",
+        entry.assessment.jobId
+      );
+      var tierField = assessmentSelect(
+        documentRef,
+        "tierId",
+        "Custom build tier",
+        startingTier.id,
+        CUSTOM_BUILD_TIERS.map(function (tier) {
+          return [
+            tier.id,
+            tier.label + (tier.amountMinor === null
+              ? " · $4,000 + capacity"
+              : " · " + customBuildMoney(tier.amountMinor))
+          ];
+        })
+      );
+      var selectedTier = tierField.querySelector("select");
+      var pages = numericField(
+        "craftedPages",
+        "Crafted pages",
+        savedDraft ? savedDraft.craftedPages : startingTier.defaults[0],
+        startingTier.maxima[0]
+      );
+      var sections = numericField(
+        "sections",
+        "Sections",
+        savedDraft ? savedDraft.sections : startingTier.defaults[1],
+        startingTier.maxima[1]
+      );
+      var layouts = numericField(
+        "uniqueLayouts",
+        "Unique layouts",
+        savedDraft ? savedDraft.uniqueLayouts : startingTier.defaults[2],
+        startingTier.maxima[2]
+      );
+      var words = numericField(
+        "contentWords",
+        "Customer-supplied content words",
+        savedDraft ? savedDraft.contentWords : startingTier.defaults[3],
+        startingTier.maxima[3]
+      );
+      var media = numericField(
+        "suppliedMedia",
+        "Customer-supplied media items",
+        savedDraft ? savedDraft.suppliedMedia : startingTier.defaults[4],
+        startingTier.maxima[4]
+      );
+      var scope = assessmentField(
+        documentRef,
+        "scopeStatement",
+        "Exact included build scope",
+        savedDraft ? savedDraft.scopeStatement : "",
+        {
+          required: true,
+          minimumLength: 20,
+          maximum: 2000,
+          multiline: true,
+          placeholder:
+            "Name the exact pages, sections, content responsibilities, integrations, exclusions, review rounds, and handoff boundary."
+        }
+      );
+      var target = assessmentField(
+        documentRef,
+        "targetCompletionDate",
+        "Target completion date",
+        savedDraft
+          ? savedDraft.targetCompletionDate
+          : customBuildFutureDate(30),
+        { required: true, type: "date" }
+      );
+      var targetInput = target.querySelector("input");
+      targetInput.min = customBuildFutureDate(1);
+      targetInput.max = customBuildFutureDate(730);
+      var cutoff = Date.parse(entry.credit.acceptanceCutoff);
+      var maximumExpiry = Math.min(
+        Date.now() + 30 * 24 * 60 * 60 * 1000,
+        cutoff
+      );
+      var defaultExpiry = Math.min(
+        Date.now() + 14 * 24 * 60 * 60 * 1000,
+        maximumExpiry
+      );
+      var expiry = assessmentField(
+        documentRef,
+        "expiresAt",
+        "Quote expiration",
+        savedDraft
+          ? savedDraft.expiresAt
+          : customBuildLocalDateTime(defaultExpiry),
+        { required: true, type: "datetime-local" }
+      );
+      var expiryInput = expiry.querySelector("input");
+      expiryInput.min = customBuildLocalDateTime(
+        Date.now() + 5 * 60 * 1000
+      );
+      expiryInput.max = customBuildLocalDateTime(maximumExpiry);
+      var estimate = accountElement(
+        documentRef,
+        "p",
+        "customer-custom-build-estimate customer-assessment-note",
+        ""
+      );
+      estimate.setAttribute("role", "status");
+      estimate.setAttribute("aria-live", "polite");
+      var error = accountElement(
+        documentRef,
+        "p",
+        "customer-owner-quote-form-error",
+        ""
+      );
+      error.setAttribute("role", "alert");
+      var issue = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        "Issue exact Custom website quote"
+      );
+      issue.type = "submit";
+      issue.disabled = busy;
+      form.append(
+        tierField,
+        pages,
+        sections,
+        layouts,
+        words,
+        media,
+        scope,
+        target,
+        expiry,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-scale-note",
+          "Scale is $4,000 + $270 per computed capacity unit (1–15). Capacity is the greatest overage beyond Flagship: each extra crafted page or unique layout, each four extra sections or media items, or each 500 extra content words."
+        ),
+        estimate,
+        error,
+        issue
+      );
+
+      var footprintInputs = {
+        craftedPages: pages.querySelector("input"),
+        sections: sections.querySelector("input"),
+        uniqueLayouts: layouts.querySelector("input"),
+        contentWords: words.querySelector("input"),
+        suppliedMedia: media.querySelector("input")
+      };
+
+      function currentFootprint() {
+        return {
+          craftedPages: Number(footprintInputs.craftedPages.value),
+          sections: Number(footprintInputs.sections.value),
+          uniqueLayouts: Number(footprintInputs.uniqueLayouts.value),
+          contentWords: Number(footprintInputs.contentWords.value),
+          suppliedMedia: Number(footprintInputs.suppliedMedia.value)
+        };
+      }
+
+      function storeDraft() {
+        issueDrafts.set(draftKey, {
+          tierId: selectedTier.value,
+          craftedPages: Number(footprintInputs.craftedPages.value),
+          sections: Number(footprintInputs.sections.value),
+          uniqueLayouts: Number(footprintInputs.uniqueLayouts.value),
+          contentWords: Number(footprintInputs.contentWords.value),
+          suppliedMedia: Number(footprintInputs.suppliedMedia.value),
+          scopeStatement: form.querySelector(
+            '[name="scopeStatement"]'
+          ).value,
+          targetCompletionDate: targetInput.value,
+          expiresAt: expiryInput.value
+        });
+      }
+
+      function updateEstimate() {
+        var publicEstimate = customBuildPublicEstimate(
+          selectedTier.value,
+          currentFootprint()
+        );
+        if (!publicEstimate) {
+          estimate.textContent = selectedTier.value === "scale"
+            ? "Scale must exceed Flagship in at least one capacity and remain within 1–15 computed units."
+            : "Enter a footprint inside this tier's published boundary.";
+          issue.disabled = true;
+          return null;
+        }
+        var scaleCopy = publicEstimate.scaleUnits === null
+          ? ""
+          : " ($4,000.00 + $270.00 × "
+            + publicEstimate.scaleUnits + " capacity unit"
+            + (publicEstimate.scaleUnits === 1 ? "" : "s") + ")";
+        estimate.textContent = "Calculated public estimate: "
+          + customBuildMoney(publicEstimate.serviceAmountMinor)
+          + scaleCopy + " gross; −$200.00 assessment credit; "
+          + customBuildMoney(publicEstimate.customerAmountMinor)
+          + " remaining before tax. The issued server quote is authoritative.";
+        issue.disabled = busy;
+        return publicEstimate;
+      }
+
+      function applyTierDefaults() {
+        var tier = customBuildTier(selectedTier.value);
+        Object.keys(footprintInputs).forEach(function (name, index) {
+          footprintInputs[name].value = String(tier.defaults[index]);
+          footprintInputs[name].max = String(tier.maxima[index]);
+        });
+        storeDraft();
+        updateEstimate();
+      }
+
+      selectedTier.addEventListener("change", applyTierDefaults);
+      Object.keys(footprintInputs).forEach(function (name) {
+        footprintInputs[name].addEventListener("input", function () {
+          storeDraft();
+          updateEstimate();
+        });
+      });
+      [
+        form.querySelector('[name="scopeStatement"]'),
+        targetInput,
+        expiryInput
+      ].forEach(function (field) {
+        field.addEventListener("input", storeDraft);
+      });
+      updateEstimate();
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        error.textContent = "";
+        var publicEstimate = updateEstimate();
+        if (!publicEstimate || !form.reportValidity()) return;
+        storeDraft();
+        var expiresAt = new Date(expiryInput.value);
+        if (!Number.isFinite(expiresAt.getTime())) {
+          error.textContent = "Choose an exact quote expiration.";
+          return;
+        }
+        if (typeof actions.issue !== "function") return;
+        actions.issue(entry, {
+          organizationId: entry.organizationId,
+          tierId: selectedTier.value,
+          craftedPages: currentFootprint().craftedPages,
+          sections: currentFootprint().sections,
+          uniqueLayouts: currentFootprint().uniqueLayouts,
+          contentWords: currentFootprint().contentWords,
+          suppliedMedia: currentFootprint().suppliedMedia,
+          scopeStatement: text(
+            form.querySelector('[name="scopeStatement"]').value
+          ),
+          targetCompletionDate: targetInput.value,
+          expiresAt: expiresAt.toISOString()
+        });
+      });
+      return form;
+    }
+
+    function renderOpportunity(entry, busy) {
+      var card = accountElement(
+        documentRef,
+        "article",
+        "customer-owner-quote-card customer-owner-custom-build-card"
+      );
+      card.setAttribute(
+        "data-custom-build-job",
+        entry.assessment.jobId
+      );
+      card.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          entry.projectName + " · " + entry.organizationName
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          entry.customer.name + " · " + entry.customer.email
+        )
+      );
+      var sourceFacts = accountElement(documentRef, "dl", "");
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Assessment report",
+        entry.assessment.reportId + " · delivered "
+          + accountDate(entry.assessment.deliveredAt)
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Assessment job",
+        entry.assessment.jobId
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Build credit",
+        customBuildMoney(entry.credit.amountMinor) + " · "
+          + accountWords(entry.credit.state)
+      );
+      appendAccountFact(
+        documentRef,
+        sourceFacts,
+        "Credit deadline",
+        accountDate(entry.credit.acceptanceCutoff)
+      );
+      card.appendChild(sourceFacts);
+      if (entry.currentQuote) {
+        if (entry.currentQuote.state !== "voided") {
+          issueDrafts.delete(entry.assessment.jobId);
+        } else {
+          voidDrafts.delete(entry.currentQuote.quoteId);
+        }
+        card.appendChild(renderQuote(entry, busy));
+      }
+      if (
+        (!entry.currentQuote
+          || entry.currentQuote.state === "voided")
+        && ["available", "released"].includes(entry.credit.state)
+      ) {
+        card.appendChild(renderIssueForm(entry, busy));
+      } else if (!entry.currentQuote) {
+        card.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            "A new quote cannot be issued while this credit is "
+              + accountWords(entry.credit.state) + "."
+          )
+        );
+      }
+      return card;
+    }
+
+    function render(readState) {
+      var read = readState || {};
+      body.replaceChildren();
+      if (["idle", "unavailable"].includes(read.phase)) {
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      refresh.disabled = read.phase === "loading"
+        || Boolean(read.busyKey);
+      if (read.phase === "loading") {
+        status.textContent = "Loading delivered assessment opportunities…";
+        return;
+      }
+      if (read.phase === "error") {
+        status.textContent = read.error
+          || "Custom build opportunities could not be loaded.";
+        return;
+      }
+      var queue = verifiedOwnerCustomBuildOpportunities(
+        read.opportunities
+      );
+      if (!queue) {
+        status.textContent =
+          "The Custom build opportunity response could not be verified. No owner action is available.";
+        return;
+      }
+      status.textContent = read.busyKey
+        ? "Saving one exact Custom build command…"
+        : queue.opportunities.length === 0
+          ? "No delivered assessment is waiting for a Custom build quote."
+          : queue.opportunities.length + " delivered assessment "
+            + (queue.opportunities.length === 1
+              ? "opportunity"
+              : "opportunities") + " ready.";
+      if (read.error) {
+        body.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            read.error
+          )
+        );
+      }
+      queue.opportunities.forEach(function (entry) {
+        body.appendChild(renderOpportunity(
+          entry,
+          Boolean(read.busyKey)
+        ));
+      });
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        status.focus();
+      },
+      render: render
+    });
   }
 
   function createAssessmentPanel(documentRef, actions) {
@@ -3826,6 +5447,20 @@
       section.appendChild(findings);
 
       var credit = reportState.credit;
+      var creditMessages = {
+        available:
+          "It is available for an eligible Custom base build accepted through "
+            + accountDate(credit.acceptanceCutoff) + ".",
+        expired:
+          "Its acceptance window expired on "
+            + accountDate(credit.acceptanceCutoff) + ".",
+        reserved:
+          "It is reserved by your accepted Custom build quote and has not been applied as payment yet.",
+        settled:
+          "It has been applied once to your Custom base build.",
+        reconciliation_required:
+          "Its payment application is under review; it cannot be used again while that review is open."
+      };
       var creditSection = accountElement(
         documentRef,
         "section",
@@ -3842,9 +5477,8 @@
           documentRef,
           "p",
           "customer-assessment-note",
-          "This is a one-use, non-cash $200 credit toward an eligible Custom base build for this same organization and project. It "
-            + (credit.state === "available" ? "can be accepted through " : "expired on ")
-            + accountDate(credit.acceptanceCutoff) + "."
+          "This is a one-use, non-cash $200 credit toward an eligible Custom base build for this same organization and project. "
+            + creditMessages[credit.state]
         )
       );
       section.appendChild(creditSection);
@@ -6032,8 +7666,27 @@
       busyKey: "",
       error: ""
     };
+    var customBuildReadSequence = 0;
+    var customBuildRead = {
+      accountId: "",
+      projectId: "",
+      phase: "idle",
+      snapshot: null,
+      command: "",
+      error: ""
+    };
+    var ownerCustomBuildReadSequence = 0;
+    var ownerCustomBuildRead = {
+      accountId: "",
+      phase: "idle",
+      opportunities: null,
+      busyKey: "",
+      error: ""
+    };
     var ownerEvidenceAttemptStorageKey =
       "sitesourcery.owner-assessment-evidence-attempt/v1";
+    var customBuildAttemptStorageKey =
+      "sitesourcery.custom-build-command-attempt/v1";
 
     function emptyOwnerEvidenceAttempt() {
       return {
@@ -6088,6 +7741,117 @@
     }
 
     var ownerEvidenceAttempt = readOwnerEvidenceAttempt();
+
+    function emptyCustomBuildAttempt() {
+      return {
+        accountId: "",
+        commandId: "",
+        operation: "",
+        signature: "",
+        subjectId: ""
+      };
+    }
+
+    function readCustomBuildAttempt() {
+      try {
+        var stored = windowRef.sessionStorage
+          && windowRef.sessionStorage.getItem(
+            customBuildAttemptStorageKey
+          );
+        var parsed = stored ? JSON.parse(stored) : null;
+        return parsed
+          && exactKeys(
+            parsed,
+            [
+              "accountId",
+              "commandId",
+              "operation",
+              "signature",
+              "subjectId"
+            ]
+          )
+          && UUID.test(text(parsed.accountId))
+          && UUID.test(text(parsed.commandId))
+          && UUID.test(text(parsed.subjectId))
+          && ["accept", "issue", "void"].includes(parsed.operation)
+          && /^[a-f0-9]{8}$/u.test(text(parsed.signature))
+          ? parsed
+          : emptyCustomBuildAttempt();
+      } catch (error) {
+        return emptyCustomBuildAttempt();
+      }
+    }
+
+    function storeCustomBuildAttempt(attempt) {
+      try {
+        if (!windowRef.sessionStorage) return;
+        if (attempt.accountId && attempt.subjectId) {
+          windowRef.sessionStorage.setItem(
+            customBuildAttemptStorageKey,
+            JSON.stringify(attempt)
+          );
+        } else {
+          windowRef.sessionStorage.removeItem(
+            customBuildAttemptStorageKey
+          );
+        }
+      } catch (error) {
+        // Safe in-memory retry identity remains available.
+      }
+    }
+
+    function customBuildAttemptSignature(input) {
+      var source = JSON.stringify(input);
+      var hash = 2166136261;
+      for (var index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(16).padStart(8, "0");
+    }
+
+    var customBuildAttempt = readCustomBuildAttempt();
+
+    function customBuildCommandId(
+      accountId,
+      operation,
+      subjectId,
+      input
+    ) {
+      var signature = customBuildAttemptSignature(input);
+      if (
+        customBuildAttempt.accountId === accountId
+        && customBuildAttempt.operation === operation
+        && customBuildAttempt.subjectId === subjectId
+        && customBuildAttempt.signature === signature
+        && UUID.test(text(customBuildAttempt.commandId))
+      ) return customBuildAttempt.commandId;
+      var cryptoObject = windowRef.crypto;
+      var commandId = cryptoObject
+        && typeof cryptoObject.randomUUID === "function"
+        ? cryptoObject.randomUUID()
+        : "";
+      if (!UUID.test(text(commandId))) {
+        throw new Error(
+          "This browser cannot safely identify the Custom website quote command. Update it and try again."
+        );
+      }
+      customBuildAttempt = {
+        accountId: accountId,
+        commandId: commandId,
+        operation: operation,
+        signature: signature,
+        subjectId: subjectId
+      };
+      storeCustomBuildAttempt(customBuildAttempt);
+      return commandId;
+    }
+
+    function clearCustomBuildAttempt(commandId) {
+      if (customBuildAttempt.commandId !== commandId) return;
+      customBuildAttempt = emptyCustomBuildAttempt();
+      storeCustomBuildAttempt(customBuildAttempt);
+    }
     var alakazamReadSequence = 0;
     var alakazamRead = {
       projectId: "",
@@ -6267,6 +8031,37 @@
           }
         }
       );
+    var ownerCustomBuildPanel =
+      createOwnerCustomBuildPanel(
+        documentRef,
+        {
+          refresh: function () {
+            requestOwnerCustomBuildOpportunities(
+              text(lastState.account && lastState.account.id)
+            );
+          },
+          issue: function (entry, input) {
+            runOwnerCustomBuildIssue(entry, input);
+          },
+          void: function (entry, reason) {
+            runOwnerCustomBuildVoid(entry, reason);
+          }
+        }
+      );
+    var customerCustomBuildPanel =
+      createCustomerCustomBuildPanel(
+        documentRef,
+        {
+          retry: function () {
+            requestCustomerCustomBuildQuote(
+              idOf(lastState && lastState.project)
+            );
+          },
+          accept: function (snapshot) {
+            runCustomerCustomBuildAcceptance(snapshot);
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -6321,6 +8116,14 @@
         ownerAssessmentWorkPanel.element,
         assessmentPanel.element
       );
+      alakazamAnchor.parentNode.insertBefore(
+        ownerCustomBuildPanel.element,
+        assessmentPanel.element
+      );
+      alakazamAnchor.parentNode.insertBefore(
+        customerCustomBuildPanel.element,
+        alakazamAnchor
+      );
     }
     if (
       alakazamAnchor
@@ -6343,7 +8146,13 @@
           ownerAssessmentWorkPanel.element
         );
         controlShell.appendChild(
+          ownerCustomBuildPanel.element
+        );
+        controlShell.appendChild(
           assessmentPanel.element
+        );
+        controlShell.appendChild(
+          customerCustomBuildPanel.element
         );
         controlShell.appendChild(
           alakazamPanel.element
@@ -6788,7 +8597,14 @@
           ));
         },
         "The immutable assessment report could not be delivered safely."
-      );
+      ).then(function (result) {
+        if (result && ownerWorkRead.accountId) {
+          requestOwnerCustomBuildOpportunities(
+            ownerWorkRead.accountId
+          );
+        }
+        return result;
+      });
     }
 
     function syncOwnerAssessmentWorkAccount(state) {
@@ -6816,6 +8632,503 @@
         storeOwnerEvidenceAttempt(ownerEvidenceAttempt);
         requestOwnerAssessmentJobs(nextAccountId);
       }
+    }
+
+    function renderOwnerCustomBuildPanel() {
+      ownerCustomBuildPanel.render(ownerCustomBuildRead);
+    }
+
+    function ownerCustomBuildReadIsCurrent(sequence, accountId) {
+      return sequence === ownerCustomBuildReadSequence
+        && ownerCustomBuildRead.accountId === accountId
+        && text(lastState.account && lastState.account.id) === accountId;
+    }
+
+    function requestOwnerCustomBuildOpportunities(accountId) {
+      var selectedAccountId = text(accountId);
+      var sequence = ++ownerCustomBuildReadSequence;
+      if (
+        !selectedAccountId
+        || typeof client.listOwnerCustomBuildOpportunities !== "function"
+      ) {
+        ownerCustomBuildRead = {
+          accountId: selectedAccountId,
+          phase: "unavailable",
+          opportunities: null,
+          busyKey: "",
+          error: ""
+        };
+        renderOwnerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildRead = {
+        accountId: selectedAccountId,
+        phase: "loading",
+        opportunities: null,
+        busyKey: "",
+        error: ""
+      };
+      renderOwnerCustomBuildPanel();
+      return client.listOwnerCustomBuildOpportunities()
+        .then(function (result) {
+          if (!ownerCustomBuildReadIsCurrent(
+            sequence,
+            selectedAccountId
+          )) return null;
+          if (!verifiedOwnerCustomBuildOpportunities(result)) {
+            throw new Error(
+              "The Custom build opportunity response could not be verified."
+            );
+          }
+          ownerCustomBuildRead = {
+            accountId: selectedAccountId,
+            phase: "ready",
+            opportunities: result,
+            busyKey: "",
+            error: ""
+          };
+          renderOwnerCustomBuildPanel();
+          return result;
+        })
+        .catch(function (error) {
+          if (!ownerCustomBuildReadIsCurrent(
+            sequence,
+            selectedAccountId
+          )) return null;
+          ownerCustomBuildRead = {
+            accountId: selectedAccountId,
+            phase: error && [401, 403, 503].includes(error.status)
+              ? "unavailable"
+              : "error",
+            opportunities: null,
+            busyKey: "",
+            error: error && [401, 403, 503].includes(error.status)
+              ? ""
+              : explain(
+                  error,
+                  "Custom build opportunities could not be loaded."
+                )
+          };
+          renderOwnerCustomBuildPanel();
+          return null;
+        });
+    }
+
+    function currentOwnerCustomBuildOpportunity(entry) {
+      var queue = verifiedOwnerCustomBuildOpportunities(
+        ownerCustomBuildRead.opportunities
+      );
+      if (!queue || !entry) return null;
+      return queue.opportunities.find(function (candidate) {
+        return candidate.assessment.jobId === entry.assessment.jobId
+          && candidate.projectId === entry.projectId
+          && candidate.assessment.reportId === entry.assessment.reportId
+          && candidate.organizationId === entry.organizationId;
+      }) || null;
+    }
+
+    function runOwnerCustomBuildIssue(entry, input) {
+      var current = currentOwnerCustomBuildOpportunity(entry);
+      var accountId = ownerCustomBuildRead.accountId;
+      if (
+        !current
+        || (current.currentQuote !== null
+          && current.currentQuote.state !== "voided")
+        || !["available", "released"].includes(current.credit.state)
+        || ownerCustomBuildRead.busyKey
+        || typeof client.issueOwnerCustomBuildQuote !== "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "issue",
+          current.assessment.jobId,
+          input
+        );
+      } catch (error) {
+        ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+          error: explain(
+            error,
+            "The Custom build quote command could not start."
+          )
+        });
+        renderOwnerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = ownerCustomBuildReadSequence;
+      ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+        busyKey: "issue:" + current.assessment.jobId,
+        error: ""
+      });
+      renderOwnerCustomBuildPanel();
+      return Promise.resolve().then(function () {
+        return client.issueOwnerCustomBuildQuote(
+          current.assessment.jobId,
+          Object.assign({}, input, { commandId: commandId })
+        );
+      }).then(function (result) {
+        if (!ownerCustomBuildReadIsCurrent(sequence, accountId)) {
+          return null;
+        }
+        var receipt = verifiedOwnerCustomBuildQuoteReceipt(result);
+        if (
+          !receipt
+          || receipt.state !== "issued"
+          || receipt.organizationId !== current.organizationId
+          || receipt.projectId !== current.projectId
+          || receipt.customerId !== current.customer.customerId
+          || receipt.caseId !== current.caseId
+          || receipt.jobId !== current.assessment.jobId
+          || receipt.reportId !== current.assessment.reportId
+          || receipt.quote.tier.id !== input.tierId
+        ) {
+          throw new Error(
+            "The issued Custom build quote receipt could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        return requestOwnerCustomBuildOpportunities(accountId);
+      }).catch(function (error) {
+        if (!ownerCustomBuildReadIsCurrent(sequence, accountId)) {
+          return null;
+        }
+        ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+          busyKey: "",
+          error: explain(
+            error,
+            "The exact Custom build quote could not be issued. The same command can be retried safely."
+          )
+        });
+        renderOwnerCustomBuildPanel();
+        ownerCustomBuildPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function runOwnerCustomBuildVoid(entry, reason) {
+      var current = currentOwnerCustomBuildOpportunity(entry);
+      var accountId = ownerCustomBuildRead.accountId;
+      var quote = current && current.currentQuote;
+      var input = {
+        organizationId: current && current.organizationId,
+        reason: text(reason)
+      };
+      if (
+        !current
+        || !quote
+        || ownerCustomBuildRead.busyKey
+        || typeof client.voidOwnerCustomBuildQuote !== "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "void",
+          quote.quoteId,
+          input
+        );
+      } catch (error) {
+        ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+          error: explain(
+            error,
+            "The safe quote void could not start."
+          )
+        });
+        renderOwnerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = ownerCustomBuildReadSequence;
+      ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+        busyKey: "void:" + quote.quoteId,
+        error: ""
+      });
+      renderOwnerCustomBuildPanel();
+      return Promise.resolve().then(function () {
+        return client.voidOwnerCustomBuildQuote(
+          quote.quoteId,
+          Object.assign({}, input, { commandId: commandId })
+        );
+      }).then(function (result) {
+        if (!ownerCustomBuildReadIsCurrent(sequence, accountId)) {
+          return null;
+        }
+        var receipt = verifiedOwnerCustomBuildQuoteReceipt(result);
+        if (
+          !receipt
+          || receipt.state !== "voided"
+          || receipt.organizationId !== current.organizationId
+          || receipt.projectId !== current.projectId
+          || receipt.quote.quoteId !== quote.quoteId
+          || receipt.quote.quoteDigest !== quote.quoteDigest
+        ) {
+          throw new Error(
+            "The safely voided Custom build quote receipt could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        return requestOwnerCustomBuildOpportunities(accountId);
+      }).catch(function (error) {
+        if (!ownerCustomBuildReadIsCurrent(sequence, accountId)) {
+          return null;
+        }
+        ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
+          busyKey: "",
+          error: explain(
+            error,
+            "The quote was not confirmed void. The same command can be retried safely."
+          )
+        });
+        renderOwnerCustomBuildPanel();
+        ownerCustomBuildPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function syncOwnerCustomBuildAccount(state) {
+      var nextAccountId = text(
+        state && state.account && state.account.id
+      );
+      if (!nextAccountId) {
+        if (ownerCustomBuildRead.accountId) {
+          ownerCustomBuildReadSequence += 1;
+          ownerCustomBuildRead = {
+            accountId: "",
+            phase: "idle",
+            opportunities: null,
+            busyKey: "",
+            error: ""
+          };
+          renderOwnerCustomBuildPanel();
+        }
+        return;
+      }
+      if (ownerCustomBuildRead.accountId !== nextAccountId) {
+        requestOwnerCustomBuildOpportunities(nextAccountId);
+      }
+    }
+
+    function renderCustomerCustomBuildPanel() {
+      customerCustomBuildPanel.render(customBuildRead);
+    }
+
+    function customerCustomBuildReadIsCurrent(sequence, projectId) {
+      return sequence === customBuildReadSequence
+        && customBuildRead.projectId === projectId
+        && customBuildRead.accountId === text(
+          lastState.account && lastState.account.id
+        )
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestCustomerCustomBuildQuote(projectId) {
+      var selectedProjectId = text(projectId);
+      var selectedAccountId = text(
+        lastState.account && lastState.account.id
+      );
+      var sequence = ++customBuildReadSequence;
+      if (!selectedProjectId || !selectedAccountId) {
+        return Promise.resolve(null);
+      }
+      customBuildRead = {
+        accountId: selectedAccountId,
+        projectId: selectedProjectId,
+        phase: "loading",
+        snapshot: null,
+        command: "",
+        error: ""
+      };
+      renderCustomerCustomBuildPanel();
+      if (
+        typeof client.getCustomServicesCustomBuildQuote !== "function"
+      ) {
+        customBuildRead.phase = "error";
+        customBuildRead.error =
+          "Custom website quotes are unavailable in this build.";
+        renderCustomerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      return client.getCustomServicesCustomBuildQuote(selectedProjectId)
+        .then(function (result) {
+          if (!customerCustomBuildReadIsCurrent(
+            sequence,
+            selectedProjectId
+          )) return null;
+          if (!verifiedCustomerCustomBuildQuote(
+            result,
+            selectedProjectId
+          )) {
+            throw new Error(
+              "The Custom website quote response could not be verified."
+            );
+          }
+          customBuildRead = {
+            accountId: selectedAccountId,
+            projectId: selectedProjectId,
+            phase: "ready",
+            snapshot: result,
+            command: "",
+            error: ""
+          };
+          renderCustomerCustomBuildPanel();
+          return customBuildRead;
+        })
+        .catch(function (error) {
+          if (!customerCustomBuildReadIsCurrent(
+            sequence,
+            selectedProjectId
+          )) return null;
+          customBuildRead = {
+            accountId: selectedAccountId,
+            projectId: selectedProjectId,
+            phase: "error",
+            snapshot: null,
+            command: "",
+            error: explain(
+              error,
+              "The Custom website quote could not be loaded."
+            )
+          };
+          renderCustomerCustomBuildPanel();
+          customerCustomBuildPanel.focusStatus();
+          return null;
+        });
+    }
+
+    function runCustomerCustomBuildAcceptance(snapshotInput) {
+      var projectId = customBuildRead.projectId;
+      var accountId = customBuildRead.accountId;
+      var current = verifiedCustomerCustomBuildQuote(
+        customBuildRead.snapshot,
+        projectId
+      );
+      var selected = verifiedCustomerCustomBuildQuote(
+        snapshotInput,
+        projectId
+      );
+      if (
+        !current
+        || !selected
+        || current.state !== "issued"
+        || selected.state !== "issued"
+        || current.quote.quoteId !== selected.quote.quoteId
+        || current.quote.quoteRevision !== selected.quote.quoteRevision
+        || current.quote.quoteDigest !== selected.quote.quoteDigest
+        || customBuildRead.command
+        || typeof client.acceptCustomServicesCustomBuildQuote !== "function"
+      ) return Promise.resolve(null);
+      var acceptance = {
+        acceptanceStatement: "accepted_exact_custom_build_quote",
+        acceptedDisclosureDigest: current.quote.disclosureDigest,
+        acceptedQuoteDigest: current.quote.quoteDigest,
+        quoteId: current.quote.quoteId,
+        quoteRevision: current.quote.quoteRevision
+      };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "accept",
+          current.quote.quoteId,
+          acceptance
+        );
+      } catch (error) {
+        customBuildRead = Object.assign({}, customBuildRead, {
+          error: explain(
+            error,
+            "The Custom website quote acceptance could not start."
+          )
+        });
+        renderCustomerCustomBuildPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildReadSequence;
+      customBuildRead = Object.assign({}, customBuildRead, {
+        command: "accepting quote",
+        error: ""
+      });
+      renderCustomerCustomBuildPanel();
+      return Promise.resolve().then(function () {
+        return client.acceptCustomServicesCustomBuildQuote(
+          projectId,
+          Object.assign({}, acceptance, { commandId: commandId })
+        );
+      }).then(function (result) {
+        if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        var settled = verifiedCustomerCustomBuildQuote(
+          result,
+          projectId
+        );
+        if (
+          !settled
+          || !["accepted", "voided"].includes(settled.state)
+          || settled.customerId !== current.customerId
+          || settled.quote.quoteId !== current.quote.quoteId
+          || settled.quote.quoteRevision !==
+            current.quote.quoteRevision
+          || settled.quote.quoteDigest !== current.quote.quoteDigest
+        ) {
+          throw new Error(
+            "The accepted Custom website quote response could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        customBuildRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: settled,
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildPanel();
+        customerCustomBuildPanel.focusStatus();
+        return settled;
+      }).catch(function (error) {
+        if (!customerCustomBuildReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        customBuildRead = Object.assign({}, customBuildRead, {
+          command: "",
+          error: explain(
+            error,
+            "The quote was not confirmed accepted. The same command can be retried safely."
+          )
+        });
+        renderCustomerCustomBuildPanel();
+        customerCustomBuildPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function renderCustomerCustomBuildAccount(state) {
+      var accountId = text(state.account && state.account.id);
+      var projectId = accountId ? idOf(state.project) : "";
+      if (!projectId) {
+        if (customBuildRead.projectId || customBuildRead.accountId) {
+          customBuildReadSequence += 1;
+          customBuildRead = {
+            accountId: "",
+            projectId: "",
+            phase: "idle",
+            snapshot: null,
+            command: "",
+            error: ""
+          };
+        }
+        renderCustomerCustomBuildPanel();
+        return;
+      }
+      if (
+        customBuildRead.accountId !== accountId
+        || customBuildRead.projectId !== projectId
+      ) {
+        requestCustomerCustomBuildQuote(projectId);
+        return;
+      }
+      renderCustomerCustomBuildPanel();
     }
 
     function renderAssessmentPanel() {
@@ -8615,9 +10928,11 @@
       renderQuote(state);
       renderCapabilities(state);
       renderAssessmentAccount(state);
+      renderCustomerCustomBuildAccount(state);
       renderAlakazamAccount(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
+      syncOwnerCustomBuildAccount(state);
 
       var entitlement =
         downloadEntitlement(
@@ -9222,6 +11537,8 @@
       alakazamAccountPresentation,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
+    customBuildPublicEstimate:
+      customBuildPublicEstimate,
     downloadCheckoutReturnFromLocation:
       downloadCheckoutReturnFromLocation,
     downloadEntitlement:
@@ -9265,6 +11582,8 @@
       verifiedAssessmentInvoice,
     verifiedCustomerAssessmentReport:
       verifiedCustomerAssessmentReport,
+    verifiedCustomerCustomBuildQuote:
+      verifiedCustomerCustomBuildQuote,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:
@@ -9273,6 +11592,10 @@
       verifiedOwnerAssessmentFinding,
     verifiedOwnerAssessmentJobs:
       verifiedOwnerAssessmentJobs,
+    verifiedOwnerCustomBuildOpportunities:
+      verifiedOwnerCustomBuildOpportunities,
+    verifiedOwnerCustomBuildQuoteReceipt:
+      verifiedOwnerCustomBuildQuoteReceipt,
     versionLabel: versionLabel,
     verifiedDownloadQuote:
       verifiedDownloadQuote,

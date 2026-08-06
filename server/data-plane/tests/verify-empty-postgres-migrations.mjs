@@ -178,6 +178,24 @@ async function verifyPlatformSchema(pool) {
       to_regprocedure(
         'ss.materialize_service_assessment_delivery()'
       ) is not null as service_assessment_delivery_materializer,
+      to_regclass('ss.service_custom_build_quotes') is not null
+        as service_custom_build_quotes,
+      to_regclass('ss.service_custom_build_quote_revisions') is not null
+        as service_custom_build_quote_revisions,
+      to_regclass('ss.service_custom_build_quote_base_lines') is not null
+        as service_custom_build_quote_base_lines,
+      to_regclass('ss.service_custom_build_quote_installments') is not null
+        as service_custom_build_quote_installments,
+      to_regclass('ss.service_custom_build_quote_commands') is not null
+        as service_custom_build_quote_commands,
+      to_regclass('ss.service_custom_build_quote_acceptances') is not null
+        as service_custom_build_quote_acceptances,
+      to_regclass('ss.service_credit_applications') is not null
+        as service_credit_applications,
+      to_regclass('ss.service_custom_build_quote_voids') is not null
+        as service_custom_build_quote_voids,
+      to_regprocedure('ss.hosted_runtime_contract_v41()') is not null
+        as custom_build_quote_credit_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -1169,6 +1187,514 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `assessment delivery migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildQuoteCredit = await pool.query(`
+    with
+    expected_tables(table_name, directly_insertable) as (
+      values
+        ('service_custom_build_quotes', true),
+        ('service_custom_build_quote_revisions', true),
+        ('service_custom_build_quote_base_lines', false),
+        ('service_custom_build_quote_installments', false),
+        ('service_custom_build_quote_commands', true),
+        ('service_custom_build_quote_acceptances', true),
+        ('service_credit_applications', false),
+        ('service_custom_build_quote_voids', true)
+    ),
+    expected_functions(function_signature, service_role_execute) as (
+      values
+        ('ss.custom_build_amount_minor(text,integer)', true),
+        ('ss.custom_build_payment_schedule(text)', true),
+        ('ss.custom_build_scale_units(integer,integer,integer,integer,integer)', true),
+        ('ss.custom_build_footprint_is_valid(text,integer,integer,integer,integer,integer,integer)', true),
+        ('ss.custom_build_policy_id(text)', true),
+        ('ss.custom_build_tier_label(text)', true),
+        ('ss.prepare_service_custom_build_quote()', true),
+        ('ss.guard_service_custom_build_quote_update()', true),
+        ('ss.prepare_service_custom_build_quote_revision()', true),
+        ('ss.materialize_service_custom_build_quote()', false),
+        ('ss.prepare_service_custom_build_quote_command()', true),
+        ('ss.validate_service_custom_build_quote_revision()', true),
+        ('ss.prepare_service_custom_build_quote_acceptance()', true),
+        ('ss.guard_service_credit_application()', true),
+        ('ss.materialize_service_custom_build_acceptance()', false),
+        ('ss.prepare_service_custom_build_quote_void()', true),
+        ('ss.materialize_service_custom_build_quote_void()', false),
+        ('ss.hosted_runtime_contract_v41()', true)
+    ),
+    expected_triggers(
+      table_name,
+      trigger_name,
+      function_signature,
+      is_deferrable
+    ) as (
+      values
+        ('service_custom_build_quotes', 'service_custom_build_quotes_prepare', 'ss.prepare_service_custom_build_quote()', false),
+        ('service_custom_build_quotes', 'service_custom_build_quotes_update_guard', 'ss.guard_service_custom_build_quote_update()', false),
+        ('service_custom_build_quotes', 'service_custom_build_quotes_no_delete', 'ss.reject_update()', false),
+        ('service_custom_build_quotes', 'service_custom_build_quotes_exact_revision', 'ss.validate_service_custom_build_quote_revision()', true),
+        ('service_custom_build_quote_revisions', 'service_custom_build_quote_revisions_prepare', 'ss.prepare_service_custom_build_quote_revision()', false),
+        ('service_custom_build_quote_revisions', 'service_custom_build_quote_revisions_immutable', 'ss.reject_update()', false),
+        ('service_custom_build_quote_revisions', 'service_custom_build_quote_revisions_materialize', 'ss.materialize_service_custom_build_quote()', false),
+        ('service_custom_build_quote_revisions', 'service_custom_build_quote_revisions_exact_append', 'ss.validate_service_custom_build_quote_revision()', true),
+        ('service_custom_build_quote_base_lines', 'service_custom_build_quote_base_lines_immutable', 'ss.reject_update()', false),
+        ('service_custom_build_quote_installments', 'service_custom_build_quote_installments_immutable', 'ss.reject_update()', false),
+        ('service_custom_build_quote_commands', 'service_custom_build_quote_commands_prepare', 'ss.prepare_service_custom_build_quote_command()', false),
+        ('service_custom_build_quote_commands', 'service_custom_build_quote_commands_immutable', 'ss.reject_update()', false),
+        ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_prepare', 'ss.prepare_service_custom_build_quote_acceptance()', false),
+        ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_account_authority', 'ss.validate_service_account_authority()', false),
+        ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_materialize', 'ss.materialize_service_custom_build_acceptance()', false),
+        ('service_custom_build_quote_acceptances', 'service_custom_build_quote_acceptances_immutable', 'ss.reject_update()', false),
+        ('service_credit_applications', 'service_credit_applications_guard', 'ss.guard_service_credit_application()', false),
+        ('service_custom_build_quote_voids', 'service_custom_build_quote_voids_prepare', 'ss.prepare_service_custom_build_quote_void()', false),
+        ('service_custom_build_quote_voids', 'service_custom_build_quote_voids_materialize', 'ss.materialize_service_custom_build_quote_void()', false),
+        ('service_custom_build_quote_voids', 'service_custom_build_quote_voids_immutable', 'ss.reject_update()', false)
+    ),
+    expected_policies(
+      policy_id,
+      tier_id,
+      display_name,
+      pricing_mode,
+      amount_minor,
+      maximum_pages,
+      maximum_sections,
+      maximum_layouts,
+      maximum_words,
+      maximum_media
+    ) as (
+      values
+        ('00000000-0000-4000-8000-000000000411'::uuid, 'card', 'Card Custom website build', 'fixed', 40000::bigint, 1, 5, 1, 500, 2),
+        ('00000000-0000-4000-8000-000000000412'::uuid, 'card-plus', 'Card Plus Custom website build', 'fixed', 65000::bigint, 1, 8, 1, 900, 8),
+        ('00000000-0000-4000-8000-000000000413'::uuid, 'site', 'Site Custom website build', 'fixed', 120000::bigint, 4, 16, 4, 1800, 12),
+        ('00000000-0000-4000-8000-000000000414'::uuid, 'site-plus', 'Site Plus Custom website build', 'fixed', 180000::bigint, 7, 28, 7, 3000, 24),
+        ('00000000-0000-4000-8000-000000000415'::uuid, 'signature', 'Signature Custom website build', 'fixed', 280000::bigint, 10, 40, 10, 4500, 36),
+        ('00000000-0000-4000-8000-000000000416'::uuid, 'flagship', 'Flagship Custom website build', 'fixed', 400000::bigint, 15, 60, 15, 7000, 60),
+        ('00000000-0000-4000-8000-000000000417'::uuid, 'scale', 'Scale Custom website build', 'banded', null::bigint, 30, 120, 30, 14500, 120)
+    )
+    select
+      ss.hosted_runtime_contract_v40() =
+        'canonical-ss-v40-custom-service-assessment-delivery'
+        as retained_v40_runtime_marker,
+      ss.hosted_runtime_contract_v41() =
+        'canonical-ss-v41-custom-build-quote-credit'
+        as exact_v41_runtime_marker,
+      (
+        select count(*) = 8
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            ) = expected.directly_insertable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'REFERENCES'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRIGGER'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+            and not has_table_privilege('anon', relation.oid, 'DELETE')
+            and not has_table_privilege('anon', relation.oid, 'TRUNCATE')
+          )
+          from expected_tables expected
+          join pg_class relation
+            on relation.oid = format(
+              'ss.%I', expected.table_name
+            )::regclass
+           and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      (
+        select count(*) = 18
+          and bool_and(procedure_record.oid is not null)
+          and bool_and(
+            has_function_privilege(
+              'service_role', procedure_record.oid, 'EXECUTE'
+            ) = expected.service_role_execute
+          )
+          and bool_and(not has_function_privilege(
+            'authenticated', procedure_record.oid, 'EXECUTE'
+          ))
+          and bool_and(not has_function_privilege(
+            'anon', procedure_record.oid, 'EXECUTE'
+          ))
+          from expected_functions expected
+          join pg_proc procedure_record
+            on procedure_record.oid =
+              to_regprocedure(expected.function_signature)
+      ) as exact_function_boundary,
+      (
+        select count(*) = 20
+          and bool_and(not trigger_record.tgisinternal)
+          and bool_and(
+            trigger_record.tgdeferrable = expected.is_deferrable
+          )
+          and bool_and(
+            trigger_record.tginitdeferred = expected.is_deferrable
+          )
+          and (
+            select count(*)
+              from pg_trigger all_trigger
+             where not all_trigger.tgisinternal
+               and all_trigger.tgrelid in (
+                 select format(
+                   'ss.%I', table_record.table_name
+                 )::regclass
+                   from expected_tables table_record
+               )
+          ) = 20
+          from expected_triggers expected
+          join pg_trigger trigger_record
+            on trigger_record.tgrelid = format(
+              'ss.%I', expected.table_name
+            )::regclass
+           and trigger_record.tgname = expected.trigger_name
+           and trigger_record.tgfoid =
+             to_regprocedure(expected.function_signature)
+      ) as exact_trigger_boundary,
+      (
+        select count(*) = 7
+          and bool_and(policy.catalog_version = 'SS-PROFESSIONAL-2026.2')
+          and bool_and(
+            policy.service_key =
+              'custom_build_' || replace(expected.tier_id, '-', '_')
+          )
+          and bool_and(policy.display_name = expected.display_name)
+          and bool_and(policy.pricing_mode = expected.pricing_mode)
+          and bool_and(policy.billing_cadence = 'one_time')
+          and bool_and(policy.currency = 'USD')
+          and bool_and(
+            policy.unit_amount_minor is not distinct from expected.amount_minor
+          )
+          and bool_and(policy.unit_label = 'base build')
+          and bool_and(policy.minimum_quantity = 1)
+          and bool_and(policy.maximum_quantity = 1)
+          and bool_and(policy.publication_state = 'held')
+          and bool_and(
+            policy.scope_boundary_digest =
+              ss.service_json_digest(policy.scope_boundary)
+          )
+          and bool_and(
+            policy.scope_boundary #>> '{baseBuild,tierId}' =
+              expected.tier_id
+          )
+          and bool_and(
+            policy.scope_boundary #>> '{baseBuild,amountMinor}'
+              is not distinct from expected.amount_minor::text
+          )
+          and bool_and(
+            (policy.scope_boundary #>>
+              '{baseBuild,limits,craftedPages}')::integer =
+                expected.maximum_pages
+          )
+          and bool_and(
+            (policy.scope_boundary #>>
+              '{baseBuild,limits,sections}')::integer =
+                expected.maximum_sections
+          )
+          and bool_and(
+            (policy.scope_boundary #>>
+              '{baseBuild,limits,uniqueLayouts}')::integer =
+                expected.maximum_layouts
+          )
+          and bool_and(
+            (policy.scope_boundary #>>
+              '{baseBuild,limits,contentWords}')::integer =
+                expected.maximum_words
+          )
+          and bool_and(
+            (policy.scope_boundary #>>
+              '{baseBuild,limits,suppliedMedia}')::integer =
+                expected.maximum_media
+          )
+          and bool_and(
+            policy.scope_boundary -> 'assessmentCredit' =
+              jsonb_build_object(
+                'amountMinor', 20000,
+                'applicationScope', 'custom_base_build',
+                'currency', 'USD',
+                'maximumApplications', 1,
+                'nonCash', true,
+                'sameOrganizationAndProjectOnly', true
+              )
+          )
+          and bool_and(
+            policy.scope_boundary ->> 'publicCatalogDigest' =
+              'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'
+          )
+          and bool_and(
+            (policy.scope_boundary ->> 'workmanshipCorrectionDays')::integer = 30
+          )
+          and bool_and(
+            policy.commercial_contract_id =
+              'SS-CUSTOM-SERVICES-2026-08-05.1'
+          )
+          and bool_and(
+            policy.commercial_contract_digest =
+              '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8'
+          )
+          and bool_and((
+            select count(*) = 4
+              from ss.service_catalog_coverage coverage
+             where coverage.policy_id = policy.id
+               and coverage.boundary_digest = policy.scope_boundary_digest
+               and coverage.coverage_mode = 'includes'
+               and coverage.scope_identity_kind = 'project'
+          ))
+          and (
+            select count(*) = 7
+              from ss.service_catalog_policies custom_policy
+             where custom_policy.service_key like 'custom_build_%'
+          )
+          from expected_policies expected
+          join ss.service_catalog_policies policy
+            on policy.id = expected.policy_id
+      ) as exact_held_catalog,
+      ss.custom_build_amount_minor('card', null) = 40000
+        and ss.custom_build_amount_minor('card-plus', null) = 65000
+        and ss.custom_build_amount_minor('site', null) = 120000
+        and ss.custom_build_amount_minor('site-plus', null) = 180000
+        and ss.custom_build_amount_minor('signature', null) = 280000
+        and ss.custom_build_amount_minor('flagship', null) = 400000
+        and ss.custom_build_amount_minor('scale', 1) = 427000
+        and ss.custom_build_amount_minor('scale', 15) = 805000
+        and ss.custom_build_amount_minor('scale', 0) is null
+        and ss.custom_build_amount_minor('scale', 16) is null
+        as exact_database_pricing,
+      ss.custom_build_scale_units(16, 60, 15, 7000, 60) = 1
+        and ss.custom_build_scale_units(15, 64, 15, 7000, 60) = 1
+        and ss.custom_build_scale_units(15, 60, 15, 7500, 60) = 1
+        and ss.custom_build_scale_units(30, 120, 30, 14500, 120) = 15
+        and ss.custom_build_footprint_is_valid(
+          'scale', 15, 30, 120, 30, 14500, 120
+        )
+        and not ss.custom_build_footprint_is_valid(
+          'scale', 1, 30, 120, 30, 14500, 120
+        )
+        and ss.custom_build_payment_schedule('card') = 'full_before_work'
+        and ss.custom_build_payment_schedule('site') =
+          'half_before_work_half_before_handoff'
+        as independently_derived_scale_authority,
+      (
+        select count(*) = 2
+          and bool_and(column_record.is_nullable = 'NO')
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name = 'service_custom_build_quotes'
+           and column_record.column_name in (
+             'source_job_id', 'source_report_id'
+           )
+      )
+        and exists (
+          select 1
+            from pg_constraint constraint_record
+           where constraint_record.conrelid =
+             'ss.service_custom_build_quotes'::regclass
+             and constraint_record.confrelid =
+               'ss.service_assessment_reports'::regclass
+             and constraint_record.contype = 'f'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%organization_id, source_job_id, source_report_id%'
+        )
+        and (
+          select procedure_record.prosecdef
+            and lower(pg_get_functiondef(procedure_record.oid)) like
+              '%from ss.service_assessment_reports report%'
+            and lower(pg_get_functiondef(procedure_record.oid)) like
+              '%service_quote_author%'
+            and lower(pg_get_functiondef(procedure_record.oid)) like
+              '%eligible delivered assessment%'
+            from pg_proc procedure_record
+           where procedure_record.oid =
+             'ss.prepare_service_custom_build_quote()'::regprocedure
+        ) as assessment_backed_quote_only,
+      (
+        select count(*) = 2
+          and bool_and(column_record.is_generated = 'ALWAYS')
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name =
+             'service_custom_build_quote_revisions'
+           and column_record.column_name in (
+             'quote_digest', 'disclosure_digest'
+           )
+      ) as immutable_revision_digests,
+      (
+        select procedure_record.prosecdef
+          and not has_function_privilege(
+            'service_role', procedure_record.oid, 'EXECUTE'
+          )
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_quote_base_lines%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_quote_installments%'
+          from pg_proc procedure_record
+         where procedure_record.oid =
+           'ss.materialize_service_custom_build_quote()'::regprocedure
+      ) as normalized_line_installment_materializer,
+      (
+        select acceptance_materializer.prosecdef
+          and acceptance_preparer.prosecdef
+          and not has_function_privilege(
+            'service_role', acceptance_materializer.oid, 'EXECUTE'
+          )
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%claimed_quote_digest is distinct from revision_record.quote_digest%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%claimed_disclosure_digest is distinct from revision_record.disclosure_digest%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%credit.organization_id = revision_record.organization_id%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%credit.project_id = revision_record.project_id%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%credit.credit_digest = revision_record.credit_digest%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%credit.acceptance_cutoff = revision_record.credit_acceptance_cutoff%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%for update of credit%'
+          and lower(pg_get_functiondef(acceptance_materializer.oid)) like
+            '%insert into ss.service_credit_applications%'
+          and lower(pg_get_functiondef(acceptance_materializer.oid)) like
+            '%''reserved''%'
+          and lower(pg_get_functiondef(acceptance_materializer.oid)) like
+            '%update ss.service_custom_build_quotes%'
+          from pg_proc acceptance_preparer
+          cross join pg_proc acceptance_materializer
+         where acceptance_preparer.oid =
+           'ss.prepare_service_custom_build_quote_acceptance()'::regprocedure
+           and acceptance_materializer.oid =
+             'ss.materialize_service_custom_build_acceptance()'::regprocedure
+      ) as exact_atomic_customer_reservation,
+      exists (
+        select 1
+          from pg_index index_record
+          join pg_class index_relation
+            on index_relation.oid = index_record.indexrelid
+         where index_relation.relnamespace = 'ss'::regnamespace
+           and index_relation.relname =
+             'service_credit_applications_one_active_grant'
+           and index_record.indrelid =
+             'ss.service_credit_applications'::regclass
+           and index_record.indisunique
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%reserved%'
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%settled%'
+           and pg_get_expr(
+             index_record.indpred,
+             index_record.indrelid
+           ) like '%reconciliation_required%'
+      ) as one_active_credit_application,
+      (
+        select void_preparer.prosecdef
+          and void_materializer.prosecdef
+          and credit_guard.prosecdef is false
+          and lower(pg_get_functiondef(void_preparer.oid)) like
+            '%application_record.state <> ''reserved''%'
+          and lower(pg_get_functiondef(void_preparer.oid)) like
+            '%cannot release a consumed or uncertain credit%'
+          and lower(pg_get_functiondef(void_materializer.oid)) like
+            '%state = ''released''%'
+          and lower(pg_get_functiondef(void_materializer.oid)) like
+            '%and state = ''reserved''%'
+          and lower(pg_get_functiondef(credit_guard.oid)) like
+            '%service_operator_has_capability%'
+          and lower(pg_get_functiondef(credit_guard.oid)) like
+            '%service_custom_build_quote_voids%'
+          from pg_proc void_preparer
+          cross join pg_proc void_materializer
+          cross join pg_proc credit_guard
+         where void_preparer.oid =
+           'ss.prepare_service_custom_build_quote_void()'::regprocedure
+           and void_materializer.oid =
+             'ss.materialize_service_custom_build_quote_void()'::regprocedure
+           and credit_guard.oid =
+             'ss.guard_service_credit_application()'::regprocedure
+      ) as safe_operator_void_release,
+      (
+        select count(*) = 1
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name =
+             'service_custom_build_quote_revisions'
+           and column_record.column_name = 'tax_state'
+           and column_record.column_default is null
+      )
+        and exists (
+          select 1
+            from pg_constraint constraint_record
+           where constraint_record.conrelid =
+             'ss.service_custom_build_quote_revisions'::regclass
+             and constraint_record.contype = 'c'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%tax_state%calculation_required%'
+        )
+        and not exists (
+          select 1
+            from information_schema.columns column_record
+           where column_record.table_schema = 'ss'
+             and column_record.table_name in (
+               select table_name from expected_tables
+             )
+             and column_record.column_name in ('tax_minor', 'total_minor')
+        )
+        and not exists (
+          select 1
+            from expected_functions expected
+            join pg_proc procedure_record
+              on procedure_record.oid =
+                to_regprocedure(expected.function_signature)
+           where lower(pg_get_functiondef(procedure_record.oid)) ~
+             '(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+ss\\.(service_invoices|service_invoice_lines|service_payment_reservations|service_assessment_jobs|alakazam_[a-z_]+)'
+        ) as no_tax_job_payment_or_provider_effect,
+      not exists (
+        select 1
+          from pg_constraint constraint_record
+         where constraint_record.conrelid in (
+           select format('ss.%I', table_name)::regclass
+             from expected_tables
+         )
+           and constraint_record.contype = 'f'
+           and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(customBuildQuoteCredit.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `custom build quote/credit migration contract failed: ${name}`
     );
   }
 }

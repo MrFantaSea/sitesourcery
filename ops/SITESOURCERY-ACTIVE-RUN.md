@@ -25,8 +25,8 @@ After a context compaction, terminal restart, or agent handoff:
 ## Safety holds
 
 - Branch: `build/sitesourcery-v2-20260730`.
-- The H1 provider-confirmed assessment settlement and job-open surface is the
-  latest reviewed local checkpoint represented by this ledger;
+- The H1I assessment-backed Custom build quote and one-use credit reservation
+  surface is the latest reviewed local checkpoint represented by this ledger;
   use `git log -1` for its eventual checkpoint commit rather than copying a
   hash into the commit that creates it.
 - Public production remains the July 22 predecessor.
@@ -36,14 +36,13 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the now-proven provider-confirmed assessment receipt and
-bounded open job: add owner-safe assessment work, up to ten evidence-backed
-findings, immutable customer report delivery, and one atomic same-project
-90-day `$200` Custom base-build credit. Stripe Checkout continues to own
-billing-address collection and jurisdictional tax calculation; Site Sourcery
-owns the immutable `$200` subtotal and final verified receipt. All real
-provider effects and public-service release gates remain held until each
-preceding local boundary is proven.
+Continue H1 from the now-proven assessment-backed Custom build quote and
+credit reservation: materialize the accepted quote's exact remaining first
+installment into a Custom invoice, reserve one automatic-tax Checkout before
+provider work, verify settlement by readback, settle the one-use credit only
+with that payment, and open one bounded build job carrying the final handoff
+amount. All real provider effects and public-service release gates remain held
+until each preceding local boundary is proven.
 
 ## Completed and reviewed
 
@@ -1028,25 +1027,74 @@ Batch 3C sealed checkpoint gates:
   complete; credit reservation/redemption and the Custom build commercial
   lifecycle remain held.
 
+## H1I Custom build quote and credit-reservation checkpoint evidence
+
+- Migration 41 adds one assessment-backed Card-through-Scale base-build quote
+  ledger. PostgreSQL derives every fixed price and Scale capacity price,
+  materializes the immutable base line and exact full-before-work or 50/50
+  installments, binds the delivered report/customer/organization/project, and
+  exposes no browser authority over money, credit, tax, or payment state.
+- Customer acceptance atomically reserves the same report's available `$200`
+  grant once and only for the Custom base build. Repeated or simultaneous
+  commands cannot double-use it. An owner void can release only an unsettled
+  reservation; settled or reconciliation-required credit can never become
+  reusable, transferable, cash, or a refund offer.
+- The private owner desk lists delivered assessment opportunities and can
+  issue or safely void one exact quote from Mac or Pixel. The customer account
+  reads and accepts that same immutable quote, shows gross value, credit,
+  remaining start/final amounts, reviewable contract terms, tax-pending truth,
+  and a retained acceptance receipt. Assessment-report and quote panels now
+  agree on available/reserved/settled/reconciliation credit truth, and an
+  acceptance replay after a later void returns the fresh void/release state.
+  Production keeps the entire Custom build boundary explicitly held until its
+  invoice/payment deadline exists; canonical PostgreSQL startup readiness
+  still proves the v41 storage boundary.
+- Fresh database `ss_h1i_custom_build_20260805_codex8` replayed all 41
+  migrations from empty state, reported canonical runtime readiness, and
+  passed the complete real PostgreSQL assessment-through-report-through-Custom
+  quote journey 1/1. The journey proves exact Site pricing and installments,
+  replay and conflicting-command rejection, stale-revision rejection,
+  customer acceptance/receipt, account-wide reserved-credit consistency, one
+  credit reservation, safe void/release, fresh replay after void, and a
+  replacement quote reusing only the released grant.
+- Focused browser/API/HTTP/readiness/migration proof passes 109/109.
+  Authoritative Node 24 proof passes: core 526/526; hosted service 245 pass
+  with 2 intentional environment skips and 0 failures. The hosted artifact
+  builds and validates.
+  Canonical runtime readiness passes against the fresh v41 database. The
+  hosted staging manifest binds API digest
+  `a2fa0c48594bb85c6e774dfae97ed12c7da2f9a3cd04841ed6540540f1c26943`
+  and customer-control digest
+  `456a43db95efb63a9435f57c1de1d87fa2c673690f839847aee5261d35fcb872`.
+- Independent redline review found and rechecked five integration risks:
+  account-wide credit-state consistency, inspectable terms/receipt, fresh
+  replay after void, the production hold, and indefinite pre-payment
+  reservation. The first four are repaired; the fifth is safely impossible in
+  production under the explicit hold and moves with the payment deadline into
+  the next invoice/Checkout slice. The final recheck reports no local H1I seal
+  blocker.
+- Disposable databases `ss_h1i_custom_build_20260805_codex1` through `codex8`
+  each had zero active sessions before exact-name deletion and are verified
+  absent. No real Stripe call, customer/production-data write, push,
+  deployment, DNS change, credential handling, or release mutation occurred.
+  The Custom invoice, payment settlement, build job/handoff, provider release,
+  and public release remain held.
+
 ## Live resources and workers
 
-- No H1, Batch 3C, H0, quote-readiness, invoice-proof, Checkout-dispatch,
-  settlement, assessment-work, browser, or redline worker remains running.
-  The exact Batch 3C and H1 disposable PostgreSQL databases are absent.
+- No implementation or redline worker remains running. The exact Batch 3C and
+  H1 disposable PostgreSQL databases are absent.
 - The existing HQ PostgreSQL loopback tunnel remains an intentionally shared
   test resource. Public production remains untouched.
 
 ## Next action
 
-Add the one-use credit reservation/application boundary to the Custom build
-quote and acceptance path. The accepted quote must bind the same organization
-and project, reserve only an available migration-40 grant, apply it only to the
-base build, preserve the exact owner-approved Card-through-Scale installment
-rules, and prevent simultaneous or repeated acceptance from double-use. A
-voided/unsettled quote may release only its reservation; a settled application
-is never reusable or cash. Then carry the exact remaining due-now amount into
-the invoice, automatic-tax Checkout, provider-confirmed settlement, and Custom
-build job. Keep provider release, push, deployment, and DNS held.
+Carry only the accepted migration-41 quote's exact remaining first installment
+into a Custom invoice and automatic-tax Checkout reservation. Verify payment
+through exact Stripe Session/PaymentIntent/Charge readback, atomically settle
+the reserved assessment credit, and open one Custom build job that retains the
+final handoff amount. Do not let the browser submit money, tax, credit, payment,
+or job state. Keep provider release, push, deployment, and DNS held.
 
 ## Batch 3B write scope
 

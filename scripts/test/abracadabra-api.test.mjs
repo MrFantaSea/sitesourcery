@@ -767,6 +767,196 @@ test("custom-service assessment requests and quote acceptance use exact project 
   }
 });
 
+test("assessment-backed Custom build commands use exact routes, bodies, and command identity without browser money authority", async () => {
+  const calls = [];
+  const commandIds = {
+    issue: "10000000-0000-4000-8000-000000000001",
+    void: "10000000-0000-4000-8000-000000000002",
+    accept: "10000000-0000-4000-8000-000000000003"
+  };
+  const organizationId =
+    "20000000-0000-4000-8000-000000000001";
+  const jobId =
+    "80000000-0000-4000-8000-000000000001";
+  const quoteId =
+    "50000000-0000-4000-8000-000000000001";
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_custom_build" });
+      }
+      return response(200, { ok: true });
+    },
+    idempotencyFactory: () => {
+      assert.fail("the body command ID must also fence the write header");
+    }
+  });
+
+  await client.listOwnerCustomBuildOpportunities();
+  await client.issueOwnerCustomBuildQuote(jobId, {
+    commandId: commandIds.issue,
+    organizationId,
+    tierId: "scale",
+    craftedPages: 16,
+    sections: 64,
+    uniqueLayouts: 16,
+    contentWords: 7500,
+    suppliedMedia: 64,
+    scopeStatement:
+      "Build the exact approved pages and sections in this bounded scope.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-19T16:00:00.000Z"
+  });
+  await client.voidOwnerCustomBuildQuote(quoteId, {
+    commandId: commandIds.void,
+    organizationId,
+    reason: "The customer requested a corrected replacement scope."
+  });
+  await client.getCustomServicesCustomBuildQuote(
+    "project_1"
+  );
+  await client.acceptCustomServicesCustomBuildQuote(
+    "project_1",
+    {
+      acceptanceStatement: "accepted_exact_custom_build_quote",
+      acceptedDisclosureDigest: "b".repeat(64),
+      acceptedQuoteDigest: "a".repeat(64),
+      commandId: commandIds.accept,
+      quoteId,
+      quoteRevision: 2
+    }
+  );
+
+  const serviceCalls = calls.filter(
+    ({ url }) => url !== "/api/v1/csrf"
+  );
+  assert.deepEqual(
+    serviceCalls.map(({ url, options }) => [options.method, url]),
+    [
+      [
+        "GET",
+        "/api/v1/operator/custom-services/custom-build-opportunities"
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/assessment-jobs/${jobId}/custom-build-quote`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-quotes/${quoteId}/void`
+      ],
+      [
+        "GET",
+        "/api/v1/projects/project_1/custom-services/custom-build-quote"
+      ],
+      [
+        "POST",
+        "/api/v1/projects/project_1/custom-services/custom-build-quote/acceptance"
+      ]
+    ]
+  );
+  assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
+    commandId: commandIds.issue,
+    organizationId,
+    tierId: "scale",
+    craftedPages: 16,
+    sections: 64,
+    uniqueLayouts: 16,
+    contentWords: 7500,
+    suppliedMedia: 64,
+    scopeStatement:
+      "Build the exact approved pages and sections in this bounded scope.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-19T16:00:00.000Z"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[2].options.body), {
+    commandId: commandIds.void,
+    organizationId,
+    reason: "The customer requested a corrected replacement scope."
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[4].options.body), {
+    acceptanceStatement: "accepted_exact_custom_build_quote",
+    acceptedDisclosureDigest: "b".repeat(64),
+    acceptedQuoteDigest: "a".repeat(64),
+    commandId: commandIds.accept,
+    quoteId,
+    quoteRevision: 2
+  });
+  for (const [index, commandId] of [
+    [1, commandIds.issue],
+    [2, commandIds.void],
+    [4, commandIds.accept]
+  ]) {
+    assert.equal(
+      serviceCalls[index].options.headers["X-CSRF-Token"],
+      "csrf_custom_build"
+    );
+    assert.equal(
+      serviceCalls[index].options.headers["Idempotency-Key"],
+      commandId
+    );
+    assert.doesNotMatch(
+      serviceCalls[index].options.body,
+      /amountMinor|currency|price|scaleUnits|taxState/u
+    );
+  }
+});
+
+test("Custom build API rejects unsupported authority and out-of-band footprint claims before fetch", () => {
+  let calls = 0;
+  const client = createClient({
+    fetch: async () => {
+      calls += 1;
+      return response(200, { ok: true });
+    }
+  });
+  const base = {
+    commandId: "10000000-0000-4000-8000-000000000001",
+    organizationId: "20000000-0000-4000-8000-000000000001",
+    tierId: "card",
+    craftedPages: 1,
+    sections: 5,
+    uniqueLayouts: 1,
+    contentWords: 500,
+    suppliedMedia: 2,
+    scopeStatement:
+      "Build one exact card page inside the approved boundary.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-19T16:00:00.000Z"
+  };
+  assert.throws(
+    () => client.issueOwnerCustomBuildQuote(
+      "80000000-0000-4000-8000-000000000001",
+      { ...base, amountMinor: 1 }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.issueOwnerCustomBuildQuote(
+      "80000000-0000-4000-8000-000000000001",
+      { ...base, craftedPages: 2 }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.issueOwnerCustomBuildQuote(
+      "80000000-0000-4000-8000-000000000001",
+      {
+        ...base,
+        tierId: "scale",
+        craftedPages: 15,
+        sections: 60,
+        uniqueLayouts: 15,
+        contentWords: 7000,
+        suppliedMedia: 60
+      }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.equal(calls, 0);
+});
+
 test("assessment invoice checkout sends only the invoice digest with the caller's idempotency key", async () => {
   const calls = [];
   const invoiceId =

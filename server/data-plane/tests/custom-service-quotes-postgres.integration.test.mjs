@@ -25,6 +25,9 @@ import {
   createPostgresCustomServicesAssessmentWork
 } from "../../hosted/custom-services-assessment-work-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuild
+} from "../../hosted/custom-services-custom-build-postgres.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -2531,6 +2534,260 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       }),
       (error) => error.code === "project_unavailable"
     );
+
+    const customBuild = createPostgresCustomServicesCustomBuild({
+      authority: {
+        async service(context, work) {
+          const transactionClient = await pool.connect();
+          try {
+            await transactionClient.query("begin");
+            await transactionClient.query("set local role service_role");
+            if (context.userId) {
+              await setActor(
+                transactionClient,
+                context.userId === secondOperatorId
+                  ? "operator"
+                  : "customer",
+                {
+                  organizationId:
+                    context.organizationId ?? customer.organizationId
+                },
+                context.userId
+              );
+            }
+            const result = await work(transactionClient);
+            await transactionClient.query("commit");
+            return result;
+          } catch (error) {
+            await transactionClient.query("rollback").catch(() => {});
+            throw error;
+          } finally {
+            transactionClient.release();
+          }
+        }
+      },
+      randomUUID
+    });
+    assert.deepEqual(await customBuild.readiness(), {
+      schema: "sitesourcery.custom-services-custom-build-readiness/v1",
+      ready: true,
+      runtimeContract: "canonical-ss-v41-custom-build-quote-credit"
+    });
+
+    const opportunities = await customBuild.listOpportunities(operatorActor);
+    assert.equal(
+      opportunities.schema,
+      "sitesourcery.custom-services-owner-custom-build-opportunities/v1"
+    );
+    const opportunity = opportunities.opportunities.find(
+      (entry) => entry.assessment.jobId === paidJob.jobId
+    );
+    assert.ok(opportunity);
+    assert.equal(opportunity.credit.amountMinor, 20000);
+    assert.equal(opportunity.credit.state, "available");
+    assert.equal(opportunity.currentQuote, null);
+
+    const customBuildIssue = {
+      commandId: `custom-build-issue-${randomUUID()}`,
+      organizationId: customer.organizationId,
+      tierId: "site",
+      craftedPages: 4,
+      sections: 16,
+      uniqueLayouts: 4,
+      contentWords: 1800,
+      suppliedMedia: 12,
+      scopeStatement:
+        "Build the four reviewed public pages with the agreed essential design scope.",
+      targetCompletionDate: dateAfter(45),
+      expiresAt: isoAfter({ days: 14 })
+    };
+    await assert.rejects(
+      customBuild.issueQuote(operatorActor, paidJob.jobId, {
+        ...customBuildIssue,
+        serviceAmountMinor: 1
+      }),
+      (error) => error.code === "invalid_input"
+    );
+    const issuedBuild = await customBuild.issueQuote(
+      operatorActor,
+      paidJob.jobId,
+      customBuildIssue
+    );
+    assert.equal(
+      issuedBuild.schema,
+      "sitesourcery.custom-services-owner-custom-build-quote/v1"
+    );
+    assert.equal(issuedBuild.state, "issued");
+    assert.equal(issuedBuild.quote.tier.id, "site");
+    assert.equal(issuedBuild.quote.pricing.serviceAmountMinor, 120000);
+    assert.equal(issuedBuild.quote.pricing.creditAmountMinor, 20000);
+    assert.equal(issuedBuild.quote.pricing.customerAmountMinor, 100000);
+    assert.equal(issuedBuild.quote.pricing.startValueMinor, 60000);
+    assert.equal(issuedBuild.quote.pricing.startCreditMinor, 20000);
+    assert.equal(issuedBuild.quote.pricing.startDueMinor, 40000);
+    assert.equal(issuedBuild.quote.pricing.finalDueMinor, 60000);
+    assert.deepEqual(
+      issuedBuild.quote.pricing.installments.map((entry) => ({
+        number: entry.number,
+        amountDueMinor: entry.amountDueMinor,
+        dueTrigger: entry.dueTrigger
+      })),
+      [
+        { number: 1, amountDueMinor: 40000, dueTrigger: "before_work" },
+        { number: 2, amountDueMinor: 60000, dueTrigger: "before_handoff" }
+      ]
+    );
+    assert.deepEqual(
+      await customBuild.issueQuote(
+        operatorActor,
+        paidJob.jobId,
+        customBuildIssue
+      ),
+      issuedBuild
+    );
+    await assert.rejects(
+      customBuild.issueQuote(operatorActor, paidJob.jobId, {
+        ...customBuildIssue,
+        scopeStatement:
+          "A conflicting scope must never reuse the first quote command identity."
+      }),
+      (error) => error.code === "idempotency_conflict"
+    );
+
+    const customerBuildIssued = await customBuild.readCurrentQuote(
+      customerAssessmentScope
+    );
+    assert.equal(customerBuildIssued.state, "issued");
+    assert.equal(
+      customerBuildIssued.quote.quoteDigest,
+      issuedBuild.quote.quoteDigest
+    );
+    await assert.rejects(
+      customBuild.acceptCurrentQuote({
+        ...customerAssessmentScope,
+        acceptanceStatement: "accepted_exact_custom_build_quote",
+        acceptedDisclosureDigest:
+          customerBuildIssued.quote.disclosureDigest,
+        acceptedQuoteDigest: customerBuildIssued.quote.quoteDigest,
+        commandId: `custom-build-accept-${randomUUID()}`,
+        quoteId: customerBuildIssued.quote.quoteId,
+        quoteRevision: customerBuildIssued.quote.quoteRevision + 1
+      }),
+      (error) => error.code === "custom_build_changed"
+    );
+    const customBuildAcceptanceCommandId =
+      `custom-build-accept-${randomUUID()}`;
+    const acceptedBuild = await customBuild.acceptCurrentQuote({
+      ...customerAssessmentScope,
+      acceptanceStatement: "accepted_exact_custom_build_quote",
+      acceptedDisclosureDigest: customerBuildIssued.quote.disclosureDigest,
+      acceptedQuoteDigest: customerBuildIssued.quote.quoteDigest,
+      commandId: customBuildAcceptanceCommandId,
+      quoteId: customerBuildIssued.quote.quoteId,
+      quoteRevision: customerBuildIssued.quote.quoteRevision
+    });
+    assert.equal(acceptedBuild.state, "accepted");
+    assert.equal(acceptedBuild.credit.state, "reserved");
+    assert.equal(
+      acceptedBuild.quote.acceptance.acceptedQuoteDigest,
+      acceptedBuild.quote.quoteDigest
+    );
+    assert.equal(
+      (await assessmentWork.readCustomerReport(
+        customerAssessmentScope
+      )).credit.state,
+      "reserved"
+    );
+    assert.deepEqual(
+      await customBuild.acceptCurrentQuote({
+        ...customerAssessmentScope,
+        acceptanceStatement: "accepted_exact_custom_build_quote",
+        acceptedDisclosureDigest: customerBuildIssued.quote.disclosureDigest,
+        acceptedQuoteDigest: customerBuildIssued.quote.quoteDigest,
+        commandId: customBuildAcceptanceCommandId,
+        quoteId: customerBuildIssued.quote.quoteId,
+        quoteRevision: customerBuildIssued.quote.quoteRevision
+      }),
+      acceptedBuild
+    );
+
+    const voidedBuild = await customBuild.voidQuote(
+      operatorActor,
+      issuedBuild.quote.quoteId,
+      {
+        commandId: `custom-build-void-${randomUUID()}`,
+        organizationId: customer.organizationId,
+        reason:
+          "Customer requested a corrected scope before any payment setup began."
+      }
+    );
+    assert.equal(voidedBuild.state, "voided");
+    assert.equal(voidedBuild.credit.state, "released");
+    const replayAfterVoid = await customBuild.acceptCurrentQuote({
+      ...customerAssessmentScope,
+      acceptanceStatement: "accepted_exact_custom_build_quote",
+      acceptedDisclosureDigest: customerBuildIssued.quote.disclosureDigest,
+      acceptedQuoteDigest: customerBuildIssued.quote.quoteDigest,
+      commandId: customBuildAcceptanceCommandId,
+      quoteId: customerBuildIssued.quote.quoteId,
+      quoteRevision: customerBuildIssued.quote.quoteRevision
+    });
+    assert.equal(replayAfterVoid.state, "voided");
+    assert.equal(replayAfterVoid.credit.state, "released");
+    assert.equal(
+      (await assessmentWork.readCustomerReport(
+        customerAssessmentScope
+      )).credit.state,
+      "available"
+    );
+
+    const replacementBuild = await customBuild.issueQuote(
+      operatorActor,
+      paidJob.jobId,
+      {
+        ...customBuildIssue,
+        commandId: `custom-build-issue-${randomUUID()}`,
+        tierId: "card-plus",
+        craftedPages: 1,
+        sections: 8,
+        uniqueLayouts: 1,
+        contentWords: 900,
+        suppliedMedia: 8,
+        scopeStatement:
+          "Build one polished Card Plus page with the corrected essential design scope."
+      }
+    );
+    assert.equal(replacementBuild.quote.pricing.serviceAmountMinor, 65000);
+    assert.equal(replacementBuild.quote.pricing.startDueMinor, 45000);
+    assert.equal(replacementBuild.quote.pricing.finalDueMinor, 0);
+    assert.equal(replacementBuild.credit.state, "available");
+
+    const customBuildCounts = await pool.query(
+      `select
+         (select count(*)::int
+          from ss.service_custom_build_quotes
+          where source_job_id = $1) as quotes,
+         (select count(*)::int
+          from ss.service_credit_applications application
+          join ss.service_custom_build_quotes quote
+            on quote.id = application.quote_id
+          where quote.source_job_id = $1
+            and application.state = 'released') as released_credits,
+         (select count(*)::int
+          from ss.service_credit_applications application
+          join ss.service_custom_build_quotes quote
+            on quote.id = application.quote_id
+          where quote.source_job_id = $1
+            and application.state in (
+              'reserved', 'settled', 'reconciliation_required'
+            )) as active_credits`,
+      [paidJob.jobId]
+    );
+    assert.deepEqual(customBuildCounts.rows[0], {
+      quotes: 2,
+      released_credits: 1,
+      active_credits: 0
+    });
 
     await assert.rejects(
       assessmentWork.uploadEvidence(operatorActor, paidJob.jobId, {

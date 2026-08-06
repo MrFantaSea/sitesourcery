@@ -78,6 +78,29 @@ function exactQuoteAcceptance(value) {
   return value;
 }
 
+function exactCustomBuildAcceptance(value) {
+  const expected = [
+    "acceptanceStatement",
+    "acceptedDisclosureDigest",
+    "acceptedQuoteDigest",
+    "commandId",
+    "quoteId",
+    "quoteRevision"
+  ];
+  invariant(
+    value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.getPrototypeOf(value) === Object.prototype &&
+      JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify(expected.sort()),
+    "invalid_input",
+    "The Custom build quote acceptance is invalid.",
+    { status: 400 }
+  );
+  return value;
+}
+
 function exactCheckoutCommand(value) {
   const expected = ["commandId", "invoiceDigest"];
   invariant(
@@ -120,6 +143,14 @@ export function createHeldHostedCustomServicesAccount() {
       throw new HostedError(
         "CUSTOM_SERVICES_QUOTE_HELD",
         "Custom-services assessment quotes are held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async getCustomBuildQuote(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_HELD",
+        "Custom build quote tools are held in this runtime.",
         { status: 503 }
       );
     },
@@ -194,12 +225,21 @@ export function createHeldHostedCustomServicesAccount() {
         "Custom-services assessment quotes are held in this runtime.",
         { status: 503 }
       );
+    },
+    async acceptCustomBuildQuote(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_HELD",
+        "Custom build quote tools are held in this runtime.",
+        { status: 503 }
+      );
     }
   });
 }
 
 export function createHostedCustomServicesAccount({
   assessmentWork,
+  customBuild,
   invoiceRepository,
   payment,
   quoteRepository,
@@ -213,6 +253,14 @@ export function createHostedCustomServicesAccount({
       typeof assessmentWork.readCustomerEvidence === "function",
     "invalid_configuration",
     "the custom-services assessment work boundary is required",
+    { status: 500 }
+  );
+  invariant(
+    customBuild &&
+      typeof customBuild.readCurrentQuote === "function" &&
+      typeof customBuild.acceptCurrentQuote === "function",
+    "invalid_configuration",
+    "the Custom build quote boundary is required",
     { status: 500 }
   );
   invariant(
@@ -279,6 +327,15 @@ export function createHostedCustomServicesAccount({
       );
       const snapshot = await quoteRepository.readCurrentQuote(scope);
       return projectCustomServicesAssessmentQuote({ scope, snapshot });
+    },
+
+    async getCustomBuildQuote(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuild.readCurrentQuote(scope);
     },
 
     async getAssessmentInvoice(actorInput, projectIdInput) {
@@ -391,6 +448,24 @@ export function createHostedCustomServicesAccount({
       });
       const snapshot = await quoteRepository.readCurrentQuote(scope);
       return projectCustomServicesAssessmentQuote({ scope, snapshot });
+    },
+
+    async acceptCustomBuildQuote(actorInput, projectIdInput, value) {
+      const input = exactCustomBuildAcceptance(value);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuild.acceptCurrentQuote({
+        ...scope,
+        acceptanceStatement: input.acceptanceStatement,
+        acceptedDisclosureDigest: input.acceptedDisclosureDigest,
+        acceptedQuoteDigest: input.acceptedQuoteDigest,
+        commandId: input.commandId,
+        quoteId: input.quoteId,
+        quoteRevision: input.quoteRevision
+      });
     }
   });
 }

@@ -178,6 +178,101 @@
     return selected;
   }
 
+  function requiredDate(value, field) {
+    var selected = requiredText(value, field, 10);
+    var match = selected.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
+    var parsed = match
+      ? new Date(Date.UTC(
+          Number(match[1]),
+          Number(match[2]) - 1,
+          Number(match[3])
+        ))
+      : null;
+    if (!parsed || parsed.toISOString().slice(0, 10) !== selected) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " must be an exact calendar date."
+      });
+    }
+    return selected;
+  }
+
+  function requiredIso(value, field) {
+    var selected = requiredText(value, field, 40);
+    var parsed = new Date(selected);
+    if (
+      !Number.isFinite(parsed.getTime())
+      || parsed.toISOString() !== selected
+    ) {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: field + " must be an exact UTC date and time."
+      });
+    }
+    return selected;
+  }
+
+  function customBuildFootprint(tierId, source) {
+    var maxima = {
+      "card": [1, 5, 1, 500, 2],
+      "card-plus": [1, 8, 1, 900, 8],
+      "site": [4, 16, 4, 1800, 12],
+      "site-plus": [7, 28, 7, 3000, 24],
+      "signature": [10, 40, 10, 4500, 36],
+      "flagship": [15, 60, 15, 7000, 60],
+      "scale": [30, 120, 30, 14500, 120]
+    };
+    var maximum = maxima[tierId];
+    var footprint = {
+      craftedPages: integerBetween(
+        source.craftedPages,
+        "Crafted pages",
+        1,
+        maximum[0]
+      ),
+      sections: integerBetween(
+        source.sections,
+        "Sections",
+        1,
+        maximum[1]
+      ),
+      uniqueLayouts: integerBetween(
+        source.uniqueLayouts,
+        "Unique layouts",
+        1,
+        maximum[2]
+      ),
+      contentWords: integerBetween(
+        source.contentWords,
+        "Content words",
+        0,
+        maximum[3]
+      ),
+      suppliedMedia: integerBetween(
+        source.suppliedMedia,
+        "Supplied media",
+        0,
+        maximum[4]
+      )
+    };
+    if (tierId === "scale") {
+      var scaleUnits = Math.max(
+        Math.max(footprint.craftedPages - 15, 0),
+        Math.ceil(Math.max(footprint.sections - 60, 0) / 4),
+        Math.max(footprint.uniqueLayouts - 15, 0),
+        Math.ceil(Math.max(footprint.contentWords - 7000, 0) / 500),
+        Math.ceil(Math.max(footprint.suppliedMedia - 60, 0) / 4)
+      );
+      if (scaleUnits < 1 || scaleUnits > 15) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Scale must use between one and fifteen capacity units beyond Flagship."
+        });
+      }
+    }
+    return footprint;
+  }
+
   function assessmentTarget(value, field) {
     var selected = exactInput(value, ["kind", "value"], field);
     var kind = oneOf(
@@ -1049,6 +1144,190 @@
       );
     }
 
+    function listOwnerCustomBuildOpportunities(requestOptions) {
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-opportunities",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function issueOwnerCustomBuildQuote(jobId, input) {
+      var source = exactInput(
+        input,
+        [
+          "commandId",
+          "organizationId",
+          "tierId",
+          "craftedPages",
+          "sections",
+          "uniqueLayouts",
+          "contentWords",
+          "suppliedMedia",
+          "scopeStatement",
+          "targetCompletionDate",
+          "expiresAt"
+        ],
+        "Custom website quote"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom website quote command ID"
+      );
+      var tierId = oneOf(
+        source.tierId,
+        "Custom website tier",
+        [
+          "card",
+          "card-plus",
+          "site",
+          "site-plus",
+          "signature",
+          "flagship",
+          "scale"
+        ]
+      );
+      var footprint = customBuildFootprint(tierId, source);
+      return request(
+        "POST",
+        "/operator/custom-services/assessment-jobs/"
+          + segment(requiredUuid(jobId, "Assessment job ID"), "Assessment job ID")
+          + "/custom-build-quote",
+        {
+          body: {
+            commandId: commandId,
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            tierId: tierId,
+            craftedPages: footprint.craftedPages,
+            sections: footprint.sections,
+            uniqueLayouts: footprint.uniqueLayouts,
+            contentWords: footprint.contentWords,
+            suppliedMedia: footprint.suppliedMedia,
+            scopeStatement: boundedText(
+              source.scopeStatement,
+              "Custom website scope",
+              20,
+              2000
+            ),
+            targetCompletionDate: requiredDate(
+              source.targetCompletionDate,
+              "Target completion date"
+            ),
+            expiresAt: requiredIso(
+              source.expiresAt,
+              "Custom website quote expiration"
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
+    function voidOwnerCustomBuildQuote(quoteId, input) {
+      var source = exactInput(
+        input,
+        ["commandId", "organizationId", "reason"],
+        "Custom website quote void"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom website quote void command ID"
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-quotes/"
+          + segment(requiredUuid(quoteId, "Custom website quote ID"), "Custom website quote ID")
+          + "/void",
+        {
+          body: {
+            commandId: commandId,
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            reason: boundedText(
+              source.reason,
+              "Custom website quote void reason",
+              10,
+              500
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
+    function getCustomServicesCustomBuildQuote(
+      projectId,
+      requestOptions
+    ) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-quote",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function acceptCustomServicesCustomBuildQuote(projectId, input) {
+      var source = exactInput(
+        input,
+        [
+          "acceptanceStatement",
+          "acceptedDisclosureDigest",
+          "acceptedQuoteDigest",
+          "commandId",
+          "quoteId",
+          "quoteRevision"
+        ],
+        "Custom website quote acceptance"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Custom website quote acceptance command ID"
+      );
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-quote/acceptance",
+        {
+          body: {
+            acceptanceStatement: oneOf(
+              source.acceptanceStatement,
+              "Custom website quote acceptance",
+              ["accepted_exact_custom_build_quote"]
+            ),
+            acceptedDisclosureDigest: requiredDigest(
+              source.acceptedDisclosureDigest,
+              "Custom website disclosure digest"
+            ),
+            acceptedQuoteDigest: requiredDigest(
+              source.acceptedQuoteDigest,
+              "Custom website quote digest"
+            ),
+            commandId: commandId,
+            quoteId: requiredUuid(
+              source.quoteId,
+              "Custom website quote ID"
+            ),
+            quoteRevision: integerBetween(
+              source.quoteRevision,
+              "Custom website quote revision",
+              1,
+              Number.MAX_SAFE_INTEGER
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
     function createProject(input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
@@ -1731,6 +2010,16 @@
         deliverOwnerAssessmentReport,
       getCustomServicesAssessmentReport:
         getCustomServicesAssessmentReport,
+      listOwnerCustomBuildOpportunities:
+        listOwnerCustomBuildOpportunities,
+      issueOwnerCustomBuildQuote:
+        issueOwnerCustomBuildQuote,
+      voidOwnerCustomBuildQuote:
+        voidOwnerCustomBuildQuote,
+      getCustomServicesCustomBuildQuote:
+        getCustomServicesCustomBuildQuote,
+      acceptCustomServicesCustomBuildQuote:
+        acceptCustomServicesCustomBuildQuote,
       createProject: createProject,
       saveDraft: saveDraft,
       createVersion: createVersion,

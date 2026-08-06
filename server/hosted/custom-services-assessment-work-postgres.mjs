@@ -739,6 +739,16 @@ function assessmentWorkDigest(jobId, evidence, findings) {
 function creditProjection(row, now = Date.now()) {
   if (row.credit_id === null || row.credit_id === undefined) return null;
   const cutoff = iso(row.acceptance_cutoff);
+  const applicationState = row.credit_application_state ?? null;
+  invariant(
+    applicationState === null ||
+      ["reserved", "settled", "reconciliation_required"].includes(
+        applicationState
+      ),
+    "assessment_work_repository_conflict",
+    "The assessment credit application state is invalid.",
+    { status: 500 }
+  );
   return Object.freeze({
     creditId: row.credit_id,
     amountMinor: Number(row.amount_minor),
@@ -749,7 +759,9 @@ function creditProjection(row, now = Date.now()) {
     nonCash: row.non_cash === true,
     deliveredAt: iso(row.credit_delivered_at),
     acceptanceCutoff: cutoff,
-    state: Date.parse(cutoff) >= now ? "available" : "expired",
+    state:
+      applicationState ??
+      (Date.parse(cutoff) >= now ? "available" : "expired"),
     creditDigest: row.credit_digest
   });
 }
@@ -872,11 +884,18 @@ async function selectDelivered(client, organizationId, jobId) {
          credit.non_cash,
          credit.delivered_at as credit_delivered_at,
          credit.acceptance_cutoff,
-         credit.credit_digest
+         credit.credit_digest,
+         application.state as credit_application_state
        from ss.service_assessment_reports report
        join ss.service_credit_grants credit
          on credit.organization_id = report.organization_id
         and credit.source_report_id = report.id
+       left join ss.service_credit_applications application
+         on application.organization_id = credit.organization_id
+        and application.credit_grant_id = credit.id
+        and application.state in (
+          'reserved', 'settled', 'reconciliation_required'
+        )
       where report.organization_id = $1
         and report.job_id = $2`,
       [organizationId, jobId]
@@ -1053,11 +1072,18 @@ export function createPostgresCustomServicesAssessmentWork({
                    credit.non_cash,
                    credit.delivered_at as credit_delivered_at,
                    credit.acceptance_cutoff,
-                   credit.credit_digest
+                   credit.credit_digest,
+                   application.state as credit_application_state
                  from ss.service_assessment_reports report
                  join ss.service_credit_grants credit
                    on credit.organization_id = report.organization_id
                   and credit.source_report_id = report.id
+                 left join ss.service_credit_applications application
+                   on application.organization_id = credit.organization_id
+                  and application.credit_grant_id = credit.id
+                  and application.state in (
+                    'reserved', 'settled', 'reconciliation_required'
+                  )
                 where report.job_id = any($1::uuid[])`,
                 [jobIds]
               ),
@@ -1796,7 +1822,8 @@ export function createPostgresCustomServicesAssessmentWork({
                    credit.non_cash,
                    credit.delivered_at as credit_delivered_at,
                    credit.acceptance_cutoff,
-                   credit.credit_digest
+                   credit.credit_digest,
+                   application.state as credit_application_state
                  from ss.service_assessment_reports report
                  join ss.service_documents document
                    on document.organization_id = report.organization_id
@@ -1807,6 +1834,12 @@ export function createPostgresCustomServicesAssessmentWork({
                  join ss.service_credit_grants credit
                    on credit.organization_id = report.organization_id
                   and credit.source_report_id = report.id
+                 left join ss.service_credit_applications application
+                   on application.organization_id = credit.organization_id
+                  and application.credit_grant_id = credit.id
+                  and application.state in (
+                    'reserved', 'settled', 'reconciliation_required'
+                  )
                 where report.organization_id = $1
                   and report.project_id = $2
                   and report.customer_user_id = $3`,

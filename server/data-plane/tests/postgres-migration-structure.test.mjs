@@ -1388,3 +1388,264 @@ test("paid assessment delivery freezes exact evidence, findings, report, and one
     /on delete cascade|grant all privileges/iu
   );
 });
+
+test("Custom build catalog pins seven held tiers and derives Scale pricing from capacity", async () => {
+  const customBuild = (await migrations()).find(
+    ({ name }) =>
+      name === "202608050041_custom_build_quote_credit.sql"
+  );
+  assert.ok(customBuild);
+
+  const tiers = [
+    ["411", "card", "Card", "fixed", 40000, 1, 5, 1, 500, 2],
+    ["412", "card-plus", "Card Plus", "fixed", 65000, 1, 8, 1, 900, 8],
+    ["413", "site", "Site", "fixed", 120000, 4, 16, 4, 1800, 12],
+    ["414", "site-plus", "Site Plus", "fixed", 180000, 7, 28, 7, 3000, 24],
+    ["415", "signature", "Signature", "fixed", 280000, 10, 40, 10, 4500, 36],
+    ["416", "flagship", "Flagship", "fixed", 400000, 15, 60, 15, 7000, 60],
+    ["417", "scale", "Scale", "banded", null, 30, 120, 30, 14500, 120]
+  ];
+
+  for (const [
+    policySuffix,
+    tierId,
+    label,
+    pricingMode,
+    amountMinor,
+    pages,
+    sections,
+    layouts,
+    words,
+    media
+  ] of tiers) {
+    const amountSql = amountMinor === null
+      ? "null::bigint"
+      : `${amountMinor}::bigint`;
+    assert.match(
+      customBuild.sql,
+      new RegExp(
+        String.raw`'00000000-0000-4000-8000-000000000${policySuffix}'::uuid,\s*'${tierId}',\s*'${label}',\s*'${pricingMode}',\s*${amountSql},\s*${pages},\s*${sections},\s*${layouts},\s*${words},\s*${media}`,
+        "iu"
+      ),
+      `missing exact ${label} held-catalog row`
+    );
+  }
+
+  for (const [tierId, amountMinor] of [
+    ["card", 40000],
+    ["card-plus", 65000],
+    ["site", 120000],
+    ["site-plus", 180000],
+    ["signature", 280000],
+    ["flagship", 400000]
+  ]) {
+    assert.match(
+      customBuild.sql,
+      new RegExp(`when '${tierId}' then ${amountMinor}`, "iu"),
+      `missing database-authoritative ${tierId} price`
+    );
+  }
+
+  assert.match(
+    customBuild.sql,
+    /when 'scale' then\s+case[\s\S]*selected_scale_units between 1 and 15[\s\S]*400000 \+ selected_scale_units::bigint \* 27000/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.custom_build_scale_units\([\s\S]*greatest\(crafted_pages - 15, 0\)[\s\S]*greatest\(sections - 60, 0\) \+ 3\) \/ 4[\s\S]*greatest\(unique_layouts - 15, 0\)[\s\S]*greatest\(content_words - 7000, 0\) \+ 499\) \/ 500[\s\S]*greatest\(supplied_media - 60, 0\) \+ 3\) \/ 4/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /when 'scale' then[\s\S]*selected_scale_units between 1 and 15[\s\S]*selected_scale_units = ss\.custom_build_scale_units\(/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /'scale', case when tier\.tier_id = 'scale' then jsonb_build_object\([\s\S]*'baseAmountMinor', 400000[\s\S]*'maximumCapacityUnits', 15[\s\S]*'minimumCapacityUnits', 1[\s\S]*'unitAmountMinor', 27000/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'[\s\S]*'held'[\s\S]*where document\.id = '00000000-0000-4000-8000-000000000342'/iu
+  );
+});
+
+test("Custom build acceptance atomically reserves one exact assessment credit without charging", async () => {
+  const customBuild = (await migrations()).find(
+    ({ name }) =>
+      name === "202608050041_custom_build_quote_credit.sql"
+  );
+  assert.ok(customBuild);
+
+  for (const table of [
+    "service_custom_build_quotes",
+    "service_custom_build_quote_revisions",
+    "service_custom_build_quote_base_lines",
+    "service_custom_build_quote_installments",
+    "service_custom_build_quote_commands",
+    "service_custom_build_quote_acceptances",
+    "service_credit_applications",
+    "service_custom_build_quote_voids"
+  ]) {
+    assert.match(
+      customBuild.sql,
+      new RegExp(`create table ss\\.${table} \\(`, "iu"),
+      `missing ${table}`
+    );
+  }
+
+  assert.match(
+    customBuild.sql,
+    /create table ss\.service_custom_build_quotes \([\s\S]*source_job_id uuid not null[\s\S]*source_report_id uuid not null[\s\S]*references ss\.service_assessment_reports\(organization_id, job_id, id\)/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.prepare_service_custom_build_quote\(\)[\s\S]*from ss\.service_assessment_reports report[\s\S]*custom build quote requires one eligible delivered assessment/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /quote_digest ss\.sha256_hex generated always as[\s\S]*disclosure_digest ss\.sha256_hex generated always as[\s\S]*check \(expires_at <= credit_acceptance_cutoff\)/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create trigger service_custom_build_quote_revisions_immutable[\s\S]*before update or delete on ss\.service_custom_build_quote_revisions[\s\S]*ss\.reject_update\(\)/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.materialize_service_custom_build_quote\(\)[\s\S]*insert into ss\.service_custom_build_quote_base_lines[\s\S]*insert into ss\.service_custom_build_quote_installments/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create trigger service_custom_build_quote_revisions_materialize[\s\S]*after insert on ss\.service_custom_build_quote_revisions[\s\S]*materialize_service_custom_build_quote/iu
+  );
+
+  assert.match(
+    customBuild.sql,
+    /where credit\.organization_id = quote_record\.organization_id[\s\S]*credit\.project_id = quote_record\.project_id[\s\S]*credit\.credit_digest[\s\S]*credit\.acceptance_cutoff > recorded_at[\s\S]*for update of credit/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /claimed_quote_digest is distinct from revision_record\.quote_digest[\s\S]*claimed_disclosure_digest is distinct from revision_record\.disclosure_digest[\s\S]*credit\.credit_digest = revision_record\.credit_digest[\s\S]*credit\.acceptance_cutoff = revision_record\.credit_acceptance_cutoff[\s\S]*for update of credit/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create trigger service_custom_build_quote_acceptances_materialize[\s\S]*after insert on ss\.service_custom_build_quote_acceptances[\s\S]*materialize_service_custom_build_acceptance/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.materialize_service_custom_build_acceptance\(\)[\s\S]*insert into ss\.service_credit_applications[\s\S]*'reserved'[\s\S]*update ss\.service_custom_build_quotes[\s\S]*state = 'accepted'/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create unique index service_credit_applications_one_active_grant[\s\S]*on ss\.service_credit_applications\(credit_grant_id\)[\s\S]*where state in \('reserved', 'settled', 'reconciliation_required'\)/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.prepare_service_custom_build_quote_void\(\)[\s\S]*service_operator_has_capability[\s\S]*application_record\.state <> 'reserved'[\s\S]*cannot release a consumed or uncertain credit/iu
+  );
+  assert.match(
+    customBuild.sql,
+    /create function ss\.materialize_service_custom_build_quote_void\(\)[\s\S]*update ss\.service_credit_applications[\s\S]*state = 'released'[\s\S]*where quote_id = new\.quote_id[\s\S]*and state = 'reserved'/iu
+  );
+
+  assert.match(
+    customBuild.sql,
+    /tax_state text not null check \(tax_state = 'calculation_required'\)/iu
+  );
+  assert.doesNotMatch(customBuild.sql, /\btax_minor\b|\btotal_minor\b/iu);
+  assert.doesNotMatch(
+    customBuild.sql,
+    /\binsert into ss\.(?:service_invoices|service_invoice_lines|service_payment_reservations|service_assessment_jobs|alakazam_[a-z_]+)/iu
+  );
+  assert.doesNotMatch(
+    customBuild.sql,
+    /\bcreate table ss\.[a-z_]*(?:invoice|payment|checkout|provider|job)[a-z_]*\b/iu
+  );
+});
+
+test("Custom build quote storage is forced-RLS, minimally writable, and exactly v41", async () => {
+  const customBuild = (await migrations()).find(
+    ({ name }) =>
+      name === "202608050041_custom_build_quote_credit.sql"
+  );
+  assert.ok(customBuild);
+
+  const tables = [
+    "service_custom_build_quotes",
+    "service_custom_build_quote_revisions",
+    "service_custom_build_quote_base_lines",
+    "service_custom_build_quote_installments",
+    "service_custom_build_quote_commands",
+    "service_custom_build_quote_acceptances",
+    "service_credit_applications",
+    "service_custom_build_quote_voids"
+  ];
+  const directlyInsertable = new Set([
+    "service_custom_build_quotes",
+    "service_custom_build_quote_revisions",
+    "service_custom_build_quote_commands",
+    "service_custom_build_quote_acceptances",
+    "service_custom_build_quote_voids"
+  ]);
+
+  assert.match(
+    customBuild.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+
+  const selectGrant = customBuild.sql.match(
+    /grant select on table([\s\S]*?)to service_role;/iu
+  );
+  const insertGrant = customBuild.sql.match(
+    /grant insert on table([\s\S]*?)to service_role;/iu
+  );
+  assert.ok(selectGrant, "missing explicit service_role SELECT grant");
+  assert.ok(insertGrant, "missing explicit service_role INSERT grant");
+  for (const table of tables) {
+    assert.match(
+      selectGrant[1],
+      new RegExp(`ss\\.${table}\\b`, "iu"),
+      `service_role cannot read ${table}`
+    );
+    const tablePattern = new RegExp(`ss\\.${table}\\b`, "iu");
+    if (directlyInsertable.has(table)) {
+      assert.match(
+        insertGrant[1],
+        tablePattern,
+        `service_role cannot create ${table}`
+      );
+    } else {
+      assert.doesNotMatch(
+        insertGrant[1],
+        tablePattern,
+        `${table} must only be trigger-materialized`
+      );
+    }
+  }
+
+  assert.match(
+    customBuild.sql,
+    /custom build materialization is directly writable/iu
+  );
+  for (const materializer of [
+    "materialize_service_custom_build_quote",
+    "materialize_service_custom_build_acceptance",
+    "materialize_service_custom_build_quote_void"
+  ]) {
+    assert.match(
+      customBuild.sql,
+      new RegExp(
+        String.raw`revoke all on function ss\.${materializer}\(\)\s+from public, anon, authenticated, service_role`,
+        "iu"
+      )
+    );
+  }
+
+  assert.doesNotMatch(
+    customBuild.sql,
+    /\bgrant\b[^;]*\b(?:update|delete|truncate)\b[^;]*\bto service_role\b/iu
+  );
+  assert.doesNotMatch(customBuild.sql, /on delete cascade|grant all privileges/iu);
+  assert.match(
+    customBuild.sql,
+    /create function ss\.hosted_runtime_contract_v41\(\)[\s\S]*select 'canonical-ss-v41-custom-build-quote-credit'::text[\s\S]*grant execute on function ss\.hosted_runtime_contract_v41\(\)[\s\S]*to service_role/iu
+  );
+});

@@ -241,6 +241,28 @@
 .customer-owner-quote-form .customer-assessment-note,.customer-owner-quote-form .customer-owner-quote-form-error,.customer-owner-quote-form .spark-button{grid-column:1/-1}
 .customer-owner-quote-form textarea{min-height:7rem;resize:vertical}
 .customer-owner-quote-form-error{min-height:1.4em;margin:0;color:#ffe3ea;font-size:.86rem;line-height:1.5}
+.customer-custom-build-quote{border-color:rgba(185,152,255,.34);background:linear-gradient(145deg,rgba(185,152,255,.075),rgba(25,16,35,.72))}
+.customer-custom-build-review{display:grid;gap:1rem}
+.customer-custom-build-review h4,.customer-custom-build-owner-review h5{margin:0}
+.customer-custom-build-scope{white-space:pre-line}
+.customer-custom-build-facts dd{overflow-wrap:anywhere}
+.customer-custom-build-acceptance{margin-top:.2rem}
+.customer-custom-build-payment-pending{border-left-color:var(--spark-mint);background:rgba(130,231,196,.06)}
+.customer-owner-custom-build{border-color:rgba(185,152,255,.4);background:linear-gradient(145deg,rgba(185,152,255,.09),rgba(25,16,35,.76))}
+.customer-owner-custom-build>.spark-button{justify-self:start;margin:0 0 1rem}
+.customer-owner-custom-build-card>dl,.customer-custom-build-owner-review>dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:1rem 0;border:1px solid var(--spark-line);border-radius:.8rem;overflow:hidden}
+.customer-owner-custom-build-card>dl>div,.customer-custom-build-owner-review>dl>div{display:grid;grid-template-columns:minmax(7rem,.7fr) minmax(0,1fr);gap:.7rem;padding:.75rem .85rem}
+.customer-owner-custom-build-card>dl>div:nth-child(even),.customer-custom-build-owner-review>dl>div:nth-child(even){border-left:1px solid var(--spark-line)}
+.customer-owner-custom-build-card>dl>div:nth-child(n+3),.customer-custom-build-owner-review>dl>div:nth-child(n+3){border-top:1px solid var(--spark-line)}
+.customer-owner-custom-build-card dt,.customer-custom-build-owner-review dt{color:var(--spark-faint)}
+.customer-owner-custom-build-card dd,.customer-custom-build-owner-review dd{min-width:0;margin:0;overflow-wrap:anywhere;color:var(--spark-text);font-weight:750}
+.customer-owner-custom-build-form .spark-field:has(textarea),.customer-custom-build-scale-note,.customer-custom-build-estimate{grid-column:1/-1}
+.customer-custom-build-scale-note{margin:0;color:var(--spark-muted);font-size:.84rem;line-height:1.55}
+.customer-custom-build-estimate{border-left-color:var(--spark-mint);color:var(--spark-text);background:rgba(130,231,196,.055)}
+.customer-custom-build-owner-review{display:grid;gap:.8rem;margin-top:1rem;padding:1rem;border:1px solid rgba(185,152,255,.3);border-radius:.9rem;background:rgba(185,152,255,.045)}
+.customer-owner-custom-build-void{display:grid;gap:.8rem;padding-top:.2rem}
+.customer-owner-custom-build-void textarea{min-height:5rem}
+.customer-custom-build-void-button{justify-self:start;border-color:rgba(255,184,200,.36);color:#ffe3ea}
 .customer-alakazam-account{max-width:58rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid rgba(185,152,255,.3);border-radius:1.2rem;background:linear-gradient(145deg,rgba(185,152,255,.08),rgba(25,16,35,.72))}
 .customer-alakazam-account>h3{margin:.2rem 0 .45rem;font-size:clamp(1.45rem,3vw,2rem);letter-spacing:-.03em}
 .customer-alakazam-load-state,.customer-alakazam-summary,.customer-alakazam-placeholder,.customer-alakazam-error{margin:.35rem 0 1rem;color:var(--spark-muted);line-height:1.55}
@@ -425,7 +447,13 @@
   .customer-assessment-complexity legend{grid-column:auto}
   .customer-owner-quote-form{grid-template-columns:1fr}
   .customer-owner-quote-form .customer-assessment-note,.customer-owner-quote-form .customer-owner-quote-form-error,.customer-owner-quote-form .spark-button{grid-column:auto}
+  .customer-owner-custom-build-form .spark-field:has(textarea),.customer-custom-build-scale-note,.customer-custom-build-estimate{grid-column:auto}
   .customer-owner-quote-form .spark-button{width:100%}
+  .customer-owner-custom-build>.spark-button,.customer-custom-build-void-button{width:100%}
+  .customer-owner-custom-build-card>dl,.customer-custom-build-owner-review>dl{grid-template-columns:1fr}
+  .customer-owner-custom-build-card>dl>div,.customer-custom-build-owner-review>dl>div{grid-template-columns:1fr;gap:.25rem}
+  .customer-owner-custom-build-card>dl>div:nth-child(even),.customer-custom-build-owner-review>dl>div:nth-child(even){border-left:0}
+  .customer-owner-custom-build-card>dl>div:nth-child(n+2),.customer-custom-build-owner-review>dl>div:nth-child(n+2){border-top:1px solid var(--spark-line)}
   .customer-separate-help{display:grid}
   .spark-progress{grid-template-columns:repeat(3,1fr)}
   .spark-progress li:nth-child(4){border-left:0}

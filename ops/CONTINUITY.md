@@ -982,3 +982,14 @@ catalogs or copy do not override it.
   authority and provider proof; Polish owns copy, scope clarity, responsive
   interfaces, legal consistency, and device proof. Polish may audit ahead but
   cannot publish an unimplemented promise.
+- In-person sales do not create an account exception. The owner may invite or
+  assist the client through account activation, then open the same bound quote
+  or invoice on Mac or Pixel and present a secure payment link or QR. Physical
+  tap/swipe requires a separately reviewed Stripe Terminal path; manually
+  received cash, check, or approved wallet payment requires retained evidence
+  and owner reconciliation, never a generic `mark paid` button.
+- Codex/Claude/other approved model tooling may analyze bounded assessment
+  evidence and prepare a report draft. The Site Sourcery owner remains the
+  reviewer and approver: model output is not delivered, represented as a
+  finding, or allowed to mint the `$200` credit until the owner explicitly
+  approves the final customer-safe report.

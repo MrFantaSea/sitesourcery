@@ -242,6 +242,25 @@ const READINESS_QUERY = `
       and to_regclass('ss.service_assessment_report_findings') is not null
       and to_regclass('ss.service_credit_grants') is not null
       and to_regprocedure('ss.hosted_runtime_contract_v40()') is not null
+      and (
+        select count(*) = 8
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+        where namespace.nspname = 'ss'
+          and relation.relkind = 'r'
+          and relation.relname in (
+            'service_custom_build_quotes',
+            'service_custom_build_quote_revisions',
+            'service_custom_build_quote_base_lines',
+            'service_custom_build_quote_installments',
+            'service_custom_build_quote_commands',
+            'service_custom_build_quote_acceptances',
+            'service_credit_applications',
+            'service_custom_build_quote_voids'
+          )
+      )
+      and to_regprocedure('ss.hosted_runtime_contract_v41()') is not null
       as custom_service_quotes_schema_ready,
     to_regclass('ss.release_requests') is not null as releases_ready,
     to_regclass('ss.export_requests') is not null as exports_ready,
@@ -395,6 +414,9 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ss.hosted_runtime_contract_v40() =
       'canonical-ss-v40-custom-service-assessment-delivery'
       as custom_service_assessment_delivery_contract_marker_ready,
+    ss.hosted_runtime_contract_v41() =
+      'canonical-ss-v41-custom-build-quote-credit'
+      as custom_build_quote_credit_contract_marker_ready,
     (
       select count(*) = 1
         and bool_and(relation.relrowsecurity)
@@ -1188,7 +1210,77 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
            and column_record.generation_expression like
              '%service_intake_facts_digest%'
       )
-    ) as custom_service_customer_commands_fences_ready
+    ) as custom_service_customer_commands_fences_ready,
+    (
+      (
+        select count(*) = 8
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and not has_table_privilege('service_role', relation.oid, 'UPDATE')
+            and not has_table_privilege('service_role', relation.oid, 'DELETE')
+            and not has_table_privilege('service_role', relation.oid, 'TRUNCATE')
+            and not has_table_privilege('authenticated', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and has_table_privilege('service_role', relation.oid, 'INSERT') =
+              (relation.relname in (
+                'service_custom_build_quotes',
+                'service_custom_build_quote_revisions',
+                'service_custom_build_quote_commands',
+                'service_custom_build_quote_acceptances',
+                'service_custom_build_quote_voids'
+              ))
+          )
+        from pg_class relation
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
+        where namespace.nspname = 'ss'
+          and relation.relkind = 'r'
+          and relation.relname in (
+            'service_custom_build_quotes',
+            'service_custom_build_quote_revisions',
+            'service_custom_build_quote_base_lines',
+            'service_custom_build_quote_installments',
+            'service_custom_build_quote_commands',
+            'service_custom_build_quote_acceptances',
+            'service_credit_applications',
+            'service_custom_build_quote_voids'
+          )
+      )
+      and (
+        select count(*) = 7
+        from ss.service_catalog_policies policy
+        where policy.catalog_version = 'SS-PROFESSIONAL-2026.2'
+          and policy.service_key like 'custom_build_%'
+          and policy.publication_state = 'held'
+          and policy.currency = 'USD'
+      )
+      and to_regclass(
+        'ss.service_credit_applications_one_active_grant'
+      ) is not null
+      and to_regclass(
+        'ss.service_custom_build_quotes_one_active_report'
+      ) is not null
+      and to_regclass(
+        'ss.service_custom_build_quotes_one_active_project'
+      ) is not null
+      and not has_function_privilege(
+        'service_role',
+        'ss.materialize_service_custom_build_quote()',
+        'EXECUTE'
+      )
+      and not has_function_privilege(
+        'service_role',
+        'ss.materialize_service_custom_build_acceptance()',
+        'EXECUTE'
+      )
+      and not has_function_privilege(
+        'service_role',
+        'ss.materialize_service_custom_build_quote_void()',
+        'EXECUTE'
+      )
+    ) as custom_build_quote_credit_ready
 `;
 
 function requiredString(value, code, message) {
@@ -1312,6 +1404,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_assessment_checkout_contract_marker_ready: false,
           custom_service_assessment_settlement_contract_marker_ready: false,
           custom_service_assessment_delivery_contract_marker_ready: false,
+          custom_build_quote_credit_contract_marker_ready: false,
           custom_service_assessment_checkout_ready: false,
           custom_service_assessment_settlement_ready: false,
           custom_service_assessment_delivery_ready: false,
@@ -1322,7 +1415,8 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_quotes_terms_ready: false,
           custom_service_quotes_operator_authority_ready: false,
           custom_service_quotes_acceptance_ready: false,
-          custom_service_customer_commands_fences_ready: false
+          custom_service_customer_commands_fences_ready: false,
+          custom_build_quote_credit_ready: false
         });
       } else {
         Object.assign(row, {
@@ -1331,8 +1425,11 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_invoices_contract_marker_ready: false,
           custom_service_assessment_checkout_contract_marker_ready: false,
           custom_service_assessment_settlement_contract_marker_ready: false,
+          custom_service_assessment_delivery_contract_marker_ready: false,
+          custom_build_quote_credit_contract_marker_ready: false,
           custom_service_assessment_checkout_ready: false,
           custom_service_assessment_settlement_ready: false,
+          custom_service_assessment_delivery_ready: false,
           custom_service_invoices_held_ready: false,
           custom_service_quotes_security_ready: false,
           custom_service_quotes_retention_ready: false,
@@ -1340,7 +1437,8 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           custom_service_quotes_terms_ready: false,
           custom_service_quotes_operator_authority_ready: false,
           custom_service_quotes_acceptance_ready: false,
-          custom_service_customer_commands_fences_ready: false
+          custom_service_customer_commands_fences_ready: false,
+          custom_build_quote_credit_ready: false
         });
       }
       const missing = Object.entries(row)
@@ -1382,7 +1480,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations through custom-service assessment delivery v40 are required.",
+        : "Canonical PostgreSQL migrations through Custom build quote credit v41 are required.",
       { status: 503, details: status }
     );
     return status;
