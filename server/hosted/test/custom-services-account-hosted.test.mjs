@@ -64,7 +64,9 @@ function context({ scope, snapshot } = {}) {
     customBuildCheckout: [],
     customBuildChangeAcceptance: [],
     customBuildChangeCompletionRead: [],
+    customBuildChangeCheckout: [],
     customBuildChangeDecline: [],
+    customBuildChangeInvoiceRead: [],
     customBuildCompletionEvidenceRead: [],
     customBuildAcceptance: [],
     customBuildInvoiceRead: [],
@@ -138,6 +140,23 @@ function context({ scope, snapshot } = {}) {
         calls.customBuildCheckout.push(structuredClone(value));
         return {
           schema: "sitesourcery.custom-build-start-checkout/v1",
+          state: "ready"
+        };
+      }
+    },
+    customBuildChangePayment: {
+      async readCurrentInvoice(value) {
+        calls.customBuildChangeInvoiceRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-change-invoice/v1",
+          state: "checkout_available",
+          invoice: { invoiceId: OTHER_ID }
+        };
+      },
+      async createCheckout(value) {
+        calls.customBuildChangeCheckout.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-change-checkout/v1",
           state: "ready"
         };
       }
@@ -567,6 +586,52 @@ test("hosted Custom build invoice and checkout send only resolved customer autho
   ]);
 });
 
+test("hosted Custom-build change invoice and checkout stay project-bound and distinct from first payment", async () => {
+  const selected = context();
+  const invoice = await selected.service.getCustomBuildChangeInvoice(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(invoice.state, "checkout_available");
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000004";
+  const input = {
+    commandId: "custom-build-change-checkout-command-1",
+    invoiceDigest: "e".repeat(64)
+  };
+  const checkout = await selected.service.createCustomBuildChangeCheckout(
+    actor(),
+    PROJECT_ID,
+    invoiceId,
+    input
+  );
+  assert.equal(checkout.state, "ready");
+
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildChangeInvoiceRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildChangeCheckout, [
+    { ...scope, ...input, invoiceId }
+  ]);
+  assert.deepEqual(selected.calls.customBuildInvoiceRead, []);
+  assert.deepEqual(selected.calls.customBuildCheckout, []);
+
+  await assert.rejects(
+    selected.service.createCustomBuildChangeCheckout(
+      actor(),
+      PROJECT_ID,
+      invoiceId,
+      { ...input, amountMinor: 12_500 }
+    ),
+    isError("invalid_input", 400)
+  );
+  assert.equal(selected.calls.customBuildChangeCheckout.length, 1);
+});
+
 test("hosted Custom build progress read and response stay bound to the resolved project", async () => {
   const selected = context();
   const progress = await selected.service.getCustomBuildProgress(
@@ -854,6 +919,10 @@ test("held custom-services account authenticates but exposes no read", async () 
     isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
   );
   await assert.rejects(
+    held.getCustomBuildChangeInvoice(actor(), PROJECT_ID),
+    isError("CUSTOM_BUILD_CHANGE_PAYMENT_HELD", 503)
+  );
+  await assert.rejects(
     held.getCustomBuildCompletionEvidence(actor(), PROJECT_ID, EVIDENCE_ID),
     isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
   );
@@ -868,6 +937,15 @@ test("held custom-services account authenticates but exposes no read", async () 
   await assert.rejects(
     held.acceptCustomBuildQuote(actor(), PROJECT_ID, {}),
     isError("CUSTOM_BUILD_HELD", 503)
+  );
+  await assert.rejects(
+    held.createCustomBuildChangeCheckout(
+      actor(),
+      PROJECT_ID,
+      OTHER_ID,
+      {}
+    ),
+    isError("CUSTOM_BUILD_CHANGE_PAYMENT_HELD", 503)
   );
   await assert.rejects(
     held.getAssessmentRequest(actor(), PROJECT_ID),

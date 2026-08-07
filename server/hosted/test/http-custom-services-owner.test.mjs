@@ -15,6 +15,8 @@ const CASE_ID =
   "30000000-0000-4000-8000-000000000001";
 const JOB_ID =
   "40000000-0000-4000-8000-000000000001";
+const ATTEMPT_ID =
+  "41000000-0000-4000-8000-000000000001";
 const EVIDENCE_ID =
   "50000000-0000-4000-8000-000000000001";
 const CUSTOM_BUILD_QUOTE_ID =
@@ -35,6 +37,7 @@ function service() {
 
 function request({
   body,
+  idempotencyKey = "owner-quote-command-1",
   method = "GET",
   path = "/api/v1/operator/custom-services/assessment-requests",
   signedIn = true
@@ -43,10 +46,12 @@ function request({
     ? { Cookie: `ss_session=${SESSION_TOKEN}` }
     : {};
   if (method !== "GET") {
-    headers.Cookie += `${headers.Cookie ? "; " : ""}ss_csrf=${"c".repeat(32)}`;
+    headers.Cookie =
+      `${headers.Cookie ? `${headers.Cookie}; ` : ""}` +
+      `ss_csrf=${"c".repeat(32)}`;
     headers.Origin = ORIGIN;
     headers["X-CSRF-Token"] = "c".repeat(32);
-    headers["Idempotency-Key"] = "owner-quote-command-1";
+    headers["Idempotency-Key"] = idempotencyKey;
     headers["Content-Type"] = "application/json";
   }
   return new Request(`${ORIGIN}${path}`, {
@@ -543,6 +548,191 @@ test("owner paid Custom build jobs are private, authenticated, and read-only", a
   assert.equal(calls.length, 2);
 });
 
+test("owner Custom-build change payments expose only exact reads and uncertain-Checkout reconciliation", async () => {
+  const calls = [];
+  const payments = {
+    schema: "sitesourcery.custom-build-change-payments-owner/v1",
+    organizationId: ORGANIZATION_ID,
+    jobId: JOB_ID,
+    payments: []
+  };
+  const reconciled = {
+    schema: "sitesourcery.custom-build-change-checkout/v1",
+    state: "ready"
+  };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuildChangePayment: {
+      async readOwnerPayments(actor, jobId, organizationId) {
+        calls.push({
+          action: "read",
+          actor,
+          jobId,
+          organizationId
+        });
+        return payments;
+      },
+      async reconcileCheckoutCreation(actor, jobId, input) {
+        calls.push({ action: "reconcile", actor, jobId, input });
+        return reconciled;
+      }
+    }
+  });
+  const root =
+    `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
+  const readPath =
+    `${root}/change-payments?organizationId=${ORGANIZATION_ID}`;
+  const reconcilePath =
+    `${root}/change-payments/${ATTEMPT_ID}/checkout-reconciliation`;
+
+  const read = await api.fetch(request({ path: readPath }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), payments);
+
+  const reconcile = await api.fetch(request({
+    body: {
+      commandId: "owner-quote-command-1",
+      organizationId: ORGANIZATION_ID
+    },
+    method: "POST",
+    path: reconcilePath
+  }));
+  assert.equal(reconcile.status, 200);
+  assert.deepEqual(await reconcile.json(), reconciled);
+  const replay = await api.fetch(request({
+    body: {
+      commandId: "owner-quote-command-1",
+      organizationId: ORGANIZATION_ID
+    },
+    method: "POST",
+    path: reconcilePath
+  }));
+  assert.equal(replay.status, 200);
+  assert.deepEqual(await replay.json(), reconciled);
+  const actor = { userId: OPERATOR_ID };
+  assert.deepEqual(calls, [
+    {
+      action: "read",
+      actor,
+      jobId: JOB_ID,
+      organizationId: ORGANIZATION_ID
+    },
+    {
+      action: "reconcile",
+      actor,
+      jobId: JOB_ID,
+      input: {
+        attemptId: ATTEMPT_ID,
+        commandId: "owner-quote-command-1",
+        organizationId: ORGANIZATION_ID
+      }
+    },
+    {
+      action: "reconcile",
+      actor,
+      jobId: JOB_ID,
+      input: {
+        attemptId: ATTEMPT_ID,
+        commandId: "owner-quote-command-1",
+        organizationId: ORGANIZATION_ID
+      }
+    }
+  ]);
+
+  for (const path of [
+    `${root}/change-payments`,
+    `${readPath}&organizationId=${ORGANIZATION_ID}`,
+    `${readPath}&state=paid`
+  ]) {
+    const response = await api.fetch(request({ path }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT"
+    );
+  }
+
+  for (const expanded of [
+    { amountMinor: 12_500 },
+    { taxMinor: 1 },
+    { provider: "stripe" },
+    { state: "paid" },
+    { markPaid: true },
+    { checkoutSessionId: "cs_browser_claim" }
+  ]) {
+    const response = await api.fetch(request({
+      body: {
+        commandId: "owner-quote-command-1",
+        organizationId: ORGANIZATION_ID,
+        ...expanded
+      },
+      method: "POST",
+      path: reconcilePath
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT"
+    );
+  }
+
+  for (const body of [
+    { organizationId: ORGANIZATION_ID },
+    {
+      commandId: "body-command-does-not-match-header",
+      organizationId: ORGANIZATION_ID
+    }
+  ]) {
+    const response = await api.fetch(request({
+      body,
+      idempotencyKey: "owner-quote-command-1",
+      method: "POST",
+      path: reconcilePath
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT"
+    );
+  }
+
+  const wrongWriteQuery = await api.fetch(request({
+    body: {
+      commandId: "owner-quote-command-1",
+      organizationId: ORGANIZATION_ID
+    },
+    method: "POST",
+    path: `${reconcilePath}?force=true`
+  }));
+  assert.equal(wrongWriteQuery.status, 400);
+
+  const signedOutRead = await api.fetch(request({
+    path: readPath,
+    signedIn: false
+  }));
+  assert.equal(signedOutRead.status, 401);
+  const signedOutWrite = await api.fetch(request({
+    body: {
+      commandId: "owner-quote-command-1",
+      organizationId: ORGANIZATION_ID
+    },
+    method: "POST",
+    path: reconcilePath,
+    signedIn: false
+  }));
+  assert.equal(signedOutWrite.status, 401);
+
+  const customerCrossRoute = await api.fetch(request({
+    path:
+      `/api/v1/projects/${CASE_ID}/custom-services/custom-build-change-invoice`
+  }));
+  assert.equal(customerCrossRoute.status, 503);
+  assert.equal(
+    (await customerCrossRoute.json()).error.code,
+    "CUSTOM_BUILD_CHANGE_PAYMENT_HELD"
+  );
+  assert.equal(calls.length, 3);
+});
+
 test("owner Custom-build progress routes bind exact job, organization, updates, and requests", async () => {
   const calls = [];
   const progress = {
@@ -886,6 +1076,17 @@ test("default owner Custom-build change/completion routes fail closed", async ()
   assert.equal(
     (await response.json()).error.code,
     "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+  );
+
+  const changePayments = await api.fetch(request({
+    path:
+      `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}` +
+      `/change-payments?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(changePayments.status, 503);
+  assert.equal(
+    (await changePayments.json()).error.code,
+    "CUSTOM_BUILD_CHANGE_PAYMENT_HELD"
   );
 });
 

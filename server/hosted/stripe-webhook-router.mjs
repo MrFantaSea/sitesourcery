@@ -9,6 +9,9 @@ import {
 import {
   isPotentialCustomBuildPaymentStripeEvent
 } from "./custom-services-custom-build-payment-postgres.mjs";
+import {
+  isPotentialCustomBuildChangePaymentStripeEvent
+} from "./custom-services-custom-build-change-payment-postgres.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 
 const SAFE_CODE = /^[A-Za-z0-9._:-]{1,200}$/u;
@@ -26,6 +29,7 @@ export function createStripeWebhookRouter({
   downloadCommerce,
   assessmentCommerce,
   customBuildCommerce,
+  customBuildChangeCommerce,
   alakazamCommerce
 } = {}) {
   invariant(
@@ -42,6 +46,9 @@ export function createStripeWebhookRouter({
         "function" &&
       customBuildCommerce &&
       typeof customBuildCommerce.ingestStripeEvent ===
+        "function" &&
+      customBuildChangeCommerce &&
+      typeof customBuildChangeCommerce.ingestStripeEvent ===
         "function" &&
       alakazamCommerce &&
       typeof alakazamCommerce.ingestStripeEvent ===
@@ -110,6 +117,15 @@ export function createStripeWebhookRouter({
         )
       ) {
         return assessmentCommerce.ingestStripeEvent(
+          event
+        );
+      }
+      if (
+        isPotentialCustomBuildChangePaymentStripeEvent(
+          event
+        )
+      ) {
+        return customBuildChangeCommerce.ingestStripeEvent(
           event
         );
       }

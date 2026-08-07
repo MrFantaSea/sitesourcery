@@ -11,11 +11,15 @@ const {
   customerCustomBuildCompletionEvidenceUrl,
   currentOwnerCustomBuildCompletionEvidence,
   prepareCustomBuildCompletionEvidenceFile,
+  verifiedCustomerCustomBuildChangeCheckout,
   verifiedCustomerCustomBuildChangeCompletion,
+  verifiedCustomerCustomBuildChangeInvoice,
   verifiedCustomBuildProgress,
   verifiedCustomerCustomBuildCheckout,
   verifiedCustomerCustomBuildInvoice,
-  verifiedOwnerCustomBuildChangeCompletion
+  verifiedOwnerCustomBuildChangeCompletion,
+  verifiedOwnerCustomBuildChangePaymentReconciliation,
+  verifiedOwnerCustomBuildChangePayments
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
@@ -32,6 +36,11 @@ const INVOICE_DIGEST = "c".repeat(64);
 const QUOTE_DIGEST = "a".repeat(64);
 const DISCLOSURE_DIGEST = "b".repeat(64);
 const CHANGE_ORDER_ID = "81000000-0000-4000-8000-000000000001";
+const CHANGE_ACCEPTANCE_ID = "81000000-0000-4000-8000-000000000002";
+const CHANGE_INVOICE_ID = "81000000-0000-4000-8000-000000000003";
+const CHANGE_ATTEMPT_ID = "81000000-0000-4000-8000-000000000004";
+const CHANGE_RECEIPT_ID = "81000000-0000-4000-8000-000000000005";
+const CHANGE_INVOICE_NUMBER = "SSCB-CHG-81000000000040008000000000000003";
 const DESKTOP_EVIDENCE_ID = "82000000-0000-4000-8000-000000000001";
 const PHONE_EVIDENCE_ID = "82000000-0000-4000-8000-000000000002";
 const COMPLETION_ID = "83000000-0000-4000-8000-000000000001";
@@ -383,6 +392,213 @@ function customerChangeCompletion(state = "change_order_review") {
       history: []
     },
     completion: null
+  };
+}
+
+function customerChangePaymentSnapshot(invoiceState) {
+  if (invoiceState === "paid") {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state: "building",
+      changeOrders: {
+        active: null,
+        history: [changeOrder("effective")]
+      },
+      completion: null
+    };
+  }
+  if (invoiceState === "voided") {
+    return {
+      schema: "sitesourcery.custom-build-change-completion/v1",
+      state: "building",
+      changeOrders: {
+        active: null,
+        history: [changeOrder("voided", false, {
+          acceptedAt: "2026-08-07T15:00:00.000Z"
+        })]
+      },
+      completion: null
+    };
+  }
+  return customerChangeCompletion("change_order_payment_required");
+}
+
+function customerChangeInvoice(state = "checkout_available") {
+  if (state === "not_available") {
+    return {
+      schema: "sitesourcery.custom-build-change-invoice/v1",
+      state,
+      invoice: null,
+      action: { available: false, reason: "invoice_not_available" }
+    };
+  }
+  const paid = state === "paid";
+  const ready = state === "checkout_ready";
+  return {
+    schema: "sitesourcery.custom-build-change-invoice/v1",
+    state,
+    invoice: {
+      invoiceId: CHANGE_INVOICE_ID,
+      invoiceNumber: CHANGE_INVOICE_NUMBER,
+      invoiceDigest: "7".repeat(64),
+      changeOrderId: CHANGE_ORDER_ID,
+      changeAcceptanceId: CHANGE_ACCEPTANCE_ID,
+      changeNumber: 1,
+      acceptedQuoteDigest: "d".repeat(64),
+      acceptedDisclosureDigest: "e".repeat(64),
+      issuedAt: "2026-08-07T15:01:00.000Z",
+      targetCompletionDate: "2026-09-22",
+      lines: [{
+        lineNumber: 1,
+        componentKey: "custom_build_change_units",
+        displayName: "Custom build change #1 — added-work units",
+        quantity: 2,
+        unitAmountMinor: 12500,
+        amountMinor: 25000,
+        currency: "USD"
+      }],
+      subtotal: { amountMinor: 25000, currency: "USD" },
+      tax: paid
+        ? { amountMinor: 1800, state: "settled" }
+        : { amountMinor: null, state: "calculated_at_checkout" },
+      total: paid
+        ? { amountMinor: 26800, currency: "USD", state: "settled" }
+        : { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
+      payment: {
+        chargeOccurred: paid,
+        checkoutUrl: ready
+          ? "https://checkout.stripe.com/c/pay/change_1"
+          : null,
+        checkoutExpiresAt: ready
+          ? "2026-08-07T16:00:00.000Z"
+          : null,
+        settledAt: paid ? "2026-08-07T15:30:00.000Z" : null
+      }
+    },
+    action: {
+      available: state === "checkout_available",
+      reason: state === "checkout_available" ? null : state
+    }
+  };
+}
+
+function customerChangeCheckout(invoiceState) {
+  const invoice = invoiceState.invoice;
+  return {
+    schema: "sitesourcery.custom-build-change-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId: invoice.invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      changeOrderId: invoice.changeOrderId,
+      url: "https://checkout.stripe.com/c/pay/change_1",
+      expiresAt: "2026-08-07T16:00:00.000Z",
+      subtotal: { ...invoice.subtotal },
+      tax: { amountMinor: null, state: "calculated_at_checkout" },
+      total: { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
+      chargeOccurred: false
+    }
+  };
+}
+
+function ownerChangePaymentCompletion(invoiceState) {
+  if (invoiceState === "paid") return ownerChangeCompletion();
+  const value = ownerChangeCompletion();
+  value.state = "change_order_payment_required";
+  value.changeOrders = [changeOrder("accepted_payment_required", true)];
+  value.evidence = [];
+  value.completion = null;
+  return value;
+}
+
+function ownerChangePayments(
+  invoiceState = "reconciliation_required",
+  ownerOverrides = {}
+) {
+  const defaults = invoiceState === "paid"
+    ? {
+        attemptState: "paid",
+        providerEffectCertainty: "confirmed",
+        providerErrorCode: null,
+        receiptSource: "provider_readback",
+        canReconcileCreation: false,
+        canReconcileSettlement: false
+      }
+    : invoiceState === "checkout_ready"
+      ? {
+          attemptState: "ready",
+          providerEffectCertainty: "confirmed",
+          providerErrorCode: null,
+          receiptSource: null,
+          canReconcileCreation: false,
+          canReconcileSettlement: true
+        }
+      : {
+          attemptState: "persistence_unknown",
+          providerEffectCertainty: "ambiguous",
+          providerErrorCode: "checkout_persistence_unknown",
+          receiptSource: null,
+          canReconcileCreation: true,
+          canReconcileSettlement: false
+        };
+  return {
+    schema: "sitesourcery.custom-build-change-payments-owner/v1",
+    organizationId: ORGANIZATION_ID,
+    jobId: JOB_ID,
+    payments: [{
+      ...customerChangeInvoice(invoiceState),
+      owner: {
+        attemptId: CHANGE_ATTEMPT_ID,
+        ...defaults,
+        providerRequestExpiresAt: "2026-08-07T16:00:00.000Z",
+        eventId: null,
+        eventState: null,
+        reconciliationCode: null,
+        ...ownerOverrides
+      }
+    }]
+  };
+}
+
+function ownerChangeReconciliation(
+  payment,
+  status = "checkout_ready"
+) {
+  const state = {
+    checkout_ready: ["creation_reconciled", "customer_checkout"],
+    payment_settled: [
+      "settlement_reconciled",
+      "custom_build_changed_work"
+    ],
+    checkout_expired: ["attempt_expired", "new_checkout_command"],
+    reconciliation_required: ["retry_required", "owner_retry"]
+  }[status];
+  return {
+    schema:
+      "sitesourcery.custom-build-change-payment-reconciliation-command/v1",
+    status,
+    organizationId: ORGANIZATION_ID,
+    jobId: JOB_ID,
+    attemptId: CHANGE_ATTEMPT_ID,
+    invoiceId: CHANGE_INVOICE_ID,
+    changeOrderId: CHANGE_ORDER_ID,
+    action: state[0],
+    next: state[1],
+    reason: null,
+    checkout: status === "checkout_ready"
+      ? customerChangeCheckout(payment)
+      : null,
+    settlement: status === "payment_settled"
+      ? {
+          schema: "sitesourcery.custom-build-change-settlement/v1",
+          status: "payment_settled",
+          projectId: PROJECT_ID,
+          changeOrderId: CHANGE_ORDER_ID,
+          invoiceId: CHANGE_INVOICE_ID,
+          receiptId: CHANGE_RECEIPT_ID,
+          next: "custom_build_changed_work"
+        }
+      : null
   };
 }
 
@@ -958,6 +1174,194 @@ test("Custom-build change and completion customer projections keep exact commerc
   );
 });
 
+test("accepted-change invoice and Checkout projections bind exact units, order, tax, and provider destination", () => {
+  for (const state of [
+    "not_available",
+    "checkout_available",
+    "checkout_ready",
+    "checkout_expired",
+    "payment_held",
+    "reconciliation_required",
+    "paid",
+    "voided"
+  ]) {
+    const invoice = customerChangeInvoice(state);
+    assert.equal(
+      verifiedCustomerCustomBuildChangeInvoice(
+        invoice,
+        customerChangePaymentSnapshot(state)
+      ),
+      invoice,
+      state
+    );
+  }
+
+  const available = customerChangeInvoice();
+  const snapshot = customerChangePaymentSnapshot("checkout_available");
+  const checkout = customerChangeCheckout(available);
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCheckout(
+      checkout,
+      available,
+      "2026-08-07T15:10:00.000Z"
+    ),
+    checkout
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeInvoice({
+      ...available,
+      invoice: {
+        ...available.invoice,
+        lines: [{ ...available.invoice.lines[0], quantity: 3 }]
+      }
+    }, snapshot),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeInvoice({
+      ...available,
+      action: { available: false, reason: "checkout_available" }
+    }, snapshot),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeInvoice({
+      ...available,
+      invoice: {
+        ...available.invoice,
+        acceptedQuoteDigest: "0".repeat(64)
+      }
+    }, snapshot),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCheckout({
+      ...checkout,
+      checkout: {
+        ...checkout.checkout,
+        url: "https://example.test/pay/change_1"
+      }
+    }, available, "2026-08-07T15:10:00.000Z"),
+    null
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCheckout({
+      ...checkout,
+      checkout: {
+        ...checkout.checkout,
+        subtotal: { amountMinor: 1, currency: "USD" }
+      }
+    }, available, "2026-08-07T15:10:00.000Z"),
+    null
+  );
+});
+
+test("owner accepted-change payments expose only exact reconciliation authority", () => {
+  const uncertain = ownerChangePayments();
+  const accepted = ownerChangePaymentCompletion(
+    "reconciliation_required"
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangePayments(
+      uncertain,
+      ownerEntry(),
+      accepted
+    ),
+    uncertain
+  );
+
+  const ready = ownerChangePayments("checkout_ready");
+  assert.equal(
+    verifiedOwnerCustomBuildChangePayments(
+      ready,
+      ownerEntry(),
+      ownerChangePaymentCompletion("checkout_ready")
+    ),
+    ready
+  );
+
+  const paid = ownerChangePayments("paid");
+  assert.equal(
+    verifiedOwnerCustomBuildChangePayments(
+      paid,
+      ownerEntry(),
+      ownerChangePaymentCompletion("paid")
+    ),
+    paid
+  );
+
+  assert.equal(
+    verifiedOwnerCustomBuildChangePayments({
+      ...uncertain,
+      payments: [{
+        ...uncertain.payments[0],
+        owner: {
+          ...uncertain.payments[0].owner,
+          canReconcileCreation: false
+        }
+      }]
+    }, ownerEntry(), accepted),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangePayments({
+      ...uncertain,
+      payments: [{
+        ...uncertain.payments[0],
+        owner: {
+          ...uncertain.payments[0].owner,
+          providerRequestExpiresAt: null
+        }
+      }]
+    }, ownerEntry(), accepted),
+    null
+  );
+});
+
+test("owner reconciliation result binds command outcome to one attempt and invoice", () => {
+  const payments = ownerChangePayments();
+  const payment = payments.payments[0];
+  const checkoutReady = ownerChangeReconciliation(payment);
+  assert.equal(
+    verifiedOwnerCustomBuildChangePaymentReconciliation(
+      checkoutReady,
+      ownerEntry(),
+      payment
+    ),
+    checkoutReady
+  );
+
+  const settledPayment = ownerChangePayments("paid").payments[0];
+  const settled = ownerChangeReconciliation(
+    settledPayment,
+    "payment_settled"
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangePaymentReconciliation(
+      settled,
+      ownerEntry(),
+      settledPayment
+    ),
+    settled
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangePaymentReconciliation(
+      { ...checkoutReady, jobId: PROJECT_ID },
+      ownerEntry(),
+      payment
+    ),
+    null
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildChangePaymentReconciliation(
+      { ...checkoutReady, settlement: settled.settlement },
+      ownerEntry(),
+      payment
+    ),
+    null
+  );
+});
+
 test("expired change orders and required verified image dimensions stay display-safe", () => {
   const expired = customerChangeCompletion("building");
   assert.equal(
@@ -1164,6 +1568,9 @@ test("change-order and completion UI is bounded, responsive, held-safe, and auth
     "Due before changed work begins",
     "Calculated before payment",
     "Completion proof is prepared",
+    "Added-work payments",
+    "Reconcile uncertain payment page",
+    "Provider-confirmed payment is retained",
     "It is not payment, delivery, launch",
     "Record this change as expired",
     "Nothing changed and no action is available.",
@@ -1175,6 +1582,8 @@ test("change-order and completion UI is bounded, responsive, held-safe, and auth
     "acceptCustomServicesCustomBuildChangeOrder",
     "declineCustomServicesCustomBuildChangeOrder",
     "getOwnerCustomBuildChangeCompletion",
+    "getOwnerCustomBuildChangePayments",
+    "reconcileOwnerCustomBuildChangeCheckout",
     "issueOwnerCustomBuildChangeOrder",
     "voidOwnerCustomBuildChangeOrder",
     "expireOwnerCustomBuildChangeOrder",
@@ -1186,6 +1595,8 @@ test("change-order and completion UI is bounded, responsive, held-safe, and auth
     "data-customer-change-order",
     "data-customer-expired-change-order",
     "data-owner-job-change-completion",
+    "data-owner-custom-build-change-payments",
+    "data-owner-custom-build-change-payment-reconcile",
     "data-owner-change-order-form",
     "data-owner-change-order-expire",
     "data-owner-completion-evidence-form",

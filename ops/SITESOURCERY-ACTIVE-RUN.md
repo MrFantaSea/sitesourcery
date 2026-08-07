@@ -1435,3 +1435,94 @@ schema v2, setup freshness, project/Checkout fencing, customer controls,
 PostgreSQL authority, production composition, and exact unit/integration proof.
 No migration, public copy, provider credential, lifecycle rule, invoice,
 registrar, push, deploy, DNS, or production state is changed by this checkpoint.
+
+## H1N Purpose 1 — accepted-change payment checkpoint
+
+Checkpoint time: 2026-08-06T20:58:42-0400 (EDT)
+
+This checkpoint implements only the first H1N financial purpose. It does not
+start the completion-bound final obligation, final invoice, final-payment or
+zero-balance path, immutable handoff, final projections, or 30-day workmanship
+window.
+
+### Implemented authority
+
+- Additive migration `202608060045_custom_build_change_payment.sql`
+  materializes one immutable invoice and exact `$125`-unit line set for each
+  accepted-payment-required change, retains dedicated Checkout attempts and
+  Stripe events, stores immutable provider-confirmed receipts, and permits the
+  exact accepted change to become `effective` only through receipt insertion.
+- The migration retains a separate durable owner reconciliation-command row
+  with a database-derived request digest, exact completed-result replay, and a
+  same-command/different-digest conflict. Receipt triggers bind every provider
+  fact, its recomputed digest, invoice, attempt, acceptance, event/readback
+  source, customer, money, tax, currency, and paid time before scope changes.
+- `custom-services-custom-build-change-payment-postgres.mjs` reserves authority
+  before Stripe, retains ambiguous effects for owner-only readback, accepts no
+  browser money or mark-paid authority, and composes separate customer invoice,
+  Checkout, webhook-settlement, owner-read, and owner-reconciliation paths.
+- Every mutating v45 transaction now follows one executable order: discover the
+  immutable job, acquire `ss-custom-build-h1m:<job>` with a transaction advisory
+  lock, and only then lock or write idempotency/context/payment rows. Covered
+  paths are stage, finish, failure, event claim, event reconciliation, event
+  settlement, owner claim, owner creation completion, owner settlement, and
+  customer expiry.
+- The Stripe adapter retains one exact `$125 × quantity` automatic-tax purpose
+  and its original expiration across same-key recovery. Production composition
+  injects the same payment service into the account, API, and webhook router.
+- HTTP transports owner `commandId` without dropping it. Abracadabra API and
+  owner controls bind reconciliation to both `expectedPayment` and
+  `expectedProjectId`, retain the last verified customer invoice across
+  malformed or uncertain refreshes, and expose no provider or monetary owner
+  override.
+
+### Purpose-1 proof
+
+- Final focused service/config/migration command: **54/54 passed**. Its
+  executable in-memory PostgreSQL-service harness proves query ordering on
+  every mutation named above, exact owner replay, digest conflict, zero repeat
+  provider calls, and zero replay/conflict `INSERT`/`UPDATE`/`DELETE` effects.
+- Broader H1N API/control/HTTP/composition/Stripe/webhook command:
+  **186/186 passed**.
+- The exact Git index was exported to isolated tree
+  `/private/tmp/sitesourcery-h1n-purpose1-index-20260806` after path-limited
+  staging. That commit candidate independently reran **54/54**, **186/186**,
+  both staged Abracadabra SHA-256 values, and the full maintained browser audit
+  successfully. Concurrent public worktree edits were therefore absent from
+  the final Purpose-1 proof.
+- Maintained browser audit completed successfully on the current Purpose-1
+  source. It exercises accepted-change held, malformed, Checkout, customer
+  uncertain, owner uncertain/reconciled, and paid/effective states at exact
+  `320×720`, `390×844`, and `1440×1000`, including keyboard activation, focus
+  retention, 44px controls, no horizontal overflow, no leaked money/mark-paid
+  input, and no collision with first-payment or completion controls.
+- The independent reviewer found no backend defect and independently confirmed
+  the 54/54 service/config/migration result. Its forced timebox verdict was
+  `BLOCKER: YES` only because its own three-viewport browser command had not
+  finished before interruption. The exact maintained browser command then
+  completed successfully locally. A final local read-only adversarial checklist
+  rechecked all lock, replay, provider-fact, receipt, production-injection,
+  HTTP, project-binding, browser, and Purpose-2-separation obligations:
+  `BLOCKER: NO`. The reviewer timeout is recorded rather than misreported as an
+  independent `BLOCKER: NO`.
+- A provisional combined-tree Core command created disposable database
+  `ss_core_release_20260807t005515078z_967701591355`, replayed all 45 migrations,
+  passed all three launch-critical Custom-services PostgreSQL journeys, removed
+  that exact database with verified absence, and then reached the broad
+  candidate suite. The moving public-truth lane caused the candidate suite to
+  fail 1 of 587 tests at `scripts/test/hosted-artifact.test.mjs:353` while
+  forbidding a public `$25` value. This run is explicitly **not** a deterministic
+  final release seal and is not used to absorb or certify the concurrent public
+  files.
+- `git diff --check` is clean. No live Stripe/registrar effect, production or
+  customer-data mutation, credential handling, push, deployment, DNS change,
+  or Purpose-2 implementation occurred.
+
+### Seal boundary and next action
+
+The Purpose-1 commit is path-limited to its migration, backend/API/control,
+focused tests, browser fixture, two staged Abracadabra asset hashes, and these
+durable evidence documents. Concurrent public, legal, landing, checker, and
+shared-manifest truth hunks remain unstaged. After this commit, pause and report
+its hash. Begin H1N Purpose 2 only from a fresh continuation and the technical
+lead's exact blueprint.

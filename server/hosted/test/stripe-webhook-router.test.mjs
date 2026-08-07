@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   ALAKAZAM_PROVIDER_METADATA_SCHEMA
 } from "../../commerce-v2/index.mjs";
+import {
+  CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA
+} from "../custom-services-custom-build-change-payment-postgres.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
 
 function event(metadata = {}) {
@@ -28,6 +31,9 @@ function fixture(
     downloadResult = { status: "download" },
     assessmentResult = { status: "assessment" },
     customBuildResult = { status: "custom_build" },
+    customBuildChangeResult = {
+      status: "custom_build_change"
+    },
     alakazamResult = { status: "alakazam" }
   } = {}
 ) {
@@ -37,6 +43,7 @@ function fixture(
     download: [],
     assessment: [],
     customBuild: [],
+    customBuildChange: [],
     alakazam: []
   };
   const router = createStripeWebhookRouter({
@@ -70,6 +77,14 @@ function fixture(
         return structuredClone(customBuildResult);
       }
     },
+    customBuildChangeCommerce: {
+      async ingestStripeEvent(input) {
+        calls.customBuildChange.push(
+          structuredClone(input)
+        );
+        return structuredClone(customBuildChangeResult);
+      }
+    },
     alakazamCommerce: {
       async ingestStripeEvent(input) {
         calls.alakazam.push(structuredClone(input));
@@ -95,6 +110,7 @@ test("shared webhook router verifies raw bytes once and sends Download metadata 
   assert.equal(context.calls.verify.length, 1);
   assert.equal(context.calls.download.length, 1);
   assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.download[0], selected);
@@ -115,6 +131,7 @@ test("shared webhook router sends assessment Checkout events to exact settlement
   assert.equal(context.calls.verify.length, 1);
   assert.equal(context.calls.assessment.length, 1);
   assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.assessment[0], selected);
@@ -136,9 +153,56 @@ test("shared webhook router sends Custom build Checkout events to exact settleme
   assert.equal(context.calls.customBuild.length, 1);
   assert.equal(context.calls.download.length, 0);
   assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.customBuild[0], selected);
+});
+
+test("shared webhook router sends only exact Custom-build change metadata to Purpose-1 settlement even while new Checkout creation is held", async () => {
+  const selected = event({
+    schema: CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA
+  });
+  const context = fixture(selected);
+  assert.deepEqual(
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from("custom-build-change-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "custom_build_change" }
+  );
+  assert.equal(context.calls.verify.length, 1);
+  assert.equal(context.calls.customBuildChange.length, 1);
+  assert.equal(context.calls.customBuild.length, 0);
+  assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.alakazam.length, 0);
+  assert.equal(context.calls.canonical.length, 0);
+  assert.deepEqual(
+    context.calls.customBuildChange[0],
+    selected
+  );
+});
+
+test("nearby payment schemas never enter Custom-build change settlement", async () => {
+  for (const schema of [
+    "sitesourcery_custom_build_start_checkout_v1",
+    "sitesourcery_service_assessment_checkout_v1",
+    "sitesourcery_download_checkout_v2",
+    ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+    `${CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA}_drift`
+  ]) {
+    const context = fixture(event({ schema }));
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from(schema),
+      signature: "stripe-signature"
+    });
+    assert.equal(
+      context.calls.customBuildChange.length,
+      0,
+      schema
+    );
+  }
 });
 
 test("shared webhook router sends verified Alakazam events to one held runtime branch", async () => {
@@ -158,6 +222,7 @@ test("shared webhook router sends verified Alakazam events to one held runtime b
   assert.equal(context.calls.alakazam.length, 1);
   assert.equal(context.calls.download.length, 0);
   assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.canonical.length, 0);
   assert.deepEqual(context.calls.alakazam[0], selected);
 });
@@ -201,6 +266,7 @@ test("shared webhook router offers refund and dispute events to Download before 
     );
     assert.equal(context.calls.download.length, 1);
     assert.equal(context.calls.assessment.length, 0);
+    assert.equal(context.calls.customBuildChange.length, 0);
     assert.equal(context.calls.alakazam.length, 0);
     assert.equal(context.calls.canonical.length, 0);
   }
@@ -229,6 +295,7 @@ test("non-Download reversal continues to canonical commerce", async () => {
   );
   assert.equal(context.calls.download.length, 1);
   assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
   assert.equal(context.calls.canonical.length, 1);
 });
@@ -249,6 +316,7 @@ test("shared webhook router preserves canonical Stripe events without double ver
   assert.equal(context.calls.canonical.length, 1);
   assert.equal(context.calls.download.length, 0);
   assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
 });
 

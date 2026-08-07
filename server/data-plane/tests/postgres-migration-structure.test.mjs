@@ -1865,3 +1865,110 @@ test("Custom build change orders and completion proof are bounded before payment
     /on delete cascade|grant all privileges/iu
   );
 });
+
+test("Custom build change payment is a distinct provider-confirmed financial purpose", async () => {
+  const changePayment = (await migrations()).find(
+    ({ name }) =>
+      name === "202608060045_custom_build_change_payment.sql"
+  );
+  assert.ok(
+    changePayment,
+    "missing migration 45 Custom build change-payment boundary"
+  );
+
+  for (const table of [
+    "service_custom_build_change_invoices",
+    "service_custom_build_change_invoice_lines",
+    "service_custom_build_change_checkout_attempts",
+    "service_custom_build_change_reconciliation_commands",
+    "service_custom_build_change_stripe_events",
+    "service_custom_build_change_payment_receipts"
+  ]) {
+    assert.match(
+      changePayment.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu"),
+      `missing ${table}`
+    );
+  }
+
+  assert.match(
+    changePayment.sql,
+    /purpose text not null check \(purpose = 'custom_build_change'\)/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /change_acceptance_id uuid not null[\s\S]*unique \(change_order_id\)[\s\S]*unique \(change_acceptance_id\)/iu
+  );
+  assert.doesNotMatch(changePayment.sql, /payment_deadline|interval '7 days'/iu);
+  assert.match(
+    changePayment.sql,
+    /component_key = 'custom_build_change_units'[\s\S]*unit_amount_minor bigint not null check \(unit_amount_minor = 12500\)/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create unique index service_custom_build_change_checkout_one_active[\s\S]*where state in \('provider_pending', 'ready', 'persistence_unknown', 'paid'\)/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /provider_request_expires_at timestamptz not null[\s\S]*check \(provider_request_expires_at > created_at\)[\s\S]*expires_at is null or expires_at = provider_request_expires_at/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create table ss\.service_custom_build_change_reconciliation_commands[\s\S]*unique \(command_id\)[\s\S]*custom_build_change_reconciliation_request_digest/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create or replace function ss\.service_custom_build_change_has_payment_evidence[\s\S]*service_custom_build_change_checkout_attempts[\s\S]*'provider_pending', 'ready', 'persistence_unknown', 'paid'[\s\S]*service_custom_build_change_stripe_events[\s\S]*service_custom_build_change_payment_receipts/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /old\.state = 'accepted_payment_required'[\s\S]{0,300}new\.state = 'effective'[\s\S]*service_custom_build_change_payment_receipts/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /guard_service_custom_build_change_payment_receipt[\s\S]*jsonb_object_keys\(new\.provider_facts\)[\s\S]*<> 14[\s\S]*custom_build_change_provider_facts_digest[\s\S]*change_order\.state = 'accepted_payment_required'[\s\S]*attempt\.state = 'ready'[\s\S]*event\.state in \('pending', 'reconciliation_required'\)[\s\S]*receipt_source = 'provider_readback'/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create function ss\.materialize_service_custom_build_change_payment[\s\S]*set state = 'effective'[\s\S]*set state = 'paid'[\s\S]*state = 'processed'[\s\S]*create trigger service_custom_build_change_payment_materialize[\s\S]*after insert on ss\.service_custom_build_change_payment_receipts/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create or replace function ss\.prepare_service_custom_build_change_void[\s\S]*ss-custom-build-h1m:[\s\S]*service_custom_build_change_has_payment_evidence/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create function ss\.assert_service_custom_build_change_payment_lock[\s\S]*pg_locks[\s\S]*guard_service_custom_build_change_checkout_attempt[\s\S]*assert_service_custom_build_change_payment_lock\(new\.job_id\)[\s\S]*guard_service_custom_build_change_reconciliation_command[\s\S]*assert_service_custom_build_change_payment_lock\(new\.job_id\)[\s\S]*guard_service_custom_build_change_stripe_event[\s\S]*assert_service_custom_build_change_payment_lock\(new\.job_id\)[\s\S]*guard_service_custom_build_change_payment_receipt[\s\S]*assert_service_custom_build_change_payment_lock\(new\.job_id\)/iu
+  );
+  for (const guard of [
+    "guard_service_custom_build_change_checkout_attempt",
+    "guard_service_custom_build_change_reconciliation_command",
+    "guard_service_custom_build_change_stripe_event",
+    "guard_service_custom_build_change_payment_receipt"
+  ]) {
+    const start = changePayment.sql.indexOf(`create function ss.${guard}`);
+    const end = changePayment.sql.indexOf("$$;", start);
+    assert.ok(start >= 0 && end > start, `missing ${guard}`);
+    assert.doesNotMatch(
+      changePayment.sql.slice(start, end),
+      /pg_advisory_xact_lock/iu,
+      `${guard} must assert a pre-held lock, not acquire after its row lock`
+    );
+  }
+  assert.match(
+    changePayment.sql,
+    /revoke all on function ss\.ensure_service_custom_build_change_invoice\(uuid\)[\s\S]*from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    changePayment.sql,
+    /create function ss\.hosted_runtime_contract_v45\(\)[\s\S]*canonical-ss-v45-custom-build-change-payment[\s\S]*grant execute on function ss\.hosted_runtime_contract_v45\(\)/iu
+  );
+  assert.doesNotMatch(
+    changePayment.sql,
+    /service_custom_build_(?:invoices|checkout_attempts|payment_receipts)\b/iu
+  );
+  assert.doesNotMatch(
+    changePayment.sql,
+    /custom_build_final|handoff|on delete cascade|grant all privileges/iu
+  );
+});

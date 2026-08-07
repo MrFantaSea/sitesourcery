@@ -2295,3 +2295,810 @@ test("Custom-build change/completion browser writes reject monetary, tax, credit
   );
   assert.equal(calls, 0);
 });
+
+const CHANGE_PAYMENT_INVOICE_ID =
+  "a1000000-0000-4000-8000-000000000001";
+const CHANGE_PAYMENT_ACCEPTANCE_ID =
+  "a2000000-0000-4000-8000-000000000002";
+const CHANGE_PAYMENT_ATTEMPT_ID =
+  "a3000000-0000-4000-8000-000000000003";
+const CHANGE_PAYMENT_RECEIPT_ID =
+  "a4000000-0000-4000-8000-000000000004";
+const CHANGE_PAYMENT_INVOICE_NUMBER =
+  "SSCB-CHG-A1000000000040008000000000000001";
+const CHANGE_PAYMENT_CHECKOUT_URL =
+  "https://checkout.stripe.com/c/pay/cs_test_custom_build_change";
+const CHANGE_PAYMENT_CHECKOUT_EXPIRATION =
+  "2099-08-07T15:00:00.000Z";
+
+function customBuildChangePaymentInvoice({
+  state = "checkout_available",
+  invoice = {},
+  line = {},
+  payment = {},
+  tax = {},
+  total = {},
+  action = {}
+} = {}) {
+  if (state === "not_available") {
+    return {
+      schema: "sitesourcery.custom-build-change-invoice/v1",
+      state,
+      invoice: null,
+      action: {
+        available: false,
+        reason: "invoice_not_available",
+        ...action
+      }
+    };
+  }
+  const paid = state === "paid";
+  const ready = state === "checkout_ready";
+  const quantity = line.quantity ?? 2;
+  const unitAmountMinor = line.unitAmountMinor ?? 12500;
+  const amountMinor = line.amountMinor ?? quantity * unitAmountMinor;
+  const subtotalMinor = invoice.subtotal?.amountMinor ?? amountMinor;
+  const taxMinor = paid ? (tax.amountMinor ?? 1656) : null;
+  return {
+    schema: "sitesourcery.custom-build-change-invoice/v1",
+    state,
+    invoice: {
+      invoiceId: CHANGE_PAYMENT_INVOICE_ID,
+      invoiceNumber: CHANGE_PAYMENT_INVOICE_NUMBER,
+      invoiceDigest: "5".repeat(64),
+      changeOrderId: CHANGE_COMPLETION_CHANGE_ID,
+      changeAcceptanceId: CHANGE_PAYMENT_ACCEPTANCE_ID,
+      changeNumber: 1,
+      acceptedQuoteDigest: "a".repeat(64),
+      acceptedDisclosureDigest: "b".repeat(64),
+      issuedAt: "2026-08-07T14:00:00.000Z",
+      targetCompletionDate: "2026-09-20",
+      lines: [{
+        lineNumber: 1,
+        componentKey: "custom_build_change_units",
+        displayName: "Custom build change #1 — added-work units",
+        quantity,
+        unitAmountMinor,
+        amountMinor,
+        currency: "USD",
+        ...line
+      }],
+      subtotal: {
+        amountMinor: subtotalMinor,
+        currency: "USD",
+        ...(invoice.subtotal || {})
+      },
+      tax: paid
+        ? { amountMinor: taxMinor, state: "settled", ...tax }
+        : {
+            amountMinor: null,
+            state: "calculated_at_checkout",
+            ...tax
+          },
+      total: paid
+        ? {
+            amountMinor: subtotalMinor + taxMinor,
+            currency: "USD",
+            state: "settled",
+            ...total
+          }
+        : {
+            amountMinor: null,
+            currency: "USD",
+            state: "shown_at_checkout",
+            ...total
+          },
+      payment: {
+        chargeOccurred: paid,
+        checkoutUrl: ready ? CHANGE_PAYMENT_CHECKOUT_URL : null,
+        checkoutExpiresAt: ready
+          ? CHANGE_PAYMENT_CHECKOUT_EXPIRATION
+          : null,
+        settledAt: paid ? "2026-08-07T15:05:00.000Z" : null,
+        ...payment
+      },
+      ...invoice
+    },
+    action: {
+      available: state === "checkout_available",
+      reason: state === "checkout_available" ? null : state,
+      ...action
+    }
+  };
+}
+
+function customBuildChangePaymentCheckout(invoiceProjection) {
+  const invoice = invoiceProjection.invoice;
+  return {
+    schema: "sitesourcery.custom-build-change-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId: invoice.invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      changeOrderId: invoice.changeOrderId,
+      url: CHANGE_PAYMENT_CHECKOUT_URL,
+      expiresAt: CHANGE_PAYMENT_CHECKOUT_EXPIRATION,
+      subtotal: {
+        amountMinor: invoice.subtotal.amountMinor,
+        currency: "USD"
+      },
+      tax: { amountMinor: null, state: "calculated_at_checkout" },
+      total: {
+        amountMinor: null,
+        currency: "USD",
+        state: "shown_at_checkout"
+      },
+      chargeOccurred: false
+    }
+  };
+}
+
+function ownerCustomBuildChangePayment({
+  state = "reconciliation_required",
+  attemptState = "persistence_unknown",
+  providerEffectCertainty = "ambiguous",
+  providerErrorCode = "custom_build_change_checkout_effect_unknown",
+  eventId = null,
+  eventState = null,
+  reconciliationCode = null,
+  canReconcileCreation = [
+    "provider_pending",
+    "persistence_unknown"
+  ].includes(attemptState),
+  canReconcileSettlement = attemptState === "ready",
+  providerRequestExpiresAt = attemptState === null
+    ? null
+    : CHANGE_PAYMENT_CHECKOUT_EXPIRATION,
+  receiptSource = state === "paid" ? "stripe_event" : null,
+  projection = null,
+  owner = {}
+} = {}) {
+  const selectedProjection = projection
+    || customBuildChangePaymentInvoice({ state });
+  return {
+    ...selectedProjection,
+    owner: {
+      attemptId: attemptState === null ? null : CHANGE_PAYMENT_ATTEMPT_ID,
+      attemptState,
+      providerEffectCertainty: attemptState === null
+        ? null
+        : providerEffectCertainty,
+      providerErrorCode: attemptState === null
+        ? null
+        : providerErrorCode,
+      eventId,
+      eventState,
+      reconciliationCode,
+      providerRequestExpiresAt,
+      receiptSource,
+      canReconcileCreation,
+      canReconcileSettlement,
+      ...owner
+    }
+  };
+}
+
+function ownerCustomBuildChangePayments(payments) {
+  return {
+    schema: "sitesourcery.custom-build-change-payments-owner/v1",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    jobId: CHANGE_COMPLETION_JOB_ID,
+    payments
+  };
+}
+
+function ownerCustomBuildChangeReconciliation(
+  payment,
+  status = "checkout_ready"
+) {
+  const result = {
+    checkout_ready: ["creation_reconciled", "customer_checkout"],
+    payment_settled: [
+      "settlement_reconciled",
+      "custom_build_changed_work"
+    ],
+    checkout_expired: ["attempt_expired", "new_checkout_command"],
+    reconciliation_required: ["retry_required", "owner_retry"]
+  }[status];
+  return {
+    schema:
+      "sitesourcery.custom-build-change-payment-reconciliation-command/v1",
+    status,
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    jobId: CHANGE_COMPLETION_JOB_ID,
+    attemptId: CHANGE_PAYMENT_ATTEMPT_ID,
+    invoiceId: payment.invoice.invoiceId,
+    changeOrderId: payment.invoice.changeOrderId,
+    action: result[0],
+    next: result[1],
+    reason: null,
+    checkout: status === "checkout_ready"
+      ? customBuildChangePaymentCheckout(payment)
+      : null,
+    settlement: status === "payment_settled"
+      ? {
+          schema: "sitesourcery.custom-build-change-settlement/v1",
+          status: "payment_settled",
+          projectId: CHANGE_COMPLETION_PROJECT_ID,
+          changeOrderId: payment.invoice.changeOrderId,
+          invoiceId: payment.invoice.invoiceId,
+          receiptId: CHANGE_PAYMENT_RECEIPT_ID,
+          next: "custom_build_changed_work"
+        }
+      : null
+  };
+}
+
+function assertInvalidCustomBuildChangePayment(error) {
+  return error.code === "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_RESPONSE"
+    && error.retryable === true;
+}
+
+test("H1N accepted-change payment API uses exact routes, command bodies, idempotency, and bound projections", async () => {
+  const calls = [];
+  const acceptedOrder = changeCompletionOrder({
+    state: "accepted_payment_required"
+  });
+  const invoiceProjection = customBuildChangePaymentInvoice();
+  const checkoutProjection = customBuildChangePaymentCheckout(
+    invoiceProjection
+  );
+  const uncertainPayment = ownerCustomBuildChangePayment();
+  const ownerProjection = ownerCustomBuildChangePayments([
+    uncertainPayment
+  ]);
+  const reconciliationProjection =
+    ownerCustomBuildChangeReconciliation(uncertainPayment);
+  const customerCommand =
+    "b1000000-0000-4000-8000-000000000001";
+  const ownerCommand =
+    "b2000000-0000-4000-8000-000000000002";
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_change_payment" });
+      }
+      if (url.endsWith("/custom-build-change-invoice")) {
+        return response(200, invoiceProjection);
+      }
+      if (url.endsWith("/checkout-command")) {
+        return response(201, checkoutProjection);
+      }
+      if (url.endsWith("/checkout-reconciliation")) {
+        return response(200, reconciliationProjection);
+      }
+      return response(200, ownerProjection);
+    },
+    idempotencyFactory: () => {
+      assert.fail("H1N payment writes must use their command IDs");
+    }
+  });
+
+  const invoice = await client.getCustomServicesCustomBuildChangeInvoice(
+    "project alpha/one",
+    { expectedChangeOrder: acceptedOrder }
+  );
+  const checkout = await client.createCustomServicesCustomBuildChangeCheckout(
+    "project alpha/one",
+    CHANGE_PAYMENT_INVOICE_ID,
+    {
+      commandId: customerCommand,
+      invoiceDigest: "5".repeat(64)
+    },
+    { expectedInvoice: invoice }
+  );
+  const payments = await client.getOwnerCustomBuildChangePayments(
+    CHANGE_COMPLETION_JOB_ID,
+    CHANGE_COMPLETION_ORGANIZATION_ID
+  );
+  const reconciled = await client.reconcileOwnerCustomBuildChangeCheckout(
+    CHANGE_COMPLETION_JOB_ID,
+    CHANGE_PAYMENT_ATTEMPT_ID,
+    {
+      commandId: ownerCommand,
+      organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+    },
+    {
+      expectedPayment: payments.payments[0],
+      expectedProjectId: CHANGE_COMPLETION_PROJECT_ID
+    }
+  );
+  const replayedReconciliation =
+    await client.reconcileOwnerCustomBuildChangeCheckout(
+      CHANGE_COMPLETION_JOB_ID,
+      CHANGE_PAYMENT_ATTEMPT_ID,
+      {
+        commandId: ownerCommand,
+        organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+      },
+      {
+        expectedPayment: payments.payments[0],
+        expectedProjectId: CHANGE_COMPLETION_PROJECT_ID
+      }
+    );
+
+  assert.equal(invoice.invoice.acceptedQuoteDigest, acceptedOrder.quoteDigest);
+  assert.equal(invoice.invoice.acceptedDisclosureDigest, acceptedOrder.disclosureDigest);
+  assert.equal(invoice.invoice.lines[0].unitAmountMinor, 12500);
+  assert.equal(checkout.checkout.invoiceId, invoice.invoice.invoiceId);
+  assert.equal(
+    reconciled.checkout.checkout.changeOrderId,
+    acceptedOrder.changeOrderId
+  );
+  assert.deepEqual(replayedReconciliation, reconciled);
+  assert.equal(payments.payments[0].owner.canReconcileCreation, true);
+  assert.equal(Object.isFrozen(invoice), true);
+  assert.equal(Object.isFrozen(invoice.invoice.lines[0]), true);
+  assert.equal(Object.isFrozen(checkout.checkout), true);
+  assert.equal(Object.isFrozen(payments.payments[0].owner), true);
+
+  const serviceCalls = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.deepEqual(
+    serviceCalls.map(({ url, options }) => [options.method, url]),
+    [
+      [
+        "GET",
+        "/api/v1/projects/project%20alpha%2Fone/custom-services/custom-build-change-invoice"
+      ],
+      [
+        "POST",
+        `/api/v1/projects/project%20alpha%2Fone/custom-services/custom-build-change-invoices/${CHANGE_PAYMENT_INVOICE_ID}/checkout-command`
+      ],
+      [
+        "GET",
+        `/api/v1/operator/custom-services/custom-build-jobs/${CHANGE_COMPLETION_JOB_ID}/change-payments?organizationId=${CHANGE_COMPLETION_ORGANIZATION_ID}`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-jobs/${CHANGE_COMPLETION_JOB_ID}/change-payments/${CHANGE_PAYMENT_ATTEMPT_ID}/checkout-reconciliation`
+      ],
+      [
+        "POST",
+        `/api/v1/operator/custom-services/custom-build-jobs/${CHANGE_COMPLETION_JOB_ID}/change-payments/${CHANGE_PAYMENT_ATTEMPT_ID}/checkout-reconciliation`
+      ]
+    ]
+  );
+  assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
+    commandId: customerCommand,
+    invoiceDigest: "5".repeat(64)
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[3].options.body), {
+    commandId: ownerCommand,
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+  });
+  assert.deepEqual(
+    JSON.parse(serviceCalls[4].options.body),
+    JSON.parse(serviceCalls[3].options.body)
+  );
+  assert.equal(
+    serviceCalls[1].options.headers["Idempotency-Key"],
+    customerCommand
+  );
+  assert.equal(
+    serviceCalls[3].options.headers["Idempotency-Key"],
+    ownerCommand
+  );
+  assert.equal(
+    serviceCalls[4].options.headers["Idempotency-Key"],
+    ownerCommand
+  );
+  assert.equal(
+    serviceCalls[1].options.headers["X-CSRF-Token"],
+    "csrf_change_payment"
+  );
+  for (const write of [serviceCalls[1], serviceCalls[3], serviceCalls[4]]) {
+    const keys = nestedKeys(JSON.parse(write.options.body));
+    for (const forbidden of [
+      "amountMinor",
+      "currency",
+      "invoiceNumber",
+      "changeOrderId",
+      "providerReference",
+      "paymentReceipt",
+      "state",
+      "tax"
+    ]) {
+      assert.equal(keys.has(forbidden), false, forbidden);
+    }
+  }
+});
+
+test("H1N customer invoice validator fails closed on shape, money, active-order, state, tax, and URL drift", async () => {
+  const acceptedOrder = changeCompletionOrder({
+    state: "accepted_payment_required"
+  });
+  const effectiveOrder = changeCompletionOrder({ state: "effective" });
+  const valid = customBuildChangePaymentInvoice();
+  const ready = customBuildChangePaymentInvoice({ state: "checkout_ready" });
+  const paid = customBuildChangePaymentInvoice({ state: "paid" });
+  const mutations = [];
+
+  const expanded = structuredClone(valid);
+  expanded.providerReference = "pi_browser_claim";
+  mutations.push([expanded, acceptedOrder]);
+  mutations.push([{ ...structuredClone(valid), schema: "sitesourcery.custom-build-change-invoice/v2" }, acceptedOrder]);
+  const numberDrift = structuredClone(valid);
+  numberDrift.invoice.invoiceNumber =
+    "SSCB-CHG-B1000000000040008000000000000001";
+  mutations.push([numberDrift, acceptedOrder]);
+  const lineDrift = structuredClone(valid);
+  lineDrift.invoice.lines[0].unitAmountMinor = 12499;
+  mutations.push([lineDrift, acceptedOrder]);
+  const lineShape = structuredClone(valid);
+  lineShape.invoice.lines[0].priceId = "price_forged";
+  mutations.push([lineShape, acceptedOrder]);
+  const subtotalDrift = structuredClone(valid);
+  subtotalDrift.invoice.subtotal.amountMinor = 24999;
+  mutations.push([subtotalDrift, acceptedOrder]);
+  const quoteDrift = structuredClone(valid);
+  quoteDrift.invoice.acceptedQuoteDigest = "c".repeat(64);
+  mutations.push([quoteDrift, acceptedOrder]);
+  const disclosureDrift = structuredClone(valid);
+  disclosureDrift.invoice.acceptedDisclosureDigest = "c".repeat(64);
+  mutations.push([disclosureDrift, acceptedOrder]);
+  const orderDrift = structuredClone(valid);
+  orderDrift.invoice.changeOrderId =
+    "a4000000-0000-4000-8000-000000000004";
+  mutations.push([orderDrift, acceptedOrder]);
+  const targetDrift = structuredClone(valid);
+  targetDrift.invoice.targetCompletionDate = "2026-09-21";
+  mutations.push([targetDrift, acceptedOrder]);
+  const actionDrift = structuredClone(valid);
+  actionDrift.action.available = false;
+  mutations.push([actionDrift, acceptedOrder]);
+  const taxDrift = structuredClone(valid);
+  taxDrift.invoice.tax.state = "settled";
+  mutations.push([taxDrift, acceptedOrder]);
+  const badHost = structuredClone(ready);
+  badHost.invoice.payment.checkoutUrl =
+    "https://checkout.stripe.com.evil.test/c/pay/cs_forged";
+  mutations.push([badHost, acceptedOrder]);
+  const expired = structuredClone(ready);
+  expired.invoice.payment.checkoutExpiresAt =
+    "2020-08-07T15:00:00.000Z";
+  mutations.push([expired, acceptedOrder]);
+  const paidTotalDrift = structuredClone(paid);
+  paidTotalDrift.invoice.total.amountMinor += 1;
+  mutations.push([paidTotalDrift, effectiveOrder]);
+  const paidChargeDrift = structuredClone(paid);
+  paidChargeDrift.invoice.payment.chargeOccurred = false;
+  mutations.push([paidChargeDrift, effectiveOrder]);
+  mutations.push([
+    customBuildChangePaymentInvoice({ state: "not_available" }),
+    acceptedOrder
+  ]);
+
+  const payloads = [valid, ready, paid, ...mutations.map(([value]) => value)];
+  const client = createClient({
+    fetch: async () => response(200, payloads.shift())
+  });
+  const preserved = await client.getCustomServicesCustomBuildChangeInvoice(
+    "project_1",
+    { expectedChangeOrder: acceptedOrder }
+  );
+  await client.getCustomServicesCustomBuildChangeInvoice(
+    "project_1",
+    { expectedChangeOrder: acceptedOrder }
+  );
+  await client.getCustomServicesCustomBuildChangeInvoice(
+    "project_1",
+    { expectedChangeOrder: effectiveOrder }
+  );
+  const preservedJson = JSON.stringify(preserved);
+  for (const [, expectedOrder] of mutations) {
+    await assert.rejects(
+      () => client.getCustomServicesCustomBuildChangeInvoice(
+        "project_1",
+        { expectedChangeOrder: expectedOrder }
+      ),
+      assertInvalidCustomBuildChangePayment
+    );
+    assert.equal(JSON.stringify(preserved), preservedJson);
+    assert.equal(Object.isFrozen(preserved), true);
+  }
+});
+
+test("H1N Checkout validator binds invoice identity, change order, subtotal, automatic tax, and Stripe destination", async () => {
+  const invoice = customBuildChangePaymentInvoice();
+  const valid = customBuildChangePaymentCheckout(invoice);
+  const mutations = [];
+  mutations.push({ ...structuredClone(valid), schema: "sitesourcery.custom-build-change-checkout/v2" });
+  const expanded = structuredClone(valid);
+  expanded.checkout.metadata = { amountMinor: 25000 };
+  mutations.push(expanded);
+  const invoiceIdDrift = structuredClone(valid);
+  invoiceIdDrift.checkout.invoiceId =
+    "a5000000-0000-4000-8000-000000000005";
+  mutations.push(invoiceIdDrift);
+  const numberDrift = structuredClone(valid);
+  numberDrift.checkout.invoiceNumber =
+    "SSCB-CHG-A5000000000040008000000000000005";
+  mutations.push(numberDrift);
+  const orderDrift = structuredClone(valid);
+  orderDrift.checkout.changeOrderId =
+    "a6000000-0000-4000-8000-000000000006";
+  mutations.push(orderDrift);
+  const subtotalDrift = structuredClone(valid);
+  subtotalDrift.checkout.subtotal.amountMinor = 12500;
+  mutations.push(subtotalDrift);
+  const taxDrift = structuredClone(valid);
+  taxDrift.checkout.tax.amountMinor = 1;
+  mutations.push(taxDrift);
+  const totalDrift = structuredClone(valid);
+  totalDrift.checkout.total.state = "settled";
+  mutations.push(totalDrift);
+  const chargeDrift = structuredClone(valid);
+  chargeDrift.checkout.chargeOccurred = true;
+  mutations.push(chargeDrift);
+  const evilHost = structuredClone(valid);
+  evilHost.checkout.url =
+    "https://checkout.stripe.com.attacker.test/c/pay/cs_forged";
+  mutations.push(evilHost);
+  const expired = structuredClone(valid);
+  expired.checkout.expiresAt = "2020-01-01T00:00:00.000Z";
+  mutations.push(expired);
+
+  const payloads = mutations.slice();
+  const calls = [];
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_checkout_drift" });
+      }
+      return response(201, payloads.shift());
+    },
+    idempotencyFactory: () => assert.fail("command ID must be retained")
+  });
+  for (let index = 0; index < mutations.length; index += 1) {
+    const commandId = `c0000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+    await assert.rejects(
+      () => client.createCustomServicesCustomBuildChangeCheckout(
+        "project_1",
+        CHANGE_PAYMENT_INVOICE_ID,
+        { commandId, invoiceDigest: "5".repeat(64) },
+        { expectedInvoice: invoice }
+      ),
+      assertInvalidCustomBuildChangePayment
+    );
+  }
+  assert.equal(
+    calls.filter(({ url }) => url === "/api/v1/csrf").length,
+    1
+  );
+});
+
+test("H1N owner payment projection enforces scope, permissions shape, attempt certainty, event state, and reconciliation authority", async () => {
+  const uncertain = ownerCustomBuildChangePayment();
+  const paidProjection = customBuildChangePaymentInvoice({ state: "paid" });
+  const paid = ownerCustomBuildChangePayment({
+    state: "paid",
+    attemptState: "paid",
+    providerEffectCertainty: "confirmed",
+    providerErrorCode: null,
+    eventId: "evt_custom_build_change_paid",
+    eventState: "processed",
+    projection: paidProjection
+  });
+  const validPayloads = [
+    ownerCustomBuildChangePayments([uncertain]),
+    ownerCustomBuildChangePayments([paid])
+  ];
+  const invalidPayloads = [];
+  const wrongOrganization = ownerCustomBuildChangePayments([uncertain]);
+  wrongOrganization.organizationId =
+    "d1000000-0000-4000-8000-000000000001";
+  invalidPayloads.push(wrongOrganization);
+  const wrongJob = ownerCustomBuildChangePayments([uncertain]);
+  wrongJob.jobId = "d2000000-0000-4000-8000-000000000002";
+  invalidPayloads.push(wrongJob);
+  const leakedPermission = ownerCustomBuildChangePayments([uncertain]);
+  leakedPermission.permissions = ["service_payment_reconcile"];
+  invalidPayloads.push(leakedPermission);
+  const wrongReconcile = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({ canReconcileCreation: false })
+  ]);
+  invalidPayloads.push(wrongReconcile);
+  const wrongCertainty = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      attemptState: "ready",
+      providerEffectCertainty: "ambiguous",
+      providerErrorCode: null,
+      state: "checkout_ready",
+      projection: customBuildChangePaymentInvoice({
+        state: "checkout_ready"
+      }),
+      canReconcileCreation: false
+    })
+  ]);
+  invalidPayloads.push(wrongCertainty);
+  const orphanEvent = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      state: "checkout_available",
+      attemptState: null,
+      eventId: "evt_orphan",
+      eventState: "pending",
+      projection: customBuildChangePaymentInvoice(),
+      canReconcileCreation: false
+    })
+  ]);
+  invalidPayloads.push(orphanEvent);
+  const missingReconciliationCode = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      attemptState: "ready",
+      providerEffectCertainty: "confirmed",
+      providerErrorCode: null,
+      eventId: "evt_reconciliation",
+      eventState: "reconciliation_required",
+      reconciliationCode: null,
+      canReconcileCreation: false
+    })
+  ]);
+  invalidPayloads.push(missingReconciliationCode);
+  const paidAttemptDrift = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      state: "paid",
+      attemptState: "ready",
+      providerEffectCertainty: "confirmed",
+      providerErrorCode: null,
+      eventId: "evt_custom_build_change_paid",
+      eventState: "processed",
+      projection: paidProjection,
+      canReconcileCreation: false
+    })
+  ]);
+  invalidPayloads.push(paidAttemptDrift);
+  const unsafeCode = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      providerErrorCode: "provider error with spaces"
+    })
+  ]);
+  invalidPayloads.push(unsafeCode);
+  const missingCause = ownerCustomBuildChangePayments([
+    ownerCustomBuildChangePayment({
+      state: "reconciliation_required",
+      attemptState: "failed",
+      providerEffectCertainty: "not_submitted",
+      providerErrorCode: "not_submitted",
+      canReconcileCreation: false
+    })
+  ]);
+  invalidPayloads.push(missingCause);
+
+  const payloads = [...validPayloads, ...invalidPayloads];
+  const client = createClient({
+    fetch: async () => response(200, payloads.shift())
+  });
+  const retained = await client.getOwnerCustomBuildChangePayments(
+    CHANGE_COMPLETION_JOB_ID,
+    CHANGE_COMPLETION_ORGANIZATION_ID
+  );
+  const settled = await client.getOwnerCustomBuildChangePayments(
+    CHANGE_COMPLETION_JOB_ID,
+    CHANGE_COMPLETION_ORGANIZATION_ID
+  );
+  assert.equal(retained.payments[0].owner.canReconcileCreation, true);
+  assert.equal(settled.payments[0].state, "paid");
+  for (let index = 0; index < invalidPayloads.length; index += 1) {
+    await assert.rejects(
+      () => client.getOwnerCustomBuildChangePayments(
+        CHANGE_COMPLETION_JOB_ID,
+        CHANGE_COMPLETION_ORGANIZATION_ID
+      ),
+      assertInvalidCustomBuildChangePayment
+    );
+    assert.equal(Object.isFrozen(retained.payments[0].owner), true);
+  }
+});
+
+test("H1N payment commands reject unsupported authority, malformed IDs, digest drift, and stale owner projections before fetch", () => {
+  let calls = 0;
+  const client = createClient({
+    fetch: async () => {
+      calls += 1;
+      return response(201, customBuildChangePaymentCheckout(
+        customBuildChangePaymentInvoice()
+      ));
+    }
+  });
+  const customerInput = {
+    commandId: "e1000000-0000-4000-8000-000000000001",
+    invoiceDigest: "5".repeat(64)
+  };
+  for (const authority of [
+    { amountMinor: 25000 },
+    { currency: "USD" },
+    { invoiceNumber: CHANGE_PAYMENT_INVOICE_NUMBER },
+    { changeOrderId: CHANGE_COMPLETION_CHANGE_ID },
+    { providerReference: "cs_forged" },
+    { tax: { amountMinor: 0 } },
+    { state: "paid" }
+  ]) {
+    assert.throws(
+      () => client.createCustomServicesCustomBuildChangeCheckout(
+        "project_1",
+        CHANGE_PAYMENT_INVOICE_ID,
+        { ...customerInput, ...authority }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+    );
+  }
+  assert.throws(
+    () => client.createCustomServicesCustomBuildChangeCheckout(
+      "project_1",
+      "not-an-invoice-id",
+      customerInput
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.createCustomServicesCustomBuildChangeCheckout(
+      "project_1",
+      CHANGE_PAYMENT_INVOICE_ID,
+      { ...customerInput, invoiceDigest: "not-a-digest" }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => client.createCustomServicesCustomBuildChangeCheckout(
+      "project_1",
+      CHANGE_PAYMENT_INVOICE_ID,
+      { ...customerInput, commandId: "short" }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+
+  const ownerInput = {
+    commandId: "e2000000-0000-4000-8000-000000000002",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+  };
+  for (const authority of [
+    { amountMinor: 25000 },
+    { invoiceId: CHANGE_PAYMENT_INVOICE_ID },
+    { paymentReceipt: "forged" },
+    { providerEffectCertainty: "confirmed" },
+    { canReconcileCreation: true },
+    { actorId: CHANGE_COMPLETION_OPERATOR_ID },
+    { idempotencyKey: "different-from-command" }
+  ]) {
+    assert.throws(
+      () => client.reconcileOwnerCustomBuildChangeCheckout(
+        CHANGE_COMPLETION_JOB_ID,
+        CHANGE_PAYMENT_ATTEMPT_ID,
+        { ...ownerInput, ...authority }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+    );
+  }
+  for (const [jobId, attemptId, organizationId] of [
+    ["bad-job", CHANGE_PAYMENT_ATTEMPT_ID, CHANGE_COMPLETION_ORGANIZATION_ID],
+    [CHANGE_COMPLETION_JOB_ID, "bad-attempt", CHANGE_COMPLETION_ORGANIZATION_ID],
+    [CHANGE_COMPLETION_JOB_ID, CHANGE_PAYMENT_ATTEMPT_ID, "bad-organization"]
+  ]) {
+    assert.throws(
+      () => client.reconcileOwnerCustomBuildChangeCheckout(
+        jobId,
+        attemptId,
+        { ...ownerInput, organizationId }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+    );
+  }
+  const stalePayment = ownerCustomBuildChangePayment({
+    canReconcileCreation: false
+  });
+  assert.throws(
+    () => client.reconcileOwnerCustomBuildChangeCheckout(
+      CHANGE_COMPLETION_JOB_ID,
+      CHANGE_PAYMENT_ATTEMPT_ID,
+      ownerInput,
+      {
+        expectedPayment: stalePayment,
+        expectedProjectId: CHANGE_COMPLETION_PROJECT_ID
+      }
+    ),
+    assertInvalidCustomBuildChangePayment
+  );
+  assert.equal(calls, 0);
+});

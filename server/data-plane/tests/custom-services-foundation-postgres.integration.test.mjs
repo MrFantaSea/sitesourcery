@@ -667,11 +667,11 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
       assert.equal(row.service_truncate, false, row.relname);
     }
 
-    for (const table of [
-      "operator_profiles",
-      "operator_permissions",
-      "service_documents",
-      "service_access_requests"
+    for (const [table, expectedInsert] of [
+      ["operator_profiles", false],
+      ["operator_permissions", false],
+      ["service_documents", true],
+      ["service_access_requests", true]
     ]) {
       const privilege = await client.query(
         `select has_table_privilege(
@@ -681,7 +681,11 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
          ) as can_insert`,
         [`ss.${table}`]
       );
-      assert.equal(privilege.rows[0].can_insert, false, table);
+      assert.equal(
+        privilege.rows[0].can_insert,
+        expectedInsert,
+        table
+      );
     }
 
     await expectRejected(

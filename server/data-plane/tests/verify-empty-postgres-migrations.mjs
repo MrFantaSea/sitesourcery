@@ -232,6 +232,23 @@ async function verifyPlatformSchema(pool) {
         as service_custom_build_completion_packages,
       to_regprocedure('ss.hosted_runtime_contract_v44()') is not null
         as custom_build_change_completion_runtime_contract,
+      to_regclass('ss.service_custom_build_change_invoices') is not null
+        as service_custom_build_change_invoices,
+      to_regclass('ss.service_custom_build_change_invoice_lines') is not null
+        as service_custom_build_change_invoice_lines,
+      to_regclass(
+        'ss.service_custom_build_change_checkout_attempts'
+      ) is not null as service_custom_build_change_checkout_attempts,
+      to_regclass(
+        'ss.service_custom_build_change_reconciliation_commands'
+      ) is not null as service_custom_build_change_reconciliation_commands,
+      to_regclass('ss.service_custom_build_change_stripe_events') is not null
+        as service_custom_build_change_stripe_events,
+      to_regclass(
+        'ss.service_custom_build_change_payment_receipts'
+      ) is not null as service_custom_build_change_payment_receipts,
+      to_regprocedure('ss.hosted_runtime_contract_v45()') is not null
+        as custom_build_change_payment_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -2172,16 +2189,6 @@ async function verifyPlatformSchema(pool) {
       (
         select
           lower(pg_get_functiondef(procedure_record.oid)) like
-            '%return false%'
-          and lower(pg_get_functiondef(procedure_record.oid)) like
-            '%service_custom_build_change_payment_receipts%'
-        from pg_proc procedure_record
-        where procedure_record.oid =
-          'ss.service_custom_build_change_has_payment_evidence(uuid)'::regprocedure
-      ) as payment_effect_stays_held,
-      (
-        select
-          lower(pg_get_functiondef(procedure_record.oid)) like
             '%document_kind = ''job_evidence''%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
             '%service_job_manage%'
@@ -2285,6 +2292,214 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build change/completion migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildChangePayment = await pool.query(`
+    with expected_tables(table_name, insertable, updatable) as (
+      values
+        ('service_custom_build_change_invoices', false, false),
+        ('service_custom_build_change_invoice_lines', false, false),
+        ('service_custom_build_change_checkout_attempts', true, true),
+        ('service_custom_build_change_reconciliation_commands', true, true),
+        ('service_custom_build_change_stripe_events', true, true),
+        ('service_custom_build_change_payment_receipts', true, false)
+    )
+    select
+      ss.hosted_runtime_contract_v45() =
+        'canonical-ss-v45-custom-build-change-payment'
+        as exact_v45_runtime_marker,
+      (
+        select count(*) = 6
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            ) = expected.insertable
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = expected.updatable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+          )
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+         and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_change_invoices'::regclass
+          and constraint_record.contype = 'u'
+          and pg_get_constraintdef(constraint_record.oid) =
+            'UNIQUE (change_order_id)'
+      ) and exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_change_invoices'::regclass
+          and constraint_record.contype = 'u'
+          and pg_get_constraintdef(constraint_record.oid) =
+            'UNIQUE (change_acceptance_id)'
+      ) as one_invoice_per_accepted_change,
+      exists (
+        select 1
+        from pg_index index_record
+        join pg_class index_relation
+          on index_relation.oid = index_record.indexrelid
+        where index_relation.relnamespace = 'ss'::regnamespace
+          and index_relation.relname =
+            'service_custom_build_change_checkout_one_active'
+          and index_record.indisunique
+          and pg_get_expr(
+            index_record.indpred, index_record.indrelid
+          ) like '%provider_pending%ready%persistence_unknown%paid%'
+      ) as one_active_change_checkout,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_change_checkout_attempts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%provider_pending%ready%persistence_unknown%paid%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_change_stripe_events%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_change_payment_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%receipt.change_order_id = selected_change_order_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '%return false%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.service_custom_build_change_has_payment_evidence(uuid)'::regprocedure
+      ) as named_payment_evidence_gate,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%old.state = ''accepted_payment_required''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.state = ''effective''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_change_payment_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%current_service_actor_kind() in (''system'', ''operator'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%assert_service_custom_build_change_payment_lock(old.job_id)%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_change_order_update()'::regprocedure
+      ) as provider_receipt_only_effective_transition,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%change_order.state = ''accepted_payment_required''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%attempt.state = ''ready''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%event.state in (''pending'', ''reconciliation_required'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%attempt.purpose_digest = new.purpose_digest%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%invoice.change_acceptance_id = new.change_acceptance_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%custom_build_change_provider_facts_digest(%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%jsonb_object_keys(new.provider_facts)%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.receipt_source = ''provider_readback''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%assert_service_custom_build_change_payment_lock(new.job_id)%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_change_payment_receipt()'::regprocedure
+      ) as exact_receipt_binding,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%from pg_catalog.pg_locks held%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%held.pid = pg_catalog.pg_backend_pid()%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%held.mode = ''exclusivelock''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.assert_service_custom_build_change_payment_lock(uuid)'::regprocedure
+      ) as mutation_requires_preheld_job_lock,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_payment_reconcile%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%assert_service_custom_build_change_payment_lock(new.job_id)%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_change_reconciliation_command()'::regprocedure
+      ) as durable_owner_reconciliation_command,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_custom_build_change_payment_receipts'::regclass
+          and trigger_record.tgname =
+            'service_custom_build_change_payment_materialize'
+          and not trigger_record.tgisinternal
+      ) and (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%set state = ''effective''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%set state = ''paid''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%state = ''processed''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.materialize_service_custom_build_change_payment()'::regprocedure
+      ) as atomic_receipt_materialization,
+      not has_function_privilege(
+        'service_role',
+        'ss.ensure_service_custom_build_change_invoice(uuid)',
+        'EXECUTE'
+      ) as invoice_materializer_not_directly_callable,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          select format('ss.%I', table_name)::regclass
+          from expected_tables
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (
+    const [name, ready] of Object.entries(
+      customBuildChangePayment.rows[0]
+    )
+  ) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build change-payment migration contract failed: ${name}`
     );
   }
 }

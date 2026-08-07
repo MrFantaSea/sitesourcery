@@ -6,6 +6,7 @@ import {
   STRIPE_API_VERSION,
   STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA,
   STRIPE_ALAKAZAM_PURPOSE_SCHEMA,
+  STRIPE_CUSTOM_BUILD_CHANGE_PURPOSE_SCHEMA,
   createOfficialStripeClient,
   createStripeProviderAdapter
 } from "../adapters/stripe.mjs";
@@ -556,6 +557,177 @@ function customBuildStartCheckoutReadback({
   };
 }
 
+function customBuildChangePurpose(overrides = {}) {
+  return {
+    schema: STRIPE_CUSTOM_BUILD_CHANGE_PURPOSE_SCHEMA,
+    tenantId:
+      "10000000-0000-4000-8000-000000000001",
+    customerId:
+      "20000000-0000-4000-8000-000000000001",
+    projectId:
+      "30000000-0000-4000-8000-000000000001",
+    jobId:
+      "70000000-0000-4000-8000-000000000001",
+    changeOrderId:
+      "71000000-0000-4000-8000-000000000001",
+    changeAcceptanceId:
+      "72000000-0000-4000-8000-000000000001",
+    changeNumber: 1,
+    invoiceId:
+      "73000000-0000-4000-8000-000000000001",
+    invoiceNumber:
+      "SSCB-CHG-73000000000040008000000000000001",
+    acceptedQuoteDigest: "4".repeat(64),
+    acceptedDisclosureDigest: "5".repeat(64),
+    priorEffectiveScopeDigest: "6".repeat(64),
+    scopeBoundaryDigest: "8".repeat(64),
+    targetCompletionDate: "2026-09-30",
+    invoiceDigest: "7".repeat(64),
+    price: {
+      amountMinor: 25000,
+      unitAmountMinor: 12500,
+      quantity: 2,
+      currency: "USD",
+      billing: "one_time",
+      taxBehavior: "automatic_exclusive"
+    },
+    ...overrides
+  };
+}
+
+function customBuildChangeRequest(overrides = {}) {
+  const purpose = customBuildChangePurpose(
+    overrides.purpose
+  );
+  return {
+    checkoutExpiresAt: "2026-07-28T12:30:00.000Z",
+    idempotencyKey:
+      "custom-build:change-checkout-command-1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function customBuildChangeMetadata(
+  purpose = customBuildChangePurpose()
+) {
+  return {
+    schema:
+      "sitesourcery_custom_build_change_checkout_v1",
+    tenant_id: purpose.tenantId,
+    customer_id: purpose.customerId,
+    project_id: purpose.projectId,
+    job_id: purpose.jobId,
+    change_order_id: purpose.changeOrderId,
+    change_acceptance_id: purpose.changeAcceptanceId,
+    change_number: String(purpose.changeNumber),
+    invoice_id: purpose.invoiceId,
+    invoice_number: purpose.invoiceNumber,
+    accepted_quote_digest:
+      purpose.acceptedQuoteDigest,
+    accepted_disclosure_digest:
+      purpose.acceptedDisclosureDigest,
+    prior_effective_scope_digest:
+      purpose.priorEffectiveScopeDigest,
+    scope_boundary_digest:
+      purpose.scopeBoundaryDigest,
+    target_completion_date:
+      purpose.targetCompletionDate,
+    invoice_digest: purpose.invoiceDigest,
+    purpose_digest: digest(purpose)
+  };
+}
+
+function customBuildChangeReadRequest(overrides = {}) {
+  const purpose = customBuildChangePurpose(
+    overrides.purpose
+  );
+  return {
+    checkoutSessionId:
+      "cs_test_custom_build_change_1",
+    purpose,
+    purposeDigest: digest(purpose),
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(
+        ([key]) => key !== "purpose"
+      )
+    )
+  };
+}
+
+function customBuildChangeCheckoutReadback({
+  purpose = customBuildChangePurpose(),
+  taxMinor = 0,
+  status = "complete",
+  paymentStatus = "paid",
+  overrides = {}
+} = {}) {
+  const subtotalMinor = purpose.price.amountMinor;
+  const totalMinor = subtotalMinor + taxMinor;
+  const metadata = customBuildChangeMetadata(purpose);
+  const customerId = "cus_test_custom_build_change_1";
+  const paymentIntentId =
+    "pi_test_custom_build_change_1";
+  return {
+    id: "cs_test_custom_build_change_1",
+    client_reference_id: purpose.invoiceId,
+    livemode: false,
+    mode: "payment",
+    currency: "usd",
+    amount_subtotal: subtotalMinor,
+    amount_total: totalMinor,
+    automatic_tax: {
+      enabled: true,
+      status: status === "complete" ? "complete" : null
+    },
+    total_details: {
+      amount_discount: 0,
+      amount_shipping: 0,
+      amount_tax: taxMinor
+    },
+    status,
+    payment_status: paymentStatus,
+    customer: customerId,
+    metadata,
+    payment_intent: {
+      id: paymentIntentId,
+      livemode: false,
+      status: "succeeded",
+      currency: "usd",
+      amount: totalMinor,
+      amount_received: totalMinor,
+      amount_capturable: 0,
+      customer: customerId,
+      metadata,
+      latest_charge: {
+        id: "ch_test_custom_build_change_1",
+        livemode: false,
+        status: "succeeded",
+        paid: true,
+        captured: true,
+        refunded: false,
+        disputed: false,
+        failure_code: null,
+        failure_message: null,
+        currency: "usd",
+        amount: totalMinor,
+        amount_captured: totalMinor,
+        amount_refunded: 0,
+        customer: customerId,
+        payment_intent: paymentIntentId,
+        metadata,
+        created: 1785672000
+      }
+    },
+    ...overrides
+  };
+}
+
 function alakazamCurrent({
   tierId = "alakazam_25",
   stripePriceId = ALAKAZAM_PRICE_IDS[tierId]
@@ -884,8 +1056,11 @@ function fakeStripe({
               params.line_items?.[0]?.price_data?.currency ??
               null,
             amount_subtotal:
-              params.line_items?.[0]?.price_data?.unit_amount ??
-              null,
+              params.line_items?.[0]?.price_data?.unit_amount ===
+              undefined
+                ? null
+                : params.line_items[0].price_data.unit_amount *
+                  (params.line_items[0].quantity ?? 1),
             automatic_tax:
               params.automatic_tax ?? { enabled: false },
             status: "open",
@@ -1130,7 +1305,8 @@ function fakeStripe({
 
 function adapterFixture({
   config = configuration(),
-  fake = fakeStripe({ config })
+  fake = fakeStripe({ config }),
+  clockNow = "2026-07-28T12:00:00.000Z"
 } = {}) {
   return {
     ...fake,
@@ -1140,7 +1316,7 @@ function adapterFixture({
       client: fake.client,
       config,
       clock: {
-        now: () => "2026-07-28T12:00:00.000Z"
+        now: () => clockNow
       }
     })
   };
@@ -1653,6 +1829,9 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "createCustomBuildStartCheckout",
     "retrieveCustomBuildStartPayment",
     "retrieveCustomBuildStartCheckoutLifecycle",
+    "createCustomBuildChangeCheckout",
+    "retrieveCustomBuildChangePayment",
+    "retrieveCustomBuildChangeCheckoutLifecycle",
     "createAlakazamCustomer",
     "retrieveAlakazamCustomer",
     "createAlakazamStartCheckout",
@@ -3643,6 +3822,623 @@ test("Custom-build lifecycle projects only open, expired, or paid exact Sessions
         "stripe_custom_build_start_checkout_lifecycle_invalid" &&
       error.status === 502
   );
+});
+
+test("Custom-build change order creates one distinct exact automatic-tax Checkout", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const request = customBuildChangeRequest();
+  const { adapter, calls } = adapterFixture({ config });
+  const result =
+    await adapter.createCustomBuildChangeCheckout(request);
+  assert.deepEqual(result, {
+    checkoutId: "cs_test_checkout_1",
+    url: "https://checkout.stripe.com/c/pay/test_1",
+    expiresAt: "2026-07-28T12:30:00.000Z"
+  });
+  assert.equal(calls.checkouts.length, 1);
+  const [{ params, requestOptions }] = calls.checkouts;
+  assert.equal(params.mode, "payment");
+  assert.deepEqual(params.payment_method_types, ["card"]);
+  assert.deepEqual(params.line_items, [
+    {
+      price_data: {
+        currency: "usd",
+        unit_amount:
+          request.purpose.price.unitAmountMinor,
+        tax_behavior: "exclusive",
+        product_data: {
+          name: "Site Sourcery Custom build — accepted change order"
+        }
+      },
+      quantity: request.purpose.price.quantity
+    }
+  ]);
+  assert.equal(
+    params.expires_at,
+    Date.parse(request.checkoutExpiresAt) / 1000
+  );
+  assert.deepEqual(params.automatic_tax, { enabled: true });
+  assert.equal(params.billing_address_collection, "required");
+  assert.equal(params.customer_creation, "always");
+  assert.equal(params.customer, undefined);
+  assert.equal(
+    params.client_reference_id,
+    request.purpose.invoiceId
+  );
+  assert.equal(params.cancel_url, config.cancelUrl);
+  assert.equal(
+    params.success_url,
+    config.successUrl
+      + "&custom_build_change_project="
+      + encodeURIComponent(request.purpose.projectId)
+      + "&custom_build_change_job="
+      + encodeURIComponent(request.purpose.jobId)
+      + "&custom_build_change_order="
+      + encodeURIComponent(request.purpose.changeOrderId)
+      + "&custom_build_change_invoice="
+      + encodeURIComponent(request.purpose.invoiceId)
+  );
+  assert.deepEqual(
+    params.metadata,
+    customBuildChangeMetadata(request.purpose)
+  );
+  assert.deepEqual(
+    params.payment_intent_data.metadata,
+    params.metadata
+  );
+  assert.equal(
+    params.metadata.schema,
+    "sitesourcery_custom_build_change_checkout_v1"
+  );
+  assert.notEqual(
+    params.metadata.schema,
+    "sitesourcery_custom_build_start_checkout_v1"
+  );
+  assert.match(
+    requestOptions.idempotencyKey,
+    /^ss:custom_build_change_checkout:[a-f0-9]{64}$/u
+  );
+
+  const stripeCustomerId =
+    "cus_test_custom_build_change_prebound";
+  const preboundFake = fakeStripe({
+    config,
+    checkoutResponse: (created) => ({
+      customer: created.customer
+    })
+  });
+  const prebound = adapterFixture({
+    config,
+    fake: preboundFake
+  });
+  await prebound.adapter.createCustomBuildChangeCheckout({
+    ...request,
+    idempotencyKey:
+      "custom-build:change-checkout-command-2",
+    stripeCustomerId
+  });
+  const preboundParams =
+    prebound.calls.checkouts[0].params;
+  assert.equal(preboundParams.customer, stripeCustomerId);
+  assert.deepEqual(preboundParams.customer_update, {
+    address: "auto"
+  });
+  assert.equal(preboundParams.customer_creation, undefined);
+});
+
+test("Custom-build change delayed same-key retry preserves exact Stripe parameters and cached expiration", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const request = customBuildChangeRequest();
+  const retainedExpiresAt =
+    Date.parse(request.checkoutExpiresAt) / 1000;
+  const fake = fakeStripe({
+    config,
+    checkoutResponse: {
+      expires_at: retainedExpiresAt
+    }
+  });
+
+  const initial = await adapterFixture({
+    config,
+    fake,
+    clockNow: "2026-07-28T12:00:00.000Z"
+  }).adapter.createCustomBuildChangeCheckout(request);
+  const delayed = await adapterFixture({
+    config,
+    fake,
+    clockNow: "2026-08-01T12:00:00.000Z"
+  }).adapter.createCustomBuildChangeCheckout(request);
+
+  assert.deepEqual(delayed, initial);
+  assert.equal(
+    delayed.expiresAt,
+    request.checkoutExpiresAt
+  );
+  assert.equal(fake.calls.checkouts.length, 2);
+  assert.deepEqual(
+    fake.calls.checkouts[1],
+    fake.calls.checkouts[0]
+  );
+  assert.equal(
+    JSON.stringify(fake.calls.checkouts[1]),
+    JSON.stringify(fake.calls.checkouts[0])
+  );
+});
+
+test("Custom-build change Checkout rejects purpose crossover and tampering with exact effect certainty", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const startPurpose = customBuildStartPurpose();
+  const invalidRequests = [
+    customBuildChangeRequest({
+      purpose: { amountFromBrowser: 25000 }
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        schema:
+          "sitesourcery.custom-build-start-checkout-purpose/v1"
+      }
+    }),
+    customBuildChangeRequest({
+      purpose: { changeAcceptanceId: "not-a-uuid" }
+    }),
+    customBuildChangeRequest({
+      purpose: { changeNumber: 0 }
+    }),
+    customBuildChangeRequest({
+      purpose: { scopeBoundaryDigest: "8".repeat(63) }
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        invoiceNumber:
+          "SSCB-73000000000040008000000000000001"
+      }
+    }),
+    customBuildChangeRequest({
+      purpose: { targetCompletionDate: "2026-02-30" }
+    }),
+    customBuildChangeRequest({
+      checkoutExpiresAt: "2026-07-28T12:30:00.500Z"
+    }),
+    customBuildChangeRequest({
+      checkoutExpiresAt: "2026-07-28T12:30:00Z"
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        price: {
+          amountMinor: 25000,
+          unitAmountMinor: 12500,
+          quantity: 2,
+          currency: "EUR",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        price: {
+          amountMinor: 25000,
+          unitAmountMinor: 12501,
+          quantity: 2,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        price: {
+          amountMinor: 25000,
+          unitAmountMinor: 12500,
+          quantity: 3,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    customBuildChangeRequest({
+      purpose: {
+        price: {
+          amountMinor: 512500,
+          unitAmountMinor: 12500,
+          quantity: 41,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        }
+      }
+    }),
+    {
+      ...customBuildChangeRequest(),
+      purposeDigest: "0".repeat(64)
+    },
+    {
+      idempotencyKey:
+        "custom-build:change-crossover-command",
+      purpose: startPurpose,
+      purposeDigest: digest(startPurpose)
+    }
+  ];
+  for (const request of invalidRequests) {
+    const fixture = adapterFixture({ config });
+    await assert.rejects(
+      fixture.adapter.createCustomBuildChangeCheckout(
+        request
+      ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_change_checkout_invalid" &&
+        error.certainty === "not_submitted"
+    );
+    assert.equal(fixture.calls.checkouts.length, 0);
+  }
+
+  const changePurpose = customBuildChangePurpose();
+  await assert.rejects(
+    adapterFixture({ config })
+      .adapter.createCustomBuildStartCheckout({
+        idempotencyKey:
+          "custom-build:start-crossover-command",
+        purpose: changePurpose,
+        purposeDigest: digest(changePurpose)
+      }),
+    (error) =>
+      error.code ===
+        "stripe_custom_build_start_checkout_invalid" &&
+      error.certainty === "not_submitted"
+  );
+
+  const heldByTax = adapterFixture();
+  await assert.rejects(
+    heldByTax.adapter.createCustomBuildChangeCheckout(
+      customBuildChangeRequest()
+    ),
+    (error) =>
+      error.code ===
+        "stripe_custom_build_change_tax_required" &&
+      error.certainty === "not_submitted"
+  );
+  assert.equal(heldByTax.calls.checkouts.length, 0);
+
+  for (const drift of [
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        schema:
+          "sitesourcery_custom_build_start_checkout_v1"
+      }
+    }),
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        prior_effective_scope_digest: "0".repeat(64)
+      }
+    }),
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        change_number: "2"
+      }
+    }),
+    (params) => ({
+      metadata: {
+        ...params.metadata,
+        scope_boundary_digest: "0".repeat(64)
+      }
+    }),
+    () => ({ amount_subtotal: 24999 }),
+    () => ({ expires_at: 1785241801 }),
+    () => ({ currency: "eur" }),
+    () => ({ automatic_tax: { enabled: false } }),
+    () => ({ status: "complete" })
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutResponse: drift
+    });
+    const fixture = adapterFixture({ config, fake });
+    await assert.rejects(
+      fixture.adapter.createCustomBuildChangeCheckout(
+        customBuildChangeRequest()
+      ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_change_checkout_response_invalid" &&
+        error.certainty === "ambiguous"
+    );
+    assert.equal(fixture.calls.checkouts.length, 1);
+  }
+
+  const preboundFake = fakeStripe({
+    config,
+    checkoutResponse: {
+      customer: "cus_test_custom_build_change_wrong"
+    }
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake: preboundFake })
+      .adapter.createCustomBuildChangeCheckout({
+        ...customBuildChangeRequest(),
+        stripeCustomerId:
+          "cus_test_custom_build_change_expected"
+      }),
+    (error) =>
+      error.code ===
+        "stripe_custom_build_change_checkout_response_invalid" &&
+      error.certainty === "ambiguous"
+  );
+});
+
+test("Custom-build change settlement returns exact provider-readback facts", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const purpose = customBuildChangePurpose({
+    price: {
+      amountMinor: 37500,
+      unitAmountMinor: 12500,
+      quantity: 3,
+      currency: "USD",
+      billing: "one_time",
+      taxBehavior: "automatic_exclusive"
+    }
+  });
+  const taxMinor = 2719;
+  const fake = fakeStripe({
+    config,
+    checkoutRetrieveResponse:
+      customBuildChangeCheckoutReadback({
+        purpose,
+        taxMinor
+      })
+  });
+  const { adapter, calls } = adapterFixture({
+    config,
+    fake
+  });
+  const facts =
+    await adapter.retrieveCustomBuildChangePayment(
+      customBuildChangeReadRequest({ purpose })
+    );
+  const { providerFactsDigest, ...factsWithoutDigest } =
+    facts;
+  assert.deepEqual(factsWithoutDigest, {
+    schema:
+      "sitesourcery.stripe-custom-build-change-payment-facts/v1",
+    provider: "stripe",
+    checkoutSessionId:
+      "cs_test_custom_build_change_1",
+    paymentIntentId:
+      "pi_test_custom_build_change_1",
+    customerId: "cus_test_custom_build_change_1",
+    paymentStatus: "paid",
+    subtotalMinor: 37500,
+    taxMinor,
+    totalMinor: 37500 + taxMinor,
+    taxMode: "automatic",
+    currency: "USD",
+    purposeDigest: digest(purpose),
+    providerPaymentTime: "2026-08-02T12:00:00.000Z"
+  });
+  assert.equal(
+    providerFactsDigest,
+    digest(factsWithoutDigest)
+  );
+  assert.equal(Object.isFrozen(facts), true);
+  assert.equal("chargeId" in facts, false);
+  assert.deepEqual(calls.checkoutReads, [
+    {
+      id: "cs_test_custom_build_change_1",
+      params: {
+        expand: ["payment_intent.latest_charge"]
+      }
+    }
+  ]);
+});
+
+test("Custom-build change settlement rejects crossover, money, tax, customer, and unsafe payment evidence", async () => {
+  const purpose = customBuildChangePurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const mutate of [
+    (response) => {
+      response.metadata.schema =
+        "sitesourcery_custom_build_start_checkout_v1";
+    },
+    (response) => {
+      response.metadata.invoice_digest = "0".repeat(64);
+    },
+    (response) => {
+      response.metadata.change_number = "2";
+    },
+    (response) => {
+      response.metadata.scope_boundary_digest = "0".repeat(64);
+    },
+    (response) => {
+      response.amount_subtotal -= 1;
+    },
+    (response) => {
+      response.currency = "eur";
+    },
+    (response) => {
+      response.total_details.amount_tax += 1;
+    },
+    (response) => {
+      response.automatic_tax.status = null;
+    },
+    (response) => {
+      response.payment_status = "unpaid";
+    },
+    (response) => {
+      response.payment_intent.status = "processing";
+    },
+    (response) => {
+      response.payment_intent.metadata.schema =
+        "sitesourcery_custom_build_start_checkout_v1";
+    },
+    (response) => {
+      response.payment_intent.amount_received -= 1;
+    },
+    (response) => {
+      response.payment_intent.customer =
+        "cus_test_custom_build_change_other";
+    },
+    (response) => {
+      response.payment_intent.latest_charge.captured = false;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.refunded = true;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.disputed = true;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.failure_code =
+        "card_declined";
+    },
+    (response) => {
+      response.payment_intent.latest_charge.metadata.schema =
+        "sitesourcery_custom_build_start_checkout_v1";
+    },
+    (response) => {
+      response.payment_intent.latest_charge.amount_refunded = 1;
+    },
+    (response) => {
+      response.payment_intent.latest_charge.customer =
+        "cus_test_custom_build_change_other";
+    },
+    (response) => {
+      response.payment_intent.latest_charge =
+        "ch_test_custom_build_change_1";
+    }
+  ]) {
+    const response =
+      customBuildChangeCheckoutReadback({ purpose });
+    mutate(response);
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter.retrieveCustomBuildChangePayment(
+          customBuildChangeReadRequest({ purpose })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_change_payment_mismatch" &&
+        error.status === 502
+    );
+  }
+
+  const startPurpose = customBuildStartPurpose();
+  await assert.rejects(
+    adapterFixture({ config })
+      .adapter.retrieveCustomBuildChangePayment({
+        checkoutSessionId:
+          "cs_test_custom_build_change_1",
+        purpose: startPurpose,
+        purposeDigest: digest(startPurpose)
+      }),
+    (error) =>
+      error.code ===
+      "stripe_custom_build_change_checkout_invalid"
+  );
+});
+
+test("Custom-build change lifecycle exposes only exact open, expired, or paid Sessions", async () => {
+  const purpose = customBuildChangePurpose();
+  const config = configuration({ taxMode: "automatic" });
+  for (const [status, paymentStatus, state] of [
+    ["open", "unpaid", "open"],
+    ["expired", "unpaid", "expired"],
+    ["complete", "paid", "paid"]
+  ]) {
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse:
+        customBuildChangeCheckoutReadback({
+          purpose,
+          status,
+          paymentStatus
+        })
+    });
+    const { adapter, calls } = adapterFixture({
+      config,
+      fake
+    });
+    const lifecycle =
+      await adapter
+        .retrieveCustomBuildChangeCheckoutLifecycle(
+          customBuildChangeReadRequest({ purpose })
+        );
+    assert.deepEqual(lifecycle, {
+      schema:
+        "sitesourcery.stripe-custom-build-change-checkout-lifecycle/v1",
+      provider: "stripe",
+      checkoutSessionId:
+        "cs_test_custom_build_change_1",
+      purposeDigest: digest(purpose),
+      state
+    });
+    assert.equal(Object.isFrozen(lifecycle), true);
+    assert.deepEqual(calls.checkoutReads, [
+      {
+        id: "cs_test_custom_build_change_1",
+        params: undefined
+      }
+    ]);
+  }
+
+  for (const mutate of [
+    (response) => {
+      response.metadata.schema =
+        "sitesourcery_custom_build_start_checkout_v1";
+    },
+    (response) => {
+      response.metadata.change_number = "2";
+    },
+    (response) => {
+      response.metadata.scope_boundary_digest = "0".repeat(64);
+    },
+    (response) => {
+      response.amount_subtotal -= 1;
+    },
+    (response) => {
+      response.currency = "eur";
+    },
+    (response) => {
+      response.payment_status = "unpaid";
+    },
+    (response) => {
+      response.automatic_tax.status = null;
+    },
+    (response) => {
+      response.amount_total -= 1;
+    },
+    (response) => {
+      response.total_details.amount_discount = 1;
+    }
+  ]) {
+    const response = customBuildChangeCheckoutReadback({
+      purpose
+    });
+    mutate(response);
+    const fake = fakeStripe({
+      config,
+      checkoutRetrieveResponse: response
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake })
+        .adapter
+        .retrieveCustomBuildChangeCheckoutLifecycle(
+          customBuildChangeReadRequest({ purpose })
+        ),
+      (error) =>
+        error.code ===
+          "stripe_custom_build_change_checkout_lifecycle_invalid" &&
+        error.status === 502
+    );
+  }
 });
 
 test("Download Checkout rejects changed money and purpose before Stripe", async () => {

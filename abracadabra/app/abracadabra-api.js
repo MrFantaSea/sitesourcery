@@ -22,6 +22,44 @@
   var MAXIMUM_ASSESSMENT_EVIDENCE_BYTES = 700 * 1024;
   var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
     "sitesourcery.custom-build-change-completion/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA =
+    "sitesourcery.custom-build-change-invoice/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_CHECKOUT_SCHEMA =
+    "sitesourcery.custom-build-change-checkout/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_OWNER_SCHEMA =
+    "sitesourcery.custom-build-change-payments-owner/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_SCHEMA =
+    "sitesourcery.custom-build-change-payment-reconciliation-command/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA =
+    "sitesourcery.custom-build-change-settlement/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_STATES = [
+    "not_available",
+    "payment_held",
+    "checkout_available",
+    "checkout_ready",
+    "checkout_expired",
+    "reconciliation_required",
+    "paid",
+    "voided"
+  ];
+  var CUSTOM_BUILD_CHANGE_CHECKOUT_ATTEMPT_STATES = [
+    "provider_pending",
+    "ready",
+    "failed",
+    "persistence_unknown",
+    "expired",
+    "paid"
+  ];
+  var CUSTOM_BUILD_CHANGE_CHECKOUT_EVENT_STATES = [
+    "pending",
+    "processed",
+    "reconciliation_required"
+  ];
+  var CUSTOM_BUILD_CHANGE_INVOICE_NUMBER =
+    /^SSCB-CHG-[0-9A-F]{32}$/u;
+  var CUSTOM_BUILD_CHANGE_STRIPE_EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
+  var CUSTOM_BUILD_CHANGE_SAFE_PROVIDER_CODE =
+    /^[A-Za-z0-9._:-]{1,200}$/u;
   var CUSTOM_BUILD_CHANGE_COMPLETION_STATES = [
     "not_available",
     "building",
@@ -1094,6 +1132,882 @@
       changeOrders: changeOrders,
       evidence: evidence,
       completion: completion
+    });
+  }
+
+  function invalidCustomBuildChangePaymentResponse() {
+    return new APIError({
+      code: "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_RESPONSE",
+      message:
+        "Site Sourcery returned invalid added-work payment information. Refresh before replacing the information already shown.",
+      retryable: true
+    });
+  }
+
+  function changePaymentInvariant(condition) {
+    if (!condition) throw invalidCustomBuildChangePaymentResponse();
+  }
+
+  function changePaymentObject(value, expected) {
+    changePaymentInvariant(
+      isObject(value)
+      && (Object.getPrototypeOf(value) === Object.prototype
+        || Object.getPrototypeOf(value) === null)
+      && JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify(expected.slice().sort())
+    );
+    return value;
+  }
+
+  function changePaymentArray(value, minimum, maximum) {
+    changePaymentInvariant(
+      Array.isArray(value)
+      && value.length >= minimum
+      && value.length <= maximum
+    );
+    return value;
+  }
+
+  function changePaymentText(value, minimum, maximum) {
+    changePaymentInvariant(
+      typeof value === "string"
+      && value === value.trim()
+      && value.length >= minimum
+      && value.length <= maximum
+      && !CONTROL_CHARACTER.test(value)
+    );
+    return value;
+  }
+
+  function changePaymentUuid(value) {
+    changePaymentInvariant(typeof value === "string" && UUID.test(value));
+    return value;
+  }
+
+  function changePaymentNullableUuid(value) {
+    return value === null ? null : changePaymentUuid(value);
+  }
+
+  function changePaymentDigest(value) {
+    changePaymentInvariant(typeof value === "string" && SHA256.test(value));
+    return value;
+  }
+
+  function changePaymentInteger(value, minimum, maximum) {
+    changePaymentInvariant(
+      typeof value === "number"
+      && Number.isSafeInteger(value)
+      && value >= minimum
+      && value <= maximum
+    );
+    return value;
+  }
+
+  function changePaymentDate(value) {
+    var parsed = typeof value === "string"
+      && /^\d{4}-\d{2}-\d{2}$/u.test(value)
+      ? new Date(value + "T00:00:00.000Z")
+      : null;
+    changePaymentInvariant(
+      parsed !== null
+      && Number.isFinite(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === value
+    );
+    return value;
+  }
+
+  function changePaymentIso(value) {
+    var parsed = typeof value === "string" ? new Date(value) : null;
+    changePaymentInvariant(
+      parsed !== null
+      && Number.isFinite(parsed.getTime())
+      && parsed.toISOString() === value
+    );
+    return value;
+  }
+
+  function changePaymentNullableIso(value) {
+    return value === null ? null : changePaymentIso(value);
+  }
+
+  function changePaymentNullableProviderCode(value) {
+    changePaymentInvariant(
+      value === null
+      || (
+        typeof value === "string"
+        && CUSTOM_BUILD_CHANGE_SAFE_PROVIDER_CODE.test(value)
+      )
+    );
+    return value;
+  }
+
+  function changePaymentCheckoutUrl(value, expiresAt) {
+    changePaymentInvariant(
+      typeof value === "string"
+      && value.length >= 20
+      && value.length <= 2000
+    );
+    var parsed;
+    try {
+      parsed = new URL(value);
+    } catch (_error) {
+      parsed = null;
+    }
+    changePaymentInvariant(
+      parsed !== null
+      && parsed.protocol === "https:"
+      && parsed.hostname === "checkout.stripe.com"
+      && parsed.port === ""
+      && !parsed.username
+      && !parsed.password
+      && Date.parse(expiresAt) > Date.now()
+    );
+    return value;
+  }
+
+  function customBuildChangeInvoiceRecord(value, state) {
+    var source = changePaymentObject(value, [
+      "acceptedDisclosureDigest",
+      "acceptedQuoteDigest",
+      "changeAcceptanceId",
+      "changeNumber",
+      "changeOrderId",
+      "invoiceDigest",
+      "invoiceId",
+      "invoiceNumber",
+      "issuedAt",
+      "lines",
+      "payment",
+      "subtotal",
+      "targetCompletionDate",
+      "tax",
+      "total"
+    ]);
+    var invoiceId = changePaymentUuid(source.invoiceId);
+    var invoiceNumber = changePaymentText(
+      source.invoiceNumber,
+      41,
+      41
+    );
+    changePaymentInvariant(
+      CUSTOM_BUILD_CHANGE_INVOICE_NUMBER.test(invoiceNumber)
+      && invoiceNumber === "SSCB-CHG-"
+        + invoiceId.replace(/-/gu, "").toUpperCase()
+    );
+    var changeNumber = changePaymentInteger(
+      source.changeNumber,
+      1,
+      100000
+    );
+    var lines = changePaymentArray(source.lines, 1, 1).map(function (entry) {
+      var line = changePaymentObject(entry, [
+        "amountMinor",
+        "componentKey",
+        "currency",
+        "displayName",
+        "lineNumber",
+        "quantity",
+        "unitAmountMinor"
+      ]);
+      var quantity = changePaymentInteger(line.quantity, 1, 40);
+      var unitAmountMinor = changePaymentInteger(
+        line.unitAmountMinor,
+        12500,
+        12500
+      );
+      var amountMinor = changePaymentInteger(
+        line.amountMinor,
+        12500,
+        40 * 12500
+      );
+      changePaymentInvariant(
+        line.lineNumber === 1
+        && line.componentKey === "custom_build_change_units"
+        && line.displayName === "Custom build change #" + changeNumber
+          + " — added-work units"
+        && amountMinor === quantity * unitAmountMinor
+        && line.currency === "USD"
+      );
+      return {
+        lineNumber: 1,
+        componentKey: "custom_build_change_units",
+        displayName: line.displayName,
+        quantity: quantity,
+        unitAmountMinor: unitAmountMinor,
+        amountMinor: amountMinor,
+        currency: "USD"
+      };
+    });
+    var subtotalSource = changePaymentObject(
+      source.subtotal,
+      ["amountMinor", "currency"]
+    );
+    var subtotalMinor = changePaymentInteger(
+      subtotalSource.amountMinor,
+      12500,
+      40 * 12500
+    );
+    changePaymentInvariant(
+      subtotalSource.currency === "USD"
+      && subtotalMinor === lines[0].amountMinor
+    );
+    var taxSource = changePaymentObject(source.tax, ["amountMinor", "state"]);
+    var totalSource = changePaymentObject(
+      source.total,
+      ["amountMinor", "currency", "state"]
+    );
+    var paymentSource = changePaymentObject(source.payment, [
+      "chargeOccurred",
+      "checkoutExpiresAt",
+      "checkoutUrl",
+      "settledAt"
+    ]);
+    var issuedAt = changePaymentIso(source.issuedAt);
+    var tax;
+    var total;
+    var payment;
+    if (state === "paid") {
+      var taxMinor = changePaymentInteger(
+        taxSource.amountMinor,
+        0,
+        99999999
+      );
+      var totalMinor = changePaymentInteger(
+        totalSource.amountMinor,
+        subtotalMinor,
+        Number.MAX_SAFE_INTEGER
+      );
+      var settledAt = changePaymentIso(paymentSource.settledAt);
+      changePaymentInvariant(
+        taxSource.state === "settled"
+        && totalSource.currency === "USD"
+        && totalSource.state === "settled"
+        && totalMinor === subtotalMinor + taxMinor
+        && paymentSource.chargeOccurred === true
+        && paymentSource.checkoutUrl === null
+        && paymentSource.checkoutExpiresAt === null
+        && Date.parse(settledAt) >= Date.parse(issuedAt)
+      );
+      tax = { amountMinor: taxMinor, state: "settled" };
+      total = {
+        amountMinor: totalMinor,
+        currency: "USD",
+        state: "settled"
+      };
+      payment = {
+        chargeOccurred: true,
+        checkoutUrl: null,
+        checkoutExpiresAt: null,
+        settledAt: settledAt
+      };
+    } else {
+      changePaymentInvariant(
+        taxSource.amountMinor === null
+        && taxSource.state === "calculated_at_checkout"
+        && totalSource.amountMinor === null
+        && totalSource.currency === "USD"
+        && totalSource.state === "shown_at_checkout"
+        && paymentSource.chargeOccurred === false
+        && paymentSource.settledAt === null
+      );
+      var checkoutExpiresAt = null;
+      var checkoutUrl = null;
+      if (state === "checkout_ready") {
+        checkoutExpiresAt = changePaymentIso(
+          paymentSource.checkoutExpiresAt
+        );
+        checkoutUrl = changePaymentCheckoutUrl(
+          paymentSource.checkoutUrl,
+          checkoutExpiresAt
+        );
+        changePaymentInvariant(
+          Date.parse(checkoutExpiresAt) > Date.parse(issuedAt)
+        );
+      } else {
+        changePaymentInvariant(
+          paymentSource.checkoutUrl === null
+          && paymentSource.checkoutExpiresAt === null
+        );
+      }
+      tax = { amountMinor: null, state: "calculated_at_checkout" };
+      total = {
+        amountMinor: null,
+        currency: "USD",
+        state: "shown_at_checkout"
+      };
+      payment = {
+        chargeOccurred: false,
+        checkoutUrl: checkoutUrl,
+        checkoutExpiresAt: checkoutExpiresAt,
+        settledAt: null
+      };
+    }
+    return {
+      invoiceId: invoiceId,
+      invoiceNumber: invoiceNumber,
+      invoiceDigest: changePaymentDigest(source.invoiceDigest),
+      changeOrderId: changePaymentUuid(source.changeOrderId),
+      changeAcceptanceId: changePaymentUuid(source.changeAcceptanceId),
+      changeNumber: changeNumber,
+      acceptedQuoteDigest: changePaymentDigest(source.acceptedQuoteDigest),
+      acceptedDisclosureDigest: changePaymentDigest(
+        source.acceptedDisclosureDigest
+      ),
+      issuedAt: issuedAt,
+      targetCompletionDate: changePaymentDate(
+        source.targetCompletionDate
+      ),
+      lines: lines,
+      subtotal: { amountMinor: subtotalMinor, currency: "USD" },
+      tax: tax,
+      total: total,
+      payment: payment
+    };
+  }
+
+  function expectedCustomBuildChangeOrder(value) {
+    if (value === null || value === undefined) return null;
+    try {
+      return customBuildChangeOrderProjection(value, false);
+    } catch (_error) {
+      throw invalidCustomBuildChangePaymentResponse();
+    }
+  }
+
+  function validateCustomBuildChangeInvoice(
+    value,
+    expectedChangeOrderInput
+  ) {
+    var source = changePaymentObject(value, [
+      "action",
+      "invoice",
+      "schema",
+      "state"
+    ]);
+    var state = changePaymentText(source.state, 1, 80);
+    changePaymentInvariant(
+      source.schema === CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA
+      && CUSTOM_BUILD_CHANGE_PAYMENT_STATES.includes(state)
+    );
+    var actionSource = changePaymentObject(
+      source.action,
+      ["available", "reason"]
+    );
+    changePaymentInvariant(
+      typeof actionSource.available === "boolean"
+      && actionSource.available === (state === "checkout_available")
+      && actionSource.reason === (
+        state === "checkout_available"
+          ? null
+          : state === "not_available" ? "invoice_not_available" : state
+      )
+    );
+    var expectedOrder = expectedCustomBuildChangeOrder(
+      expectedChangeOrderInput
+    );
+    if (state === "not_available") {
+      changePaymentInvariant(source.invoice === null);
+      if (expectedOrder !== null) {
+        changePaymentInvariant(
+          ["issued", "declined", "expired"].includes(expectedOrder.state)
+          || (
+            expectedOrder.state === "voided"
+            && expectedOrder.acceptedAt === null
+          )
+        );
+      }
+      return deepFreezeProjection({
+        schema: CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA,
+        state: state,
+        invoice: null,
+        action: { available: false, reason: "invoice_not_available" }
+      });
+    }
+    var invoice = customBuildChangeInvoiceRecord(source.invoice, state);
+    if (expectedOrder !== null) {
+      changePaymentInvariant(
+        invoice.changeOrderId === expectedOrder.changeOrderId
+        && invoice.changeNumber === expectedOrder.changeNumber
+        && invoice.acceptedQuoteDigest === expectedOrder.quoteDigest
+        && invoice.acceptedDisclosureDigest ===
+          expectedOrder.disclosureDigest
+        && invoice.targetCompletionDate ===
+          expectedOrder.targetCompletionDate
+        && invoice.lines[0].quantity === expectedOrder.pricing.unitCount
+        && invoice.subtotal.amountMinor ===
+          expectedOrder.pricing.subtotalMinor
+        && expectedOrder.acceptedAt !== null
+        && invoice.issuedAt === expectedOrder.acceptedAt
+      );
+      if (expectedOrder.state === "accepted_payment_required") {
+        changePaymentInvariant([
+          "payment_held",
+          "checkout_available",
+          "checkout_ready",
+          "checkout_expired",
+          "reconciliation_required"
+        ].includes(state));
+      } else if (expectedOrder.state === "effective") {
+        changePaymentInvariant(state === "paid");
+      } else if (expectedOrder.state === "voided") {
+        changePaymentInvariant(state === "voided");
+      } else {
+        changePaymentInvariant(false);
+      }
+    }
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA,
+      state: state,
+      invoice: invoice,
+      action: {
+        available: actionSource.available,
+        reason: actionSource.reason
+      }
+    });
+  }
+
+  function checkoutExpectationInvoice(value) {
+    if (value === null || value === undefined) return null;
+    var projection = validateCustomBuildChangeInvoice(value);
+    changePaymentInvariant(projection.invoice !== null);
+    return projection.invoice;
+  }
+
+  function validateCustomBuildChangeCheckout(value, expectationInput) {
+    var source = changePaymentObject(value, ["checkout", "schema", "state"]);
+    changePaymentInvariant(
+      source.schema === CUSTOM_BUILD_CHANGE_PAYMENT_CHECKOUT_SCHEMA
+      && source.state === "ready"
+    );
+    var checkoutSource = changePaymentObject(source.checkout, [
+      "changeOrderId",
+      "chargeOccurred",
+      "expiresAt",
+      "invoiceId",
+      "invoiceNumber",
+      "subtotal",
+      "tax",
+      "total",
+      "url"
+    ]);
+    var invoiceId = changePaymentUuid(checkoutSource.invoiceId);
+    var invoiceNumber = changePaymentText(
+      checkoutSource.invoiceNumber,
+      41,
+      41
+    );
+    var expiresAt = changePaymentIso(checkoutSource.expiresAt);
+    var subtotalSource = changePaymentObject(
+      checkoutSource.subtotal,
+      ["amountMinor", "currency"]
+    );
+    var subtotalMinor = changePaymentInteger(
+      subtotalSource.amountMinor,
+      12500,
+      40 * 12500
+    );
+    var taxSource = changePaymentObject(
+      checkoutSource.tax,
+      ["amountMinor", "state"]
+    );
+    var totalSource = changePaymentObject(
+      checkoutSource.total,
+      ["amountMinor", "currency", "state"]
+    );
+    var selected = {
+      schema: CUSTOM_BUILD_CHANGE_PAYMENT_CHECKOUT_SCHEMA,
+      state: "ready",
+      checkout: {
+        invoiceId: invoiceId,
+        invoiceNumber: invoiceNumber,
+        changeOrderId: changePaymentUuid(checkoutSource.changeOrderId),
+        url: changePaymentCheckoutUrl(checkoutSource.url, expiresAt),
+        expiresAt: expiresAt,
+        subtotal: { amountMinor: subtotalMinor, currency: "USD" },
+        tax: { amountMinor: null, state: "calculated_at_checkout" },
+        total: {
+          amountMinor: null,
+          currency: "USD",
+          state: "shown_at_checkout"
+        },
+        chargeOccurred: false
+      }
+    };
+    changePaymentInvariant(
+      CUSTOM_BUILD_CHANGE_INVOICE_NUMBER.test(invoiceNumber)
+      && invoiceNumber === "SSCB-CHG-"
+        + invoiceId.replace(/-/gu, "").toUpperCase()
+      && subtotalSource.currency === "USD"
+      && subtotalMinor % 12500 === 0
+      && taxSource.amountMinor === null
+      && taxSource.state === "calculated_at_checkout"
+      && totalSource.amountMinor === null
+      && totalSource.currency === "USD"
+      && totalSource.state === "shown_at_checkout"
+      && checkoutSource.chargeOccurred === false
+    );
+    var expectation = checkoutExpectationInvoice(expectationInput);
+    if (expectation !== null) {
+      changePaymentInvariant(
+        selected.checkout.invoiceId === expectation.invoiceId
+        && selected.checkout.invoiceNumber === expectation.invoiceNumber
+        && selected.checkout.changeOrderId === expectation.changeOrderId
+        && selected.checkout.subtotal.amountMinor ===
+          expectation.subtotal.amountMinor
+      );
+    }
+    return deepFreezeProjection(selected);
+  }
+
+  function customBuildChangeOwnerPayment(value) {
+    var source = changePaymentObject(value, [
+      "action",
+      "invoice",
+      "owner",
+      "schema",
+      "state"
+    ]);
+    var invoice = validateCustomBuildChangeInvoice({
+      schema: source.schema,
+      state: source.state,
+      invoice: source.invoice,
+      action: source.action
+    });
+    changePaymentInvariant(invoice.invoice !== null);
+    var ownerSource = changePaymentObject(source.owner, [
+      "attemptId",
+      "attemptState",
+      "canReconcileCreation",
+      "canReconcileSettlement",
+      "eventId",
+      "eventState",
+      "providerEffectCertainty",
+      "providerErrorCode",
+      "providerRequestExpiresAt",
+      "receiptSource",
+      "reconciliationCode"
+    ]);
+    var attemptId = changePaymentNullableUuid(ownerSource.attemptId);
+    var attemptState = ownerSource.attemptState;
+    var providerEffectCertainty = ownerSource.providerEffectCertainty;
+    var providerErrorCode = changePaymentNullableProviderCode(
+      ownerSource.providerErrorCode
+    );
+    var providerRequestExpiresAt = changePaymentNullableIso(
+      ownerSource.providerRequestExpiresAt
+    );
+    var receiptSource = ownerSource.receiptSource;
+    changePaymentInvariant(
+      attemptState === null
+      || CUSTOM_BUILD_CHANGE_CHECKOUT_ATTEMPT_STATES.includes(attemptState)
+    );
+    changePaymentInvariant(
+      providerEffectCertainty === null
+      || ["not_submitted", "confirmed", "ambiguous"].includes(
+        providerEffectCertainty
+      )
+    );
+    if (attemptState === null) {
+      changePaymentInvariant(
+        attemptId === null
+        && providerEffectCertainty === null
+        && providerErrorCode === null
+        && providerRequestExpiresAt === null
+        && receiptSource === null
+      );
+    } else {
+      changePaymentInvariant(
+        attemptId !== null && providerRequestExpiresAt !== null
+      );
+      if (attemptState === "provider_pending") {
+        changePaymentInvariant(
+          providerEffectCertainty === "not_submitted"
+          && providerErrorCode === null
+        );
+      } else if (attemptState === "ready") {
+        changePaymentInvariant(
+          providerEffectCertainty === "confirmed"
+          && providerErrorCode === null
+        );
+      } else if (attemptState === "failed") {
+        changePaymentInvariant(
+          providerEffectCertainty === "not_submitted"
+          && providerErrorCode !== null
+        );
+      } else if (attemptState === "persistence_unknown") {
+        changePaymentInvariant(
+          providerEffectCertainty === "ambiguous"
+          && providerErrorCode !== null
+        );
+      } else {
+        changePaymentInvariant(providerEffectCertainty === "confirmed");
+      }
+    }
+    changePaymentInvariant(
+      typeof ownerSource.canReconcileCreation === "boolean"
+      && ownerSource.canReconcileCreation ===
+        ["provider_pending", "persistence_unknown"].includes(
+          attemptState
+        )
+      && typeof ownerSource.canReconcileSettlement === "boolean"
+      && ownerSource.canReconcileSettlement === (attemptState === "ready")
+      && [null, "stripe_event", "provider_readback"].includes(
+        receiptSource
+      )
+    );
+    var eventId = ownerSource.eventId;
+    var eventState = ownerSource.eventState;
+    var reconciliationCode = changePaymentNullableProviderCode(
+      ownerSource.reconciliationCode
+    );
+    if (eventId === null) {
+      changePaymentInvariant(
+        eventState === null && reconciliationCode === null
+      );
+    } else {
+      changePaymentInvariant(
+        typeof eventId === "string"
+        && CUSTOM_BUILD_CHANGE_STRIPE_EVENT_ID.test(eventId)
+        && CUSTOM_BUILD_CHANGE_CHECKOUT_EVENT_STATES.includes(eventState)
+        && (
+          eventState === "reconciliation_required"
+            ? reconciliationCode !== null
+            : reconciliationCode === null
+        )
+        && ["ready", "paid"].includes(attemptState)
+      );
+    }
+    if (
+      attemptState === "paid"
+      || eventState === "processed"
+      || receiptSource !== null
+    ) changePaymentInvariant(invoice.state === "paid");
+    if (invoice.state === "paid") {
+      changePaymentInvariant(
+        invoice.state === "paid"
+        && attemptState === "paid"
+        && ["stripe_event", "provider_readback"].includes(receiptSource)
+        && (
+          receiptSource === "provider_readback"
+            ? eventId === null
+            : eventState === "processed"
+        )
+      );
+    } else changePaymentInvariant(receiptSource === null);
+    if (eventState === "pending") {
+      changePaymentInvariant(
+        attemptState === "ready"
+        && ["checkout_ready", "checkout_expired"].includes(invoice.state)
+      );
+    }
+    if (eventState === "reconciliation_required") {
+      changePaymentInvariant(
+        attemptState === "ready"
+        && invoice.state === "reconciliation_required"
+      );
+    }
+    if (
+      ["provider_pending", "persistence_unknown"].includes(attemptState)
+      || eventState === "reconciliation_required"
+    ) {
+      changePaymentInvariant(invoice.state === "reconciliation_required");
+    }
+    if (invoice.state === "reconciliation_required") {
+      changePaymentInvariant(
+        ["provider_pending", "persistence_unknown"].includes(attemptState)
+        || eventState === "reconciliation_required"
+      );
+    }
+    if (["checkout_ready", "checkout_expired"].includes(invoice.state)) {
+      changePaymentInvariant(attemptState === "ready");
+    }
+    if (["checkout_available", "payment_held"].includes(invoice.state)) {
+      changePaymentInvariant(
+        [null, "provider_pending", "failed", "expired"].includes(
+          attemptState
+        )
+      );
+    }
+    if (invoice.state === "voided") {
+      changePaymentInvariant(
+        [null, "failed", "expired"].includes(attemptState)
+        && eventId === null
+      );
+    }
+    return deepFreezeProjection({
+      schema: invoice.schema,
+      state: invoice.state,
+      invoice: invoice.invoice,
+      action: invoice.action,
+      owner: {
+        attemptId: attemptId,
+        attemptState: attemptState,
+        providerEffectCertainty: providerEffectCertainty,
+        providerErrorCode: providerErrorCode,
+        eventId: eventId,
+        eventState: eventState,
+        reconciliationCode: reconciliationCode,
+        receiptSource: receiptSource,
+        canReconcileCreation: ownerSource.canReconcileCreation,
+        canReconcileSettlement: ownerSource.canReconcileSettlement,
+        providerRequestExpiresAt: providerRequestExpiresAt
+      }
+    });
+  }
+
+  function validateCustomBuildChangeOwnerPayments(
+    value,
+    expectedJobId,
+    expectedOrganizationId
+  ) {
+    var source = changePaymentObject(value, [
+      "jobId",
+      "organizationId",
+      "payments",
+      "schema"
+    ]);
+    var jobId = changePaymentUuid(source.jobId);
+    var organizationId = changePaymentUuid(source.organizationId);
+    changePaymentInvariant(
+      source.schema === CUSTOM_BUILD_CHANGE_PAYMENT_OWNER_SCHEMA
+      && jobId === expectedJobId
+      && organizationId === expectedOrganizationId
+    );
+    var payments = changePaymentArray(source.payments, 0, 100000).map(
+      customBuildChangeOwnerPayment
+    );
+    for (var index = 1; index < payments.length; index += 1) {
+      changePaymentInvariant(
+        payments[index - 1].invoice.changeNumber <
+          payments[index].invoice.changeNumber
+      );
+    }
+    changePaymentInvariant(
+      new Set(payments.map(function (entry) {
+        return entry.invoice.invoiceId;
+      })).size === payments.length
+      && new Set(payments.map(function (entry) {
+        return entry.invoice.changeOrderId;
+      })).size === payments.length
+      && new Set(payments.map(function (entry) {
+        return entry.invoice.changeAcceptanceId;
+      })).size === payments.length
+      && new Set(payments.map(function (entry) {
+        return entry.owner.attemptId;
+      }).filter(Boolean)).size === payments.filter(function (entry) {
+        return entry.owner.attemptId !== null;
+      }).length
+    );
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_CHANGE_PAYMENT_OWNER_SCHEMA,
+      organizationId: organizationId,
+      jobId: jobId,
+      payments: payments
+    });
+  }
+
+  function validateCustomBuildChangeOwnerReconciliation(
+    value,
+    expected
+  ) {
+    var source = changePaymentObject(value, [
+      "action",
+      "attemptId",
+      "changeOrderId",
+      "checkout",
+      "invoiceId",
+      "jobId",
+      "next",
+      "organizationId",
+      "reason",
+      "schema",
+      "settlement",
+      "status"
+    ]);
+    var status = changePaymentText(source.status, 1, 80);
+    var state = {
+      checkout_ready: ["creation_reconciled", "customer_checkout"],
+      payment_settled: [
+        "settlement_reconciled",
+        "custom_build_changed_work"
+      ],
+      checkout_expired: ["attempt_expired", "new_checkout_command"],
+      reconciliation_required: ["retry_required", "owner_retry"]
+    }[status];
+    changePaymentInvariant(
+      source.schema === CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_SCHEMA
+      && state
+      && changePaymentUuid(source.organizationId) ===
+        expected.organizationId
+      && changePaymentUuid(source.jobId) === expected.jobId
+      && changePaymentUuid(source.attemptId) === expected.attemptId
+      && changePaymentUuid(source.invoiceId) ===
+        expected.payment.invoice.invoiceId
+      && changePaymentUuid(source.changeOrderId) ===
+        expected.payment.invoice.changeOrderId
+      && source.action === state[0]
+      && source.next === state[1]
+    );
+    var reason = changePaymentNullableProviderCode(source.reason);
+    var checkout = null;
+    if (status === "checkout_ready") {
+      checkout = validateCustomBuildChangeCheckout(
+        source.checkout,
+        {
+          schema: expected.payment.schema,
+          state: expected.payment.state,
+          invoice: expected.payment.invoice,
+          action: expected.payment.action
+        }
+      );
+      changePaymentInvariant(source.settlement === null);
+    } else changePaymentInvariant(source.checkout === null);
+    var settlement = null;
+    if (status === "payment_settled") {
+      var settlementSource = changePaymentObject(source.settlement, [
+        "changeOrderId",
+        "invoiceId",
+        "next",
+        "projectId",
+        "receiptId",
+        "schema",
+        "status"
+      ]);
+      changePaymentInvariant(
+        settlementSource.schema ===
+          CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA
+        && settlementSource.status === "payment_settled"
+        && settlementSource.next === "custom_build_changed_work"
+        && changePaymentUuid(settlementSource.projectId) ===
+          expected.projectId
+        && changePaymentUuid(settlementSource.changeOrderId) ===
+          expected.payment.invoice.changeOrderId
+        && changePaymentUuid(settlementSource.invoiceId) ===
+          expected.payment.invoice.invoiceId
+      );
+      settlement = {
+        schema: CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA,
+        status: "payment_settled",
+        projectId: settlementSource.projectId,
+        changeOrderId: settlementSource.changeOrderId,
+        invoiceId: settlementSource.invoiceId,
+        receiptId: changePaymentUuid(settlementSource.receiptId),
+        next: "custom_build_changed_work"
+      };
+    } else changePaymentInvariant(source.settlement === null);
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_SCHEMA,
+      status: status,
+      organizationId: source.organizationId,
+      jobId: source.jobId,
+      attemptId: source.attemptId,
+      invoiceId: source.invoiceId,
+      changeOrderId: source.changeOrderId,
+      action: source.action,
+      next: source.next,
+      reason: reason,
+      checkout: checkout,
+      settlement: settlement
     });
   }
 
@@ -2521,6 +3435,24 @@
       ).then(validateCustomBuildCustomerChangeCompletion);
     }
 
+    function getCustomServicesCustomBuildChangeInvoice(
+      projectId,
+      requestOptions
+    ) {
+      var options = requestOptions || {};
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-change-invoice",
+        { signal: options.signal }
+      ).then(function (value) {
+        return validateCustomBuildChangeInvoice(
+          value,
+          options.expectedChangeOrder
+        );
+      });
+    }
+
     function getCustomServicesCustomBuildCompletionEvidence(
       projectId,
       evidenceId,
@@ -2709,6 +3641,72 @@
       ).then(validateCustomBuildCustomerChangeCompletion);
     }
 
+    function createCustomServicesCustomBuildChangeCheckout(
+      projectId,
+      invoiceId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "invoiceDigest"],
+        "Custom-build change payment"
+      );
+      rejectClaimedAuthority(source);
+      var selectedInvoiceId = requiredUuid(
+        invoiceId,
+        "Custom-build change invoice ID"
+      );
+      var invoiceDigest = requiredDigest(
+        source.invoiceDigest,
+        "Custom-build change invoice digest"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change payment command ID"
+      );
+      var options = requestOptions || {};
+      var expectedInvoice = options.expectedInvoice === undefined
+        ? null
+        : validateCustomBuildChangeInvoice(options.expectedInvoice);
+      if (expectedInvoice !== null) {
+        changePaymentInvariant(
+          expectedInvoice.state === "checkout_available"
+          && expectedInvoice.action.available === true
+          && expectedInvoice.invoice !== null
+          && expectedInvoice.invoice.invoiceId === selectedInvoiceId
+          && expectedInvoice.invoice.invoiceDigest === invoiceDigest
+        );
+      }
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/custom-services/custom-build-change-invoices/"
+          + segment(
+            selectedInvoiceId,
+            "Custom-build change invoice ID"
+          )
+          + "/checkout-command",
+        {
+          body: {
+            commandId: commandId,
+            invoiceDigest: invoiceDigest
+          },
+          idempotencyKey: commandId,
+          signal: options.signal
+        }
+      ).then(function (value) {
+        var checkout = validateCustomBuildChangeCheckout(
+          value,
+          expectedInvoice
+        );
+        changePaymentInvariant(
+          checkout.checkout.invoiceId === selectedInvoiceId
+        );
+        return checkout;
+      });
+    }
+
     function getOwnerCustomBuildChangeCompletion(
       jobId,
       organizationId,
@@ -2731,6 +3729,105 @@
           value,
           selectedJobId,
           selectedOrganizationId
+        );
+      });
+    }
+
+    function getOwnerCustomBuildChangePayments(
+      jobId,
+      organizationId,
+      requestOptions
+    ) {
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedOrganizationId = requiredUuid(
+        organizationId,
+        "Organization ID"
+      );
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-payments?organizationId="
+          + encodeURIComponent(selectedOrganizationId),
+        { signal: requestOptions && requestOptions.signal }
+      ).then(function (value) {
+        return validateCustomBuildChangeOwnerPayments(
+          value,
+          selectedJobId,
+          selectedOrganizationId
+        );
+      });
+    }
+
+    function reconcileOwnerCustomBuildChangeCheckout(
+      jobId,
+      attemptId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "organizationId"],
+        "Custom-build change Checkout reconciliation"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedAttemptId = requiredUuid(
+        attemptId,
+        "Custom-build change Checkout attempt ID"
+      );
+      var selectedOrganizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build change Checkout reconciliation command ID"
+      );
+      var options = requestOptions || {};
+      var expectedPayment = options.expectedPayment === undefined
+        ? null
+        : customBuildChangeOwnerPayment(options.expectedPayment);
+      var expectedProjectId = requiredUuid(
+        options.expectedProjectId,
+        "Custom-build project ID"
+      );
+      changePaymentInvariant(
+        expectedPayment !== null
+        && expectedPayment.owner.attemptId === selectedAttemptId
+        && (
+          expectedPayment.owner.canReconcileCreation
+          || expectedPayment.owner.canReconcileSettlement
+        )
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/change-payments/"
+          + segment(
+            selectedAttemptId,
+            "Custom-build change Checkout attempt ID"
+          )
+          + "/checkout-reconciliation",
+        {
+          body: {
+            commandId: commandId,
+            organizationId: selectedOrganizationId
+          },
+          idempotencyKey: commandId,
+          signal: options.signal
+        }
+      ).then(function (value) {
+        return validateCustomBuildChangeOwnerReconciliation(
+          value,
+          {
+            organizationId: selectedOrganizationId,
+            projectId: expectedProjectId,
+            jobId: selectedJobId,
+            attemptId: selectedAttemptId,
+            payment: expectedPayment
+          }
         );
       });
     }
@@ -3891,14 +4988,22 @@
         getCustomServicesCustomBuildProgress,
       getCustomServicesCustomBuildChangeCompletion:
         getCustomServicesCustomBuildChangeCompletion,
+      getCustomServicesCustomBuildChangeInvoice:
+        getCustomServicesCustomBuildChangeInvoice,
       getCustomServicesCustomBuildCompletionEvidence:
         getCustomServicesCustomBuildCompletionEvidence,
       acceptCustomServicesCustomBuildChangeOrder:
         acceptCustomServicesCustomBuildChangeOrder,
       declineCustomServicesCustomBuildChangeOrder:
         declineCustomServicesCustomBuildChangeOrder,
+      createCustomServicesCustomBuildChangeCheckout:
+        createCustomServicesCustomBuildChangeCheckout,
       getOwnerCustomBuildChangeCompletion:
         getOwnerCustomBuildChangeCompletion,
+      getOwnerCustomBuildChangePayments:
+        getOwnerCustomBuildChangePayments,
+      reconcileOwnerCustomBuildChangeCheckout:
+        reconcileOwnerCustomBuildChangeCheckout,
       issueOwnerCustomBuildChangeOrder:
         issueOwnerCustomBuildChangeOrder,
       voidOwnerCustomBuildChangeOrder:

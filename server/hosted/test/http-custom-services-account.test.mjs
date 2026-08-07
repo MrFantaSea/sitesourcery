@@ -47,11 +47,17 @@ function assessmentWorkMethods() {
     async getCustomBuildChangeCompletion() {
       throw new Error("unexpected Custom build change/completion read");
     },
+    async getCustomBuildChangeInvoice() {
+      throw new Error("unexpected Custom build change invoice read");
+    },
     async getCustomBuildCompletionEvidence() {
       throw new Error("unexpected Custom build completion evidence read");
     },
     async createCustomBuildCheckout() {
       throw new Error("unexpected Custom build checkout");
+    },
+    async createCustomBuildChangeCheckout() {
+      throw new Error("unexpected Custom build change checkout");
     },
     async respondToCustomBuildRequest() {
       throw new Error("unexpected Custom build response");
@@ -83,8 +89,10 @@ function completeAccountBoundary(overrides = {}) {
     getCustomBuildInvoice: noOp,
     getCustomBuildProgress: noOp,
     getCustomBuildChangeCompletion: noOp,
+    getCustomBuildChangeInvoice: noOp,
     getCustomBuildCompletionEvidence: noOp,
     createCustomBuildCheckout: noOp,
+    createCustomBuildChangeCheckout: noOp,
     acceptCustomBuildQuote: noOp,
     respondToCustomBuildRequest: noOp,
     acceptCustomBuildChangeOrder: noOp,
@@ -104,7 +112,9 @@ function request({
     ? { Cookie: `ss_session=${SESSION_TOKEN}` }
     : {};
   if (write) {
-    headers.Cookie += `${headers.Cookie ? "; " : ""}ss_csrf=${"c".repeat(32)}`;
+    headers.Cookie =
+      `${headers.Cookie ? `${headers.Cookie}; ` : ""}` +
+      `ss_csrf=${"c".repeat(32)}`;
     headers.Origin = ORIGIN;
     headers["X-CSRF-Token"] = "c".repeat(32);
     headers["Idempotency-Key"] = "accept-command-1";
@@ -619,6 +629,126 @@ test("Custom build invoice HTTP routes bind exact project and invoice without br
   ]);
 });
 
+test("Custom-build change payment HTTP routes are exact, authenticated, and isolated from first payment", async () => {
+  const calls = [];
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000004";
+  const invoice = {
+    schema: "sitesourcery.custom-build-change-invoice/v1",
+    state: "checkout_available"
+  };
+  const checkout = {
+    schema: "sitesourcery.custom-build-change-checkout/v1",
+    state: "ready"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildChangeInvoice(actor, projectId) {
+        calls.push({ action: "change-read", actor, projectId });
+        return invoice;
+      },
+      async createCustomBuildChangeCheckout(
+        actor,
+        projectId,
+        selectedInvoiceId,
+        input
+      ) {
+        calls.push({
+          action: "change-checkout",
+          actor,
+          projectId,
+          invoiceId: selectedInvoiceId,
+          input
+        });
+        return checkout;
+      },
+      async createCustomBuildCheckout() {
+        calls.push({ action: "first-payment-crossed" });
+        throw new Error("change payment crossed into first payment");
+      }
+    })
+  });
+  const root =
+    `/api/v1/projects/${PROJECT_ID}/custom-services`;
+  const readPath = `${root}/custom-build-change-invoice`;
+  const checkoutPath =
+    `${root}/custom-build-change-invoices/${invoiceId}/checkout-command`;
+
+  const read = await api.fetch(request({ path: readPath }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), invoice);
+
+  const paid = await api.fetch(request({
+    body: { invoiceDigest: "f".repeat(64) },
+    method: "POST",
+    path: checkoutPath,
+    write: true
+  }));
+  assert.equal(paid.status, 201);
+  assert.deepEqual(await paid.json(), checkout);
+  assert.deepEqual(calls, [
+    {
+      action: "change-read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "change-checkout",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      invoiceId,
+      input: {
+        commandId: "accept-command-1",
+        invoiceDigest: "f".repeat(64)
+      }
+    }
+  ]);
+
+  const wrongQuery = await api.fetch(request({
+    path: `${readPath}?state=paid`
+  }));
+  assert.equal(wrongQuery.status, 400);
+  assert.equal(
+    (await wrongQuery.json()).error.code,
+    "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT"
+  );
+
+  for (const expanded of [
+    { amountMinor: 12_500 },
+    { taxMinor: 1 },
+    { provider: "stripe" },
+    { state: "paid" },
+    { markPaid: true }
+  ]) {
+    const response = await api.fetch(request({
+      body: { invoiceDigest: "f".repeat(64), ...expanded },
+      method: "POST",
+      path: checkoutPath,
+      write: true
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT"
+    );
+  }
+
+  const signedOutRead = await api.fetch(request({
+    path: readPath,
+    signedIn: false
+  }));
+  assert.equal(signedOutRead.status, 401);
+  const signedOutWrite = await api.fetch(request({
+    body: { invoiceDigest: "f".repeat(64) },
+    method: "POST",
+    path: checkoutPath,
+    signedIn: false,
+    write: true
+  }));
+  assert.equal(signedOutWrite.status, 401);
+  assert.equal(calls.length, 2);
+});
+
 test("Custom build progress HTTP routes bind the exact project and safe customer response", async () => {
   const calls = [];
   const requestId =
@@ -982,6 +1112,15 @@ test("default hosted runtime keeps custom-services account reading held", async 
   assert.equal(
     (await changeCompletion.json()).error.code,
     "CUSTOM_BUILD_CHANGE_COMPLETION_HELD"
+  );
+  const changeInvoice = await api.fetch(request({
+    path:
+      `/api/v1/projects/${PROJECT_ID}/custom-services/custom-build-change-invoice`
+  }));
+  assert.equal(changeInvoice.status, 503);
+  assert.equal(
+    (await changeInvoice.json()).error.code,
+    "CUSTOM_BUILD_CHANGE_PAYMENT_HELD"
   );
 });
 

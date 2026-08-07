@@ -1,15 +1,18 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-06T18:41:36-0400 (EDT)
+Generated at: 2026-08-06T20:58:42-0400 (EDT)
 
 Repository snapshot:
 
 - Branch: build/sitesourcery-v2-20260730
-- HEAD: c4277ceffc66186e9f3b7fd7aa64467966a15ccf
+- HEAD: 2b0f9e08d45961afa38ac541d3a065f29f467b68
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
-- Active ledger reviewed completely: ops/SITESOURCERY-ACTIVE-RUN.md, 1,437 lines
+- Active ledger reviewed completely: ops/SITESOURCERY-ACTIVE-RUN.md, 1,528 lines
 - Package gates reviewed: package.json and server/data-plane/package.json
-- The H1M backend/Abracadabra/browser checkpoint is sealed at HEAD. The remaining mixed worktree contains owner-lane Custom, Domains, Responder, Work and vnext.css changes plus untracked coordination documents. This matrix does not treat those dirty public/aesthetic files or stale prose as completed proof.
+- H1M remains sealed at c4277ce and the distinct local public-page visual
+  checkpoint is sealed at HEAD 2b0f9e0. This matrix is part of the path-limited
+  H1N Purpose-1 seal. Concurrent public/legal/checker/shared-manifest truth
+  edits remain outside that checkpoint and are not treated as release proof.
 
 ## Authority, status, and percentage rules
 
@@ -83,7 +86,7 @@ of this file.
 
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| CORE LAUNCH | 64 | 44 | 28 | 0 | 136 | 47.1% |
+| CORE LAUNCH | 74 | 43 | 19 | 0 | 136 | 54.4% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
@@ -293,11 +296,11 @@ settlement, handoff, or permission to skip either financial purpose.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| H1N-CO-01 | Enforce the financial-purpose ordering gate for every accepted_payment_required change before completion/final obligation | Build | PARTIAL | Sealed migration 202608060044:1105-1107 creates accepted_payment_required and lines 1946-1956 block completion while issued/accepted changes remain; no payment orchestration, effective transition or phase-2 reservation guard exists | From sealed H1M, add a database-enforced gate that enumerates every accepted change and forbids completion/final-purpose reservation until all are effective. |
-| H1N-CO-02 | Materialize one exact immutable change-order invoice and line set for every accepted_payment_required change | Build | NOT STARTED | migration 202608060044:710-730 explicitly says v44 has no payment evidence relation; no change-order invoice table/materializer/service/test exists | Bind invoice identity, amount, scope/quote/disclosure digests, customer, job and change number; prove one invoice per accepted change under replay/race. |
-| H1N-CO-03 | Use a dedicated change-order Checkout purpose with retained attempt/event authority | Build | NOT STARTED | Existing Custom Checkout purpose covers the first build payment; no change-order Checkout purpose, attempt or route is present in migration 44/services/tests | Add reserve-before-provider-call Checkout bound only to the exact change-order invoice; never reuse assessment, first-payment or final-payment purpose. |
-| H1N-CO-04 | Record a provider-confirmed change-order settlement receipt bound to the exact invoice and Checkout attempt | Build | NOT STARTED | migration 202608060044:710-730 is deliberately fail-closed until a named receipt relation exists; no provider readback/receipt/reconciliation path exists for change orders | Implement provider readback, immutable receipt/event evidence, idempotent replay and owner-only uncertain-effect reconciliation; no browser mark-paid authority. |
-| H1N-CO-05 | Atomically record the confirmed receipt and transition accepted_payment_required to effective | Build | NOT STARTED | migration 202608060044:934-1008 allows issued-to-accepted/declined/expired/voided transitions but has no accepted_payment_required-to-effective transition; the effective scope can therefore never include an accepted paid change | Add one transaction that validates receipt/invoice/change digests, appends settlement, changes state to effective exactly once and survives duplicate/lost responses; prove completion remains blocked until commit. |
+| H1N-CO-01 | Enforce the financial-purpose ordering gate for every accepted_payment_required change before completion/final obligation | Build | DONE | migrations 44/45; v45 shared H1M lock and receipt-only effective transition; executable lock-order test at custom-services-custom-build-change-payment-postgres.test.mjs:747; active ledger Purpose-1 checkpoint; checkpoint commit containing this matrix | Preserve the gate; Purpose 2 may reserve nothing until every accepted change is effective. |
+| H1N-CO-02 | Materialize one exact immutable change-order invoice and line set for every accepted_payment_required change | Build | DONE | migration 202608060045:128-406 materializes immutable invoice/line authority at exactly `$125 × units`; PostgreSQL Custom-services journey and migration structure proof; active ledger Purpose-1 checkpoint | Preserve one invoice per accepted change and its quote/disclosure/scope digest binding. |
+| H1N-CO-03 | Use a dedicated change-order Checkout purpose with retained attempt/event authority | Build | DONE | migration 202608060045 Checkout attempt/event tables; custom-services-custom-build-change-payment-postgres.mjs; Stripe adapter and provider tests; HTTP/composition/webhook tests; active ledger Purpose-1 checkpoint | Keep this purpose isolated from assessment, first-payment and future final-payment authority. |
+| H1N-CO-04 | Record a provider-confirmed change-order settlement receipt bound to the exact invoice and Checkout attempt | Build | DONE | migration 202608060045:940-1167 immutable receipts and provider-fact validation; durable reconciliation commands at 664-797; service replay/conflict test at lines 848-925; focused 54/54 and integrated 186/186 evidence in active ledger | Preserve provider readback, immutable evidence and owner-only ambiguity handling; never add browser mark-paid authority. |
+| H1N-CO-05 | Atomically record the confirmed receipt and transition accepted_payment_required to effective | Build | DONE | migration 202608060045:1292-1518 receipt-triggered effective transition; PostgreSQL assessment-to-paid-change journey; customer/owner projections and exact three-viewport browser audit; active ledger Purpose-1 checkpoint | Start Purpose 2 only from the resulting all-changes-effective boundary. |
 
 #### Purpose 2 — final obligation, settlement and handoff
 
@@ -314,20 +317,21 @@ settlement, handoff, or permission to skip either financial purpose.
 ### Owner-directed aesthetic launch corrections
 
 The aesthetic lane owns vnext.css, visual assets, and the listed public route
-presentation. The homepage remains design-locked. Dirty aesthetic source is
-evidence of work in progress, not completion.
+presentation. Commit 2b0f9e0 proves the local visual portion for AESTH-01
+through AESTH-08 and leaves the homepage design locked. Rows that also require
+commercial/public truth remain PARTIAL until that separate lane is sealed.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| AESTH-01 | Domains uses its own storefront background, no floating duplicate, readable frosted hero and mobile containment | Aesthetic | PARTIAL | Dirty domains/index.html and vnext.css contain a page class/background attempt; owner still observed wizard background and prior phone render overflowed; no final browser proof exists | Correct actual routed selector/artifact, remove duplicate, then verify desktop and Pixel screenshots. |
-| AESTH-02 | Custom Sorcery route has unique page presentation and no arbitrary floating repeated graphics | Aesthetic | NOT STARTED | custom/index.html has no current worktree change; no page-specific verified background proof exists | Audit complete route, implement unique visual, and verify mobile/desktop without changing commercial authority. |
-| AESTH-03 | Responder removes planner/floating art, shows the whole five-step flow directly and is held/non-sellable | Aesthetic | PARTIAL | Dirty responder/index.html removes planner and exposes five steps, but still carries active pricing/outcome claims; no final CSS/background/browser proof | Finish visual and truth hold, validate HTML and responsive route. |
-| AESTH-04 | Work/Spell Book is an explorable work gallery without clutter or invented client claims | Aesthetic | PARTIAL | Dirty work/index.html and work/work.css; work meta already distinguishes founder sites and fictional studies; no final route proof | Finish gallery structure and responsive/accessibility review. |
-| AESTH-05 | About has its own awesome page background/presentation | Aesthetic | NOT STARTED | No current about/index.html or page-specific asset/CSS change in worktree | Implement and browser-prove without touching locked homepage. |
-| AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | NOT STARTED | No current contact/index.html or page-specific asset/CSS change in worktree | Implement and browser-prove form/contact readability. |
-| AESTH-07 | FAQ has its own awesome page background/presentation | Aesthetic | NOT STARTED | No current faq/index.html or page-specific asset/CSS change in worktree | Implement after copy truth is reconciled; verify details controls. |
-| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | NOT STARTED | No current legal route visual changes; legal copy remains commercially stale | Reconcile legal truth first, then implement/readability-test all legal routes. |
-| AESTH-09 | Homepage design remains locked and is not altered by route corrections | Aesthetic | DONE | index.html has no current worktree modification; coordination directive explicitly locks homepage | Keep it unchanged unless the owner explicitly reopens it. |
+| AESTH-01 | Domains uses its own storefront background, no floating duplicate, readable frosted hero and mobile containment | Aesthetic | DONE | commit 2b0f9e0; page-scoped environment/CSS/assets; maintained 15-route exact-width browser audit | Preserve the visual checkpoint while the separate Domains truth lane finishes. |
+| AESTH-02 | Custom Sorcery route has unique page presentation and no arbitrary floating repeated graphics | Aesthetic | DONE | commit 2b0f9e0; distinct Custom environment and exact-width browser audit | Preserve presentation; commercial authority remains a separate truth obligation. |
+| AESTH-03 | Responder removes planner/floating art, shows the whole five-step flow directly and is held/non-sellable | Aesthetic | PARTIAL | Local visual portion is sealed at 2b0f9e0 and browser-proven; held/non-sellable copy is concurrently edited and unsealed | Seal the separate Responder truth tests without changing the visual checkpoint. |
+| AESTH-04 | Work/Spell Book is an explorable work gallery without clutter or invented client claims | Aesthetic | PARTIAL | Local gallery presentation is sealed at 2b0f9e0; final public-truth review of founder/fictional claims is not yet sealed | Complete and seal the claim audit separately. |
+| AESTH-05 | About has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `one-person-studio` asset/page class; exact-width browser audit | Preserve. |
+| AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `signal-room` asset/page class; exact-width browser audit | Preserve form/contact readability. |
+| AESTH-07 | FAQ has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `index-room` asset/page class; exact-width browser audit | Preserve visual behavior while FAQ copy is sealed separately. |
+| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | PARTIAL | Local `archive-room` presentation/readability is sealed at 2b0f9e0; canonical legal/commercial copy is concurrently edited and unsealed | Seal canonical legal truth separately; do not promote it from visual evidence. |
+| AESTH-09 | Homepage design remains locked and is not altered by route corrections | Aesthetic | DONE | commit 2b0f9e0 excludes homepage visual changes; coordination directive locks its design | Keep visual design unchanged unless the owner explicitly reopens it; truth-only work remains separate. |
 
 ## EXPANSION matrix
 
@@ -400,34 +404,34 @@ held and non-sellable. They determine the separate Expansion percentage.
 
 ## Immediate next action
 
-Begin H1N Purpose 1 from sealed commit c4277ce: materialize the exact accepted-
-change-order invoice and lines, add its dedicated Checkout/Stripe purpose and
-append-only events, require provider-confirmed settlement, and atomically move
-that exact order from `accepted_payment_required` to `effective`. Preserve every
-H1M invariant and keep production, provider release, push, deployment and DNS
-held. Only after every accepted change is effective may Purpose 2 derive the
-completion-bound final obligation.
+Seal the path-limited H1N Purpose-1 checkpoint and pause after reporting its
+commit hash. Begin Purpose 2 only from a fresh continuation and the technical
+lead's exact blueprint. Purpose 2 must derive the completion-bound final
+obligation only after every accepted change is effective, and must retain the
+provider-release, push, deployment and DNS holds.
 
 ## Current evidence gaps that control the next actions
 
-1. H1N has two unimplemented financial purposes. Accepted change orders have no
-   exact invoice, dedicated Checkout, provider-confirmed receipt or atomic
-   effective transition. Until every accepted change is effective, completion
-   may not derive the also-absent final obligation/invoice, final Checkout,
-   settlement/zero-balance clearance, handoff, projections or workmanship clock.
+1. H1N Purpose 1 now has an exact invoice, dedicated Checkout, provider-confirmed
+   receipt, durable reconciliation and atomic effective transition. Purpose 2
+   remains absent: final obligation/invoice, final Checkout,
+   settlement/zero-balance clearance, handoff, final projections and the
+   handoff-derived workmanship clock are still NOT STARTED.
 2. Canonical Alakazam invoices, Portal/cancellation, lifecycle transitions,
    $35/$50 controls/care, customer publication controls and owner
    reconciliation remain incomplete.
-3. Public/legal truth is not launch-ready: an inquiry-only catalog conflicts
-   with the five-sellable-rails checker, direct Stripe/domain charge/refund paths
-   remain, Responder claims active fulfillment despite held telephony, legacy
-   GitHub Pages account/honor-payment scripts ship, legal lifecycle terms are
-   stale, and the all-tier ladder is not published truthfully.
-4. The current mixed aesthetic work has no final mobile/desktop/browser seal.
-5. npm test omits both the fresh empty PostgreSQL replay and Custom-services
-   PostgreSQL journeys. Final clean-room Node 24, authenticated browser,
-   provider test-mode, staging, operations, cutover and rollback proof has not
-   run against one exact sealed candidate either.
+3. The public/legal truth lane is actively correcting catalog, Domains,
+   Responder, legacy Pages, Alakazam and legal contradictions, but its dirty
+   source/checker/manifest work is not yet a sealed launch candidate.
+4. Local page visuals are sealed at 2b0f9e0; Responder, Work and Legal rows that
+   combine presentation with truth remain PARTIAL until their truth is sealed.
+5. `scripts/core-release.mjs` now includes fresh migration and Custom-services
+   PostgreSQL journeys. A provisional moving-tree run replayed all 45
+   migrations, passed all three journeys and removed its exact database, but
+   the concurrent public lane then failed 1/587 candidate tests at the hosted
+   artifact public-dollar assertion. Final clean-room Node 24, provider
+   test-mode, staging, operations, cutover and rollback proof must rerun on one
+   stopped, sealed candidate.
 
 ## Row coverage and recount
 
@@ -468,7 +472,7 @@ Roadmap coverage audit:
 Recount arithmetic:
 
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 = 136.
-- Core status recount: 64 DONE + 44 PARTIAL + 28 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 64 / 136 = 47.1% after one-decimal rounding.
+- Core status recount: 74 DONE + 43 PARTIAL + 19 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 74 / 136 = 54.4% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 136 + 24 + 5 = 165 total classified rows.

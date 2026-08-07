@@ -96,6 +96,16 @@
     "sitesourcery.custom-build-progress/v1";
   var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
     "sitesourcery.custom-build-change-completion/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA =
+    "sitesourcery.custom-build-change-invoice/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_CHECKOUT_SCHEMA =
+    "sitesourcery.custom-build-change-checkout/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_OWNER_SCHEMA =
+    "sitesourcery.custom-build-change-payments-owner/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_SCHEMA =
+    "sitesourcery.custom-build-change-payment-reconciliation-command/v1";
+  var CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA =
+    "sitesourcery.custom-build-change-settlement/v1";
   var CUSTOM_BUILD_CHANGE_UNIT_MINOR = 12500;
   var CUSTOM_BUILD_COMPLETION_CHECKS = Object.freeze([
     Object.freeze(["scope", "Approved scope"]),
@@ -3791,6 +3801,557 @@
       : null;
   }
 
+  function customBuildChangeOrderForInvoice(snapshot, invoice) {
+    var verified = verifiedCustomerCustomBuildChangeCompletion(snapshot);
+    if (!verified || !invoice) return null;
+    return verified.changeOrders.history.concat(
+      verified.changeOrders.active ? [verified.changeOrders.active] : []
+    ).find(function (order) {
+      return order.changeOrderId === invoice.changeOrderId;
+    }) || null;
+  }
+
+  function safeCustomBuildChangeInvoiceProjection(
+    value,
+    order,
+    ownerOrder
+  ) {
+    var states = [
+      "checkout_available",
+      "checkout_expired",
+      "checkout_ready",
+      "paid",
+      "payment_held",
+      "reconciliation_required",
+      "voided"
+    ];
+    if (
+      !exactKeys(value, ["action", "invoice", "schema", "state"])
+      || value.schema !== CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA
+      || !states.includes(value.state)
+      || !exactKeys(value.action, ["available", "reason"])
+      || value.action.available !== (value.state === "checkout_available")
+      || value.action.reason !== (
+        value.state === "checkout_available" ? null : value.state
+      )
+      || !exactKeys(
+        value.invoice,
+        [
+          "acceptedDisclosureDigest",
+          "acceptedQuoteDigest",
+          "changeAcceptanceId",
+          "changeNumber",
+          "changeOrderId",
+          "invoiceDigest",
+          "invoiceId",
+          "invoiceNumber",
+          "issuedAt",
+          "lines",
+          "payment",
+          "subtotal",
+          "targetCompletionDate",
+          "tax",
+          "total"
+        ]
+      )
+    ) return null;
+    var invoice = value.invoice;
+    if (
+      !UUID.test(text(invoice.invoiceId))
+      || !/^SSCB-CHG-[0-9A-F]{32}$/u.test(text(invoice.invoiceNumber))
+      || !SHA256.test(text(invoice.invoiceDigest))
+      || !UUID.test(text(invoice.changeOrderId))
+      || !UUID.test(text(invoice.changeAcceptanceId))
+      || !Number.isSafeInteger(invoice.changeNumber)
+      || invoice.changeNumber < 1
+      || !SHA256.test(text(invoice.acceptedQuoteDigest))
+      || !SHA256.test(text(invoice.acceptedDisclosureDigest))
+      || !safeIso(invoice.issuedAt)
+      || !assessmentDate(invoice.targetCompletionDate)
+      || !Array.isArray(invoice.lines)
+      || invoice.lines.length !== 1
+      || !exactKeys(
+        invoice.lines[0],
+        [
+          "amountMinor",
+          "componentKey",
+          "currency",
+          "displayName",
+          "lineNumber",
+          "quantity",
+          "unitAmountMinor"
+        ]
+      )
+    ) return null;
+    var line = invoice.lines[0];
+    if (
+      line.lineNumber !== 1
+      || line.componentKey !== "custom_build_change_units"
+      || line.displayName !== "Custom build change #"
+        + invoice.changeNumber + " — added-work units"
+      || !Number.isSafeInteger(line.quantity)
+      || line.quantity < 1
+      || line.quantity > 40
+      || line.unitAmountMinor !== CUSTOM_BUILD_CHANGE_UNIT_MINOR
+      || line.amountMinor !== line.quantity * line.unitAmountMinor
+      || line.currency !== "USD"
+      || !exactKeys(invoice.subtotal, ["amountMinor", "currency"])
+      || invoice.subtotal.amountMinor !== line.amountMinor
+      || invoice.subtotal.currency !== "USD"
+      || !exactKeys(invoice.tax, ["amountMinor", "state"])
+      || !exactKeys(invoice.total, ["amountMinor", "currency", "state"])
+      || invoice.total.currency !== "USD"
+      || !exactKeys(
+        invoice.payment,
+        ["chargeOccurred", "checkoutExpiresAt", "checkoutUrl", "settledAt"]
+      )
+    ) return null;
+    var paid = value.state === "paid";
+    var ready = value.state === "checkout_ready";
+    if (paid) {
+      if (
+        !safeMinor(invoice.tax.amountMinor)
+        || invoice.tax.state !== "settled"
+        || !safeMinor(invoice.total.amountMinor)
+        || invoice.total.amountMinor !==
+          invoice.subtotal.amountMinor + invoice.tax.amountMinor
+        || invoice.total.state !== "settled"
+        || invoice.payment.chargeOccurred !== true
+        || invoice.payment.checkoutUrl !== null
+        || invoice.payment.checkoutExpiresAt !== null
+        || !safeIso(invoice.payment.settledAt)
+      ) return null;
+    } else if (
+      invoice.tax.amountMinor !== null
+      || invoice.tax.state !== "calculated_at_checkout"
+      || invoice.total.amountMinor !== null
+      || invoice.total.state !== "shown_at_checkout"
+      || invoice.payment.chargeOccurred !== false
+      || invoice.payment.settledAt !== null
+    ) return null;
+    if (ready) {
+      if (
+        safeCheckoutDestination({ checkoutUrl: invoice.payment.checkoutUrl })
+          !== invoice.payment.checkoutUrl
+        || !safeIso(invoice.payment.checkoutExpiresAt)
+      ) return null;
+    } else if (
+      invoice.payment.checkoutUrl !== null
+      || invoice.payment.checkoutExpiresAt !== null
+    ) return null;
+    if (order) {
+      if (
+        !safeCustomBuildChangeOrder(order, ownerOrder === true)
+        || invoice.changeOrderId !== order.changeOrderId
+        || invoice.changeNumber !== order.changeNumber
+        || invoice.acceptedQuoteDigest !== order.quoteDigest
+        || invoice.acceptedDisclosureDigest !== order.disclosureDigest
+        || invoice.targetCompletionDate !== order.targetCompletionDate
+        || invoice.subtotal.amountMinor !== order.pricing.subtotalMinor
+        || !safeIso(order.acceptedAt)
+        || Date.parse(invoice.issuedAt) < Date.parse(order.acceptedAt)
+        || (paid && order.state !== "effective")
+        || (value.state === "voided" && order.state !== "voided")
+        || (
+          !paid
+          && value.state !== "voided"
+          && order.state !== "accepted_payment_required"
+        )
+      ) return null;
+    }
+    return value;
+  }
+
+  function verifiedCustomerCustomBuildChangeInvoice(value, snapshot) {
+    if (
+      !exactKeys(value, ["action", "invoice", "schema", "state"])
+      || value.schema !== CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA
+      || !exactKeys(value.action, ["available", "reason"])
+    ) return null;
+    if (value.state === "not_available") {
+      return value.invoice === null
+        && value.action.available === false
+        && value.action.reason === "invoice_not_available"
+        ? value
+        : null;
+    }
+    var order = customBuildChangeOrderForInvoice(snapshot, value.invoice);
+    return order
+      ? safeCustomBuildChangeInvoiceProjection(value, order)
+      : null;
+  }
+
+  function verifiedCustomerCustomBuildChangeCheckout(
+    value,
+    invoiceState,
+    nowInput
+  ) {
+    var invoiceProjection = invoiceState
+      && invoiceState.schema === CUSTOM_BUILD_CHANGE_PAYMENT_INVOICE_SCHEMA
+      ? invoiceState
+      : null;
+    var invoice = invoiceProjection && invoiceProjection.invoice;
+    var now = safeIso(nowInput) ? Date.parse(nowInput) : Date.now();
+    if (
+      !invoice
+      || !exactKeys(value, ["checkout", "schema", "state"])
+      || value.schema !== CUSTOM_BUILD_CHANGE_PAYMENT_CHECKOUT_SCHEMA
+      || value.state !== "ready"
+      || !exactKeys(
+        value.checkout,
+        [
+          "chargeOccurred",
+          "changeOrderId",
+          "expiresAt",
+          "invoiceId",
+          "invoiceNumber",
+          "subtotal",
+          "tax",
+          "total",
+          "url"
+        ]
+      )
+    ) return null;
+    var checkout = value.checkout;
+    if (
+      checkout.invoiceId !== invoice.invoiceId
+      || checkout.invoiceNumber !== invoice.invoiceNumber
+      || checkout.changeOrderId !== invoice.changeOrderId
+      || safeCheckoutDestination({ checkoutUrl: checkout.url }) !== checkout.url
+      || !safeIso(checkout.expiresAt)
+      || Date.parse(checkout.expiresAt) <= now
+      || !exactKeys(checkout.subtotal, ["amountMinor", "currency"])
+      || checkout.subtotal.amountMinor !== invoice.subtotal.amountMinor
+      || checkout.subtotal.currency !== "USD"
+      || !exactKeys(checkout.tax, ["amountMinor", "state"])
+      || checkout.tax.amountMinor !== null
+      || checkout.tax.state !== "calculated_at_checkout"
+      || !safeCustomBuildPendingMoney(checkout.total, "USD")
+      || checkout.chargeOccurred !== false
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerCustomBuildChangePayments(
+    value,
+    expectedEntry,
+    changeCompletionInput
+  ) {
+    if (
+      !exactKeys(
+        value,
+        ["jobId", "organizationId", "payments", "schema"]
+      )
+      || value.schema !== CUSTOM_BUILD_CHANGE_PAYMENT_OWNER_SCHEMA
+      || !UUID.test(text(value.organizationId))
+      || !UUID.test(text(value.jobId))
+      || !Array.isArray(value.payments)
+      || value.payments.length > 100
+      || (
+        expectedEntry
+        && (
+          value.organizationId !== text(expectedEntry.organizationId)
+          || value.jobId !== text(
+            expectedEntry.job && expectedEntry.job.jobId
+          )
+        )
+      )
+    ) return null;
+    var changeCompletion = changeCompletionInput
+      ? verifiedOwnerCustomBuildChangeCompletion(
+          changeCompletionInput,
+          expectedEntry
+        )
+      : null;
+    if (changeCompletionInput && !changeCompletion) return null;
+    var invoiceIds = new Set();
+    var orderIds = new Set();
+    var acceptanceIds = new Set();
+    var attemptIds = new Set();
+    var priorChangeNumber = 0;
+    var valid = value.payments.every(function (payment) {
+      if (
+        !exactKeys(
+          payment,
+          ["action", "invoice", "owner", "schema", "state"]
+        )
+        || !payment.invoice
+      ) return false;
+      var order = changeCompletion
+        ? changeCompletion.changeOrders.find(function (candidate) {
+            return candidate.changeOrderId === payment.invoice.changeOrderId;
+          })
+        : null;
+      if (changeCompletion && !order) return false;
+      var invoiceProjection = safeCustomBuildChangeInvoiceProjection(
+        {
+          schema: payment.schema,
+          state: payment.state,
+          invoice: payment.invoice,
+          action: payment.action
+        },
+        order,
+        true
+      );
+      if (!invoiceProjection) return false;
+      var invoice = payment.invoice;
+      if (
+        invoice.changeNumber <= priorChangeNumber
+        || invoiceIds.has(invoice.invoiceId)
+        || orderIds.has(invoice.changeOrderId)
+        || acceptanceIds.has(invoice.changeAcceptanceId)
+      ) return false;
+      priorChangeNumber = invoice.changeNumber;
+      invoiceIds.add(invoice.invoiceId);
+      orderIds.add(invoice.changeOrderId);
+      acceptanceIds.add(invoice.changeAcceptanceId);
+      if (
+        !exactKeys(
+          payment.owner,
+          [
+            "attemptId",
+            "attemptState",
+            "canReconcileCreation",
+            "canReconcileSettlement",
+            "eventId",
+            "eventState",
+            "providerEffectCertainty",
+            "providerErrorCode",
+            "providerRequestExpiresAt",
+            "receiptSource",
+            "reconciliationCode"
+          ]
+        )
+      ) return false;
+      var owner = payment.owner;
+      var attemptStates = [
+        "provider_pending",
+        "ready",
+        "failed",
+        "persistence_unknown",
+        "expired",
+        "paid"
+      ];
+      var eventStates = [
+        "pending",
+        "reconciliation_required",
+        "processed"
+      ];
+      var safeCode = function (selected) {
+        return selected === null
+          || /^[A-Za-z0-9._:-]{1,200}$/u.test(text(selected));
+      };
+      if (
+        (owner.attemptId !== null && !UUID.test(text(owner.attemptId)))
+        || (
+          owner.attemptState !== null
+          && !attemptStates.includes(owner.attemptState)
+        )
+        || (
+          owner.providerEffectCertainty !== null
+          && !["not_submitted", "confirmed", "ambiguous"]
+            .includes(owner.providerEffectCertainty)
+        )
+        || !safeCode(owner.providerErrorCode)
+        || !safeCode(owner.reconciliationCode)
+        || ![null, "stripe_event", "provider_readback"]
+          .includes(owner.receiptSource)
+        || typeof owner.canReconcileCreation !== "boolean"
+        || typeof owner.canReconcileSettlement !== "boolean"
+      ) return false;
+      if (owner.attemptState === null) {
+        if (
+          owner.attemptId !== null
+          || owner.providerEffectCertainty !== null
+          || owner.providerErrorCode !== null
+          || owner.providerRequestExpiresAt !== null
+          || owner.eventId !== null
+          || owner.eventState !== null
+          || owner.reconciliationCode !== null
+          || owner.receiptSource !== null
+          || owner.canReconcileCreation
+          || owner.canReconcileSettlement
+        ) return false;
+      } else {
+        if (
+          !UUID.test(text(owner.attemptId))
+          || !safeIso(owner.providerRequestExpiresAt)
+          || attemptIds.has(owner.attemptId)
+        ) return false;
+        attemptIds.add(owner.attemptId);
+        if (
+          owner.canReconcileCreation !== [
+            "provider_pending",
+            "persistence_unknown"
+          ].includes(owner.attemptState)
+          || owner.canReconcileSettlement !==
+            (owner.attemptState === "ready")
+        ) return false;
+        if (
+          owner.attemptState === "provider_pending"
+          && owner.providerEffectCertainty !== "not_submitted"
+        ) return false;
+        if (
+          owner.attemptState === "persistence_unknown"
+          && (
+            owner.providerEffectCertainty !== "ambiguous"
+            || owner.providerErrorCode === null
+          )
+        ) return false;
+        if (
+          ["ready", "expired", "paid"].includes(owner.attemptState)
+          && owner.providerEffectCertainty !== "confirmed"
+        ) return false;
+        if (
+          owner.attemptState === "failed"
+          && (
+            owner.providerEffectCertainty !== "not_submitted"
+            || owner.providerErrorCode === null
+          )
+        ) return false;
+      }
+      if (owner.eventId === null) {
+        if (
+          owner.eventState !== null
+          || owner.reconciliationCode !== null
+        ) return false;
+      } else if (
+        !/^evt_[A-Za-z0-9_]+$/u.test(text(owner.eventId))
+        || !eventStates.includes(owner.eventState)
+        || (
+          owner.eventState === "reconciliation_required"
+            ? owner.reconciliationCode === null
+            : owner.reconciliationCode !== null
+        )
+      ) return false;
+      if (payment.state === "paid") {
+        if (
+          owner.attemptState !== "paid"
+          || !["stripe_event", "provider_readback"]
+            .includes(owner.receiptSource)
+          || (
+            owner.receiptSource === "stripe_event"
+            && owner.eventState !== "processed"
+          )
+        ) return false;
+      } else if (owner.receiptSource !== null) return false;
+      if (
+        payment.state === "reconciliation_required"
+        && !owner.canReconcileCreation
+        && !owner.canReconcileSettlement
+      ) return false;
+      if (
+        owner.canReconcileCreation
+        && payment.state !== "reconciliation_required"
+      ) return false;
+      return true;
+    });
+    return valid ? value : null;
+  }
+
+  function verifiedOwnerCustomBuildChangePaymentReconciliation(
+    value,
+    expectedEntry,
+    expectedPayment
+  ) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "action",
+          "attemptId",
+          "changeOrderId",
+          "checkout",
+          "invoiceId",
+          "jobId",
+          "next",
+          "organizationId",
+          "reason",
+          "schema",
+          "settlement",
+          "status"
+        ]
+      )
+      || value.schema !==
+        CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_SCHEMA
+      || !expectedEntry
+      || !expectedPayment
+      || value.organizationId !== text(expectedEntry.organizationId)
+      || value.jobId !== text(expectedEntry.job && expectedEntry.job.jobId)
+      || value.attemptId !== expectedPayment.owner.attemptId
+      || value.invoiceId !== expectedPayment.invoice.invoiceId
+      || value.changeOrderId !== expectedPayment.invoice.changeOrderId
+      || (
+        value.reason !== null
+        && !/^[A-Za-z0-9._:-]{1,200}$/u.test(text(value.reason))
+      )
+    ) return null;
+    var expectedState = {
+      checkout_ready: [
+        "creation_reconciled",
+        "customer_checkout"
+      ],
+      payment_settled: [
+        "settlement_reconciled",
+        "custom_build_changed_work"
+      ],
+      checkout_expired: [
+        "attempt_expired",
+        "new_checkout_command"
+      ],
+      reconciliation_required: [
+        "retry_required",
+        "owner_retry"
+      ]
+    }[value.status];
+    if (
+      !expectedState
+      || value.action !== expectedState[0]
+      || value.next !== expectedState[1]
+    ) return null;
+    if (value.status === "checkout_ready") {
+      var invoiceState = {
+        schema: expectedPayment.schema,
+        state: expectedPayment.state,
+        invoice: expectedPayment.invoice,
+        action: expectedPayment.action
+      };
+      if (
+        !verifiedCustomerCustomBuildChangeCheckout(
+          value.checkout,
+          invoiceState
+        )
+        || value.settlement !== null
+      ) return null;
+    } else if (value.checkout !== null) return null;
+    if (value.status === "payment_settled") {
+      if (
+        !exactKeys(
+          value.settlement,
+          [
+            "changeOrderId",
+            "invoiceId",
+            "next",
+            "projectId",
+            "receiptId",
+            "schema",
+            "status"
+          ]
+        )
+        || value.settlement.schema !==
+          CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA
+        || value.settlement.status !== "payment_settled"
+        || value.settlement.next !== "custom_build_changed_work"
+        || value.settlement.projectId !== text(expectedEntry.projectId)
+        || value.settlement.changeOrderId !==
+          expectedPayment.invoice.changeOrderId
+        || value.settlement.invoiceId !== expectedPayment.invoice.invoiceId
+        || !UUID.test(text(value.settlement.receiptId))
+      ) return null;
+    } else if (value.settlement !== null) return null;
+    return value;
+  }
+
   function currentOwnerCustomBuildCompletionEvidence(snapshot, progressRead) {
     var progress = progressRead && verifiedCustomBuildProgress(
       progressRead.snapshot
@@ -6195,6 +6756,154 @@
       return section;
     }
 
+    function renderChangePayment(invoiceState, busy, actionAvailable) {
+      if (!invoiceState || invoiceState.state === "not_available") {
+        return null;
+      }
+      var invoice = invoiceState.invoice;
+      var line = invoice.lines[0];
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-change-card customer-custom-build-change-payment"
+      );
+      section.setAttribute(
+        "data-customer-custom-build-change-payment",
+        invoiceState.state
+      );
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Invoice",
+        invoice.invoiceNumber
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Added work",
+        line.quantity + " × $125.00"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Subtotal",
+        customBuildMoney(invoice.subtotal.amountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Tax",
+        invoiceState.state === "paid"
+          ? customBuildMoney(invoice.tax.amountMinor) + " USD · Settled"
+          : "Calculated by Stripe before confirmation"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Exact total",
+        invoiceState.state === "paid"
+          ? customBuildMoney(invoice.total.amountMinor) + " USD"
+          : "Shown by Stripe before confirmation"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Changed work",
+        invoiceState.state === "paid"
+          ? "Payment confirmed; added scope is effective"
+          : "Paused until exact payment is verified"
+      );
+      section.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          "Added-work payment"
+        ),
+        facts
+      );
+      var note = {
+        checkout_available:
+          "No charge has occurred. Stripe will show automatic tax and the exact total before you confirm payment.",
+        checkout_ready:
+          "No charge is recorded here yet. Your retained Stripe payment page is available until the time shown.",
+        checkout_expired:
+          "That Stripe payment page expired. Refresh this panel before requesting one safe replacement.",
+        payment_held:
+          "New payment pages are held in this runtime. No charge occurred and the changed work remains paused.",
+        reconciliation_required:
+          "Do not try another payment. A prior payment-page result is uncertain and requires Site Sourcery owner review.",
+        paid:
+          "Stripe payment was verified against this exact invoice. The changed work may now proceed.",
+        voided:
+          "This invoice was voided without a recorded charge. It cannot be paid."
+      }[invoiceState.state];
+      section.appendChild(accountElement(
+        documentRef,
+        "p",
+        invoiceState.state === "reconciliation_required"
+          ? "customer-custom-build-credential-warning"
+          : "customer-assessment-note",
+        note
+      ));
+      if (
+        invoiceState.state === "checkout_available"
+        && actionAvailable === true
+      ) {
+        var checkout = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          busy ? "Opening secure payment…" : "Continue to secure payment"
+        );
+        checkout.type = "button";
+        checkout.disabled = busy;
+        checkout.setAttribute(
+          "data-customer-custom-build-change-checkout",
+          ""
+        );
+        checkout.addEventListener("click", function () {
+          if (!busy && typeof actions.checkout === "function") {
+            actions.checkout(invoiceState);
+          }
+        });
+        section.appendChild(checkout);
+      } else if (invoiceState.state === "checkout_ready") {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Payment page expires",
+          accountDate(invoice.payment.checkoutExpiresAt)
+        );
+        var reopen = accountElement(
+          documentRef,
+          "a",
+          "spark-button spark-button-primary",
+          "Open retained secure payment"
+        );
+        reopen.href = invoice.payment.checkoutUrl;
+        reopen.rel = "noopener noreferrer";
+        reopen.setAttribute(
+          "data-customer-custom-build-change-checkout-ready",
+          ""
+        );
+        section.appendChild(reopen);
+      } else if (invoiceState.state === "paid") {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Settled",
+          accountDate(invoice.payment.settledAt)
+        );
+      }
+      return section;
+    }
+
     function renderCompletion(completion, projectId, busy) {
       var section = accountElement(
         documentRef,
@@ -6314,6 +7023,11 @@
       var snapshot = verifiedCustomerCustomBuildChangeCompletion(
         read.snapshot
       );
+      var invoiceState = snapshot
+        && verifiedCustomerCustomBuildChangeInvoice(
+          read.invoice,
+          snapshot
+        );
       body.replaceChildren();
       panel.hidden = read.phase === "idle";
       if (read.phase === "idle") return;
@@ -6372,6 +7086,22 @@
           "p",
           "customer-assessment-note",
           "This project does not currently have paid Custom-build change or completion records."
+        ));
+      }
+      if (invoiceState && invoiceState.state !== "not_available") {
+        body.appendChild(renderChangePayment(
+          invoiceState,
+          Boolean(read.command),
+          !read.error
+        ));
+      } else if (snapshot.state === "change_order_payment_required") {
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-credential-warning",
+          read.command === "loading added-work invoice"
+            ? "Loading the exact added-work invoice…"
+            : "The exact added-work invoice is not verified yet. Do not send payment outside this account panel."
         ));
       }
       snapshot.changeOrders.history.filter(function (order) {
@@ -8353,9 +9083,224 @@
       return section;
     }
 
+    function renderOwnerChangePayments(
+      entry,
+      read,
+      changeCompletion,
+      globallyBusy
+    ) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-change customer-custom-build-owner-change-payments"
+      );
+      section.setAttribute(
+        "data-owner-custom-build-change-payments",
+        entry.job.jobId
+      );
+      var status = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-status customer-custom-build-change-payment-status"
+      );
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.setAttribute("tabindex", "-1");
+      var refresh = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Refresh added-work payments"
+      );
+      refresh.type = "button";
+      refresh.setAttribute(
+        "data-owner-custom-build-change-payments-refresh",
+        ""
+      );
+      refresh.disabled = Boolean(globallyBusy)
+        || Boolean(read && (read.phase === "loading" || read.busy));
+      refresh.addEventListener("click", function () {
+        if (typeof actions.refreshChangePayments === "function") {
+          actions.refreshChangePayments(entry);
+        }
+      });
+      section.append(
+        accountElement(documentRef, "h6", "", "Added-work payments"),
+        status,
+        refresh
+      );
+      var snapshot = changeCompletion
+        && read
+        && verifiedOwnerCustomBuildChangePayments(
+          read.snapshot,
+          entry,
+          changeCompletion
+        );
+      if (!snapshot) {
+        status.textContent = read && read.phase === "error"
+          ? read.error
+            || "Added-work payment records could not be verified."
+          : "Loading exact added-work payment records…";
+        return section;
+      }
+      if (read.phase === "loading") {
+        status.textContent =
+          "Refreshing exact payment records. The last verified records remain below.";
+      } else if (read.busy) {
+        status.textContent =
+          "Reconciling one exact Stripe payment result…";
+      } else if (read.notice) {
+        status.textContent = read.notice;
+      } else {
+        status.textContent = snapshot.payments.length
+          ? snapshot.payments.length + " exact added-work payment record"
+            + (snapshot.payments.length === 1 ? " is" : "s are")
+            + " retained."
+          : "No accepted-change payment invoice is retained for this project.";
+      }
+      if (read.error) {
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-owner-quote-form-error",
+          read.error
+        ));
+      }
+      snapshot.payments.forEach(function (payment) {
+        var invoice = payment.invoice;
+        var owner = payment.owner;
+        var line = invoice.lines[0];
+        var card = accountElement(
+          documentRef,
+          "section",
+          "customer-custom-build-change-card customer-custom-build-owner-change-payment"
+        );
+        card.setAttribute(
+          "data-owner-custom-build-change-payment",
+          payment.state
+        );
+        var facts = accountElement(
+          documentRef,
+          "dl",
+          "customer-custom-build-change-facts"
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Invoice",
+          invoice.invoiceNumber
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Added work",
+          line.quantity + " × $125.00"
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Subtotal",
+          customBuildMoney(invoice.subtotal.amountMinor) + " USD"
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Invoice state",
+          accountWords(payment.state)
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Stripe effect certainty",
+          owner.providerEffectCertainty === null
+            ? "No payment-page attempt"
+            : accountWords(owner.providerEffectCertainty)
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Receipt source",
+          owner.receiptSource === null
+            ? "No verified payment receipt"
+            : owner.receiptSource === "stripe_event"
+              ? "Verified Stripe event"
+              : "Verified Stripe readback"
+        );
+        card.append(
+          accountElement(
+            documentRef,
+            "h6",
+            "",
+            "Added-work change " + invoice.changeNumber
+          ),
+          facts
+        );
+        var note = {
+          checkout_available:
+            "The customer may request one exact Stripe payment page.",
+          checkout_ready:
+            "The customer’s retained Stripe payment page is ready. This owner control cannot mark it paid.",
+          checkout_expired:
+            "The retained Stripe payment page is expired. A fresh customer command is required.",
+          payment_held:
+            "Payment-page creation is held. No owner action can mark this invoice paid.",
+          reconciliation_required:
+            "The Stripe result is uncertain. Reconcile the retained provider evidence before any retry.",
+          paid:
+            "Provider-confirmed payment is retained and the accepted added work is effective.",
+          voided:
+            "The invoice is voided and no payment action is available."
+        }[payment.state];
+        card.appendChild(accountElement(
+          documentRef,
+          "p",
+          payment.state === "reconciliation_required"
+            ? "customer-custom-build-credential-warning"
+            : "customer-assessment-note",
+          note
+        ));
+        if (
+          owner.canReconcileCreation
+          || owner.canReconcileSettlement
+        ) {
+          var reconcile = accountElement(
+            documentRef,
+            "button",
+            "spark-button spark-button-primary",
+            read.busy
+              ? "Reconciling exact Stripe result…"
+              : owner.canReconcileSettlement
+                ? "Verify retained Stripe payment"
+                : "Reconcile uncertain payment page"
+          );
+          reconcile.type = "button";
+          reconcile.disabled = Boolean(globallyBusy) || Boolean(read.busy);
+          reconcile.setAttribute(
+            "data-owner-custom-build-change-payment-reconcile",
+            owner.attemptId
+          );
+          reconcile.setAttribute(
+            "data-owner-custom-build-change-payment-reconcile-kind",
+            owner.canReconcileSettlement ? "settlement" : "creation"
+          );
+          reconcile.addEventListener("click", function () {
+            if (
+              !globallyBusy
+              && !read.busy
+              && typeof actions.reconcileChangePayment === "function"
+            ) actions.reconcileChangePayment(entry, payment);
+          });
+          card.appendChild(reconcile);
+        }
+        section.appendChild(card);
+      });
+      return section;
+    }
+
     function renderJobChangeCompletion(
       entry,
       read,
+      paymentRead,
       progressRead,
       globallyBusy
     ) {
@@ -8425,6 +9370,12 @@
           read.error
         ));
       }
+      section.appendChild(renderOwnerChangePayments(
+        entry,
+        paymentRead,
+        snapshot,
+        busy
+      ));
       var active = snapshot.changeOrders.find(function (order) {
         return ["issued", "accepted_payment_required"].includes(order.state);
       });
@@ -8487,6 +9438,7 @@
       entry,
       progressRead,
       changeCompletionRead,
+      changePaymentRead,
       globallyBusy
     ) {
       var card = accountElement(
@@ -8536,6 +9488,7 @@
         renderJobChangeCompletion(
           entry,
           changeCompletionRead,
+          changePaymentRead,
           progressRead,
           globallyBusy
         )
@@ -8547,6 +9500,19 @@
       element: panel,
       focusStatus: function () {
         if (typeof status.focus === "function") status.focus();
+      },
+      focusChangePaymentStatus: function (jobId) {
+        var payment = body.querySelector(
+          '[data-owner-custom-build-change-payments="'
+            + text(jobId) + '"]'
+        );
+        var paymentStatus = payment && payment.querySelector(
+          ".customer-custom-build-change-payment-status"
+        );
+        if (
+          paymentStatus
+          && typeof paymentStatus.focus === "function"
+        ) paymentStatus.focus();
       },
       render: function (state) {
         var visible = Boolean(state && state.revealed === true);
@@ -8593,6 +9559,8 @@
               && state.progressByJob[entry.job.jobId],
             state.changeCompletionByJob
               && state.changeCompletionByJob[entry.job.jobId],
+            state.changePaymentsByJob
+              && state.changePaymentsByJob[entry.job.jobId],
             interfaceBusy
           );
         });
@@ -11492,6 +12460,7 @@
       projectId: "",
       phase: "idle",
       snapshot: null,
+      invoice: null,
       command: "",
       error: ""
     };
@@ -11511,6 +12480,7 @@
       jobs: null,
       progressByJob: {},
       changeCompletionByJob: {},
+      changePaymentsByJob: {},
       busyKey: "",
       pageNumber: 0,
       loadingMore: false,
@@ -11609,9 +12579,11 @@
           && [
             "accept",
             "checkout",
+            "change-checkout",
             "issue",
             "void",
             "progress",
+            "reconcile-change-payment",
             "request",
             "respond",
             "resolve",
@@ -11937,6 +12909,15 @@
           refreshChangeCompletion: function (entry) {
             return requestOwnerCustomBuildChangeCompletion(entry);
           },
+          refreshChangePayments: function (entry) {
+            return requestOwnerCustomBuildChangePayments(entry);
+          },
+          reconcileChangePayment: function (entry, payment) {
+            return runOwnerCustomBuildChangePaymentReconciliation(
+              entry,
+              payment
+            );
+          },
           issueChange: function (entry, snapshot, input) {
             return runOwnerCustomBuildChangeCompletionCommand(
               "issue-change",
@@ -12035,6 +13016,11 @@
             return runCustomerCustomBuildChangeDecision(
               "decline",
               order
+            );
+          },
+          checkout: function (invoiceState) {
+            return requestCustomerCustomBuildChangeCheckout(
+              invoiceState
             );
           },
           evidence: function (entry, fallbackUrl) {
@@ -13153,6 +14139,328 @@
       );
     }
 
+    function setOwnerCustomBuildChangePayments(jobId, value) {
+      var next = Object.assign(
+        {},
+        ownerCustomBuildWorkRead.changePaymentsByJob || {}
+      );
+      next[jobId] = value;
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { changePaymentsByJob: next }
+      );
+      renderOwnerCustomBuildWorkPanel();
+    }
+
+    function requestOwnerCustomBuildChangePayments(entry) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      if (
+        !accountId
+        || !jobId
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      var changeRead = ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      var changeCompletion = changeRead
+        && verifiedOwnerCustomBuildChangeCompletion(
+          changeRead.snapshot,
+          entry
+        );
+      var retainedRead = ownerCustomBuildWorkRead.changePaymentsByJob
+        && ownerCustomBuildWorkRead.changePaymentsByJob[jobId];
+      var retained = retainedRead
+        && verifiedOwnerCustomBuildChangePayments(
+          retainedRead.snapshot,
+          entry,
+          changeCompletion
+        );
+      var retainedNotice = text(retainedRead && retainedRead.notice);
+      if (
+        typeof client.getOwnerCustomBuildChangePayments !== "function"
+      ) {
+        setOwnerCustomBuildChangePayments(jobId, {
+          phase: "error",
+          snapshot: retained,
+          busy: "",
+          notice: retainedNotice,
+          error:
+            "Added-work payment reconciliation is unavailable in this build."
+        });
+        return Promise.resolve(null);
+      }
+      setOwnerCustomBuildChangePayments(jobId, {
+        phase: "loading",
+        snapshot: retained,
+        busy: "",
+        notice: retainedNotice,
+        error: ""
+      });
+      return client.getOwnerCustomBuildChangePayments(
+        jobId,
+        entry.organizationId
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var currentChangeRead =
+          ownerCustomBuildWorkRead.changeCompletionByJob
+          && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+        var currentChange = currentChangeRead
+          && verifiedOwnerCustomBuildChangeCompletion(
+            currentChangeRead.snapshot,
+            entry
+          );
+        var snapshot = verifiedOwnerCustomBuildChangePayments(
+          result,
+          entry,
+          currentChange
+        );
+        if (!snapshot) {
+          throw new Error(
+            "The exact added-work payment records could not be verified."
+          );
+        }
+        setOwnerCustomBuildChangePayments(jobId, {
+          phase: "ready",
+          snapshot: snapshot,
+          busy: "",
+          notice: retainedNotice,
+          error: ""
+        });
+        return snapshot;
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var held = [401, 403, 503].includes(Number(error && error.status))
+          || [
+            "CUSTOM_BUILD_CHANGE_PAYMENT_HELD",
+            "CUSTOM_BUILD_CHANGE_PAYMENT_UNAVAILABLE"
+          ].includes(text(error && error.code));
+        setOwnerCustomBuildChangePayments(jobId, {
+          phase: "error",
+          snapshot: retained,
+          busy: "",
+          notice: retainedNotice,
+          error: held
+            ? "Added-work payment reconciliation is held or unavailable. No provider action was taken."
+            : explain(
+                error,
+                "Added-work payment records could not be refreshed. The last verified records remain below."
+              )
+        });
+        ownerCustomBuildWorkPanel.focusChangePaymentStatus(jobId);
+        return null;
+      });
+    }
+
+    function requestOwnerCustomBuildChangePaymentsBatch(entries) {
+      var pending = entries.slice();
+      function next() {
+        var entry = pending.shift();
+        if (!entry) return Promise.resolve(null);
+        return requestOwnerCustomBuildChangePayments(entry).then(next);
+      }
+      return Promise.all(
+        entries.slice(0, 4).map(function () { return next(); })
+      );
+    }
+
+    function runOwnerCustomBuildChangePaymentReconciliation(
+      entry,
+      paymentInput
+    ) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      var changeRead = jobId
+        && ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      var changeCompletion = changeRead
+        && verifiedOwnerCustomBuildChangeCompletion(
+          changeRead.snapshot,
+          entry
+        );
+      var read = jobId
+        && ownerCustomBuildWorkRead.changePaymentsByJob
+        && ownerCustomBuildWorkRead.changePaymentsByJob[jobId];
+      var payments = changeCompletion
+        && read
+        && verifiedOwnerCustomBuildChangePayments(
+          read.snapshot,
+          entry,
+          changeCompletion
+        );
+      var selectedAttemptId = text(
+        paymentInput && paymentInput.owner
+          && paymentInput.owner.attemptId
+      );
+      var selectedInvoiceId = text(
+        paymentInput && paymentInput.invoice
+          && paymentInput.invoice.invoiceId
+      );
+      var selectedInvoiceDigest = text(
+        paymentInput && paymentInput.invoice
+          && paymentInput.invoice.invoiceDigest
+      );
+      var payment = payments && payments.payments.find(function (candidate) {
+        return candidate.owner.attemptId ===
+            selectedAttemptId
+          && candidate.invoice.invoiceId ===
+            selectedInvoiceId
+          && candidate.invoice.invoiceDigest ===
+            selectedInvoiceDigest;
+      });
+      if (
+        !accountId
+        || !jobId
+        || !payment
+        || Boolean(read.busy)
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        || (
+          !payment.owner.canReconcileCreation
+          && !payment.owner.canReconcileSettlement
+        )
+      ) return Promise.resolve(null);
+      if (
+        typeof client.reconcileOwnerCustomBuildChangeCheckout !==
+          "function"
+      ) {
+        setOwnerCustomBuildChangePayments(
+          jobId,
+          Object.assign({}, read, {
+            error:
+              "Exact Stripe reconciliation is unavailable in this build."
+          })
+        );
+        return Promise.resolve(null);
+      }
+      var commandBody = {
+        organizationId: entry.organizationId
+      };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "reconcile-change-payment",
+          payment.owner.attemptId,
+          commandBody
+        );
+      } catch (error) {
+        setOwnerCustomBuildChangePayments(
+          jobId,
+          Object.assign({}, read, {
+            error: explain(
+              error,
+              "Exact Stripe reconciliation could not start safely."
+            )
+          })
+        );
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { busyKey: jobId + ":reconcile-change-payment" }
+      );
+      setOwnerCustomBuildChangePayments(jobId, {
+        phase: "ready",
+        snapshot: payments,
+        busy: payment.owner.canReconcileSettlement
+          ? "settlement"
+          : "creation",
+        notice: text(read.notice),
+        error: ""
+      });
+      return client.reconcileOwnerCustomBuildChangeCheckout(
+        jobId,
+        payment.owner.attemptId,
+        {
+          commandId: commandId,
+          organizationId: entry.organizationId
+        },
+        {
+          expectedPayment: payment,
+          expectedProjectId: entry.projectId
+        }
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var reconciled =
+          verifiedOwnerCustomBuildChangePaymentReconciliation(
+            result,
+            entry,
+            payment
+          );
+        if (!reconciled) {
+          throw new Error(
+            "The exact Stripe reconciliation result could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        var notice = {
+          checkout_ready:
+            "The exact Stripe payment page is reconciled and retained for the customer.",
+          payment_settled:
+            "Provider-confirmed payment is retained and the accepted added work is effective.",
+          checkout_expired:
+            "Stripe confirmed that page expired. A new customer command is required.",
+          reconciliation_required:
+            "Stripe remains uncertain. The exact owner result is retained for a reviewed retry."
+        }[reconciled.status];
+        setOwnerCustomBuildChangePayments(jobId, {
+          phase: "ready",
+          snapshot: payments,
+          busy: "",
+          notice: notice,
+          error: ""
+        });
+        return Promise.all([
+          requestOwnerCustomBuildChangePayments(entry),
+          requestOwnerCustomBuildChangeCompletion(entry)
+        ]).then(function () {
+          ownerCustomBuildWorkPanel.focusChangePaymentStatus(jobId);
+          return reconciled;
+        });
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildChangePayments(jobId, {
+          phase: "ready",
+          snapshot: payments,
+          busy: "",
+          notice: text(read.notice),
+          error: explain(
+            error,
+            "Stripe reconciliation remains uncertain. The exact command can be replayed safely."
+          )
+        });
+        ownerCustomBuildWorkPanel.focusChangePaymentStatus(jobId);
+        return null;
+      });
+    }
+
     function sameCustomBuildMilestones(value, expected) {
       return ["content", "quality", "responsive", "structure"]
         .every(function (key) {
@@ -13675,6 +14983,7 @@
           jobs: null,
           progressByJob: {},
           changeCompletionByJob: {},
+          changePaymentsByJob: {},
           busyKey: "",
           pageNumber: 0,
           loadingMore: false,
@@ -13691,6 +15000,8 @@
         progressByJob: ownerCustomBuildWorkRead.progressByJob || {},
         changeCompletionByJob:
           ownerCustomBuildWorkRead.changeCompletionByJob || {},
+        changePaymentsByJob:
+          ownerCustomBuildWorkRead.changePaymentsByJob || {},
         busyKey: "",
         pageNumber: retainedPageNumber,
         loadingMore: continuing,
@@ -13712,6 +15023,7 @@
           }
           var progressByJob = {};
           var changeCompletionByJob = {};
+          var changePaymentsByJob = {};
           result.jobs.forEach(function (entry) {
             progressByJob[entry.job.jobId] = {
               phase: "loading",
@@ -13725,6 +15037,12 @@
               busy: "",
               error: ""
             };
+            changePaymentsByJob[entry.job.jobId] = {
+              phase: "loading",
+              snapshot: null,
+              busy: "",
+              error: ""
+            };
           });
           ownerCustomBuildWorkRead = {
             accountId: selectedAccountId,
@@ -13733,6 +15051,7 @@
             jobs: result,
             progressByJob: progressByJob,
             changeCompletionByJob: changeCompletionByJob,
+            changePaymentsByJob: changePaymentsByJob,
             busyKey: "",
             pageNumber: continuing ? retainedPageNumber + 1 : 1,
             loadingMore: false,
@@ -13741,7 +15060,8 @@
           renderOwnerCustomBuildWorkPanel();
           return Promise.all([
             requestOwnerCustomBuildProgressBatch(result.jobs),
-            requestOwnerCustomBuildChangeCompletionBatch(result.jobs)
+            requestOwnerCustomBuildChangeCompletionBatch(result.jobs),
+            requestOwnerCustomBuildChangePaymentsBatch(result.jobs)
           ]).then(function () { return result; });
         })
         .catch(function (error) {
@@ -13762,6 +15082,9 @@
             changeCompletionByJob: unavailable
               ? {}
               : ownerCustomBuildWorkRead.changeCompletionByJob || {},
+            changePaymentsByJob: unavailable
+              ? {}
+              : ownerCustomBuildWorkRead.changePaymentsByJob || {},
             busyKey: "",
             pageNumber: unavailable ? 0 : retainedPageNumber,
             loadingMore: false,
@@ -13794,6 +15117,7 @@
             jobs: null,
             progressByJob: {},
             changeCompletionByJob: {},
+            changePaymentsByJob: {},
             busyKey: "",
             pageNumber: 0,
             loadingMore: false,
@@ -14504,6 +15828,113 @@
         && idOf(lastState.project) === projectId;
     }
 
+    function requestCustomerCustomBuildChangeInvoice(
+      sequence,
+      projectId,
+      accountId,
+      snapshot
+    ) {
+      if (
+        !customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )
+        || !verifiedCustomerCustomBuildChangeCompletion(snapshot)
+      ) return Promise.resolve(null);
+      var retainedInvoice = verifiedCustomerCustomBuildChangeInvoice(
+        customBuildChangeCompletionRead.invoice,
+        snapshot
+      );
+      if (
+        typeof client.getCustomServicesCustomBuildChangeInvoice !==
+          "function"
+      ) {
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          {
+            phase: "ready",
+            invoice: retainedInvoice,
+            command: "",
+            error:
+              "Added-work payment details are unavailable in this build. No payment action is available."
+          }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        return Promise.resolve(null);
+      }
+      customBuildChangeCompletionRead = Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        {
+          phase: "ready",
+          snapshot: snapshot,
+          invoice: retainedInvoice,
+          command: "loading added-work invoice",
+          error: ""
+        }
+      );
+      renderCustomerCustomBuildChangeCompletionPanel();
+      return client.getCustomServicesCustomBuildChangeInvoice(projectId)
+        .then(function (result) {
+          if (!customerCustomBuildChangeCompletionReadIsCurrent(
+            sequence,
+            projectId
+          )) return null;
+          var current = verifiedCustomerCustomBuildChangeCompletion(
+            customBuildChangeCompletionRead.snapshot
+          );
+          var invoice = current
+            && verifiedCustomerCustomBuildChangeInvoice(result, current);
+          if (!invoice) {
+            throw new Error(
+              "The exact added-work invoice response could not be verified."
+            );
+          }
+          customBuildChangeCompletionRead = {
+            accountId: accountId,
+            projectId: projectId,
+            phase: "ready",
+            snapshot: current,
+            invoice: invoice,
+            command: "",
+            error: ""
+          };
+          renderCustomerCustomBuildChangeCompletionPanel();
+          return invoice;
+        })
+        .catch(function (error) {
+          if (!customerCustomBuildChangeCompletionReadIsCurrent(
+            sequence,
+            projectId
+          )) return null;
+          var held = text(error && error.code) ===
+            "CUSTOM_BUILD_CHANGE_PAYMENT_HELD"
+            || Number(error && error.status) === 503;
+          customBuildChangeCompletionRead = Object.assign(
+            {},
+            customBuildChangeCompletionRead,
+            {
+              phase: "ready",
+              invoice: verifiedCustomerCustomBuildChangeInvoice(
+                customBuildChangeCompletionRead.invoice,
+                snapshot
+              ) || retainedInvoice,
+              command: "",
+              error: held
+                ? "Added-work payment is held or unavailable. No charge occurred and no payment action is available."
+                : explain(
+                    error,
+                    "The exact added-work invoice could not be loaded. No payment action is available."
+                  )
+            }
+          );
+          renderCustomerCustomBuildChangeCompletionPanel();
+          customerCustomBuildChangeCompletionPanel.focusStatus();
+          return null;
+        });
+    }
+
     function requestCustomerCustomBuildChangeCompletion(projectId) {
       var selectedProjectId = text(projectId);
       var selectedAccountId = text(
@@ -14520,11 +15951,18 @@
             customBuildChangeCompletionRead.snapshot
           )
         : null;
+      var retainedInvoice = retained
+        ? verifiedCustomerCustomBuildChangeInvoice(
+            customBuildChangeCompletionRead.invoice,
+            retained
+          )
+        : null;
       customBuildChangeCompletionRead = {
         accountId: selectedAccountId,
         projectId: selectedProjectId,
         phase: "loading",
         snapshot: retained,
+        invoice: retainedInvoice,
         command: "",
         error: ""
       };
@@ -14563,11 +16001,20 @@
           projectId: selectedProjectId,
           phase: "ready",
           snapshot: snapshot,
+          invoice: verifiedCustomerCustomBuildChangeInvoice(
+            retainedInvoice,
+            snapshot
+          ),
           command: "",
           error: ""
         };
         renderCustomerCustomBuildChangeCompletionPanel();
-        return snapshot;
+        return requestCustomerCustomBuildChangeInvoice(
+          sequence,
+          selectedProjectId,
+          selectedAccountId,
+          snapshot
+        ).then(function () { return snapshot; });
       }).catch(function (error) {
         if (!customerCustomBuildChangeCompletionReadIsCurrent(
           sequence,
@@ -14581,6 +16028,7 @@
           projectId: selectedProjectId,
           phase: "error",
           snapshot: retained,
+          invoice: retainedInvoice,
           command: "",
           error: held
             ? "Added-work and completion tools are held or unavailable. Nothing changed and no action is available."
@@ -14699,12 +16147,18 @@
           projectId: projectId,
           phase: "ready",
           snapshot: settled,
+          invoice: null,
           command: "",
           error: ""
         };
         renderCustomerCustomBuildChangeCompletionPanel();
         customerCustomBuildChangeCompletionPanel.focusStatus();
-        return settled;
+        return requestCustomerCustomBuildChangeInvoice(
+          sequence,
+          projectId,
+          accountId,
+          settled
+        ).then(function () { return settled; });
       }).catch(function (error) {
         if (!customerCustomBuildChangeCompletionReadIsCurrent(
           sequence,
@@ -14718,12 +16172,144 @@
           projectId: projectId,
           phase: "ready",
           snapshot: current,
+          invoice: verifiedCustomerCustomBuildChangeInvoice(
+            customBuildChangeCompletionRead.invoice,
+            current
+          ),
           command: "",
           error: held
             ? "Added-work decisions are held or unavailable. Nothing changed and no action was taken."
             : explain(
                 error,
                 "This change may have been updated. Refresh before retrying the same exact decision."
+              )
+        };
+        renderCustomerCustomBuildChangeCompletionPanel();
+        customerCustomBuildChangeCompletionPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function requestCustomerCustomBuildChangeCheckout(invoiceInput) {
+      var projectId = customBuildChangeCompletionRead.projectId;
+      var accountId = customBuildChangeCompletionRead.accountId;
+      var snapshot = verifiedCustomerCustomBuildChangeCompletion(
+        customBuildChangeCompletionRead.snapshot
+      );
+      var current = snapshot
+        && verifiedCustomerCustomBuildChangeInvoice(
+          customBuildChangeCompletionRead.invoice,
+          snapshot
+        );
+      var selected = snapshot
+        && verifiedCustomerCustomBuildChangeInvoice(
+          invoiceInput,
+          snapshot
+        );
+      if (
+        !projectId
+        || !accountId
+        || !snapshot
+        || !current
+        || !selected
+        || customBuildChangeCompletionRead.command
+        || current.state !== "checkout_available"
+        || selected.state !== "checkout_available"
+        || current.invoice.invoiceId !== selected.invoice.invoiceId
+        || current.invoice.invoiceDigest !== selected.invoice.invoiceDigest
+      ) return Promise.resolve(null);
+      var input = { invoiceDigest: current.invoice.invoiceDigest };
+      var commandId;
+      try {
+        if (
+          typeof client.createCustomServicesCustomBuildChangeCheckout !==
+            "function"
+        ) {
+          throw new Error(
+            "Secure added-work payment is unavailable in this build."
+          );
+        }
+        commandId = customBuildCommandId(
+          accountId,
+          "change-checkout",
+          current.invoice.invoiceId,
+          input
+        );
+      } catch (error) {
+        customBuildChangeCompletionRead = Object.assign(
+          {},
+          customBuildChangeCompletionRead,
+          {
+            command: "",
+            error: explain(
+              error,
+              "Secure added-work payment could not start."
+            )
+          }
+        );
+        renderCustomerCustomBuildChangeCompletionPanel();
+        customerCustomBuildChangeCompletionPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildChangeCompletionReadSequence;
+      customBuildChangeCompletionRead = Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        { command: "opening added-work payment", error: "" }
+      );
+      renderCustomerCustomBuildChangeCompletionPanel();
+      return client.createCustomServicesCustomBuildChangeCheckout(
+        projectId,
+        current.invoice.invoiceId,
+        {
+          commandId: commandId,
+          invoiceDigest: current.invoice.invoiceDigest
+        },
+        { expectedInvoice: current }
+      ).then(function (result) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var checkout = verifiedCustomerCustomBuildChangeCheckout(
+          result,
+          current,
+          new Date().toISOString()
+        );
+        var destination = safeCheckoutDestination(checkout);
+        if (!checkout || !destination) {
+          throw new Error(
+            "The secure added-work payment destination could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        windowRef.location.assign(destination);
+        return checkout;
+      }).catch(function (error) {
+        if (!customerCustomBuildChangeCompletionReadIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        if (
+          [
+            "CUSTOM_BUILD_CHANGE_CHECKOUT_REQUIRES_NEW_COMMAND",
+            "CUSTOM_BUILD_CHANGE_PAYMENT_HELD",
+            "CUSTOM_BUILD_CHANGE_PAYMENT_UNAVAILABLE"
+          ].includes(text(error && error.code))
+        ) clearCustomBuildAttempt(commandId);
+        customBuildChangeCompletionRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: snapshot,
+          invoice: current,
+          command: "",
+          error: text(error && error.code) ===
+            "CUSTOM_BUILD_CHANGE_CHECKOUT_RECONCILIATION_REQUIRED"
+            ? "Do not try another payment. The payment-page result is uncertain and Site Sourcery must reconcile it first."
+            : explain(
+                error,
+                "Secure added-work payment could not open. Refresh the exact invoice before trying again."
               )
         };
         renderCustomerCustomBuildChangeCompletionPanel();
@@ -14839,6 +16425,7 @@
             projectId: "",
             phase: "idle",
             snapshot: null,
+            invoice: null,
             command: "",
             error: ""
           };
@@ -17326,8 +18913,16 @@
       verifiedCustomBuildProgress,
     verifiedCustomerCustomBuildChangeCompletion:
       verifiedCustomerCustomBuildChangeCompletion,
+    verifiedCustomerCustomBuildChangeInvoice:
+      verifiedCustomerCustomBuildChangeInvoice,
+    verifiedCustomerCustomBuildChangeCheckout:
+      verifiedCustomerCustomBuildChangeCheckout,
     verifiedOwnerCustomBuildChangeCompletion:
       verifiedOwnerCustomBuildChangeCompletion,
+    verifiedOwnerCustomBuildChangePayments:
+      verifiedOwnerCustomBuildChangePayments,
+    verifiedOwnerCustomBuildChangePaymentReconciliation:
+      verifiedOwnerCustomBuildChangePaymentReconciliation,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:

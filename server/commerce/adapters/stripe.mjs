@@ -100,6 +100,14 @@ const STRIPE_CUSTOM_BUILD_START_PAYMENT_SCHEMA =
   "sitesourcery.stripe-custom-build-start-payment-facts/v1";
 const STRIPE_CUSTOM_BUILD_START_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1";
+export const STRIPE_CUSTOM_BUILD_CHANGE_PURPOSE_SCHEMA =
+  "sitesourcery.custom-build-change-checkout-purpose/v1";
+const STRIPE_CUSTOM_BUILD_CHANGE_METADATA_SCHEMA =
+  "sitesourcery_custom_build_change_checkout_v1";
+const STRIPE_CUSTOM_BUILD_CHANGE_PAYMENT_SCHEMA =
+  "sitesourcery.stripe-custom-build-change-payment-facts/v1";
+const STRIPE_CUSTOM_BUILD_CHANGE_LIFECYCLE_SCHEMA =
+  "sitesourcery.stripe-custom-build-change-checkout-lifecycle/v1";
 export const STRIPE_ALAKAZAM_PURPOSE_SCHEMA =
   ALAKAZAM_CHECKOUT_PURPOSE_SCHEMA;
 export const STRIPE_ALAKAZAM_CUSTOMER_PURPOSE_SCHEMA =
@@ -337,6 +345,49 @@ function customBuildStartReturnUrl(template, validated) {
         "{CHECKOUT_SESSION_ID}"
       ),
     "Custom-build success URL",
+    { checkoutSessionPlaceholder: true }
+  );
+}
+
+function customBuildChangeReturnUrl(template, validated) {
+  const parsed = new URL(template);
+  for (const field of [
+    "custom_build_change_project",
+    "custom_build_change_job",
+    "custom_build_change_order",
+    "custom_build_change_invoice"
+  ]) {
+    invariant(
+      !parsed.searchParams.has(field),
+      "stripe_redirect_invalid",
+      "Custom-build change return URL already contains payment identity",
+      { status: 500 }
+    );
+  }
+  parsed.searchParams.set(
+    "custom_build_change_project",
+    validated.identity.projectId
+  );
+  parsed.searchParams.set(
+    "custom_build_change_job",
+    validated.identity.jobId
+  );
+  parsed.searchParams.set(
+    "custom_build_change_order",
+    validated.identity.changeOrderId
+  );
+  parsed.searchParams.set(
+    "custom_build_change_invoice",
+    validated.identity.invoiceId
+  );
+  return exactUrl(
+    parsed
+      .toString()
+      .replace(
+        "%7BCHECKOUT_SESSION_ID%7D",
+        "{CHECKOUT_SESSION_ID}"
+      ),
+    "Custom-build change success URL",
     { checkoutSessionPlaceholder: true }
   );
 }
@@ -2454,6 +2505,532 @@ function customBuildStartCheckoutLifecycle(
   });
 }
 
+function validateCustomBuildChangePurpose(
+  request,
+  { retrieval = false } = {}
+) {
+  const requestFields = retrieval
+    ? [
+        "checkoutSessionId",
+        "purpose",
+        "purposeDigest"
+      ]
+    : [
+        "checkoutExpiresAt",
+        "idempotencyKey",
+        "purpose",
+        "purposeDigest",
+        ...(request?.stripeCustomerId === undefined
+          ? []
+          : ["stripeCustomerId"])
+      ];
+  invariant(
+    exactObjectKeys(request, requestFields) &&
+      exactObjectKeys(request.purpose, [
+        "acceptedDisclosureDigest",
+        "acceptedQuoteDigest",
+        "changeAcceptanceId",
+        "changeNumber",
+        "changeOrderId",
+        "customerId",
+        "invoiceDigest",
+        "invoiceId",
+        "invoiceNumber",
+        "jobId",
+        "price",
+        "priorEffectiveScopeDigest",
+        "projectId",
+        "schema",
+        "scopeBoundaryDigest",
+        "targetCompletionDate",
+        "tenantId"
+      ]),
+    "stripe_custom_build_change_checkout_invalid",
+    "Custom-build change Checkout requires the exact accepted change and invoice purpose",
+    { status: 500 }
+  );
+  const purpose = request.purpose;
+  const identity = {};
+  for (const field of [
+    "tenantId",
+    "customerId",
+    "projectId",
+    "jobId",
+    "changeOrderId",
+    "changeAcceptanceId",
+    "invoiceId",
+    "invoiceNumber"
+  ]) {
+    identity[field] = safeMetadataValue(
+      purpose[field],
+      `purpose.${field}`
+    );
+  }
+  const targetCompletionDate = safeMetadataValue(
+    purpose.targetCompletionDate,
+    "purpose.targetCompletionDate"
+  );
+  const parsedTargetCompletionDate = new Date(
+    `${targetCompletionDate}T00:00:00.000Z`
+  );
+  invariant(
+    purpose.schema ===
+      STRIPE_CUSTOM_BUILD_CHANGE_PURPOSE_SCHEMA &&
+      [
+        identity.tenantId,
+        identity.customerId,
+        identity.projectId,
+        identity.jobId,
+        identity.changeOrderId,
+        identity.changeAcceptanceId,
+        identity.invoiceId
+      ].every((value) => UUID.test(value)) &&
+      /^SSCB-CHG-[0-9A-F]{32}$/u.test(
+        identity.invoiceNumber
+      ) &&
+      /^\d{4}-\d{2}-\d{2}$/u.test(
+        targetCompletionDate
+      ) &&
+      !Number.isNaN(parsedTargetCompletionDate.getTime()) &&
+      parsedTargetCompletionDate
+        .toISOString()
+        .slice(0, 10) === targetCompletionDate &&
+      exactObjectKeys(purpose.price, [
+        "amountMinor",
+        "billing",
+        "currency",
+        "quantity",
+        "taxBehavior",
+        "unitAmountMinor"
+      ]) &&
+      Number.isSafeInteger(purpose.price.amountMinor) &&
+      purpose.price.amountMinor > 0 &&
+      purpose.price.amountMinor <= 99_999_999 &&
+      purpose.price.unitAmountMinor === 12_500 &&
+      Number.isSafeInteger(purpose.price.quantity) &&
+      purpose.price.quantity >= 1 &&
+      purpose.price.quantity <= 40 &&
+      purpose.price.amountMinor ===
+        purpose.price.unitAmountMinor *
+          purpose.price.quantity &&
+      purpose.price.currency === "USD" &&
+      purpose.price.billing === "one_time" &&
+      purpose.price.taxBehavior ===
+        "automatic_exclusive" &&
+      Number.isSafeInteger(purpose.changeNumber) &&
+      purpose.changeNumber > 0 &&
+      purpose.changeNumber <= 100000,
+    "stripe_custom_build_change_checkout_invalid",
+    "Custom-build change Checkout permits only the exact positive accepted-change invoice",
+    { status: 500 }
+  );
+  const acceptedQuoteDigest = safeMetadataValue(
+    purpose.acceptedQuoteDigest,
+    "purpose.acceptedQuoteDigest"
+  );
+  const acceptedDisclosureDigest = safeMetadataValue(
+    purpose.acceptedDisclosureDigest,
+    "purpose.acceptedDisclosureDigest"
+  );
+  const priorEffectiveScopeDigest = safeMetadataValue(
+    purpose.priorEffectiveScopeDigest,
+    "purpose.priorEffectiveScopeDigest"
+  );
+  const scopeBoundaryDigest = safeMetadataValue(
+    purpose.scopeBoundaryDigest,
+    "purpose.scopeBoundaryDigest"
+  );
+  const invoiceDigest = safeMetadataValue(
+    purpose.invoiceDigest,
+    "purpose.invoiceDigest"
+  );
+  invariant(
+    [
+      acceptedQuoteDigest,
+      acceptedDisclosureDigest,
+      scopeBoundaryDigest,
+      priorEffectiveScopeDigest,
+      invoiceDigest
+    ].every((value) => SHA256.test(value)),
+    "stripe_custom_build_change_checkout_invalid",
+    "Custom-build change Checkout authority is invalid",
+    { status: 500 }
+  );
+  const purposeDigest = digest(purpose);
+  invariant(
+    request.purposeDigest === purposeDigest &&
+      SHA256.test(request.purposeDigest),
+    "stripe_custom_build_change_checkout_invalid",
+    "Custom-build change Checkout purpose digest changed",
+    { status: 500 }
+  );
+  let checkoutExpiresAt = null;
+  let checkoutExpiresAtSeconds = null;
+  if (!retrieval) {
+    checkoutExpiresAt = requiredText(
+      request.checkoutExpiresAt,
+      "checkoutExpiresAt",
+      40
+    );
+    const checkoutExpiresAtMilliseconds = Date.parse(
+      checkoutExpiresAt
+    );
+    invariant(
+      Number.isFinite(checkoutExpiresAtMilliseconds) &&
+        new Date(
+          checkoutExpiresAtMilliseconds
+        ).toISOString() === checkoutExpiresAt &&
+        checkoutExpiresAtMilliseconds % 1000 === 0,
+      "stripe_custom_build_change_checkout_invalid",
+      "Custom-build change Checkout expiration must be an exact provider-second ISO timestamp",
+      { status: 500 }
+    );
+    checkoutExpiresAtSeconds =
+      checkoutExpiresAtMilliseconds / 1000;
+    invariant(
+      Number.isSafeInteger(checkoutExpiresAtSeconds) &&
+        checkoutExpiresAtSeconds > 0,
+      "stripe_custom_build_change_checkout_invalid",
+      "Custom-build change Checkout expiration is invalid",
+      { status: 500 }
+    );
+  }
+  return Object.freeze({
+    purpose,
+    identity,
+    acceptedQuoteDigest,
+    acceptedDisclosureDigest,
+    scopeBoundaryDigest,
+    priorEffectiveScopeDigest,
+    invoiceDigest,
+    targetCompletionDate,
+    purposeDigest,
+    checkoutExpiresAt,
+    checkoutExpiresAtSeconds,
+    stripeCustomerId:
+      retrieval ||
+      request.stripeCustomerId === undefined
+        ? null
+        : providerId(
+            request.stripeCustomerId,
+            "cus",
+            "stripeCustomerId"
+          ),
+    idempotencyKey: retrieval
+      ? null
+      : requiredText(
+          request.idempotencyKey,
+          "idempotencyKey",
+          255
+        )
+  });
+}
+
+function customBuildChangeMetadata(validated) {
+  return Object.freeze({
+    schema: STRIPE_CUSTOM_BUILD_CHANGE_METADATA_SCHEMA,
+    tenant_id: validated.identity.tenantId,
+    customer_id: validated.identity.customerId,
+    project_id: validated.identity.projectId,
+    job_id: validated.identity.jobId,
+    change_order_id: validated.identity.changeOrderId,
+    change_acceptance_id:
+      validated.identity.changeAcceptanceId,
+    change_number: String(validated.purpose.changeNumber),
+    invoice_id: validated.identity.invoiceId,
+    invoice_number: validated.identity.invoiceNumber,
+    accepted_quote_digest:
+      validated.acceptedQuoteDigest,
+    accepted_disclosure_digest:
+      validated.acceptedDisclosureDigest,
+    scope_boundary_digest:
+      validated.scopeBoundaryDigest,
+    prior_effective_scope_digest:
+      validated.priorEffectiveScopeDigest,
+    target_completion_date:
+      validated.targetCompletionDate,
+    invoice_digest: validated.invoiceDigest,
+    purpose_digest: validated.purposeDigest
+  });
+}
+
+function customBuildChangeCheckoutResponse(
+  value,
+  config,
+  expectedExpiresAt,
+  validated,
+  expectedMetadata
+) {
+  const checkout = checkoutResponse(
+    value,
+    config,
+    expectedExpiresAt
+  );
+  const metadata = value?.metadata;
+  const observedCustomerId =
+    value?.customer === null ||
+    value?.customer === undefined
+      ? null
+      : providerReferenceId(
+          value.customer,
+          "cus",
+          "Stripe Custom-build change Checkout Customer ID"
+        );
+  invariant(
+    value?.client_reference_id ===
+      validated.identity.invoiceId &&
+      value?.mode === "payment" &&
+      value?.currency === "usd" &&
+      value?.amount_subtotal ===
+        validated.purpose.price.amountMinor &&
+      value?.automatic_tax?.enabled === true &&
+      value?.status === "open" &&
+      value?.payment_status === "unpaid" &&
+      (
+        validated.stripeCustomerId === null ||
+        observedCustomerId === validated.stripeCustomerId
+      ) &&
+      exactObjectKeys(
+        metadata,
+        Object.keys(expectedMetadata)
+      ) &&
+      Object.entries(expectedMetadata).every(
+        ([key, expected]) => metadata[key] === expected
+      ),
+    "stripe_custom_build_change_checkout_response_invalid",
+    "Stripe Custom-build change Checkout did not preserve the exact invoice purpose",
+    { status: 502 }
+  );
+  return checkout;
+}
+
+function customBuildChangePaymentFacts(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_custom_build_change_payment_mismatch";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Custom-build change Checkout Session ID"
+  );
+  const expectedMetadata =
+    customBuildChangeMetadata(validated);
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    expectedMetadata,
+    code,
+    "Stripe Custom-build change payment metadata changed"
+  );
+  const taxMinor = serviceAssessmentProviderMinor(
+    value?.total_details?.amount_tax,
+    "Stripe Custom-build change tax amount",
+    code
+  );
+  const subtotalMinor =
+    validated.purpose.price.amountMinor;
+  const totalMinor = subtotalMinor + taxMinor;
+  const customerId = providerReferenceId(
+    value?.customer,
+    "cus",
+    "Stripe Custom-build change Checkout Customer ID"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal === subtotalMinor &&
+      value.amount_total === totalMinor &&
+      value.automatic_tax?.enabled === true &&
+      value.automatic_tax?.status === "complete" &&
+      value.total_details?.amount_discount === 0 &&
+      value.total_details?.amount_shipping === 0 &&
+      value.status === "complete" &&
+      value.payment_status === "paid",
+    code,
+    "Stripe did not confirm the exact paid Custom-build change Checkout",
+    { status: 502 }
+  );
+  const intent = serviceAssessmentProviderObject(
+    value.payment_intent,
+    "pi",
+    "Stripe Custom-build change PaymentIntent",
+    code
+  );
+  validateServiceAssessmentMetadata(
+    intent.metadata,
+    expectedMetadata,
+    code,
+    "Stripe Custom-build change PaymentIntent metadata changed"
+  );
+  invariant(
+    intent.livemode === config.livemode &&
+      intent.status === "succeeded" &&
+      intent.currency === "usd" &&
+      intent.amount === totalMinor &&
+      intent.amount_received === totalMinor &&
+      intent.amount_capturable === 0 &&
+      providerReferenceId(
+        intent.customer,
+        "cus",
+        "Stripe Custom-build change PaymentIntent Customer ID"
+      ) === customerId,
+    code,
+    "Stripe did not confirm the exact succeeded Custom-build change PaymentIntent",
+    { status: 502 }
+  );
+  const charge = serviceAssessmentProviderObject(
+    intent.latest_charge,
+    "ch",
+    "Stripe Custom-build change Charge",
+    code
+  );
+  validateServiceAssessmentMetadata(
+    charge.metadata,
+    expectedMetadata,
+    code,
+    "Stripe Custom-build change Charge metadata changed"
+  );
+  invariant(
+    charge.livemode === config.livemode &&
+      charge.status === "succeeded" &&
+      charge.paid === true &&
+      charge.captured === true &&
+      charge.refunded === false &&
+      charge.disputed === false &&
+      charge.failure_code === null &&
+      charge.failure_message === null &&
+      charge.currency === "usd" &&
+      charge.amount === totalMinor &&
+      charge.amount_captured === totalMinor &&
+      charge.amount_refunded === 0 &&
+      providerReferenceId(
+        charge.customer,
+        "cus",
+        "Stripe Custom-build change Charge Customer ID"
+      ) === customerId &&
+      providerReferenceId(
+        charge.payment_intent,
+        "pi",
+        "Stripe Custom-build change Charge PaymentIntent ID"
+      ) === intent.id,
+    code,
+    "Stripe did not confirm one uncontested captured Custom-build change Charge",
+    { status: 502 }
+  );
+  const facts = {
+    schema: STRIPE_CUSTOM_BUILD_CHANGE_PAYMENT_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    paymentIntentId: intent.id,
+    customerId,
+    paymentStatus: "paid",
+    subtotalMinor,
+    taxMinor,
+    totalMinor,
+    taxMode: "automatic",
+    currency: "USD",
+    purposeDigest: validated.purposeDigest,
+    providerPaymentTime:
+      serviceAssessmentProviderTime(
+        charge.created,
+        "Stripe Custom-build change payment time",
+        code
+      )
+  };
+  return Object.freeze({
+    ...facts,
+    providerFactsDigest: digest(facts)
+  });
+}
+
+function customBuildChangeCheckoutLifecycle(
+  value,
+  config,
+  validated,
+  checkoutSessionId
+) {
+  const code =
+    "stripe_custom_build_change_checkout_lifecycle_invalid";
+  const checkoutId = providerId(
+    value?.id,
+    "cs",
+    "Stripe Custom-build change Checkout Session ID"
+  );
+  validateServiceAssessmentMetadata(
+    value?.metadata,
+    customBuildChangeMetadata(validated),
+    code,
+    "Stripe Custom-build change Checkout lifecycle metadata changed"
+  );
+  invariant(
+    checkoutId === checkoutSessionId &&
+      value.client_reference_id ===
+        validated.identity.invoiceId &&
+      value.livemode === config.livemode &&
+      value.mode === "payment" &&
+      value.currency === "usd" &&
+      value.amount_subtotal ===
+        validated.purpose.price.amountMinor &&
+      value.automatic_tax?.enabled === true,
+    code,
+    "Stripe did not return the exact Custom-build change Checkout lifecycle",
+    { status: 502 }
+  );
+  let state;
+  if (
+    value.status === "open" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "open";
+  } else if (
+    value.status === "expired" &&
+    value.payment_status === "unpaid"
+  ) {
+    state = "expired";
+  } else if (
+    value.status === "complete" &&
+    value.payment_status === "paid" &&
+    value.automatic_tax?.status === "complete"
+  ) {
+    const taxMinor = serviceAssessmentProviderMinor(
+      value?.total_details?.amount_tax,
+      "Stripe Custom-build change lifecycle tax amount",
+      code
+    );
+    invariant(
+      value.amount_total ===
+        validated.purpose.price.amountMinor + taxMinor &&
+        value.total_details?.amount_discount === 0 &&
+        value.total_details?.amount_shipping === 0,
+      code,
+      "Stripe returned unsafe paid Custom-build change totals",
+      { status: 502 }
+    );
+    state = "paid";
+  } else {
+    invariant(
+      false,
+      code,
+      "Stripe returned an unsafe Custom-build change Checkout lifecycle",
+      { status: 502 }
+    );
+  }
+  return Object.freeze({
+    schema: STRIPE_CUSTOM_BUILD_CHANGE_LIFECYCLE_SCHEMA,
+    provider: "stripe",
+    checkoutSessionId: checkoutId,
+    purposeDigest: validated.purposeDigest,
+    state
+  });
+}
+
 function validateDownloadMetadata(value, expected) {
   invariant(
     exactObjectKeys(value, Object.keys(expected)) &&
@@ -4186,6 +4763,9 @@ export function createStripeProviderAdapter(options = {}) {
       createCustomBuildStartCheckout: reject,
       retrieveCustomBuildStartPayment: reject,
       retrieveCustomBuildStartCheckoutLifecycle: reject,
+      createCustomBuildChangeCheckout: reject,
+      retrieveCustomBuildChangePayment: reject,
+      retrieveCustomBuildChangeCheckoutLifecycle: reject,
       createAlakazamCustomer: reject,
       retrieveAlakazamCustomer: reject,
       createAlakazamStartCheckout: reject,
@@ -6004,6 +6584,203 @@ export function createStripeProviderAdapter(options = {}) {
         );
       }
       return customBuildStartCheckoutLifecycle(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async createCustomBuildChangeCheckout(request) {
+      let validated;
+      let providerMetadata;
+      let expiresAt;
+      let params;
+      let stripeIdempotencyKey;
+      try {
+        requireCapability("checkout:create");
+        invariant(
+          config.taxMode === "automatic",
+          "stripe_custom_build_change_tax_required",
+          "Custom-build change Checkout requires automatic tax",
+          { status: 503 }
+        );
+        validated =
+          validateCustomBuildChangePurpose(request);
+        providerMetadata =
+          customBuildChangeMetadata(validated);
+        expiresAt = validated.checkoutExpiresAtSeconds;
+        params = {
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount:
+                  validated.purpose.price.unitAmountMinor,
+                tax_behavior: "exclusive",
+                product_data: {
+                  name: "Site Sourcery Custom build — accepted change order"
+                }
+              },
+              quantity: validated.purpose.price.quantity
+            }
+          ],
+          success_url: customBuildChangeReturnUrl(
+            config.successUrl,
+            validated
+          ),
+          cancel_url: config.cancelUrl,
+          client_reference_id:
+            validated.identity.invoiceId,
+          metadata: providerMetadata,
+          expires_at: expiresAt,
+          automatic_tax: { enabled: true },
+          billing_address_collection: "required",
+          ...(validated.stripeCustomerId
+            ? {
+                customer: validated.stripeCustomerId,
+                customer_update: { address: "auto" }
+              }
+            : { customer_creation: "always" }),
+          payment_intent_data: {
+            metadata: providerMetadata
+          }
+        };
+        stripeIdempotencyKey = providerIdempotencyKey(
+          "custom_build_change_checkout",
+          validated.idempotencyKey,
+          validated.purposeDigest
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw noEffect(
+          typeof error?.code === "string"
+            ? error.code
+            : "stripe_custom_build_change_checkout_not_submitted",
+          "Custom-build change Checkout was rejected before Stripe submission"
+        );
+      }
+      let response;
+      try {
+        response = await client.checkout.sessions.create(
+          params,
+          { idempotencyKey: stripeIdempotencyKey }
+        );
+      } catch {
+        throw ambiguous(
+          "stripe_custom_build_change_checkout_effect_unknown",
+          "Stripe Custom-build change Checkout creation requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      try {
+        return customBuildChangeCheckoutResponse(
+          response,
+          config,
+          expiresAt,
+          validated,
+          providerMetadata
+        );
+      } catch (error) {
+        if (error instanceof ExternalEffectError) throw error;
+        throw ambiguous(
+          "stripe_custom_build_change_checkout_response_invalid",
+          "Stripe Custom-build change Checkout returned unsafe evidence that requires reconciliation",
+          {
+            idempotencyKey: stripeIdempotencyKey,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+    },
+
+    async retrieveCustomBuildChangePayment(request) {
+      requireCapability("checkout:read");
+      const validated =
+        validateCustomBuildChangePurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Custom-build change settlement requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId,
+            {
+              expand: ["payment_intent.latest_charge"]
+            }
+          );
+      } catch {
+        throw noEffect(
+          "stripe_custom_build_change_payment_read_unavailable",
+          "Stripe Custom-build change payment could not be read for reconciliation",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return customBuildChangePaymentFacts(
+        response,
+        config,
+        validated,
+        checkoutSessionId
+      );
+    },
+
+    async retrieveCustomBuildChangeCheckoutLifecycle(
+      request
+    ) {
+      requireCapability("checkout:read");
+      const validated =
+        validateCustomBuildChangePurpose(request, {
+          retrieval: true
+        });
+      const checkoutSessionId = providerId(
+        request.checkoutSessionId,
+        "cs",
+        "checkoutSessionId"
+      );
+      invariant(
+        typeof client.checkout?.sessions?.retrieve ===
+          "function",
+        "stripe_client_invalid",
+        "Stripe Custom-build change lifecycle requires Checkout readback",
+        { status: 500 }
+      );
+      let response;
+      try {
+        response =
+          await client.checkout.sessions.retrieve(
+            checkoutSessionId
+          );
+      } catch {
+        throw noEffect(
+          "stripe_custom_build_change_checkout_lifecycle_unavailable",
+          "Stripe Custom-build change Checkout lifecycle could not be read",
+          {
+            checkoutSessionId,
+            purposeDigest: validated.purposeDigest
+          }
+        );
+      }
+      return customBuildChangeCheckoutLifecycle(
         response,
         config,
         validated,

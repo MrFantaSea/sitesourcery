@@ -56,6 +56,9 @@ const PAID_DESKTOP_EVIDENCE_ID = "92000000-0000-4000-8000-000000000001";
 const PAID_PHONE_EVIDENCE_ID = "92000000-0000-4000-8000-000000000002";
 const PAID_COMPLETION_ID = "93000000-0000-4000-8000-000000000001";
 const PAID_OPERATOR_ID = "94000000-0000-4000-8000-000000000001";
+const PAID_CHANGE_ACCEPTANCE_ID = "95000000-0000-4000-8000-000000000001";
+const PAID_CHANGE_INVOICE_ID = "96000000-0000-4000-8000-000000000001";
+const PAID_CHANGE_ATTEMPT_ID = "97000000-0000-4000-8000-000000000001";
 const PAID_QUOTE_DIGEST = "a".repeat(64);
 const PAID_DISCLOSURE_DIGEST = "b".repeat(64);
 const PAID_INVOICE_DIGEST = "c".repeat(64);
@@ -63,6 +66,20 @@ const PAID_ACCEPTED_AT = "2026-08-06T15:00:00.000Z";
 const PAID_CREDIT_CUTOFF = "2026-11-04T15:00:00.000Z";
 const PAID_CHANGE_QUOTE_DIGEST = "d".repeat(64);
 const PAID_CHANGE_DISCLOSURE_DIGEST = "e".repeat(64);
+const PAID_CHANGE_INVOICE_DIGEST = "f".repeat(64);
+const PAID_CHANGE_ACCEPTED_AT = "2026-08-06T16:30:00.000Z";
+const PAID_CHANGE_SETTLED_AT = "2026-08-06T17:00:00.000Z";
+const PAID_CHANGE_CHECKOUT_EXPIRES_AT = "2026-08-13T16:30:00.000Z";
+const PAID_CHANGE_CHECKOUT_URL =
+  "https://checkout.stripe.com/c/pay/cs_test_sitesourcery_change_0001";
+const PAID_PAYMENT_MODES = Object.freeze([
+  "payment-checkout",
+  "payment-paid",
+  "payment-owner-uncertain",
+  "payment-customer-held",
+  "payment-customer-malformed",
+  "payment-customer-uncertain",
+]);
 const PAID_DESKTOP_EVIDENCE_BYTES = await readFile(
   path.join(ROOT, "assets/work-demo-bright-spark.png"),
 );
@@ -356,14 +373,132 @@ function paidChangeOrder(state = "issued", owner = false) {
     issuedAt: "2026-08-06T16:00:00.000Z",
     expiresAt: "2026-08-13T16:00:00.000Z",
     expiredAt: null,
-    acceptedAt: state === "effective"
-      ? "2026-08-07T16:00:00.000Z"
+    acceptedAt: ["accepted_payment_required", "effective"].includes(state)
+      ? PAID_CHANGE_ACCEPTED_AT
       : null,
     declinedAt: null,
     void: null,
   };
   if (owner) value.createdByOperatorUserId = PAID_OPERATOR_ID;
   return value;
+}
+
+function paidChangeInvoice(state = "checkout_available") {
+  const paid = state === "paid";
+  const ready = state === "checkout_ready";
+  return {
+    schema: "sitesourcery.custom-build-change-invoice/v1",
+    state,
+    invoice: {
+      invoiceId: PAID_CHANGE_INVOICE_ID,
+      invoiceNumber: "SSCB-CHG-96000000000040008000000000000001",
+      invoiceDigest: PAID_CHANGE_INVOICE_DIGEST,
+      changeOrderId: PAID_CHANGE_ORDER_ID,
+      changeAcceptanceId: PAID_CHANGE_ACCEPTANCE_ID,
+      changeNumber: 1,
+      acceptedQuoteDigest: PAID_CHANGE_QUOTE_DIGEST,
+      acceptedDisclosureDigest: PAID_CHANGE_DISCLOSURE_DIGEST,
+      issuedAt: PAID_CHANGE_ACCEPTED_AT,
+      targetCompletionDate: "2026-09-22",
+      lines: [{
+        lineNumber: 1,
+        componentKey: "custom_build_change_units",
+        displayName: "Custom build change #1 — added-work units",
+        quantity: 2,
+        unitAmountMinor: 12500,
+        amountMinor: 25000,
+        currency: "USD",
+      }],
+      subtotal: { amountMinor: 25000, currency: "USD" },
+      tax: paid
+        ? { amountMinor: 2250, state: "settled" }
+        : { amountMinor: null, state: "calculated_at_checkout" },
+      total: paid
+        ? { amountMinor: 27250, currency: "USD", state: "settled" }
+        : { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
+      payment: {
+        chargeOccurred: paid,
+        checkoutUrl: ready ? PAID_CHANGE_CHECKOUT_URL : null,
+        checkoutExpiresAt: ready ? PAID_CHANGE_CHECKOUT_EXPIRES_AT : null,
+        settledAt: paid ? PAID_CHANGE_SETTLED_AT : null,
+      },
+    },
+    action: {
+      available: state === "checkout_available",
+      reason: state === "checkout_available" ? null : state,
+    },
+  };
+}
+
+function unavailableChangeInvoice() {
+  return {
+    schema: "sitesourcery.custom-build-change-invoice/v1",
+    state: "not_available",
+    invoice: null,
+    action: { available: false, reason: "invoice_not_available" },
+  };
+}
+
+function paidChangeCheckout() {
+  return {
+    schema: "sitesourcery.custom-build-change-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId: PAID_CHANGE_INVOICE_ID,
+      invoiceNumber: "SSCB-CHG-96000000000040008000000000000001",
+      changeOrderId: PAID_CHANGE_ORDER_ID,
+      url: PAID_CHANGE_CHECKOUT_URL,
+      expiresAt: PAID_CHANGE_CHECKOUT_EXPIRES_AT,
+      subtotal: { amountMinor: 25000, currency: "USD" },
+      tax: { amountMinor: null, state: "calculated_at_checkout" },
+      total: { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
+      chargeOccurred: false,
+    },
+  };
+}
+
+function ownerChangePayments(mode, reconciled = false) {
+  const uncertain = mode === "payment-owner-uncertain" && !reconciled;
+  const ready = mode === "payment-owner-uncertain" && reconciled;
+  return {
+    schema: "sitesourcery.custom-build-change-payments-owner/v1",
+    organizationId: PAID_ORGANIZATION_ID,
+    jobId: PAID_JOB_ID,
+    payments: uncertain || ready ? [{
+      ...paidChangeInvoice(ready ? "checkout_ready" : "reconciliation_required"),
+      owner: {
+        attemptId: PAID_CHANGE_ATTEMPT_ID,
+        attemptState: ready ? "ready" : "persistence_unknown",
+        providerEffectCertainty: ready ? "confirmed" : "ambiguous",
+        providerErrorCode: ready ? null : "checkout_persistence_unknown",
+        providerRequestExpiresAt: PAID_CHANGE_CHECKOUT_EXPIRES_AT,
+        eventId: null,
+        eventState: null,
+        reconciliationCode: null,
+        receiptSource: null,
+        canReconcileCreation: !ready,
+        canReconcileSettlement: ready,
+      },
+    }] : [],
+  };
+}
+
+function ownerChangeReconciliation() {
+  return {
+    schema:
+      "sitesourcery.custom-build-change-payment-reconciliation-command/v1",
+    status: "checkout_ready",
+    organizationId: PAID_ORGANIZATION_ID,
+    jobId: PAID_JOB_ID,
+    attemptId: PAID_CHANGE_ATTEMPT_ID,
+    invoiceId: PAID_CHANGE_INVOICE_ID,
+    changeOrderId: PAID_CHANGE_ORDER_ID,
+    action: "creation_reconciled",
+    next: "customer_checkout",
+    reason: null,
+    checkout: paidChangeCheckout(),
+    settlement: null,
+  };
 }
 
 function paidCompletionEvidence(id, viewport, owner = false) {
@@ -395,6 +530,8 @@ function paidCompletionEvidence(id, viewport, owner = false) {
 
 function paidChangeCompletion(mode, owner = false) {
   const completionMode = mode === "completion";
+  const paymentMode = PAID_PAYMENT_MODES.includes(mode);
+  const paidMode = mode === "payment-paid";
   const evidence = [
     paidCompletionEvidence(
       PAID_DESKTOP_EVIDENCE_ID,
@@ -434,16 +571,22 @@ function paidChangeCompletion(mode, owner = false) {
       createdByOperatorUserId: PAID_OPERATOR_ID,
     } : { evidence }),
   } : null;
-  const changeOrders = completionMode
+  const changeOrders = completionMode || paidMode
     ? [paidChangeOrder("effective", owner)]
-    : [paidChangeOrder("issued", owner)];
+    : paymentMode
+      ? [paidChangeOrder("accepted_payment_required", owner)]
+      : [paidChangeOrder("issued", owner)];
   if (!owner) {
     return {
       schema: "sitesourcery.custom-build-change-completion/v1",
       state: completionMode
         ? "ready_for_final_payment"
+        : paidMode
+          ? "building"
+          : paymentMode
+            ? "change_order_payment_required"
         : "change_order_review",
-      changeOrders: completionMode
+      changeOrders: completionMode || paidMode
         ? { active: null, history: changeOrders }
         : { active: changeOrders[0], history: [] },
       completion,
@@ -453,6 +596,10 @@ function paidChangeCompletion(mode, owner = false) {
     schema: "sitesourcery.custom-build-change-completion/v1",
     state: completionMode
       ? "ready_for_final_payment"
+      : paidMode
+        ? "building"
+        : paymentMode
+          ? "change_order_payment_required"
       : "change_order_review",
     job: {
       jobId: PAID_JOB_ID,
@@ -566,6 +713,18 @@ function json(response, status, payload) {
   response.end(bytes);
 }
 
+async function requestJson(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.byteLength;
+    if (size > 32 * 1024) throw new Error("Browser-audit request is too large.");
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return null;
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
 function privateEvidence(response, evidenceId) {
   const desktop = evidenceId === PAID_DESKTOP_EVIDENCE_ID;
   const bytes = desktop
@@ -613,6 +772,9 @@ async function startServer() {
   let paidJobReads = 0;
   let customerChangeCompletionReads = 0;
   let ownerChangeCompletionReads = 0;
+  let customerChangeInvoiceReads = 0;
+  let ownerChangePaymentReads = 0;
+  let ownerChangePaymentReconciled = false;
   const server = createHttpServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (url.pathname.startsWith("/api/v1/")) {
@@ -623,13 +785,30 @@ async function startServer() {
       const paidMode = paidCookie
         ? decodeURIComponent(paidCookie.split("=", 2)[1] || "")
         : "";
-      const paidFixture = ["issued", "completion"].includes(paidMode);
-      apiRequests.push({
+      const paidFixture = ["issued", "completion", ...PAID_PAYMENT_MODES]
+        .includes(paidMode);
+      let body = null;
+      try {
+        if (!["GET", "HEAD"].includes(request.method || "GET")) {
+          body = await requestJson(request);
+        }
+      } catch {
+        json(response, 400, {
+          error: { code: "BAD_JSON", message: "Invalid browser-audit JSON." },
+        });
+        return;
+      }
+      const apiRequest = {
         method: request.method || "GET",
         pathname: url.pathname,
+        search: url.search,
         paidFixture,
         paidMode,
-      });
+        body,
+        idempotencyKey: String(request.headers["x-idempotency-key"] || ""),
+        expectedWrite: false,
+      };
+      apiRequests.push(apiRequest);
       if (request.method === "GET" && url.pathname === "/api/v1/me") {
         json(response, 200, paidFixture ? {
           user: {
@@ -810,11 +989,24 @@ async function startServer() {
             response,
             200,
             ownerChangeCompletionReads === 1
+              || PAID_PAYMENT_MODES.includes(paidMode)
               ? paidChangeCompletion(paidMode, true)
               : {
                   ...paidChangeCompletion(paidMode, true),
                   evidence: null,
                 },
+          );
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-payments`
+        ) {
+          ownerChangePaymentReads += 1;
+          json(
+            response,
+            200,
+            ownerChangePayments(paidMode, ownerChangePaymentReconciled),
           );
           return;
         }
@@ -848,12 +1040,47 @@ async function startServer() {
             response,
             200,
             customerChangeCompletionReads === 1
+              || PAID_PAYMENT_MODES.includes(paidMode)
               ? paidChangeCompletion(paidMode, false)
               : {
                   ...paidChangeCompletion(paidMode, false),
                   changeOrders: null,
                 },
           );
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoice`
+        ) {
+          customerChangeInvoiceReads += 1;
+          if (paidMode === "payment-customer-held") {
+            json(response, 503, {
+              error: {
+                code: "CUSTOM_BUILD_CHANGE_PAYMENT_HELD",
+                message: "Added-work payment is held in this runtime.",
+              },
+            });
+          } else if (
+            paidMode === "payment-customer-malformed"
+            && customerChangeInvoiceReads > 1
+          ) {
+            json(response, 200, {
+              ...paidChangeInvoice("checkout_available"),
+              invoice: {
+                ...paidChangeInvoice("checkout_available").invoice,
+                lines: null,
+              },
+            });
+          } else if (paidMode === "payment-paid") {
+            json(response, 200, paidChangeInvoice("paid"));
+          } else if (paidMode === "payment-owner-uncertain") {
+            json(response, 200, paidChangeInvoice("reconciliation_required"));
+          } else if (PAID_PAYMENT_MODES.includes(paidMode)) {
+            json(response, 200, paidChangeInvoice("checkout_available"));
+          } else {
+            json(response, 200, unavailableChangeInvoice());
+          }
           return;
         }
         if (
@@ -870,6 +1097,36 @@ async function startServer() {
           );
           return;
         }
+      }
+      if (
+        paidFixture
+        && request.method === "POST"
+        && url.pathname ===
+          `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
+      ) {
+        apiRequest.expectedWrite = true;
+        if (paidMode === "payment-customer-uncertain") {
+          json(response, 409, {
+            error: {
+              code: "CUSTOM_BUILD_CHANGE_CHECKOUT_RECONCILIATION_REQUIRED",
+              message: "The payment-page result requires owner reconciliation.",
+            },
+          });
+        } else {
+          json(response, 200, paidChangeCheckout());
+        }
+        return;
+      }
+      if (
+        paidFixture
+        && request.method === "POST"
+        && url.pathname ===
+          `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-payments/${PAID_CHANGE_ATTEMPT_ID}/checkout-reconciliation`
+      ) {
+        apiRequest.expectedWrite = true;
+        ownerChangePaymentReconciled = true;
+        json(response, 200, ownerChangeReconciliation());
+        return;
       }
       json(response, 404, {
         error: {
@@ -925,10 +1182,19 @@ async function startServer() {
     ownerChangeCompletionReadCount() {
       return ownerChangeCompletionReads;
     },
+    customerChangeInvoiceReadCount() {
+      return customerChangeInvoiceReads;
+    },
+    ownerChangePaymentReadCount() {
+      return ownerChangePaymentReads;
+    },
     resetPaidFixture() {
       paidJobReads = 0;
       customerChangeCompletionReads = 0;
       ownerChangeCompletionReads = 0;
+      customerChangeInvoiceReads = 0;
+      ownerChangePaymentReads = 0;
+      ownerChangePaymentReconciled = false;
     },
     close: () =>
       new Promise((resolve) => server.close(resolve)),
@@ -1572,6 +1838,356 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
   return { initial, retained, retainedChange };
 }
 
+async function activateByKeyboard(cdp, selector) {
+  const focused = await evaluate(
+    cdp,
+    `(() => {
+      const control = document.querySelector(${JSON.stringify(selector)});
+      if (!control || control.disabled) return false;
+      control.focus();
+      return document.activeElement === control;
+    })()`,
+  );
+  if (!focused) return false;
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
+  });
+  return true;
+}
+
+async function waitForApiRequest(server, predicate, priorCount, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const matches = server.apiRequests.filter(predicate);
+    if (matches.length > priorCount) return matches.at(-1);
+    await delay(25);
+  }
+  return null;
+}
+
+async function customBuildChangePaymentJourney(
+  cdp,
+  server,
+  viewport,
+  mode,
+  checkoutNavigations,
+) {
+  server.resetPaidFixture();
+  await cdp.send("Storage.clearDataForOrigin", {
+    origin: server.origin,
+    storageTypes: "all",
+  });
+  const cookie = await cdp.send("Network.setCookie", {
+    name: PAID_FIXTURE_COOKIE,
+    value: mode,
+    url: `${server.origin}/`,
+    httpOnly: true,
+    sameSite: "Strict",
+  });
+  if (!cookie.success) throw new Error("Purpose-1 browser fixture cookie was rejected.");
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${server.origin}/abracadabra/app/`);
+  await openHostedAccount(cdp);
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-owner-custom-build-work]")?.hidden === false
+      && document.querySelectorAll("[data-paid-custom-build-job]").length === 1
+      && document.querySelector("[data-project-list] button")`,
+  );
+  await evaluate(
+    cdp,
+    `document.querySelector("[data-project-list] button").click()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-change-completion]")
+      ?.hidden === false
+      && document.querySelector("[data-customer-custom-build-change-completion]")
+        ?.textContent.includes(${JSON.stringify(
+          mode === "payment-paid"
+            ? "approved Custom build is in progress"
+            : "accepted and waiting for confirmed payment",
+        )})`,
+  );
+  await waitFor(
+    cdp,
+    mode === "payment-customer-held"
+      ? `document.querySelector("[data-customer-custom-build-change-completion]")
+          ?.textContent.toLowerCase().includes("held or unavailable")`
+      : `document.querySelector("[data-customer-custom-build-change-payment]")
+          ?.getAttribute("data-customer-custom-build-change-payment") === ${JSON.stringify(
+            mode === "payment-paid"
+              ? "paid"
+              : mode === "payment-owner-uncertain"
+                ? "reconciliation_required"
+                : "checkout_available",
+          )}`,
+  );
+  if (mode === "payment-owner-uncertain") {
+    const ownerDeadline = Date.now() + 5000;
+    while (
+      server.ownerChangePaymentReadCount() < 1
+      && Date.now() < ownerDeadline
+    ) await delay(25);
+    await delay(100);
+  }
+  await evaluate(
+    cdp,
+    `document.querySelector("[data-paid-custom-build-job] summary").click()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-paid-custom-build-job]")?.open === true`,
+  );
+  const initial = await evaluate(
+    cdp,
+    `(() => {
+      const visible = (element) => {
+        if (!element || element.hidden) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none"
+          && style.visibility !== "hidden"
+          && rect.width > 0
+          && rect.height > 0;
+      };
+      const customerPanel = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const payment = document.querySelector(
+        "[data-customer-custom-build-change-payment]"
+      );
+      const customerCheckout = document.querySelector(
+        "[data-customer-custom-build-change-checkout]"
+      );
+      const ownerPayment = document.querySelector(
+        "[data-owner-custom-build-change-payments]"
+      );
+      const ownerReconcile = document.querySelector(
+        "[data-owner-custom-build-change-payment-reconcile]"
+      );
+      const controls = [
+        ...customerPanel.querySelectorAll("button, a, summary"),
+        ...(ownerPayment ? ownerPayment.querySelectorAll("button, a, summary") : [])
+      ].filter(visible).map((element) => ({
+        selector: element.hasAttribute("data-customer-custom-build-change-checkout")
+          ? "customer-change-checkout"
+          : element.hasAttribute("data-owner-custom-build-change-payment-reconcile")
+            ? "owner-change-reconcile"
+            : element.textContent.trim().replace(/\\s+/g, " ").slice(0, 80),
+        height: Math.round(element.getBoundingClientRect().height * 10) / 10,
+      }));
+      const fields = [
+        ...(payment ? payment.querySelectorAll("input, textarea, select") : []),
+        ...(ownerPayment ? ownerPayment.querySelectorAll("input, textarea, select") : [])
+      ];
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        customerText: customerPanel.textContent.replace(/\\s+/g, " ").trim(),
+        customerStatusFocused: document.activeElement === customerPanel.querySelector(
+          ".customer-custom-build-change-status"
+        ),
+        paymentState: payment?.getAttribute(
+          "data-customer-custom-build-change-payment"
+        ) || "",
+        paymentVisible: visible(payment),
+        checkoutVisible: visible(customerCheckout),
+        checkoutCount: document.querySelectorAll(
+          "[data-customer-custom-build-change-checkout]"
+        ).length,
+        retainedCheckoutCount: document.querySelectorAll(
+          "[data-customer-custom-build-change-checkout-ready]"
+        ).length,
+        firstPaymentCount: document.querySelectorAll(
+          "[data-custom-build-invoice]"
+        ).length,
+        completionControlCount: document.querySelectorAll(
+          "[data-customer-custom-build-completion], [data-owner-completion-control]"
+        ).length,
+        ownerVisible: visible(ownerPayment),
+        ownerText: ownerPayment
+          ? ownerPayment.textContent.replace(/\\s+/g, " ").trim()
+          : "",
+        ownerReconcileVisible: visible(ownerReconcile),
+        ownerReconcileKind: ownerReconcile?.getAttribute(
+          "data-owner-custom-build-change-payment-reconcile-kind"
+        ) || "",
+        ownerReconcileCount: document.querySelectorAll(
+          "[data-owner-custom-build-change-payment-reconcile]"
+        ).length,
+        moneyOrMarkPaidFields: fields.map((field) => field.name).filter(
+          (name) => /amount|price|tax|refund|credit|mark.?paid/iu.test(name)
+        ),
+        controls,
+      };
+    })()`,
+  );
+
+  let action = null;
+  if (mode === "payment-checkout" || mode === "payment-customer-uncertain") {
+    const path =
+      `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/`
+      + `${PAID_CHANGE_INVOICE_ID}/checkout-command`;
+    const prior = server.apiRequests.filter(
+      (entry) => entry.method === "POST" && entry.pathname === path,
+    ).length;
+    const navigationCount = checkoutNavigations.length;
+    const keyboardFocused = await activateByKeyboard(
+      cdp,
+      "[data-customer-custom-build-change-checkout]",
+    );
+    const request = await waitForApiRequest(
+      server,
+      (entry) => entry.method === "POST" && entry.pathname === path,
+      prior,
+    );
+    if (mode === "payment-checkout") {
+      const deadline = Date.now() + 5000;
+      while (
+        checkoutNavigations.length === navigationCount
+        && Date.now() < deadline
+      ) await delay(25);
+    } else {
+      await waitFor(
+        cdp,
+        `document.querySelector("[data-customer-custom-build-change-completion]")
+          ?.textContent.includes("Do not try another payment")`,
+      );
+    }
+    action = {
+      keyboardFocused,
+      request,
+      navigation: checkoutNavigations.slice(navigationCount).at(-1) || "",
+      retained: mode === "payment-customer-uncertain"
+        ? await evaluate(
+            cdp,
+            `(() => {
+              const panel = document.querySelector(
+                "[data-customer-custom-build-change-completion]"
+              );
+              const status = panel.querySelector(
+                ".customer-custom-build-change-status"
+              );
+              return {
+                text: panel.textContent.replace(/\\s+/g, " ").trim(),
+                paymentPresent: Boolean(panel.querySelector(
+                  "[data-customer-custom-build-change-payment]"
+                )),
+                checkoutPresent: Boolean(panel.querySelector(
+                  "[data-customer-custom-build-change-checkout]"
+                )),
+                statusFocused: document.activeElement === status,
+              };
+            })()`,
+          )
+        : null,
+    };
+  } else if (mode === "payment-customer-malformed") {
+    const prior = server.customerChangeInvoiceReadCount();
+    const keyboardFocused = await activateByKeyboard(
+      cdp,
+      "[data-customer-change-completion-refresh]",
+    );
+    const deadline = Date.now() + 5000;
+    while (
+      server.customerChangeInvoiceReadCount() === prior
+      && Date.now() < deadline
+    ) await delay(25);
+    await delay(150);
+    action = {
+      keyboardFocused,
+      retained: await evaluate(
+        cdp,
+        `(() => {
+          const panel = document.querySelector(
+            "[data-customer-custom-build-change-completion]"
+          );
+          const status = panel.querySelector(
+            ".customer-custom-build-change-status"
+          );
+          return {
+            text: panel.textContent.replace(/\\s+/g, " ").trim(),
+            paymentPresent: Boolean(panel.querySelector(
+              "[data-customer-custom-build-change-payment]"
+            )),
+            checkoutPresent: Boolean(panel.querySelector(
+              "[data-customer-custom-build-change-checkout]"
+            )),
+            statusFocused: document.activeElement === status,
+          };
+        })()`,
+      ),
+    };
+  } else if (mode === "payment-owner-uncertain") {
+    const path =
+      `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/`
+      + `change-payments/${PAID_CHANGE_ATTEMPT_ID}/checkout-reconciliation`;
+    const prior = server.apiRequests.filter(
+      (entry) => entry.method === "POST" && entry.pathname === path,
+    ).length;
+    const keyboardFocused = await activateByKeyboard(
+      cdp,
+      "[data-owner-custom-build-change-payment-reconcile]",
+    );
+    const request = keyboardFocused
+      ? await waitForApiRequest(
+          server,
+          (entry) => entry.method === "POST" && entry.pathname === path,
+          prior,
+        )
+      : null;
+    if (request) await delay(150);
+    action = {
+      keyboardFocused,
+      request,
+      retained: await evaluate(
+        cdp,
+        `(() => {
+          const panel = document.querySelector(
+            "[data-owner-custom-build-change-payments]"
+          );
+          return {
+            text: panel?.textContent.replace(/\\s+/g, " ").trim() || "",
+            reconcilePresent: Boolean(panel?.querySelector(
+              "[data-owner-custom-build-change-payment-reconcile]"
+            )),
+            reconcileKind: panel?.querySelector(
+              "[data-owner-custom-build-change-payment-reconcile]"
+            )?.getAttribute(
+              "data-owner-custom-build-change-payment-reconcile-kind"
+            ) || "",
+            readyPresent: Boolean(panel?.querySelector(
+              "[data-customer-custom-build-change-checkout-ready]"
+            )),
+            statusFocused: Boolean(panel?.contains(document.activeElement)),
+          };
+        })()`,
+      ),
+    };
+  }
+
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+  return { action, initial };
+}
+
 await buildHostedArtifact({ root: ROOT });
 const browser = await browserPath();
 const server = await startServer();
@@ -1605,6 +2221,7 @@ child.once("exit", () => {
 let cdp;
 const failures = [];
 const browserErrors = [];
+const checkoutNavigations = [];
 try {
   cdp = new Cdp(await pageSocket(port, processState));
   cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
@@ -1618,6 +2235,12 @@ try {
     if (entry?.level === "error") {
       browserErrors.push(entry.text || "Unknown browser log error");
     }
+  });
+  cdp.on("Network.requestWillBeSent", ({ request, type }) => {
+    if (
+      type === "Document"
+      && String(request?.url || "").startsWith("https://checkout.stripe.com/")
+    ) checkoutNavigations.push(request.url);
   });
   await Promise.all([
     cdp.send("Page.enable"),
@@ -1822,13 +2445,175 @@ try {
     }
   }
 
+  for (const viewport of VIEWPORTS) {
+    for (const mode of PAID_PAYMENT_MODES) {
+      let purposeOne;
+      try {
+        purposeOne = await customBuildChangePaymentJourney(
+          cdp,
+          server,
+          viewport,
+          mode,
+          checkoutNavigations,
+        );
+      } catch (error) {
+        failures.push(
+          `${viewport.label} ${mode} Purpose-1 journey did not complete: `
+            + error.message,
+        );
+        continue;
+      }
+      const { action, initial } = purposeOne;
+      const shortControls = initial.controls.filter(
+        ({ height }) => height < 44,
+      );
+      const expectsCustomerCheckout = [
+        "payment-checkout",
+        "payment-customer-malformed",
+        "payment-customer-uncertain",
+      ].includes(mode);
+      if (
+        initial.scrollWidth !== initial.viewportWidth
+        || shortControls.length
+        || initial.moneyOrMarkPaidFields.length
+        || initial.firstPaymentCount !== 1
+        || initial.completionControlCount !== 0
+        || initial.checkoutCount !== (expectsCustomerCheckout ? 1 : 0)
+        || initial.retainedCheckoutCount !== 0
+        || (mode === "payment-customer-held" && (
+          initial.paymentVisible
+          || initial.checkoutVisible
+          || !initial.customerStatusFocused
+          || !initial.customerText.toLowerCase().includes("held or unavailable")
+          || !initial.customerText.includes("No charge occurred")
+        ))
+        || (mode !== "payment-customer-held" && (
+          !initial.paymentVisible
+          || !initial.customerText.includes("2 × $125.00")
+          || !initial.customerText.includes("$250.00 USD")
+        ))
+        || (mode === "payment-paid" && (
+          initial.paymentState !== "paid"
+          || initial.checkoutVisible
+          || !initial.customerText.includes(
+            "Payment confirmed; added scope is effective"
+          )
+          || !initial.customerText.includes(
+            "Stripe payment was verified against this exact invoice"
+          )
+        ))
+        || (expectsCustomerCheckout && (
+          initial.paymentState !== "checkout_available"
+          || !initial.checkoutVisible
+          || !initial.customerText.includes("No charge has occurred")
+          || !initial.customerText.includes(
+            "automatic tax and the exact total"
+          )
+        ))
+        || (mode === "payment-owner-uncertain" && (
+          initial.paymentState !== "reconciliation_required"
+          || initial.checkoutVisible
+          || !initial.customerText.includes("Do not try another payment")
+          || !initial.ownerVisible
+          || !initial.ownerReconcileVisible
+          || initial.ownerReconcileKind !== "creation"
+          || initial.ownerReconcileCount !== 1
+          || !/uncertain|reconcil/iu.test(initial.ownerText)
+        ))
+        || (mode !== "payment-owner-uncertain"
+          && initial.ownerReconcileCount !== 0)
+      ) {
+        failures.push(
+          `${viewport.label} ${mode} Purpose-1 layout/state failed: `
+            + JSON.stringify({ ...initial, shortControls }),
+        );
+      }
+
+      if (mode === "payment-checkout") {
+        const bodyKeys = Object.keys(action?.request?.body || {}).sort();
+        if (
+          !action?.keyboardFocused
+          || JSON.stringify(bodyKeys) !==
+            JSON.stringify(["commandId", "invoiceDigest"])
+          || action.request.body.invoiceDigest !== PAID_CHANGE_INVOICE_DIGEST
+          || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+            .test(action.request.body.commandId || "")
+          || action.request.idempotencyKey !== action.request.body.commandId
+          || action.navigation !== PAID_CHANGE_CHECKOUT_URL
+        ) {
+          failures.push(
+            `${viewport.label} customer change Checkout command failed: `
+              + JSON.stringify(action),
+          );
+        }
+      }
+
+      if (
+        ["payment-customer-malformed", "payment-customer-uncertain"]
+          .includes(mode)
+      ) {
+        if (
+          !action?.keyboardFocused
+          || !action.retained?.paymentPresent
+          || action.retained.checkoutPresent
+          || !action.retained.statusFocused
+          || !action.retained.text.includes("$250.00 USD")
+          || !/could not|invalid|uncertain|reconcil/iu.test(action.retained.text)
+        ) {
+          failures.push(
+            `${viewport.label} ${mode} fail-closed retention failed: `
+              + JSON.stringify(action),
+          );
+        }
+        if (mode === "payment-customer-uncertain") {
+          const bodyKeys = Object.keys(action?.request?.body || {}).sort();
+          if (
+            JSON.stringify(bodyKeys) !==
+              JSON.stringify(["commandId", "invoiceDigest"])
+            || action.request.body.invoiceDigest !== PAID_CHANGE_INVOICE_DIGEST
+            || action.request.idempotencyKey !== action.request.body.commandId
+            || action.navigation
+          ) {
+            failures.push(
+              `${viewport.label} uncertain customer command authority failed: `
+                + JSON.stringify(action),
+            );
+          }
+        }
+      }
+
+      if (mode === "payment-owner-uncertain") {
+        const bodyKeys = Object.keys(action?.request?.body || {}).sort();
+        if (
+          !action?.keyboardFocused
+          || JSON.stringify(bodyKeys) !==
+            JSON.stringify(["commandId", "organizationId"])
+          || action.request.body.organizationId !== PAID_ORGANIZATION_ID
+          || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+            .test(action.request.body.commandId || "")
+          || action.request.idempotencyKey !== action.request.body.commandId
+          || !action.retained?.reconcilePresent
+          || action.retained?.reconcileKind !== "settlement"
+          || !/ready|retained/iu.test(action.retained?.text || "")
+          || !action.retained?.statusFocused
+        ) {
+          failures.push(
+            `${viewport.label} owner uncertain-Checkout reconciliation failed: `
+              + JSON.stringify(action),
+          );
+        }
+      }
+    }
+  }
+
   if (server.missingFiles.length) {
     failures.push(
       `artifact requested missing files: ${JSON.stringify([...new Set(server.missingFiles)])}`,
     );
   }
   const writes = server.apiRequests.filter(
-    ({ method }) => method !== "GET" && method !== "HEAD",
+    ({ expectedWrite, method }) =>
+      method !== "GET" && method !== "HEAD" && !expectedWrite,
   );
   if (writes.length) {
     failures.push(
@@ -1848,7 +2633,7 @@ try {
   }
   console.log(
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
-      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, and issued-change plus ready-completion customer/owner fixtures with malformed-refresh retention at 390×844 and 1440×1000.",
+      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, issued-change plus ready-completion fixtures, and H1N Purpose-1 customer/owner payment journeys with exact commands, keyboard activation, retained fail-closed errors, and 44px controls at 320×720, 390×844, and 1440×1000.",
   );
 } finally {
   if (cdp) cdp.close();

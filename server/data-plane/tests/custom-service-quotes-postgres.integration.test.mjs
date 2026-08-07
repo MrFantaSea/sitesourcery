@@ -41,6 +41,10 @@ import {
   createPostgresCustomServicesCustomBuildChangeCompletion
 } from "../../hosted/custom-services-custom-build-change-completion-postgres.mjs";
 import {
+  createPostgresCustomServicesCustomBuildChangePayment
+} from "../../hosted/custom-services-custom-build-change-payment-postgres.mjs";
+import { ExternalEffectError } from "../../domain/errors.mjs";
+import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -187,6 +191,63 @@ async function waitForDatabaseLock(client, backendPid) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return false;
+}
+
+function normalizedSql(value) {
+  return String(value).replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function assertLiveJobLockOrder(
+  trace,
+  { discovery, jobId, label, mutation }
+) {
+  const mutationEntry = trace.find((entry) => mutation.test(entry.sql));
+  assert.ok(mutationEntry, `${label}: live mutation query was not observed`);
+  const transaction = trace.filter(
+    (entry) => entry.transactionId === mutationEntry.transactionId
+  );
+  const discoveryIndex = transaction.findIndex((entry) =>
+    discovery.test(entry.sql)
+  );
+  const lockIndex = transaction.findIndex((entry) =>
+    /select pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/u.test(
+      entry.sql
+    )
+  );
+  const mutationIndex = transaction.indexOf(mutationEntry);
+  assert.equal(
+    discoveryIndex,
+    0,
+    `${label}: immutable job discovery was not the first service query`
+  );
+  assert.ok(
+    lockIndex > discoveryIndex && mutationIndex > lockIndex,
+    `${label}: expected discovery -> H1M advisory lock -> mutation`
+  );
+  assert.equal(
+    /\bfor update\b/u.test(transaction[discoveryIndex].sql),
+    false,
+    `${label}: immutable job discovery unexpectedly took a row lock`
+  );
+  assert.deepEqual(
+    transaction[lockIndex].values,
+    [`ss-custom-build-h1m:${jobId}`],
+    `${label}: wrong shared H1M advisory-lock key`
+  );
+  const unsafeBeforeLock = transaction.slice(0, lockIndex).filter(
+    (entry) =>
+      /\bfor update\b/u.test(entry.sql) ||
+      /^(?:insert|update|delete)\b/u.test(entry.sql)
+  );
+  assert.deepEqual(
+    unsafeBeforeLock,
+    [],
+    `${label}: mutable or row-locking query ran before the H1M lock`
+  );
+  return Object.freeze({
+    backendPid: mutationEntry.backendPid,
+    transactionId: mutationEntry.transactionId
+  });
 }
 
 async function seedAccountProject(client, label) {
@@ -342,7 +403,8 @@ async function seedOperator(client, label) {
   for (const capability of [
     "service_quote_author",
     "service_job_manage",
-    "service_document_manage"
+    "service_document_manage",
+    "service_payment_reconcile"
   ]) {
     await insertRow(client, "operator_permissions", {
       operator_user_id: operatorUserId,
@@ -473,6 +535,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     const other = await seedAccountProject(client, "other-customer");
     const firstOperatorId = await seedOperator(client, "first");
     const secondOperatorId = await seedOperator(client, "second");
+    const thirdOperatorId = await seedOperator(client, "third");
 
     await client.query("set local role service_role");
     const request = await seedCustomerAssessmentRequest(client, customer);
@@ -1900,7 +1963,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       lockRacePayment.createCheckout(lockRaceInput);
     await within(
       providerEntered.promise,
-      "assessment lock-order provider was not reached"
+      "assessment lock-order provider was not reached",
+      15_000
     );
 
     await client.query("begin");
@@ -2609,47 +2673,88 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       (error) => error.code === "project_unavailable"
     );
 
-    const customBuildAuthority = {
-        async service(context, work) {
-          const transactionClient = await pool.connect();
-          try {
-            await transactionClient.query("begin");
-            await transactionClient.query("set local role service_role");
-            if (context.actorKind === "system") {
-              await setActor(
-                transactionClient,
-                "system",
-                {
-                  organizationId:
-                    context.organizationId ?? customer.organizationId,
-                  userId: customer.userId
-                },
-                customer.userId
-              );
-            } else if (context.userId) {
-              await setActor(
-                transactionClient,
-                context.userId === secondOperatorId
-                  ? "operator"
-                  : "customer",
-                {
-                  organizationId:
-                    context.organizationId ?? customer.organizationId
-                },
-                context.userId
-              );
-            }
-            const result = await work(transactionClient);
-            await transactionClient.query("commit");
-            return result;
-          } catch (error) {
-            await transactionClient.query("rollback").catch(() => {});
-            throw error;
-          } finally {
-            transactionClient.release();
-          }
-        }
+    let customBuildCapture = null;
+    let customBuildTransactionId = 0;
+    const beginCustomBuildCapture = (onQuery = null) => {
+      assert.equal(
+        customBuildCapture,
+        null,
+        "Custom-build query captures must not overlap"
+      );
+      const capture = {
+        entries: [],
+        onQuery
       };
+      customBuildCapture = capture;
+      return Object.freeze({
+        entries: capture.entries,
+        stop() {
+          assert.equal(customBuildCapture, capture);
+          customBuildCapture = null;
+        }
+      });
+    };
+    const customBuildAuthority = {
+      async service(context, work) {
+        const transactionClient = await pool.connect();
+        const transactionId = ++customBuildTransactionId;
+        try {
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          if (context.actorKind === "system") {
+            await setActor(
+              transactionClient,
+              "system",
+              {
+                organizationId:
+                  context.organizationId ?? customer.organizationId,
+                userId: customer.userId
+              },
+              customer.userId
+            );
+          } else if (context.userId) {
+            await setActor(
+              transactionClient,
+              [secondOperatorId, thirdOperatorId].includes(context.userId)
+                ? "operator"
+                : "customer",
+              {
+                organizationId:
+                  context.organizationId ?? customer.organizationId
+              },
+              context.userId
+            );
+          }
+          const backend = await transactionClient.query(
+            "select pg_backend_pid()::int as pid"
+          );
+          const backendPid = backend.rows[0].pid;
+          const result = await work({
+            query(text, values = []) {
+              const active = customBuildCapture;
+              if (active !== null) {
+                const entry = Object.freeze({
+                  backendPid,
+                  sql: normalizedSql(text),
+                  transactionId,
+                  values: structuredClone(values)
+                });
+                active.entries.push(entry);
+                active.onQuery?.(entry);
+              }
+              return transactionClient.query(text, values);
+            }
+          });
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    };
     const customBuild = createPostgresCustomServicesCustomBuild({
       authority: customBuildAuthority,
       randomUUID
@@ -3543,6 +3648,356 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       expiredChange
     );
 
+    const payableChangeProjection =
+      await customBuildChangeCompletion.issueChangeOrder(
+        operatorActor,
+        buildJobId,
+        {
+          ...changeIssue,
+          addedScope:
+            "Add the approved event announcement block and its responsive presentation after payment.",
+          commandId: `custom-build-change-${randomUUID()}`,
+          targetCompletionDate: dateAfter(55),
+          unitCount: 2
+        }
+      );
+    const payableChange = payableChangeProjection.changeOrders.at(-1);
+    assert.equal(payableChange.state, "issued");
+    assert.equal(payableChange.changeNumber, 4);
+    const payableAcceptance =
+      await customBuildChangeCompletion.acceptChangeOrder(
+        customerAssessmentScope,
+        payableChange.changeOrderId,
+        {
+          acceptanceStatement:
+            "accepted_exact_change_order_and_payment_requirement",
+          acceptedDisclosureDigest: payableChange.disclosureDigest,
+          acceptedQuoteDigest: payableChange.quoteDigest,
+          commandId: `custom-build-change-accept-${randomUUID()}`
+        }
+      );
+    assert.equal(payableAcceptance.state, "change_order_payment_required");
+    assert.equal(
+      payableAcceptance.changeOrders.active.changeOrderId,
+      payableChange.changeOrderId
+    );
+
+    let retainedChangePurpose = null;
+    const changeCheckoutId = "cs_test_custom_build_change_1";
+    const changePaymentIntentId = "pi_test_custom_build_change_1";
+    const initialChangeCreateEntered = deferred();
+    const releaseInitialChangeCreate = deferred();
+    const initialChangeProviderRequests = [];
+    let changePaymentMismatch = true;
+    let changePaymentReadbacks = 0;
+    let changeLifecycleReadbacks = 0;
+    const customBuildChangePaymentProvider = {
+      async createCustomBuildChangeCheckout(input) {
+        initialChangeProviderRequests.push(structuredClone(input));
+        retainedChangePurpose = structuredClone(input.purpose);
+        assert.equal(input.stripeCustomerId, buildCustomerId);
+        assert.equal(input.purpose.changeOrderId, payableChange.changeOrderId);
+        assert.equal(input.purpose.changeNumber, 4);
+        assert.deepEqual(input.purpose.price, {
+          amountMinor: 25000,
+          unitAmountMinor: 12500,
+          quantity: 2,
+          currency: "USD",
+          billing: "one_time",
+          taxBehavior: "automatic_exclusive"
+        });
+        assert.match(
+          input.checkoutExpiresAt,
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
+        );
+        initialChangeCreateEntered.resolve(structuredClone(input));
+        await releaseInitialChangeCreate.promise;
+        return {
+          checkoutId: changeCheckoutId,
+          url: "https://checkout.stripe.com/c/pay/custom_build_change_1",
+          expiresAt: input.checkoutExpiresAt
+        };
+      },
+      async retrieveCustomBuildChangePayment(input) {
+        changePaymentReadbacks += 1;
+        assert.deepEqual(input.purpose, retainedChangePurpose);
+        const subtotalMinor = changePaymentMismatch ? 12500 : 25000;
+        const taxMinor = changePaymentMismatch ? 1000 : 2000;
+        const facts = {
+          schema:
+            "sitesourcery.stripe-custom-build-change-payment-facts/v1",
+          provider: "stripe",
+          checkoutSessionId: changeCheckoutId,
+          paymentIntentId: changePaymentIntentId,
+          customerId: buildCustomerId,
+          paymentStatus: "paid",
+          subtotalMinor,
+          taxMinor,
+          totalMinor: subtotalMinor + taxMinor,
+          taxMode: "automatic",
+          currency: "USD",
+          purposeDigest: input.purposeDigest,
+          providerPaymentTime: new Date(Date.now() - 500).toISOString()
+        };
+        return Object.freeze({
+          ...facts,
+          providerFactsDigest: digest(facts)
+        });
+      },
+      async retrieveCustomBuildChangeCheckoutLifecycle(input) {
+        changeLifecycleReadbacks += 1;
+        return {
+          schema:
+            "sitesourcery.stripe-custom-build-change-checkout-lifecycle/v1",
+          provider: "stripe",
+          checkoutSessionId: input.checkoutSessionId,
+          purposeDigest: input.purposeDigest,
+          state: "paid"
+        };
+      }
+    };
+    const customBuildChangePayment =
+      createPostgresCustomServicesCustomBuildChangePayment({
+        authority: customBuildAuthority,
+        provider: customBuildChangePaymentProvider,
+        release: {
+          approved: true,
+          currency: "USD",
+          holdScope: "new_checkout_creation_only",
+          providerEffectProcessing:
+            "settlement_and_reconciliation_continue",
+          taxMode: "automatic"
+        },
+        clock: { now: () => new Date().toISOString() },
+        ids: { next: () => randomUUID() }
+      });
+    assert.deepEqual(await customBuildChangePayment.readiness(), {
+      schema: "sitesourcery.custom-build-change-payment-readiness/v1",
+      ready: true,
+      state: "approved",
+      runtimeContract: "canonical-ss-v45-custom-build-change-payment",
+      automaticTax: true,
+      webhookWakeup: true,
+      stripeReadback: true,
+      atomicSettlement: true,
+      activatesAcceptedChange: true,
+      ownerReconciliation: true,
+      holdScope: "new_checkout_creation_only",
+      providerEffectProcessing: "settlement_and_reconciliation_continue"
+    });
+    const changeInvoice =
+      await customBuildChangePayment.readCurrentInvoice(
+        customerAssessmentScope
+      );
+    assert.equal(changeInvoice.state, "checkout_available");
+    assert.equal(
+      changeInvoice.invoice.changeOrderId,
+      payableChange.changeOrderId
+    );
+    assert.equal(changeInvoice.invoice.changeNumber, 4);
+    assert.equal(changeInvoice.invoice.subtotal.amountMinor, 25000);
+    assert.deepEqual(
+      changeInvoice.invoice.lines.map((line) => ({
+        componentKey: line.componentKey,
+        quantity: line.quantity,
+        unitAmountMinor: line.unitAmountMinor,
+        amountMinor: line.amountMinor
+      })),
+      [{
+        componentKey: "custom_build_change_units",
+        quantity: 2,
+        unitAmountMinor: 12500,
+        amountMinor: 25000
+      }]
+    );
+    const changeCheckoutInput = {
+      ...customerAssessmentScope,
+      commandId: `custom-build-change-checkout-${randomUUID()}`,
+      invoiceId: changeInvoice.invoice.invoiceId,
+      invoiceDigest: changeInvoice.invoice.invoiceDigest
+    };
+    const initialStageLockEntered = deferred();
+    const initialFinishLockEntered = deferred();
+    let initialPaymentLockOrdinal = 0;
+    const initialPaymentCapture = beginCustomBuildCapture((entry) => {
+      if (!/select pg_advisory_xact_lock/u.test(entry.sql)) return;
+      initialPaymentLockOrdinal += 1;
+      if (initialPaymentLockOrdinal === 1) {
+        initialStageLockEntered.resolve(entry);
+      } else if (initialPaymentLockOrdinal === 2) {
+        initialFinishLockEntered.resolve(entry);
+      }
+    });
+    let initialPaymentLockHeld = false;
+    let changeCheckout;
+    try {
+      await client.query("begin");
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+         )`,
+        [buildJobId]
+      );
+      initialPaymentLockHeld = true;
+      const checkoutPromise = customBuildChangePayment.createCheckout(
+        changeCheckoutInput
+      );
+      checkoutPromise.catch(() => {});
+      const stageWait = await within(
+        initialStageLockEntered.promise,
+        "H1N stage did not reach the shared H1M lock"
+      );
+      assert.equal(
+        await waitForDatabaseLock(client, stageWait.backendPid),
+        true,
+        "H1N stage did not wait before idempotency or attempt mutation"
+      );
+      const absentWhileStageWaited = await client.query(
+        `select count(*)::int as count
+         from ss.service_custom_build_change_checkout_attempts
+         where organization_id = $1 and invoice_id = $2`,
+        [customer.organizationId, changeInvoice.invoice.invoiceId]
+      );
+      assert.equal(absentWhileStageWaited.rows[0].count, 0);
+      await client.query("commit");
+      initialPaymentLockHeld = false;
+
+      const initialProviderRequest = await within(
+        initialChangeCreateEntered.promise,
+        "H1N provider creation was not reached after stage release"
+      );
+      assert.equal(
+        initialProviderRequest.idempotencyKey,
+        changeCheckoutInput.commandId
+      );
+
+      const providerPendingInvoice =
+        await customBuildChangePayment.readCurrentInvoice(
+          customerAssessmentScope
+        );
+      assert.equal(providerPendingInvoice.state, "reconciliation_required");
+      assert.deepEqual(providerPendingInvoice.action, {
+        available: false,
+        reason: "reconciliation_required"
+      });
+      const providerPendingOwner =
+        await customBuildChangePayment.readOwnerPayments(
+          operatorActor,
+          buildJobId,
+          customer.organizationId
+        );
+      const providerPendingPayment = providerPendingOwner.payments.find(
+        (payment) => payment.invoice.invoiceId === changeInvoice.invoice.invoiceId
+      );
+      assert.equal(providerPendingPayment.state, "reconciliation_required");
+      assert.equal(providerPendingPayment.owner.attemptState, "provider_pending");
+      assert.equal(providerPendingPayment.owner.canReconcileCreation, true);
+      assert.equal(providerPendingPayment.owner.canReconcileSettlement, false);
+
+      await client.query("begin");
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+         )`,
+        [buildJobId]
+      );
+      initialPaymentLockHeld = true;
+      releaseInitialChangeCreate.resolve();
+      const finishWait = await within(
+        initialFinishLockEntered.promise,
+        "H1N finish did not reach the shared H1M lock"
+      );
+      assert.equal(
+        await waitForDatabaseLock(client, finishWait.backendPid),
+        true,
+        "H1N finish did not wait before attempt or command mutation"
+      );
+      const pendingWhileFinishWaited = await client.query(
+        `select state
+         from ss.service_custom_build_change_checkout_attempts
+         where organization_id = $1 and invoice_id = $2`,
+        [customer.organizationId, changeInvoice.invoice.invoiceId]
+      );
+      assert.equal(pendingWhileFinishWaited.rows[0].state, "provider_pending");
+      await client.query("commit");
+      initialPaymentLockHeld = false;
+      changeCheckout = await within(
+        checkoutPromise,
+        "H1N Checkout did not finish after the shared lock released"
+      );
+    } finally {
+      if (initialPaymentLockHeld) {
+        await client.query("rollback").catch(() => {});
+      }
+      initialPaymentCapture.stop();
+    }
+    assertLiveJobLockOrder(initialPaymentCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_invoices where organization_id = \$1/u,
+      jobId: buildJobId,
+      label: "stageCheckout",
+      mutation: /insert into ss\.idempotency_keys/u
+    });
+    assertLiveJobLockOrder(initialPaymentCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_checkout_attempts where organization_id = \$1 and id = \$2/u,
+      jobId: buildJobId,
+      label: "finishCheckout",
+      mutation:
+        /update ss\.service_custom_build_change_checkout_attempts set state = 'ready'/u
+    });
+    assert.equal(changeCheckout.state, "ready");
+    assert.equal(changeCheckout.checkout.chargeOccurred, false);
+    assert.equal(changeCheckout.checkout.subtotal.amountMinor, 25000);
+    assert.deepEqual(
+      await customBuildChangePayment.createCheckout(changeCheckoutInput),
+      changeCheckout
+    );
+    assert.equal(initialChangeProviderRequests.length, 1);
+    assert.ok(retainedChangePurpose);
+    assert.match(
+      retainedChangePurpose.scopeBoundaryDigest,
+      /^[0-9a-f]{64}$/u
+    );
+    assert.equal(
+      retainedChangePurpose.acceptedQuoteDigest,
+      payableChange.quoteDigest
+    );
+    assert.equal(
+      retainedChangePurpose.acceptedDisclosureDigest,
+      payableChange.disclosureDigest
+    );
+    const ownerChangePayments =
+      await customBuildChangePayment.readOwnerPayments(
+        operatorActor,
+        buildJobId,
+        customer.organizationId
+      );
+    const ownerPayableChange = ownerChangePayments.payments.find(
+      (payment) =>
+        payment.invoice.changeOrderId === payableChange.changeOrderId
+    );
+    assert.ok(ownerPayableChange);
+    assert.equal(ownerPayableChange.state, "checkout_ready");
+    assert.equal(ownerPayableChange.owner.attemptState, "ready");
+    await assert.rejects(
+      customBuildChangeCompletion.voidChangeOrder(
+        operatorActor,
+        buildJobId,
+        payableChange.changeOrderId,
+        {
+          commandId: `custom-build-change-void-${randomUUID()}`,
+          expectedQuoteDigest: payableChange.quoteDigest,
+          organizationId: customer.organizationId,
+          reason:
+            "This paid-path change must not be voidable after provider payment evidence begins."
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+
     const completionProgress = await customBuildProgress.recordProgress(
       operatorActor,
       buildJobId,
@@ -3613,6 +4068,338 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     const staleEvidenceIds = phoneCompletion.evidence
       .map((entry) => entry.evidenceId)
       .sort();
+    const completionChecks = {
+      accessibilityBasics: true,
+      contactActions: true,
+      desktop: true,
+      links: true,
+      phone: true,
+      scope: true
+    };
+    await assert.rejects(
+      customBuildChangeCompletion.recordCompletion(
+        operatorActor,
+        buildJobId,
+        {
+          checks: completionChecks,
+          commandId: `custom-build-completion-${randomUUID()}`,
+          customerSummary:
+            "This proof cannot complete while an accepted change still requires verified payment.",
+          evidenceIds: staleEvidenceIds,
+          organizationId: customer.organizationId
+        }
+      ),
+      (error) =>
+        error.code === "CUSTOM_BUILD_CHANGE_COMPLETION_CHANGED" &&
+        error.status === 409
+    );
+
+    const changePurposeDigest = digest(retainedChangePurpose);
+    const changeMetadata = {
+      schema: "sitesourcery_custom_build_change_checkout_v1",
+      tenant_id: retainedChangePurpose.tenantId,
+      customer_id: retainedChangePurpose.customerId,
+      project_id: retainedChangePurpose.projectId,
+      job_id: retainedChangePurpose.jobId,
+      change_order_id: retainedChangePurpose.changeOrderId,
+      change_acceptance_id: retainedChangePurpose.changeAcceptanceId,
+      change_number: String(retainedChangePurpose.changeNumber),
+      invoice_id: retainedChangePurpose.invoiceId,
+      invoice_number: retainedChangePurpose.invoiceNumber,
+      scope_boundary_digest: retainedChangePurpose.scopeBoundaryDigest,
+      prior_effective_scope_digest:
+        retainedChangePurpose.priorEffectiveScopeDigest,
+      target_completion_date: retainedChangePurpose.targetCompletionDate,
+      accepted_quote_digest: retainedChangePurpose.acceptedQuoteDigest,
+      accepted_disclosure_digest:
+        retainedChangePurpose.acceptedDisclosureDigest,
+      invoice_digest: retainedChangePurpose.invoiceDigest,
+      purpose_digest: changePurposeDigest
+    };
+    const changeStripeEvent = {
+      id: "evt_test_custom_build_change_1",
+      type: "checkout.session.completed",
+      livemode: false,
+      api_version: "2026-06-24.dahlia",
+      created: Math.floor(Date.now() / 1000) - 1,
+      data: {
+        object: {
+          id: changeCheckoutId,
+          metadata: changeMetadata
+        }
+      }
+    };
+    const eventRecoveryCapture = beginCustomBuildCapture();
+    let changeReconciliation;
+    try {
+      changeReconciliation =
+        await customBuildChangePayment.ingestStripeEvent(changeStripeEvent);
+    } finally {
+      eventRecoveryCapture.stop();
+    }
+    assert.deepEqual(changeReconciliation, {
+      schema: "sitesourcery.custom-build-change-reconciliation/v1",
+      status: "reconciliation_required",
+      projectId: customer.projectId,
+      changeOrderId: payableChange.changeOrderId,
+      invoiceId: changeInvoice.invoice.invoiceId,
+      next: "owner_review"
+    });
+    assertLiveJobLockOrder(eventRecoveryCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_checkout_attempts where organization_id = \$1 and checkout_session_id = \$2/u,
+      jobId: buildJobId,
+      label: "claimEvent",
+      mutation:
+        /insert into ss\.service_custom_build_change_stripe_events/u
+    });
+    assertLiveJobLockOrder(eventRecoveryCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_stripe_events where organization_id = \$1 and id = \$2/u,
+      jobId: buildJobId,
+      label: "markReconciliation",
+      mutation:
+        /update ss\.service_custom_build_change_stripe_events set state = 'reconciliation_required'/u
+    });
+    const mismatchedOwnerProjection =
+      await customBuildChangePayment.readOwnerPayments(
+        operatorActor,
+        buildJobId,
+        customer.organizationId
+      );
+    const mismatchedOwnerPayment = mismatchedOwnerProjection.payments.find(
+      (payment) => payment.invoice.invoiceId === changeInvoice.invoice.invoiceId
+    );
+    assert.equal(mismatchedOwnerPayment.state, "reconciliation_required");
+    assert.equal(mismatchedOwnerPayment.owner.canReconcileCreation, false);
+    assert.equal(mismatchedOwnerPayment.owner.canReconcileSettlement, true);
+    assert.equal(mismatchedOwnerPayment.owner.eventState, "reconciliation_required");
+
+    const driftProviderPaidAt = new Date(Date.now() - 1_000).toISOString();
+    const driftedProviderFactsWithoutDigest = {
+      schema: "sitesourcery.stripe-custom-build-change-payment-facts/v1",
+      provider: "stripe",
+      checkoutSessionId: changeCheckoutId,
+      paymentIntentId: changePaymentIntentId,
+      customerId: buildCustomerId,
+      paymentStatus: "paid",
+      subtotalMinor: 25000,
+      taxMinor: 1999,
+      totalMinor: 26999,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: changePurposeDigest,
+      providerPaymentTime: driftProviderPaidAt
+    };
+    const driftedProviderFacts = {
+      ...driftedProviderFactsWithoutDigest,
+      providerFactsDigest: digest(driftedProviderFactsWithoutDigest)
+    };
+    await client.query("begin");
+    try {
+      await client.query("set local role service_role");
+      await setActor(
+        client,
+        "system",
+        {
+          organizationId: customer.organizationId,
+          userId: customer.userId
+        },
+        customer.userId
+      );
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+         )`,
+        [buildJobId]
+      );
+      await expectRejected(
+        client,
+        () => client.query(
+          `insert into ss.service_custom_build_change_payment_receipts (
+             id, organization_id, project_id, case_id,
+             customer_user_id, job_id, change_order_id,
+             change_acceptance_id, invoice_id, checkout_attempt_id,
+             receipt_source, stripe_event_id,
+             reconciled_by_operator_user_id, provider,
+             checkout_session_id, payment_intent_id,
+             stripe_customer_id, payment_status, subtotal_minor,
+             tax_minor, total_minor, tax_mode, currency,
+             purpose_digest, invoice_digest, accepted_quote_digest,
+             accepted_disclosure_digest, provider_facts,
+             provider_facts_digest, provider_paid_at, settled_at
+           )
+           select
+             $1, invoice.organization_id, invoice.project_id,
+             invoice.case_id, invoice.customer_user_id, invoice.job_id,
+             invoice.change_order_id, invoice.change_acceptance_id,
+             invoice.id, attempt.id, 'stripe_event', event.id, null,
+             'stripe', attempt.checkout_session_id, $3, $4, 'paid',
+             invoice.subtotal_minor, 2000,
+             invoice.subtotal_minor + 2000, 'automatic', 'USD',
+             attempt.purpose_digest, invoice.invoice_digest,
+             invoice.accepted_quote_digest,
+             invoice.accepted_disclosure_digest, $5::jsonb, $6, $7, $8
+           from ss.service_custom_build_change_invoices invoice
+           join ss.service_custom_build_change_checkout_attempts attempt
+             on attempt.organization_id = invoice.organization_id
+            and attempt.invoice_id = invoice.id
+           join ss.service_custom_build_change_stripe_events event
+             on event.organization_id = invoice.organization_id
+            and event.checkout_attempt_id = attempt.id
+           where invoice.id = $2`,
+          [
+            randomUUID(),
+            changeInvoice.invoice.invoiceId,
+            changePaymentIntentId,
+            buildCustomerId,
+            JSON.stringify(driftedProviderFacts),
+            driftedProviderFacts.providerFactsDigest,
+            driftProviderPaidAt,
+            new Date().toISOString()
+          ]
+        ),
+        /provider facts are internally inconsistent/iu
+      );
+    } finally {
+      await client.query("rollback").catch(() => {});
+    }
+
+    changePaymentMismatch = false;
+    const settlementReconciliationCommandId =
+      `custom-build-change-reconcile-${randomUUID()}`;
+    const settlementReconciliationInput = {
+      attemptId: ownerPayableChange.owner.attemptId,
+      organizationId: customer.organizationId,
+      commandId: settlementReconciliationCommandId
+    };
+    const ownerSettlementCapture = beginCustomBuildCapture();
+    let ownerSettlement;
+    try {
+      ownerSettlement =
+        await customBuildChangePayment.reconcileCheckoutCreation(
+          operatorActor,
+          buildJobId,
+          settlementReconciliationInput
+        );
+    } finally {
+      ownerSettlementCapture.stop();
+    }
+    assert.deepEqual(Object.keys(ownerSettlement).sort(), [
+      "action",
+      "attemptId",
+      "changeOrderId",
+      "checkout",
+      "invoiceId",
+      "jobId",
+      "next",
+      "organizationId",
+      "reason",
+      "schema",
+      "settlement",
+      "status"
+    ]);
+    assert.equal(
+      ownerSettlement.schema,
+      "sitesourcery.custom-build-change-payment-reconciliation-command/v1"
+    );
+    assert.equal(ownerSettlement.status, "payment_settled");
+    assert.equal(ownerSettlement.action, "settlement_reconciled");
+    assert.equal(ownerSettlement.next, "custom_build_changed_work");
+    assert.equal(ownerSettlement.reason, null);
+    assert.equal(ownerSettlement.checkout, null);
+    assert.equal(
+      ownerSettlement.attemptId,
+      ownerPayableChange.owner.attemptId
+    );
+    const changeSettlement = ownerSettlement.settlement;
+    assert.equal(changeSettlement.status, "payment_settled");
+    assert.equal(changeSettlement.next, "custom_build_changed_work");
+    assert.equal(changeSettlement.changeOrderId, payableChange.changeOrderId);
+    assertLiveJobLockOrder(ownerSettlementCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_checkout_attempts where id = \$1/u,
+      jobId: buildJobId,
+      label: "ownerCommandClaim",
+      mutation:
+        /insert into ss\.service_custom_build_change_reconciliation_commands/u
+    });
+    assertLiveJobLockOrder(ownerSettlementCapture.entries, {
+      discovery:
+        /from ss\.service_custom_build_change_checkout_attempts where organization_id = \$1 and id = \$2/u,
+      jobId: buildJobId,
+      label: "ownerSettlementTransaction",
+      mutation:
+        /insert into ss\.service_custom_build_change_payment_receipts/u
+    });
+    assert.equal(changePaymentReadbacks, 2);
+    assert.equal(changeLifecycleReadbacks, 1);
+    assert.deepEqual(
+      await customBuildChangePayment.reconcileCheckoutCreation(
+        operatorActor,
+        buildJobId,
+        settlementReconciliationInput
+      ),
+      ownerSettlement
+    );
+    assert.equal(changePaymentReadbacks, 2);
+    assert.equal(changeLifecycleReadbacks, 1);
+    for (const conflict of [
+      {
+        actor: operatorActor,
+        jobId: randomUUID(),
+        input: settlementReconciliationInput
+      },
+      {
+        actor: operatorActor,
+        jobId: buildJobId,
+        input: {
+          ...settlementReconciliationInput,
+          organizationId: other.organizationId
+        }
+      },
+      {
+        actor: { userId: thirdOperatorId },
+        jobId: buildJobId,
+        input: settlementReconciliationInput
+      }
+    ]) {
+      await assert.rejects(
+        customBuildChangePayment.reconcileCheckoutCreation(
+          conflict.actor,
+          conflict.jobId,
+          conflict.input
+        ),
+        (error) =>
+          error.code ===
+            "CUSTOM_BUILD_CHANGE_PAYMENT_RECONCILIATION_IDEMPOTENCY_CONFLICT" &&
+          error.status === 409
+      );
+    }
+    assert.deepEqual(
+      await customBuildChangePayment.ingestStripeEvent(changeStripeEvent),
+      changeSettlement
+    );
+    assert.equal(changePaymentReadbacks, 2);
+    const paidChangeInvoice =
+      await customBuildChangePayment.readCurrentInvoice(
+        customerAssessmentScope
+      );
+    assert.equal(paidChangeInvoice.state, "paid");
+    assert.equal(paidChangeInvoice.invoice.payment.chargeOccurred, true);
+    assert.equal(paidChangeInvoice.invoice.tax.amountMinor, 2000);
+    assert.equal(paidChangeInvoice.invoice.total.amountMinor, 27000);
+    const effectiveChangeProjection =
+      await customBuildChangeCompletion.readCustomer(
+        customerAssessmentScope
+      );
+    assert.equal(effectiveChangeProjection.state, "building");
+    assert.equal(effectiveChangeProjection.changeOrders.active, null);
+    assert.equal(
+      effectiveChangeProjection.changeOrders.history.at(-1).state,
+      "effective"
+    );
+
     const finalVerificationProgress =
       await customBuildProgress.recordProgress(
         operatorActor,
@@ -3635,14 +4422,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         }
       );
     assert.equal(finalVerificationProgress.progress.revision, 3);
-    const completionChecks = {
-      accessibilityBasics: true,
-      contactActions: true,
-      desktop: true,
-      links: true,
-      phone: true,
-      scope: true
-    };
+    assert.equal(
+      finalVerificationProgress.targetCompletionDate,
+      retainedChangePurpose.targetCompletionDate
+    );
     await assert.rejects(
       customBuildChangeCompletion.recordCompletion(
         operatorActor,
@@ -3829,7 +4612,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       assert.equal(completedBuild.completion.evidenceIds.length, 2);
       assert.deepEqual(
         completedBuild.completion.effectiveChangeOrderDigests,
-        []
+        [payableChange.quoteDigest]
       );
       assert.deepEqual(
         await customBuildChangeCompletion.recordCompletion(

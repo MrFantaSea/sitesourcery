@@ -33,6 +33,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildChangeCompletion
 } from "./custom-services-custom-build-change-completion-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildChangePayment
+} from "./custom-services-custom-build-change-payment-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -375,6 +378,7 @@ export function createHostedApi(
     customServicesAssessmentWork = null,
     customServicesCustomBuild = null,
     customServicesCustomBuildChangeCompletion = null,
+    customServicesCustomBuildChangePayment = null,
     customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
@@ -486,6 +490,18 @@ export function createHostedApi(
     "Hosted Custom-build change and completion boundary is invalid.",
     { status: 500 }
   );
+  const customServicesCustomBuildChangePaymentBoundary =
+    customServicesCustomBuildChangePayment ??
+    createHeldCustomServicesCustomBuildChangePayment();
+  invariant(
+    typeof customServicesCustomBuildChangePaymentBoundary
+        .readOwnerPayments === "function" &&
+      typeof customServicesCustomBuildChangePaymentBoundary
+        .reconcileCheckoutCreation === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom-build change payment boundary is invalid.",
+    { status: 500 }
+  );
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
   const alakazamAccountBoundary =
@@ -547,10 +563,14 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildChangeCompletion ===
         "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildChangeInvoice ===
+        "function" &&
       typeof customServicesAccountBoundary.getCustomBuildCompletionEvidence ===
         "function" &&
       typeof customServicesAccountBoundary.createCustomBuildCheckout ===
         "function" &&
+      typeof customServicesAccountBoundary
+        .createCustomBuildChangeCheckout === "function" &&
       typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
         "function" &&
       typeof customServicesAccountBoundary.respondToCustomBuildRequest ===
@@ -911,6 +931,64 @@ export function createHostedApi(
               actor,
               cursorValues[0] ?? null
             );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-payments$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom-build change payments.",
+            { status: 401 }
+          );
+          const query = exactRouteQuery(
+            url,
+            ["organizationId"],
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment query is invalid."
+          );
+          result = await customServicesCustomBuildChangePaymentBoundary
+            .readOwnerPayments(actor, route[0], query.organizationId);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/change-payments\/([^/]+)\/checkout-reconciliation$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before reconciling an uncertain Custom-build change Checkout.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment query is invalid."
+          );
+          const input = exactRouteBody(
+            body,
+            ["commandId", "organizationId"],
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment reconciliation is invalid."
+          );
+          invariant(
+            input.commandId === commandId(request),
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment reconciliation command is invalid.",
+            { status: 400 }
+          );
+          result = await customServicesCustomBuildChangePaymentBoundary
+            .reconcileCheckoutCreation(actor, route[0], {
+              attemptId: route[1],
+              commandId: input.commandId,
+              organizationId: input.organizationId
+            });
         } else if (
           method === "GET" &&
           (route = match(
@@ -1482,6 +1560,38 @@ export function createHostedApi(
               );
           status = 201;
         } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-change-invoices\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before paying a Custom-build change invoice.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .createCustomBuildChangeCheckout(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                ["commandId", "invoiceDigest"],
+                "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+                "The Custom-build change invoice checkout request is invalid."
+              )
+            );
+          status = 201;
+        } else if (
           method === "GET" &&
           (route = match(
             pathname,
@@ -1744,6 +1854,27 @@ export function createHostedApi(
               actor,
               route[0]
             );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-change-invoice$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing a Custom-build change invoice.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_CHANGE_PAYMENT_INPUT",
+            "The Custom-build change payment query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .getCustomBuildChangeInvoice(actor, route[0]);
         } else if (
           method === "GET" &&
           (route = match(

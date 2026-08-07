@@ -595,7 +595,8 @@ const SNAPSHOT_SELECT = `
     job.customer_user_id,
     job.state as job_state,
     job.opened_at,
-    job.target_completion_date::text as target_completion_date,
+    effective_scope.effective_target_completion_date::text
+      as target_completion_date,
     progress.revision as progress_revision,
     progress.stage as progress_stage,
     progress.structure_milestone,
@@ -624,6 +625,10 @@ const SNAPSHOT_SELECT = `
     access.delegated_role,
     access.expires_at as access_expires_at
   from ss.service_custom_build_jobs job
+  cross join lateral ss.service_custom_build_effective_scope_snapshot(
+    job.organization_id,
+    job.id
+  ) effective_scope
   left join lateral (
     select candidate.*
     from ss.service_custom_build_progress_updates candidate
