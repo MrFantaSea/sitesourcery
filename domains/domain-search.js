@@ -24,8 +24,9 @@
    * "available", and the registrar's own answer is what settles it. Claiming
    * certainty here would be the same failure as quoting a price nobody checked.
    *
-   * Cloudflare's resolver is used because it is CORS-enabled, needs no key, and
-   * receives only the name the visitor typed in order to look it up.
+   * Cloudflare's resolver is used because it is CORS-enabled and needs no key.
+   * It receives the three cleaned candidate names plus ordinary request and
+   * network metadata under its own terms and privacy practices.
    */
 
   var RESOLVER = "https://cloudflare-dns.com/dns-query";

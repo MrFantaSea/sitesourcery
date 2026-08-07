@@ -6,7 +6,9 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
@@ -40,6 +42,18 @@ import {
   hostedTruthRequirements,
   hostedTruthSlots,
 } from "../hosted-truth/manifest.mjs";
+import {
+  assertImmutableLegalArtifactSources,
+  assertLegalArtifactRelativePath,
+  assertPrivacyV3Unsealed,
+  HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_PRIVACY_V3_RELEASE,
+} from "../hosted-truth/legal-artifacts.mjs";
+import {
+  PRIVACY_V3_REVIEW_EFFECTIVE_LABEL,
+  PRIVACY_V3_REVIEW_VERSION,
+  renderPrivacyV3Review,
+} from "../hosted-truth/render-privacy-v3-review.mjs";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -340,6 +354,31 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
 
   assert.equal(await buildHostedArtifact({ root: ROOT, output }), output);
   await verifyHostedArtifact({ root: ROOT, output });
+  assert.equal(assertImmutableLegalArtifactSources({ root: ROOT }), true);
+  assert.equal(assertImmutableLegalArtifactSources({ root: output }), true);
+
+  const v2ArchiveOutput = path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file);
+  const exactV2Archive = await readFile(v2ArchiveOutput);
+  assert.equal(exactV2Archive.length, HOSTED_PRIVACY_V2_ARTIFACT.byteCount);
+  assert.equal(sha256(exactV2Archive), HOSTED_PRIVACY_V2_ARTIFACT.sha256);
+  assert.equal(hostedFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
+  assert.equal(publicFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
+  assert.equal(
+    (await readFile(path.join(output, "sitemap.xml"), "utf8"))
+      .includes(HOSTED_PRIVACY_V2_ARTIFACT.evidenceUri),
+    false,
+    "immutable legal evidence must stay out of the sitemap",
+  );
+
+  const tamperedV2Archive = Buffer.from(exactV2Archive);
+  tamperedV2Archive[100] ^= 1;
+  await writeFile(v2ArchiveOutput, tamperedV2Archive);
+  await assert.rejects(
+    verifyHostedArtifact({ root: ROOT, output }),
+    /immutable legal artifact.*digest changed|digest changed/u,
+  );
+  await writeFile(v2ArchiveOutput, exactV2Archive);
+  await verifyHostedArtifact({ root: ROOT, output });
 
   const customerControlOutput = path.join(
     output,
@@ -545,6 +584,57 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   assert.equal(releaseControl.allowsCommercialDeployment, false);
 });
 
+test("privacy V3 clause/layout review stays unsealed and outside production artifacts", async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-review-test-"));
+  t.after(async () => rm(temporary, { recursive: true, force: true }));
+  const outputRoot = path.join(temporary, "review");
+
+  assert.equal(assertPrivacyV3Unsealed(), true);
+  assert.deepEqual(HOSTED_PRIVACY_V3_RELEASE, {
+    state: "unsealed",
+    kind: "privacy",
+    currentFile: "legal/privacy/index.html",
+    version: null,
+    versionedFile: null,
+    effectiveAt: null,
+    fullPageSha256: null,
+    byteCount: null,
+    authorityDigest: null,
+  });
+
+  const review = await renderPrivacyV3Review({ root: ROOT, outputRoot });
+  const current = await readFile(
+    path.join(outputRoot, review.receipt.currentFile),
+  );
+  const versioned = await readFile(
+    path.join(outputRoot, review.receipt.versionedFile),
+  );
+  assert.equal(current.equals(versioned), true);
+  assert.equal(review.receipt.state, "unsealed");
+  assert.equal(review.receipt.sealable, false);
+  assert.equal(review.receipt.version, null);
+  assert.equal(review.receipt.effectiveAt, null);
+  assert.equal(review.receipt.fullPageSha256, null);
+  assert.equal(review.receipt.byteCount, null);
+  assert.equal(review.receipt.authorityDigest, null);
+
+  const source = current.toString("utf8");
+  assert.ok(source.includes(PRIVACY_V3_REVIEW_VERSION));
+  assert.ok(source.includes(PRIVACY_V3_REVIEW_EFFECTIVE_LABEL));
+  assert.match(source, /<meta name="robots" content="noindex,nofollow">/u);
+  assert.match(source, /must not be used to seal release constants/u);
+  assert.doesNotMatch(source, /Effective August 6, 2026/u);
+  assert.doesNotMatch(source, /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u);
+  assert.doesNotMatch(source, /sitesourcery:truth-slot:/u);
+
+  for (const file of [...publicFileAllowlist, ...hostedFileAllowlist]) {
+    assert.doesNotMatch(
+      file,
+      /^legal\/privacy\/versions\/SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3\/index\.html$/u,
+    );
+  }
+});
+
 test("missing, changed, or mixed reviewed input fails before replacing the last good artifact", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-mutation-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
@@ -570,6 +660,46 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   const originalApp = await readFile(appFile, "utf8");
   const originalFragment = await readFile(fragmentFile, "utf8");
   const originalCustomerControl = await readFile(customerControlFile, "utf8");
+  const v2ArchiveFile = path.join(fixture, HOSTED_PRIVACY_V2_ARTIFACT.file);
+  const originalV2Archive = await readFile(v2ArchiveFile);
+  const changedV2Archive = Buffer.from(originalV2Archive);
+  changedV2Archive[100] ^= 1;
+
+  for (const invalidPath of [
+    "../privacy/index.html",
+    "/legal/privacy/index.html",
+    "legal/privacy/../privacy/index.html",
+    "legal\\privacy\\index.html",
+  ]) {
+    assert.throws(
+      () => assertLegalArtifactRelativePath(invalidPath),
+      /invalid immutable legal artifact path/u,
+    );
+  }
+
+  await writeFile(v2ArchiveFile, changedV2Archive);
+  await assert.rejects(
+    buildHostedArtifact({ root: fixture, output }),
+    /digest changed/u,
+  );
+  await assert.rejects(access(output));
+  await writeFile(v2ArchiveFile, originalV2Archive);
+
+  const versionsDirectory = path.dirname(path.dirname(v2ArchiveFile));
+  const realVersionsDirectory = `${versionsDirectory}-real`;
+  await rename(versionsDirectory, realVersionsDirectory);
+  await symlink(realVersionsDirectory, versionsDirectory, "dir");
+  assert.throws(
+    () => assertImmutableLegalArtifactSources({ root: fixture }),
+    /traverses a symbolic link/u,
+  );
+  await assert.rejects(
+    buildHostedArtifact({ root: fixture, output }),
+    /traverses a symbolic link/u,
+  );
+  await assert.rejects(access(output));
+  await rm(versionsDirectory);
+  await rename(realVersionsDirectory, versionsDirectory);
 
   await writeFile(
     appFile,
@@ -617,6 +747,21 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
     path.join(output, "abracadabra/app/index.html"),
     "utf8",
   );
+  const lastGoodV2Archive = await readFile(
+    path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file),
+  );
+  await writeFile(v2ArchiveFile, changedV2Archive);
+  await assert.rejects(
+    buildHostedArtifact({ root: fixture, output }),
+    /digest changed/u,
+  );
+  assert.equal(
+    (await readFile(path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file)))
+      .equals(lastGoodV2Archive),
+    true,
+    "invalid source evidence must preserve the last complete V2 artifact",
+  );
+  await writeFile(v2ArchiveFile, originalV2Archive);
   await writeFile(
     appFile,
     originalApp.replace(

@@ -45,11 +45,14 @@
           </div>
           <div class="domain-search" data-domain-search>
             <label class="domain-search-label" for="domain-name">Your business name</label>
+            <p class="domain-price-line" id="domain-preflight-disclosure">When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver. Cloudflare also receives ordinary request and network metadata, such as the IP address, request URL, time, and user-agent information, under its own terms and privacy practices. The lookup checks public DNS only. It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order. <a href="/legal/privacy/#domains">Read the Domains section of the privacy notice.</a></p>
             <div class="domain-search-row">
               <input class="domain-search-input" id="domain-name" type="text" inputmode="url"
                      autocomplete="off" spellcheck="false" placeholder="joes-crab-shack"
-                     aria-describedby="domain-status" data-domain-input>
-              <button class="button button-primary" type="button" data-domain-submit>Check it</button>
+                     aria-describedby="domain-preflight-disclosure domain-status" data-domain-input>
+              <button class="button button-primary" type="button"
+                      aria-describedby="domain-preflight-disclosure domain-status"
+                      data-domain-submit>Check it</button>
             </div>
             <p class="domain-search-status" id="domain-status" role="status" aria-live="polite" data-domain-status>Type a name to run a public-DNS preflight. It costs nothing, reserves nothing, and does not prove registrar availability.</p>
             <ul class="domain-results" data-domain-results></ul>
