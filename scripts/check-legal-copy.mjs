@@ -15,7 +15,7 @@ import {
 import {
   PRIVACY_SECTION_IDS,
   TERMS_SECTION_IDS,
-} from "./check-site-vnext.mjs";
+} from "./legal-section-ids.mjs";
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");

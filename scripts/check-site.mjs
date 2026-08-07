@@ -16,6 +16,8 @@
  *   4. every printed price is real         — a wrong number is a wrong invoice
  *   5. phone and email are canonical       — one typo and the call never comes
  *   6. no forms or third-party network     — the site is static and stays static
+ *   7. Work labels match public truth       — a study must never read as client proof
+ *   8. live pages keep basic semantics      — skip targets and headings remain usable
  *
  * Prices are checked AGAINST data/public-catalog.json rather than banned. The
  * old rule forbade every figure except $5, which is why the site quoted no
@@ -31,6 +33,7 @@ import {
   heldAlakazamArtifactExcludedFiles,
   heldAlakazamExecutableSemantics,
 } from "./hosted-truth/manifest.mjs";
+import { validateWorkPublicTruth } from "./work-public-truth.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -286,6 +289,24 @@ function checkCanonical(page, source) {
 }
 
 /**
+ * Small structural accessibility/SEO protections retained from the archived
+ * checker without freezing page layout or copy.
+ */
+function checkDocumentSemantics(page, source) {
+  if (!/<main\b(?=[^>]*\bid="main")(?=[^>]*\btabindex="-1")[^>]*>/iu.test(source)) {
+    fail(page, 'must contain <main id="main" tabindex="-1"> for the skip link');
+  }
+  const headings = source.match(/<h1\b[^>]*>/giu) ?? [];
+  if (headings.length !== 1) fail(page, `must contain exactly one h1; found ${headings.length}`);
+  if (
+    page === "404.html"
+    && !/<meta\b(?=[^>]*\bname="robots")(?=[^>]*\bcontent="[^"]*\bnoindex\b[^"]*")[^>]*>/iu.test(source)
+  ) {
+    fail(page, "must carry a robots noindex directive");
+  }
+}
+
+/**
  * Every site-absolute resource a page loads must exist on disk. The planner
  * script pointed at /hive/ for days; a checker that reads hrefs but not srcs
  * is blind in exactly one eye.
@@ -528,6 +549,7 @@ for (const page of pages) {
     const nav = checkNav(page, source, referenceNav);
     referenceNav ??= nav;
   }
+  if (!NAV_EXEMPT_FILES.has(page)) checkDocumentSemantics(page, source);
   checkContact(page, source);
   checkPrices(page, source, allowed);
   checkOfferClaims(page, source, commerce);
@@ -535,6 +557,14 @@ for (const page of pages) {
   checkLinks(page, source, idsByRoute, routes);
   checkCanonical(page, source);
   await checkResources(page, source);
+}
+
+const workFile = "work/index.html";
+const workSource = sources.get(workFile);
+if (!workSource) {
+  fail(workFile, "missing from the public page ledger");
+} else {
+  for (const message of validateWorkPublicTruth(workSource)) fail(workFile, message);
 }
 
 const railCounts = await checkRails(sources, commerce, publicCatalog);
@@ -552,5 +582,6 @@ console.log(
   + `+ ${redirectCount} redirects, one shared nav, no dead links or resources, `
   + `${allowed.size} catalog prices, ${railCounts.direct} public checkout rails `
   + `across ${railCounts.classified} explicitly classified offers, seals fresh, `
-  + `sitemap exact, canonical phone, email, and rel=canonical.`,
+  + `sitemap exact, Work truth exact, one h1 and focusable main per live page, `
+  + `canonical phone, email, and rel=canonical.`,
 );

@@ -1,3 +1,21 @@
+#!/usr/bin/env node
+
+/*
+ * ARCHIVED SPARK V1 INSPECTOR — NOT A CURRENT RELEASE GATE
+ *
+ * Five source assumptions predate the account-aware current architecture.
+ * Current $5/held authority is mutation-tested by the commerce and hosted
+ * control suites. Use --historical-inspection only for old diagnostics.
+ */
+
+if (!process.argv.includes("--historical-inspection")) {
+  console.error(
+    "check-abracadabra-v1 is retired and is not a current release gate. "
+    + "Run npm test, or pass --historical-inspection to inspect the obsolete contract.",
+  );
+  process.exit(2);
+}
+
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";

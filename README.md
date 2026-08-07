@@ -50,9 +50,13 @@ reviewed artifacts; and opens every hosted route at 320, 390, and 1440 pixels
 in the pinned browser. The browser gate also opens the hosted account room and
 drives Look → Business → Review → Preview without making a write or payment.
 
-`npm run check:legacy`, `npm run audit:browser:legacy`,
-`npm run audit:hosted-domain-browser:legacy`, and
-`npm run test:public-truth:legacy` preserve retired exact-copy, route, and
-six-step contracts for historical inspection. They are not release gates for
-the current product. Publication, checkout, registrar, and DNS effects remain
-separate owner-authorized operations.
+`npm run audit:browser:legacy`, `npm run audit:hosted-domain-browser:legacy`,
+and `npm run test:public-truth:legacy` preserve retired browser and release
+contracts for historical inspection. `scripts/check-site-vnext.mjs`, its
+fixture test, and `scripts/check-abracadabra-v1.mjs` are archived source, not
+package gates; their old diagnostics require the explicit
+`--historical-inspection` flag. The machine-checked authority and parity ledger
+is `npm run check:authority`. The old exact-route, exact-section, and broad
+customer-copy helpers remain source history but are likewise not package gates.
+Publication, checkout, registrar, and DNS effects remain separate
+owner-authorized operations.

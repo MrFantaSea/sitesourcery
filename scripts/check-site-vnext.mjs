@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+/*
+ * ARCHIVED VNEXT INSPECTOR — NOT A CURRENT RELEASE GATE
+ *
+ * Its exact route, copy, product, and CSS contracts describe an earlier site.
+ * Current authority is documented and machine-checked by checker-authority.mjs.
+ * Use --historical-inspection explicitly if you need its old diagnostics.
+ */
+
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -22,6 +30,12 @@ import {
   SITE_ORIGIN,
   validateRouteContract,
 } from "./check-routes.mjs";
+import {
+  PRIVACY_SECTION_IDS,
+  TERMS_SECTION_IDS,
+} from "./legal-section-ids.mjs";
+
+export { PRIVACY_SECTION_IDS, TERMS_SECTION_IDS } from "./legal-section-ids.mjs";
 
 export const HOME_DOORS = Object.freeze(["websites", "hive", "services"]);
 export const HIVE_CELLS = Object.freeze([
@@ -491,43 +505,6 @@ export const PAID_ROUTE_REQUIRED_COPY = Object.freeze({
     "The customer keeps control of the payment account and money.",
   ]),
 });
-export const PRIVACY_SECTION_IDS = Object.freeze([
-  "operator",
-  "public-pages",
-  "accounts",
-  "projects",
-  "published-sites",
-  "hive-planner",
-  "network-records",
-  "domains",
-  "billing",
-  "retention",
-  "safety-support",
-  "communications",
-  "choices",
-  "security",
-  "changes",
-  "contact",
-]);
-export const TERMS_SECTION_IDS = Object.freeze([
-  "acceptance",
-  "self-service",
-  "address-modes",
-  "customer-domains",
-  "billing-cancellation",
-  "publication",
-  "customer-content",
-  "prohibited-uses",
-  "safety-holds",
-  "custom-work",
-  "assessment",
-  "hive-planner",
-  "care",
-  "site-ownership",
-  "warranty",
-  "limits",
-  "changes-contact",
-]);
 export const FAQ_ANCHORS = Object.freeze([
   "paths",
   "custom-scope",
@@ -2350,15 +2327,24 @@ export async function validateSiteVnext(root = process.cwd()) {
 
 export async function runSiteVnextCli(argv = process.argv.slice(2)) {
   if (argv.includes("--help")) {
-    console.log("Usage: node scripts/check-site-vnext.mjs [site-root]");
+    console.log("Usage: node scripts/check-site-vnext.mjs --historical-inspection [site-root]");
+    console.log("Retired inspector only; current release authority is npm test.");
     return 0;
   }
-  if (argv.length > 1) {
+  if (!argv.includes("--historical-inspection")) {
+    console.error(
+      "check-site-vnext is retired and is not a current release gate. "
+      + "Run npm test, or pass --historical-inspection to inspect the obsolete contract.",
+    );
+    return 2;
+  }
+  const positional = argv.filter((argument) => argument !== "--historical-inspection");
+  if (positional.length > 1) {
     console.error("check-site-vnext: expected zero or one site-root argument");
     return 2;
   }
   try {
-    const result = await validateSiteVnext(argv[0] ?? process.cwd());
+    const result = await validateSiteVnext(positional[0] ?? process.cwd());
     if (!result.ok) {
       console.error(`SiteSourcery vNext checks failed (${result.errors.length}):`);
       for (const error of result.errors) console.error(`- ${error}`);
