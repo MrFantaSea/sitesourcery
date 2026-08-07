@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import {
   assertHeldSourceTruth,
   assertHeldTruthSemantics,
+  assertHostedAlakazamUiHeld,
+  assertNoHeldAlakazamCopySemantics,
   assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
@@ -25,6 +27,9 @@ import { publicFileAllowlist } from "../build-pages.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldAlakazamArtifactExcludedFiles,
+  heldAlakazamCopyForbiddenSemantics,
+  heldAlakazamCopyFragmentSha256,
+  heldAlakazamCustomerArtifactFiles,
   heldAlakazamExecutableSemantics,
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
@@ -293,6 +298,41 @@ test("held truth semantic gate rejects every hosted-only or retired held-product
   }
 });
 
+test("held Alakazam copy fragments and customer UI fail closed before release", async () => {
+  const fragmentSources = new Map(
+    await Promise.all(
+      Object.keys(heldAlakazamCopyFragmentSha256).map(async (file) => [
+        file,
+        await readFile(path.join(ROOT, file), "utf8"),
+      ]),
+    ),
+  );
+  assert.equal(fragmentSources.size, 13);
+  assert.equal(assertNoHeldAlakazamCopySemantics(fragmentSources), true);
+  for (const semantic of heldAlakazamCopyForbiddenSemantics) {
+    assert.throws(
+      () => assertNoHeldAlakazamCopySemantics(new Map([
+        [`injected-${semantic.id}.html`, semantic.example],
+      ])),
+      new RegExp(`held Alakazam customer claim ${semantic.id}`, "u"),
+      semantic.id,
+    );
+  }
+
+  assert.deepEqual(heldAlakazamCustomerArtifactFiles, [
+    "abracadabra/app/index.html",
+    "abracadabra/index.html",
+    "faq/index.html",
+    "index.html",
+    "vnext.js",
+  ]);
+  const customerControl = await readFile(
+    path.join(ROOT, "abracadabra/app/abracadabra-customer-control-dom.js"),
+    "utf8",
+  );
+  assert.equal(assertHostedAlakazamUiHeld(customerControl), true);
+});
+
 test("one hosted build emits the exact $5 Download contract, customer controls, and no retired product", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-artifact-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
@@ -380,6 +420,7 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     app,
     /data-publish|data-domain-stage|data-save-address|data-save-access/u,
   );
+  assert.doesNotMatch(app, /data-alakazam-account|customer-alakazam-account/u);
   assert.match(
     app,
     /href="\/contact\/#direct-contact">Contact Site Sourcery for account recovery<\/a>/u,

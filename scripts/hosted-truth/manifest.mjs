@@ -132,10 +132,81 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "c755aae3a8635379f58dfe88522f2573946b4bb545b6dca89c239b031f4525dc",
+    "c4a4ac13709ee585b1c7458ed38eb2022bc6941e8f843e6b8eddf5d5fabeb00f",
   "abracadabra/app/abracadabra-hosted-control.js":
     "cd98aa081170bb59c348dfc91a3f34919df258cd912d16c50b147661abc88eb3",
 });
+
+/*
+ * These fragments were once hosted replacements for the public landing,
+ * guide, FAQ, and chooser copy. They are no longer injected, but remain
+ * reviewed source material. Seal them so an obsolete live-Alakazam promise
+ * cannot quietly return through a future layout reuse.
+ */
+export const heldAlakazamCopyFragmentSha256 = Object.freeze({
+  "scripts/hosted-truth/fragments/abracadabra-how-head.html":
+    "7b4176ec1579dd361a55a5e63c64c4f03fe5d0a5a52400dab5fcc3546b37c82e",
+  "scripts/hosted-truth/fragments/abracadabra-how-main.html":
+    "3078fd4a1b278127ed9f6e3885176ba9e9478d4a04c5b41c1315cd9337ca8dd2",
+  "scripts/hosted-truth/fragments/abracadabra-landing-head.html":
+    "67ff8a9a6851a1f18efccc13736fed4d1e67eebb9199e47684eba3aac7e6bb73",
+  "scripts/hosted-truth/fragments/abracadabra-landing-main.html":
+    "274a88bddb8832b10596647bd807749963aa93f1efd57991342c0d0dd6e3cd37",
+  "scripts/hosted-truth/fragments/faq-abracadabra-now.html":
+    "1f8a9819a0e22675a888dba2e2dda99b4c55cfb66751c02709a091262f89715e",
+  "scripts/hosted-truth/fragments/faq-address-choices.html":
+    "6c878981bdf46078f95a1b670e94042b67c1b781269f96eb669781c08202c297",
+  "scripts/hosted-truth/fragments/faq-missed-payment.html":
+    "a06fddbb3ea93910b035f09d05030fec57143cb5918f03abbe29ed54f8890134",
+  "scripts/hosted-truth/fragments/faq-paths.html":
+    "197c10656603f6735f690524882183d1b2f8ecef218322a8d8b152d6eaa1c764",
+  "scripts/hosted-truth/fragments/faq-private-sites.html":
+    "7c2fc996ea1d5ea252abbb9bf98d9e8580a969a2ec449218ee1b444a96e212dd",
+  "scripts/hosted-truth/fragments/home-abracadabra-card.html":
+    "37d6f12fcb8ec1476c903b878c190bc84fc443046e111c4864245dd0285bf0fd",
+  "scripts/hosted-truth/fragments/home-abracadabra-intro.html":
+    "7dd6774efa26740d94eebf8a1d3269c30042bca4c47511c6bacd0c260ebffc0e",
+  "scripts/hosted-truth/fragments/home-abracadabra-proof.html":
+    "87b96709f9ab949e28551f9d3cc4ad6268d61283528297ef68cd531e2cb56eba",
+  "scripts/hosted-truth/fragments/start-recommendation-abracadabra.js":
+    "bfe3a4a4fe7f69c7a7687ce520bfa1a2c2945d1c44c66bdd5ca3c860f08b5bf8",
+});
+
+export const heldAlakazamCustomerArtifactFiles = Object.freeze([
+  "abracadabra/app/index.html",
+  "abracadabra/index.html",
+  "faq/index.html",
+  "index.html",
+  "vnext.js",
+]);
+
+export const heldAlakazamCopyForbiddenSemantics = Object.freeze([
+  Object.freeze({
+    id: "fixed-lifecycle-promise",
+    pattern: "\\b14[- ]day\\b|\\bday 15\\b|\\b90[- ]day\\b|\\b90 days after suspension\\b",
+    example: "A 14-day grace period starts before day 15 and 90-day retention.",
+  }),
+  Object.freeze({
+    id: "available-recurring-hosting",
+    pattern: "\\brecurring hosting for\\b|\\b(?:eligible|selected) hosted tenure\\b|\\bChoose (?:Spark with |released Spark with )?Rent, Own, or Owned \\+ managed\\b",
+    example: "Choose Rent, Own, or Owned + managed for recurring hosting.",
+  }),
+  Object.freeze({
+    id: "customer-domain-offer",
+    pattern: "\\bBuy one here or connect one you own\\b|\\bbuy a customer-owned domain through Site Sourcery\\b|\\bdomain purchase receives its own final price check\\b",
+    example: "Buy one here or connect one you own.",
+  }),
+  Object.freeze({
+    id: "active-cancellation-path",
+    pattern: "\\bExport or cancel from your account\\b|\\bCancel from your account\\b|\\bmanage billing and domains[^.]*cancel\\b",
+    example: "Export or cancel from your account.",
+  }),
+  Object.freeze({
+    id: "active-publication-path",
+    pattern: "\\bbuild and publish one page\\b|\\bone clear path from account to publication\\b|\\bPublish (?:only )?(?:the|that|your) (?:accepted|reviewed) version\\b|\\bAccount, address, tenure, and publishing\\b",
+    example: "Publish only the accepted version.",
+  }),
+]);
 
 export const hostedCodeTransforms = Object.freeze([]);
 

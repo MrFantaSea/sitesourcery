@@ -11,6 +11,10 @@ const customerControl = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
 
+test("the hosted customer surface keeps Alakazam held", () => {
+  assert.equal(customerControl.alakazamPublicOfferState, "held");
+});
+
 const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const OTHER_PROJECT_ID =

@@ -40,6 +40,7 @@
     "sitesourcery.alakazam-checkout-ready/v1";
   var ALAKAZAM_DOWNGRADE_SCHEMA =
     "sitesourcery.alakazam-downgrade-scheduled/v1";
+  var ALAKAZAM_PUBLIC_OFFER_STATE = "held";
   var ALAKAZAM_ACCOUNT_STATES = [
     "available",
     "activation_pending",
@@ -14590,10 +14591,12 @@
       alakazamAnchor
       && alakazamAnchor.parentNode
     ) {
-      alakazamAnchor.parentNode.insertBefore(
-        alakazamPanel.element,
-        alakazamAnchor
-      );
+      if (ALAKAZAM_PUBLIC_OFFER_STATE === "released") {
+        alakazamAnchor.parentNode.insertBefore(
+          alakazamPanel.element,
+          alakazamAnchor
+        );
+      }
     } else {
       var controlShell = one(
         ".site-shell",
@@ -14627,9 +14630,11 @@
         controlShell.appendChild(
           customerCustomBuildFinalPanel.element
         );
-        controlShell.appendChild(
-          alakazamPanel.element
-        );
+        if (ALAKAZAM_PUBLIC_OFFER_STATE === "released") {
+          controlShell.appendChild(
+            alakazamPanel.element
+          );
+        }
       }
     }
 
@@ -19204,6 +19209,9 @@
     }
 
     function requestAlakazamAccount(projectId) {
+      if (ALAKAZAM_PUBLIC_OFFER_STATE !== "released") {
+        return Promise.resolve(null);
+      }
       var selectedProjectId = text(projectId);
       var requestedAcceptedVersionId = idOf(
         acceptedProjectVersion(
@@ -20016,6 +20024,22 @@
     }
 
     function renderAlakazamAccount(state) {
+      if (ALAKAZAM_PUBLIC_OFFER_STATE !== "released") {
+        alakazamReadAcceptedVersionId = "";
+        if (alakazamRead.projectId) {
+          alakazamReadSequence += 1;
+          alakazamRead = {
+            projectId: "",
+            phase: "idle",
+            presentation: null
+          };
+        }
+        if (alakazamCommand.projectId) {
+          resetAlakazamCommand("");
+        }
+        renderAlakazamPanel();
+        return;
+      }
       var projectId = state.account
         ? idOf(state.project)
         : "";
@@ -21177,11 +21201,14 @@
                 downloadPayment:
                   source.downloadPayment === true,
                 alakazamQuote:
-                  source.alakazamQuote === true,
+                  ALAKAZAM_PUBLIC_OFFER_STATE === "released"
+                  && source.alakazamQuote === true,
                 alakazamCheckout:
-                  source.alakazamCheckout === true,
+                  ALAKAZAM_PUBLIC_OFFER_STATE === "released"
+                  && source.alakazamCheckout === true,
                 alakazamDowngrade:
-                  source.alakazamDowngrade === true,
+                  ALAKAZAM_PUBLIC_OFFER_STATE === "released"
+                  && source.alakazamDowngrade === true,
                 domainPurchase:
                   source.domainPurchase === true,
                 publishing:
@@ -21230,6 +21257,8 @@
   }
 
   return Object.freeze({
+    alakazamPublicOfferState:
+      ALAKAZAM_PUBLIC_OFFER_STATE,
     acceptedProjectVersion:
       acceptedProjectVersion,
     accountReceiptMoney:

@@ -20,6 +20,9 @@ import {
 import { publicFileAllowlist } from "./build-pages.mjs";
 import {
   heldAlakazamArtifactExcludedFiles,
+  heldAlakazamCopyForbiddenSemantics,
+  heldAlakazamCopyFragmentSha256,
+  heldAlakazamCustomerArtifactFiles,
   heldAlakazamExecutableSemantics,
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
@@ -207,6 +210,86 @@ export function assertNoHeldAlakazamExecutableSemantics(sources) {
   return true;
 }
 
+export function assertNoHeldAlakazamCopySemantics(sources) {
+  for (const [file, source] of sources) {
+    for (const semantic of heldAlakazamCopyForbiddenSemantics) {
+      const match = String(source).match(new RegExp(semantic.pattern, "iu"));
+      if (match) {
+        throw new Error(
+          `${file} contains held Alakazam customer claim `
+          + `${semantic.id}: ${JSON.stringify(match[0])}`,
+        );
+      }
+    }
+  }
+  return true;
+}
+
+export function assertHostedAlakazamUiHeld(source) {
+  const customerControl = String(source);
+  const heldState = 'var ALAKAZAM_PUBLIC_OFFER_STATE = "held";';
+  if (occurrences(customerControl, heldState) !== 1) {
+    throw new Error("hosted customer control must keep Alakazam explicitly held");
+  }
+  const requestStart = customerControl.indexOf(
+    "function requestAlakazamAccount(projectId)",
+  );
+  const requestEnd = customerControl.indexOf(
+    "function refreshAlakazamAccountAfterSetup",
+    requestStart,
+  );
+  const requestSource = customerControl.slice(requestStart, requestEnd);
+  if (
+    requestStart < 0
+    || requestEnd <= requestStart
+    || requestSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"') < 0
+    || requestSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
+      > requestSource.indexOf(".getAlakazamAccount(selectedProjectId)")
+  ) {
+    throw new Error("held Alakazam account reads must fail before any API call");
+  }
+  const renderStart = customerControl.indexOf("function renderAlakazamAccount(state)");
+  const renderEnd = customerControl.indexOf("function reducedMotion", renderStart);
+  const renderSource = customerControl.slice(renderStart, renderEnd);
+  if (
+    renderStart < 0
+    || renderEnd <= renderStart
+    || !renderSource.includes('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
+    || renderSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
+      > renderSource.indexOf("requestAlakazamAccount(projectId)")
+  ) {
+    throw new Error("held Alakazam rendering must return before account loading");
+  }
+  const capabilityStart = customerControl.indexOf("var capabilityRequest =");
+  const capabilityEnd = customerControl.indexOf("Promise.all([", capabilityStart);
+  const capabilitySource = customerControl.slice(capabilityStart, capabilityEnd);
+  if (
+    capabilityStart < 0
+    || capabilityEnd <= capabilityStart
+    || occurrences(
+      capabilitySource,
+      'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
+    ) !== 3
+  ) {
+    throw new Error("held Alakazam capabilities must remain false despite server input");
+  }
+  const insertionStart = customerControl.indexOf("var alakazamAnchor =");
+  const insertionEnd = customerControl.indexOf("function value(name)", insertionStart);
+  const insertionSource = customerControl.slice(insertionStart, insertionEnd);
+  if (
+    insertionStart < 0
+    || insertionEnd <= insertionStart
+    || occurrences(insertionSource, "alakazamPanel.element") !== 2
+    || occurrences(
+      insertionSource,
+      'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
+    ) !== 2
+  ) {
+    throw new Error("held Alakazam panel must never enter the customer DOM");
+  }
+  return true;
+}
+
 export function assertHeldTruthSemantics(sources) {
   assertRequirementMap(sources, heldTruthRequirements, "held truth");
   assertNoPhrases(sources, hostedOnlyPhrases, "hosted-only");
@@ -283,6 +366,31 @@ function assertManifestShape() {
       throw new Error(`hosted staging asset has an invalid digest: ${file}`);
     }
   }
+  const heldCopyFiles = Object.keys(heldAlakazamCopyFragmentSha256);
+  assertSortedUnique(heldCopyFiles, "held Alakazam copy fragment ledger");
+  for (const [file, digest] of Object.entries(heldAlakazamCopyFragmentSha256)) {
+    assertPublicRelativePath(file);
+    if (
+      !file.startsWith("scripts/hosted-truth/fragments/")
+      || !SHA256.test(digest)
+    ) {
+      throw new Error(`held Alakazam copy fragment ledger is invalid: ${file}`);
+    }
+  }
+  assertSortedUnique(
+    heldAlakazamCustomerArtifactFiles,
+    "held Alakazam customer artifact files",
+  );
+  for (const semantic of heldAlakazamCopyForbiddenSemantics) {
+    if (
+      !SLOT_ID.test(semantic.id)
+      || typeof semantic.pattern !== "string"
+      || semantic.pattern === ""
+      || !new RegExp(semantic.pattern, "iu").test(semantic.example)
+    ) {
+      throw new Error(`held Alakazam copy semantic is invalid: ${semantic.id}`);
+    }
+  }
 }
 
 async function assertHostedStagingAssets(absoluteRoot) {
@@ -340,6 +448,18 @@ async function loadAndValidateHeldSources(absoluteRoot) {
       throw new Error(`hosted truth fragment contains a slot marker: ${slot.id}`);
     }
   }
+  const heldCopySources = new Map();
+  for (const [file, expectedDigest] of Object.entries(
+    heldAlakazamCopyFragmentSha256,
+  )) {
+    await assertRegularSource(absoluteRoot, file);
+    const source = await readFile(path.join(absoluteRoot, file), "utf8");
+    if (sha256(source) !== expectedDigest) {
+      throw new Error(`held Alakazam copy changed without review: ${file}`);
+    }
+    heldCopySources.set(file, source);
+  }
+  assertNoHeldAlakazamCopySemantics(heldCopySources);
   for (const transform of hostedCodeTransforms) {
     await assertRegularSource(absoluteRoot, transform.file);
     const source = await readFile(path.join(absoluteRoot, transform.file), "utf8");
@@ -364,6 +484,15 @@ async function loadAndValidateHeldSources(absoluteRoot) {
     );
   }
   assertNoHeldAlakazamExecutableSemantics(shippedJavascript);
+  assertHostedAlakazamUiHeld(
+    await readFile(
+      path.join(
+        absoluteRoot,
+        "abracadabra/app/abracadabra-customer-control-dom.js",
+      ),
+      "utf8",
+    ),
+  );
   return sources;
 }
 
@@ -609,6 +738,17 @@ export async function verifyHostedArtifact({
   }
   assertNoHeldAlakazamExecutableSemantics(artifactTextSources);
   assertNoPhrases(artifactTextSources, heldOnlyPhrases, "held-only");
+  assertNoHeldAlakazamCopySemantics(new Map(
+    heldAlakazamCustomerArtifactFiles.map((file) => [
+      file,
+      artifactTextSources.get(file),
+    ]),
+  ));
+  assertHostedAlakazamUiHeld(
+    artifactTextSources.get(
+      "abracadabra/app/abracadabra-customer-control-dom.js",
+    ),
+  );
 
   const truthFiles = Object.keys(hostedTruthRequirements);
   const sources = new Map(
