@@ -17,9 +17,7 @@
   <!-- sitesourcery:truth-slot:abracadabra-app-scripts:start -->
   <script src="/abracadabra/app/abracadabra-compiler.js" defer></script>
   <script src="/abracadabra/app/abracadabra-control-mode.js" defer></script>
-  <script src="/abracadabra/app/abracadabra-account.js" defer></script>
   <script src="/abracadabra/app/abracadabra-app.js" defer></script>
-  <script src="/abracadabra/app/abracadabra-paid-download.js" defer></script>
   <script src="/domains/domain-search.js" defer></script>
   <!-- sitesourcery:truth-slot:abracadabra-app-scripts:end -->
 </head>
@@ -185,9 +183,9 @@
                 <small>Optional. Use the full address, including https://.</small>
               </label>
 
-              <div class="spark-extras" data-tier="alakazam">
-                <p class="spark-tease" data-lock-note>&#10022; Payment links &mdash; Cash App &amp; Venmo buttons on your page &mdash; <b>unlocks with Alakazam</b> &#10022;</p>
-                <div class="spark-fields" data-extra-controls>
+              <div class="spark-extras is-locked" data-tier="alakazam" aria-disabled="true">
+                <p class="spark-tease" data-lock-note>&#10022; Payment links &mdash; Cash App &amp; Venmo buttons on your page &mdash; <b>planned for Alakazam &mdash; held</b> &#10022;</p>
+                <div class="spark-fields" data-extra-controls inert>
                   <label class="spark-field">
                     <span>Cash App</span>
                     <input id="cashapp" name="cashapp" type="text" maxlength="32" autocomplete="off" placeholder="$yourbusiness">
@@ -274,9 +272,9 @@
               <button class="spark-button" type="button" data-edit-look>Change the look</button>
             </div>
 
-<div class="spark-extras" data-tier="paid">
-              <p class="spark-tease" data-lock-note>&#10022; Style refinement and customizations &mdash; unlocked with the $5 download and account creation &#10022;</p>
-              <div class="spark-extra-rows" data-extra-controls>
+<div class="spark-extras is-locked" data-tier="paid" aria-disabled="true">
+              <p class="spark-tease" data-lock-note>&#10022; Style refinement and customizations &mdash; <b>planned for Alakazam &mdash; held</b> &#10022;</p>
+              <div class="spark-extra-rows" data-extra-controls inert>
                 <div class="spark-extra">
                   <span class="spark-extra-name">Accent</span>
                   <span class="spark-swatches">
@@ -313,11 +311,11 @@
             <!-- sitesourcery:truth-slot:abracadabra-app-save-gate:start -->
             <section class="spark-save-gate" aria-labelledby="save-direction-title">
               <div>
-                <p class="spark-kicker">Ready to keep it?</p>
-                <h3 id="save-direction-title">Save this reviewed version.</h3>
-                <p>Create an account and save the project, then review the one-time $5 Download quote. Publishing is a separate service and is not added automatically.</p>
+                <p class="spark-kicker">Guest rehearsal</p>
+                <h3 id="save-direction-title">Saving and payment are unavailable here.</h3>
+                <p>This held public artifact keeps the preview only in this tab. It creates no account, saves no project, opens no Checkout, and unlocks no Download.</p>
               </div>
-              <button class="spark-button spark-button-primary" type="button" data-save-direction>Save and continue</button>
+              <button class="spark-button spark-button-primary" type="button" disabled aria-disabled="true">Account path unavailable</button>
             </section>
             <!-- sitesourcery:truth-slot:abracadabra-app-save-gate:end -->
           </fieldset>

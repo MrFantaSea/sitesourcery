@@ -32,7 +32,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-app-scripts",
     file: "abracadabra/app/index.html",
     kind: "html",
-    sourceSha256: "ac98f68d3142b5fc9a140973cb105dd506dc304832b72258fce67690ff436551",
+    sourceSha256: "d21e55a1e7a8576405466ddbe8a86ab87b2b41860cd8830b25a1cd9b3dd33193",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-scripts.html",
     hostedSha256: "1bc24e19e1f12bab1d096b65ca9f194a6e82b171f413315093f9f5d7bbf714c5",
   }),
@@ -50,7 +50,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "3a2cd491b9462251daf7459767bf3a0ff86ca804ff5c16ca490862f0e0dd5c5c",
+    hostedSha256: "7d39d96431b35e584f5950dfa8bb87ff19b4274d9eb77af681aa15ef5f763b5b",
   }),
   slot({
     id: "abracadabra-app-control",
@@ -72,7 +72,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-app-save-gate",
     file: "abracadabra/app/index.html",
     kind: "html",
-    sourceSha256: "08dd2d684e02cc86ee2b56ba20f1fca51b00edc0ddcb1b5e541ebe43075c595c",
+    sourceSha256: "1ad7d9be7b53fd00b835ec3adbacfa693a2f41d63ab5870fd17f5a42200aa745",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-save-gate.html",
     hostedSha256: "fd6c526a83d6611d270ff8d5396a0c027a4262af2651bfcb3fd8f7ee5d928bbc",
   }),
@@ -96,7 +96,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-privacy-head",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "fd1fef8607b69125496a0919bed59f3024b58eb583bf3a3b27c9ccfc40843082",
+    sourceSha256: "21e3f58376224a95147ce112f02217f270f73d9d6d2443900b36f63f45e2cb9b",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-head.html",
     hostedSha256: "e6b1ef4ad3ec7db0b17fa563318e9eecf6e437c13fa5ba0798977d12372e1786",
   }),
@@ -104,7 +104,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-privacy-main",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "6b95560c3f505d7d7f1710886e6262660cb246c8109754ac94879f2dfa6f6998",
+    sourceSha256: "b8cc6e55659060bd6d3cd0fdb2afa53132f282fefc966a41167f46980e42e866",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
     hostedSha256: "6f226664449e8cdf206a6dc7c8823062a10b3f2b6d8c0b3ff3bc0eae6076c48c",
   }),
@@ -120,7 +120,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-website-terms-main",
     file: "legal/website-terms/index.html",
     kind: "html",
-    sourceSha256: "c560ab127eb2dd938535accc3fc09af06bfffc593eeb2bffa53d1742e7ca2552",
+    sourceSha256: "76a7c7173012613602dd6e1f231c84f5e8a8b82bcdbcccdc64f9fe2148322b92",
     hostedFragment: "scripts/hosted-truth/fragments/legal-website-terms-main.html",
     hostedSha256: "8df0c8323db3b723c6c74cc6b18044bcaf2cf5fcfcf3ebf3f60882225b6967bc",
   }),
@@ -139,11 +139,52 @@ export const hostedStagingAssetSha256 = Object.freeze({
 
 export const hostedCodeTransforms = Object.freeze([]);
 
+/*
+ * Alakazam remains held. These source files may stay in the repository as
+ * historical implementation evidence, but no public or hosted artifact may
+ * contain them. The executable patterns catch equivalent lifecycle,
+ * domain-purchase, live-publication, or local-entitlement authority if it is
+ * moved into a differently named shipped JavaScript file.
+ */
+export const heldAlakazamArtifactExcludedFiles = Object.freeze([
+  "abracadabra/app/abracadabra-account.js",
+  "abracadabra/app/abracadabra-paid-download.js",
+  "abracadabra/platform/abracadabra-platform.js",
+  "abracadabra/site/index.html",
+  "abracadabra/site/viewer.css",
+  "abracadabra/site/viewer.js",
+]);
+
+export const heldAlakazamExecutableSemantics = Object.freeze([
+  Object.freeze({
+    id: "fixed-lifecycle-windows",
+    pattern: "\\b(?:GRACE_DAYS|RETENTION_DAYS)\\b|\\b(?:graceDays|retentionDays)\\s*:",
+    example: "var GRACE_DAYS = 14; var RETENTION_DAYS = 90;",
+  }),
+  Object.freeze({
+    id: "domain-purchase-mode",
+    pattern: "\\[\\s*[\"']purchase[\"']\\s*,\\s*[\"']byod[\"']\\s*\\]|\\.path\\s*===\\s*[\"']purchase[\"']",
+    example: "if ([\"purchase\", \"byod\"].includes(address.path)) activate();",
+  }),
+  Object.freeze({
+    id: "live-publication-mutation",
+    pattern: "\\.serving\\.state\\s*=\\s*[\"']live[\"']|function\\s+publish\\s*\\(|\\bpublish\\s*:\\s*publish\\b",
+    example: "project.serving.state = \"live\";",
+  }),
+  Object.freeze({
+    id: "local-entitlement-bypass",
+    pattern: "URLSearchParams\\s*\\([^)]*location\\.search|sessionStorage\\.getItem\\s*\\(\\s*[\"']abracadabra\\.(?:paid|alakazam)[\"']",
+    example: "new URLSearchParams(location.search).get(\"paid\");",
+  }),
+]);
+
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
     "Premade Website Download $5-Custom Sites from $400",
-    "Abracadabra builds it. Alakazam keeps it live.",
+    "Abracadabra builds it. Alakazam is still held.",
+    "No setup or monthly plan is for sale",
+    "Check and ask about a domain",
   ]),
   "vnext.js": Object.freeze([
     "Build and preview privately for free.",
@@ -152,8 +193,8 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free to See-$5 to Download-$25 a Month Keeps It Live",
-    "the $5 comes off your first month",
+    "Free to See-$5 Account Download-Alakazam Plans Held",
+    "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
     "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
@@ -163,45 +204,49 @@ export const heldTruthRequirements = Object.freeze({
   "abracadabra/app/index.html": Object.freeze([
     "Abracadabra Alakazam",
     "Lives in this tab only — close it and it's gone.",
-    "$5 download and account creation",
+    "Saving and payment are unavailable here.",
+    "Account path unavailable",
   ]),
   "abracadabra/app/abracadabra-app.js": Object.freeze([
     "Abracadabra ready. Your local draft stays in this tab.",
   ]),
   "faq/index.html": Object.freeze([
-    "downloading it is $5",
-    "Alakazam is the paid service that follows the preview",
+    "Download is $5 once per editor project",
+    "Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held.",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
-    "the page cannot place an order or start work",
+    "this page cannot quote or start setup",
   ]),
   "legal/index.html": Object.freeze([
     "current device-local Abracadabra rehearsal",
   ]),
   "legal/privacy/index.html": Object.freeze([
-    "The current Abracadabra maker creates no account or organization record.",
-    "Business facts and made versions stay only in this tab.",
+    "The free guest preview needs no account. Saving an editor project or using its $5 Download requires sign-in.",
+    "A signed-in account and retained editor project can exist before any Alakazam subscription",
+    "Cloudflare also receives ordinary request and network metadata",
     "processed through Proton Mail",
   ]),
   "legal/website-terms/index.html": Object.freeze([
     "Using the current maker does not create an account, control room, project record, or saved acceptance.",
+    "The free guest maker makes temporary tab-only versions and previews. It offers no account, saved project, Checkout, or Download.",
     "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
-    "Publishing happens only through Alakazam, and only when you choose it.",
-    "exact scope, price, turnaround, and any later credit are stated in writing before purchase.",
+    "Only the separate signed-in hosted account path can retain an editor project and unlock that project’s HTML Download after a completed one-time $5 payment.",
+    "Alakazam publishing is held until a separate service and terms are released.",
+    "The standard $200 assessment covers one customer, business, public website, and primary goal",
   ]),
 });
 
 export const heldTruthForbiddenPhrases = Object.freeze({
   "legal/privacy/index.html": Object.freeze([
     "SS-HOSTED-PRIVACY-2026-07-30-V2",
-    "An account is required only when you choose to save the preview",
-    "A completed $5 payment unlocks Download for that editor project.",
-    "accepted saved-version Download",
   ]),
   "legal/website-terms/index.html": Object.freeze([
     "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
     "$5 once per editor project unlocks Download for that project.",
     "A different editor project has its own one-time $5 Download unlock.",
     "The customer may modify it and self-host it without another Site Sourcery payment.",
+    "Make temporary versions, preview them, and download chosen HTML.",
+    "open a working preview, and download a chosen self-contained HTML file.",
+    "The browser may process, compile, display, and download that material on the customer’s device",
   ]),
 });
 
@@ -209,7 +254,9 @@ export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
     "Premade Website Download $5-Custom Sites from $400",
-    "Abracadabra builds it. Alakazam keeps it live.",
+    "Abracadabra builds it. Alakazam is still held.",
+    "No setup or monthly plan is for sale",
+    "Check and ask about a domain",
   ]),
   "vnext.js": Object.freeze([
     "Download is $5 once per editor project, not per click or version.",
@@ -217,8 +264,8 @@ export const hostedTruthRequirements = Object.freeze({
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free to See-$5 to Download-$25 a Month Keeps It Live",
-    "the $5 comes off your first month",
+    "Free to See-$5 Account Download-Alakazam Plans Held",
+    "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
     "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
@@ -228,6 +275,8 @@ export const hostedTruthRequirements = Object.freeze({
   "abracadabra/app/index.html": Object.freeze([
     "Build, preview, and download with Abracadabra",
     "Your guest preview is not saved yet.",
+    "Sign in for the $5 Download.",
+    "Alakazam subscriptions and hosting activation remain held.",
     "Create an account or sign in.",
     "A new project has its own one-time $5 Download unlock.",
     "Get the exact $5 quote",
@@ -237,10 +286,10 @@ export const hostedTruthRequirements = Object.freeze({
     "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   ]),
   "faq/index.html": Object.freeze([
-    "downloading it is $5",
-    "Alakazam is the paid service that follows the preview",
+    "Download is $5 once per editor project",
+    "Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held.",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
-    "the page cannot place an order or start work",
+    "this page cannot quote or start setup",
   ]),
   "legal/index.html": Object.freeze([
     "Privacy and terms for saved editor projects and Download.",

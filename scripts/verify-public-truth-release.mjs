@@ -33,9 +33,10 @@ export const POSTDEPLOY_REQUEST_CONCURRENCY = 8;
 export const POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS = 2;
 export const PRODUCTION_ORIGIN = "https://sitesourcery.com";
 export const AUTHORITY_STATEMENT = "Authorize one exact inquiry-open, checkout-disabled public-truth reconciliation; deny automated checkout, payment-provider, containment, customer-data, and general deployment authority.";
-export const OG_PNG_SHA256 = "1e1bca44c9b62a54ee79ec670913970b54ff8405adb8520a9d95ee7b887983bc";
+export const OG_PNG_SHA256 = "66b8985aff38fe4809037b89e9e153594ed5682ffe3ed33a9bf19127bb501c0b";
 export const OG_SOURCE_SHA256 = "61c324f7c5b18ac2eed19d65b3510b8730654e8718c490966c79ee3195751868";
 export const CARD_V9_PDF_SHA256 = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d73caf99029c5b3605fc";
+export const REVIEWED_DOMAIN_PREFLIGHT_SHA256 = "a2f63d8d6cc3596c064ae0ec2327245ac98008170c3e6c4f46dc4704befddf7b";
 
 /*
  * The live-route proof deliberately duplicates the reviewed route contract.
@@ -44,38 +45,43 @@ export const CARD_V9_PDF_SHA256 = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d
  */
 export const PRODUCTION_CANONICAL_ROUTE_FILES = Object.freeze({
   "/": "index.html",
-  "/custom/": "custom/index.html",
-  "/custom/scope/": "custom/scope/index.html",
-  "/custom/process/": "custom/process/index.html",
-  "/abracadabra/": "abracadabra/index.html",
-  "/abracadabra/how/": "abracadabra/how/index.html",
-  "/abracadabra/app/": "abracadabra/app/index.html",
-  "/hive/": "hive/index.html",
-  "/solutions/": "solutions/index.html",
-  "/work/": "work/index.html",
   "/about/": "about/index.html",
-  "/faq/": "faq/index.html",
+  "/abracadabra/": "abracadabra/index.html",
+  "/abracadabra/app/": "abracadabra/app/index.html",
   "/contact/": "contact/index.html",
-  "/start/": "start/index.html",
+  "/custom/": "custom/index.html",
+  "/custom/process/": "custom/process/index.html",
+  "/custom/scope/": "custom/scope/index.html",
+  "/domains/": "domains/index.html",
+  "/faq/": "faq/index.html",
   "/legal/": "legal/index.html",
   "/legal/privacy/": "legal/privacy/index.html",
   "/legal/website-terms/": "legal/website-terms/index.html",
+  "/responder/": "responder/index.html",
+  "/work/": "work/index.html",
 });
 
 export const PRODUCTION_LEGACY_REDIRECTS = Object.freeze({
   "about.html": "/about/",
-  "automation.html": "/hive/",
+  "abracadabra/how/index.html": "/abracadabra/",
+  "alacazam/index.html": "/abracadabra/#plans",
+  "alakazam/index.html": "/abracadabra/#plans",
+  "automation.html": "/responder/",
   "contact.html": "/contact/",
   "faq.html": "/faq/",
+  "hive/index.html": "/responder/",
   "how-it-works.html": "/custom/process/",
   "pricing.html": "/custom/scope/",
   "privacy.html": "/legal/privacy/",
+  "services/index.html": "/custom/",
+  "start/index.html": "/contact/",
   "terms.html": "/legal/website-terms/",
   "thanks.html": "/contact/",
-  "the-difference.html": "/about/#the-difference",
-  "the-meter.html": "/custom/process/#scope",
-  "the-moat.html": "/about/#the-difference",
-  "the-responder.html": "/hive/",
+  "the-difference.html": "/about/",
+  "the-meter.html": "/custom/process/",
+  "the-moat.html": "/about/",
+  "the-responder.html": "/responder/",
+  "websites/index.html": "/custom/",
 });
 
 export const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
@@ -220,19 +226,22 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "abracadabra/app/index.html",
   "abracadabra/how/index.html",
   "abracadabra/index.html",
-  "abracadabra/platform/abracadabra-platform.js",
-  "abracadabra/site/index.html",
-  "abracadabra/site/viewer.css",
-  "abracadabra/site/viewer.js",
+  "alacazam/index.html",
+  "alakazam/index.html",
   "assets/cursor-wand-active.svg",
   "assets/cursor-wand.svg",
   "assets/portfolio-sconesourcery-v3-720.webp",
   "assets/portfolio-sconesourcery-v3.webp",
   "assets/site-sourcery-arcane-atelier-v3.webp",
+  "assets/site-sourcery-archive-room-v1.webp",
   "assets/site-sourcery-hive-orchestra-v4.webp",
+  "assets/site-sourcery-index-room-v1.webp",
   "assets/site-sourcery-main-street-v2.webp",
+  "assets/site-sourcery-one-person-studio-v1.webp",
+  "assets/site-sourcery-signal-room-v1.webp",
   "assets/site-sourcery-storm-atelier-v4.webp",
   "assets/site-sourcery-two-doors-v3.webp",
+  "assets/work-daarx-current.jpg",
   "assets/work-demo-bright-spark-1440.webp",
   "assets/work-demo-bright-spark-720.webp",
   "assets/work-demo-bright-spark.png",
@@ -248,9 +257,11 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "custom/index.html",
   "custom/process/index.html",
   "custom/scope/index.html",
+  "domains/domain-search.js",
+  "domains/index.html",
   "faq.html",
   "faq/index.html",
-  "hive/hive-planner.js",
+  "flyer.html",
   "hive/index.html",
   "how-it-works.html",
   "index.html",
@@ -260,9 +271,11 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "og.png",
   "pricing.html",
   "privacy.html",
+  "responder/hive-planner.js",
+  "responder/index.html",
   "robots.txt",
+  "services/index.html",
   "sitemap.xml",
-  "solutions/index.html",
   "start/index.html",
   "terms.html",
   "the-difference.html",
@@ -271,6 +284,7 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "the-responder.html",
   "vnext.css",
   "vnext.js",
+  "websites/index.html",
   "work/index.html",
   "work/work.css",
 ]);
@@ -311,15 +325,21 @@ const PRIVATE_ARTIFACT_SEGMENT = /^(?:\.git|\.github|\.env(?:\..*)?|node_modules
 const PRIVATE_ARTIFACT_FILE = /(?:^|\/)(?:AGENTS\.md|QUALITY\.md|README(?:\.[^/]*)?|package(?:-lock)?\.json|release-control\.json|public-truth-authority\.json|[^/]+\.(?:pem|key|p12|pfx|crt|csr|log|map|mjs|cjs|ts|tsx|jsx|sh|py))$/iu;
 const PAYMENT_ENDPOINT = /(?:buy\.stripe\.com|checkout\.stripe\.com|js\.stripe\.com|api\.stripe\.com|paypal\.com|paypalobjects\.com|braintreegateway\.com|checkout\.com|squareup\.com|square\.link|payment_intent|createCheckoutSession|apple-pay|google-pay)/iu;
 const NETWORK_SINK = /\b(?:fetch\s*\(|XMLHttpRequest\b|sendBeacon\s*\(|WebSocket\s*\(|EventSource\s*\()/u;
+const REVIEWED_DOMAIN_PREFLIGHT_PATH = "domains/domain-search.js";
 const ENABLE_FORM = /(?:\.disabled\s*=\s*false\b|removeAttribute\s*\(\s*["']disabled["']|\.requestSubmit\s*\(|\.submit\s*\()/u;
 const REVIEWED_NON_FORM_CONTROL_SHA256 = Object.freeze({
   "abracadabra/app/abracadabra-app.js":
-    "cfb3f3282a8f965ec84b2cd92b3192820fa6b34a1058dd20a097580749f80e29",
-  "abracadabra/site/viewer.js":
-    "b459639c9209e88f907fc0570565ef7945b545d3d2ca594c4b5a783d57f5d634",
-  "hive/hive-planner.js":
-    "8ab5bc996ed70e9dee0ed22c0f97c1b9839486af062cd6723fb384bcc59b049c",
+    "09c250033e308c2f8c995eddff72ce050eeb7cd13b5897cf0f087e719f49f4eb",
+  "domains/domain-search.js": REVIEWED_DOMAIN_PREFLIGHT_SHA256,
+  "responder/hive-planner.js":
+    "3f31972e1ba2342158694c5925208857d8c55692d51170fbe2c9489c80634eb6",
 });
+const HELD_ALAKAZAM_EXECUTABLE_SEMANTICS = Object.freeze([
+  /\b(?:GRACE_DAYS|RETENTION_DAYS)\b|\b(?:graceDays|retentionDays)\s*:/u,
+  /\[\s*["']purchase["']\s*,\s*["']byod["']\s*\]|\.path\s*===\s*["']purchase["']/u,
+  /\.serving\.state\s*=\s*["']live["']|function\s+publish\s*\(|\bpublish\s*:\s*publish\b/u,
+  /URLSearchParams\s*\([^)]*location\.search|sessionStorage\.getItem\s*\(\s*["']abracadabra\.(?:paid|alakazam)["']/u,
+]);
 const WEB3FORMS_MARKER = /web3forms/iu;
 const ACCESS_KEY_MARKER = /(?:\bname\s*=\s*(?:"access_key"|'access_key'|access_key)|(?:"access_key"|'access_key'|\baccess_key\b)\s*[:=])/iu;
 const RETIRED_321_IDENTITY = /(?:^|[^\d])(?:\+?1[\s().-]*)?321[\s().-]*788[\s.-]*2555(?:[^\d]|$)/iu;
@@ -816,6 +836,35 @@ function assertDirectInquiryGuide(file, html) {
   }
 }
 
+function assertReviewedDomainPreflight(file, source, bytes) {
+  const requiredFragments = Object.freeze([
+    ["Cloudflare resolver", 'var RESOLVER = "https://cloudflare-dns.com/dns-query";'],
+    ["three reviewed candidates", 'var ENDINGS = ["com", "net", "org"];'],
+    ["NS-only query", 'var url = RESOLVER + "?name=" + encodeURIComponent(domain) + "&type=NS";'],
+    ["explicit GET request", 'return fetch(url, { method: "GET", headers: { accept: "application/dns-json" } })'],
+    ["candidate projection", 'var domains = ENDINGS.map(function (ending) { return name + "." + ending; });'],
+    ["one preflight per candidate", "Promise.all(domains.map(check)).then(function (states) {"],
+    ["click trigger", 'button.addEventListener("click", run);'],
+  ]);
+  for (const [label, fragment] of requiredFragments) {
+    if (!source.includes(fragment)) {
+      fail(`${file} reviewed DNS preflight changed its ${label}`);
+    }
+  }
+  if ((source.match(/\bfetch\s*\(/gu) ?? []).length !== 1) {
+    fail(`${file} reviewed DNS preflight must contain exactly one fetch call`);
+  }
+  if (
+    /addEventListener\s*\(\s*["'](?:DOMContentLoaded|load)["']/u.test(source)
+    || /\b(?:window|document)\.onload\s*=/u.test(source)
+  ) {
+    fail(`${file} reviewed DNS preflight must remain user-triggered and cannot run on load`);
+  }
+  if (sha256(bytes) !== REVIEWED_DOMAIN_PREFLIGHT_SHA256) {
+    fail(`${file} must match the exact reviewed DNS preflight digest ${REVIEWED_DOMAIN_PREFLIGHT_SHA256}`);
+  }
+}
+
 export async function validateArtifactSafety(artifactRoot, sourceManifest) {
   const actual = await artifactManifest(artifactRoot);
   const expectedEntries = artifactProjectionEntries(sourceManifest);
@@ -834,14 +883,23 @@ export async function validateArtifactSafety(artifactRoot, sourceManifest) {
     if (entry.path.endsWith(".html")) {
       const html = bytes.toString("utf8");
       assertHeldForms(entry.path, html);
-      if (entry.path === "contact/index.html" || entry.path === "start/index.html") {
+      if (entry.path === "contact/index.html") {
         assertDirectInquiryGuide(entry.path, html);
       }
     }
     if (entry.path.endsWith(".js")) {
       const source = decodeHtml(bytes.toString("utf8"));
       if (PAYMENT_ENDPOINT.test(source)) fail(`${entry.path} contains an active payment-provider endpoint`);
-      if (NETWORK_SINK.test(source)) fail(`${entry.path} contains an active browser network sink`);
+      if (entry.path === REVIEWED_DOMAIN_PREFLIGHT_PATH) {
+        assertReviewedDomainPreflight(entry.path, source, bytes);
+      } else if (NETWORK_SINK.test(source)) {
+        fail(`${entry.path} contains an active browser network sink`);
+      }
+      for (const semantic of HELD_ALAKAZAM_EXECUTABLE_SEMANTICS) {
+        if (semantic.test(source)) {
+          fail(`${entry.path} contains held Alakazam executable semantics ${semantic}`);
+        }
+      }
       if (
         ENABLE_FORM.test(source)
         && REVIEWED_NON_FORM_CONTROL_SHA256[entry.path] !== sha256(bytes)
@@ -1473,7 +1531,9 @@ function assertLegacyProductionRedirect(file, target, source) {
   const canonical = htmlTags(source, "link").filter((attributes) => (
     (htmlAttributeValue(attributes, "rel") ?? "").toLowerCase().split(/\s+/u).includes("canonical")
   ));
-  const expectedCanonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
+  const canonicalTarget = new URL(target, `${PRODUCTION_ORIGIN}/`);
+  canonicalTarget.hash = "";
+  const expectedCanonical = canonicalTarget.href;
   if (canonical.length !== 1 || htmlAttributeValue(canonical[0], "href") !== expectedCanonical) {
     fail(`live legacy redirect ${file} canonical must be ${expectedCanonical}`);
   }
@@ -1625,28 +1685,28 @@ export function validatePublicTruthTextSet({
     "Custom work begins only through a written quote or scope and a separately accepted agreement.",
     "Payment alone does not authorize work or publication.",
     "Ownership of the agreed client deliverables transfers only after final payment",
-    "The Hive workbench is planning-only.",
-    "It does not activate an integration",
-    "Care requires its own explicit written scope.",
+    "The Responder page is planning only. It sends no messages, takes no payment, and starts no setup or service.",
+    "The Responder remains held until its telephony, A2P registration, message delivery, opt-out handling, monitoring, lifecycle terms, and customer proof are complete.",
+    "Ongoing Care requires its own written scope, and optional Custom Care plan details and prices remain held.",
     "Provider hosting, public Internet publication, real billing, DNS work, and provider-side storage require a separately released service",
     "Using the current maker does not create an account, control room, project record, or saved acceptance.",
     "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
-    "The current maker has no plan-activation control, checkout, billing state, provider reference, subscription, transaction, payment receipt, or charge.",
+    "The free guest maker makes temporary tab-only versions and previews. It offers no account, saved project, Checkout, or Download.",
     "This maker has no Publish button or publication state.",
     "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
   ]) requireVisible(terms, marker, "legal/website-terms/index.html", errors);
   for (const marker of [
     "Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY",
     "The ordinary marketing pages contain no inquiry form, visitor upload, advertising tracker, or page-level analytics code.",
-    "The Start chooser uses the buttons you select only to show a recommendation on the current page.",
-    "The Hive planner selects from fixed planning blueprints already present in the downloaded page script.",
-    "The current Abracadabra maker creates no account or organization record.",
-    "Business facts and made versions stay only in this tab. Refreshing or closing it clears them.",
-    "That chosen HTML download is the only maker output that leaves the browser.",
-    "The current maker does not collect registrar credentials, domain proof, DNS records, or a domain order.",
-    "The current maker does not ask for payment-card details, take payment, activate a plan, create a subscription or transaction, or keep billing state.",
-    "The current maker has no account, saved project, product database, cancellation state, nonpayment clock, suspension clock, retained-exit clock, or project-deletion control.",
-    "The current maker does not record a safety hold, report, appeal, restoration result, support note, ticket, review history, or enforcement state.",
+    "The Start chooser uses selected buttons only to show a recommendation on the current page and sends nothing.",
+    "The Responder is held from sale. Its public page describes an intended flow already present in the page and does not ask for customer data, store a setup, contact a provider, create a quote, take payment, or activate a message, booking, review request, invoice action, or other integration.",
+    "A guest may build, revise, and test a private preview without an account. Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
+    "Before a guest saves, the business facts, selected look, review confirmation, and made versions remain in the current editor tab and are not sent to Site Sourcery merely because a preview is made. Refreshing or closing the tab clears that unsaved work.",
+    "Download does not publish or host the page.",
+    "The lookup checks public DNS only. It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+    "Secure card entry belongs to the payment processor identified at checkout.",
+    "Alakazam has no active cancellation, nonpayment, suspension, retained-exit, or deletion schedule under this notice; earlier day-count drafts are not policy.",
+    "The ordinary public pages and guest preview do not submit a safety report or support ticket.",
     "Email sent to sitesourcery@proton.me is processed through Proton Mail",
     "If you call or email, Site Sourcery may retain the communication and reasonable business records needed to respond, scope work, document decisions, deliver accepted work, protect the service, and meet legal obligations.",
   ]) requireVisible(privacy, marker, "legal/privacy/index.html", errors);

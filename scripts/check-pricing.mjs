@@ -3,10 +3,20 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { publicFileAllowlist } from "./build-pages.mjs";
+import {
+  heldAlakazamArtifactExcludedFiles,
+  heldAlakazamExecutableSemantics,
+} from "./hosted-truth/manifest.mjs";
 
 const root = process.cwd();
 const errors = [];
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
+const {
+  OFFER_AVAILABILITY,
+  RAIL_NEEDS_SERVER,
+  SELLABLE,
+  sellableNow,
+} = await import(path.join(root, "server/commerce/rails.mjs"));
 const EXPECTED_CATALOG_IDENTITY = Object.freeze({
   version: "SS-COMMERCIAL-2026.5",
   tierCatalogId: "SS-TIERS-2026.5",
@@ -131,6 +141,85 @@ const forbidRegex = (file, expression, label) => {
 if (publicFileAllowlist.includes("data/public-catalog.json")) {
   errors.push("data/public-catalog.json: private price-bearing projection entered the public artifact allowlist");
 }
+if (publicFileAllowlist.includes("domains/domain-prices.json")) {
+  errors.push("domains/domain-prices.json: held domain retail prices entered the public artifact allowlist");
+}
+for (const file of heldAlakazamArtifactExcludedFiles) {
+  if (publicFileAllowlist.includes(file)) {
+    errors.push(`${file}: held Alakazam source entered the public artifact allowlist`);
+  }
+}
+
+const availabilityValues = new Set(Object.values(OFFER_AVAILABILITY));
+const offerIds = new Set();
+for (const offer of SELLABLE) {
+  if (offerIds.has(offer.id)) {
+    errors.push(`server/commerce/rails.mjs: duplicate offer id ${JSON.stringify(offer.id)}`);
+  }
+  offerIds.add(offer.id);
+  if (!availabilityValues.has(offer.availability)) {
+    errors.push(
+      `server/commerce/rails.mjs: ${offer.id} must declare an exact per-offer availability`
+    );
+  }
+}
+const expectedOfferAvailability = {
+  "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+  "alacazam.hosting": OFFER_AVAILABILITY.HELD,
+  "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
+  "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+  assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+  responder: OFFER_AVAILABILITY.HELD,
+  "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+};
+const actualOfferAvailability = Object.fromEntries(
+  SELLABLE.map((offer) => [offer.id, offer.availability])
+);
+if (JSON.stringify(actualOfferAvailability) !== JSON.stringify(expectedOfferAvailability)) {
+  errors.push(
+    `server/commerce/rails.mjs: exact offer availability mapping changed; received ${JSON.stringify(actualOfferAvailability)}`
+  );
+}
+for (const offer of SELLABLE) {
+  if (
+    offer.availability !== OFFER_AVAILABILITY.PUBLIC_CHECKOUT
+    && offer.checkoutUrl !== null
+  ) {
+    errors.push(`server/commerce/rails.mjs: non-public ${offer.id} cannot retain a direct Checkout URL`);
+  }
+  if (
+    offer.availability === OFFER_AVAILABILITY.ACCOUNT_ONLY
+    && RAIL_NEEDS_SERVER[offer.rail] !== true
+  ) {
+    errors.push(`server/commerce/rails.mjs: account-only ${offer.id} must use a server Checkout rail`);
+  }
+  if (
+    offer.availability === OFFER_AVAILABILITY.HELD
+    && offer.amountCents !== null
+  ) {
+    errors.push(`server/commerce/rails.mjs: held ${offer.id} cannot expose active price authority`);
+  }
+}
+const publicCheckoutOffers = sellableNow();
+if (publicCatalog.offerState === "inquiry-only" && publicCheckoutOffers.length !== 0) {
+  errors.push(
+    `server/commerce/rails.mjs: inquiry-only public catalog cannot release ${publicCheckoutOffers.length} public checkout offers`
+  );
+}
+for (const id of ["domain.purchase", "domain.purchase.plus"]) {
+  const offer = SELLABLE.find((candidate) => candidate.id === id);
+  if (
+    !offer
+    || offer.availability !== OFFER_AVAILABILITY.INQUIRY_ONLY
+    || offer.checkoutUrl !== null
+    || offer.productRef !== null
+    || offer.priceRef !== null
+  ) {
+    errors.push(
+      `server/commerce/rails.mjs: ${id} must remain inquiry-only with no direct provider checkout authority`
+    );
+  }
+}
 
 const scopeFile = "custom/scope/index.html";
 for (const tier of publicCatalog.buildTiers) {
@@ -163,6 +252,127 @@ for (const file of publicHtmlFiles) {
     "js.stripe.com",
     "paypal.com/checkout",
   ]) forbidText(file, value);
+}
+
+const publicTextFiles = publicFileAllowlist.filter((file) =>
+  /\.(?:html|js|json|xml|txt)$/u.test(file)
+);
+for (const file of publicTextFiles) {
+  const source = Object.hasOwn(files, file)
+    ? files[file]
+    : await readFile(path.join(root, file), "utf8");
+  for (const pattern of [
+    /https:\/\/buy\.stripe\.com\//u,
+    /straight on to Stripe|existing account pays directly|paid right in the maker/iu,
+  ]) {
+    const match = source.match(pattern);
+    if (match) {
+      errors.push(`${file}: contains direct public payment authority ${JSON.stringify(match[0])}`);
+    }
+  }
+  if (file.endsWith(".js")) {
+    for (const semantic of heldAlakazamExecutableSemantics) {
+      const match = source.match(new RegExp(semantic.pattern, "u"));
+      if (match) {
+        errors.push(
+          `${file}: contains held Alakazam executable semantics `
+          + `${semantic.id} ${JSON.stringify(match[0])}`
+        );
+      }
+    }
+  }
+}
+
+const offerById = new Map(SELLABLE.map((offer) => [offer.id, offer]));
+const availabilityClaimRules = [
+  {
+    id: "alacazam.hosting",
+    state: OFFER_AVAILABILITY.HELD,
+    label: "held Alakazam sale",
+    patterns: [
+      /Abracadabra builds it\. Alakazam keeps it live/iu,
+      /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
+      /Alakazam is the service that keeps it and puts it online/iu,
+      /Live at your own address/iu,
+      /\$25[^<\n]{0,40}(?:month|mo)\b/iu,
+      /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
+      /leaving costs nothing/iu,
+      /Alakazam is (?:active|on)\b/iu,
+    ],
+  },
+  {
+    id: "responder",
+    state: OFFER_AVAILABILITY.HELD,
+    label: "held Responder sale",
+    patterns: [
+      /\$300\s+setup/iu,
+      /\$250\s+(?:a|per)\s+month/iu,
+      /The Responder[^<\n]{0,80}texts them back/iu,
+      /Answers in seconds|Sent 4 seconds|Switch it off any time/iu,
+    ],
+  },
+  {
+    id: "domain.purchase",
+    state: OFFER_AVAILABILITY.INQUIRY_ONLY,
+    label: "inquiry-only domain sale",
+    patterns: [/Buy a domain/iu, /rent an address instead/iu],
+  },
+  {
+    id: "assessment",
+    state: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    label: "account-only assessment sale",
+    patterns: [
+      /assessment that comes off any build/iu,
+      /full \$200 comes off any build/iu,
+      /Book (?:the|an|your) assessment/iu,
+    ],
+  },
+];
+for (const [file, source] of Object.entries(files)) {
+  for (const rule of availabilityClaimRules) {
+    if (offerById.get(rule.id)?.availability !== rule.state) continue;
+    for (const pattern of rule.patterns) {
+      const match = source.match(pattern);
+      if (match) {
+        errors.push(`${file}: contains ${rule.label} claim ${JSON.stringify(match[0])}`);
+      }
+    }
+  }
+}
+
+const domainPage = files["domains/index.html"] ?? "";
+const domainSearch = await readFile(path.join(root, "domains/domain-search.js"), "utf8");
+for (const marker of [
+  "Domain registration is inquiry-only.",
+  "public-DNS preflight",
+  "This page cannot accept payment.",
+]) {
+  if (!domainPage.includes(marker)) {
+    errors.push(`domains/index.html: missing inquiry-only boundary ${JSON.stringify(marker)}`);
+  }
+}
+for (const [sourceName, source, forbidden] of [
+  ["domains/index.html", domainPage, "$40"],
+  ["domains/index.html", domainPage, "$45"],
+  ["domains/index.html", domainPage, "Buy prices, flat"],
+  ["domains/index.html", domainPage, "live immediately"],
+  ["domains/domain-search.js", domainSearch, "buy.stripe.com"],
+  ["domains/domain-search.js", domainSearch, "CHECKOUT_BY_BAND"],
+  ["domains/domain-search.js", domainSearch, "domain-prices.json"],
+  ["domains/domain-search.js", domainSearch, "refund in full"],
+  ["domains/domain-search.js", domainSearch, "rent an address instead"],
+]) {
+  if (source.includes(forbidden)) {
+    errors.push(`${sourceName}: contains held domain storefront authority ${JSON.stringify(forbidden)}`);
+  }
+}
+for (const marker of [
+  "Ask to verify ",
+  "not a reservation, registrar result, quote, or authorization to buy",
+]) {
+  if (!domainSearch.includes(marker)) {
+    errors.push(`domains/domain-search.js: missing inquiry-only preflight boundary ${JSON.stringify(marker)}`);
+  }
 }
 
 for (const file of publicHtmlFiles) {
@@ -199,7 +409,7 @@ if (
     "data/public-catalog.json: website-assessment must be the bounded exact $200 offer with one-use same-project $200 Custom build credit"
   );
 } else {
-  const allowedDollarDisplays = new Set([5]);
+  const allowedDollarDisplays = new Set();
   const collectCatalogAmounts = (value, key = null) => {
     if (Array.isArray(value)) {
       value.forEach((item) => collectCatalogAmounts(item, key));
@@ -218,7 +428,22 @@ if (
       allowedDollarDisplays.add(value / 100);
     }
   };
-  collectCatalogAmounts(publicCatalog);
+  collectCatalogAmounts({
+    buildTiers: publicCatalog.buildTiers,
+    customPaymentTerms: publicCatalog.customPaymentTerms,
+    scaleRule: publicCatalog.scaleRule,
+    creativityLevels: publicCatalog.creativityLevels,
+    buildAddons: publicCatalog.buildAddons,
+    architectureBands: publicCatalog.architectureBands,
+    migration: publicCatalog.migration,
+    professionalServices: publicCatalog.professionalServices,
+  });
+  for (const offer of SELLABLE) {
+    if (
+      offer.amountCents !== null
+      && offer.availability !== OFFER_AVAILABILITY.HELD
+    ) allowedDollarDisplays.add(offer.amountCents / 100);
+  }
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
     for (const match of files[file].matchAll(/\$\s?\d[\d,.]*/gu)) {
@@ -246,5 +471,5 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records and public dollar copy match the private projection; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
+  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records and public dollar copy match the private projection; all commerce offers have explicit availability; Domains is inquiry/preflight-only; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
 }

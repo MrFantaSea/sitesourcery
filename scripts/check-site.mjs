@@ -22,27 +22,21 @@
  * prices at all. Showing them is the point; showing a stale one is the risk.
  */
 
-import { readFile, readdir, access } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { publicFileAllowlist } from "./build-pages.mjs";
+import {
+  heldAlakazamArtifactExcludedFiles,
+  heldAlakazamExecutableSemantics,
+} from "./hosted-truth/manifest.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-
-const SKIP_DIRS = new Set([
-  ".git", "node_modules", "_site", "_hosted", "scripts", "server", "assets", "data", "ops",
-]);
 
 const CANONICAL_PHONE_DISPLAY = "(856) 244-1220";
 const CANONICAL_PHONE_TEL = "tel:+18562441220";
 const CANONICAL_MAILBOX = "sitesourcery@proton.me";
-
-/**
- * Pages that are the product rather than marketing. They render inside the
- * maker and deliberately carry no site chrome, so the shared-nav rule does not
- * apply to them.
- */
-const APP_ROUTES = new Set(["/abracadabra/site/"]);
 
 /**
  * Root-level HTML that is not a route folder: the 404 page, the print flyer,
@@ -63,14 +57,9 @@ const ALLOWED_EXTERNAL = new Set([
 ]);
 
 /**
- * Stripe-hosted checkout. These are the only destinations allowed to take money,
- * and they must be Stripe's own domain: a "buy" button pointing anywhere else is
- * either a mistake or an attack, and both look identical in a diff.
- *
- * A link may only appear here once its product can actually be DELIVERED. The
- * $5 preview and the $25 subscription have live Stripe links, but the maker
- * cannot yet charge or provision, so wiring them to a page would take money for
- * something that does not happen. Recorded in server/commerce/rails.mjs.
+ * Direct public Payment Links are forbidden. The $5 Download uses authenticated
+ * server Checkout, while Alakazam remains held. Keep the origin constant only
+ * so malformed lookalike links and any accidental public release fail loudly.
  */
 const CHECKOUT_ORIGIN = "https://buy.stripe.com/";
 
@@ -79,19 +68,9 @@ const fail = (file, message) => errors.push(`${file}: ${message}`);
 
 // ---------------------------------------------------------------- discovery
 
-/** Every public page, found on disk rather than declared in a list that drifts. */
-async function findPages(dir = ROOT, pages = []) {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
-      await findPages(path.join(dir, entry.name), pages);
-    } else if (entry.name === "index.html") {
-      pages.push(path.relative(ROOT, path.join(dir, entry.name)));
-    } else if (dir === ROOT && entry.name.endsWith(".html")) {
-      pages.push(entry.name);
-    }
-  }
-  return pages;
+/** Every published page, derived from the same positive artifact ledger. */
+async function findPages() {
+  return publicFileAllowlist.filter((file) => file.endsWith(".html"));
 }
 
 const routeOf = (page) =>
@@ -101,8 +80,8 @@ const routeOf = (page) =>
 
 // ------------------------------------------------------------------ catalog
 
-async function catalogPrices() {
-  const amounts = new Set([5]); // the Abracadabra preview, a product fact
+function catalogPrices(catalog, commerce) {
+  const amounts = new Set();
   const walk = (value, key) => {
     if (Array.isArray(value)) return value.forEach((item) => walk(item, key));
     if (value && typeof value === "object") {
@@ -110,7 +89,22 @@ async function catalogPrices() {
     }
     if (typeof value === "number" && /cents$/iu.test(key ?? "")) amounts.add(value / 100);
   };
-  walk(JSON.parse(await readFile(path.join(ROOT, "data/public-catalog.json"), "utf8")), null);
+  walk({
+    buildTiers: catalog.buildTiers,
+    customPaymentTerms: catalog.customPaymentTerms,
+    scaleRule: catalog.scaleRule,
+    creativityLevels: catalog.creativityLevels,
+    buildAddons: catalog.buildAddons,
+    architectureBands: catalog.architectureBands,
+    migration: catalog.migration,
+    professionalServices: catalog.professionalServices,
+  }, null);
+  for (const offer of commerce.SELLABLE) {
+    if (
+      offer.amountCents !== null
+      && offer.availability !== commerce.OFFER_AVAILABILITY.HELD
+    ) amounts.add(offer.amountCents / 100);
+  }
   return amounts;
 }
 
@@ -149,7 +143,6 @@ function checkRedirect(page, source, routes, idsByRoute) {
 }
 
 function checkNav(page, source, reference) {
-  if (APP_ROUTES.has(routeOf(page))) return null;
   const found = source.match(NAV);
   if (!found) return fail(page, "has no primary nav");
   // aria-current marks the page you are on, so it is expected to differ.
@@ -179,7 +172,65 @@ function checkPrices(page, source, allowed) {
   for (const raw of source.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
     if (!allowed.has(amount)) {
-      fail(page, `price ${JSON.stringify(raw)} is not in data/public-catalog.json`);
+      fail(
+        page,
+        `price ${JSON.stringify(raw)} is not released for public display by the availability-aware catalog`
+      );
+    }
+  }
+}
+
+function checkOfferClaims(page, source, commerce) {
+  const offers = new Map(commerce.SELLABLE.map((offer) => [offer.id, offer]));
+  const rules = [
+    {
+      id: "alacazam.hosting",
+      state: commerce.OFFER_AVAILABILITY.HELD,
+      label: "held Alakazam sale",
+      patterns: [
+        /Abracadabra builds it\. Alakazam keeps it live/iu,
+        /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
+        /Alakazam is the service that keeps it and puts it online/iu,
+        /Live at your own address/iu,
+        /\$25[^<\n]{0,40}(?:month|mo)\b/iu,
+        /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
+        /leaving costs nothing/iu,
+        /Alakazam is (?:active|on)\b/iu,
+      ],
+    },
+    {
+      id: "responder",
+      state: commerce.OFFER_AVAILABILITY.HELD,
+      label: "held Responder sale",
+      patterns: [
+        /\$300\s+setup/iu,
+        /\$250\s+(?:a|per)\s+month/iu,
+        /The Responder[^<\n]{0,80}texts them back/iu,
+        /Answers in seconds|Sent 4 seconds|Switch it off any time/iu,
+      ],
+    },
+    {
+      id: "domain.purchase",
+      state: commerce.OFFER_AVAILABILITY.INQUIRY_ONLY,
+      label: "inquiry-only domain sale",
+      patterns: [/Buy a domain/iu, /rent an address instead/iu],
+    },
+    {
+      id: "assessment",
+      state: commerce.OFFER_AVAILABILITY.ACCOUNT_ONLY,
+      label: "account-only assessment sale",
+      patterns: [
+        /assessment that comes off any build/iu,
+        /full \$200 comes off any build/iu,
+        /Book (?:the|an|your) assessment/iu,
+      ],
+    },
+  ];
+  for (const rule of rules) {
+    if (offers.get(rule.id)?.availability !== rule.state) continue;
+    for (const pattern of rule.patterns) {
+      const match = source.match(pattern);
+      if (match) fail(page, `contains ${rule.label} claim ${JSON.stringify(match[0])}`);
     }
   }
 }
@@ -227,7 +278,7 @@ function checkLinks(page, source, idsByRoute, routes) {
  * shipped pointing Google at a 404 and nothing noticed; now something does.
  */
 function checkCanonical(page, source) {
-  if (APP_ROUTES.has(routeOf(page)) || CANONICAL_EXEMPT.has(page)) return;
+  if (CANONICAL_EXEMPT.has(page)) return;
   const expected = `<link rel="canonical" href="https://sitesourcery.com${routeOf(page)}">`;
   if (!source.includes(expected)) {
     fail(page, `canonical must be ${JSON.stringify(`https://sitesourcery.com${routeOf(page)}`)}`);
@@ -246,6 +297,10 @@ async function checkResources(page, source) {
     for (const candidate of raw.split(",")) {
       const clean = candidate.trim().split(/[\s?#]/u)[0];
       if (!clean || !/\.[a-z0-9]+$/iu.test(clean)) continue; // routes handled elsewhere
+      if (!publicFileAllowlist.includes(clean.slice(1))) {
+        fail(page, `loads ${JSON.stringify(clean)}, which is not in the public artifact ledger`);
+        continue;
+      }
       try {
         await access(path.join(ROOT, clean.slice(1)));
       } catch {
@@ -264,14 +319,76 @@ async function checkResources(page, source) {
 
 /**
  * Money truth: the commerce ledger and the pages must agree exactly. Every
- * checkout link on a page must be a registered sellable rail, and the rail
- * count is pinned so a rail can neither vanish nor appear unnoticed.
+ * checkout link on a page must be a specifically released public-checkout
+ * rail. Provider references and fixed amounts do not imply availability.
  */
-async function checkRails(pagesSources) {
-  const { sellableNow } = await import(path.join(ROOT, "server/commerce/rails.mjs"));
+async function checkRails(pagesSources, commerce, publicCatalog) {
+  const { SELLABLE, OFFER_AVAILABILITY, RAIL_NEEDS_SERVER, sellableNow } = commerce;
   const rails = sellableNow();
-  if (rails.length !== 5) {
-    fail("server/commerce/rails.mjs", `expected exactly 5 sellable rails, found ${rails.length}`);
+  if (publicCatalog.offerState === "inquiry-only" && rails.length !== 0) {
+    fail(
+      "server/commerce/rails.mjs",
+      `inquiry-only public catalog cannot release ${rails.length} public checkout rails`
+    );
+  }
+  const availabilityValues = new Set(Object.values(OFFER_AVAILABILITY));
+  const ids = new Set();
+  for (const offer of SELLABLE) {
+    if (ids.has(offer.id)) {
+      fail("server/commerce/rails.mjs", `duplicate offer id ${JSON.stringify(offer.id)}`);
+    }
+    ids.add(offer.id);
+    if (!availabilityValues.has(offer.availability)) {
+      fail(
+        "server/commerce/rails.mjs",
+        `offer ${JSON.stringify(offer.id)} has invalid availability ${JSON.stringify(offer.availability)}`
+      );
+    }
+    if (
+      offer.availability !== OFFER_AVAILABILITY.PUBLIC_CHECKOUT
+      && offer.checkoutUrl !== null
+    ) {
+      fail(
+        "server/commerce/rails.mjs",
+        `non-public offer ${JSON.stringify(offer.id)} cannot retain a direct Checkout URL`
+      );
+    }
+    if (
+      offer.availability === OFFER_AVAILABILITY.ACCOUNT_ONLY
+      && RAIL_NEEDS_SERVER[offer.rail] !== true
+    ) {
+      fail(
+        "server/commerce/rails.mjs",
+        `account-only offer ${JSON.stringify(offer.id)} must use a server Checkout rail`
+      );
+    }
+    if (
+      offer.availability === OFFER_AVAILABILITY.HELD
+      && offer.amountCents !== null
+    ) {
+      fail(
+        "server/commerce/rails.mjs",
+        `held offer ${JSON.stringify(offer.id)} cannot expose active price authority`
+      );
+    }
+  }
+  const expectedOfferAvailability = {
+    "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    "alacazam.hosting": OFFER_AVAILABILITY.HELD,
+    "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    responder: OFFER_AVAILABILITY.HELD,
+    "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+  };
+  const actualOfferAvailability = Object.fromEntries(
+    SELLABLE.map((offer) => [offer.id, offer.availability])
+  );
+  if (JSON.stringify(actualOfferAvailability) !== JSON.stringify(expectedOfferAvailability)) {
+    fail(
+      "server/commerce/rails.mjs",
+      `exact offer availability mapping changed; received ${JSON.stringify(actualOfferAvailability)}`
+    );
   }
   const registered = new Set(rails.map((rail) => rail.checkoutUrl));
   for (const [page, source] of pagesSources) {
@@ -283,6 +400,30 @@ async function checkRails(pagesSources) {
       }
     }
   }
+  for (const file of heldAlakazamArtifactExcludedFiles) {
+    if (publicFileAllowlist.includes(file)) {
+      fail(file, "held Alakazam source entered the public artifact ledger");
+    }
+  }
+  for (const file of publicFileAllowlist.filter((candidate) =>
+    /\.(?:html|js|json|xml|txt)$/u.test(candidate))) {
+    const source = await readFile(path.join(ROOT, file), "utf8");
+    if (source.includes(CHECKOUT_ORIGIN) && registered.size === 0) {
+      fail(file, "contains direct Stripe Checkout authority while no public checkout rail is released");
+    }
+    if (file.endsWith(".js")) {
+      for (const semantic of heldAlakazamExecutableSemantics) {
+        const match = source.match(new RegExp(semantic.pattern, "u"));
+        if (match) {
+          fail(
+            file,
+            `contains held Alakazam executable semantics ${semantic.id} ${JSON.stringify(match[0])}`,
+          );
+        }
+      }
+    }
+  }
+  return Object.freeze({ direct: rails.length, classified: SELLABLE.length });
 }
 
 /**
@@ -367,7 +508,11 @@ const idsByRoute = new Map(
   ]),
 );
 
-const allowed = await catalogPrices();
+const publicCatalog = JSON.parse(
+  await readFile(path.join(ROOT, "data/public-catalog.json"), "utf8")
+);
+const commerce = await import(path.join(ROOT, "server/commerce/rails.mjs"));
+const allowed = catalogPrices(publicCatalog, commerce);
 let referenceNav = null;
 
 let redirectCount = 0;
@@ -385,13 +530,14 @@ for (const page of pages) {
   }
   checkContact(page, source);
   checkPrices(page, source, allowed);
+  checkOfferClaims(page, source, commerce);
   checkStatic(page, source);
   checkLinks(page, source, idsByRoute, routes);
   checkCanonical(page, source);
   await checkResources(page, source);
 }
 
-await checkRails(sources);
+const railCounts = await checkRails(sources, commerce, publicCatalog);
 await checkSeals();
 await checkSitemap(pages, sources);
 
@@ -404,6 +550,7 @@ if (errors.length) {
 console.log(
   `Site checks passed: ${pages.length - redirectCount} live pages `
   + `+ ${redirectCount} redirects, one shared nav, no dead links or resources, `
-  + `${allowed.size} catalog prices, 5 sellable rails, seals fresh, `
+  + `${allowed.size} catalog prices, ${railCounts.direct} public checkout rails `
+  + `across ${railCounts.classified} explicitly classified offers, seals fresh, `
   + `sitemap exact, canonical phone, email, and rel=canonical.`,
 );

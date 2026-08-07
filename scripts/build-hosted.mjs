@@ -19,6 +19,8 @@ import {
 } from "./configure-abracadabra-hosted-staging.mjs";
 import { publicFileAllowlist } from "./build-pages.mjs";
 import {
+  heldAlakazamArtifactExcludedFiles,
+  heldAlakazamExecutableSemantics,
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
   heldTruthRequirements,
@@ -32,15 +34,6 @@ import {
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
 const RELEASE_CONTROL_FILE = "data/release-control.json";
-const SOURCE_ONLY_HOSTED_EXCLUSIONS = Object.freeze([
-  "abracadabra/app/abracadabra-account.js",
-  "abracadabra/app/abracadabra-paid-download.js",
-  "abracadabra/platform/abracadabra-platform.js",
-  "abracadabra/site/index.html",
-  "abracadabra/site/viewer.css",
-  "abracadabra/site/viewer.js",
-]);
-const SOURCE_ONLY_HOSTED_EXCLUSION_SET = new Set(SOURCE_ONLY_HOSTED_EXCLUSIONS);
 const SLOT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const MARKER_PREFIX = "sitesourcery:truth-slot:";
@@ -132,14 +125,17 @@ function assertSortedUnique(values, label) {
 
 export const hostedFileAllowlist = Object.freeze(
   [
-    ...publicFileAllowlist.filter(
-      (file) => !SOURCE_ONLY_HOSTED_EXCLUSION_SET.has(file),
-    ),
+    ...publicFileAllowlist,
     ...hostedStagingAssets.filter((file) => !publicFileAllowlist.includes(file)),
   ].sort(lexical),
 );
 
 assertSortedUnique(hostedFileAllowlist, "hosted file allowlist");
+for (const file of heldAlakazamArtifactExcludedFiles) {
+  if (hostedFileAllowlist.includes(file)) {
+    throw new Error(`held Alakazam source cannot enter the hosted allowlist: ${file}`);
+  }
+}
 
 async function walkArtifact(directory, root = directory) {
   const files = [];
@@ -195,6 +191,22 @@ function assertNoPhraseMap(sources, forbiddenPhrases, label) {
   }
 }
 
+export function assertNoHeldAlakazamExecutableSemantics(sources) {
+  for (const [file, source] of sources) {
+    if (!file.endsWith(".js")) continue;
+    for (const semantic of heldAlakazamExecutableSemantics) {
+      const match = String(source).match(new RegExp(semantic.pattern, "u"));
+      if (match) {
+        throw new Error(
+          `${file} contains held Alakazam executable semantics `
+          + `${semantic.id}: ${JSON.stringify(match[0])}`,
+        );
+      }
+    }
+  }
+  return true;
+}
+
 export function assertHeldTruthSemantics(sources) {
   assertRequirementMap(sources, heldTruthRequirements, "held truth");
   assertNoPhrases(sources, hostedOnlyPhrases, "hosted-only");
@@ -203,6 +215,7 @@ export function assertHeldTruthSemantics(sources) {
     heldTruthForbiddenPhrases,
     "retired held-product",
   );
+  assertNoHeldAlakazamExecutableSemantics(sources);
   return true;
 }
 
@@ -343,6 +356,14 @@ async function loadAndValidateHeldSources(absoluteRoot) {
   }
 
   assertHeldTruthSemantics(sources);
+  const shippedJavascript = new Map();
+  for (const file of publicFileAllowlist.filter((candidate) => candidate.endsWith(".js"))) {
+    shippedJavascript.set(
+      file,
+      await readFile(path.join(absoluteRoot, ...file.split("/")), "utf8"),
+    );
+  }
+  assertNoHeldAlakazamExecutableSemantics(shippedJavascript);
   return sources;
 }
 
@@ -556,9 +577,9 @@ export async function verifyHostedArtifact({
       + `unexpected: ${unexpected.join(", ") || "none"}`,
     );
   }
-  for (const file of SOURCE_ONLY_HOSTED_EXCLUSIONS) {
+  for (const file of heldAlakazamArtifactExcludedFiles) {
     if (actual.includes(file)) {
-      throw new Error(`hosted artifact contains source-only viewer file: ${file}`);
+      throw new Error(`hosted artifact contains held Alakazam source file: ${file}`);
     }
   }
   for (const file of hostedStagingAssets) {
@@ -586,6 +607,7 @@ export async function verifyHostedArtifact({
       throw new Error(`${file} contains a truth slot marker after hosted transformation`);
     }
   }
+  assertNoHeldAlakazamExecutableSemantics(artifactTextSources);
   assertNoPhrases(artifactTextSources, heldOnlyPhrases, "held-only");
 
   const truthFiles = Object.keys(hostedTruthRequirements);

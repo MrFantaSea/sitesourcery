@@ -9,6 +9,10 @@ import {
 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import {
+  heldAlakazamArtifactExcludedFiles,
+  heldAlakazamExecutableSemantics,
+} from "./hosted-truth/manifest.mjs";
 
 /*
  * This is intentionally an allowlist, not a recursive copy with exceptions.
@@ -22,19 +26,13 @@ export const publicFileAllowlist = Object.freeze([
   "about.html",
   "about/index.html",
   "abracadabra/abracadabra-showcase.js",
-  "abracadabra/app/abracadabra-account.js",
   "abracadabra/app/abracadabra-app.css",
   "abracadabra/app/abracadabra-app.js",
   "abracadabra/app/abracadabra-compiler.js",
   "abracadabra/app/abracadabra-control-mode.js",
-  "abracadabra/app/abracadabra-paid-download.js",
   "abracadabra/app/index.html",
   "abracadabra/how/index.html",
   "abracadabra/index.html",
-  "abracadabra/platform/abracadabra-platform.js",
-  "abracadabra/site/index.html",
-  "abracadabra/site/viewer.css",
-  "abracadabra/site/viewer.js",
   "alacazam/index.html",
   "alakazam/index.html",
   "assets/cursor-wand-active.svg",
@@ -66,7 +64,6 @@ export const publicFileAllowlist = Object.freeze([
   "custom/index.html",
   "custom/process/index.html",
   "custom/scope/index.html",
-  "domains/domain-prices.json",
   "domains/domain-search.js",
   "domains/index.html",
   "faq.html",
@@ -88,7 +85,6 @@ export const publicFileAllowlist = Object.freeze([
   "sitemap.xml",
   "start/index.html",
   "terms.html",
-  "thanks.html",
   "the-difference.html",
   "the-meter.html",
   "the-moat.html",
@@ -139,6 +135,26 @@ function assertSortedUniqueAllowlist() {
   }
   if (new Set(publicFileAllowlist).size !== publicFileAllowlist.length) {
     throw new Error("public file allowlist must not contain duplicates");
+  }
+  for (const file of heldAlakazamArtifactExcludedFiles) {
+    if (publicFileAllowlist.includes(file)) {
+      throw new Error(`held Alakazam source cannot enter the public allowlist: ${file}`);
+    }
+  }
+}
+
+function assertHeldAlakazamExecutableBoundary(root) {
+  for (const file of publicFileAllowlist.filter((candidate) => candidate.endsWith(".js"))) {
+    const source = readFileSync(path.join(root, ...file.split("/")), "utf8");
+    for (const semantic of heldAlakazamExecutableSemantics) {
+      const match = source.match(new RegExp(semantic.pattern, "u"));
+      if (match) {
+        throw new Error(
+          `${file} contains held Alakazam executable semantics `
+          + `${semantic.id}: ${JSON.stringify(match[0])}`,
+        );
+      }
+    }
   }
 }
 
@@ -236,6 +252,7 @@ export function buildPagesArtifact({
    * aliased source therefore leaves the last local build intact.
    */
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
+  assertHeldAlakazamExecutableBoundary(absoluteRoot);
 
   if (isExactSiteOutput && existsSync(absoluteOutput)) {
     const outputStat = lstatSync(absoluteOutput);
@@ -277,6 +294,7 @@ export function verifyPagesArtifact({
   }
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
+  assertHeldAlakazamExecutableBoundary(absoluteRoot);
   const actual = walkArtifact(absoluteOutput).sort(lexical);
   if (JSON.stringify(actual) !== JSON.stringify(publicFileAllowlist)) {
     const expectedSet = new Set(publicFileAllowlist);

@@ -20,6 +20,9 @@ import {
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
 const SELLER_IDENTITY = "Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY. Desiderata Labs LLC is the legal seller.";
+const SELLER_IDENTITY_BY_FILE = Object.freeze({
+  "legal/privacy/index.html": "Desiderata Labs LLC operates this website under the filed alternate name <strong>SITESOURCERY</strong>. Site Sourcery is the brand presentation of SITESOURCERY. Desiderata Labs LLC is the legal seller.",
+});
 const SUMMARY_WORD_LIMIT = 26;
 const SUMMARY_GRADE_LIMIT = 8;
 const DEFAULT_VISIBLE_GRADE_LIMIT = 8.5;
@@ -29,39 +32,39 @@ const LEGAL_CLAUSE_DIGESTS = Object.freeze({
     "current-product": "b77fba2c1bd31df3efcb97e85fa4993548ebb1b812361fd02321dbb65d9defd6",
   }),
   "legal/privacy/index.html": Object.freeze({
-    "operator": "e0a537583e3a66472ca277c99da549e1c338a9754882443a4186c51803dc109b",
-    "public-pages": "36482a5904c55255726e1a2795b5095a55baa0bea9fe05d8629b32998de8f6be",
-    "accounts": "29631227dcfc1d3b3a89e6421ad99af227bfb57ed305d4dc746cb67dfe009774",
-    "projects": "5ee10badba58a8124d91b4defb286e91659dabf47cf3469ab0cf38ac3686e374",
-    "published-sites": "833c6835cfeaf32688cd820206fd37ea1721529be6904ce4f22fcc57d9cd5fed",
-    "hive-planner": "5509f3597490feb4de839cbd1318507998a2152da541da857e9b67fab16d1090",
-    "network-records": "d7220c775fa5ba74608cfac9eeae55844208cc34bc7bfdb3797e2892b8de1229",
-    "domains": "b3ec255517993a86e9fbf92744d39c8daf3ff9bd75a28d9ac6bbd46f9883678e",
-    "billing": "c1434680407853b5d2caa8b93b0a8677de146a892bb2d69481141adc56bbaf07",
-    "retention": "54a42061982a2e108df8fb24f6679ce92dc83a6497cd3488e5b056bc9cf0844a",
-    "safety-support": "40975568cf405eb14d50a60cf1dd55ef957ff1d9173f0b2816ef4131af4726d6",
+    "operator": "b14b9e4ebebaf97cf0c8d382f0f0d6e23bf416b1e74a98751441770427b8d2f5",
+    "public-pages": "6baee86dcd9d5423d37dab62d08939f835de68e5b591fd1b01d1a92933c5f4a9",
+    "accounts": "64e370dacfcfb7097c4b7b500644d090acdbf515abd25a43edd61e60aaa1b9f5",
+    "projects": "7efba45b7ced790e2bf1bf7ab9c3d935d45591433b3ae6b09f4476f8e174339b",
+    "published-sites": "331cf4c044a4fa35c5b81b4e6043e3efedc5beda8e516ddd94f1beb22c433521",
+    "hive-planner": "7fe67c538ff733958dcced13676c3107ca9e6536c77cf1d82f1168d5ce3a1c65",
+    "network-records": "d193555da065b5f203d9b858b26b09b0b0899d53d16701a4516a1158393f74d7",
+    "domains": "e20bef513e76b629334eea8e76236e35658c1e668afb57445d2d1563018ec747",
+    "billing": "c72b400f0dd4466536f99ed675cb74d292e58facfa7a88903b89ba2fc415292a",
+    "retention": "96b029295c9034ac53041bcb30e9fb01e9349a8e8ddbd65246a588056d48075c",
+    "safety-support": "2ecd86c6c1d9e0a819f908c87d67e0eaa1a47373136a9a1cbf26e37b955a2f6f",
     "communications": "82317ea5a50f039a4dac1c929399c24fbbc3286bb038d27a7af3f4d937d5a2c8",
-    "choices": "ac5587e4e44cec7ef0ad565b789f1f8b971402ec18c536bcc3b9b3e8698d4992",
-    "security": "93b0e568b658a17d7c6823d5ad86b6020149681d7a5c23e8926c74b7b8e458e9",
+    "choices": "e57ebc6da1b439737144bea241572014e616fb1d4d445d80e978f0c16dd1c376",
+    "security": "1f819f658b262878cd0c40f4f122977f73af9a5bb573e5a0077cade20610f87d",
     "changes": "3928c1a1acd04eeafe20d1e6382020a8bc3e58e8cf886aa95c55c8182877f199",
     "contact": "7c6c0e369333eadd80692fa57c9975475a829dffa91c421d46e3cda282c16a1a",
   }),
   "legal/website-terms/index.html": Object.freeze({
     "acceptance": "3e0cb616a7a18641d019a136fa243792cce0638cdf2f371f18a324586d9615b9",
-    "self-service": "a85a60c61544cd631e478d774d2dd42f01d9a2c8a56c880456d92d0294995339",
-    "address-modes": "636aefdf3a71810de55b38cdceb0eb2bc42266c514ca2956b3a7f6e5ef90c489",
-    "customer-domains": "0aad314fc03ebeadc885d693d53a31dcb5150fce48c18f91993a2d20b32a088c",
-    "billing-cancellation": "e60fba9404f17db8ca7aff1c001e92b68d765ee92590dda327dd42f95f94ab83",
-    "publication": "bd06e078fd336989d3f5faf9d70b3d4cb877bd19605f092563d034c3e82f5e90",
-    "customer-content": "0c6361644e5d6c0540b3286332e33f60ed18eaee6653b63d08ef44b3c351f218",
+    "self-service": "424423916d7a5fa13bfa4a119e9c36e93895c437a0ceaad0b654aa87f3bcb2f4",
+    "address-modes": "52e2e1a0c6b061c0af50a761ee06488a4dfe52f0fcbe183ff1626cd0d4002107",
+    "customer-domains": "11a9310059aa5cb8c6ce1cc6bc8018c2d3e3ca08a8f70658858a068398f7d118",
+    "billing-cancellation": "d86152f790af801387dc345559d7faf4800c94e6a5ee5b0a2bba5d0b7d7afc2f",
+    "publication": "278cf53f6c372032948e355210b0d25598e7c3869a5bb2bb667dbfca26cf9df3",
+    "customer-content": "f58347f6daad93310ed0ed5b729e47e189544428f23baf19d308445e5d5c9452",
     "prohibited-uses": "5826a9ec8f03fb7842dd816bfc62cb2ff90b334d51a7e5e00d1fbaf3ae00e41e",
     "safety-holds": "51bc2295d80b5ea94e4f087cfeb4d2e2cd6fa8b0df34cb52e1cd42d39ad320d6",
-    "custom-work": "c0dade91da88af7b873af72d4c9e6518b017f97ff4f57dbc43ea2a9594903b49",
-    "assessment": "57c6bc7809dc7be0ef82eda3451e5617e42795c91a74e1c537fac04a0642e590",
-    "hive-planner": "989d1641728ebd09d7e91bd3d9936b00d83d25a4d5331e9d7de40ef8206b69f2",
-    "care": "fe996c75a6aef7cd599e83e2bd86d09e1d36406c7939286055e741c6ea93fc8f",
+    "custom-work": "d698e14977422177072f5e6846d0cc1669dc632a395ab257824ace30b70c3a77",
+    "assessment": "02e36dab7849f0f3c497cf468615d3756ee5135fbea1cde52adce4208a88cf17",
+    "hive-planner": "a93d5ef9c5601e3e908595b96e18ed855e7fd7e69b76b84b68dd23d840d31d21",
+    "care": "149a2561c9fcdfeedbdb14e251a85e06b847c9d985e9b317743f606ff4fc6166",
     "site-ownership": "a263b5a395522792b4723aa43b89abb61be551d823f00070ed6a77e9da47cfec",
-    "warranty": "7eb26ae860e0d8d59e57cb4136f1bb3c4aadbb955fd5df7ab3cf001e4fe9e7d7",
+    "warranty": "df44467f0272bc3c8d139cd2a0d58312aa5b4e6cfe534231511878b7274016c6",
     "limits": "0e505216c205278449e44aa3cd9cd844e25d183e1d9e45ab1366ef5c9c24e260",
     "changes-contact": "77c1170bff5ee40eaf036a2495902b416f9ae23014aa92f871af9950fbed958b",
   }),
@@ -183,7 +186,8 @@ export function analyzeLegalCopySource(file, source, routeConfig) {
 export function validateLegalCopyAnalysis(analysis, routeConfig) {
   const errors = [];
   const prefix = `${analysis.file}:`;
-  if (!analysis.source.includes(SELLER_IDENTITY)) {
+  const sellerIdentity = SELLER_IDENTITY_BY_FILE[analysis.file] ?? SELLER_IDENTITY;
+  if (!analysis.source.includes(sellerIdentity)) {
     errors.push(`${prefix} missing exact legal seller identity`);
   }
   if (!exactOrder(analysis.topics, routeConfig.topics)) {

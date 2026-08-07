@@ -4,9 +4,11 @@
   /**
    * Domain availability search.
    *
-   * The site talked about four ways to have an address and gave the visitor no
-   * way to look one up — every route ended in "call Zack". This is the smallest
-   * honest thing that actually works from a static page with no server.
+   * This is a DNS preflight, not a storefront. It gives a visitor a useful
+   * first signal from a static page, then routes every possible registration
+   * to an inquiry. A registrar's fresh availability and price readback, written
+   * terms, and customer authorization are still required before anything can
+   * be bought.
    *
    * HOW IT DECIDES, AND WHY IT IS HONEST ABOUT IT
    *
@@ -19,9 +21,8 @@
    *                            also answers NXDOMAIN.
    *
    * So a free-looking name is reported as "looks available" and never as
-   * "available", and the registrar's own answer is what settles it before any
-   * money moves. Claiming certainty here would be the same failure as quoting a
-   * price nobody checked.
+   * "available", and the registrar's own answer is what settles it. Claiming
+   * certainty here would be the same failure as quoting a price nobody checked.
    *
    * Cloudflare's resolver is used because it is CORS-enabled, needs no key, and
    * receives only the name the visitor typed in order to look it up.
@@ -29,22 +30,7 @@
 
   var RESOLVER = "https://cloudflare-dns.com/dns-query";
 
-  /**
-   * Endings are NOT all the same price. Registries charge different wholesale
-   * for each, so a single flat retail number is fat margin on one ending and a
-   * loss on another. Prices come from domains/domain-prices.json, which is
-   * derived from data/public-catalog.json — never hand-typed here.
-   *
-   * `checkout` is null for any band that has no Stripe price yet. A band
-   * without a price cannot be sold, so the row offers to get a quote instead of
-   * charging the wrong amount. Undercharging silently is the failure this
-   * avoids.
-   */
-  var PRICES = null;
-  var CHECKOUT_BY_BAND = {
-    standard: "https://buy.stripe.com/dRm9AV0iIfroddk5jS7kc03",
-    plus: "https://buy.stripe.com/cNi7sN8Pegvs7T07s07kc04"
-  };
+  var ENDINGS = ["com", "net", "org"];
 
   var form = document.querySelector("[data-domain-search]");
   if (!form) return;
@@ -70,7 +56,7 @@
 
   function check(domain) {
     var url = RESOLVER + "?name=" + encodeURIComponent(domain) + "&type=NS";
-    return fetch(url, { headers: { accept: "application/dns-json" } })
+    return fetch(url, { method: "GET", headers: { accept: "application/dns-json" } })
       .then(function (response) {
         if (!response.ok) throw new Error("resolver_unavailable");
         return response.json();
@@ -87,17 +73,7 @@
       });
   }
 
-  function money(cents) {
-    return "$" + (cents / 100).toFixed(cents % 100 ? 2 : 0);
-  }
-
-  function priceFor(ending) {
-    return PRICES && PRICES.endings ? PRICES.endings[ending] : null;
-  }
-
   function row(domain, state) {
-    var ending = domain.split(".").slice(1).join(".");
-    var price = priceFor(ending);
     var li = document.createElement("li");
     li.className = "domain-result domain-result-" + state;
 
@@ -107,40 +83,24 @@
 
     var verdict = document.createElement("span");
     if (state === "free") {
-      verdict.textContent = price
-        ? "Looks available · " + money(price.firstYearCents) + " a year"
-        : "Looks available · priced for this ending";
+      verdict.textContent = "Looks unused in public DNS — registrar confirmation still required";
     } else if (state === "taken") {
-      verdict.textContent = "Already taken";
+      verdict.textContent = "Appears registered in public DNS";
     } else {
-      verdict.textContent = "Could not tell — call me and I check it by hand while you wait";
+      verdict.textContent = "DNS preflight was inconclusive — ask for a registrar check";
     }
     li.appendChild(verdict);
 
     if (state === "free") {
-      var checkout = price ? CHECKOUT_BY_BAND[price.band] : null;
-      if (checkout) {
-        var buy = document.createElement("a");
-        buy.className = "button button-primary";
-        // The name travels to Stripe so the order says which domain was bought.
-        // Stripe silently drops client_reference_id values with dots, so the
-        // domain travels with dashes: joes.com -> joes-com.
-        buy.href = checkout + "?client_reference_id=" + domain.replace(/[^a-zA-Z0-9_-]/g, "-");
-        buy.rel = "noopener";
-        buy.textContent = "Buy " + domain;
-        li.appendChild(buy);
-      } else {
-        // Priced but not yet sellable at that price. Ask rather than undercharge.
-        var ask = document.createElement("a");
-        ask.className = "button";
-        ask.href = "/contact/#about-customer-domain";
-        ask.textContent = "Ask about " + domain;
-        li.appendChild(ask);
-      }
+      var ask = document.createElement("a");
+      ask.className = "button button-primary";
+      ask.href = "/contact/#about-customer-domain";
+      ask.textContent = "Ask to verify " + domain;
+      li.appendChild(ask);
     } else if (state === "taken") {
       var alt = document.createElement("span");
       alt.className = "domain-result-note";
-      alt.textContent = "Try a different word, or rent an address instead.";
+      alt.textContent = "Try a different word, or ask about the address options.";
       li.appendChild(alt);
     }
     return li;
@@ -158,8 +118,7 @@
     button.disabled = true;
     say("Checking for “" + name + "”…");
 
-    var endings = Object.keys((PRICES && PRICES.endings) || { com: 1 });
-    var domains = endings.map(function (ending) { return name + "." + ending; });
+    var domains = ENDINGS.map(function (ending) { return name + "." + ending; });
     Promise.all(domains.map(check)).then(function (states) {
       results.replaceChildren.apply(
         results,
@@ -168,8 +127,8 @@
       var free = states.filter(function (s) { return s === "free"; }).length;
       say(
         free
-          ? free + " of " + domains.length + " look available. If you buy, I confirm the name with the registrar the same day - and refund in full if it turns out taken."
-          : "None of those look available. Try another word, or rent an address at sitesourcery.me."
+          ? free + " of " + domains.length + " look unused in public DNS. This is not a reservation, registrar result, quote, or authorization to buy. Ask for a fresh provider check and written terms."
+          : "None of those looked unused in public DNS. Try another word, or ask about the address options."
       );
       button.disabled = false;
     });
@@ -177,11 +136,6 @@
 
   // No <form> element: this site is static and carries none. Enter and the
   // button both run the same search.
-  fetch("/domains/domain-prices.json")
-    .then(function (r) { return r.json(); })
-    .then(function (data) { PRICES = data; })
-    .catch(function () { PRICES = null; });
-
   button.addEventListener("click", run);
   input.addEventListener("keydown", function (event) {
     if (event.key === "Enter") run(event);

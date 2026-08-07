@@ -3,6 +3,7 @@
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { publicFileAllowlist } from "./build-pages.mjs";
 
 export const SITE_ORIGIN = "https://sitesourcery.com";
 
@@ -29,9 +30,7 @@ export const CANONICAL_ROUTES = Object.freeze([
   "/legal/website-terms/",
 ]);
 
-export const FUNCTIONAL_APP_ROUTES = Object.freeze([
-  "/abracadabra/site/",
-]);
+export const FUNCTIONAL_APP_ROUTES = Object.freeze([]);
 
 // Domains sits second because every arrival needs an address whichever website
 // lane they take, and it was previously reachable only as an anchor inside
@@ -77,7 +76,6 @@ const ALLOWED_EXTERNAL_REFERENCES = new Set([
 ]);
 
 const IGNORED_TOP_LEVEL = new Set([".git", "_hosted", "_site", "node_modules"]);
-const NONDEPLOYED_HTML_TOP_LEVEL = new Set([".github", "data", "print-collateral", "scripts"]);
 const HTML_ENTITY = Object.freeze({
   amp: "&",
   apos: "'",
@@ -581,10 +579,9 @@ export async function validateRouteContract(root = process.cwd()) {
     "404.html",
     "flyer.html",
   ]);
-  const actualDeployableHtml = [...paths]
-    .filter((file) => file.endsWith(".html"))
-    .filter((file) => !NONDEPLOYED_HTML_TOP_LEVEL.has(file.split("/")[0]))
-    .filter((file) => !file.startsWith("_hosted/") && !file.startsWith("_site/"));
+  const actualDeployableHtml = publicFileAllowlist.filter((file) =>
+    file.endsWith(".html")
+  );
   for (const file of actualDeployableHtml) {
     if (!expectedHtml.has(file)) report(errors, file, "unexpected HTML route outside the vNext ledger");
   }

@@ -519,7 +519,7 @@ async function expectSiteFailure(mutate, expression) {
 
 test("canonical route ledger is exact and stable", () => {
   assert.deepEqual(CANONICAL_ROUTES, EXPECTED_ROUTES);
-  assert.equal(publicFileAllowlist.length, 68);
+  assert.equal(publicFileAllowlist.length, 74);
   assert.deepEqual(publicFileAllowlist, [...publicFileAllowlist].sort());
   assert.equal(publicFileAllowlist.includes("thanks.html"), false);
   assert.equal(publicFileAllowlist.includes("data/release-control.json"), false);
@@ -623,7 +623,7 @@ test("valid fixture satisfies provider-free vNext and artifact boundary", async 
     assert.equal(result.counts.homeDoors, 3);
     assert.equal(result.counts.hiveCells, 6);
     assert.equal(result.counts.solutionAnchors, 9);
-    assert.equal(result.counts.artifactFiles, 68);
+    assert.equal(result.counts.artifactFiles, 74);
   });
 });
 
@@ -632,7 +632,7 @@ test("an unreviewed root file cannot enter the allowlisted public ledger", async
     await put(root, "rogue.js", 'fetch("https://provider.invalid"); // unavailable $999');
     const result = await validateSiteVnext(root);
     assert.equal(result.ok, true, result.errors.join("\n"));
-    assert.equal(result.counts.artifactFiles, 68);
+    assert.equal(result.counts.artifactFiles, 74);
   });
 });
 
@@ -683,7 +683,7 @@ test("source-only thanks redirect is validated but excluded from public content 
     assert.equal(routes.ok, true, routes.errors.join("\n"));
     const site = await validateSiteVnext(root);
     assert.equal(site.ok, true, site.errors.join("\n"));
-    assert.equal(site.counts.artifactFiles, 68);
+    assert.equal(site.counts.artifactFiles, 74);
   });
 });
 
@@ -1220,6 +1220,8 @@ test("Custom keeps the complete quote-only catalog surface and exact reviewed fo
 });
 
 test("paid routes keep every section tied to one customer job, action, and evidence source", async (t) => {
+  const finalPaymentBoundary =
+    "Site through Scale use half before work starts; the final half becomes due only after completion and before final handoff. Completion itself does not authorize an automatic charge.";
   for (const [route, contracts] of Object.entries(PAID_ROUTE_SECTION_CONTRACTS)) {
     const source = await readFile(path.join(SITE_ROOT, routeToFile(route)), "utf8");
     for (const contract of contracts) {
@@ -1233,6 +1235,10 @@ test("paid routes keep every section tied to one customer job, action, and evide
     }
     for (const phrase of PAID_ROUTE_REQUIRED_COPY[route]) {
       assert.ok(source.includes(phrase), `${route} must retain ${JSON.stringify(phrase)}`);
+    }
+    if (["/custom/", "/custom/scope/", "/custom/process/"].includes(route)) {
+      assert.ok(source.includes(finalPaymentBoundary), `${route} must retain the exact final-payment boundary`);
+      assert.doesNotMatch(source, /half on completion|half before, half on completion/iu);
     }
   }
 

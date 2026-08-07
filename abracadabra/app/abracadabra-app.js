@@ -936,19 +936,6 @@
   returnButton.addEventListener("click", function () { setStep("preview"); });
   sampleButton.addEventListener("click", loadFictionalSample);
   clearDraftButton.addEventListener("click", clearDraft);
-  /* The entitlement script runs after this one and owns the ss-paid/ss-live
-     classes; it announces them so the room can dress itself on arrival. */
-  window.addEventListener("abracadabra:entitlements", function () {
-    updateRoomState();
-    /* A paid or live tab with no work must land in the (empty) Alakazam room,
-       not on the wizard - the entitlement classes arrive after boot ran. */
-    var paidRoot = document.documentElement.classList.contains("ss-paid")
-      || document.documentElement.classList.contains("ss-live");
-    if (paidRoot && !versions.length && currentStep !== "preview" && !hasMeaningfulUnsavedChanges()) {
-      setStep("preview", { focus: false });
-    }
-  });
-
   var emptyBegin = maker.querySelector("[data-empty-begin]");
   if (emptyBegin) emptyBegin.addEventListener("click", function () { setStep("vibe"); });
 
@@ -968,21 +955,10 @@
   bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
-  /* The app reads the paid flags itself. The landing must never depend on
-     another script's timing - a real-Chrome race left live tabs on the
-     wizard (with the live chip on) while headless probes kept passing. */
-  var bootEntitled = { paid: false, live: false };
-  try {
-    var bootParams = new URLSearchParams(location.search);
-    bootEntitled.live = bootParams.get("alakazam") === "1" || sessionStorage.getItem("abracadabra.alakazam") === "1";
-    bootEntitled.paid = bootEntitled.live || bootParams.get("paid") === "1" || sessionStorage.getItem("abracadabra.paid") === "1";
-  } catch (_e) { /* private mode: land free */ }
-  if (bootEntitled.paid) document.documentElement.classList.add("ss-paid");
-  if (bootEntitled.live) document.documentElement.classList.add("ss-live");
   if (restoreTabWork()) {
     setStep("preview", { focus: false });
   } else {
-    setStep(bootEntitled.paid ? "preview" : "vibe", { focus: false });
+    setStep("vibe", { focus: false });
   }
   window.SiteSourceryAbracadabraMaker = Object.freeze({
     getCurrentVersion: function () {

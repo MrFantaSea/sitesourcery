@@ -463,21 +463,24 @@ export const INTAKE_TOPIC_LABELS = Object.freeze({
 export const PAID_ROUTE_REQUIRED_COPY = Object.freeze({
   "/custom/": Object.freeze([
     "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
-    "Site through Scale use half before work starts and half on completion.",
+    "Site through Scale use half before work starts; the final half becomes due only after completion and before final handoff.",
+    "Completion itself does not authorize an automatic charge.",
     "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
     "A customer-owned web address stays in the customer’s name.",
   ]),
   "/custom/scope/": Object.freeze([
     "These are work limits, not prices.",
     "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
-    "Site through Scale use half before work starts and half on completion.",
+    "Site through Scale use half before work starts; the final half becomes due only after completion and before final handoff.",
+    "Completion itself does not authorize an automatic charge.",
     "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
     "A customer-owned web address stays in the customer’s name.",
   ]),
   "/custom/process/": Object.freeze([
     "Dates are confirmed after the scope is accepted and the needed payment, materials, access, and decision-maker are ready.",
     "Card and Card Plus, the one-page sizes, are paid in full before work starts.",
-    "Site through Scale use half before work starts and half on completion.",
+    "Site through Scale use half before work starts; the final half becomes due only after completion and before final handoff.",
+    "Completion itself does not authorize an automatic charge.",
     "The agreed client deliverables become yours after final payment; the quote lists any exceptions.",
     "A customer-owned web address stays in your name",
   ]),
@@ -712,7 +715,7 @@ const EXCLUDED_ARTIFACT_TOP_LEVEL = Object.freeze([
   "scripts",
   "server",
 ]);
-const PUBLIC_ALLOWLIST_COUNT = 69;
+const PUBLIC_ALLOWLIST_COUNT = 74;
 const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
 const EXPECTED_ARTIFACT_ROUTE_ERROR =
   "thanks.html: missing legacy redirect to /contact/";
@@ -790,11 +793,7 @@ const PROHIBITED_COPY = Object.freeze([
   Object.freeze({ label: "waitlist language", expression: /\bwait[\s-]*list\b/iu }),
   Object.freeze({ label: "unavailable language", expression: /\bunavailable\b/iu }),
 ]);
-const STORAGE_ALLOWED_FILES = new Set([
-  "abracadabra/app/abracadabra-control.js",
-  "abracadabra/platform/abracadabra-platform.js",
-  "abracadabra/site/viewer.js",
-]);
+const STORAGE_ALLOWED_FILES = new Set();
 const RETIRED_ABRACADABRA_PRODUCT_COPY = Object.freeze([
   "The whole path",
   "exact four-step Abracadabra flow",
@@ -1764,7 +1763,7 @@ function checkInteractions(file, route, source, errors) {
   }
   if (/\bformaction\s*=/iu.test(source)) report(errors, file, "formaction controls are forbidden");
   const controls = source.match(/<(?:input|select|textarea)\b/giu) ?? [];
-  if (!["/abracadabra/app/", "/abracadabra/site/"].includes(route) && controls.length !== 0) {
+  if (route !== "/abracadabra/app/" && controls.length !== 0) {
     report(errors, file, "input, select, and textarea controls are allowed only on reviewed Abracadabra app routes");
   }
 }

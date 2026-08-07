@@ -39,6 +39,7 @@ import {
   RECEIPT_SCHEMA,
   RELEASE_ENVIRONMENT,
   REPOSITORY_FULL_NAME,
+  REVIEWED_DOMAIN_PREFLIGHT_SHA256,
   REVIEWED_PUBLIC_ARTIFACT_PATHS,
   SOURCE_CATALOG_DIGEST,
   SOURCE_ONLY_LEGACY_REDIRECT,
@@ -81,6 +82,12 @@ const ARTIFACT_MANIFEST_SHA = "cd".repeat(32);
 const RECEIPT_SHA = "ef".repeat(32);
 const NOW = Date.parse("2026-07-25T12:15:00.000Z");
 const LEGACY_SOURCE_ONLY_ARTIFACT_PATHS = Object.freeze([
+  "abracadabra/app/abracadabra-account.js",
+  "abracadabra/app/abracadabra-paid-download.js",
+  "abracadabra/platform/abracadabra-platform.js",
+  "abracadabra/site/index.html",
+  "abracadabra/site/viewer.css",
+  "abracadabra/site/viewer.js",
   "assets/portfolio-daarx-v3.webp",
   "atelier-commerce.css",
   "atelier-commerce.js",
@@ -240,28 +247,28 @@ function truthFixture() {
       "Custom work begins only through a written quote or scope and a separately accepted agreement.",
       "Payment alone does not authorize work or publication.",
       "Ownership of the agreed client deliverables transfers only after final payment.",
-      "The Hive workbench is planning-only.",
-      "It does not activate an integration.",
-      "Care requires its own explicit written scope.",
+      "The Responder page is planning only. It sends no messages, takes no payment, and starts no setup or service.",
+      "The Responder remains held until its telephony, A2P registration, message delivery, opt-out handling, monitoring, lifecycle terms, and customer proof are complete.",
+      "Ongoing Care requires its own written scope, and optional Custom Care plan details and prices remain held.",
       "Provider hosting, public Internet publication, real billing, DNS work, and provider-side storage require a separately released service.",
       "Using the current maker does not create an account, control room, project record, or saved acceptance.",
       "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
-      "The current maker has no plan-activation control, checkout, billing state, provider reference, subscription, transaction, payment receipt, or charge.",
+      "The free guest maker makes temporary tab-only versions and previews. It offers no account, saved project, Checkout, or Download.",
       "This maker has no Publish button or publication state.",
       "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
     ].join(" "),
     privacyHtml: [
       "Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY.",
       "The ordinary marketing pages contain no inquiry form, visitor upload, advertising tracker, or page-level analytics code.",
-      "The Start chooser uses the buttons you select only to show a recommendation on the current page.",
-      "The Hive planner selects from fixed planning blueprints already present in the downloaded page script.",
-      "The current Abracadabra maker creates no account or organization record.",
-      "Business facts and made versions stay only in this tab. Refreshing or closing it clears them.",
-      "That chosen HTML download is the only maker output that leaves the browser.",
-      "The current maker does not collect registrar credentials, domain proof, DNS records, or a domain order.",
-      "The current maker does not ask for payment-card details, take payment, activate a plan, create a subscription or transaction, or keep billing state.",
-      "The current maker has no account, saved project, product database, cancellation state, nonpayment clock, suspension clock, retained-exit clock, or project-deletion control.",
-      "The current maker does not record a safety hold, report, appeal, restoration result, support note, ticket, review history, or enforcement state.",
+      "The Start chooser uses selected buttons only to show a recommendation on the current page and sends nothing.",
+      "The Responder is held from sale. Its public page describes an intended flow already present in the page and does not ask for customer data, store a setup, contact a provider, create a quote, take payment, or activate a message, booking, review request, invoice action, or other integration.",
+      "A guest may build, revise, and test a private preview without an account. Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
+      "Before a guest saves, the business facts, selected look, review confirmation, and made versions remain in the current editor tab and are not sent to Site Sourcery merely because a preview is made. Refreshing or closing the tab clears that unsaved work.",
+      "Download does not publish or host the page.",
+      "The lookup checks public DNS only. It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+      "Secure card entry belongs to the payment processor identified at checkout.",
+      "Alakazam has no active cancellation, nonpayment, suspension, retained-exit, or deletion schedule under this notice; earlier day-count drafts are not policy.",
+      "The ordinary public pages and guest preview do not submit a safety report or support ticket.",
       "Email sent to sitesourcery@proton.me is processed through Proton Mail.",
       "If you call or email, Site Sourcery may retain the communication and reasonable business records needed to respond, scope work, document decisions, deliver accepted work, protect the service, and meet legal obligations.",
     ].join(" "),
@@ -318,7 +325,9 @@ function productionFiles(overrides = {}) {
   }
   for (const [file, target] of Object.entries(PRODUCTION_LEGACY_REDIRECTS)) {
     if (file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
-    const canonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
+    const canonicalTarget = new URL(target, `${PRODUCTION_ORIGIN}/`);
+    canonicalTarget.hash = "";
+    const canonical = canonicalTarget.href;
     files[file] = [
       "<!doctype html>",
       '<meta name="robots" content="noindex">',
@@ -524,8 +533,8 @@ test("artifact exclusion contract covers generated, server, workflow, governance
   }
 });
 
-test("verifier publication ledger independently matches the reviewed 66-file held builder ledger", () => {
-  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 66);
+test("verifier publication ledger independently matches the reviewed 74-file held builder ledger", () => {
+  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 74);
   assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
   assert.deepEqual(
     [...REVIEWED_PUBLIC_ARTIFACT_PATHS].sort(),
@@ -1461,6 +1470,38 @@ test("postdeploy route fixture proves canonical pages, custom 404, redirects, an
   });
 });
 
+test("real reviewed 74-file artifact satisfies the production manifest and byte-level route contract", async () => {
+  const files = reviewedArtifactFiles();
+  const manifest = artifactManifestFor(files);
+  assert.equal(manifest.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
+  assert.equal(manifest.count, 74);
+  assert.equal(validateProductionRouteManifest(manifest), manifest);
+
+  const { fetchImpl } = liveFixtureFetch(files);
+  const snapshot = await inspectLiveProductionSnapshot({
+    manifest,
+    origin: PRODUCTION_ORIGIN,
+    fetchImpl,
+    requestTimeoutMs: 1000,
+  });
+  assert.equal(snapshot.full, true);
+  assert.equal(snapshot.exact, true);
+
+  await withArtifact(files, async (artifactRoot) => {
+    const contract = await verifyProductionRouteContract({
+      artifactRoot,
+      manifest,
+      finalSnapshot: snapshot,
+    });
+    assert.deepEqual(contract.canonicalRoutes, Object.keys(PRODUCTION_CANONICAL_ROUTE_FILES));
+    assert.deepEqual(
+      contract.legacyRedirects,
+      Object.keys(PRODUCTION_LEGACY_REDIRECTS).filter((file) => file !== SOURCE_ONLY_LEGACY_REDIRECT),
+    );
+    assert.equal(contract.sourceOnlyRedirectAbsence, "thanks.html");
+  });
+});
+
 test("postdeploy proof rejects Web3Forms, access_key, and the retired 321 identity", async () => {
   const forbidden = [
     "Web3Forms",
@@ -1584,7 +1625,7 @@ test("postdeploy identity rejects candidate, control, artifact, and deployment c
   const identity = {
     actor: "Founder-Test",
     actorId: "987654",
-    artifactFileCount: 66,
+    artifactFileCount: REVIEWED_PUBLIC_ARTIFACT_PATHS.length,
     artifactId: "123456789",
     artifactManifestSha256: ARTIFACT_MANIFEST_SHA,
     candidateSha: CANDIDATE_SHA,
@@ -1642,7 +1683,7 @@ test("artifact safety accepts exact static projection with open direct-inquiry g
   }, async (root, files) => {
     const source = manifestFor({ ...files, "scripts/build.mjs": "private" });
     const result = await validateArtifactSafety(root, source);
-    assert.equal(result.count, 66);
+    assert.equal(result.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
   });
 });
 
@@ -1655,7 +1696,7 @@ test("artifact projection ignores source-only legacy bytes and rejects them in t
       root,
       manifestFor({ ...files, ...sourceOnlyFiles }),
     );
-    assert.equal(result.count, 66);
+    assert.equal(result.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
     assert.deepEqual(
       result.entries.map((entry) => entry.path),
       REVIEWED_PUBLIC_ARTIFACT_PATHS,
@@ -1689,10 +1730,10 @@ test("artifact projection fails closed when source-only bytes replace one review
   });
 });
 
-test("current contact and start bytes satisfy the direct-inquiry guide contract", async () => {
+test("current contact guide and Start redirect bytes satisfy the artifact contract", async () => {
   await withReviewedArtifact({}, async (root, files) => {
     const result = await validateArtifactSafety(root, manifestFor(files));
-    assert.equal(result.count, 66);
+    assert.equal(result.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
   });
 });
 
@@ -1705,11 +1746,11 @@ test("artifact safety permits an exact held form only outside the zero-entry gui
   ].join("");
   await withReviewedArtifact({ "index.html": html }, async (root, files) => {
     const result = await validateArtifactSafety(root, manifestFor(files));
-    assert.equal(result.count, 66);
+    assert.equal(result.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
   });
 });
 
-test("artifact safety rejects even fully disabled forms on contact and start", async () => {
+test("artifact safety rejects even fully disabled forms on the direct-inquiry contact guide", async () => {
   const disabledForm = [
     '<article data-intake-state="open">',
     '<a href="tel:+18562441220">Call</a>',
@@ -1719,7 +1760,7 @@ test("artifact safety rejects even fully disabled forms on contact and start", a
     '<input name="preview"><button type="submit" disabled>Held</button>',
     "</fieldset></form></article>",
   ].join("");
-  for (const file of ["contact/index.html", "start/index.html"]) {
+  for (const file of ["contact/index.html"]) {
     await withReviewedArtifact({ [file]: disabledForm }, async (root, files) => {
       await assert.rejects(
         () => validateArtifactSafety(root, manifestFor(files)),
@@ -1825,6 +1866,37 @@ test("artifact safety rejects payment endpoints and browser network sinks", asyn
   const inlineNetwork = "<script>navigator.sendBeacon('/collect')</script>";
   await withReviewedArtifact({ "index.html": inlineNetwork }, async (root, files) => {
     await assert.rejects(() => validateArtifactSafety(root, manifestFor(files)), /inline browser network sink/u);
+  });
+});
+
+test("artifact safety permits only the exact reviewed user-triggered Cloudflare NS preflight", async () => {
+  const file = "domains/domain-search.js";
+  const reviewed = REVIEWED_ARTIFACT_FILES[file].toString("utf8");
+  assert.equal(sha256(Buffer.from(reviewed)), REVIEWED_DOMAIN_PREFLIGHT_SHA256);
+
+  const mutations = Object.freeze([
+    ["resolver URL", reviewed.replace("https://cloudflare-dns.com/dns-query", "https://resolver.example.invalid/dns-query")],
+    ["HTTP method", reviewed.replace('method: "GET"', 'method: "POST"')],
+    ["load trigger", reviewed.replace('button.addEventListener("click", run);', 'window.addEventListener("load", run);')],
+    ["candidate count", reviewed.replace('["com", "net", "org"]', '["com", "net", "org", "io"]')],
+    ["record type", reviewed.replace("&type=NS", "&type=A")],
+  ]);
+  for (const [label, mutation] of mutations) {
+    assert.notEqual(mutation, reviewed, `${label} fixture must mutate the reviewed source`);
+    await withReviewedArtifact({ [file]: mutation }, async (root, files) => {
+      await assert.rejects(
+        () => validateArtifactSafety(root, manifestFor(files)),
+        /reviewed DNS preflight/u,
+        label,
+      );
+    });
+  }
+
+  await withReviewedArtifact({ "vnext.js": 'fetch("https://cloudflare-dns.com/dns-query?name=example.com&type=NS", { method: "GET" });' }, async (root, files) => {
+    await assert.rejects(
+      () => validateArtifactSafety(root, manifestFor(files)),
+      /active browser network sink/u,
+    );
   });
 });
 

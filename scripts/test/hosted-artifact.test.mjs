@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertHeldSourceTruth,
   assertHeldTruthSemantics,
+  assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
   verifyHostedArtifact,
@@ -23,6 +24,8 @@ import {
 import { publicFileAllowlist } from "../build-pages.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
+  heldAlakazamArtifactExcludedFiles,
+  heldAlakazamExecutableSemantics,
   heldOnlyPhrases,
   heldTruthForbiddenPhrases,
   heldTruthRequirements,
@@ -191,29 +194,19 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     assert.equal(publicFileAllowlist.includes(hostedOnlyAsset), false);
     assert.equal(hostedFileAllowlist.includes(hostedOnlyAsset), true);
   }
-  for (const heldViewerFile of [
-    "abracadabra/platform/abracadabra-platform.js",
-    "abracadabra/site/index.html",
-    "abracadabra/site/viewer.css",
-    "abracadabra/site/viewer.js",
-  ]) {
-    assert.equal(publicFileAllowlist.includes(heldViewerFile), true);
-    assert.equal(hostedFileAllowlist.includes(heldViewerFile), false);
+  for (const heldSourceFile of heldAlakazamArtifactExcludedFiles) {
+    assert.equal(publicFileAllowlist.includes(heldSourceFile), false);
+    assert.equal(hostedFileAllowlist.includes(heldSourceFile), false);
   }
-  for (const browserBridgeFile of [
-    "abracadabra/app/abracadabra-account.js",
-    "abracadabra/app/abracadabra-paid-download.js",
-  ]) {
-    assert.equal(publicFileAllowlist.includes(browserBridgeFile), true);
-    assert.equal(hostedFileAllowlist.includes(browserBridgeFile), false);
+  for (const file of publicFileAllowlist.filter((candidate) =>
+    /\.(?:html|js|json|xml|txt)$/u.test(candidate))) {
+    const source = await readFile(path.join(ROOT, file), "utf8");
+    assert.doesNotMatch(source, /https:\/\/buy\.stripe\.com\//u, file);
   }
-  for (const domainSearchDependency of [
-    "domains/domain-prices.json",
-    "domains/domain-search.js",
-  ]) {
-    assert.equal(publicFileAllowlist.includes(domainSearchDependency), true);
-    assert.equal(hostedFileAllowlist.includes(domainSearchDependency), true);
-  }
+  assert.equal(publicFileAllowlist.includes("domains/domain-prices.json"), false);
+  assert.equal(hostedFileAllowlist.includes("domains/domain-prices.json"), false);
+  assert.equal(publicFileAllowlist.includes("domains/domain-search.js"), true);
+  assert.equal(hostedFileAllowlist.includes("domains/domain-search.js"), true);
 
   for (const slot of hostedTruthSlots) {
     const source = await readFile(path.join(ROOT, slot.file), "utf8");
@@ -245,6 +238,15 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     for (const phrase of phrases) {
       assert.equal(source.includes(phrase), false, `${file}: ${phrase}`);
     }
+  }
+
+  for (const semantic of heldAlakazamExecutableSemantics) {
+    const injected = new Map([[`injected-${semantic.id}.js`, semantic.example]]);
+    assert.throws(
+      () => assertNoHeldAlakazamExecutableSemantics(injected),
+      new RegExp(`held Alakazam executable semantics ${semantic.id}`, "u"),
+      semantic.id,
+    );
   }
 
   const app = sources.get("abracadabra/app/index.html");
@@ -314,12 +316,7 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
 
   const files = (await walk(output)).sort();
   assert.deepEqual(files, [...hostedFileAllowlist]);
-  for (const file of [
-    "abracadabra/site/index.html",
-    "abracadabra/site/viewer.css",
-    "abracadabra/site/viewer.js",
-    "abracadabra/platform/abracadabra-platform.js",
-  ]) {
+  for (const file of heldAlakazamArtifactExcludedFiles) {
     await assert.rejects(access(path.join(output, file)));
   }
 
@@ -342,10 +339,12 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   }
 
   const allText = await readTextFiles(output, files);
+  for (const [file, source] of allText) {
+    assert.doesNotMatch(source, /https:\/\/buy\.stripe\.com\//u, file);
+  }
   const dollars = publicDollarValues(allText);
   assert.ok(dollars.length > 0);
   assert.ok(dollars.some(({ value }) => value === "5" || value === "5.00"));
-  assert.ok(dollars.some(({ value }) => value === "25" || value === "25.00"));
   const emails = publicEmails(allText);
   assert.ok(emails.length > 0);
   for (const { email, file } of emails) {
@@ -407,10 +406,29 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     /name="acceptedProjectTerms"[\s\S]*I accept the <a href="\/legal\/website-terms\/"[^>]*>website terms<\/a>, including the <a href="\/legal\/website-terms\/#self-service"[^>]*>self-service product terms<\/a>, and acknowledge the <a href="\/legal\/privacy\/"[^>]*>privacy notice<\/a> for this project\./u,
   );
   assert.match(app, /\$5 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
+  assert.match(app, /Sign in for the \$5 Download\./u);
+  assert.match(
+    app,
+    /Alakazam subscriptions and hosting activation remain held\./u,
+  );
+  assert.doesNotMatch(
+    app,
+    /Alakazam is the service that keeps it and puts it online|Your \$5 comes off Alakazam/u,
+  );
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Free to See-\$5 to Download-\$25 a Month Keeps It Live/u);
+  assert.match(landing, /Free to See-\$5 Account Download-Alakazam Plans Held/u);
+  assert.match(
+    landing,
+    /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
+  );
+  assert.match(landing, /<small>plans<\/small>held/u);
+  assert.match(landing, /class="kd-live"><i><\/i>Held<\/span>/u);
+  assert.doesNotMatch(
+    landing,
+    /\$25|Keeps It Live|Live at your own address|comes off your first month|leaving costs nothing|class="kd-live"><i><\/i>Live<\/span>/iu,
+  );
   assert.ok(landing.indexOf("Abracadabra</p>") < landing.indexOf("Alakazam</p>"));
   assert.match(
     sources.get("abracadabra/how/index.html"),
@@ -427,6 +445,25 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   ]) {
     assert.equal(count(faq, `id="${anchor}" data-faq-anchor="${anchor}"`), 1);
   }
+  assert.match(faq, /Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held\./u);
+  assert.match(faq, /The Responder is also held: it sends no messages and this page cannot quote or start setup\./u);
+  assert.match(faq, /the final 50% becomes due after completion and before final handoff\./u);
+  assert.match(faq, /It is not charged merely because completion was recorded\./u);
+  assert.doesNotMatch(faq, /The Responder answers missed calls with a text in seconds/u);
+
+  const responder = await readFile(path.join(output, "responder/index.html"), "utf8");
+  for (const phrase of [
+    "The Responder is not currently connected to a phone number, sending messages, or operating for customers.",
+    "No setup or monthly plan is for sale.",
+    "This is an inquiry page only.",
+    "The Responder remains held.",
+  ]) {
+    assert.ok(responder.includes(phrase), phrase);
+  }
+  assert.doesNotMatch(
+    responder,
+    /\$300|\$250|within seconds|Texts in seconds|switch it off whenever you like/iu,
+  );
 
   const privacy = sources.get("legal/privacy/index.html");
   const terms = sources.get("legal/website-terms/index.html");
@@ -542,7 +579,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      "Create an account and save the project",
+      "Saving and payment are unavailable here.",
       "Use a changed account instruction",
     ),
     "utf8",

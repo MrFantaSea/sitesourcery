@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { publicFileAllowlist } from "../build-pages.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const compilerPath = path.join(projectRoot, "abracadabra/app/abracadabra-compiler.js");
@@ -391,7 +392,7 @@ test("application page has zero forms and fails closed before its local compiler
   assert.doesNotMatch(pageHtml, /<iframe\b[^>]*sandbox="[^"]+"/u);
 });
 
-test("maker stays guest-first while account-before-payment bridges remain deployment-specific", () => {
+test("maker stays guest-first while account and payment authority remain hosted-only", () => {
   assert.match(
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\stabindex="-1"[^>]*>/u,
@@ -405,19 +406,37 @@ test("maker stays guest-first while account-before-payment bridges remain deploy
     [...pageHtml.matchAll(/data-progress-step="([^"]+)"/gu)].map((match) => match[1]),
     ["vibe", "facts", "truth", "preview"],
   );
-  const prototypeScripts = [
-    "abracadabra-account.js",
-    "abracadabra-app.js",
-    "abracadabra-paid-download.js",
-  ].map((name) => pageHtml.indexOf(name));
-  assert.equal(prototypeScripts.every((index) => index >= 0), true);
-  assert.equal(prototypeScripts[0] < prototypeScripts[1], true);
-  assert.equal(prototypeScripts[1] < prototypeScripts[2], true);
-  assert.match(accountSource, /var ACCOUNT_KEY = "abracadabra\.account"/u);
-  assert.match(accountSource, /localStorage\.setItem/u);
-  assert.match(paidDownloadSource, /if \(accountApi && freeGate && !paid\)/u);
-  assert.match(paidDownloadSource, /if \(accountApi\.get\(\)\) return; \/\/ account exists - straight to pay/u);
-  assert.match(paidDownloadSource, /accountApi\.openPanel\(freeGate, payAnchor, "pay"/u);
+  assert.match(pageHtml, /abracadabra-app\.js/u);
+  assert.doesNotMatch(pageHtml, /abracadabra-account\.js|abracadabra-paid-download\.js/u);
+  assert.equal(
+    publicFileAllowlist.includes("abracadabra/app/abracadabra-account.js"),
+    false,
+  );
+  assert.equal(
+    publicFileAllowlist.includes("abracadabra/app/abracadabra-paid-download.js"),
+    false,
+  );
+  for (const legacySource of [accountSource, paidDownloadSource]) {
+    assert.match(legacySource, /Archived browser-(?:account|download) prototype/u);
+    assert.match(legacySource, /executableAuthority: false/u);
+    assert.doesNotMatch(
+      legacySource,
+      /URLSearchParams|location\.search|localStorage|sessionStorage|abracadabra\.(?:paid|alakazam)|ss-(?:paid|live)|buy\.stripe\.com/u,
+    );
+  }
+  assert.doesNotMatch(
+    appSource,
+    /bootEntitled|abracadabra\.paid|abracadabra\.alakazam|abracadabra:entitlements/u,
+  );
+  assert.match(
+    pageHtml,
+    /class="spark-extras is-locked" data-tier="paid" aria-disabled="true"[\s\S]*?data-extra-controls inert/u,
+  );
+  assert.match(
+    pageHtml,
+    /Saving and payment are unavailable here\.[\s\S]*?<button[^>]*disabled[^>]*aria-disabled="true">Account path unavailable<\/button>/u,
+  );
+  assert.doesNotMatch(pageHtml, /data-save-direction/u);
   assert.doesNotMatch(hostedScriptsMarkup, /abracadabra-account\.js|abracadabra-paid-download\.js/u);
   assert.match(hostedScriptsMarkup, /abracadabra-app\.js/u);
   assert.match(hostedControlMarkup, /<legend>Create your account<\/legend>/u);
@@ -431,7 +450,15 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
     /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
   assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
-  assert.match(landingHtml, /Free to See-\$5 to Download-\$25 a Month Keeps It Live/u);
+  assert.match(landingHtml, /Free to See-\$5 Account Download-Alakazam Plans Held/u);
+  assert.match(
+    landingHtml,
+    /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
+  );
+  assert.doesNotMatch(
+    landingHtml,
+    /\$25|Keeps It Live|Live at your own address|comes off your first month|leaving costs nothing|class="kd-live"><i><\/i>Live<\/span>/iu,
+  );
   assert.doesNotMatch(landingHtml, /<form\b/iu);
 });
 
@@ -441,6 +468,15 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
   assert.match(
     hostedHeroMarkup,
     /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account and you will start over/u,
+  );
+  assert.match(hostedHeroMarkup, /Sign in for the \$5 Download\./u);
+  assert.match(
+    hostedHeroMarkup,
+    /Alakazam subscriptions and hosting activation remain held\./u,
+  );
+  assert.doesNotMatch(
+    hostedHeroMarkup,
+    /Alakazam is the service that keeps it and puts it online|Your \$5 comes off Alakazam/u,
   );
   assert.match(
     hostedReadySource,
@@ -468,7 +504,7 @@ test("account recovery and support stay tied to Site Sourcery instead of an inve
   );
 });
 
-test("UI keeps the free maker local while paid download remains account-gated", () => {
+test("UI keeps the free maker local while legacy download evidence remains unshipped", () => {
   for (const marker of [
     "var versions = []",
     "currentVersionIndex",
@@ -481,9 +517,11 @@ test("UI keeps the free maker local while paid download remains account-gated", 
     assert.ok(appSource.includes(marker) || pageHtml.includes(marker), marker);
   }
   assert.doesNotMatch(appSource, /function downloadCurrent\(|downloadButton\.addEventListener/u);
-  assert.match(paidDownloadSource, /No account, no download/u);
-  assert.match(paidDownloadSource, /if \(accountApi && !accountApi\.get\(\)\)/u);
-  assert.match(paidDownloadSource, /a\.download = "your-page\.html"/u);
+  assert.equal(publicFileAllowlist.includes("abracadabra/app/abracadabra-paid-download.js"), false);
+  assert.doesNotMatch(
+    `${accountSource}\n${paidDownloadSource}`,
+    /createObjectURL|\.download\s*=|SiteSourceryAccount|classList\.(?:add|remove|toggle)/u,
+  );
   assert.match(
     appSource,
     /currentStep === "truth" && event\.target !== truthConfirmed/u,
@@ -643,7 +681,7 @@ test("hosted Download requires the exact server quote and exposes no direct chec
   );
 });
 
-test("maker prototype keeps canonical contact, legal identity, and catalog amounts", () => {
+test("held maker keeps canonical identity while pricing stays on account-aware surfaces", () => {
   assert.match(pageHtml, /tel:\+18562441220/u);
   assert.match(pageHtml, /\(856\) 244-1220/u);
   assert.match(pageHtml, /mailto:sitesourcery@proton\.me/u);
@@ -666,8 +704,13 @@ test("maker prototype keeps canonical contact, legal identity, and catalog amoun
       (pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu) ?? [])
         .map((amount) => Number(amount.replace(/[^\d.]/gu, ""))),
     )].sort((left, right) => left - right),
-    [5],
+    [],
   );
+  assert.match(
+    landingHtml,
+    /sign in to review the one-time \$5 Download quote/u,
+  );
+  assert.match(hostedControlMarkup, /<strong>\$5 once<\/strong>/u);
   assert.equal(
     pageHtml.split("https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00").length - 1,
     0,
