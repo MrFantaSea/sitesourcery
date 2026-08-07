@@ -43,6 +43,7 @@ import {
 import {
   createHeldCustomServicesCustomBuildHandoff
 } from "./custom-services-custom-build-handoff-postgres.mjs";
+import { digestUserAgent } from "./project-legal-authority.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -318,6 +319,29 @@ function exactRouteBody(value, expected, code, message) {
         JSON.stringify([...expected].sort()),
     code,
     message,
+    { status: 400 }
+  );
+  return value;
+}
+
+function exactProjectCreateBody(value) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).every((key) =>
+        [
+          "accessPassword",
+          "address",
+          "legalAcceptance",
+          "name",
+          "visibility"
+        ].includes(key)
+      ) &&
+      Object.prototype.hasOwnProperty.call(value, "name") &&
+      Object.prototype.hasOwnProperty.call(value, "legalAcceptance"),
+    "LEGAL_ACCEPTANCE_INVALID",
+    "Project creation contains an unsupported or missing field.",
     { status: 400 }
   );
   return value;
@@ -2339,6 +2363,17 @@ export function createHostedApi(
             );
         } else if (
           method === "GET" &&
+          pathname === "/api/v1/legal/project-authority"
+        ) {
+          invariant(
+            typeof service.getProjectLegalAuthority === "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Project legal authority is unavailable.",
+            { status: 500 }
+          );
+          result = await service.getProjectLegalAuthority();
+        } else if (
+          method === "GET" &&
           (route = match(pathname, /^\/api\/v1\/organizations\/([^/]+)\/projects$/u))
         ) {
           result = await service.listProjects(actor, route[0]);
@@ -2346,7 +2381,13 @@ export function createHostedApi(
           method === "POST" &&
           (route = match(pathname, /^\/api\/v1\/organizations\/([^/]+)\/projects$/u))
         ) {
-          result = await service.createProject(actor, route[0], write);
+          result = await service.createProject(actor, route[0], {
+            ...exactProjectCreateBody(body),
+            commandId: commandId(request),
+            userAgentDigest: digestUserAgent(
+              request.headers.get("user-agent")
+            )
+          });
           status = 201;
         } else if (
           method === "GET" &&

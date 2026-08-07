@@ -4,6 +4,10 @@ import test from "node:test";
 import { createHeldCatalogPort } from "../../commerce/adapters/held.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 
+const ACTOR = Object.freeze({
+  userId: "00000000-0000-4000-8000-000000000001"
+});
+
 function createService(catalogPort) {
   let authorityServiceCalls = 0;
   const service = createCanonicalPostgresService({
@@ -91,6 +95,31 @@ test("an explicit catalog hold keeps the account and project runtime ready", asy
       error?.code === "catalog_unavailable" &&
       error?.status === 503
   );
+});
+
+test("an unsealed Privacy V3 hold does not take down reads, but gates authority and project creation", async () => {
+  const context = createService(createHeldCatalogPort());
+  assert.equal((await context.service.readiness()).ready, true);
+  await assert.rejects(
+    context.service.getProjectLegalAuthority(),
+    (error) =>
+      error?.code === "LEGAL_CONFIGURATION_REQUIRED" &&
+      error?.status === 503
+  );
+  await assert.rejects(
+    context.service.createProject(
+      ACTOR,
+      "00000000-0000-4000-8000-000000000002",
+      {
+        name: "Held project",
+        commandId: "privacy-v3-held-create"
+      }
+    ),
+    (error) =>
+      error?.code === "LEGAL_CONFIGURATION_REQUIRED" &&
+      error?.status === 503
+  );
+  assert.equal(context.authorityServiceCalls(), 0);
 });
 
 test("an invalid configured catalog still fails runtime readiness closed", async () => {

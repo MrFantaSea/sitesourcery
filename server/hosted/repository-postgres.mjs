@@ -14,6 +14,13 @@ const ISOLATION_LEVELS = Object.freeze({
   serializable: "SERIALIZABLE"
 });
 const SERVICE_ACTOR_KINDS = new Set(["customer", "operator", "system"]);
+const PROJECT_LEGAL_V3_HOLD_FLAGS = new Set([
+  "legal_privacy_v3_contract_ready",
+  "legal_privacy_v2_artifact_ready",
+  "legal_privacy_v3_artifact_ready",
+  "legal_acceptance_receipts_ready",
+  "legal_privacy_v3_authority_ready"
+]);
 
 const READINESS_QUERY = `
   select
@@ -267,6 +274,117 @@ const READINESS_QUERY = `
     to_regclass('ss.export_download_authorizations') is not null as export_grants_ready,
     to_regclass('ss.audit_events') is not null as audit_ready,
     to_regclass('ss.idempotency_keys') is not null as idempotency_ready
+`;
+
+// These two queries are intentionally separate from READINESS_QUERY. The
+// global boot query must parse on a pre-v48 database. Only catalog references
+// are used until the v48 relations/functions are proven to exist.
+const PROJECT_LEGAL_CATALOG_QUERY = `
+  select
+    to_regprocedure('ss.hosted_runtime_contract_v48()') is not null
+      and exists (
+        select 1 from pg_proc procedure_row
+         where procedure_row.oid =
+           to_regprocedure('ss.hosted_runtime_contract_v48()')
+           and procedure_row.prosrc like '%canonical-ss-v48-hosted-privacy-v3%'
+           and not has_function_privilege(
+             'public', procedure_row.oid, 'EXECUTE'
+           )
+           and has_function_privilege(
+             'service_role', procedure_row.oid, 'EXECUTE'
+           )
+      ) as v48_catalog_contract,
+    to_regclass('ss.legal_document_artifacts') is not null
+      and to_regclass('ss.project_legal_acceptance_receipts') is not null
+      as v48_catalog_tables,
+    (
+      select count(*) = 4
+        from pg_attribute attribute_row
+        join pg_class relation on relation.oid = attribute_row.attrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname = 'project_legal_acceptance_receipts'
+         and attribute_row.attnum > 0
+         and not attribute_row.attisdropped
+         and attribute_row.attname in (
+           'organization_id', 'project_id', 'request_id', 'authority_digest'
+         )
+    ) as v48_catalog_receipt_columns,
+    (
+      select count(*) = 4
+        from pg_trigger trigger_row
+        join pg_class relation on relation.oid = trigger_row.tgrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname in (
+           'legal_document_artifacts',
+           'project_legal_acceptance_receipts',
+           'term_acceptances',
+           'legal_documents'
+         )
+         and trigger_row.tgname in (
+           'legal_document_artifacts_no_update',
+           'project_legal_receipts_no_update',
+           'term_acceptances_no_update_v48',
+           'legal_documents_no_delete_v48'
+         )
+         and not trigger_row.tgisinternal
+    ) as v48_catalog_immutability_triggers,
+    (
+      select count(*) = 2
+        from pg_class relation
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname in (
+           'legal_document_artifacts',
+           'project_legal_acceptance_receipts'
+         )
+         and relation.relrowsecurity
+         and relation.relforcerowsecurity
+    ) as v48_catalog_rls,
+    (
+      to_regclass('ss.legal_document_artifacts') is not null
+      and has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'SELECT')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'SELECT')
+      and has_table_privilege('service_role', 'ss.legal_document_artifacts', 'SELECT')
+      and to_regclass('ss.project_legal_acceptance_receipts') is not null
+      and has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'SELECT')
+      and has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'INSERT')
+      and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'UPDATE')
+      and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'DELETE')
+    ) as v48_catalog_privileges
+`;
+
+const PROJECT_LEGAL_DATA_QUERY = `
+  select
+    exists (
+      select 1 from ss.legal_document_artifacts artifact
+      join ss.legal_documents document on document.id = artifact.document_id
+      where document.id = '00000000-0000-4000-8000-000000000022'
+        and artifact.artifact_sha256 =
+          'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
+        and artifact.byte_count = 19935
+        and artifact.media_type = 'text/html; charset=utf-8'
+    ) as v2_artifact_ready,
+    exists (
+      select 1 from ss.legal_documents document
+      join ss.legal_document_artifacts artifact on artifact.document_id = document.id
+      where document.id = '00000000-0000-4000-8000-000000000048'
+        and document.kind = 'privacy'
+        and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
+        and document.retired_at is null
+        and artifact.artifact_sha256 = document.content_digest
+        and artifact.byte_count > 0
+        and artifact.media_type = 'text/html; charset=utf-8'
+    ) as v3_artifact_ready,
+    exists (
+      select 1 from ss.legal_documents document
+      where document.id = '00000000-0000-4000-8000-000000000048'
+        and document.kind = 'privacy'
+        and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
+        and document.retired_at is null
+        and document.content_digest ~ '^[a-f0-9]{64}$'
+    ) as authority_ready
 `;
 
 const CUSTOM_SERVICES_READINESS_QUERY = `
@@ -1377,6 +1495,31 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
           database: row?.database_name ?? null
         };
       }
+      const legalCatalog = (
+        await pool.query(PROJECT_LEGAL_CATALOG_QUERY)
+      ).rows[0] ?? {};
+      let legalData = {};
+      const legalCatalogReady = [
+        "v48_catalog_contract",
+        "v48_catalog_tables",
+        "v48_catalog_receipt_columns",
+        "v48_catalog_immutability_triggers",
+        "v48_catalog_rls",
+        "v48_catalog_privileges"
+      ].every((key) => legalCatalog[key] === true);
+      if (legalCatalogReady) {
+        legalData = (await pool.query(PROJECT_LEGAL_DATA_QUERY)).rows[0] ?? {};
+      }
+      Object.assign(row, {
+        legal_privacy_v3_contract_ready: legalCatalog.v48_catalog_contract === true,
+        legal_privacy_v2_artifact_ready: legalCatalogReady &&
+          legalData.v2_artifact_ready === true,
+        legal_privacy_v3_artifact_ready: legalCatalogReady &&
+          legalData.v3_artifact_ready === true,
+        legal_acceptance_receipts_ready: legalCatalogReady,
+        legal_privacy_v3_authority_ready: legalCatalogReady &&
+          legalData.authority_ready === true
+      });
       if (row.custom_services_schema_ready) {
         const customServices = await pool.query(
           CUSTOM_SERVICES_READINESS_QUERY
@@ -1444,31 +1587,47 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       const missing = Object.entries(row)
         .filter(
           ([key, value]) =>
-            key.endsWith("_ready") && value !== true
+            key.endsWith("_ready") &&
+            !PROJECT_LEGAL_V3_HOLD_FLAGS.has(key) &&
+            value !== true
         )
         .map(([key]) => key.replace(/_ready$/u, ""))
         .sort();
+      const projectCreationLegal = {
+        ready: [...PROJECT_LEGAL_V3_HOLD_FLAGS].every(
+          (key) => row[key] === true
+        ),
+        contract: row.legal_privacy_v3_contract_ready === true,
+        v2Artifact: row.legal_privacy_v2_artifact_ready === true,
+        v3Artifact: row.legal_privacy_v3_artifact_ready === true,
+        receipts: row.legal_acceptance_receipts_ready === true,
+        authority: row.legal_privacy_v3_authority_ready === true
+      };
       if (missing.length > 0) {
         return {
           ready: false,
           kind: "canonical-postgres",
           code: "DATABASE_NOT_MIGRATED",
           database: row.database_name,
-          missing
+          missing,
+          projectCreationLegal
         };
       }
       return {
         ready: true,
         kind: "canonical-postgres",
         database: row.database_name,
-        authoritySchema: "ss"
+        authoritySchema: "ss",
+        missing: [],
+        projectCreationLegal
       };
     } catch {
       return {
         ready: false,
         kind: "canonical-postgres",
         code: "DATABASE_UNAVAILABLE",
-        database: null
+        database: null,
+        projectCreationLegal: { ready: false }
       };
     }
   }
