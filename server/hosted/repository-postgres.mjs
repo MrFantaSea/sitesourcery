@@ -281,8 +281,8 @@ const READINESS_QUERY = `
 // are used until the v48 relations/functions are proven to exist.
 const PROJECT_LEGAL_CATALOG_QUERY = `
   select
-    to_regprocedure('ss.hosted_runtime_contract_v48()') is not null
-      and exists (
+    case when to_regprocedure('ss.hosted_runtime_contract_v48()') is null
+      then false else exists (
         select 1 from pg_proc procedure_row
          where procedure_row.oid =
            to_regprocedure('ss.hosted_runtime_contract_v48()')
@@ -293,12 +293,12 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and has_function_privilege(
              'service_role', procedure_row.oid, 'EXECUTE'
            )
-      ) as v48_catalog_contract,
+      ) end as v48_catalog_contract,
     to_regclass('ss.legal_document_artifacts') is not null
       and to_regclass('ss.project_legal_acceptance_receipts') is not null
       as v48_catalog_tables,
     (
-      select count(*) = 4
+      select count(*) = 11
         from pg_attribute attribute_row
         join pg_class relation on relation.oid = attribute_row.attrelid
         join pg_namespace namespace on namespace.oid = relation.relnamespace
@@ -307,11 +307,27 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and attribute_row.attnum > 0
          and not attribute_row.attisdropped
          and attribute_row.attname in (
-           'organization_id', 'project_id', 'request_id', 'authority_digest'
+           'id', 'organization_id', 'project_id', 'user_id', 'request_id',
+           'schema_version', 'acceptance_statement', 'authority_digest',
+           'user_agent_digest', 'accepted_at', 'created_at'
          )
     ) as v48_catalog_receipt_columns,
     (
-      select count(*) = 4
+      select count(*) = 6
+        from pg_attribute attribute_row
+        join pg_class relation on relation.oid = attribute_row.attrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname = 'legal_document_artifacts'
+         and attribute_row.attnum > 0
+         and not attribute_row.attisdropped
+         and attribute_row.attname in (
+           'document_id', 'artifact_uri', 'artifact_sha256', 'byte_count',
+           'media_type', 'created_at'
+         )
+    ) as v48_catalog_artifact_columns,
+    (
+      select count(*) = 10
         from pg_trigger trigger_row
         join pg_class relation on relation.oid = trigger_row.tgrelid
         join pg_namespace namespace on namespace.oid = relation.relnamespace
@@ -324,9 +340,15 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          )
          and trigger_row.tgname in (
            'legal_document_artifacts_no_update',
+           'legal_document_artifacts_no_delete',
            'project_legal_receipts_no_update',
+           'project_legal_receipts_no_delete',
            'term_acceptances_no_update_v48',
-           'legal_documents_no_delete_v48'
+           'term_acceptances_no_delete_v48',
+           'legal_documents_no_delete_v48',
+           'project_required_terms_no_delete_v48',
+           'project_required_terms_monotonic_v48',
+           'project_legal_receipt_exact_bundle'
          )
          and not trigger_row.tgisinternal
     ) as v48_catalog_immutability_triggers,
@@ -343,8 +365,36 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and relation.relforcerowsecurity
     ) as v48_catalog_rls,
     (
-      to_regclass('ss.legal_document_artifacts') is not null
-      and has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'SELECT')
+      select count(*) >= 7
+        from pg_constraint constraint_row
+        join pg_class relation on relation.oid = constraint_row.conrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname = 'project_legal_acceptance_receipts'
+    ) as v48_catalog_receipt_constraints,
+    (
+      select count(*) >= 3
+        from pg_constraint constraint_row
+        join pg_class relation on relation.oid = constraint_row.conrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname = 'legal_document_artifacts'
+    ) as v48_catalog_artifact_constraints,
+    (
+      select count(*) >= 2
+        from pg_policy policy_row
+        join pg_class relation on relation.oid = policy_row.polrelid
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+       where namespace.nspname = 'ss'
+         and relation.relname in (
+           'legal_document_artifacts',
+           'project_legal_acceptance_receipts'
+         )
+    ) as v48_catalog_policies,
+    case when to_regclass('ss.legal_document_artifacts') is null
+      or to_regclass('ss.project_legal_acceptance_receipts') is null
+      then false else (
+      has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'SELECT')
       and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'SELECT')
       and has_table_privilege('service_role', 'ss.legal_document_artifacts', 'SELECT')
       and to_regclass('ss.project_legal_acceptance_receipts') is not null
@@ -352,11 +402,17 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
       and has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'INSERT')
       and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'UPDATE')
       and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'DELETE')
-    ) as v48_catalog_privileges
+      and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'TRUNCATE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'UPDATE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'DELETE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'TRUNCATE')
+    ) end as v48_catalog_privileges
 `;
 
 const PROJECT_LEGAL_DATA_QUERY = `
   select
+    ss.hosted_runtime_contract_v48() =
+      'canonical-ss-v48-hosted-privacy-v3' as contract_marker_ready,
     exists (
       select 1 from ss.legal_document_artifacts artifact
       join ss.legal_documents document on document.id = artifact.document_id
@@ -385,6 +441,67 @@ const PROJECT_LEGAL_DATA_QUERY = `
         and document.retired_at is null
         and document.content_digest ~ '^[a-f0-9]{64}$'
     ) as authority_ready
+`;
+
+const PROJECT_LEGAL_CONSTANTS_QUERY = `
+  select
+    ss.hosted_runtime_contract_v48() =
+      'canonical-ss-v48-hosted-privacy-v3' as contract_marker_ready,
+    (
+      select count(*) = 3
+        from ss.legal_documents document
+       where (
+         document.id = $1::uuid and document.kind = $2::text
+         and document.version = $3::text
+         and document.content_digest = $4::text
+         and document.content_uri = $5::text
+         and document.effective_at = $6::timestamptz
+         and document.retired_at is null
+       ) or (
+         document.id = $7::uuid and document.kind = $8::text
+         and document.version = $9::text
+         and document.content_digest = $10::text
+         and document.content_uri = $11::text
+         and document.effective_at = $12::timestamptz
+         and document.retired_at is null
+       ) or (
+         document.id = $13::uuid and document.kind = $14::text
+         and document.version = $15::text
+         and document.content_digest = $16::text
+         and document.content_uri = $17::text
+         and document.effective_at = $18::timestamptz
+         and document.retired_at is null
+       )
+    ) as exact_documents_ready,
+    (
+      select count(*) = 1
+        from ss.legal_document_artifacts artifact
+       where artifact.document_id = $19::uuid
+         and artifact.artifact_uri = $20::text
+         and artifact.artifact_sha256 = $21::text
+         and artifact.byte_count = $22::bigint
+         and artifact.media_type = $23::text
+    ) as exact_v3_artifact_ready,
+    ss.service_json_digest(jsonb_build_object(
+      'documents', jsonb_build_array(
+        jsonb_build_object(
+          'kind', $2::text, 'version', $3::text,
+          'contentDigest', $4::text, 'contentUri', $5::text,
+          'effectiveAt', to_char($6::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        ),
+        jsonb_build_object(
+          'kind', $8::text, 'version', $9::text,
+          'contentDigest', $10::text, 'contentUri', $11::text,
+          'effectiveAt', to_char($12::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        ),
+        jsonb_build_object(
+          'kind', $14::text, 'version', $15::text,
+          'contentDigest', $16::text, 'contentUri', $17::text,
+          'effectiveAt', to_char($18::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        )
+      ),
+      'schema', 'sitesourcery.project-legal-authority/v3'
+    )) = $24::text as authority_digest_ready
 `;
 
 const CUSTOM_SERVICES_READINESS_QUERY = `
@@ -1502,16 +1619,21 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       const legalCatalogReady = [
         "v48_catalog_contract",
         "v48_catalog_tables",
-        "v48_catalog_receipt_columns",
+    "v48_catalog_receipt_columns",
+        "v48_catalog_artifact_columns",
         "v48_catalog_immutability_triggers",
         "v48_catalog_rls",
+        "v48_catalog_receipt_constraints",
+        "v48_catalog_artifact_constraints",
+        "v48_catalog_policies",
         "v48_catalog_privileges"
       ].every((key) => legalCatalog[key] === true);
       if (legalCatalogReady) {
         legalData = (await pool.query(PROJECT_LEGAL_DATA_QUERY)).rows[0] ?? {};
       }
       Object.assign(row, {
-        legal_privacy_v3_contract_ready: legalCatalog.v48_catalog_contract === true,
+        legal_privacy_v3_contract_ready: legalCatalogReady &&
+          legalData.contract_marker_ready === true,
         legal_privacy_v2_artifact_ready: legalCatalogReady &&
           legalData.v2_artifact_ready === true,
         legal_privacy_v3_artifact_ready: legalCatalogReady &&
@@ -1645,6 +1767,42 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     return status;
   }
 
+  async function projectLegalAuthorityMatches(expected) {
+    const status = await readiness();
+    if (status.projectCreationLegal?.ready !== true) return false;
+    const documents = expected?.documents ?? [];
+    const ids = expected?.documentBindings ?? [];
+    const artifact = expected?.artifactBindings?.[0];
+    if (documents.length !== 3 || ids.length !== 3 || !artifact?.artifactUri) {
+      return false;
+    }
+    const values = [];
+    for (let index = 0; index < 3; index += 1) {
+      values.push(
+        ids[index].id,
+        documents[index].kind,
+        documents[index].version,
+        documents[index].contentDigest,
+        documents[index].contentUri,
+        documents[index].effectiveAt
+      );
+    }
+    values.push(
+      ids[0].id,
+      artifact.artifactUri,
+      artifact.artifactSha256,
+      artifact.byteCount,
+      artifact.mediaType,
+      expected.authorityDigest
+    );
+    const result = await pool.query(PROJECT_LEGAL_CONSTANTS_QUERY, values);
+    const row = result.rows[0] ?? {};
+    return row.contract_marker_ready === true &&
+      row.exact_documents_ready === true &&
+      row.exact_v3_artifact_ready === true &&
+      row.authority_digest_ready === true;
+  }
+
   async function transaction(
     {
       role = "authenticated",
@@ -1754,6 +1912,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     kind: "canonical-postgres",
     pool,
     readiness,
+    projectLegalAuthorityMatches,
     assertReady,
 
     tenant({ userId, organizationId, isolation, readOnly = false }, work) {

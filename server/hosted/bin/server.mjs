@@ -129,6 +129,9 @@ import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
+  createProjectLegalAuthorityFromEnvironment
+} from "../project-legal-authority.mjs";
+import {
   createAesGcmContactVault,
   createConfiguredRegistrationMailPort,
   createConfiguredRecoveryMailPort,
@@ -551,6 +554,8 @@ async function start() {
     });
   const recoveryMailPort =
     await createConfiguredRecoveryMailPort();
+  const projectLegalAuthority =
+    createProjectLegalAuthorityFromEnvironment();
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -564,6 +569,7 @@ async function start() {
     contactVault,
     paymentProvider: stripeComposition.adapter,
     domainRuntime,
+    projectLegalAuthority,
     licensedBaseDomain
   });
 

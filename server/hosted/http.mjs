@@ -2381,6 +2381,13 @@ export function createHostedApi(
           method === "POST" &&
           (route = match(pathname, /^\/api\/v1\/organizations\/([^/]+)\/projects$/u))
         ) {
+          invariant(
+            typeof service.projectCreationLegalReadiness === "function" &&
+              await service.projectCreationLegalReadiness(),
+            "LEGAL_CONFIGURATION_REQUIRED",
+            "Project creation is held while reviewed legal authority is installed.",
+            { status: 503 }
+          );
           result = await service.createProject(actor, route[0], {
             ...exactProjectCreateBody(body),
             commandId: commandId(request),

@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   createProjectLegalAuthority,
+  createProjectLegalAuthorityFromEnvironment,
   createProjectLegalAuthorityFixture,
+  publicProjectLegalAuthority,
   PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
   PROJECT_LEGAL_ACCEPTANCE_STATEMENT,
   validateProjectLegalAcceptance
@@ -75,15 +77,24 @@ test("production authority fails closed until the explicit sealed digest handoff
   );
 });
 
+test("production bootstrap stays held without constants", () => {
+  assert.equal(
+    createProjectLegalAuthorityFromEnvironment({}),
+    null
+  );
+});
+
 test("authority digest is canonical and acceptance requires the exact three-document bundle", () => {
   const authority = fixture();
-  assert.deepEqual(Object.keys(authority).sort(), [
+  const publicAuthority = publicProjectLegalAuthority(authority);
+  assert.deepEqual(Object.keys(publicAuthority).sort(), [
     "acceptanceStatement",
     "authorityDigest",
     "documents",
     "schema"
   ]);
-  assert.equal("privacyV3" in authority, false);
+  assert.equal("privacyV3" in publicAuthority, false);
+  assert.equal("artifactBindings" in publicAuthority, false);
   const acceptance = {
     schema: PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
     acceptanceStatement: PROJECT_LEGAL_ACCEPTANCE_STATEMENT,

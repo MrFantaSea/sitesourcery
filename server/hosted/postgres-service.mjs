@@ -33,6 +33,7 @@ import { createHeldDomainRuntime } from "./domain-postgres-runtime.mjs";
 import { DEFAULT_PLATFORM_BASE_DOMAIN } from "../selfhost/src/hostname.mjs";
 import {
   constantTimeDigestEqual,
+  publicProjectLegalAuthority,
   validateProjectLegalAcceptance
 } from "./project-legal-authority.mjs";
 
@@ -683,12 +684,17 @@ export function createCanonicalPostgresService({
     ? Object.freeze(projectLegalAuthority)
     : null;
   async function projectLegalReadiness() {
-    if (!legalAuthority || typeof authority.readiness !== "function") {
+    if (
+      !legalAuthority ||
+      typeof authority.readiness !== "function" ||
+      typeof authority.projectLegalAuthorityMatches !== "function"
+    ) {
       return false;
     }
     const status = await authority.readiness();
     return status.ready === true &&
-      status.projectCreationLegal?.ready === true;
+      status.projectCreationLegal?.ready === true &&
+      await authority.projectLegalAuthorityMatches(legalAuthority);
   }
   normalizeHostname(`probe.${licensedBaseDomain}`);
   const domains =
@@ -1172,9 +1178,11 @@ export function createCanonicalPostgresService({
     const accepted = [...versions]
       .reverse()
       .find((version) => version.state === "accepted_release");
-    const legal = legalAuthority && await projectLegalReadiness()
-      ? await loadProjectLegal(client, projectId)
-      : null;
+    const legal = await loadProjectLegal(
+      client,
+      projectId,
+      legalAuthority && await projectLegalReadiness()
+    );
     return {
       id: row.id,
       projectId: row.id,
@@ -1205,24 +1213,41 @@ export function createCanonicalPostgresService({
         previousReleaseId: row.previous_release_id,
         updatedAt: iso(row.updated_at)
       },
-      ...(legal ? { legal } : {})
+      legal
     };
   }
 
-  async function loadProjectLegal(client, projectId) {
+  async function loadProjectLegal(client, projectId, includeArtifacts) {
     const result = await client.query(
-      `select document.kind, document.version, document.content_digest,
-              coalesce(artifact.artifact_uri, document.content_uri) as evidence_uri,
-              acceptance.accepted_at
+      `select acceptance.document_id, document.kind, document.version,
+              document.content_digest,
+              document.content_uri as evidence_uri,
+              acceptance.accepted_at,
+              required.acceptance_id is not null as is_current
          from ss.term_acceptances acceptance
          join ss.legal_documents document
            on document.id = acceptance.document_id
-         left join ss.legal_document_artifacts artifact
-           on artifact.document_id = document.id
+         left join ss.project_required_terms required
+           on required.project_id = acceptance.project_id
+          and required.kind = document.kind
+          and required.acceptance_id = acceptance.id
         where acceptance.project_id = $1
-        order by acceptance.accepted_at, document.kind, document.id`,
+        order by required.acceptance_id is not null desc,
+                 acceptance.accepted_at, document.kind, document.id`,
       [projectId]
     );
+    const evidence = new Map();
+    if (includeArtifacts) {
+      const artifacts = await client.query(
+        `select document_id, artifact_uri
+           from ss.legal_document_artifacts
+          where document_id = any($1::uuid[])`,
+        [result.rows.map((row) => row.document_id)]
+      );
+      for (const artifact of artifacts.rows) {
+        evidence.set(artifact.document_id, artifact.artifact_uri);
+      }
+    }
     const current = [];
     const history = [];
     const seen = new Set();
@@ -1231,12 +1256,12 @@ export function createCanonicalPostgresService({
         kind: row.kind,
         version: row.version,
         contentDigest: row.content_digest,
-        evidenceUri: row.evidence_uri,
+        evidenceUri: evidence.get(row.document_id) ?? row.evidence_uri,
         acceptedAt: iso(row.accepted_at)
       };
-      if (!seen.has(row.kind)) {
-        seen.add(row.kind);
+      if (row.is_current === true) {
         current.push(item);
+        seen.add(row.kind);
       } else {
         history.push(item);
       }
@@ -6050,12 +6075,22 @@ export function createCanonicalPostgresService({
         "The reviewed Privacy V3 authority is not configured.",
         { status: 503 }
       );
-      return legalAuthority;
+      return publicProjectLegalAuthority(legalAuthority);
+    },
+
+    async projectCreationLegalReadiness() {
+      return projectLegalReadiness();
     },
 
     async createProject(actor, organizationId, input) {
       requiredActor(actor);
       const orgId = uuid(organizationId, "Organization ID");
+      invariant(
+        legalAuthority && await projectLegalReadiness(),
+        "LEGAL_CONFIGURATION_REQUIRED",
+        "Project creation is held while reviewed legal authority is installed.",
+        { status: 503 }
+      );
       invariant(
         input &&
           typeof input === "object" &&
@@ -6076,12 +6111,6 @@ export function createCanonicalPostgresService({
         { status: 400 }
       );
       const name = requiredText(input.name, "Project name", 120, 2);
-      invariant(
-        legalAuthority && await projectLegalReadiness(),
-        "LEGAL_CONFIGURATION_REQUIRED",
-        "Project creation is held while reviewed legal authority is installed.",
-        { status: 503 }
-      );
       const legalAcceptance = validateProjectLegalAcceptance(
         input.legalAcceptance,
         legalAuthority
@@ -6124,7 +6153,9 @@ export function createCanonicalPostgresService({
                 const documents = await client.query(
                   `select document.id, document.kind, document.version,
                           document.content_digest, document.content_uri,
-                          document.effective_at, artifact.artifact_uri
+                          document.effective_at, artifact.artifact_uri,
+                          artifact.artifact_sha256, artifact.byte_count,
+                          artifact.media_type
                      from ss.legal_documents document
                      left join ss.legal_document_artifacts artifact
                        on artifact.document_id = document.id
@@ -6138,7 +6169,8 @@ export function createCanonicalPostgresService({
                     where document.retired_at is null
                     order by array_position(
                       array[$1::text, $3::text, $5::text], document.kind
-                    )`,
+                    )
+                    for update of document`,
                   [
                     legalAcceptance.documents[0].kind,
                     legalAcceptance.documents[0].version,
@@ -6152,6 +6184,26 @@ export function createCanonicalPostgresService({
                   documents.rowCount === legalAcceptance.documents.length &&
                     documents.rows.every((document, index) => {
                       const expected = legalAcceptance.documents[index];
+                      const expectedArtifact =
+                        legalAuthority.artifactBindings[index];
+                      const artifactValid = document.artifact_uri === null
+                        ? expectedArtifact.artifactUri === null
+                        : expectedArtifact.artifactUri === null
+                          ? constantTimeDigestEqual(
+                              document.artifact_sha256,
+                              document.content_digest
+                            ) &&
+                            Number(document.byte_count) > 0 &&
+                            document.media_type ===
+                              "text/html; charset=utf-8"
+                          : document.artifact_uri === expectedArtifact.artifactUri &&
+                            constantTimeDigestEqual(
+                              document.artifact_sha256,
+                              expectedArtifact.artifactSha256
+                            ) &&
+                            Number(document.byte_count) ===
+                              expectedArtifact.byteCount &&
+                            document.media_type === expectedArtifact.mediaType;
                       return document.kind === expected.kind &&
                         document.version === expected.version &&
                         constantTimeDigestEqual(
@@ -6159,7 +6211,8 @@ export function createCanonicalPostgresService({
                           expected.contentDigest
                         ) &&
                         document.content_uri === expected.contentUri &&
-                        new Date(document.effective_at).toISOString() === expected.effectiveAt;
+                        new Date(document.effective_at).toISOString() === expected.effectiveAt &&
+                        artifactValid;
                     }),
                   "LEGAL_AUTHORITY_CHANGED",
                   "The reviewed legal authority changed. Refresh and try again.",
@@ -6316,18 +6369,7 @@ export function createCanonicalPostgresService({
                   requestId
                 });
                 return {
-                  project: await loadProject(client, actor, projectId),
-                  legal: {
-                    receiptId,
-                    authorityDigest: legalAcceptance.authorityDigest,
-                    documents: documents.rows.map((document) => ({
-                      kind: document.kind,
-                      version: document.version,
-                      contentDigest: document.content_digest,
-                      evidenceUri: document.artifact_uri,
-                      acceptedAt
-                    }))
-                  }
+                  project: await loadProject(client, actor, projectId)
                 };
               }
             });

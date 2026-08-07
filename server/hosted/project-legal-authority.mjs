@@ -118,11 +118,29 @@ function buildProjectLegalAuthority(privacyV3, fixture) {
     "The reviewed Privacy V3 authority digest is not configured.",
     { status: 503 }
   );
+  const artifactBindings = Object.freeze([
+    Object.freeze({
+      kind: "privacy",
+      artifactUri: privacyV3.artifactUri,
+      artifactSha256: privacyV3.contentDigest,
+      byteCount: privacyV3.byteCount,
+      mediaType: "text/html; charset=utf-8"
+    }),
+    Object.freeze({ kind: "product", artifactUri: null }),
+    Object.freeze({ kind: "website", artifactUri: null })
+  ]);
+  const documentBindings = Object.freeze([
+    Object.freeze({ kind: "privacy", id: "00000000-0000-4000-8000-000000000048" }),
+    Object.freeze({ kind: "product", id: "00000000-0000-4000-8000-000000000021" }),
+    Object.freeze({ kind: "website", id: "00000000-0000-4000-8000-000000000023" })
+  ]);
   return Object.freeze({
     schema: PROJECT_LEGAL_SCHEMA,
     acceptanceStatement: PROJECT_LEGAL_ACCEPTANCE_STATEMENT,
     authorityDigest,
-    documents
+    documents,
+    artifactBindings,
+    documentBindings
   });
 }
 
@@ -130,6 +148,45 @@ export function createProjectLegalAuthority({
   privacyV3 = UNSEALED_PRIVACY_V3_CONSTANTS
 } = {}) {
   return buildProjectLegalAuthority(privacyV3, false);
+}
+
+export function createProjectLegalAuthorityFromEnvironment(
+  environment = process.env
+) {
+  const names = [
+    "SITESOURCERY_HOSTED_PRIVACY_V3_VERSION",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_SHA256",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_URI",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256"
+  ];
+  const supplied = names.map((name) => environment[name]);
+  if (supplied.every((value) => value === undefined || value === "")) {
+    return null;
+  }
+  return createProjectLegalAuthority({
+    privacyV3: {
+      version: environment.SITESOURCERY_HOSTED_PRIVACY_V3_VERSION,
+      contentDigest: environment.SITESOURCERY_HOSTED_PRIVACY_V3_SHA256,
+      contentUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_URI,
+      effectiveAt: environment.SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT,
+      byteCount: Number(environment.SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT),
+      artifactUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI,
+      authorityDigest:
+        environment.SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256
+    }
+  });
+}
+
+export function publicProjectLegalAuthority(authority) {
+  return Object.freeze({
+    schema: authority.schema,
+    acceptanceStatement: authority.acceptanceStatement,
+    authorityDigest: authority.authorityDigest,
+    documents: authority.documents
+  });
 }
 
 // Test-only constructor. Production composition must use
