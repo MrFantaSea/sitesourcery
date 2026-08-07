@@ -2141,3 +2141,332 @@ test("Custom build final payment freezes completion-bound obligation and globall
     /service_custom_build_handoff_receipts|workmanship_starts_at|workmanship_ends_at|hosted_runtime_contract_v4[78]|on delete cascade|grant all privileges/iu
   );
 });
+
+test("Custom build handoff atomically binds exact financial clearance to one immutable customer document", async () => {
+  const handoff = (await migrations()).find(
+    ({ name }) =>
+      name === "202608060047_custom_build_handoff.sql"
+  );
+  assert.ok(handoff, "missing migration 47 Custom build handoff boundary");
+
+  assert.match(
+    handoff.sql,
+    /create table ss\.service_custom_build_handoff_receipts\s*\([\s\S]*completion_package_id uuid not null[\s\S]*final_obligation_id uuid not null[\s\S]*final_payment_receipt_id uuid[\s\S]*zero_balance_clearance_id uuid[\s\S]*document_id uuid not null[\s\S]*completion_package_digest ss\.sha256_hex not null[\s\S]*final_obligation_digest ss\.sha256_hex not null[\s\S]*handoff_digest ss\.sha256_hex generated always/iu
+  );
+  assert.match(
+    handoff.sql,
+    /financial_clearance_kind in \([\s\S]*'provider_confirmed_final_payment'[\s\S]*'zero_balance_clearance'[\s\S]*final_due_minor > 0[\s\S]*final_payment_receipt_id is not null[\s\S]*final_due_minor = 0[\s\S]*zero_balance_clearance_id is not null/iu
+  );
+  const finalReceiptLockStart = handoff.sql.indexOf(
+    "create function ss.lock_service_custom_build_final_payment_receipt_h1m"
+  );
+  const finalReceiptLockEnd = handoff.sql.indexOf(
+    "$$;",
+    finalReceiptLockStart
+  );
+  assert.ok(
+    finalReceiptLockStart >= 0 && finalReceiptLockEnd > finalReceiptLockStart
+  );
+  const finalReceiptLock = handoff.sql.slice(
+    finalReceiptLockStart,
+    finalReceiptLockEnd
+  );
+  assert.match(
+    finalReceiptLock,
+    /pg_advisory_xact_lock\([\s\S]*hashtextextended\([\s\S]*'ss-custom-build-h1m:' \|\| new\.job_id::text/iu
+  );
+  assert.match(
+    handoff.sql,
+    /create trigger service_custom_build_final_payment_receipt_00_h1m_lock[\s\S]*before insert on ss\.service_custom_build_final_payment_receipts[\s\S]*execute function[\s\S]*ss\.lock_service_custom_build_final_payment_receipt_h1m\(\)/iu
+  );
+  assert.match(
+    handoff.sql,
+    /unique \(job_id\)[\s\S]*unique \(completion_package_id\)[\s\S]*unique \(final_obligation_id\)[\s\S]*unique \(final_payment_receipt_id\)[\s\S]*unique \(zero_balance_clearance_id\)[\s\S]*unique \(document_id\)[\s\S]*unique \(handed_off_by_operator_user_id, job_id, command_id\)/iu
+  );
+  assert.match(
+    handoff.sql,
+    /document_byte_count between 1 and 65536[\s\S]*document_media_type = 'application\/json'[\s\S]*references ss\.service_documents\([\s\S]*content_digest,[\s\S]*byte_count,[\s\S]*media_type[\s\S]*deferrable initially deferred[\s\S]*references ss\.service_document_payloads\(organization_id, document_id\)[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    handoff.sql,
+    /workmanship_starts_at = handed_off_at[\s\S]*service_custom_build_workmanship_end\(handed_off_at\)[\s\S]*workmanship_ends_at - workmanship_starts_at = interval '720 hours'/iu
+  );
+  assert.match(
+    handoff.sql,
+    /at time zone 'UTC'\) \+ interval '30 days'[\s\S]*at time zone 'UTC'/iu
+  );
+  assert.match(
+    handoff.sql,
+    /create function ss\.service_custom_build_handoff_iso_millisecond\([\s\S]*selected_value timestamptz[\s\S]*to_char\([\s\S]*selected_value at time zone 'UTC',[\s\S]*YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"/iu
+  );
+  const manifestGuardStart = handoff.sql.indexOf(
+    "create function ss.service_custom_build_handoff_manifest_is_valid"
+  );
+  const manifestGuardEnd = handoff.sql.indexOf(
+    "$$;",
+    manifestGuardStart
+  );
+  assert.ok(
+    manifestGuardStart >= 0 && manifestGuardEnd > manifestGuardStart,
+    "missing exact v47 delivery-manifest guard"
+  );
+  const manifestGuard = handoff.sql.slice(
+    manifestGuardStart,
+    manifestGuardEnd
+  );
+  for (const invariant of [
+    /from pg_catalog\.jsonb_object_keys\(selected_manifest\)[\s\S]*selected_manifest_key_count <> 1/iu,
+    /selected_manifest \? 'items'/iu,
+    /jsonb_array_length\(selected_manifest -> 'items'\) not between 1 and 40/iu,
+    /from pg_catalog\.jsonb_object_keys\(selected_item\)[\s\S]*selected_item_key_count <> 2/iu,
+    /selected_item \?& array\['label', 'description'\]/iu,
+    /service_custom_build_handoff_text_is_valid\(\s*selected_label,\s*2,\s*120\s*\)/iu,
+    /service_custom_build_handoff_text_is_valid\(\s*selected_description,\s*2,\s*500\s*\)/iu,
+    /pg_catalog\.translate\([\s\S]*selected_label,[\s\S]*'ABCDEFGHIJKLMNOPQRSTUVWXYZ',[\s\S]*'abcdefghijklmnopqrstuvwxyz'[\s\S]*\) = any \(retained_labels\)/iu,
+    /pg_catalog\.octet_length\([\s\S]*service_custom_build_handoff_canonical_json\(selected_manifest\)[\s\S]*\) <= 30 \* 1024/iu
+  ]) {
+    assert.match(manifestGuard, invariant);
+  }
+  const canonicalGuardStart = handoff.sql.indexOf(
+    "create function ss.service_custom_build_handoff_canonical_json"
+  );
+  const canonicalGuardEnd = handoff.sql.indexOf("$$;", canonicalGuardStart);
+  assert.ok(canonicalGuardStart >= 0 && canonicalGuardEnd > canonicalGuardStart);
+  const canonicalGuard = handoff.sql.slice(
+    canonicalGuardStart,
+    canonicalGuardEnd
+  );
+  for (const invariant of [
+    /jsonb_typeof\(selected_value\)/iu,
+    /string_agg\([\s\S]*',' order by entry\.key collate "C"\s*\)/iu,
+    /from jsonb_each\(selected_value\) entry\(key, value\)/iu,
+    /string_agg\([\s\S]*',' order by entry\.ordinality\s*\)/iu,
+    /from jsonb_array_elements\(selected_value\)[\s\S]*with ordinality entry\(value, ordinality\)/iu
+  ]) assert.match(canonicalGuard, invariant);
+  const textGuardStart = handoff.sql.indexOf(
+    "create function ss.service_custom_build_handoff_text_is_valid"
+  );
+  const textGuardEnd = handoff.sql.indexOf("$$;", textGuardStart);
+  assert.ok(textGuardStart >= 0 && textGuardEnd > textGuardStart);
+  const textGuard = handoff.sql.slice(textGuardStart, textGuardEnd);
+  for (const invariant of [
+    /char_length\(selected_value\) between minimum_length and maximum_length/iu,
+    /selected_value = btrim\(/iu,
+    /service_text_excludes_credentials\(selected_value\)/iu,
+    /bearer\[\[:space:\]\]\+/iu,
+    /\[\?&\]\(token\|key\|secret\|password\)=/iu,
+    /\(cs\|pi\|ch\|cus\|evt\|pm\|seti\|src\|tok\|sub\|price\|prod\|re\)_/iu
+  ]) assert.match(textGuard, invariant);
+  assert.match(
+    handoff.sql,
+    /delivery_manifest jsonb not null check \([\s\S]*service_custom_build_handoff_manifest_is_valid\(delivery_manifest\)[\s\S]*\)/iu
+  );
+  assert.doesNotMatch(
+    handoff.sql,
+    /pg_column_size\((?:selected_)?delivery_manifest\)|32768/iu
+  );
+  assert.match(
+    handoff.sql,
+    /convert_to\(\s*ss\.service_custom_build_handoff_canonical_json\(decoded_payload\),\s*'UTF8'\s*\) <> new\.payload/iu
+  );
+
+  const callableStart = handoff.sql.indexOf(
+    "create function ss.create_service_custom_build_handoff"
+  );
+  const callableEnd = handoff.sql.indexOf("$$;", callableStart);
+  assert.ok(callableStart >= 0 && callableEnd > callableStart);
+  const callable = handoff.sql.slice(callableStart, callableEnd);
+  for (const allowedInput of [
+    /target_job_id uuid/iu,
+    /selected_command_id text/iu,
+    /selected_organization_id uuid/iu,
+    /expected_completion_package_digest ss\.sha256_hex/iu,
+    /expected_final_obligation_digest ss\.sha256_hex/iu,
+    /selected_customer_summary text/iu,
+    /selected_delivery_manifest jsonb/iu
+  ]) {
+    assert.match(callable, allowedInput);
+  }
+  assert.match(
+    callable,
+    /returns table \([\s\S]*receipt_id uuid[\s\S]*document_id uuid[\s\S]*handoff_digest ss\.sha256_hex[\s\S]*handed_off_at timestamptz[\s\S]*workmanship_starts_at timestamptz[\s\S]*workmanship_ends_at timestamptz/iu
+  );
+  assert.match(
+    callable,
+    /service_custom_build_handoff_manifest_is_valid\([\s\S]*selected_delivery_manifest/iu
+  );
+  const discoveryIndex = callable.indexOf(
+    "select job.id into discovered_job_id"
+  );
+  const lockIndex = callable.indexOf("pg_advisory_xact_lock");
+  const capabilityIndex = callable.indexOf(
+    "service_operator_has_capability"
+  );
+  const commandIndex = callable.indexOf(
+    "from ss.service_custom_build_handoff_receipts receipt"
+  );
+  const sourceIndex = callable.indexOf(
+    "from ss.service_custom_build_jobs job",
+    callable.indexOf("from ss.service_custom_build_jobs job") + 1
+  );
+  assert.ok(
+    discoveryIndex >= 0 &&
+      discoveryIndex < lockIndex &&
+      lockIndex < capabilityIndex &&
+      capabilityIndex < commandIndex &&
+      commandIndex < sourceIndex,
+    "handoff callable must discover immutable job, lock H1M, then inspect command and source rows"
+  );
+  assert.doesNotMatch(
+    callable.slice(discoveryIndex, lockIndex),
+    /for update|\b(?:insert|update|delete)\b/iu
+  );
+  assert.match(
+    callable,
+    /service_job_manage[\s\S]*service_document_manage[\s\S]*request_digest is distinct from[\s\S]*command digest conflicts/iu
+  );
+  assert.match(
+    callable,
+    /state in \([\s\S]*'provider_pending', 'ready', 'persistence_unknown'[\s\S]*event\.state in \('pending', 'reconciliation_required'\)/iu
+  );
+  assert.match(
+    callable,
+    /service_custom_build_final_reconciliation_commands command[\s\S]*command\.job_id = discovered_job_id[\s\S]*command\.state = 'running'/iu
+  );
+  assert.match(
+    callable,
+    /final_due_minor > 0[\s\S]*final_payment_receipt_id is null[\s\S]*payment_status <> 'paid'[\s\S]*not source\.charge_captured[\s\S]*amount_refunded_minor <> 0[\s\S]*source\.disputed[\s\S]*attempt\.state = 'paid'/iu
+  );
+  assert.match(
+    callable,
+    /final_due_minor = 0[\s\S]*zero_balance_clearance_id is null[\s\S]*accepted_quote_has_no_final_balance[\s\S]*service_custom_build_final_checkout_attempts[\s\S]*service_custom_build_final_stripe_events/iu
+  );
+  assert.match(
+    callable,
+    /insert into ss\.service_custom_build_handoff_receipts[\s\S]*insert into ss\.service_documents[\s\S]*'handoff'[\s\S]*insert into ss\.service_document_payloads/iu
+  );
+  assert.match(
+    callable,
+    /service-documents\/[\s\S]*\/custom-build-jobs\/[\s\S]*\/handoff\/[\s\S]*\.json/iu
+  );
+  assert.match(
+    callable,
+    /financialClearance[\s\S]*provider_confirmed_final_payment[\s\S]*zero_balance_clearance/iu
+  );
+  assert.match(
+    callable,
+    /'clearedAt', ss\.service_custom_build_handoff_iso_millisecond\([\s\S]*'handedOffAt', ss\.service_custom_build_handoff_iso_millisecond\([\s\S]*'endsAt', ss\.service_custom_build_handoff_iso_millisecond\([\s\S]*'startsAt', ss\.service_custom_build_handoff_iso_millisecond\(/iu
+  );
+  assert.match(
+    callable,
+    /'schema', 'sitesourcery\.custom-build-handoff-document\/v1'/iu
+  );
+  assert.match(callable, /'coverage', '\[start,end\)'/iu);
+  assert.doesNotMatch(
+    callable,
+    /checkout_session_id|payment_intent_id|charge_id|stripe_customer_id|on conflict/iu
+  );
+
+  assert.match(
+    handoff.sql,
+    /create or replace function ss\.guard_service_assessment_document[\s\S]*'assessment_evidence', 'assessment_report', 'job_evidence', 'handoff'[\s\S]*document_kind = 'job_evidence'[\s\S]*document_kind = 'handoff'[\s\S]*service_custom_build_handoff_receipts/iu
+  );
+  assert.match(
+    handoff.sql,
+    /create or replace function ss\.guard_service_custom_build_completion_payload[\s\S]*document_kind = 'job_evidence'[\s\S]*document_kind = 'handoff'[\s\S]*convert_from\(new\.payload, 'UTF8'\)::jsonb[\s\S]*service_custom_build_handoff_canonical_json\(decoded_payload\)[\s\S]*<> new\.payload/iu
+  );
+  const v44 = (await migrations()).find(
+    ({ name }) =>
+      name === "202608060044_custom_build_change_completion.sql"
+  );
+  assert.ok(v44);
+  const functionBody = (sql, signature) => {
+    const start = sql.indexOf(signature);
+    const end = sql.indexOf("$$;", start);
+    assert.ok(start >= 0 && end > start, `missing ${signature}`);
+    return sql.slice(start, end).replace(/\s+/gu, " ").trim();
+  };
+  const v44DocumentGuard = functionBody(
+    v44.sql,
+    "create or replace function ss.guard_service_assessment_document"
+  );
+  const v47DocumentGuard = functionBody(
+    handoff.sql,
+    "create or replace function ss.guard_service_assessment_document"
+  );
+  const jobBranch = (body, endMarker) => {
+    const start = body.indexOf(
+      "or ( new.document_kind = 'job_evidence'"
+    );
+    const end = body.indexOf(endMarker, start);
+    assert.ok(start >= 0 && end > start);
+    return body.slice(start, end).trim();
+  };
+  assert.equal(
+    jobBranch(v47DocumentGuard, "or ( new.document_kind = 'handoff'"),
+    jobBranch(v44DocumentGuard, "then raise exception")
+  );
+  const assessmentPrefix = (body) => {
+    const start = body.indexOf("if ss.current_service_actor_kind()");
+    const end = body.indexOf(
+      "or ( new.document_kind = 'job_evidence'",
+      start
+    );
+    assert.ok(start >= 0 && end > start);
+    return body
+      .slice(start, end)
+      .replace(", 'handoff'", "")
+      .trim();
+  };
+  assert.equal(
+    assessmentPrefix(v47DocumentGuard),
+    assessmentPrefix(v44DocumentGuard)
+  );
+  const v44PayloadGuard = functionBody(
+    v44.sql,
+    "create function ss.guard_service_custom_build_completion_payload"
+  );
+  const v47PayloadGuard = functionBody(
+    handoff.sql,
+    "create or replace function ss.guard_service_custom_build_completion_payload"
+  );
+  const payloadJobBranch = (body) => {
+    const start = body.indexOf(
+      "if selected_document.document_kind = 'job_evidence'"
+    );
+    const end = body.indexOf(
+      "then raise exception 'Custom build evidence payload lacks bounded authority'",
+      start
+    );
+    assert.ok(start >= 0 && end > start);
+    return body.slice(start, end).trim();
+  };
+  assert.equal(
+    payloadJobBranch(v47PayloadGuard),
+    payloadJobBranch(v44PayloadGuard)
+  );
+  for (const trigger of [
+    "service_custom_build_progress_updates_00_handoff_guard",
+    "service_custom_build_work_requests_00_handoff_guard",
+    "service_access_requests_00_custom_build_handoff_guard",
+    "service_custom_build_final_checkout_00_handoff_guard"
+  ]) {
+    assert.match(
+      handoff.sql,
+      new RegExp(`create trigger ${trigger}\\b`, "iu"),
+      `missing post-handoff closure trigger ${trigger}`
+    );
+  }
+  assert.match(
+    handoff.sql,
+    /alter table ss\.service_custom_build_handoff_receipts enable row level security[\s\S]*force row level security[\s\S]*revoke all on table ss\.service_custom_build_handoff_receipts[\s\S]*grant select on table ss\.service_custom_build_handoff_receipts/iu
+  );
+  assert.match(
+    handoff.sql,
+    /create function ss\.hosted_runtime_contract_v47\(\)[\s\S]*canonical-ss-v47-custom-build-handoff[\s\S]*grant execute on function ss\.hosted_runtime_contract_v47\(\)/iu
+  );
+  assert.doesNotMatch(
+    handoff.sql,
+    /hosted_runtime_contract_v48|privacy|on delete cascade|grant all privileges|create table ss\.service_custom_build_(?!handoff_receipts)/iu
+  );
+});

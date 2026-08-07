@@ -1,20 +1,23 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-07T06:18:23-0400 (EDT)
+Generated at: 2026-08-07T10:01:17-0400 (EDT)
 
 Repository snapshot:
 
 - Branch: build/sitesourcery-v2-20260730
-- Base HEAD: ea38093 (sealed public truth on top of H1N Purpose 1; the
-  migration-46 checkpoint is the path-limited commit containing this matrix)
+- Base HEAD: f9950ae (sealed migration 46 on top of public-truth commit
+  ea38093; the migration-47 checkpoint is the path-limited commit containing
+  this matrix)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
-- Active ledger reviewed completely: ops/SITESOURCERY-ACTIVE-RUN.md, 1,629 lines
+- Active ledger reviewed completely through the migration-47 seal:
+  ops/SITESOURCERY-ACTIVE-RUN.md
 - Package gates reviewed: package.json and server/data-plane/package.json
 - H1M remains sealed at c4277ce, the distinct local public-page visual
   checkpoint is sealed at 2b0f9e0, and H1N Purpose 1 is sealed at 9a9511c.
-  This matrix is part of the path-limited migration-46 seal. Concurrent
-  public/legal/checker/shared-manifest truth edits remain outside that
-  checkpoint and are not treated as release proof.
+  H1N migration 46 is sealed at f9950ae and public truth is sealed at ea38093.
+  This matrix is part of the path-limited migration-47 seal. The separate
+  public branches 035d76a and 4b30ce5 are not ancestors of this candidate and
+  are not counted as release proof.
 
 ## Authority, status, and percentage rules
 
@@ -88,7 +91,7 @@ of this file.
 
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| CORE LAUNCH | 74 | 43 | 19 | 0 | 136 | 54.4% |
+| CORE LAUNCH | 94 | 33 | 9 | 0 | 136 | 69.1% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
@@ -222,10 +225,10 @@ of this file.
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
 | QIJ-03 | Versioned estimate/quote, disclosure, expiry, acceptance, credit, scope reuse and change-order authority | Build | PARTIAL | Assessment/Custom quote authority is sealed through migration 42; H1M change-order authority is sealed in migration 44 and commit c4277ce; generic cross-service scope reuse is absent | Preserve the sealed H1M authority and add only launch-required scope reuse. |
-| QIJ-04 | Invoice, deposit/milestone/balance, provider settlement, receipt, retry and uncertain-payment reconciliation | Build | PARTIAL | Assessment and first Custom payment are sealed through migration 42; H1M intentionally leaves accepted changes payment-required; H1N change-order and final invoices/settlement remain absent | Implement H1N's ordered change-payment purpose before its separate final-payment purpose. |
-| QIJ-05 | Job, checklist, dependency, safe access, evidence, deliverable, completion, 30-day correction and handoff | Build | PARTIAL | Migration 43 progress and migration 44 completion are sealed through c4277ce; no immutable handoff or handoff-derived workmanship clock exists | Implement H1N final settlement, handoff and database-derived window without weakening H1M finality. |
+| QIJ-04 | Invoice, deposit/milestone/balance, provider settlement, receipt, retry and uncertain-payment reconciliation | Build | DONE | Assessment and first Custom payment are sealed through migration 42; accepted-change payment is sealed at 9a9511c; final obligation/payment is sealed at f9950ae; durable provider-confirmed receipt, exact zero-balance clearance, retry and command-bound owner reconciliation are exercised by the maintained all-47 PostgreSQL and hosted/API suites recorded in the active ledger | Preserve each financial purpose and its no-browser-mark-paid boundary. |
+| QIJ-05 | Job, checklist, dependency, safe access, evidence, deliverable, completion, 30-day correction and handoff | Build | DONE | Migrations 43/44 retain progress/completion; migration 47 and custom-services-custom-build-handoff-postgres.mjs add one immutable delivery document, terminal write guards and database-derived 30-day `[start,end)` window; maintained PostgreSQL/API/browser proof is recorded in the active ledger | Preserve completion/handoff finality and the handoff-derived clock. |
 | QIJ-06 | Paid-job subset: three stages, four milestones, one bounded request and owner resolution | Build | DONE | migration 202608060043; custom-build-progress-postgres.mjs and tests; commit a46fb40; H1M post-completion finality sealed by c4277ce | Preserve the sealed progress and completion finality through H1N. |
-| QIJ-07 | Formal change orders, completion evidence, final payment, delivery receipt and 30-day boundary | Build | PARTIAL | H1M change orders and completion evidence are sealed at c4277ce with active ledger:1293-1381; both H1N payment purposes, delivery and workmanship authority are absent | Complete every ordered H1N row below. |
+| QIJ-07 | Formal change orders, completion evidence, final payment, delivery receipt and 30-day boundary | Build | DONE | H1M is sealed at c4277ce, accepted-change payment at 9a9511c, final payment at f9950ae, and migration 47 provides the settlement/clearance-gated immutable handoff and exact workmanship interval; all-47 PostgreSQL and three-width browser journeys prove the ordered path | Preserve the one-way sequence and rerun it in final staging. |
 | SURFACE-01 | Responsive Mac/Pixel owner assessment review and quote issue | Build | DONE | owner quote desk source/tests; browser controls; commit f2ee0b5 | Re-run in final owner journey. |
 | SURFACE-02 | Customer views for full assessment/onboarding/quote/invoice/payment/job/access/change/handoff/management/recovery lifecycle | Build | PARTIAL | Assessment and Custom-through-H1M completion views are sealed; onboarding, H1N payment/handoff, management, tickets and some recovery states do not exist | Complete H1N and only then Expansion views. |
 | SURFACE-03 | Mac/Pixel owner search and bounded operations for full client/site/payment/job/access/management/ops/reconciliation lifecycle | Build | PARTIAL | Owner assessment, paid-job, progress and H1M change/completion controls are sealed at c4277ce; broad search, final settlement, management and reconciliation are absent | Add launch-critical owner operations and prove no mark-paid shortcut. |
@@ -235,9 +238,9 @@ of this file.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| I-08 | Remove direct domain Stripe checkout, charge-before-registration and refund promises | Aesthetic + Polish/Integration | PARTIAL | domains/domain-search.js:43-46 maps two direct Stripe links, lines 120-131 render active Buy buttons, and lines 169-172 promise registrar confirmation plus a full refund; current domains/index.html has dirty copy changes but no sealed held journey | Remove every direct payment/refund path, retain truthful preflight/inquiry only, and prove the exact Pages/hosted artifacts. |
+| I-08 | Remove direct domain Stripe checkout, charge-before-registration and refund promises | Aesthetic + Polish/Integration | DONE | commit ea38093; domains/domain-search.js and domains/index.html expose inquiry/preflight only; server/commerce/rails.mjs and maintained domain public-truth/site/artifact tests prove zero public Checkout, charge or refund authority | Keep registrar commerce held until its separate Expansion authority is releasable. |
 | I-10 | Keep held domain storefront distinct from paid email/domain configuration, move and rescue work | Aesthetic + Polish/Integration | PARTIAL | Commercial contract/audit separates services; current Domains page still presents active buy/manage offers without a complete held boundary | Make storefront visibly non-sellable and cross-link separately scoped services only. |
-| I-11 | Keep The Responder operationally and commercially held until telephony fulfillment is real | Aesthetic + Polish/Integration | PARTIAL | responder/index.html:7,42-44,54-66,76-81 and 101-146 claim texts in seconds, working call paths, setup, monitoring and active $300/$250 pricing; lines 45 and 146 say it is not a button/order, but that does not retract the active fulfillment claims; server/commerce/rails.mjs:188-194 says no working Responder exists | Convert every route to clearly hypothetical examples plus inquiry-only hold; publish operational/pricing claims only after telephony/A2P proof. |
+| I-11 | Keep The Responder operationally and commercially held until telephony fulfillment is real | Aesthetic + Polish/Integration | DONE | commit ea38093; responder/index.html, FAQ/legal truth and maintained release/public-copy tests classify the examples as held and non-sellable; server/commerce/rails.mjs exposes no Responder checkout authority | Preserve the hold until real telephony/A2P fulfillment is independently released. |
 | I-12 | Expansion items do not block platform-subdomain launch | Build + Polish/Integration | DONE | Separate Alakazam release config/holds and this Core/Expansion split; roadmap:417-418 | Keep held public truth while Expansion proceeds independently. |
 
 ### Lane J — release and proof
@@ -255,7 +258,7 @@ of this file.
 | J-09 | Prove email, Stripe test payments, hosting, support, invoice, backup, restore, monitoring, alerting and rollback | Polish/Integration | PARTIAL | Individual ops proofs and Stripe mock/test boundaries exist in ops docs/tests and hosted tests; no single current-candidate integrated release proof exists | Execute full provider/staging/ops proof against exact candidate. |
 | J-10 | Owner walkthrough and reviewed production cutover | Owner/cutover | NOT STARTED | Public production remains July 22 predecessor per active ledger:32-34; no cutover record exists | Complete internal gates, conduct walkthrough, request explicit cutover approval. |
 | J-11 | Verify DNS/TLS/post-cutover and retain old-release rollback | Owner/cutover | PARTIAL | Old release is retained as fallback; no new-build cutover, post-cutover DNS/TLS or rollback exercise exists | At approved cutover, verify DNS/TLS/live behavior and rehearse exact rollback. |
-| J-12 | One Core release command runs fresh empty PostgreSQL migration replay and Custom-services PostgreSQL journeys | Build + Polish/Integration | PARTIAL | package.json:37-39 defines test:pg:migrations and test:pg:custom-services separately, but package.json:54 npm test invokes neither; test:node includes only PostgreSQL structure checks, so a green npm test is not green database release proof | Add a fail-fast Node 24 Core release command that provisions a fresh named disposable database, runs the complete empty migration replay and Custom-services journeys, verifies cleanup, and records the exact candidate digest. |
+| J-12 | One Core release command runs fresh empty PostgreSQL migration replay and Custom-services PostgreSQL journeys | Build + Polish/Integration | DONE | scripts/core-release.mjs and scripts/test/core-release.test.mjs; commit 3f10235; exact Node 24 all-47 command recorded in the active ledger created one named disposable database, replayed all migrations, passed 4/4 Custom-services journeys, removed it and returned `databaseAbsent:true` before the complete candidate gates passed | Keep this exact command mandatory for every final release candidate. |
 
 ### Accepted launch-truth gates
 
@@ -266,13 +269,13 @@ of this file.
 | TRUTH-03 | Replace “$25 = your own .com” with label.sitesourcery.me | Aesthetic + Polish/Integration | PARTIAL | Account/terms use label.sitesourcery.me; hosted fragments still advertise own-domain hosting at scripts/hosted-truth/fragments/abracadabra-landing-main.html:80-90 | Remove tier/domain conflation from every public/hosted source. |
 | TRUTH-04 | Remove invented cancellation, grace, suspension, retention, deletion and refund language until policy is approved | Aesthetic + Polish/Integration | PARTIAL | Audit exists, but legal/website-terms/index.html:96-101 and source-only controls still state invented clocks | Remove/hold public claims now; reintroduce only after Lane G policy/proof. |
 | TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Hosted legal fragments exist for earlier Download authority; current public legal source conflicts with hosted account reality and all-tier contract | Rewrite from canonical contracts, then run legal/copy tests and browser audit. |
-| TRUTH-06 | Remove five legacy direct Stripe Payment Links from all public and production artifacts | Build + Aesthetic | NOT STARTED | Direct links remain in domains/domain-search.js:45-46, abracadabra/app/abracadabra-paid-download.js:122-137 and server/commerce/rails.mjs:95-177; scripts/check-site.mjs:270-275 currently blesses five rails by count | Remove direct links and the count-based blessing from Pages/hosted candidates; use only account-bound server Checkout with purpose-specific authority. |
+| TRUTH-06 | Remove five legacy direct Stripe Payment Links from all public and production artifacts | Build + Aesthetic | DONE | commit ea38093 removes the direct-link rails and legacy paid bridge from reviewed artifacts; scripts/check-site.mjs, domain-public-truth and hosted-artifact tests require zero public checkout rails while authenticated purpose-specific server Checkout remains private | Preserve zero direct payment links in both Pages and hosted artifacts. |
 | TRUTH-07 | Assessment intake, written offer, account invoice and payment sequencing | Build | DONE | migrations 34-39; authenticated routes/tests; commits ccce671 through 5c34845 | Re-run as part of final public-to-account journey. |
-| TRUTH-08 | Minimum Custom estimate/invoice/deposit/milestone/job ledger before advertised operational | Build | PARTIAL | Estimate, acceptance, first invoice/payment and job exist through migration 43; H1M change/completion is sealed at c4277ce; H1N change-payment, final balance and handoff are absent | Implement both ordered H1N financial purposes before any public operational claim. |
-| TRUTH-09 | Hold domain storefront and remove direct Stripe, charge and refund language until registrar authority is releasable | Aesthetic + Polish/Integration | NOT STARTED | domains/domain-search.js:43-46,120-131 creates direct Stripe Buy actions and lines 169-172 promises post-search registrar confirmation/refund; server/commerce/rails.mjs:128-162 records charged-today/refund fulfillment while registrar resale remains held | Make search explicitly non-authoritative and inquiry/preflight-only, remove all direct charge/refund paths, then test Pages and hosted artifacts for zero domain payment authority. |
-| TRUTH-10 | Hold active Responder sales and operational claims until telephony/A2P is real | Aesthetic + Polish/Integration | PARTIAL | responder/index.html:7,42-44,54-66,76-81 and 101-146 presents an operating seconds-fast service at $300 setup/$250 monthly; no-button/order caveats at lines 45 and 146 are only partial truth; server/commerce/rails.mjs:188-194 says there is no working Responder | Convert all current-tense fulfillment and sellable pricing to unmistakable held/hypothetical inquiry copy across every route; require telephony/A2P journey proof before activation. |
-| TRUTH-11 | Exclude legacy browser localStorage accounts, honor-paid state and direct-payment scripts from both GitHub Pages and hosted production artifacts | Build | PARTIAL | Hosted build correctly excludes the bridges at scripts/build-hosted.mjs:35-40,631-640, but scripts/build-pages.mjs:25,30 includes them, abracadabra/app/index.html:20,22 loads them, abracadabra-account.js:5-10,24-28 stores browser accounts, and abracadabra-paid-download.js:7-11,122-137 trusts an honor gate/direct Stripe link | Remove the legacy bridges from the Pages artifact and runtime, replace them with authenticated server authority, and make both artifact gates fail on localStorage/honor/direct-payment regressions. |
-| TRUTH-12 | Reconcile the inquiry-only public catalog with the release checker's five-sellable-rails model | Build + Polish/Integration | NOT STARTED | data/public-catalog.json:4-5 and scripts/check-pricing.mjs:240-249 require inquiry-only/no checkout endpoints, while scripts/check-site.mjs:270-275,404-408 requires and reports exactly five sellable rails from server/commerce/rails.mjs:95-177,214-215, including held/direct-payment offers | Replace the pinned rail count with per-offer availability and fulfillment authority; fail when any inquiry-only/held offer is classified sellable or a public artifact carries its checkout. |
+| TRUTH-08 | Minimum Custom estimate/invoice/deposit/milestone/job ledger before advertised operational | Build | DONE | Migrations 41-47, commits 9221072/52644fa/a46fb40/c4277ce/9a9511c/f9950ae and the migration-47 checkpoint provide estimate, accepted scope, first/change/final invoices and settlement, retained job/progress/completion, immutable handoff and 30-day workmanship authority; active ledger records all-47 PostgreSQL and browser proof | Preserve the full ordered ledger in staging and production release proof. |
+| TRUTH-09 | Hold domain storefront and remove direct Stripe, charge and refund language until registrar authority is releasable | Aesthetic + Polish/Integration | DONE | commit ea38093; domain storefront is inquiry/preflight-only, server rails expose no charge/refund action, and maintained domain/site/artifact checks reject direct payment or refund authority | Keep held until registrar/reseller Expansion proof is complete. |
+| TRUTH-10 | Hold active Responder sales and operational claims until telephony/A2P is real | Aesthetic + Polish/Integration | DONE | commit ea38093; Responder examples are explicitly held/non-sellable in public, FAQ and legal truth; maintained release tests and zero public rails enforce the hold | Reopen only after telephony/A2P journey proof. |
+| TRUTH-11 | Exclude legacy browser localStorage accounts, honor-paid state and direct-payment scripts from both GitHub Pages and hosted production artifacts | Build | DONE | commit ea38093; the reviewed 74-file Pages artifact and hosted artifact exclude legacy account/honor-paid/direct-payment scripts; hosted-artifact/site checks fail on their return | Preserve authenticated server authority and exact artifact allowlists. |
+| TRUTH-12 | Reconcile the inquiry-only public catalog with the release checker's five-sellable-rails model | Build + Polish/Integration | DONE | commit ea38093; data/public-catalog.json, server/commerce/rails.mjs and scripts/check-site.mjs classify seven offers explicitly and report zero public checkout rails; exact public/catalog/site tests are green | Require per-offer fulfillment authority before any rail becomes sellable. |
 
 ### Sealed H1M checkpoint — H1N is next
 
@@ -312,9 +315,9 @@ settlement, handoff, or permission to skip either financial purpose.
 | H1N-FINAL-02 | Materialize the final invoice and immutable line items, including an explicit zero-balance path | Build | DONE | migration 202608060046 final invoice/line and explicit zero-balance-clearance authority; migration structure and real all-46 replay; active-ledger migration-46 checkpoint | Keep zero clearance explicit and prohibit zero/forged Checkout creation. |
 | H1N-FINAL-03 | Use a dedicated final-payment Checkout purpose with retained attempt and event ledger | Build | DONE | final-payment service, Stripe adapter/config, migration-46 attempts/events/global purpose fence, HTTP/composition/webhook tests; active-ledger migration-46 checkpoint | Preserve global first/change/final effect isolation and held-by-default new creation. |
 | H1N-FINAL-04 | Require provider-confirmed final settlement or explicit database-authorized zero-balance clearance | Build | DONE | migration-46 immutable receipt/clearance triggers; exact provider line-item/readback checks; durable owner replay/conflict; 7/7 service, 195/195 independent and all-46 clean-room proof in active ledger | Permit migration-47 handoff only from these two exact authorities. |
-| H1N-FINAL-05 | Create immutable handoff/delivery receipt only after final settlement/clearance and close later work writes | Build | NOT STARTED | No service handoff receipt/table exists; migration 44 explicitly says completion is not handoff | Add evidenced handoff transaction, financial prerequisite and terminal write guards. |
-| H1N-FINAL-06 | Expose bounded customer and owner final-obligation/payment/handoff projections and responsive journeys | Build | PARTIAL | v46 customer/account and owner/API/HTTP final-obligation/payment projections are exact and provider-ID-safe; handoff projections, final controls and final browser journey do not exist | Add migration-47 handoff projections and the complete authenticated customer/owner browser journey. |
-| H1N-FINAL-07 | Derive immutable 30-day workmanship start/end in PostgreSQL from evidenced handoff | Build | NOT STARTED | Quote promises 30 days in migration 41 and UI, but no handoff-derived clock exists; completion UI says clock has not started | Materialize start/end only from handoff time and prove exact inclusive/exclusive boundaries and immutable replay. |
+| H1N-FINAL-05 | Create immutable handoff/delivery receipt only after final settlement/clearance and close later work writes | Build | DONE | migration 202608060047 creates one unique-job immutable handoff receipt and canonical customer document only after exact provider receipt or zero-balance clearance; H1M advisory-lock serialization, terminal write guards, receipt-count/race proof and handoff service tests are maintained; active ledger records all-47 PostgreSQL proof | Preserve unique `job_id`, financial prerequisites, exact command replay and terminal finality. |
+| H1N-FINAL-06 | Expose bounded customer and owner final-obligation/payment/handoff projections and responsive journeys | Build | DONE | custom-services-account-hosted.mjs, http.mjs, abracadabra-api.js and customer controls keep payment and two-capability handoff readiness separate; maintained API/DOM/browser proof covers paid and zero paths, retained errors, delayed authority, no provider IDs, 44px controls and exact 320/390/1440 widths | Preserve capability separation and fail-closed terminal/unknown rendering. |
+| H1N-FINAL-07 | Derive immutable 30-day workmanship start/end in PostgreSQL from evidenced handoff | Build | DONE | migration 202608060047 derives exact UTC start at handoff and end at 720 hours with `[start,end)` semantics; stored canonical document carries the same millisecond-Z facts; real PostgreSQL and both paid/zero browser journeys assert exact dates and coverage wording | Keep the clock database-derived from immutable handoff only. |
 
 ### Owner-directed aesthetic launch corrections
 
@@ -327,7 +330,7 @@ commercial/public truth remain PARTIAL until that separate lane is sealed.
 | --- | --- | --- | --- | --- | --- |
 | AESTH-01 | Domains uses its own storefront background, no floating duplicate, readable frosted hero and mobile containment | Aesthetic | DONE | commit 2b0f9e0; page-scoped environment/CSS/assets; maintained 15-route exact-width browser audit | Preserve the visual checkpoint while the separate Domains truth lane finishes. |
 | AESTH-02 | Custom Sorcery route has unique page presentation and no arbitrary floating repeated graphics | Aesthetic | DONE | commit 2b0f9e0; distinct Custom environment and exact-width browser audit | Preserve presentation; commercial authority remains a separate truth obligation. |
-| AESTH-03 | Responder removes planner/floating art, shows the whole five-step flow directly and is held/non-sellable | Aesthetic | PARTIAL | Local visual portion is sealed at 2b0f9e0 and browser-proven; held/non-sellable copy is concurrently edited and unsealed | Seal the separate Responder truth tests without changing the visual checkpoint. |
+| AESTH-03 | Responder removes planner/floating art, shows the whole five-step flow directly and is held/non-sellable | Aesthetic | DONE | visual presentation is sealed at 2b0f9e0; held/non-sellable public, FAQ and legal truth plus maintained checks are sealed at ea38093; current 15-route exact-width browser audit is green | Preserve the visual flow and operational hold until Responder Expansion is real. |
 | AESTH-04 | Work/Spell Book is an explorable work gallery without clutter or invented client claims | Aesthetic | PARTIAL | Local gallery presentation is sealed at 2b0f9e0; final public-truth review of founder/fictional claims is not yet sealed | Complete and seal the claim audit separately. |
 | AESTH-05 | About has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `one-person-studio` asset/page class; exact-width browser audit | Preserve. |
 | AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `signal-room` asset/page class; exact-width browser audit | Preserve form/contact readability. |
@@ -406,33 +409,39 @@ held and non-sellable. They determine the separate Expansion percentage.
 
 ## Immediate next action
 
-Seal the path-limited migration-46 checkpoint on public base `ea38093`, with
-only the exact customer-control asset-hash hunk from the shared manifest. Then
-implement migration 47 immutable handoff and the handoff-derived 30-day
-workmanship window. Reserve migration 48 for hosted Privacy V3 and retain the
-provider-release, push, deployment and DNS holds.
+Seal the path-limited migration-47 checkpoint on base `f9950ae`, including
+only the two exact Abracadabra asset hashes from the shared manifest and no
+public-route files. After that commit, resume the remaining launch-critical
+Alakazam invoice/lifecycle/control gaps. Reserve migration 48 for hosted
+Privacy V3 and retain the provider-release, push, deployment and DNS holds.
 
 ## Current evidence gaps that control the next actions
 
-1. H1N Purpose 1 is sealed at 9a9511c. Migration 46 now has the exact final
-   obligation/invoice, dedicated final Checkout, provider-confirmed settlement
-   or explicit zero-balance clearance, owner reconciliation and bounded backend
-   projections. Immutable handoff, final customer/owner controls and the
-   handoff-derived workmanship clock remain for migration 47.
+1. H1N Purpose 1 is sealed at 9a9511c and migration 46 at f9950ae. Migration 47
+   now adds the exact financial-clearance-gated immutable handoff, canonical
+   customer document, split customer/owner controls, terminal write closure and
+   database-derived 30-day workmanship interval. Its path-limited commit is the
+   immediate seal action.
 2. Canonical Alakazam invoices, Portal/cancellation, lifecycle transitions,
    $35/$50 controls/care, customer publication controls and owner
    reconciliation remain incomplete.
 3. Public/legal/catalog/domain/Responder truth is sealed separately at
    `ea38093`; it remains a held-truth checkpoint rather than evidence that
    unavailable commerce rails are sellable.
-4. Local page visuals are sealed at 2b0f9e0; Responder, Work and Legal rows that
-   combine presentation with truth remain PARTIAL until their truth is sealed.
-5. Both the isolated migration-46 tree and the final combined tree on public
-   base `ea38093` replayed all 46 migrations, passed 4/4 real Custom-services
-   journeys, removed and proved absence of their exact disposable databases,
-   and passed the full Node 24 candidate and exact browser gate. Provider
-   test-mode, private staging, cutover and rollback proof still belong to the
-   later release candidate after migration 47.
+4. Local page visuals are sealed at 2b0f9e0 and the Responder visual/truth row
+   is complete through ea38093. Work and Legal combined rows remain PARTIAL.
+   Separate branch tips 035d76a and 4b30ce5 are not ancestors and earn no Core
+   credit in this candidate.
+5. Exact Node 24 Core run
+   `ss_core_release_20260807t135415807z_6b34890859c9` replayed all 47
+   migrations, passed 4/4 real Custom-services journeys, removed and proved
+   absence of the database, then passed the full candidate and exact
+   three-width browser gate. After the narrow organization/job receipt-scope
+   review, fresh database
+   `ss_core_release_20260807t135950166z_2c36b2fb31f9` replayed current all-47
+   bytes, passed the affected 4/4 PostgreSQL journeys and proved exact absence;
+   the only affected candidate gate, migration structure, passed 39/39.
+   Provider test mode, private staging, cutover and rollback proof remain.
 
 ## Row coverage and recount
 
@@ -473,7 +482,7 @@ Roadmap coverage audit:
 Recount arithmetic:
 
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 = 136.
-- Core status recount: 78 DONE + 44 PARTIAL + 14 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 78 / 136 = 57.4% after one-decimal rounding.
+- Core status recount: 94 DONE + 33 PARTIAL + 9 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 94 / 136 = 69.1% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 136 + 24 + 5 = 165 total classified rows.

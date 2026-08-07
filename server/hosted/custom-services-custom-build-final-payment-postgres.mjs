@@ -112,11 +112,14 @@ function iso(value, field, code = "CUSTOM_BUILD_FINAL_PAYMENT_CONFLICT") {
 }
 
 function canonicalDigests(value, field) {
+  // Migration 44 canonically orders this immutable sequence by change number,
+  // not by the lexical value of each digest. Preserve that semantic order and
+  // reject duplicates instead of sorting hashes and changing bound identity.
   invariant(
     Array.isArray(value) &&
       value.length <= 1000 &&
       value.every((entry) => SHA256.test(String(entry ?? ""))) &&
-      JSON.stringify(value) === JSON.stringify([...new Set(value)].sort()),
+      new Set(value).size === value.length,
     "CUSTOM_BUILD_FINAL_PAYMENT_CONFLICT",
     `${field} is not canonical.`,
     { status: 500 }
@@ -855,7 +858,8 @@ const FINAL_STATE_SELECT = `
     obligation.completion_package_digest,
     package.prepared_at as completion_prepared_at,
     obligation.base_scope_digest,
-    obligation.effective_change_order_digests,
+    pg_catalog.to_json(obligation.effective_change_order_digests)
+      as effective_change_order_digests,
     obligation.effective_scope_digest,
     obligation.accepted_quote_digest,
     obligation.accepted_disclosure_digest,
@@ -1609,7 +1613,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              obligation.completion_package_id,
              obligation.completion_package_digest,
              obligation.base_scope_digest,
-             obligation.effective_change_order_digests,
+             pg_catalog.to_json(obligation.effective_change_order_digests)
+               as effective_change_order_digests,
              obligation.effective_scope_digest,
              obligation.accepted_quote_digest,
              obligation.accepted_disclosure_digest,
@@ -2032,7 +2037,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              obligation.installment_number,
              obligation.completion_package_digest,
              obligation.base_scope_digest,
-             obligation.effective_change_order_digests,
+             pg_catalog.to_json(obligation.effective_change_order_digests)
+               as effective_change_order_digests,
              obligation.effective_scope_digest,
              obligation.accepted_quote_digest,
              obligation.accepted_disclosure_digest,
@@ -2264,7 +2270,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              obligation.completion_package_id,
              obligation.completion_package_digest,
              obligation.base_scope_digest,
-             obligation.effective_change_order_digests,
+             pg_catalog.to_json(obligation.effective_change_order_digests)
+               as effective_change_order_digests,
              obligation.effective_scope_digest,
              obligation.accepted_quote_digest,
              obligation.accepted_disclosure_digest,
@@ -2723,7 +2730,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              obligation.installment_number,
              obligation.completion_package_digest,
              obligation.base_scope_digest,
-             obligation.effective_change_order_digests,
+             pg_catalog.to_json(obligation.effective_change_order_digests)
+               as effective_change_order_digests,
              obligation.effective_scope_digest,
              obligation.accepted_quote_digest,
              obligation.accepted_disclosure_digest,
@@ -3254,7 +3262,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              obligation.installment_number,
              obligation.completion_package_digest,
              obligation.base_scope_digest,
-             obligation.effective_change_order_digests,
+             pg_catalog.to_json(obligation.effective_change_order_digests)
+               as effective_change_order_digests,
              obligation.effective_scope_digest,
              obligation.accepted_quote_digest,
              obligation.accepted_disclosure_digest,

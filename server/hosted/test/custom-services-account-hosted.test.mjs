@@ -4,7 +4,8 @@ import test from "node:test";
 
 import {
   createHeldHostedCustomServicesAccount,
-  createHostedCustomServicesAccount
+  createHostedCustomServicesAccount,
+  createHostedCustomServicesCustomBuildHandoffOwner
 } from "../custom-services-account-hosted.mjs";
 import {
   createHeldCustomServicesCustomBuildChangeCompletion
@@ -56,7 +57,12 @@ function foundationSnapshot() {
   };
 }
 
-function context({ scope, snapshot } = {}) {
+function context({
+  customBuildFinalState,
+  customBuildHandoff,
+  scope,
+  snapshot
+} = {}) {
   const calls = {
     assessmentEvidence: [],
     assessmentReport: [],
@@ -69,6 +75,8 @@ function context({ scope, snapshot } = {}) {
     customBuildChangeInvoiceRead: [],
     customBuildFinalCheckout: [],
     customBuildFinalRead: [],
+    customBuildHandoffDocumentRead: [],
+    customBuildHandoffRead: [],
     customBuildCompletionEvidenceRead: [],
     customBuildAcceptance: [],
     customBuildInvoiceRead: [],
@@ -166,12 +174,12 @@ function context({ scope, snapshot } = {}) {
     customBuildFinalPayment: {
       async readCurrentState(value) {
         calls.customBuildFinalRead.push(structuredClone(value));
-        return {
+        return structuredClone(customBuildFinalState ?? {
           schema: "sitesourcery.custom-build-final-handoff/v1",
           state: "checkout_available",
           invoice: { invoiceId: OTHER_ID },
           handoff: null
-        };
+        });
       },
       async createCheckout(value) {
         calls.customBuildFinalCheckout.push(structuredClone(value));
@@ -181,6 +189,23 @@ function context({ scope, snapshot } = {}) {
         };
       }
     },
+    ...(customBuildHandoff
+      ? {
+          customBuildHandoff: {
+            async readCustomer(value) {
+              calls.customBuildHandoffRead.push(structuredClone(value));
+              return structuredClone(customBuildHandoff.state);
+            },
+            async readCustomerDocument(value, documentId) {
+              calls.customBuildHandoffDocumentRead.push({
+                scope: structuredClone(value),
+                documentId
+              });
+              return structuredClone(customBuildHandoff.document);
+            }
+          }
+        }
+      : {}),
     customBuildProgress: {
       async readCustomerProgress(value) {
         calls.customBuildProgressRead.push(structuredClone(value));
@@ -696,6 +721,296 @@ test("hosted Custom-build final state and checkout stay project-bound and cannot
     isError("invalid_input", 400)
   );
   assert.equal(selected.calls.customBuildFinalCheckout.length, 1);
+});
+
+test("hosted Custom-build handoff overlays immutable delivery dates and reads only the bound customer document", async () => {
+  const jobId = "61000000-0000-4000-8000-000000000001";
+  const packageId = "62000000-0000-4000-8000-000000000001";
+  const obligationId = "63000000-0000-4000-8000-000000000001";
+  const documentId = "64000000-0000-4000-8000-000000000001";
+  const receiptId = "65000000-0000-4000-8000-000000000001";
+  const completedAt = "2026-11-01T04:45:00.000Z";
+  const handedOffAt = "2026-11-01T05:30:00.000Z";
+  const workmanshipEndsAt = "2026-12-01T05:30:00.000Z";
+  const packageDigest = "1".repeat(64);
+  const obligationDigest = "2".repeat(64);
+  const contentDigest = "3".repeat(64);
+  const document = {
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    documentId,
+    contentDigest,
+    mediaType: "application/json",
+    byteCount: 512,
+    payload: { state: "handed_off" }
+  };
+  const selected = context({
+    customBuildFinalState: {
+      schema: "sitesourcery.custom-build-final-handoff/v1",
+      state: "paid_handoff_pending",
+      projectId: PROJECT_ID,
+      jobId,
+      completion: { packageId, packageDigest, completedAt },
+      obligation: { obligationId, obligationDigest },
+      invoice: { invoiceId: OTHER_ID },
+      payment: { state: "paid" },
+      handoff: {
+        state: "pending",
+        documentId: null,
+        workmanshipStartsAt: null,
+        workmanshipEndsAt: null
+      },
+      action: {
+        checkoutAvailable: false,
+        handoffAvailable: false,
+        reason: "paid_handoff_pending"
+      }
+    },
+    customBuildHandoff: {
+      state: {
+        schema: "sitesourcery.custom-build-handoff-state/v1",
+        state: "handed_off",
+        projectId: PROJECT_ID,
+        jobId,
+        completion: { packageId, packageDigest, completedAt },
+        finalObligation: { obligationId, obligationDigest },
+        financialClearance: {
+          kind: "provider_confirmed_final_payment",
+          referenceId: "66000000-0000-4000-8000-000000000001",
+          clearedAt: "2026-11-01T05:00:00.000Z"
+        },
+        handoff: {
+          receiptId,
+          documentId,
+          contentDigest,
+          handedOffAt,
+          workmanship: {
+            coverage: "[start,end)",
+            termDays: 30,
+            startsAt: handedOffAt,
+            endsAt: workmanshipEndsAt
+          }
+        },
+        action: { handoffAvailable: false, reason: "handed_off" }
+      },
+      document
+    }
+  });
+
+  const state = await selected.service.getCustomBuildFinalHandoff(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(state.state, "handed_off");
+  assert.deepEqual(state.handoff, {
+    state: "handed_off",
+    documentId,
+    contentDigest,
+    handedOffAt,
+    workmanshipStartsAt: handedOffAt,
+    workmanshipEndsAt
+  });
+  assert.equal(Object.hasOwn(state.handoff, "receiptId"), false);
+  assert.equal(Object.isFrozen(state), true);
+
+  assert.deepEqual(
+    await selected.service.getCustomBuildHandoffDocument(
+      actor(),
+      PROJECT_ID,
+      documentId
+    ),
+    document
+  );
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildFinalRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildHandoffRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildHandoffDocumentRead, [
+    { scope, documentId }
+  ]);
+});
+
+test("hosted owner handoff readiness preserves the exact two-capability boundary and excludes payment lifecycle data", async () => {
+  const jobId = "61000000-0000-4000-8000-000000000011";
+  const packageId = "62000000-0000-4000-8000-000000000011";
+  const obligationId = "63000000-0000-4000-8000-000000000011";
+  const packageDigest = "4".repeat(64);
+  const obligationDigest = "5".repeat(64);
+  const clearedAt = "2026-11-01T05:00:00.000Z";
+  const readySource = {
+    schema: "sitesourcery.custom-build-handoff-state/v1",
+    state: "paid_handoff_pending",
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    jobId,
+    completion: {
+      packageId,
+      packageDigest,
+      completedAt: "2026-11-01T04:45:00.000Z"
+    },
+    finalObligation: { obligationId, obligationDigest },
+    financialClearance: {
+      kind: "provider_confirmed_final_payment",
+      referenceId: "66000000-0000-4000-8000-000000000011",
+      clearedAt
+    },
+    handoff: null,
+    action: {
+      handoffAvailable: true,
+      reason: "provider checkout cs_hidden_from_handoff_projection"
+    }
+  };
+  const command = { commandId: "handoff-capability-command-1" };
+
+  function boundary(capabilities, source = readySource) {
+    const selected = new Set(capabilities);
+    const calls = [];
+    function requireExactHandoffAuthority() {
+      if (
+        !selected.has("service_job_manage") ||
+        !selected.has("service_document_manage")
+      ) {
+        throw Object.assign(new Error("handoff authority required"), {
+          code: "OPERATOR_ACCESS_REQUIRED",
+          status: 403
+        });
+      }
+    }
+    return {
+      calls,
+      service: createHostedCustomServicesCustomBuildHandoffOwner({
+        customBuildHandoff: {
+          async readOwner(selectedActor, selectedJobId, organizationId) {
+            requireExactHandoffAuthority();
+            calls.push({
+              action: "read",
+              actor: selectedActor,
+              jobId: selectedJobId,
+              organizationId
+            });
+            return structuredClone(source);
+          },
+          async createHandoff(selectedActor, selectedJobId, input) {
+            requireExactHandoffAuthority();
+            calls.push({
+              action: "create",
+              actor: selectedActor,
+              jobId: selectedJobId,
+              input
+            });
+            return { schema: "handoff-command-test/v1", state: "handed_off" };
+          }
+        }
+      })
+    };
+  }
+
+  const allowed = boundary([
+    "service_job_manage",
+    "service_document_manage"
+  ]);
+  const readiness = await allowed.service.readOwnerState(
+    actor(),
+    jobId,
+    ORGANIZATION_ID
+  );
+  assert.deepEqual(readiness, {
+    schema: "sitesourcery.custom-build-handoff-owner-readiness/v1",
+    state: "handoff_available",
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    jobId,
+    completion: {
+      packageId,
+      packageDigest,
+      completedAt: "2026-11-01T04:45:00.000Z"
+    },
+    finalObligation: { obligationId, obligationDigest },
+    financialClearance: { clearedAt },
+    handoff: null,
+    action: {
+      handoffAvailable: true,
+      reason: "financial_clearance_confirmed"
+    }
+  });
+  assert.equal(Object.isFrozen(readiness), true);
+  const serialized = JSON.stringify(readiness);
+  for (const forbidden of [
+    "cs_",
+    "provider",
+    "attempt",
+    "checkout",
+    "event",
+    "payment",
+    "reconciliation",
+    "receiptId",
+    "referenceId"
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
+  assert.deepEqual(
+    await allowed.service.createHandoff(actor(), jobId, command),
+    { schema: "handoff-command-test/v1", state: "handed_off" }
+  );
+  assert.deepEqual(allowed.calls, [
+    {
+      action: "read",
+      actor: actor(),
+      jobId,
+      organizationId: ORGANIZATION_ID
+    },
+    { action: "create", actor: actor(), jobId, input: command }
+  ]);
+
+  for (const capabilities of [
+    ["service_job_manage"],
+    ["service_document_manage"],
+    ["service_payment_reconcile"],
+    ["service_payment_reconcile", "service_job_manage"],
+    ["service_payment_reconcile", "service_document_manage"]
+  ]) {
+    const denied = boundary(capabilities);
+    await assert.rejects(
+      denied.service.readOwnerState(actor(), jobId, ORGANIZATION_ID),
+      isError("OPERATOR_ACCESS_REQUIRED", 403)
+    );
+    await assert.rejects(
+      denied.service.createHandoff(actor(), jobId, command),
+      isError("OPERATOR_ACCESS_REQUIRED", 403)
+    );
+    assert.deepEqual(denied.calls, []);
+  }
+
+  const retainedReadyMisclassification = boundary(
+    ["service_job_manage", "service_document_manage"],
+    {
+      ...readySource,
+      state: "payment_reconciliation_required",
+      financialClearance: null,
+      action: {
+        handoffAvailable: false,
+        reason: "payment_reconciliation_required"
+      }
+    }
+  );
+  const notReady = await retainedReadyMisclassification.service.readOwnerState(
+    actor(),
+    jobId,
+    ORGANIZATION_ID
+  );
+  assert.equal(notReady.state, "handoff_not_ready");
+  assert.deepEqual(notReady.financialClearance, null);
+  assert.deepEqual(notReady.action, {
+    handoffAvailable: false,
+    reason: "financial_clearance_required"
+  });
+  assert.doesNotMatch(
+    JSON.stringify(notReady),
+    /checkout|payment|provider|reconciliation/u
+  );
 });
 
 test("hosted Custom build progress read and response stay bound to the resolved project", async () => {

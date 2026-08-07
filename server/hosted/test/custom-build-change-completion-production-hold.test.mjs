@@ -7,24 +7,24 @@ const serverSourceUrl = new URL(
   import.meta.url
 );
 
-test("production holds H1M change and completion until H1N settlement exists", async () => {
+test("production releases change and completion only through the PostgreSQL authority after H1N settlement exists", async () => {
   const source = await readFile(serverSourceUrl, "utf8");
 
   assert.match(
     source,
-    /import\s*\{\s*createHeldCustomServicesCustomBuildChangeCompletion\s*\}\s*from\s*"\.\.\/custom-services-custom-build-change-completion-postgres\.mjs";/u
+    /import\s*\{\s*createPostgresCustomServicesCustomBuildChangeCompletion\s*\}\s*from\s*"\.\.\/custom-services-custom-build-change-completion-postgres\.mjs";/u
   );
   assert.match(
     source,
-    /const customServicesCustomBuildChangeCompletion\s*=\s*createHeldCustomServicesCustomBuildChangeCompletion\(\);/u
+    /const customServicesCustomBuildChangeCompletion\s*=\s*createPostgresCustomServicesCustomBuildChangeCompletion\(\{\s*authority,\s*clock:\s*commerceV2\.clock,\s*randomUUID:\s*\(\)\s*=>\s*commerceV2\.ids\.next\("custom_build_change_completion"\)\s*\}\);/u
   );
   assert.doesNotMatch(
     source,
-    /createPostgresCustomServicesCustomBuildChangeCompletion/u
+    /createHeldCustomServicesCustomBuildChangeCompletion/u
   );
-  assert.doesNotMatch(
+  assert.match(
     source,
-    /customServicesCustomBuildChangeCompletion\.readiness\(\)/u
+    /await customServicesCustomBuildChangeCompletion\.readiness\(\);/u
   );
   assert.match(
     source,

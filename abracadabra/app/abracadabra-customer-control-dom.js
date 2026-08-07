@@ -106,6 +106,18 @@
     "sitesourcery.custom-build-change-payment-reconciliation-command/v1";
   var CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA =
     "sitesourcery.custom-build-change-settlement/v1";
+  var CUSTOM_BUILD_FINAL_STATE_SCHEMA =
+    "sitesourcery.custom-build-final-handoff/v1";
+  var CUSTOM_BUILD_FINAL_CHECKOUT_SCHEMA =
+    "sitesourcery.custom-build-final-checkout/v1";
+  var CUSTOM_BUILD_FINAL_PAYMENTS_OWNER_SCHEMA =
+    "sitesourcery.custom-build-final-payments-owner/v1";
+  var CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA =
+    "sitesourcery.custom-build-handoff-owner-readiness/v1";
+  var CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA =
+    "sitesourcery.custom-build-handoff-document/v1";
+  var CUSTOM_BUILD_HANDOFF_COMMAND_SCHEMA =
+    "sitesourcery.custom-build-handoff-command/v1";
   var CUSTOM_BUILD_CHANGE_UNIT_MINOR = 12500;
   var CUSTOM_BUILD_COMPLETION_CHECKS = Object.freeze([
     Object.freeze(["scope", "Approved scope"]),
@@ -127,7 +139,9 @@
     Object.freeze(["quality", "Final checks"])
   ]);
   var CUSTOM_BUILD_PROGRESS_CREDENTIAL =
-    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase)/iu;
+    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase|bearer\s+[a-z0-9._~-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:token|key|secret|password)=)/iu;
+  var CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER =
+    /(^|[^a-z0-9_])(?:cs|pi|ch|cus|evt|pm|seti|src|tok|sub|price|prod|re)_[a-z0-9][a-z0-9_-]{5,}($|[^a-z0-9_])/iu;
   var CUSTOM_BUILD_TIERS = Object.freeze([
     Object.freeze({
       id: "card",
@@ -3160,7 +3174,32 @@
 
   function customBuildProgressText(value, minimum, maximum) {
     return assessmentText(value, minimum, maximum)
-      && !CUSTOM_BUILD_PROGRESS_CREDENTIAL.test(value);
+      && !CUSTOM_BUILD_PROGRESS_CREDENTIAL.test(value)
+      && !CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER.test(value);
+  }
+
+  function customBuildCanonicalJson(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return "[" + value.map(customBuildCanonicalJson).join(",") + "]";
+    }
+    return "{" + Object.keys(value).sort().map(function (key) {
+      return JSON.stringify(key) + ":" + customBuildCanonicalJson(value[key]);
+    }).join(",") + "}";
+  }
+
+  function customBuildUtf8ByteLength(value) {
+    return typeof TextEncoder === "function"
+      ? new TextEncoder().encode(value).byteLength
+      : Number.POSITIVE_INFINITY;
+  }
+
+  function portableCustomBuildLabelKey(value) {
+    return value.replace(/[A-Z]/gu, function (character) {
+      return character.toLowerCase();
+    });
   }
 
   function safeCustomBuildProgressRequest(value) {
@@ -4349,6 +4388,503 @@
         || !UUID.test(text(value.settlement.receiptId))
       ) return null;
     } else if (value.settlement !== null) return null;
+    return value;
+  }
+
+  function customBuildFinalHasRawProviderIdentifiers(value) {
+    var forbidden = new Set([
+      "chargeId",
+      "checkoutSessionId",
+      "eventId",
+      "paymentIntentId",
+      "stripeCustomerId"
+    ]);
+    function visit(selected) {
+      if (Array.isArray(selected)) return selected.some(visit);
+      if (!record(selected)) return false;
+      return Object.keys(selected).some(function (key) {
+        return forbidden.has(key) || visit(selected[key]);
+      });
+    }
+    return visit(value);
+  }
+
+  function exactCustomBuildWorkmanship(value, handedOffAt) {
+    return exactKeys(
+      value,
+      ["coverage", "endsAt", "startsAt", "termDays"]
+    )
+      && value.coverage === "[start,end)"
+      && value.termDays === 30
+      && safeIso(value.startsAt)
+      && safeIso(value.endsAt)
+      && (!handedOffAt || value.startsAt === handedOffAt)
+      && Date.parse(value.endsAt) - Date.parse(value.startsAt) ===
+        30 * 24 * 60 * 60 * 1000;
+  }
+
+  function verifiedCustomerCustomBuildFinalState(value, expectedProjectId) {
+    if (
+      !exactKeys(value, [
+        "action",
+        "completion",
+        "handoff",
+        "invoice",
+        "jobId",
+        "obligation",
+        "payment",
+        "projectId",
+        "schema",
+        "state"
+      ])
+      || value.schema !== CUSTOM_BUILD_FINAL_STATE_SCHEMA
+      || !UUID.test(text(value.projectId))
+      || (expectedProjectId && value.projectId !== expectedProjectId)
+      || ![
+        "completion_required",
+        "checkout_held",
+        "checkout_available",
+        "checkout_ready",
+        "checkout_expired",
+        "payment_reconciliation_required",
+        "paid_handoff_pending",
+        "cleared_no_balance_handoff_pending",
+        "handed_off"
+      ].includes(value.state)
+      || !exactKeys(
+        value.action,
+        ["checkoutAvailable", "handoffAvailable", "reason"]
+      )
+      || typeof value.action.checkoutAvailable !== "boolean"
+      || value.action.checkoutAvailable !==
+        (value.state === "checkout_available")
+      || value.action.handoffAvailable !== false
+      || customBuildFinalHasRawProviderIdentifiers(value)
+    ) return null;
+    if (value.state === "completion_required") {
+      return value.jobId === null
+        && value.completion === null
+        && value.obligation === null
+        && value.invoice === null
+        && value.payment === null
+        && exactKeys(
+          value.handoff,
+          ["documentId", "state", "workmanshipEndsAt", "workmanshipStartsAt"]
+        )
+        && value.handoff.state === "unavailable"
+        && value.handoff.documentId === null
+        && value.handoff.workmanshipStartsAt === null
+        && value.handoff.workmanshipEndsAt === null
+        ? value
+        : null;
+    }
+    if (
+      !UUID.test(text(value.jobId))
+      || !exactKeys(
+        value.completion,
+        ["completedAt", "packageDigest", "packageId"]
+      )
+      || !UUID.test(text(value.completion.packageId))
+      || !SHA256.test(text(value.completion.packageDigest))
+      || !safeIso(value.completion.completedAt)
+      || !exactKeys(value.obligation, [
+        "amount",
+        "boundAt",
+        "installmentNumber",
+        "obligationDigest",
+        "obligationId",
+        "workmanshipCorrectionDays"
+      ])
+      || !UUID.test(text(value.obligation.obligationId))
+      || !SHA256.test(text(value.obligation.obligationDigest))
+      || !exactKeys(value.obligation.amount, ["amountMinor", "currency"])
+      || !safeMinor(value.obligation.amount.amountMinor)
+      || value.obligation.amount.currency !== "USD"
+      || ![null, 2].includes(value.obligation.installmentNumber)
+      || value.obligation.workmanshipCorrectionDays !== 30
+      || !safeIso(value.obligation.boundAt)
+    ) return null;
+    var zero = value.obligation.amount.amountMinor === 0;
+    if (zero) {
+      if (
+        value.obligation.installmentNumber !== null
+        || value.invoice !== null
+        || !exactKeys(
+          value.payment,
+          ["chargeOccurred", "state", "zeroBalanceClearance"]
+        )
+        || value.payment.state !== "cleared_no_balance"
+        || value.payment.chargeOccurred !== false
+        || !exactKeys(
+          value.payment.zeroBalanceClearance,
+          ["clearanceDigest", "clearanceId", "clearedAt"]
+        )
+        || !UUID.test(text(value.payment.zeroBalanceClearance.clearanceId))
+        || !SHA256.test(
+          text(value.payment.zeroBalanceClearance.clearanceDigest)
+        )
+        || !safeIso(value.payment.zeroBalanceClearance.clearedAt)
+      ) return null;
+    } else {
+      if (
+        value.obligation.installmentNumber !== 2
+        || !record(value.invoice)
+        || !exactKeys(value.invoice, [
+          "credit",
+          "invoiceDigest",
+          "invoiceId",
+          "invoiceNumber",
+          "issuedAt",
+          "lines",
+          "purpose",
+          "subtotal",
+          "tax",
+          "total"
+        ])
+        || !UUID.test(text(value.invoice.invoiceId))
+        || !/^SSCB-FINAL-[0-9A-F]{32}$/u.test(
+          text(value.invoice.invoiceNumber)
+        )
+        || !SHA256.test(text(value.invoice.invoiceDigest))
+        || value.invoice.purpose !== "custom_build_final"
+        || !safeIso(value.invoice.issuedAt)
+        || !Array.isArray(value.invoice.lines)
+        || value.invoice.lines.length !== 1
+        || !exactKeys(value.invoice.subtotal, ["amountMinor", "currency"])
+        || value.invoice.subtotal.amountMinor !==
+          value.obligation.amount.amountMinor
+        || value.invoice.subtotal.currency !== "USD"
+        || !exactKeys(value.invoice.credit, ["amountMinor", "currency"])
+        || value.invoice.credit.amountMinor !== 0
+        || value.invoice.credit.currency !== "USD"
+        || !exactKeys(
+          value.payment,
+          [
+            "chargeOccurred",
+            "checkoutExpiresAt",
+            "checkoutUrl",
+            "settledAt",
+            "state"
+          ]
+        )
+        || ![
+          "held",
+          "checkout_available",
+          "checkout_ready",
+          "checkout_expired",
+          "reconciliation_required",
+          "paid"
+        ].includes(value.payment.state)
+        || value.payment.chargeOccurred !== (value.payment.state === "paid")
+      ) return null;
+      if (value.payment.state === "checkout_ready") {
+        if (
+          safeCheckoutDestination({ checkoutUrl: value.payment.checkoutUrl })
+            !== value.payment.checkoutUrl
+          || !safeIso(value.payment.checkoutExpiresAt)
+        ) return null;
+      } else if (
+        value.payment.checkoutUrl !== null
+        || value.payment.checkoutExpiresAt !== null
+      ) return null;
+      if (
+        value.payment.state === "paid"
+          ? !safeIso(value.payment.settledAt)
+          : value.payment.settledAt !== null
+      ) return null;
+    }
+    if (value.state === "handed_off") {
+      if (
+        !exactKeys(value.handoff, [
+          "contentDigest",
+          "documentId",
+          "handedOffAt",
+          "state",
+          "workmanshipEndsAt",
+          "workmanshipStartsAt"
+        ])
+        || value.handoff.state !== "handed_off"
+        || !UUID.test(text(value.handoff.documentId))
+        || !SHA256.test(text(value.handoff.contentDigest))
+        || !safeIso(value.handoff.handedOffAt)
+        || value.handoff.workmanshipStartsAt !== value.handoff.handedOffAt
+        || !safeIso(value.handoff.workmanshipEndsAt)
+        || Date.parse(value.handoff.workmanshipEndsAt) -
+          Date.parse(value.handoff.workmanshipStartsAt) !==
+          30 * 24 * 60 * 60 * 1000
+      ) return null;
+    } else if (
+      !exactKeys(
+        value.handoff,
+        ["documentId", "state", "workmanshipEndsAt", "workmanshipStartsAt"]
+      )
+      || !["pending", "unavailable"].includes(value.handoff.state)
+      || value.handoff.documentId !== null
+      || value.handoff.workmanshipStartsAt !== null
+      || value.handoff.workmanshipEndsAt !== null
+    ) return null;
+    return value;
+  }
+
+  function verifiedCustomerCustomBuildFinalCheckout(
+    value,
+    finalState,
+    nowInput
+  ) {
+    var expected = verifiedCustomerCustomBuildFinalState(finalState);
+    var now = safeIso(nowInput) ? Date.parse(nowInput) : Date.now();
+    if (
+      !expected
+      || expected.state !== "checkout_available"
+      || !exactKeys(value, ["checkout", "schema", "state"])
+      || value.schema !== CUSTOM_BUILD_FINAL_CHECKOUT_SCHEMA
+      || value.state !== "ready"
+      || !exactKeys(value.checkout, [
+        "chargeOccurred",
+        "expiresAt",
+        "invoiceId",
+        "invoiceNumber",
+        "subtotal",
+        "tax",
+        "total",
+        "url"
+      ])
+      || value.checkout.invoiceId !== expected.invoice.invoiceId
+      || value.checkout.invoiceNumber !== expected.invoice.invoiceNumber
+      || safeCheckoutDestination({ checkoutUrl: value.checkout.url }) !==
+        value.checkout.url
+      || !safeIso(value.checkout.expiresAt)
+      || Date.parse(value.checkout.expiresAt) <= now
+      || !exactKeys(value.checkout.subtotal, ["amountMinor", "currency"])
+      || value.checkout.subtotal.amountMinor !==
+        expected.invoice.subtotal.amountMinor
+      || value.checkout.subtotal.currency !== "USD"
+      || !safeCustomBuildPendingMoney(value.checkout.total, "USD")
+      || !exactKeys(value.checkout.tax, ["amountMinor", "state"])
+      || value.checkout.tax.amountMinor !== null
+      || value.checkout.tax.state !== "calculated_at_checkout"
+      || value.checkout.chargeOccurred !== false
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerCustomBuildFinalPayments(value, expectedEntry) {
+    if (
+      !exactKeys(value, [
+        "finalPayment",
+        "jobId",
+        "organizationId",
+        "owner",
+        "schema"
+      ])
+      || value.schema !== CUSTOM_BUILD_FINAL_PAYMENTS_OWNER_SCHEMA
+      || !expectedEntry
+      || value.organizationId !== text(expectedEntry.organizationId)
+      || value.jobId !== text(expectedEntry.job && expectedEntry.job.jobId)
+      || !verifiedCustomerCustomBuildFinalState(
+        value.finalPayment,
+        text(expectedEntry.projectId)
+      )
+      || !exactKeys(value.owner, [
+        "attemptId",
+        "attemptState",
+        "canReconcileCreation",
+        "canReconcileSettlement",
+        "eventId",
+        "eventState",
+        "providerEffectCertainty",
+        "providerErrorCode",
+        "providerRequestExpiresAt",
+        "receiptSource",
+        "reconciliationCode"
+      ])
+      || (value.owner.attemptId !== null
+        && !UUID.test(text(value.owner.attemptId)))
+      || typeof value.owner.canReconcileCreation !== "boolean"
+      || typeof value.owner.canReconcileSettlement !== "boolean"
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerCustomBuildHandoffReadiness(value, expectedEntry) {
+    if (
+      !exactKeys(value, [
+        "action",
+        "completion",
+        "finalObligation",
+        "financialClearance",
+        "handoff",
+        "jobId",
+        "organizationId",
+        "projectId",
+        "schema",
+        "state"
+      ])
+      || value.schema !== CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA
+      || !expectedEntry
+      || value.organizationId !== text(expectedEntry.organizationId)
+      || value.projectId !== text(expectedEntry.projectId)
+      || value.jobId !== text(expectedEntry.job && expectedEntry.job.jobId)
+      || !["handoff_available", "handoff_not_ready", "handed_off"]
+        .includes(value.state)
+      || !exactKeys(value.completion, [
+        "completedAt",
+        "packageDigest",
+        "packageId"
+      ])
+      || !UUID.test(text(value.completion.packageId))
+      || !SHA256.test(text(value.completion.packageDigest))
+      || !safeIso(value.completion.completedAt)
+      || !exactKeys(value.finalObligation, [
+        "obligationDigest",
+        "obligationId"
+      ])
+      || !UUID.test(text(value.finalObligation.obligationId))
+      || !SHA256.test(text(value.finalObligation.obligationDigest))
+      || !exactKeys(value.action, ["handoffAvailable", "reason"])
+      || typeof value.action.handoffAvailable !== "boolean"
+      || customBuildFinalHasRawProviderIdentifiers(value)
+    ) return null;
+    if (value.financialClearance !== null && (
+      !exactKeys(value.financialClearance, ["clearedAt"])
+      || !safeIso(value.financialClearance.clearedAt)
+    )) return null;
+    if (value.state === "handed_off") {
+      if (
+        !exactKeys(value.handoff, [
+          "contentDigest",
+          "documentId",
+          "handedOffAt",
+          "workmanship"
+        ])
+        || !UUID.test(text(value.handoff.documentId))
+        || !SHA256.test(text(value.handoff.contentDigest))
+        || !safeIso(value.handoff.handedOffAt)
+        || !exactCustomBuildWorkmanship(
+          value.handoff.workmanship,
+          value.handoff.handedOffAt
+        )
+        || value.financialClearance === null
+        || value.action.handoffAvailable !== false
+        || value.action.reason !== "handed_off"
+      ) return null;
+    } else if (
+      value.handoff !== null
+      || (value.state === "handoff_available"
+        ? value.financialClearance === null
+          || value.action.handoffAvailable !== true
+          || value.action.reason !== "financial_clearance_confirmed"
+        : value.action.handoffAvailable !== false
+          || (value.financialClearance === null
+            ? value.action.reason !== "financial_clearance_required"
+            : value.action.reason !== "handoff_boundary_not_ready"))
+    ) return null;
+    return value;
+  }
+
+  function verifiedCustomerCustomBuildHandoffDocument(
+    value,
+    finalState
+  ) {
+    var expected = verifiedCustomerCustomBuildFinalState(finalState);
+    if (
+      !expected
+      || expected.state !== "handed_off"
+      || !exactKeys(value, [
+        "byteCount",
+        "contentDigest",
+        "documentId",
+        "mediaType",
+        "payload",
+        "schema"
+      ])
+      || value.schema !== CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA
+      || value.documentId !== expected.handoff.documentId
+      || value.contentDigest !== expected.handoff.contentDigest
+      || value.mediaType !== "application/json"
+      || !Number.isSafeInteger(value.byteCount)
+      || value.byteCount < 1
+      || value.byteCount > 64 * 1024
+      || customBuildFinalHasRawProviderIdentifiers(value)
+      || !exactKeys(value.payload, [
+        "completion",
+        "customerSummary",
+        "deliveryManifest",
+        "finalObligation",
+        "financialClearance",
+        "handoff",
+        "jobId",
+        "projectId",
+        "schema",
+        "state"
+      ])
+      || value.payload.schema !== CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA
+      || value.payload.state !== "handed_off"
+      || value.payload.projectId !== expected.projectId
+      || value.payload.jobId !== expected.jobId
+      || !customBuildProgressText(
+        value.payload.customerSummary,
+        20,
+        2000
+      )
+      || !Array.isArray(value.payload.deliveryManifest)
+      || value.payload.deliveryManifest.length < 1
+      || value.payload.deliveryManifest.length > 40
+      || !value.payload.deliveryManifest.every(function (entry) {
+        return exactKeys(entry, ["description", "label"])
+          && customBuildProgressText(entry.label, 2, 120)
+          && customBuildProgressText(entry.description, 2, 500);
+      })
+      || !exactKeys(
+        value.payload.handoff,
+        ["documentId", "handedOffAt", "receiptId", "workmanship"]
+      )
+      || value.payload.handoff.documentId !== value.documentId
+      || !exactCustomBuildWorkmanship(
+        value.payload.handoff.workmanship,
+        value.payload.handoff.handedOffAt
+      )
+    ) return null;
+    return value;
+  }
+
+  function verifiedOwnerCustomBuildHandoffCommand(value, ownerState) {
+    var expected = ownerState;
+    if (
+      !expected
+      || expected.schema !== CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA
+      || expected.state !== "handoff_available"
+      || !expected.action
+      || expected.action.handoffAvailable !== true
+      || !exactKeys(value, [
+        "completionPackageDigest",
+        "documentDigest",
+        "documentId",
+        "financialClearance",
+        "finalObligationDigest",
+        "handedOffAt",
+        "jobId",
+        "organizationId",
+        "projectId",
+        "receiptId",
+        "schema",
+        "state",
+        "workmanship"
+      ])
+      || value.schema !== CUSTOM_BUILD_HANDOFF_COMMAND_SCHEMA
+      || value.state !== "handed_off"
+      || value.organizationId !== expected.organizationId
+      || value.projectId !== expected.projectId
+      || value.jobId !== expected.jobId
+      || value.completionPackageDigest !==
+        expected.completion.packageDigest
+      || value.finalObligationDigest !==
+        expected.finalObligation.obligationDigest
+      || !UUID.test(text(value.documentId))
+      || !SHA256.test(text(value.documentDigest))
+      || !safeIso(value.handedOffAt)
+      || !exactCustomBuildWorkmanship(value.workmanship, value.handedOffAt)
+    ) return null;
     return value;
   }
 
@@ -6260,9 +6796,10 @@
       body
     );
 
-    function renderRequest(snapshot, busy) {
+    function renderRequest(snapshot, busy, completionAuthority) {
       var request = snapshot.activeRequest;
       if (!request) return null;
+      var readOnly = completionAuthority !== "open";
       var section = accountElement(
         documentRef,
         "section",
@@ -6358,6 +6895,20 @@
         );
         return section;
       }
+      if (readOnly) {
+        section.setAttribute("data-custom-build-request-read-only", "");
+        section.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-assessment-note",
+            completionAuthority === "terminal"
+              ? "Completion is immutable. This earlier request remains visible as history, but it can no longer be answered or changed."
+              : "Current completion authority is still being verified. This request remains visible, but no response is available until a current snapshot proves the project is open."
+          )
+        );
+        return section;
+      }
       var form = accountElement(
         documentRef,
         "form",
@@ -6436,11 +6987,11 @@
         return;
       }
       panel.hidden = false;
-      if (read.phase === "loading") {
+      if (read.phase === "loading" && !read.snapshot) {
         status.textContent = "Loading your Custom-build progress…";
         return;
       }
-      if (read.phase === "error") {
+      if (read.phase === "error" && !read.snapshot) {
         status.textContent = read.error
           || "Project progress could not be loaded. Refresh and try again.";
         return;
@@ -6451,9 +7002,17 @@
           "Project progress could not be verified. Refresh before responding.";
         return;
       }
-      status.textContent = read.command
-        ? "Saving your response safely…"
-        : snapshot.status.label;
+      var completionAuthority = ["open", "terminal"].includes(
+        read.completionAuthority
+      ) ? read.completionAuthority : "unknown";
+      var readOnly = completionAuthority !== "open";
+      status.textContent = completionAuthority === "terminal"
+        ? "Completion is immutable. Project progress and requests are read-only history."
+        : completionAuthority === "unknown"
+          ? "Current completion authority is not verified yet. Progress remains visible, but every mutation is held."
+          : read.command
+          ? "Saving your response safely…"
+          : snapshot.status.label;
       if (read.error) {
         body.appendChild(
           accountElement(
@@ -6465,7 +7024,30 @@
         );
       }
       body.appendChild(customBuildProgressSummary(documentRef, snapshot));
-      var request = renderRequest(snapshot, Boolean(read.command));
+      if (readOnly) {
+        panel.setAttribute(
+          "data-customer-progress-completion-authority",
+          completionAuthority
+        );
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          completionAuthority === "terminal"
+            ? "No progress, work-request, response, or delegated-access mutation is available after verified completion."
+            : "No progress, work-request, response, or delegated-access mutation is available until current completion authority proves this project is open."
+        ));
+      } else {
+        panel.setAttribute(
+          "data-customer-progress-completion-authority",
+          "open"
+        );
+      }
+      var request = renderRequest(
+        snapshot,
+        Boolean(read.command),
+        completionAuthority
+      );
       if (request) body.appendChild(request);
     }
 
@@ -6592,7 +7174,8 @@
       body
     );
 
-    function renderChangeOrder(order, busy) {
+    function renderChangeOrder(order, busy, completionAuthority) {
+      var readOnly = completionAuthority !== "open";
       var section = accountElement(
         documentRef,
         "section",
@@ -6667,6 +7250,18 @@
           "Your original approved scope remains in place. This change covers added work only, and that added work does not begin until its payment is confirmed."
         )
       );
+      if (readOnly) {
+        section.setAttribute("data-customer-change-order-read-only", "");
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          completionAuthority === "terminal"
+            ? "Verified completion closed added-work decisions. This retained change remains visible as read-only history."
+            : "Current completion authority is still being verified. This retained change remains visible, but no decision is available until a current snapshot proves the project is open."
+        ));
+        return section;
+      }
       if (order.state !== "issued") return section;
       var expired = Date.parse(order.expiresAt) <= Date.now();
       var controls = accountElement(
@@ -6756,7 +7351,12 @@
       return section;
     }
 
-    function renderChangePayment(invoiceState, busy, actionAvailable) {
+    function renderChangePayment(
+      invoiceState,
+      busy,
+      actionAvailable,
+      terminal
+    ) {
       if (!invoiceState || invoiceState.state === "not_available") {
         return null;
       }
@@ -6771,6 +7371,9 @@
         "data-customer-custom-build-change-payment",
         invoiceState.state
       );
+      if (terminal) {
+        section.setAttribute("data-customer-change-payment-read-only", "");
+      }
       var facts = accountElement(
         documentRef,
         "dl",
@@ -6873,7 +7476,10 @@
           }
         });
         section.appendChild(checkout);
-      } else if (invoiceState.state === "checkout_ready") {
+      } else if (
+        invoiceState.state === "checkout_ready"
+        && !terminal
+      ) {
         appendAccountFact(
           documentRef,
           facts,
@@ -7012,7 +7618,9 @@
           documentRef,
           "p",
           "customer-assessment-note",
-          "This proof records completed checks. It is not payment, delivery, launch, or the start of the 30-day workmanship-correction clock."
+          completion.state === "ready_for_delivery"
+            ? "This proof records completed checks and delivery readiness. It is not delivery, launch, or the start of the 30-day workmanship-correction clock."
+            : "This proof records completed checks. It is not payment, delivery, launch, or the start of the 30-day workmanship-correction clock."
         )
       );
       return section;
@@ -7023,6 +7631,11 @@
       var snapshot = verifiedCustomerCustomBuildChangeCompletion(
         read.snapshot
       );
+      var completionAuthority = ["open", "terminal"].includes(
+        read.completionAuthority
+      ) ? read.completionAuthority : "unknown";
+      if (snapshot && snapshot.completion) completionAuthority = "terminal";
+      var readOnly = completionAuthority !== "open";
       var invoiceState = snapshot
         && verifiedCustomerCustomBuildChangeInvoice(
           read.invoice,
@@ -7035,6 +7648,10 @@
       panel.setAttribute(
         "aria-busy",
         String(read.phase === "loading" || Boolean(read.command))
+      );
+      panel.setAttribute(
+        "data-customer-change-completion-authority",
+        completionAuthority
       );
       if (!snapshot) {
         status.textContent = read.phase === "loading"
@@ -7051,12 +7668,24 @@
           read.error
         ));
       }
-      if (read.phase === "loading") {
+      if (completionAuthority === "terminal") {
+        status.textContent = snapshot.state === "ready_for_delivery"
+          ? "Verified completion is immutable. Added-work decisions are read-only history."
+          : "Verified completion is immutable. Added-work decisions and payment actions are read-only history.";
+        panel.setAttribute("data-customer-change-completion-read-only", "");
+      } else if (completionAuthority === "unknown") {
+        status.textContent =
+          "Current completion authority is not verified yet. Added-work history remains visible, but every mutation is held.";
+        panel.setAttribute("data-customer-change-completion-read-only", "");
+      } else {
+        panel.removeAttribute("data-customer-change-completion-read-only");
+      }
+      if (!readOnly && read.phase === "loading") {
         status.textContent =
           "Refreshing added work and completion proof. The last verified information remains below.";
-      } else if (read.command) {
+      } else if (!readOnly && read.command) {
         status.textContent = "Saving one exact added-work decision…";
-      } else {
+      } else if (!readOnly) {
         status.textContent = {
           not_available: "No paid Custom build is open for this project.",
           building: "Your approved Custom build is in progress.",
@@ -7071,7 +7700,8 @@
       if (snapshot.changeOrders.active) {
         body.appendChild(renderChangeOrder(
           snapshot.changeOrders.active,
-          Boolean(read.command)
+          Boolean(read.command),
+          completionAuthority
         ));
       } else if (snapshot.state === "building") {
         body.appendChild(accountElement(
@@ -7092,7 +7722,8 @@
         body.appendChild(renderChangePayment(
           invoiceState,
           Boolean(read.command),
-          !read.error
+          !read.error && !readOnly,
+          readOnly
         ));
       } else if (snapshot.state === "change_order_payment_required") {
         body.appendChild(accountElement(
@@ -7147,6 +7778,360 @@
           Boolean(read.command)
         ));
       }
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: render
+    });
+  }
+
+  function createCustomerCustomBuildFinalPanel(documentRef, actions) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-custom-services customer-custom-build-final"
+    );
+    panel.hidden = true;
+    panel.setAttribute("aria-labelledby", "customer-custom-build-final-title");
+    panel.setAttribute("data-customer-custom-build-final", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Final payment, delivery, and workmanship"
+    );
+    heading.id = "customer-custom-build-final-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-status customer-custom-build-final-status"
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh final payment and handoff"
+    );
+    refresh.type = "button";
+    refresh.setAttribute("data-customer-custom-build-final-refresh", "");
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") actions.refresh();
+    });
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-custom-build-final-body"
+    );
+    var intro = accountElement(
+      documentRef,
+      "p",
+      "customer-assessment-intro",
+      "Review the completion-bound final installment, provider-confirmed clearance, immutable delivery record, and exact 30-day workmanship-correction window."
+    );
+    panel.append(
+      accountElement(documentRef, "p", "spark-kicker", "Completed build"),
+      heading,
+      intro,
+      status,
+      refresh,
+      body
+    );
+
+    function renderInvoice(snapshot, busy) {
+      var zeroBalance = snapshot.obligation.amount.amountMinor === 0;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-change-card customer-custom-build-final-payment"
+      );
+      section.setAttribute("data-customer-custom-build-final-payment", snapshot.state);
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        zeroBalance ? "Final balance" : "Final installment",
+        zeroBalance
+          ? "$0.00 USD · cleared without a charge"
+          : customBuildMoney(snapshot.obligation.amount.amountMinor) + " USD"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Assessment credit",
+        "Not reused — it was applied only to the first installment"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Accepted added work",
+        "Billed separately and not charged again here"
+      );
+      if (snapshot.invoice) {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Invoice",
+          snapshot.invoice.invoiceNumber
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Tax",
+          snapshot.payment.state === "paid"
+            ? customBuildMoney(snapshot.invoice.tax.amountMinor) + " USD · Settled"
+            : "Calculated by Stripe before confirmation"
+        );
+      }
+      section.append(
+        accountElement(
+          documentRef,
+          "h4",
+          "",
+          zeroBalance ? "Delivery clearance" : "Final-build clearance"
+        ),
+        facts
+      );
+      var note = {
+        checkout_held:
+          "New final-payment pages are held in this runtime. No charge occurred and delivery remains unavailable.",
+        checkout_available:
+          "No charge has occurred. Stripe will show automatic tax and the exact total before you confirm payment.",
+        checkout_ready:
+          "Your retained Stripe payment page is ready. No payment is recorded here until Site Sourcery verifies it from Stripe.",
+        checkout_expired:
+          "That payment page expired. Refresh before requesting one safe replacement.",
+        payment_reconciliation_required:
+          "Do not try another payment. A prior Stripe result is uncertain and requires Site Sourcery review.",
+        paid_handoff_pending:
+          "Stripe payment is verified. Site Sourcery can now create the immutable handoff.",
+        cleared_no_balance_handoff_pending:
+          "No final balance was due. The zero-balance clearance is retained and handoff is ready.",
+        handed_off: zeroBalance
+          ? "Delivery is complete under the retained zero-balance clearance. Your handoff record and 30-day workmanship window are retained below."
+          : "Delivery is complete under verified provider-confirmed final-payment clearance. Your handoff record and 30-day workmanship window are retained below."
+      }[snapshot.state];
+      section.appendChild(accountElement(
+        documentRef,
+        "p",
+        snapshot.state === "payment_reconciliation_required"
+          ? "customer-custom-build-credential-warning"
+          : "customer-assessment-note",
+        note
+      ));
+      if (snapshot.state === "checkout_available") {
+        var checkout = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          busy ? "Opening secure final payment…" : "Continue to secure final payment"
+        );
+        checkout.type = "button";
+        checkout.disabled = busy;
+        checkout.setAttribute("data-customer-custom-build-final-checkout", "");
+        checkout.addEventListener("click", function () {
+          if (!busy && typeof actions.checkout === "function") {
+            actions.checkout(snapshot);
+          }
+        });
+        section.appendChild(checkout);
+      } else if (snapshot.state === "checkout_ready") {
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Payment page expires",
+          accountDate(snapshot.payment.checkoutExpiresAt)
+        );
+        var retained = accountElement(
+          documentRef,
+          "a",
+          "spark-button spark-button-primary",
+          "Open retained secure final payment"
+        );
+        retained.href = snapshot.payment.checkoutUrl;
+        retained.rel = "noopener noreferrer";
+        retained.setAttribute("data-customer-custom-build-final-checkout-ready", "");
+        section.appendChild(retained);
+      }
+      return section;
+    }
+
+    function renderHandoff(snapshot, documentValue, busy) {
+      if (snapshot.state !== "handed_off") return null;
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-completion-card customer-custom-build-handoff"
+      );
+      section.setAttribute("data-customer-custom-build-handoff", "handed_off");
+      var facts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Handed off",
+        accountDate(snapshot.handoff.handedOffAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Workmanship corrections begin",
+        accountDate(snapshot.handoff.workmanshipStartsAt)
+      );
+      appendAccountFact(
+        documentRef,
+        facts,
+        "Workmanship corrections end",
+        accountDate(snapshot.handoff.workmanshipEndsAt)
+      );
+      section.append(
+        accountElement(documentRef, "h4", "", "Immutable handoff"),
+        facts,
+        accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "The 30-day [start,end) window starts at handoff—not at completion or launch—and covers reproducible defects in the accepted deliverables, not new work or ongoing management."
+        )
+      );
+      var documentProjection = verifiedCustomerCustomBuildHandoffDocument(
+        documentValue,
+        snapshot
+      );
+      section.setAttribute(
+        "data-customer-custom-build-handoff-receipt",
+        documentProjection ? "ready" : "pending"
+      );
+      var open = accountElement(
+        documentRef,
+        "button",
+        "spark-button spark-button-primary",
+        busy
+          ? "Loading verified handoff record…"
+          : documentProjection
+            ? "Refresh verified handoff record"
+            : "Retry verified handoff record"
+      );
+      open.type = "button";
+      open.disabled = busy;
+      open.setAttribute("data-customer-custom-build-handoff-document", "");
+      open.addEventListener("click", function () {
+        if (!busy && typeof actions.document === "function") {
+          actions.document(snapshot);
+        }
+      });
+      section.appendChild(open);
+      if (documentProjection) {
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-custom-build-progress-copy",
+          documentProjection.payload.customerSummary
+        ));
+        var list = accountElement(
+          documentRef,
+          "ul",
+          "customer-custom-build-completion-checks"
+        );
+        documentProjection.payload.deliveryManifest.forEach(function (entry) {
+          list.appendChild(accountElement(
+            documentRef,
+            "li",
+            "",
+            entry.label + " · " + entry.description
+          ));
+        });
+        section.append(
+          accountElement(documentRef, "h5", "", "Delivered items"),
+          list
+        );
+      }
+      return section;
+    }
+
+    function render(readState) {
+      var read = readState || {};
+      var snapshot = verifiedCustomerCustomBuildFinalState(
+        read.snapshot,
+        read.projectId
+      );
+      var zeroBalance = Boolean(
+        snapshot
+        && snapshot.obligation
+        && snapshot.obligation.amount.amountMinor === 0
+      );
+      heading.textContent = zeroBalance
+        ? "Delivery and workmanship"
+        : "Final payment, delivery, and workmanship";
+      intro.textContent = zeroBalance
+        ? "Review the completion-bound zero-balance clearance, immutable delivery record, and exact 30-day workmanship-correction window."
+        : "Review the completion-bound final installment, provider-confirmed clearance, immutable delivery record, and exact 30-day workmanship-correction window.";
+      refresh.textContent = zeroBalance
+        ? "Refresh delivery and handoff"
+        : "Refresh final payment and handoff";
+      body.replaceChildren();
+      panel.hidden = read.phase === "idle"
+        || (snapshot && snapshot.state === "completion_required");
+      if (panel.hidden) return;
+      refresh.disabled = read.phase === "loading" || Boolean(read.command);
+      panel.setAttribute(
+        "aria-busy",
+        String(read.phase === "loading" || Boolean(read.command))
+      );
+      if (!snapshot) {
+        status.textContent = read.phase === "loading"
+          ? "Loading delivery and handoff authority…"
+          : read.error
+            || "Delivery and handoff authority could not be verified. Refresh before taking action.";
+        return;
+      }
+      status.textContent = read.phase === "loading"
+        ? zeroBalance
+          ? "Refreshing delivery and handoff. Last verified zero-balance details remain below."
+          : "Refreshing final payment and handoff. Last verified details remain below."
+        : read.command
+          ? zeroBalance
+            ? "Completing one exact delivery or handoff request…"
+            : "Completing one exact final-payment or handoff request…"
+          : {
+              checkout_held: "Final payment is held; no charge occurred.",
+              checkout_available: "The exact final installment is ready for secure payment.",
+              checkout_ready: "Your retained secure final-payment page is ready.",
+              checkout_expired: "The retained final-payment page expired.",
+              payment_reconciliation_required: "Final payment requires owner reconciliation.",
+              paid_handoff_pending: "Final payment is verified; delivery is pending.",
+              cleared_no_balance_handoff_pending: "No final balance is due; delivery is pending.",
+              handed_off: "Delivery and the workmanship window are active."
+            }[snapshot.state];
+      if (read.error) {
+        body.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-owner-quote-form-error",
+          read.error
+        ));
+      }
+      body.appendChild(renderInvoice(snapshot, Boolean(read.command)));
+      var handoff = renderHandoff(
+        snapshot,
+        read.document,
+        Boolean(read.command)
+      );
+      if (handoff) body.appendChild(handoff);
     }
 
     return Object.freeze({
@@ -8207,7 +9192,7 @@
       return details;
     }
 
-    function renderActiveRequest(entry, snapshot, busy) {
+    function renderActiveRequest(entry, snapshot, busy, terminal) {
       var request = snapshot.activeRequest;
       var section = accountElement(
         documentRef,
@@ -8280,6 +9265,16 @@
             : "Review the customer response or outside dependency before closing this request."
         )
       );
+      if (terminal) {
+        section.setAttribute("data-owner-request-read-only", "");
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "Verified completion closed this request boundary. The retained request and response remain visible as read-only history."
+        ));
+        return section;
+      }
       var form = accountElement(
         documentRef,
         "form",
@@ -8332,7 +9327,13 @@
       return section;
     }
 
-    function renderJobProgress(entry, read, globallyBusy) {
+    function renderJobProgress(
+      entry,
+      read,
+      globallyBusy,
+      completionAuthority
+    ) {
+      var readOnly = completionAuthority !== "open";
       var section = accountElement(
         documentRef,
         "section",
@@ -8385,9 +9386,13 @@
         return section;
       }
       var busy = Boolean(read.busy) || Boolean(globallyBusy);
-      progressStatus.textContent = read.busy
-        ? "Saving one bounded project command…"
-        : snapshot.status.label;
+      progressStatus.textContent = completionAuthority === "terminal"
+        ? "Verified completion is immutable. Progress and requests are read-only history."
+        : completionAuthority === "unknown"
+          ? "Current completion authority is not verified yet. Progress remains visible, but every mutation is held."
+          : read.busy
+          ? "Saving one bounded project command…"
+          : snapshot.status.label;
       if (read.error) {
         section.appendChild(
           accountElement(
@@ -8398,15 +9403,29 @@
           )
         );
       }
-      section.append(
-        customBuildProgressSummary(documentRef, snapshot),
-        renderProgressForm(entry, snapshot, busy)
+      section.appendChild(customBuildProgressSummary(documentRef, snapshot));
+      section.setAttribute(
+        "data-owner-progress-completion-authority",
+        completionAuthority
       );
+      if (readOnly) {
+        section.setAttribute("data-owner-progress-read-only", "");
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          completionAuthority === "terminal"
+            ? "No progress, work-request, delegated-access, or request-resolution mutation is available after verified completion."
+            : "No progress, work-request, delegated-access, or request-resolution mutation is available until current completion authority proves this project is open."
+        ));
+      } else {
+        section.appendChild(renderProgressForm(entry, snapshot, busy));
+      }
       if (snapshot.activeRequest) {
         section.appendChild(
-          renderActiveRequest(entry, snapshot, busy)
+          renderActiveRequest(entry, snapshot, busy, readOnly)
         );
-      } else {
+      } else if (!readOnly) {
         section.appendChild(
           renderOpenRequestForm(entry, snapshot, busy)
         );
@@ -8427,7 +9446,13 @@
         });
     }
 
-    function renderOwnerChangeOrder(entry, order, busy) {
+    function renderOwnerChangeOrder(
+      entry,
+      order,
+      busy,
+      completionAuthority
+    ) {
+      var readOnly = completionAuthority !== "open";
       var section = accountElement(
         documentRef,
         "section",
@@ -8487,6 +9512,18 @@
             : "Added work remains separate from the original scope and cannot begin before customer acceptance and confirmed payment."
         )
       );
+      if (readOnly) {
+        section.setAttribute("data-owner-change-order-read-only", "");
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          completionAuthority === "terminal"
+            ? "Verified completion closed added-work mutations. This retained change remains visible as read-only history."
+            : "Current completion authority is still being verified. This retained change remains visible, but no mutation is available until a current snapshot proves the project is open."
+        ));
+        return section;
+      }
       if (
         order.state === "issued"
         && Date.parse(order.expiresAt) <= Date.now()
@@ -8697,7 +9734,7 @@
       return details;
     }
 
-    function renderOwnerCompletionEvidence(entry, snapshot, busy) {
+    function renderOwnerCompletionEvidence(entry, snapshot, busy, terminal) {
       var section = accountElement(
         documentRef,
         "section",
@@ -8736,7 +9773,7 @@
         });
         section.appendChild(list);
       }
-      if (snapshot.completion) return section;
+      if (snapshot.completion || terminal) return section;
       var form = accountElement(
         documentRef,
         "form",
@@ -9087,7 +10124,8 @@
       entry,
       read,
       changeCompletion,
-      globallyBusy
+      globallyBusy,
+      readOnly
     ) {
       var section = accountElement(
         documentRef,
@@ -9098,6 +10136,9 @@
         "data-owner-custom-build-change-payments",
         entry.job.jobId
       );
+      if (readOnly) {
+        section.setAttribute("data-owner-change-payments-read-only", "");
+      }
       var status = accountElement(
         documentRef,
         "p",
@@ -9260,8 +10301,11 @@
           note
         ));
         if (
+          !readOnly
+          && (
           owner.canReconcileCreation
           || owner.canReconcileSettlement
+          )
         ) {
           var reconcile = accountElement(
             documentRef,
@@ -9302,8 +10346,10 @@
       read,
       paymentRead,
       progressRead,
-      globallyBusy
+      globallyBusy,
+      completionAuthority
     ) {
+      var readOnly = completionAuthority !== "open";
       var section = accountElement(
         documentRef,
         "section",
@@ -9349,7 +10395,11 @@
         return section;
       }
       var busy = Boolean(globallyBusy) || Boolean(read.busy);
-      changeStatus.textContent = read.phase === "loading"
+      changeStatus.textContent = completionAuthority === "terminal"
+        ? "Verified completion is immutable. Added work, evidence, and completion controls are read-only history."
+        : completionAuthority === "unknown"
+          ? "Current completion authority is not verified yet. Added-work and completion history remains visible, but every mutation is held."
+          : read.phase === "loading"
         ? "Refreshing this project. Last verified change and completion data remains below."
         : read.busy
           ? "Saving one exact change or completion command…"
@@ -9374,14 +10424,35 @@
         entry,
         paymentRead,
         snapshot,
-        busy
+        busy,
+        readOnly
       ));
+      section.setAttribute(
+        "data-owner-change-completion-authority",
+        completionAuthority
+      );
+      if (readOnly) {
+        section.setAttribute("data-owner-change-completion-read-only", "");
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          completionAuthority === "terminal"
+            ? "No issue, void, expire, payment-reconciliation, evidence-upload, or completion mutation is available after verified completion."
+            : "No issue, void, expire, payment-reconciliation, evidence-upload, or completion mutation is available until current completion authority proves this project is open."
+        ));
+      }
       var active = snapshot.changeOrders.find(function (order) {
         return ["issued", "accepted_payment_required"].includes(order.state);
       });
       if (active) {
-        section.appendChild(renderOwnerChangeOrder(entry, active, busy));
-      } else if (!snapshot.completion) {
+        section.appendChild(renderOwnerChangeOrder(
+          entry,
+          active,
+          busy,
+          completionAuthority
+        ));
+      } else if (!snapshot.completion && !readOnly) {
         section.appendChild(renderOwnerChangeIssue(entry, snapshot, busy));
       }
       snapshot.changeOrders.filter(function (order) {
@@ -9423,14 +10494,322 @@
       section.appendChild(renderOwnerCompletionEvidence(
         entry,
         snapshot,
-        busy
+        busy,
+        readOnly
       ));
-      section.appendChild(renderOwnerCompletionForm(
-        entry,
-        snapshot,
-        progressRead,
-        busy
-      ));
+      if (snapshot.completion || !readOnly) {
+        section.appendChild(renderOwnerCompletionForm(
+          entry,
+          snapshot,
+          progressRead,
+          busy
+        ));
+      }
+      return section;
+    }
+
+    function renderOwnerFinalHandoff(entry, read, globallyBusy) {
+      var section = accountElement(
+        documentRef,
+        "section",
+        "customer-custom-build-owner-change-completion customer-custom-build-owner-final"
+      );
+      section.setAttribute("data-owner-custom-build-final", entry.job.jobId);
+      var finalStatus = accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-status customer-custom-build-final-status"
+      );
+      finalStatus.setAttribute("role", "status");
+      finalStatus.setAttribute("aria-live", "polite");
+      finalStatus.setAttribute("tabindex", "-1");
+      var refreshFinal = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Refresh handoff readiness"
+      );
+      refreshFinal.type = "button";
+      refreshFinal.setAttribute("data-owner-custom-build-final-refresh", "");
+      refreshFinal.disabled = Boolean(globallyBusy)
+        || Boolean(read && (read.phase === "loading" || read.busy));
+      refreshFinal.addEventListener("click", function () {
+        if (typeof actions.refreshFinal === "function") {
+          actions.refreshFinal(entry);
+        }
+      });
+      section.append(
+        accountElement(documentRef, "h5", "", "Immutable handoff"),
+        finalStatus,
+        refreshFinal
+      );
+      var payment = read && verifiedOwnerCustomBuildFinalPayments(
+        read.paymentSnapshot,
+        entry
+      );
+      var readiness = read && verifiedOwnerCustomBuildHandoffReadiness(
+        read.handoffSnapshot,
+        entry
+      );
+      var paymentDetails = payment
+        && payment.finalPayment.state !== "completion_required"
+        ? payment
+        : null;
+      if (!paymentDetails && !readiness) {
+        finalStatus.textContent = read && read.phase === "error"
+          ? read.handoffError || read.paymentError
+            || "Handoff readiness could not be verified."
+          : payment
+            ? "Verified completion is required before final-payment or handoff controls exist."
+            : "Loading handoff readiness…";
+        return section;
+      }
+      var busy = Boolean(globallyBusy) || Boolean(read.busy);
+      finalStatus.textContent = read.phase === "loading"
+        ? "Refreshing independent handoff and final-payment authority. Last verified details remain below."
+        : read.busy
+          ? "Saving one exact final-payment or handoff command…"
+          : read.notice
+            || (readiness
+              ? {
+                  handoff_available: "Verified financial clearance is ready for immutable handoff.",
+                  handoff_not_ready: "Handoff is not ready. Refresh after the independent financial boundary changes.",
+                  handed_off: "The immutable handoff and workmanship window are active."
+                }[readiness.state]
+              : "Handoff authority is unavailable to this operator.");
+      [read && read.error, read && read.handoffError, read && read.paymentError]
+        .filter(Boolean)
+        .forEach(function (message) {
+          section.appendChild(accountElement(
+            documentRef,
+            "p",
+            "customer-owner-quote-form-error",
+            message
+          ));
+        });
+
+      if (paymentDetails) {
+        payment = paymentDetails;
+        var paymentSection = accountElement(
+          documentRef,
+          "section",
+          "customer-custom-build-owner-final-payment"
+        );
+        paymentSection.setAttribute("data-owner-custom-build-final-payment", "");
+        var paymentFacts = accountElement(
+          documentRef,
+          "dl",
+          "customer-custom-build-change-facts"
+        );
+        appendAccountFact(
+          documentRef,
+          paymentFacts,
+          "Final obligation",
+          payment.finalPayment.obligation.amount.amountMinor === 0
+            ? "Zero balance"
+            : customBuildMoney(
+                payment.finalPayment.obligation.amount.amountMinor
+              ) + " USD"
+        );
+        appendAccountFact(
+          documentRef,
+          paymentFacts,
+          "Assessment credit",
+          "Excluded from the final obligation"
+        );
+        appendAccountFact(
+          documentRef,
+          paymentFacts,
+          "Accepted change charges",
+          "Excluded from the final obligation"
+        );
+        if (payment.finalPayment.invoice) {
+          appendAccountFact(
+            documentRef,
+            paymentFacts,
+            "Final invoice",
+            payment.finalPayment.invoice.invoiceNumber
+          );
+        }
+        paymentSection.append(
+          accountElement(documentRef, "h6", "", "Final-payment reconciliation"),
+          paymentFacts
+        );
+        if (
+          payment.owner.canReconcileCreation
+          || payment.owner.canReconcileSettlement
+        ) {
+          var reconcile = accountElement(
+            documentRef,
+            "button",
+            "spark-button spark-button-primary",
+            busy
+              ? "Reconciling exact Stripe result…"
+              : payment.owner.canReconcileSettlement
+                ? "Verify retained final payment"
+                : "Reconcile uncertain final-payment page"
+          );
+          reconcile.type = "button";
+          reconcile.disabled = busy;
+          reconcile.setAttribute("data-owner-custom-build-final-reconcile", "");
+          reconcile.addEventListener("click", function () {
+            if (!busy && typeof actions.reconcileFinal === "function") {
+              actions.reconcileFinal(entry, payment);
+            }
+          });
+          paymentSection.appendChild(reconcile);
+        }
+        section.appendChild(paymentSection);
+      }
+
+      if (!readiness) return section;
+      var readinessFacts = accountElement(
+        documentRef,
+        "dl",
+        "customer-custom-build-change-facts"
+      );
+      appendAccountFact(
+        documentRef,
+        readinessFacts,
+        "Completion prepared",
+        accountDate(readiness.completion.completedAt)
+      );
+      appendAccountFact(
+        documentRef,
+        readinessFacts,
+        "Financial clearance",
+        readiness.financialClearance
+          ? "Verified " + accountDate(readiness.financialClearance.clearedAt)
+          : "Not verified"
+      );
+      section.appendChild(readinessFacts);
+      if (readiness.action.handoffAvailable) {
+        var form = accountElement(
+          documentRef,
+          "form",
+          "customer-custom-build-owner-completion customer-custom-build-owner-handoff"
+        );
+        form.setAttribute("data-owner-custom-build-handoff-form", "");
+        var summary = assessmentField(
+          documentRef,
+          "handoffCustomerSummary",
+          "Customer delivery summary — no credentials",
+          "Your accepted website build is delivered with the items listed below.",
+          {
+            required: true,
+            minimumLength: 20,
+            maximum: 2000,
+            multiline: true
+          }
+        );
+        var manifest = assessmentField(
+          documentRef,
+          "handoffDeliveryManifest",
+          "Delivered items — one Label | Description per line",
+          "Website files | Final accepted website deliverables\nHandoff notes | Scope, delivery, and workmanship details",
+          {
+            required: true,
+            minimumLength: 5,
+            maximum: 12000,
+            multiline: true
+          }
+        );
+        var submit = accountElement(
+          documentRef,
+          "button",
+          "spark-button spark-button-primary",
+          busy ? "Creating immutable handoff…" : "Create exact handoff"
+        );
+        submit.type = "submit";
+        submit.disabled = busy;
+        form.append(
+          summary,
+          manifest,
+          accountElement(
+            documentRef,
+            "p",
+            "customer-custom-build-credential-warning",
+            "List delivered items only. Never include passwords, verification codes, API keys, tokens, or private access details."
+          ),
+          submit
+        );
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          if (busy || !form.reportValidity()) return;
+          var data = new FormData(form);
+          var handoffSummary = text(data.get("handoffCustomerSummary"));
+          var items = text(data.get("handoffDeliveryManifest"))
+            .split(/\r?\n/u)
+            .filter(Boolean)
+            .map(function (line) {
+              var separator = line.indexOf("|");
+              return separator < 0
+                ? null
+                : {
+                    label: text(line.slice(0, separator)),
+                    description: text(line.slice(separator + 1))
+                  };
+            });
+          if (
+            !customBuildProgressText(handoffSummary, 20, 2000)
+            || items.length < 1
+            || items.length > 40
+            || items.some(function (item) {
+              return !item
+                || !customBuildProgressText(item.label, 2, 120)
+                || !customBuildProgressText(item.description, 2, 500);
+            })
+            || new Set(items.map(function (item) {
+              return item ? portableCustomBuildLabelKey(item.label) : "";
+            })).size !== items.length
+            || customBuildUtf8ByteLength(customBuildCanonicalJson({
+              items: items
+            })) > 30 * 1024
+          ) {
+            if (typeof actions.finalLocalError === "function") {
+              actions.finalLocalError(
+                entry,
+                "Use one safe Label | Description per line, with no credentials."
+              );
+            }
+            return;
+          }
+          if (typeof actions.handoff === "function") {
+            actions.handoff(entry, readiness, {
+              customerSummary: handoffSummary,
+              deliveryManifest: items
+            });
+          }
+        });
+        section.appendChild(form);
+      }
+      if (readiness.state === "handed_off") {
+        var handed = readiness.handoff;
+        appendAccountFact(
+          documentRef,
+          readinessFacts,
+          "Handed off",
+          accountDate(handed.handedOffAt)
+        );
+        appendAccountFact(
+          documentRef,
+          readinessFacts,
+          "Workmanship starts",
+          accountDate(handed.workmanship.startsAt)
+        );
+        appendAccountFact(
+          documentRef,
+          readinessFacts,
+          "Workmanship ends",
+          accountDate(handed.workmanship.endsAt)
+        );
+        section.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          "Handoff is immutable. Later progress, access, work-request, and final-payment commands remain closed."
+        ));
+      }
       return section;
     }
 
@@ -9439,9 +10818,30 @@
       progressRead,
       changeCompletionRead,
       changePaymentRead,
+      finalRead,
       globallyBusy,
       keepOpen
     ) {
+      var completionSnapshot = changeCompletionRead
+        && verifiedOwnerCustomBuildChangeCompletion(
+          changeCompletionRead.snapshot,
+          entry
+        );
+      var finalSnapshot = finalRead
+        && verifiedOwnerCustomBuildHandoffReadiness(
+          finalRead.handoffSnapshot,
+          entry
+        );
+      var completionAuthority = Boolean(
+        completionSnapshot && completionSnapshot.completion
+      ) || Boolean(
+        finalSnapshot
+        && finalSnapshot.completion
+      ) ? "terminal" : completionSnapshot
+        && changeCompletionRead
+        && changeCompletionRead.phase === "ready"
+        ? "open"
+        : "unknown";
       var card = accountElement(
         documentRef,
         "details",
@@ -9486,14 +10886,21 @@
       card.append(
         sourceFacts,
         customBuildJobFacts(documentRef, entry.job, { owner: true }),
-        renderJobProgress(entry, progressRead, globallyBusy),
+        renderJobProgress(
+          entry,
+          progressRead,
+          globallyBusy,
+          completionAuthority
+        ),
         renderJobChangeCompletion(
           entry,
           changeCompletionRead,
           changePaymentRead,
           progressRead,
-          globallyBusy
-        )
+          globallyBusy,
+          completionAuthority
+        ),
+        renderOwnerFinalHandoff(entry, finalRead, globallyBusy)
       );
       body.appendChild(card);
     }
@@ -9515,6 +10922,17 @@
           paymentStatus
           && typeof paymentStatus.focus === "function"
         ) paymentStatus.focus();
+      },
+      focusFinalStatus: function (jobId) {
+        var finalSection = body.querySelector(
+          '[data-owner-custom-build-final="' + text(jobId) + '"]'
+        );
+        var finalStatus = finalSection && finalSection.querySelector(
+          ".customer-custom-build-final-status"
+        );
+        if (finalStatus && typeof finalStatus.focus === "function") {
+          finalStatus.focus();
+        }
       },
       render: function (state) {
         var visible = Boolean(state && state.revealed === true);
@@ -9569,6 +10987,8 @@
               && state.changeCompletionByJob[entry.job.jobId],
             state.changePaymentsByJob
               && state.changePaymentsByJob[entry.job.jobId],
+            state.finalByJob
+              && state.finalByJob[entry.job.jobId],
             interfaceBusy,
             openJobIds.has(entry.job.jobId)
           );
@@ -12473,6 +13893,16 @@
       command: "",
       error: ""
     };
+    var customBuildFinalReadSequence = 0;
+    var customBuildFinalRead = {
+      accountId: "",
+      projectId: "",
+      phase: "idle",
+      snapshot: null,
+      document: null,
+      command: "",
+      error: ""
+    };
     var ownerCustomBuildReadSequence = 0;
     var ownerCustomBuildRead = {
       accountId: "",
@@ -12490,6 +13920,7 @@
       progressByJob: {},
       changeCompletionByJob: {},
       changePaymentsByJob: {},
+      finalByJob: {},
       busyKey: "",
       pageNumber: 0,
       loadingMore: false,
@@ -12927,6 +14358,25 @@
               payment
             );
           },
+          refreshFinal: function (entry) {
+            return requestOwnerCustomBuildFinal(entry);
+          },
+          reconcileFinal: function (entry, snapshot) {
+            return runOwnerCustomBuildFinalReconciliation(
+              entry,
+              snapshot
+            );
+          },
+          handoff: function (entry, snapshot, input) {
+            return runOwnerCustomBuildHandoff(
+              entry,
+              snapshot,
+              input
+            );
+          },
+          finalLocalError: function (entry, error) {
+            setOwnerCustomBuildFinalError(entry, error);
+          },
           issueChange: function (entry, snapshot, input) {
             return runOwnerCustomBuildChangeCompletionCommand(
               "issue-change",
@@ -13040,6 +14490,23 @@
           }
         }
       );
+    var customerCustomBuildFinalPanel =
+      createCustomerCustomBuildFinalPanel(
+        documentRef,
+        {
+          refresh: function () {
+            return requestCustomerCustomBuildFinal(
+              idOf(lastState && lastState.project)
+            );
+          },
+          checkout: function (snapshot) {
+            return requestCustomerCustomBuildFinalCheckout(snapshot);
+          },
+          document: function (snapshot) {
+            return requestCustomerCustomBuildHandoffDocument(snapshot);
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -13114,6 +14581,10 @@
         customerCustomBuildChangeCompletionPanel.element,
         alakazamAnchor
       );
+      alakazamAnchor.parentNode.insertBefore(
+        customerCustomBuildFinalPanel.element,
+        alakazamAnchor
+      );
     }
     if (
       alakazamAnchor
@@ -13152,6 +14623,9 @@
         );
         controlShell.appendChild(
           customerCustomBuildChangeCompletionPanel.element
+        );
+        controlShell.appendChild(
+          customerCustomBuildFinalPanel.element
         );
         controlShell.appendChild(
           alakazamPanel.element
@@ -13927,6 +15401,33 @@
       });
     }
 
+    function ownerCustomBuildCompletionAuthorityStatus(entry) {
+      var jobId = entry && entry.job && entry.job.jobId;
+      var finalRead = jobId
+        && ownerCustomBuildWorkRead.finalByJob
+        && ownerCustomBuildWorkRead.finalByJob[jobId];
+      var finalState = finalRead
+        && verifiedOwnerCustomBuildHandoffReadiness(
+          finalRead.handoffSnapshot,
+          entry
+        );
+      if (
+        finalState
+        && finalState.completion
+      ) return "terminal";
+      var completionRead = jobId
+        && ownerCustomBuildWorkRead.changeCompletionByJob
+        && ownerCustomBuildWorkRead.changeCompletionByJob[jobId];
+      var completion = completionRead
+        && verifiedOwnerCustomBuildChangeCompletion(
+          completionRead.snapshot,
+          entry
+        );
+      if (!completion) return "unknown";
+      if (completion.completion) return "terminal";
+      return completionRead.phase === "ready" ? "open" : "unknown";
+    }
+
     function setOwnerCustomBuildProgress(jobId, value) {
       var next = Object.assign(
         {},
@@ -14281,6 +15782,426 @@
       );
     }
 
+    function setOwnerCustomBuildFinal(jobId, value) {
+      var next = Object.assign(
+        {},
+        ownerCustomBuildWorkRead.finalByJob || {}
+      );
+      next[jobId] = value;
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { finalByJob: next }
+      );
+      renderOwnerCustomBuildWorkPanel();
+    }
+
+    function setOwnerCustomBuildFinalError(entry, error) {
+      var jobId = entry && entry.job && entry.job.jobId;
+      var read = jobId && ownerCustomBuildWorkRead.finalByJob
+        && ownerCustomBuildWorkRead.finalByJob[jobId];
+      if (!jobId || !read) return;
+      setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+        phase: "ready",
+        busy: "",
+        error: typeof error === "string"
+          ? error
+          : explain(error, "The handoff input is invalid.")
+      }));
+      ownerCustomBuildWorkPanel.focusFinalStatus(jobId);
+    }
+
+    function requestOwnerCustomBuildFinal(entry) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      if (
+        !accountId
+        || !jobId
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      var retainedRead = ownerCustomBuildWorkRead.finalByJob
+        && ownerCustomBuildWorkRead.finalByJob[jobId];
+      var retainedPayment = retainedRead
+        && verifiedOwnerCustomBuildFinalPayments(
+          retainedRead.paymentSnapshot,
+          entry
+        );
+      var retainedHandoff = retainedRead
+        && verifiedOwnerCustomBuildHandoffReadiness(
+          retainedRead.handoffSnapshot,
+          entry
+        );
+      var retainedNotice = text(retainedRead && retainedRead.notice);
+      setOwnerCustomBuildFinal(jobId, {
+        phase: "loading",
+        paymentSnapshot: retainedPayment,
+        handoffSnapshot: retainedHandoff,
+        busy: "",
+        notice: retainedNotice,
+        error: "",
+        paymentError: "",
+        handoffError: ""
+      });
+      function settled(work) {
+        return Promise.resolve().then(work).then(
+          function (value) { return { value: value, error: null }; },
+          function (error) { return { value: null, error: error }; }
+        );
+      }
+      var paymentWork = typeof client.getOwnerCustomBuildFinalPayments ===
+          "function"
+        ? function () {
+            return client.getOwnerCustomBuildFinalPayments(
+              jobId,
+              entry.organizationId,
+              { expectedProjectId: entry.projectId }
+            );
+          }
+        : function () {
+            throw new Error(
+              "Final-payment reconciliation is unavailable in this build."
+            );
+          };
+      var handoffWork = typeof client.getOwnerCustomBuildFinalHandoff ===
+          "function"
+        ? function () {
+            return client.getOwnerCustomBuildFinalHandoff(
+              jobId,
+              entry.organizationId,
+              { expectedProjectId: entry.projectId }
+            );
+          }
+        : function () {
+            throw new Error("Handoff readiness is unavailable in this build.");
+          };
+      return Promise.all([
+        settled(paymentWork),
+        settled(handoffWork)
+      ]).then(function (results) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        var payment = results[0].error
+          ? retainedPayment
+          : verifiedOwnerCustomBuildFinalPayments(results[0].value, entry);
+        var handoff = results[1].error
+          ? retainedHandoff
+          : verifiedOwnerCustomBuildHandoffReadiness(results[1].value, entry);
+        var paymentError = results[0].error
+          ? ([401, 403, 404, 503].includes(
+              Number(results[0].error && results[0].error.status)
+            )
+            ? "Final-payment reconciliation is unavailable to this operator. Handoff readiness remains independent."
+            : explain(
+                results[0].error,
+                "Final-payment reconciliation could not be refreshed. Last verified payment details remain below."
+              ))
+          : payment
+            ? ""
+            : "The final-payment response could not be verified. No reconciliation action is available.";
+        var handoffError = results[1].error
+          ? ([401, 403, 404, 503].includes(
+              Number(results[1].error && results[1].error.status)
+            )
+            ? "Handoff readiness is held or unavailable to this operator. No handoff action is available."
+            : explain(
+                results[1].error,
+                "Handoff readiness could not be refreshed. Last verified handoff details remain below."
+              ))
+          : handoff
+            ? ""
+            : "The handoff-readiness response could not be verified. No handoff action is available.";
+        setOwnerCustomBuildFinal(jobId, {
+          phase: payment || handoff ? "ready" : "error",
+          paymentSnapshot: payment,
+          handoffSnapshot: handoff,
+          busy: "",
+          notice: retainedNotice,
+          error: "",
+          paymentError: paymentError,
+          handoffError: handoffError
+        });
+        return { payment: payment, handoff: handoff };
+      });
+    }
+
+    function requestOwnerCustomBuildFinalBatch(entries) {
+      var pending = entries.slice();
+      function next() {
+        var entry = pending.shift();
+        if (!entry) return Promise.resolve(null);
+        return requestOwnerCustomBuildFinal(entry).then(next);
+      }
+      return Promise.all(
+        entries.slice(0, 4).map(function () { return next(); })
+      );
+    }
+
+    function runOwnerCustomBuildFinalReconciliation(entry, stateInput) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      var read = jobId && ownerCustomBuildWorkRead.finalByJob
+        && ownerCustomBuildWorkRead.finalByJob[jobId];
+      var current = read && verifiedOwnerCustomBuildFinalPayments(
+        read.paymentSnapshot,
+        entry
+      );
+      var selected = verifiedOwnerCustomBuildFinalPayments(
+        stateInput,
+        entry
+      );
+      if (
+        !accountId
+        || !jobId
+        || !current
+        || !selected
+        || current.finalPayment.obligation.obligationDigest !==
+          selected.finalPayment.obligation.obligationDigest
+        || current.owner.attemptId !== selected.owner.attemptId
+        || (!current.owner.canReconcileCreation
+          && !current.owner.canReconcileSettlement)
+        || read.busy
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      if (
+        typeof client.reconcileOwnerCustomBuildFinalCheckout !== "function"
+      ) {
+        setOwnerCustomBuildFinalError(
+          entry,
+          "Exact final-payment reconciliation is unavailable in this build."
+        );
+        return Promise.resolve(null);
+      }
+      var body = { organizationId: entry.organizationId };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "reconcile-final-payment",
+          current.owner.attemptId,
+          body
+        );
+      } catch (error) {
+        setOwnerCustomBuildFinalError(entry, error);
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { busyKey: jobId + ":reconcile-final-payment" }
+      );
+      setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+        phase: "ready",
+        busy: "reconciliation",
+        error: ""
+      }));
+      return client.reconcileOwnerCustomBuildFinalCheckout(
+        jobId,
+        current.owner.attemptId,
+        {
+          commandId: commandId,
+          organizationId: entry.organizationId
+        },
+        {
+          expectedState: current,
+          expectedProjectId: entry.projectId
+        }
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        if (
+          !result
+          || result.jobId !== jobId
+          || result.attemptId !== current.owner.attemptId
+          || ![
+            "checkout_ready",
+            "payment_settled",
+            "checkout_expired",
+            "reconciliation_required"
+          ].includes(result.status)
+        ) throw new Error("The reconciliation result could not be verified.");
+        clearCustomBuildAttempt(commandId);
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+          phase: "ready",
+          paymentSnapshot: current,
+          busy: "",
+          notice: {
+            checkout_ready: "The exact Stripe page is reconciled and retained.",
+            payment_settled: "Provider-confirmed final payment is retained.",
+            checkout_expired: "Stripe confirmed the page expired.",
+            reconciliation_required: "Stripe remains uncertain; do not retry automatically."
+          }[result.status],
+          error: "",
+          paymentError: ""
+        }));
+        return requestOwnerCustomBuildFinal(entry);
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+          phase: "ready",
+          paymentSnapshot: current,
+          busy: "",
+          notice: text(read.notice),
+          error: explain(
+            error,
+            "Final-payment reconciliation remains uncertain. The exact command can be replayed safely."
+          ),
+          paymentError: explain(
+            error,
+            "Final-payment reconciliation remains uncertain. The exact command can be replayed safely."
+          )
+        }));
+        ownerCustomBuildWorkPanel.focusFinalStatus(jobId);
+        return null;
+      });
+    }
+
+    function runOwnerCustomBuildHandoff(entry, stateInput, input) {
+      var accountId = ownerCustomBuildWorkRead.accountId;
+      var sequence = ownerCustomBuildWorkReadSequence;
+      var jobId = entry && entry.job && entry.job.jobId;
+      var read = jobId && ownerCustomBuildWorkRead.finalByJob
+        && ownerCustomBuildWorkRead.finalByJob[jobId];
+      var current = read && verifiedOwnerCustomBuildHandoffReadiness(
+        read.handoffSnapshot,
+        entry
+      );
+      var selected = verifiedOwnerCustomBuildHandoffReadiness(
+        stateInput,
+        entry
+      );
+      if (
+        !accountId
+        || !jobId
+        || !current
+        || !selected
+        || current.action.handoffAvailable !== true
+        || selected.action.handoffAvailable !== true
+        || current.completion.packageDigest !==
+          selected.completion.packageDigest
+        || current.finalObligation.obligationDigest !==
+          selected.finalObligation.obligationDigest
+        || read.busy
+        || ownerCustomBuildWorkRead.busyKey
+        || !ownerCustomBuildProgressEntryIsCurrent(entry)
+      ) return Promise.resolve(null);
+      if (typeof client.createOwnerCustomBuildHandoff !== "function") {
+        setOwnerCustomBuildFinalError(
+          entry,
+          "Immutable handoff is unavailable in this build."
+        );
+        return Promise.resolve(null);
+      }
+      var body = {
+        customerSummary: input.customerSummary,
+        deliveryManifest: input.deliveryManifest,
+        expectedCompletionPackageDigest:
+          current.completion.packageDigest,
+        expectedFinalObligationDigest:
+          current.finalObligation.obligationDigest,
+        organizationId: entry.organizationId
+      };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "final-handoff",
+          jobId,
+          body
+        );
+      } catch (error) {
+        setOwnerCustomBuildFinalError(entry, error);
+        return Promise.resolve(null);
+      }
+      ownerCustomBuildWorkRead = Object.assign(
+        {},
+        ownerCustomBuildWorkRead,
+        { busyKey: jobId + ":handoff" }
+      );
+      setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+        phase: "ready",
+        busy: "handoff",
+        error: ""
+      }));
+      return client.createOwnerCustomBuildHandoff(
+        jobId,
+        Object.assign({}, body, { commandId: commandId }),
+        {
+          expectedState: current,
+          expectedProjectId: entry.projectId
+        }
+      ).then(function (result) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        if (!verifiedOwnerCustomBuildHandoffCommand(result, current)) {
+          throw new Error("The immutable handoff result could not be verified.");
+        }
+        clearCustomBuildAttempt(commandId);
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+          phase: "ready",
+          handoffSnapshot: current,
+          busy: "",
+          notice: "Immutable handoff created. The 30-day workmanship window now begins.",
+          error: "",
+          handoffError: ""
+        }));
+        return requestOwnerCustomBuildFinal(entry);
+      }).catch(function (error) {
+        if (
+          !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
+          || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        ) return null;
+        ownerCustomBuildWorkRead = Object.assign(
+          {},
+          ownerCustomBuildWorkRead,
+          { busyKey: "" }
+        );
+        setOwnerCustomBuildFinal(jobId, Object.assign({}, read, {
+          phase: "ready",
+          handoffSnapshot: current,
+          busy: "",
+          notice: text(read.notice),
+          error: explain(
+            error,
+            "Handoff was not confirmed. Refresh before replaying the same exact command."
+          ),
+          handoffError: explain(
+            error,
+            "Handoff was not confirmed. Refresh before replaying the same exact command."
+          )
+        }));
+        ownerCustomBuildWorkPanel.focusFinalStatus(jobId);
+        return null;
+      });
+    }
+
     function runOwnerCustomBuildChangePaymentReconciliation(
       entry,
       paymentInput
@@ -14333,6 +16254,7 @@
         || Boolean(read.busy)
         || ownerCustomBuildWorkRead.busyKey
         || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        || ownerCustomBuildCompletionAuthorityStatus(entry) !== "open"
         || (
           !payment.owner.canReconcileCreation
           && !payment.owner.canReconcileSettlement
@@ -14388,18 +16310,25 @@
         notice: text(read.notice),
         error: ""
       });
-      return client.reconcileOwnerCustomBuildChangeCheckout(
-        jobId,
-        payment.owner.attemptId,
-        {
-          commandId: commandId,
-          organizationId: entry.organizationId
-        },
-        {
-          expectedPayment: payment,
-          expectedProjectId: entry.projectId
+      return Promise.resolve().then(function () {
+        if (ownerCustomBuildCompletionAuthorityStatus(entry) !== "open") {
+          throw new Error(
+            "Verified completion closed this added-work reconciliation boundary."
+          );
         }
-      ).then(function (result) {
+        return client.reconcileOwnerCustomBuildChangeCheckout(
+          jobId,
+          payment.owner.attemptId,
+          {
+            commandId: commandId,
+            organizationId: entry.organizationId
+          },
+          {
+            expectedPayment: payment,
+            expectedProjectId: entry.projectId
+          }
+        );
+      }).then(function (result) {
         if (
           !ownerCustomBuildWorkReadIsCurrent(sequence, accountId)
           || !ownerCustomBuildProgressEntryIsCurrent(entry)
@@ -14505,6 +16434,7 @@
         || Boolean(read.busy)
         || ownerCustomBuildWorkRead.busyKey
         || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        || ownerCustomBuildCompletionAuthorityStatus(entry) !== "open"
       ) return Promise.resolve(null);
       var body;
       var subjectId = jobId;
@@ -14600,6 +16530,11 @@
         error: ""
       });
       return Promise.resolve().then(function () {
+        if (ownerCustomBuildCompletionAuthorityStatus(entry) !== "open") {
+          throw new Error(
+            "Verified completion closed this owner progress boundary."
+          );
+        }
         return invoke(commandId);
       }).then(function (result) {
         if (
@@ -14713,6 +16648,7 @@
         || Boolean(read.busy)
         || ownerCustomBuildWorkRead.busyKey
         || !ownerCustomBuildProgressEntryIsCurrent(entry)
+        || ownerCustomBuildCompletionAuthorityStatus(entry) !== "open"
         || (snapshotInput && selected !== current)
       ) return Promise.resolve(null);
       var source = input || {};
@@ -14858,6 +16794,11 @@
         error: ""
       });
       return Promise.resolve().then(function () {
+        if (ownerCustomBuildCompletionAuthorityStatus(entry) !== "open") {
+          throw new Error(
+            "Verified completion closed this added-work mutation boundary."
+          );
+        }
         return invoke(commandId);
       }).then(function (result) {
         if (
@@ -14993,6 +16934,7 @@
           progressByJob: {},
           changeCompletionByJob: {},
           changePaymentsByJob: {},
+          finalByJob: {},
           busyKey: "",
           pageNumber: 0,
           loadingMore: false,
@@ -15011,6 +16953,7 @@
           ownerCustomBuildWorkRead.changeCompletionByJob || {},
         changePaymentsByJob:
           ownerCustomBuildWorkRead.changePaymentsByJob || {},
+        finalByJob: ownerCustomBuildWorkRead.finalByJob || {},
         busyKey: "",
         pageNumber: retainedPageNumber,
         loadingMore: continuing,
@@ -15033,6 +16976,7 @@
           var progressByJob = {};
           var changeCompletionByJob = {};
           var changePaymentsByJob = {};
+          var finalByJob = {};
           result.jobs.forEach(function (entry) {
             progressByJob[entry.job.jobId] = {
               phase: "loading",
@@ -15052,6 +16996,12 @@
               busy: "",
               error: ""
             };
+            finalByJob[entry.job.jobId] = {
+              phase: "loading",
+              snapshot: null,
+              busy: "",
+              error: ""
+            };
           });
           ownerCustomBuildWorkRead = {
             accountId: selectedAccountId,
@@ -15061,6 +17011,7 @@
             progressByJob: progressByJob,
             changeCompletionByJob: changeCompletionByJob,
             changePaymentsByJob: changePaymentsByJob,
+            finalByJob: finalByJob,
             busyKey: "",
             pageNumber: continuing ? retainedPageNumber + 1 : 1,
             loadingMore: false,
@@ -15070,7 +17021,8 @@
           return Promise.all([
             requestOwnerCustomBuildProgressBatch(result.jobs),
             requestOwnerCustomBuildChangeCompletionBatch(result.jobs),
-            requestOwnerCustomBuildChangePaymentsBatch(result.jobs)
+            requestOwnerCustomBuildChangePaymentsBatch(result.jobs),
+            requestOwnerCustomBuildFinalBatch(result.jobs)
           ]).then(function () { return result; });
         })
         .catch(function (error) {
@@ -15094,6 +17046,9 @@
             changePaymentsByJob: unavailable
               ? {}
               : ownerCustomBuildWorkRead.changePaymentsByJob || {},
+            finalByJob: unavailable
+              ? {}
+              : ownerCustomBuildWorkRead.finalByJob || {},
             busyKey: "",
             pageNumber: unavailable ? 0 : retainedPageNumber,
             loadingMore: false,
@@ -15127,6 +17082,7 @@
             progressByJob: {},
             changeCompletionByJob: {},
             changePaymentsByJob: {},
+            finalByJob: {},
             busyKey: "",
             pageNumber: 0,
             loadingMore: false,
@@ -15574,7 +17530,36 @@
     }
 
     function renderCustomerCustomBuildProgressPanel() {
-      customerCustomBuildProgressPanel.render(customBuildProgressRead);
+      customerCustomBuildProgressPanel.render(Object.assign(
+        {},
+        customBuildProgressRead,
+        {
+          completionAuthority: customerCustomBuildCompletionAuthorityStatus(
+            customBuildProgressRead.projectId
+          )
+        }
+      ));
+    }
+
+    function customerCustomBuildCompletionAuthorityStatus(projectId) {
+      var selectedProjectId = text(projectId);
+      var finalState = selectedProjectId
+        && customBuildFinalRead.projectId === selectedProjectId
+        && verifiedCustomerCustomBuildFinalState(
+          customBuildFinalRead.snapshot,
+          selectedProjectId
+        );
+      if (finalState && finalState.completion) return "terminal";
+      var completion = selectedProjectId
+        && customBuildChangeCompletionRead.projectId === selectedProjectId
+        && verifiedCustomerCustomBuildChangeCompletion(
+          customBuildChangeCompletionRead.snapshot
+        );
+      if (!completion) return "unknown";
+      if (completion.completion) return "terminal";
+      return customBuildChangeCompletionRead.phase === "ready"
+        ? "open"
+        : "unknown";
     }
 
     function customerCustomBuildProgressReadIsCurrent(
@@ -15687,6 +17672,7 @@
         || !selected.activeRequest
         || selected.activeRequest.requestId !==
           current.activeRequest.requestId
+        || customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
         || typeof client.respondToCustomServicesCustomBuildRequest !==
           "function"
       ) return Promise.resolve(null);
@@ -15726,6 +17712,13 @@
       );
       renderCustomerCustomBuildProgressPanel();
       return Promise.resolve().then(function () {
+        if (
+          customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
+        ) {
+          throw new Error(
+            "Verified completion closed this customer-response boundary."
+          );
+        }
         return client.respondToCustomServicesCustomBuildRequest(
           projectId,
           request.requestId,
@@ -15820,9 +17813,16 @@
     }
 
     function renderCustomerCustomBuildChangeCompletionPanel() {
-      customerCustomBuildChangeCompletionPanel.render(
-        customBuildChangeCompletionRead
-      );
+      customerCustomBuildChangeCompletionPanel.render(Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        {
+          completionAuthority: customerCustomBuildCompletionAuthorityStatus(
+            customBuildChangeCompletionRead.projectId
+          )
+        }
+      ));
+      renderCustomerCustomBuildProgressPanel();
     }
 
     function customerCustomBuildChangeCompletionReadIsCurrent(
@@ -16067,6 +18067,7 @@
         || !order
         || order !== orderInput
         || order.state !== "issued"
+        || customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
         || (operation === "accept" && Date.parse(order.expiresAt) <= Date.now())
       ) return Promise.resolve(null);
       var method = operation === "accept"
@@ -16120,11 +18121,20 @@
         { command: operation, error: "" }
       );
       renderCustomerCustomBuildChangeCompletionPanel();
-      return client[method](
-        projectId,
-        order.changeOrderId,
-        Object.assign({}, body, { commandId: commandId })
-      ).then(function (result) {
+      return Promise.resolve().then(function () {
+        if (
+          customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
+        ) {
+          throw new Error(
+            "Verified completion closed this added-work decision boundary."
+          );
+        }
+        return client[method](
+          projectId,
+          order.changeOrderId,
+          Object.assign({}, body, { commandId: commandId })
+        );
+      }).then(function (result) {
         if (!customerCustomBuildChangeCompletionReadIsCurrent(
           sequence,
           projectId
@@ -16224,6 +18234,7 @@
         || customBuildChangeCompletionRead.command
         || current.state !== "checkout_available"
         || selected.state !== "checkout_available"
+        || customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
         || current.invoice.invoiceId !== selected.invoice.invoiceId
         || current.invoice.invoiceDigest !== selected.invoice.invoiceDigest
       ) return Promise.resolve(null);
@@ -16267,15 +18278,24 @@
         { command: "opening added-work payment", error: "" }
       );
       renderCustomerCustomBuildChangeCompletionPanel();
-      return client.createCustomServicesCustomBuildChangeCheckout(
-        projectId,
-        current.invoice.invoiceId,
-        {
-          commandId: commandId,
-          invoiceDigest: current.invoice.invoiceDigest
-        },
-        { expectedInvoice: current }
-      ).then(function (result) {
+      return Promise.resolve().then(function () {
+        if (
+          customerCustomBuildCompletionAuthorityStatus(projectId) !== "open"
+        ) {
+          throw new Error(
+            "Verified completion closed this added-work payment boundary."
+          );
+        }
+        return client.createCustomServicesCustomBuildChangeCheckout(
+          projectId,
+          current.invoice.invoiceId,
+          {
+            commandId: commandId,
+            invoiceDigest: current.invoice.invoiceDigest
+          },
+          { expectedInvoice: current }
+        );
+      }).then(function (result) {
         if (!customerCustomBuildChangeCompletionReadIsCurrent(
           sequence,
           projectId
@@ -16450,6 +18470,366 @@
         return;
       }
       renderCustomerCustomBuildChangeCompletionPanel();
+    }
+
+    function renderCustomerCustomBuildFinalPanel() {
+      customerCustomBuildFinalPanel.render(customBuildFinalRead);
+      customerCustomBuildChangeCompletionPanel.render(Object.assign(
+        {},
+        customBuildChangeCompletionRead,
+        {
+          completionAuthority: customerCustomBuildCompletionAuthorityStatus(
+            customBuildChangeCompletionRead.projectId
+          )
+        }
+      ));
+      renderCustomerCustomBuildProgressPanel();
+    }
+
+    function customerCustomBuildFinalReadIsCurrent(sequence, projectId) {
+      return sequence === customBuildFinalReadSequence
+        && customBuildFinalRead.projectId === projectId
+        && customBuildFinalRead.accountId === text(
+          lastState.account && lastState.account.id
+        )
+        && idOf(lastState.project) === projectId;
+    }
+
+    function requestCustomerCustomBuildFinal(projectId) {
+      var selectedProjectId = text(projectId);
+      var selectedAccountId = text(lastState.account && lastState.account.id);
+      if (!selectedProjectId || !selectedAccountId) {
+        return Promise.resolve(null);
+      }
+      var sequence = ++customBuildFinalReadSequence;
+      var retained = customBuildFinalRead.accountId === selectedAccountId
+          && customBuildFinalRead.projectId === selectedProjectId
+        ? verifiedCustomerCustomBuildFinalState(
+            customBuildFinalRead.snapshot,
+            selectedProjectId
+          )
+        : null;
+      var retainedDocument = retained
+        ? verifiedCustomerCustomBuildHandoffDocument(
+            customBuildFinalRead.document,
+            retained
+          )
+        : null;
+      var retainedZeroBalance = Boolean(
+        retained
+        && retained.obligation
+        && retained.obligation.amount.amountMinor === 0
+      );
+      customBuildFinalRead = {
+        accountId: selectedAccountId,
+        projectId: selectedProjectId,
+        phase: "loading",
+        snapshot: retained,
+        document: retainedDocument,
+        command: "",
+        error: ""
+      };
+      renderCustomerCustomBuildFinalPanel();
+      if (
+        typeof client.getCustomServicesCustomBuildFinalHandoff !== "function"
+      ) {
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          phase: "error",
+          error: retainedZeroBalance
+            ? "Delivery and handoff are unavailable in this build."
+            : "Final payment and handoff are unavailable in this build."
+        });
+        renderCustomerCustomBuildFinalPanel();
+        return Promise.resolve(null);
+      }
+      return client.getCustomServicesCustomBuildFinalHandoff(
+        selectedProjectId
+      ).then(function (result) {
+        if (!customerCustomBuildFinalReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        var snapshot = verifiedCustomerCustomBuildFinalState(
+          result,
+          selectedProjectId
+        );
+        if (!snapshot) {
+          throw new Error(
+            "The delivery and handoff response could not be verified."
+          );
+        }
+        customBuildFinalRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: "ready",
+          snapshot: snapshot,
+          document: verifiedCustomerCustomBuildHandoffDocument(
+            retainedDocument,
+            snapshot
+          ),
+          command: "",
+          error: ""
+        };
+        renderCustomerCustomBuildFinalPanel();
+        if (
+          snapshot.state === "handed_off"
+          && !verifiedCustomerCustomBuildHandoffDocument(
+            customBuildFinalRead.document,
+            snapshot
+          )
+        ) {
+          return requestCustomerCustomBuildHandoffDocument(snapshot)
+            .then(function () { return snapshot; });
+        }
+        return snapshot;
+      }).catch(function (error) {
+        if (!customerCustomBuildFinalReadIsCurrent(
+          sequence,
+          selectedProjectId
+        )) return null;
+        var held = [401, 403, 404, 503].includes(
+          Number(error && error.status)
+        ) || [
+          "CUSTOM_BUILD_FINAL_PAYMENT_HELD",
+          "CUSTOM_BUILD_HANDOFF_HELD"
+        ].includes(text(error && error.code));
+        customBuildFinalRead = {
+          accountId: selectedAccountId,
+          projectId: selectedProjectId,
+          phase: retained ? "ready" : "error",
+          snapshot: retained,
+          document: retainedDocument,
+          command: "",
+          error: held
+            ? retainedZeroBalance
+              ? "Delivery or handoff is held or unavailable. No action was taken."
+              : "Final payment or handoff is held or unavailable. No action was taken."
+            : explain(
+                error,
+                retainedZeroBalance
+                  ? "Delivery and handoff could not be refreshed. Last verified zero-balance details remain below."
+                  : "Final payment and handoff could not be refreshed. Last verified details remain below."
+              )
+        };
+        renderCustomerCustomBuildFinalPanel();
+        customerCustomBuildFinalPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function requestCustomerCustomBuildFinalCheckout(snapshotInput) {
+      var projectId = customBuildFinalRead.projectId;
+      var accountId = customBuildFinalRead.accountId;
+      var current = verifiedCustomerCustomBuildFinalState(
+        customBuildFinalRead.snapshot,
+        projectId
+      );
+      var selected = verifiedCustomerCustomBuildFinalState(
+        snapshotInput,
+        projectId
+      );
+      if (
+        !projectId
+        || !accountId
+        || !current
+        || !selected
+        || current.state !== "checkout_available"
+        || selected.state !== "checkout_available"
+        || current.invoice.invoiceId !== selected.invoice.invoiceId
+        || current.invoice.invoiceDigest !== selected.invoice.invoiceDigest
+        || customBuildFinalRead.command
+      ) return Promise.resolve(null);
+      if (
+        typeof client.createCustomServicesCustomBuildFinalCheckout !==
+          "function"
+      ) {
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          error: "Secure final payment is unavailable in this build."
+        });
+        renderCustomerCustomBuildFinalPanel();
+        return Promise.resolve(null);
+      }
+      var body = { invoiceDigest: current.invoice.invoiceDigest };
+      var commandId;
+      try {
+        commandId = customBuildCommandId(
+          accountId,
+          "final-checkout",
+          current.invoice.invoiceId,
+          body
+        );
+      } catch (error) {
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          error: explain(error, "Secure final payment could not start.")
+        });
+        renderCustomerCustomBuildFinalPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildFinalReadSequence;
+      customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+        command: "checkout",
+        error: ""
+      });
+      renderCustomerCustomBuildFinalPanel();
+      return client.createCustomServicesCustomBuildFinalCheckout(
+        projectId,
+        current.invoice.invoiceId,
+        {
+          commandId: commandId,
+          invoiceDigest: current.invoice.invoiceDigest
+        },
+        { expectedState: current }
+      ).then(function (result) {
+        if (!customerCustomBuildFinalReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        var checkout = verifiedCustomerCustomBuildFinalCheckout(
+          result,
+          current,
+          new Date().toISOString()
+        );
+        var destination = safeCheckoutDestination(checkout);
+        if (!checkout || !destination) {
+          throw new Error(
+            "The secure final-payment destination could not be verified."
+          );
+        }
+        clearCustomBuildAttempt(commandId);
+        windowRef.location.assign(destination);
+        return checkout;
+      }).catch(function (error) {
+        if (!customerCustomBuildFinalReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        if ([
+          "CUSTOM_BUILD_FINAL_CHECKOUT_REQUIRES_NEW_COMMAND",
+          "CUSTOM_BUILD_FINAL_PAYMENT_HELD",
+          "CUSTOM_BUILD_FINAL_PAYMENT_UNAVAILABLE"
+        ].includes(text(error && error.code))) clearCustomBuildAttempt(commandId);
+        customBuildFinalRead = {
+          accountId: accountId,
+          projectId: projectId,
+          phase: "ready",
+          snapshot: current,
+          document: customBuildFinalRead.document,
+          command: "",
+          error: text(error && error.code) ===
+            "CUSTOM_BUILD_FINAL_CHECKOUT_RECONCILIATION_REQUIRED"
+            ? "Do not try another payment. The Stripe result is uncertain and Site Sourcery must reconcile it first."
+            : explain(
+                error,
+                "Secure final payment could not open. Refresh before retrying."
+              )
+        };
+        renderCustomerCustomBuildFinalPanel();
+        customerCustomBuildFinalPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function requestCustomerCustomBuildHandoffDocument(snapshotInput) {
+      var projectId = customBuildFinalRead.projectId;
+      var current = verifiedCustomerCustomBuildFinalState(
+        customBuildFinalRead.snapshot,
+        projectId
+      );
+      var selected = verifiedCustomerCustomBuildFinalState(
+        snapshotInput,
+        projectId
+      );
+      if (
+        !projectId
+        || !current
+        || !selected
+        || current.state !== "handed_off"
+        || selected.handoff.documentId !== current.handoff.documentId
+        || customBuildFinalRead.command
+      ) return Promise.resolve(null);
+      if (
+        typeof client.getCustomServicesCustomBuildHandoffDocument !==
+          "function"
+      ) {
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          phase: "ready",
+          error:
+            "The verified handoff record is unavailable in this build. Delivery details remain retained and retry stays available."
+        });
+        renderCustomerCustomBuildFinalPanel();
+        return Promise.resolve(null);
+      }
+      var sequence = customBuildFinalReadSequence;
+      customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+        command: "document",
+        error: ""
+      });
+      renderCustomerCustomBuildFinalPanel();
+      return client.getCustomServicesCustomBuildHandoffDocument(
+        projectId,
+        current.handoff.documentId,
+        { expectedState: current }
+      ).then(function (result) {
+        if (!customerCustomBuildFinalReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        var documentProjection =
+          verifiedCustomerCustomBuildHandoffDocument(result, current);
+        if (!documentProjection) {
+          throw new Error("The handoff record did not match delivery.");
+        }
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          phase: "ready",
+          document: documentProjection,
+          command: "",
+          error: ""
+        });
+        renderCustomerCustomBuildFinalPanel();
+        customerCustomBuildFinalPanel.focusStatus();
+        return documentProjection;
+      }).catch(function (error) {
+        if (!customerCustomBuildFinalReadIsCurrent(sequence, projectId)) {
+          return null;
+        }
+        customBuildFinalRead = Object.assign({}, customBuildFinalRead, {
+          phase: "ready",
+          command: "",
+          error: explain(
+            error,
+            "The verified handoff record could not be opened."
+          )
+        });
+        renderCustomerCustomBuildFinalPanel();
+        customerCustomBuildFinalPanel.focusStatus();
+        return null;
+      });
+    }
+
+    function renderCustomerCustomBuildFinalAccount(state) {
+      var accountId = text(state.account && state.account.id);
+      var projectId = accountId ? idOf(state.project) : "";
+      if (!projectId) {
+        if (customBuildFinalRead.projectId || customBuildFinalRead.accountId) {
+          customBuildFinalReadSequence += 1;
+          customBuildFinalRead = {
+            accountId: "",
+            projectId: "",
+            phase: "idle",
+            snapshot: null,
+            document: null,
+            command: "",
+            error: ""
+          };
+        }
+        renderCustomerCustomBuildFinalPanel();
+        return;
+      }
+      if (
+        customBuildFinalRead.accountId !== accountId
+        || customBuildFinalRead.projectId !== projectId
+      ) {
+        requestCustomerCustomBuildFinal(projectId);
+        return;
+      }
+      renderCustomerCustomBuildFinalPanel();
     }
 
     function renderAssessmentPanel() {
@@ -18252,6 +20632,7 @@
       renderCustomerCustomBuildAccount(state);
       renderCustomerCustomBuildProgressAccount(state);
       renderCustomerCustomBuildChangeCompletionAccount(state);
+      renderCustomerCustomBuildFinalAccount(state);
       renderAlakazamAccount(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
@@ -18926,12 +21307,24 @@
       verifiedCustomerCustomBuildChangeInvoice,
     verifiedCustomerCustomBuildChangeCheckout:
       verifiedCustomerCustomBuildChangeCheckout,
+    verifiedCustomerCustomBuildFinalState:
+      verifiedCustomerCustomBuildFinalState,
+    verifiedCustomerCustomBuildFinalCheckout:
+      verifiedCustomerCustomBuildFinalCheckout,
+    verifiedCustomerCustomBuildHandoffDocument:
+      verifiedCustomerCustomBuildHandoffDocument,
     verifiedOwnerCustomBuildChangeCompletion:
       verifiedOwnerCustomBuildChangeCompletion,
     verifiedOwnerCustomBuildChangePayments:
       verifiedOwnerCustomBuildChangePayments,
     verifiedOwnerCustomBuildChangePaymentReconciliation:
       verifiedOwnerCustomBuildChangePaymentReconciliation,
+    verifiedOwnerCustomBuildFinalPayments:
+      verifiedOwnerCustomBuildFinalPayments,
+    verifiedOwnerCustomBuildHandoffReadiness:
+      verifiedOwnerCustomBuildHandoffReadiness,
+    verifiedOwnerCustomBuildHandoffCommand:
+      verifiedOwnerCustomBuildHandoffCommand,
     verifiedOwnerAssessmentDelivery:
       verifiedOwnerAssessmentDelivery,
     verifiedOwnerAssessmentEvidence:

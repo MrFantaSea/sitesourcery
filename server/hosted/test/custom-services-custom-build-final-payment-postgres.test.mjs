@@ -69,7 +69,9 @@ function finalRow(overrides = {}) {
     completion_package_digest: "1".repeat(64),
     completion_prepared_at: "2026-08-06T17:55:00.000Z",
     base_scope_digest: "2".repeat(64),
-    effective_change_order_digests: ["3".repeat(64), "4".repeat(64)],
+    // Canonical authority is change-number order, which need not be lexical
+    // digest order. Keep this deliberately reversed as a regression fixture.
+    effective_change_order_digests: ["4".repeat(64), "3".repeat(64)],
     effective_scope_digest: "5".repeat(64),
     accepted_quote_digest: "6".repeat(64),
     accepted_disclosure_digest: "7".repeat(64),

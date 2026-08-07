@@ -2534,6 +2534,357 @@ function assertInvalidCustomBuildChangePayment(error) {
     && error.retryable === true;
 }
 
+const FINAL_PROJECT_ID =
+  "d1000000-0000-4000-8000-000000000001";
+const FINAL_JOB_ID =
+  "d2000000-0000-4000-8000-000000000002";
+const FINAL_PACKAGE_ID =
+  "d3000000-0000-4000-8000-000000000003";
+const FINAL_OBLIGATION_ID =
+  "d4000000-0000-4000-8000-000000000004";
+const FINAL_INVOICE_ID =
+  "d5000000-0000-4000-8000-000000000005";
+const FINAL_ATTEMPT_ID =
+  "d6000000-0000-4000-8000-000000000006";
+const FINAL_PAYMENT_RECEIPT_ID =
+  "d7000000-0000-4000-8000-000000000007";
+const FINAL_DOCUMENT_ID =
+  "d8000000-0000-4000-8000-000000000008";
+const FINAL_HANDOFF_RECEIPT_ID =
+  "d9000000-0000-4000-8000-000000000009";
+const FINAL_ZERO_CLEARANCE_ID =
+  "da000000-0000-4000-8000-000000000010";
+const FINAL_PACKAGE_DIGEST = "6".repeat(64);
+const FINAL_OBLIGATION_DIGEST = "7".repeat(64);
+const FINAL_INVOICE_DIGEST = "9".repeat(64);
+const FINAL_INVOICE_NUMBER =
+  "SSCB-FINAL-D5000000000040008000000000000005";
+const FINAL_COMPLETED_AT = "2026-11-01T04:45:00.000Z";
+const FINAL_CLEARED_AT = "2026-11-01T05:00:00.000Z";
+const FINAL_HANDED_OFF_AT = "2026-11-01T05:30:00.000Z";
+const FINAL_WORKMANSHIP_ENDS_AT = "2026-12-01T05:30:00.000Z";
+const FINAL_CHECKOUT_EXPIRES_AT = "2099-11-01T06:00:00.000Z";
+const FINAL_CHECKOUT_URL =
+  "https://checkout.stripe.com/c/pay/cs_test_custom_build_final";
+
+function customBuildFinalState({
+  state = "checkout_available",
+  zeroBalance = false,
+  handoffContentDigest = null
+} = {}) {
+  const paid = ["paid_handoff_pending", "handed_off"].includes(state)
+    && !zeroBalance;
+  const handedOff = state === "handed_off";
+  const ready = state === "checkout_ready";
+  const amountMinor = zeroBalance ? 0 : 32500;
+  const taxMinor = paid ? 2145 : null;
+  return {
+    schema: "sitesourcery.custom-build-final-handoff/v1",
+    state,
+    projectId: FINAL_PROJECT_ID,
+    jobId: FINAL_JOB_ID,
+    completion: {
+      packageId: FINAL_PACKAGE_ID,
+      packageDigest: FINAL_PACKAGE_DIGEST,
+      completedAt: FINAL_COMPLETED_AT
+    },
+    obligation: {
+      obligationId: FINAL_OBLIGATION_ID,
+      obligationDigest: FINAL_OBLIGATION_DIGEST,
+      amount: { amountMinor, currency: "USD" },
+      installmentNumber: zeroBalance ? null : 2,
+      workmanshipCorrectionDays: 30,
+      boundAt: "2026-11-01T04:46:00.000Z"
+    },
+    invoice: zeroBalance
+      ? null
+      : {
+          invoiceId: FINAL_INVOICE_ID,
+          invoiceNumber: FINAL_INVOICE_NUMBER,
+          invoiceDigest: FINAL_INVOICE_DIGEST,
+          purpose: "custom_build_final",
+          issuedAt: "2026-11-01T04:47:00.000Z",
+          lines: [{
+            lineNumber: 1,
+            componentKey: "custom_build_final_installment",
+            displayName: "Custom website build final installment",
+            quantity: 1,
+            unitAmountMinor: amountMinor,
+            amountMinor,
+            creditMinor: 0,
+            currency: "USD"
+          }],
+          subtotal: { amountMinor, currency: "USD" },
+          credit: { amountMinor: 0, currency: "USD" },
+          tax: paid
+            ? { amountMinor: taxMinor, state: "settled" }
+            : { amountMinor: null, state: "calculated_at_checkout" },
+          total: paid
+            ? {
+                amountMinor: amountMinor + taxMinor,
+                currency: "USD",
+                state: "settled"
+              }
+            : {
+                amountMinor: null,
+                currency: "USD",
+                state: "shown_at_checkout"
+              }
+        },
+    payment: zeroBalance
+      ? {
+          state: "cleared_no_balance",
+          chargeOccurred: false,
+          zeroBalanceClearance: {
+            clearanceId: FINAL_ZERO_CLEARANCE_ID,
+            clearanceDigest: "a".repeat(64),
+            clearedAt: FINAL_CLEARED_AT
+          }
+        }
+      : {
+          state: paid
+            ? "paid"
+            : state === "payment_reconciliation_required"
+              ? "reconciliation_required"
+              : state,
+          chargeOccurred: paid,
+          checkoutUrl: ready ? FINAL_CHECKOUT_URL : null,
+          checkoutExpiresAt: ready ? FINAL_CHECKOUT_EXPIRES_AT : null,
+          settledAt: paid ? FINAL_CLEARED_AT : null
+        },
+    handoff: handedOff
+      ? {
+          state: "handed_off",
+          documentId: FINAL_DOCUMENT_ID,
+          contentDigest: handoffContentDigest
+            || customBuildHandoffDocument().contentDigest,
+          handedOffAt: FINAL_HANDED_OFF_AT,
+          workmanshipStartsAt: FINAL_HANDED_OFF_AT,
+          workmanshipEndsAt: FINAL_WORKMANSHIP_ENDS_AT
+        }
+      : {
+          state: "pending",
+          documentId: null,
+          workmanshipStartsAt: null,
+          workmanshipEndsAt: null
+        },
+    action: {
+      checkoutAvailable: state === "checkout_available",
+      handoffAvailable: false,
+      reason: state
+    }
+  };
+}
+
+function customBuildFinalCheckout(state) {
+  return {
+    schema: "sitesourcery.custom-build-final-checkout/v1",
+    state: "ready",
+    checkout: {
+      invoiceId: state.invoice.invoiceId,
+      invoiceNumber: state.invoice.invoiceNumber,
+      url: FINAL_CHECKOUT_URL,
+      expiresAt: FINAL_CHECKOUT_EXPIRES_AT,
+      subtotal: structuredClone(state.invoice.subtotal),
+      tax: { amountMinor: null, state: "calculated_at_checkout" },
+      total: {
+        amountMinor: null,
+        currency: "USD",
+        state: "shown_at_checkout"
+      },
+      chargeOccurred: false
+    }
+  };
+}
+
+function customBuildHandoffOverlay(
+  finalState,
+  { handedOff = finalState.state === "handed_off" } = {}
+) {
+  const zeroBalance = finalState.obligation.amount.amountMinor === 0;
+  const financiallyCleared = handedOff || [
+    "paid_handoff_pending",
+    "cleared_no_balance_handoff_pending"
+  ].includes(finalState.state);
+  return {
+    schema: "sitesourcery.custom-build-handoff-owner-readiness/v1",
+    state: handedOff
+      ? "handed_off"
+      : financiallyCleared
+        ? "handoff_available"
+        : "handoff_not_ready",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    projectId: FINAL_PROJECT_ID,
+    jobId: FINAL_JOB_ID,
+    completion: structuredClone(finalState.completion),
+    finalObligation: {
+      obligationId: FINAL_OBLIGATION_ID,
+      obligationDigest: FINAL_OBLIGATION_DIGEST
+    },
+    financialClearance: financiallyCleared
+      ? { clearedAt: FINAL_CLEARED_AT }
+      : null,
+    handoff: handedOff
+      ? {
+          documentId: FINAL_DOCUMENT_ID,
+          contentDigest: customBuildHandoffDocument().contentDigest,
+          handedOffAt: FINAL_HANDED_OFF_AT,
+          workmanship: {
+            coverage: "[start,end)",
+            termDays: 30,
+            startsAt: FINAL_HANDED_OFF_AT,
+            endsAt: FINAL_WORKMANSHIP_ENDS_AT
+          }
+        }
+      : null,
+    action: {
+      handoffAvailable: financiallyCleared && !handedOff,
+      reason: handedOff
+        ? "handed_off"
+        : financiallyCleared
+          ? "financial_clearance_confirmed"
+          : "financial_clearance_required"
+    }
+  };
+}
+
+function ownerCustomBuildFinalHandoff(finalState, overrides = {}) {
+  return {
+    schema: "sitesourcery.custom-build-final-payments-owner/v1",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    jobId: FINAL_JOB_ID,
+    finalPayment: structuredClone(finalState),
+    owner: {
+      attemptId: FINAL_ATTEMPT_ID,
+      attemptState: finalState.state === "payment_reconciliation_required"
+        ? "persistence_unknown"
+        : "paid",
+      canReconcileCreation:
+        finalState.state === "payment_reconciliation_required",
+      canReconcileSettlement: false,
+      eventId: null,
+      eventState: null,
+      providerEffectCertainty:
+        finalState.state === "payment_reconciliation_required"
+          ? "ambiguous"
+          : "confirmed",
+      providerErrorCode:
+        finalState.state === "payment_reconciliation_required"
+          ? "custom_build_final_checkout_effect_unknown"
+          : null,
+      providerRequestExpiresAt: FINAL_CHECKOUT_EXPIRES_AT,
+      receiptSource: finalState.state === "paid_handoff_pending"
+        ? "provider_readback"
+        : null,
+      reconciliationCode: null,
+      ...(overrides.owner || {})
+    }
+  };
+}
+
+function customBuildHandoffCommand() {
+  return {
+    schema: "sitesourcery.custom-build-handoff-command/v1",
+    state: "handed_off",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    projectId: FINAL_PROJECT_ID,
+    jobId: FINAL_JOB_ID,
+    receiptId: FINAL_HANDOFF_RECEIPT_ID,
+    documentId: FINAL_DOCUMENT_ID,
+    documentDigest: customBuildHandoffDocument().contentDigest,
+    completionPackageDigest: FINAL_PACKAGE_DIGEST,
+    finalObligationDigest: FINAL_OBLIGATION_DIGEST,
+    financialClearance: {
+      kind: "provider_confirmed_final_payment",
+      referenceId: FINAL_PAYMENT_RECEIPT_ID,
+      clearedAt: FINAL_CLEARED_AT
+    },
+    handedOffAt: FINAL_HANDED_OFF_AT,
+    workmanship: {
+      coverage: "[start,end)",
+      termDays: 30,
+      startsAt: FINAL_HANDED_OFF_AT,
+      endsAt: FINAL_WORKMANSHIP_ENDS_AT
+    }
+  };
+}
+
+function customBuildCanonicalJson(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(customBuildCanonicalJson).join(",")}]`;
+  }
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key)}:${customBuildCanonicalJson(value[key])}`
+  ).join(",")}}`;
+}
+
+function bindCustomBuildHandoffDocumentIdentity(documentValue) {
+  const bytes = Buffer.from(
+    customBuildCanonicalJson(documentValue.payload),
+    "utf8"
+  );
+  return {
+    ...documentValue,
+    contentDigest: createHash("sha256").update(bytes).digest("hex"),
+    byteCount: bytes.byteLength
+  };
+}
+
+function customBuildHandoffDocument() {
+  const payload = {
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    state: "handed_off",
+    projectId: FINAL_PROJECT_ID,
+    jobId: FINAL_JOB_ID,
+    completion: {
+      packageId: FINAL_PACKAGE_ID,
+      packageDigest: FINAL_PACKAGE_DIGEST
+    },
+    finalObligation: {
+      obligationId: FINAL_OBLIGATION_ID,
+      obligationDigest: FINAL_OBLIGATION_DIGEST
+    },
+    financialClearance: {
+      kind: "provider_confirmed_final_payment",
+      referenceId: FINAL_PAYMENT_RECEIPT_ID,
+      clearedAt: FINAL_CLEARED_AT
+    },
+    customerSummary:
+      "Your completed website and delivery notes are ready.",
+    deliveryManifest: [{
+      label: "Production website",
+      description: "The reviewed website and its launch-ready files."
+    }],
+    handoff: {
+      receiptId: FINAL_HANDOFF_RECEIPT_ID,
+      documentId: FINAL_DOCUMENT_ID,
+      handedOffAt: FINAL_HANDED_OFF_AT,
+      workmanship: {
+        coverage: "[start,end)",
+        termDays: 30,
+        startsAt: FINAL_HANDED_OFF_AT,
+        endsAt: FINAL_WORKMANSHIP_ENDS_AT
+      }
+    }
+  };
+  return bindCustomBuildHandoffDocumentIdentity({
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    documentId: FINAL_DOCUMENT_ID,
+    contentDigest: "",
+    mediaType: "application/json",
+    byteCount: 0,
+    payload
+  });
+}
+
+function assertInvalidCustomBuildFinal(error) {
+  return error.code === "INVALID_CUSTOM_BUILD_FINAL_RESPONSE"
+    && error.retryable === true;
+}
+
 test("H1N accepted-change payment API uses exact routes, command bodies, idempotency, and bound projections", async () => {
   const calls = [];
   const acceptedOrder = changeCompletionOrder({
@@ -3101,4 +3452,346 @@ test("H1N payment commands reject unsupported authority, malformed IDs, digest d
     assertInvalidCustomBuildChangePayment
   );
   assert.equal(calls, 0);
+});
+
+test("H1N Purpose 2 API keeps final Checkout, verified handoff, document, and reconciliation on distinct exact routes", async () => {
+  const calls = [];
+  const checkoutAvailable = customBuildFinalState();
+  const paidPending = customBuildFinalState({ state: "paid_handoff_pending" });
+  const ownerPaymentPending = ownerCustomBuildFinalHandoff(paidPending);
+  const ownerHandoffReady = customBuildHandoffOverlay(paidPending);
+  const handedOff = customBuildFinalState({ state: "handed_off" });
+  const uncertainState = customBuildFinalState({
+    state: "payment_reconciliation_required"
+  });
+  const uncertainOwner = ownerCustomBuildFinalHandoff(uncertainState);
+  const checkout = customBuildFinalCheckout(checkoutAvailable);
+  const reconciliation = {
+    schema:
+      "sitesourcery.custom-build-final-payment-reconciliation-command/v1",
+    status: "checkout_ready",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+    jobId: FINAL_JOB_ID,
+    attemptId: FINAL_ATTEMPT_ID,
+    invoiceId: FINAL_INVOICE_ID,
+    action: "creation_reconciled",
+    next: "customer_checkout",
+    reason: null,
+    checkout,
+    settlement: null
+  };
+  const handoffInput = {
+    commandId: "e3000000-0000-4000-8000-000000000003",
+    customerSummary:
+      "Your completed website and delivery notes are ready.",
+    deliveryManifest: [{
+      label: "Production website",
+      description: "The reviewed website and its launch-ready files."
+    }],
+    expectedCompletionPackageDigest: FINAL_PACKAGE_DIGEST,
+    expectedFinalObligationDigest: FINAL_OBLIGATION_DIGEST,
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+  };
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_final_handoff" });
+      }
+      if (url.includes("/final-handoff?organizationId=")) {
+        return response(200, ownerHandoffReady);
+      }
+      if (url.includes("/final-payments?organizationId=")) {
+        return response(200, ownerPaymentPending);
+      }
+      if (url.endsWith("/custom-build-final-handoff")) {
+        return response(200, checkoutAvailable);
+      }
+      if (url.includes("/custom-build-final-invoices/")) {
+        return response(201, checkout);
+      }
+      if (url.endsWith("/handoff")) {
+        return response(201, customBuildHandoffCommand());
+      }
+      if (url.includes("/custom-build-handoff-documents/")) {
+        return response(200, customBuildHandoffDocument());
+      }
+      if (url.endsWith("/checkout-reconciliation")) {
+        return response(200, reconciliation);
+      }
+      assert.fail(`unexpected v47 route ${url}`);
+    },
+    idempotencyFactory: () => assert.fail("v47 commands retain caller IDs")
+  });
+
+  const customer = await client.getCustomServicesCustomBuildFinalHandoff(
+    FINAL_PROJECT_ID
+  );
+  assert.equal(customer.state, "checkout_available");
+  assert.equal(
+    (await client.createCustomServicesCustomBuildFinalCheckout(
+      FINAL_PROJECT_ID,
+      FINAL_INVOICE_ID,
+      {
+        commandId: "e1000000-0000-4000-8000-000000000001",
+        invoiceDigest: FINAL_INVOICE_DIGEST
+      },
+      { expectedState: customer }
+    )).state,
+    "ready"
+  );
+  const ownerPayment = await client.getOwnerCustomBuildFinalPayments(
+    FINAL_JOB_ID,
+    CHANGE_COMPLETION_ORGANIZATION_ID,
+    { expectedProjectId: FINAL_PROJECT_ID }
+  );
+  assert.equal(ownerPayment.finalPayment.state, "paid_handoff_pending");
+  const ownerHandoff = await client.getOwnerCustomBuildFinalHandoff(
+    FINAL_JOB_ID,
+    CHANGE_COMPLETION_ORGANIZATION_ID,
+    { expectedProjectId: FINAL_PROJECT_ID }
+  );
+  assert.equal(ownerHandoff.action.handoffAvailable, true);
+  assert.equal("finalPayment" in ownerHandoff, false);
+  assert.equal("owner" in ownerHandoff, false);
+  assert.equal(
+    (await client.createOwnerCustomBuildHandoff(
+      FINAL_JOB_ID,
+      handoffInput,
+      { expectedProjectId: FINAL_PROJECT_ID, expectedState: ownerHandoff }
+    )).state,
+    "handed_off"
+  );
+  assert.equal(
+    (await client.getCustomServicesCustomBuildHandoffDocument(
+      FINAL_PROJECT_ID,
+      FINAL_DOCUMENT_ID,
+      { expectedState: handedOff }
+    )).payload.handoff.workmanship.endsAt,
+    FINAL_WORKMANSHIP_ENDS_AT
+  );
+  assert.equal(
+    (await client.reconcileOwnerCustomBuildFinalCheckout(
+      FINAL_JOB_ID,
+      FINAL_ATTEMPT_ID,
+      {
+        commandId: "e4000000-0000-4000-8000-000000000004",
+        organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+      },
+      {
+        expectedProjectId: FINAL_PROJECT_ID,
+        expectedState: uncertainOwner
+      }
+    )).status,
+    "checkout_ready"
+  );
+
+  const writes = calls.filter(({ url }) => url !== "/api/v1/csrf");
+  assert.deepEqual(writes.map(({ url }) => url), [
+    `/api/v1/projects/${FINAL_PROJECT_ID}/custom-services/custom-build-final-handoff`,
+    `/api/v1/projects/${FINAL_PROJECT_ID}/custom-services/custom-build-final-invoices/${FINAL_INVOICE_ID}/checkout-command`,
+    `/api/v1/operator/custom-services/custom-build-jobs/${FINAL_JOB_ID}/final-payments?organizationId=${CHANGE_COMPLETION_ORGANIZATION_ID}`,
+    `/api/v1/operator/custom-services/custom-build-jobs/${FINAL_JOB_ID}/final-handoff?organizationId=${CHANGE_COMPLETION_ORGANIZATION_ID}`,
+    `/api/v1/operator/custom-services/custom-build-jobs/${FINAL_JOB_ID}/handoff`,
+    `/api/v1/projects/${FINAL_PROJECT_ID}/custom-services/custom-build-handoff-documents/${FINAL_DOCUMENT_ID}`,
+    `/api/v1/operator/custom-services/custom-build-jobs/${FINAL_JOB_ID}/final-payments/${FINAL_ATTEMPT_ID}/checkout-reconciliation`
+  ]);
+  assert.deepEqual(JSON.parse(writes[1].options.body), {
+    commandId: "e1000000-0000-4000-8000-000000000001",
+    invoiceDigest: FINAL_INVOICE_DIGEST
+  });
+  assert.deepEqual(JSON.parse(writes[4].options.body), handoffInput);
+  assert.deepEqual(JSON.parse(writes[6].options.body), {
+    commandId: "e4000000-0000-4000-8000-000000000004",
+    organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+  });
+  for (const index of [1, 4, 6]) {
+    assert.equal(
+      writes[index].options.headers["Idempotency-Key"],
+      JSON.parse(writes[index].options.body).commandId
+    );
+  }
+});
+
+test("H1N Purpose 2 browser contracts reject money, provider, digest, scope, and workmanship drift", async () => {
+  let calls = 0;
+  const client = createClient({
+    fetch: async () => {
+      calls += 1;
+      return response(200, customBuildFinalState());
+    }
+  });
+  const expected = customBuildFinalState();
+  for (const claimedAuthority of [
+    { amountMinor: 32500 },
+    { assessmentCreditMinor: 20000 },
+    { acceptedChangeTotalMinor: 12500 },
+    { paymentReceiptId: FINAL_PAYMENT_RECEIPT_ID },
+    { checkoutSessionId: "cs_browser_claim" },
+    { workmanshipStartsAt: FINAL_HANDED_OFF_AT }
+  ]) {
+    assert.throws(
+      () => client.createCustomServicesCustomBuildFinalCheckout(
+        FINAL_PROJECT_ID,
+        FINAL_INVOICE_ID,
+        {
+          commandId: "e5000000-0000-4000-8000-000000000005",
+          invoiceDigest: FINAL_INVOICE_DIGEST,
+          ...claimedAuthority
+        },
+        { expectedState: expected }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+        || error.code === "OWNER_AUTHORITY_REJECTED"
+    );
+  }
+  const paidOwner = customBuildHandoffOverlay(
+    customBuildFinalState({ state: "paid_handoff_pending" })
+  );
+  for (const claimedAuthority of [
+    { amountMinor: 32500 },
+    { paymentReceiptId: FINAL_PAYMENT_RECEIPT_ID },
+    { documentId: FINAL_DOCUMENT_ID },
+    { handedOffAt: FINAL_HANDED_OFF_AT },
+    { provider: "stripe" }
+  ]) {
+    assert.throws(
+      () => client.createOwnerCustomBuildHandoff(
+        FINAL_JOB_ID,
+        {
+          commandId: "e6000000-0000-4000-8000-000000000006",
+          customerSummary:
+            "Your completed website and delivery notes are ready.",
+          deliveryManifest: [{
+            label: "Production website",
+            description: "The reviewed website and its launch-ready files."
+          }],
+          expectedCompletionPackageDigest: FINAL_PACKAGE_DIGEST,
+          expectedFinalObligationDigest: FINAL_OBLIGATION_DIGEST,
+          organizationId: CHANGE_COMPLETION_ORGANIZATION_ID,
+          ...claimedAuthority
+        },
+        { expectedProjectId: FINAL_PROJECT_ID, expectedState: paidOwner }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+        || error.code === "OWNER_AUTHORITY_REJECTED"
+    );
+  }
+  for (const unsafeText of [
+    "Deliver with Bearer abcdefghijklmnopqrstuvwxyz in the notes.",
+    "Open the customer page with ?token=customer-secret-value.",
+    "The provider page is cs_test_customer_leak_123456."
+  ]) {
+    assert.throws(
+      () => client.createOwnerCustomBuildHandoff(
+        FINAL_JOB_ID,
+        {
+          commandId: "e7000000-0000-4000-8000-000000000007",
+          customerSummary: unsafeText,
+          deliveryManifest: [{
+            label: "Production website",
+            description: "The reviewed website and its launch-ready files."
+          }],
+          expectedCompletionPackageDigest: FINAL_PACKAGE_DIGEST,
+          expectedFinalObligationDigest: FINAL_OBLIGATION_DIGEST,
+          organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+        },
+        { expectedProjectId: FINAL_PROJECT_ID, expectedState: paidOwner }
+      ),
+      (error) => error.code === "INVALID_INPUT"
+    );
+  }
+  assert.throws(
+    () => client.createOwnerCustomBuildHandoff(
+      FINAL_JOB_ID,
+      {
+        commandId: "e8000000-0000-4000-8000-000000000008",
+        customerSummary:
+          "Your completed website and delivery notes are ready.",
+        deliveryManifest: [{
+          label: "Event evt_test_customer_leak_123456",
+          description: "The reviewed website and its launch-ready files."
+        }],
+        expectedCompletionPackageDigest: FINAL_PACKAGE_DIGEST,
+        expectedFinalObligationDigest: FINAL_OBLIGATION_DIGEST,
+        organizationId: CHANGE_COMPLETION_ORGANIZATION_ID
+      },
+      { expectedProjectId: FINAL_PROJECT_ID, expectedState: paidOwner }
+    ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+  assert.equal(calls, 0);
+
+  const malformed = [];
+  const reusedCredit = customBuildFinalState();
+  reusedCredit.invoice.credit.amountMinor = 20000;
+  malformed.push(reusedCredit);
+  const rechargedChange = customBuildFinalState();
+  rechargedChange.invoice.lines[0].amountMinor += 12500;
+  malformed.push(rechargedChange);
+  const providerLeak = customBuildFinalState();
+  providerLeak.payment.checkoutSessionId = "cs_must_not_leak";
+  malformed.push(providerLeak);
+  const wrongWindow = customBuildFinalState({ state: "handed_off" });
+  wrongWindow.handoff.workmanshipEndsAt = "2026-12-01T05:29:59.000Z";
+  malformed.push(wrongWindow);
+  const payloads = [...malformed];
+  const malformedClient = createClient({
+    fetch: async () => response(200, payloads.shift())
+  });
+  for (let index = 0; index < malformed.length; index += 1) {
+    await assert.rejects(
+      () => malformedClient.getCustomServicesCustomBuildFinalHandoff(
+        FINAL_PROJECT_ID
+      ),
+      assertInvalidCustomBuildFinal
+    );
+  }
+
+  const leakedDocument = customBuildHandoffDocument();
+  leakedDocument.payload.financialClearance.checkoutSessionId =
+    "cs_must_not_leak";
+  const documentClient = createClient({
+    fetch: async () => response(200, leakedDocument)
+  });
+  await assert.rejects(
+    () => documentClient.getCustomServicesCustomBuildHandoffDocument(
+      FINAL_PROJECT_ID,
+      FINAL_DOCUMENT_ID,
+      { expectedState: customBuildFinalState({ state: "handed_off" }) }
+    ),
+    assertInvalidCustomBuildFinal
+  );
+
+  const portableFoldDocument = customBuildHandoffDocument();
+  portableFoldDocument.payload.deliveryManifest = [
+    {
+      label: "Ä site",
+      description: "The first valid non-ASCII customer delivery label."
+    },
+    {
+      label: "ä site",
+      description: "A distinct label under the canonical ASCII-only fold."
+    }
+  ];
+  const portableFoldBoundDocument =
+    bindCustomBuildHandoffDocumentIdentity(portableFoldDocument);
+  const portableFoldClient = createClient({
+    fetch: async () => response(200, portableFoldBoundDocument)
+  });
+  const portableFoldResult = await portableFoldClient
+    .getCustomServicesCustomBuildHandoffDocument(
+      FINAL_PROJECT_ID,
+      FINAL_DOCUMENT_ID,
+      {
+        expectedState: customBuildFinalState({
+          state: "handed_off",
+          handoffContentDigest: portableFoldBoundDocument.contentDigest
+        })
+      }
+    );
+  assert.deepEqual(
+    portableFoldResult.payload.deliveryManifest.map(({ label }) => label),
+    ["Ä site", "ä site"]
+  );
 });

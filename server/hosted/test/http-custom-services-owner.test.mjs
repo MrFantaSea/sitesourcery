@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { HostedError } from "../errors.mjs";
 import { createHostedApi } from "../http.mjs";
 
 const ORIGIN = "https://app.sitesourcery.test";
@@ -760,7 +761,7 @@ test("owner Custom-build final payments expose exact reads and command-bound unc
   const root =
     `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
   const readPath =
-    `${root}/final-handoff?organizationId=${ORGANIZATION_ID}`;
+    `${root}/final-payments?organizationId=${ORGANIZATION_ID}`;
   const reconcilePath =
     `${root}/final-payments/${ATTEMPT_ID}/checkout-reconciliation`;
 
@@ -812,7 +813,7 @@ test("owner Custom-build final payments expose exact reads and command-bound unc
   ]);
 
   for (const path of [
-    `${root}/final-handoff`,
+    `${root}/final-payments`,
     `${readPath}&organizationId=${ORGANIZATION_ID}`,
     `${readPath}&state=paid`
   ]) {
@@ -905,6 +906,476 @@ test("owner Custom-build final payments expose exact reads and command-bound unc
     "CUSTOM_BUILD_FINAL_PAYMENT_HELD"
   );
   assert.equal(calls.length, 3);
+});
+
+test("owner v47 payment and handoff reads stay split while immutable handoff commands remain exact", async () => {
+  const calls = [];
+  const projectId = "42000000-0000-4000-8000-000000000001";
+  const packageId = "43000000-0000-4000-8000-000000000001";
+  const obligationId = "44000000-0000-4000-8000-000000000001";
+  const documentId = "45000000-0000-4000-8000-000000000001";
+  const packageDigest = "1".repeat(64);
+  const obligationDigest = "2".repeat(64);
+  const finalPayment = {
+    schema: "sitesourcery.custom-build-final-payments-owner/v1",
+    organizationId: ORGANIZATION_ID,
+    jobId: JOB_ID,
+    finalPayment: {
+      schema: "sitesourcery.custom-build-final-handoff/v1",
+      state: "paid_handoff_pending",
+      projectId,
+      jobId: JOB_ID,
+      completion: {
+        packageId,
+        packageDigest,
+        completedAt: "2026-11-01T04:45:00.000Z"
+      },
+      obligation: { obligationId, obligationDigest }
+    },
+    owner: { canReconcileCreation: false }
+  };
+  const handoff = {
+    schema: "sitesourcery.custom-build-handoff-state/v1",
+    state: "paid_handoff_pending",
+    organizationId: ORGANIZATION_ID,
+    projectId,
+    jobId: JOB_ID,
+    completion: finalPayment.finalPayment.completion,
+    finalObligation: { obligationId, obligationDigest },
+    financialClearance: {
+      kind: "provider_confirmed_final_payment",
+      referenceId: "46000000-0000-4000-8000-000000000001",
+      clearedAt: "2026-11-01T05:00:00.000Z"
+    },
+    handoff: null,
+    action: { handoffAvailable: true, reason: "paid_handoff_pending" }
+  };
+  const receipt = {
+    schema: "sitesourcery.custom-build-handoff-command/v1",
+    state: "handed_off",
+    organizationId: ORGANIZATION_ID,
+    projectId,
+    jobId: JOB_ID,
+    receiptId: "47000000-0000-4000-8000-000000000001",
+    documentId,
+    documentDigest: "3".repeat(64),
+    completionPackageDigest: packageDigest,
+    finalObligationDigest: obligationDigest,
+    financialClearance: handoff.financialClearance,
+    handedOffAt: "2026-11-01T05:30:00.000Z",
+    workmanship: {
+      coverage: "[start,end)",
+      termDays: 30,
+      startsAt: "2026-11-01T05:30:00.000Z",
+      endsAt: "2026-12-01T05:30:00.000Z"
+    }
+  };
+  const api = createHostedApi(service(), {
+    customServicesCustomBuildFinalPayment: {
+      async readOwnerFinalPayments(actor, jobId, organizationId) {
+        calls.push({ action: "final-read", actor, jobId, organizationId });
+        return finalPayment;
+      },
+      async reconcileCheckoutCreation() {
+        throw new Error("handoff crossed into final reconciliation");
+      }
+    },
+    customServicesCustomBuildHandoff: {
+      async readOwner(actor, jobId, organizationId) {
+        calls.push({ action: "handoff-read", actor, jobId, organizationId });
+        return handoff;
+      },
+      async createHandoff(actor, jobId, input) {
+        calls.push({ action: "handoff-create", actor, jobId, input });
+        if (
+          input.expectedCompletionPackageDigest !==
+            handoff.completion.packageDigest ||
+          input.expectedFinalObligationDigest !==
+            handoff.finalObligation.obligationDigest
+        ) {
+          throw new HostedError(
+            "CUSTOM_BUILD_HANDOFF_CONFLICT",
+            "retained handoff identity changed",
+            { status: 409 }
+          );
+        }
+        return receipt;
+      }
+    }
+  });
+  const root =
+    `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
+  const paymentReadPath =
+    `${root}/final-payments?organizationId=${ORGANIZATION_ID}`;
+  const handoffReadPath =
+    `${root}/final-handoff?organizationId=${ORGANIZATION_ID}`;
+  const body = {
+    commandId: "owner-quote-command-1",
+    customerSummary:
+      "Your completed website and delivery notes are ready.",
+    deliveryManifest: [
+      {
+        label: "Production website",
+        description: "The reviewed website and its launch-ready files."
+      }
+    ],
+    expectedCompletionPackageDigest: packageDigest,
+    expectedFinalObligationDigest: obligationDigest,
+    organizationId: ORGANIZATION_ID
+  };
+
+  const paymentRead = await api.fetch(request({ path: paymentReadPath }));
+  assert.equal(paymentRead.status, 200);
+  assert.deepEqual(await paymentRead.json(), finalPayment);
+  const handoffRead = await api.fetch(request({ path: handoffReadPath }));
+  assert.equal(handoffRead.status, 200);
+  const handoffPayload = await handoffRead.json();
+  assert.deepEqual(handoffPayload, {
+    schema: "sitesourcery.custom-build-handoff-owner-readiness/v1",
+    state: "handoff_available",
+    organizationId: ORGANIZATION_ID,
+    projectId,
+    jobId: JOB_ID,
+    completion: finalPayment.finalPayment.completion,
+    finalObligation: { obligationId, obligationDigest },
+    financialClearance: {
+      clearedAt: "2026-11-01T05:00:00.000Z"
+    },
+    handoff: null,
+    action: {
+      handoffAvailable: true,
+      reason: "financial_clearance_confirmed"
+    }
+  });
+  assert.doesNotMatch(
+    JSON.stringify(handoffPayload),
+    /cs_|checkout|payment|provider|attempt|event|reconciliation|referenceId|receiptId/u
+  );
+  assert.equal(
+    body.expectedCompletionPackageDigest,
+    handoffPayload.completion.packageDigest
+  );
+  assert.equal(
+    body.expectedFinalObligationDigest,
+    handoffPayload.finalObligation.obligationDigest
+  );
+
+  for (let replay = 0; replay < 2; replay += 1) {
+    const created = await api.fetch(request({
+      body,
+      method: "POST",
+      path: `${root}/handoff`
+    }));
+    assert.equal(created.status, 201);
+    assert.deepEqual(await created.json(), receipt);
+  }
+  const actor = { userId: OPERATOR_ID };
+  assert.deepEqual(calls, [
+    {
+      action: "final-read",
+      actor,
+      jobId: JOB_ID,
+      organizationId: ORGANIZATION_ID
+    },
+    {
+      action: "handoff-read",
+      actor,
+      jobId: JOB_ID,
+      organizationId: ORGANIZATION_ID
+    },
+    { action: "handoff-create", actor, jobId: JOB_ID, input: body },
+    { action: "handoff-create", actor, jobId: JOB_ID, input: body }
+  ]);
+
+  for (const expanded of [
+    { amountMinor: 32_500 },
+    { paymentReceiptId: "forged" },
+    { workmanshipStartsAt: "2026-11-01T05:30:00.000Z" },
+    { provider: "stripe" },
+    { markPaid: true }
+  ]) {
+    const response = await api.fetch(request({
+      body: { ...body, ...expanded },
+      method: "POST",
+      path: `${root}/handoff`
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_HANDOFF_INPUT"
+    );
+  }
+  const mismatch = await api.fetch(request({
+    body,
+    idempotencyKey: "different-command",
+    method: "POST",
+    path: `${root}/handoff`
+  }));
+  assert.equal(mismatch.status, 400);
+  for (const staleIdentity of [
+    { expectedCompletionPackageDigest: "8".repeat(64) },
+    { expectedFinalObligationDigest: "9".repeat(64) }
+  ]) {
+    const stale = await api.fetch(request({
+      body: { ...body, ...staleIdentity },
+      method: "POST",
+      path: `${root}/handoff`
+    }));
+    assert.equal(stale.status, 409);
+    assert.equal(
+      (await stale.json()).error.code,
+      "CUSTOM_BUILD_HANDOFF_CONFLICT"
+    );
+  }
+  const wrongQuery = await api.fetch(request({
+    body,
+    method: "POST",
+    path: `${root}/handoff?force=true`
+  }));
+  assert.equal(wrongQuery.status, 400);
+  const signedOut = await api.fetch(request({
+    body,
+    method: "POST",
+    path: `${root}/handoff`,
+    signedIn: false
+  }));
+  assert.equal(signedOut.status, 401);
+  assert.equal(calls.length, 6);
+});
+
+test("owner v47 handoff HTTP authority requires both handoff capabilities and never borrows payment reconciliation", async () => {
+  const projectId = "42000000-0000-4000-8000-000000000021";
+  const packageId = "43000000-0000-4000-8000-000000000021";
+  const obligationId = "44000000-0000-4000-8000-000000000021";
+  const packageDigest = "6".repeat(64);
+  const obligationDigest = "7".repeat(64);
+  const root =
+    `/api/v1/operator/custom-services/custom-build-jobs/${JOB_ID}`;
+  const readPath =
+    `${root}/final-handoff?organizationId=${ORGANIZATION_ID}`;
+  const body = {
+    commandId: "owner-quote-command-1",
+    customerSummary:
+      "Your completed website and delivery notes are ready.",
+    deliveryManifest: [{
+      label: "Production website",
+      description: "The reviewed website and its launch-ready files."
+    }],
+    expectedCompletionPackageDigest: packageDigest,
+    expectedFinalObligationDigest: obligationDigest,
+    organizationId: ORGANIZATION_ID
+  };
+  const rawHandoff = {
+    schema: "sitesourcery.custom-build-handoff-state/v1",
+    state: "paid_handoff_pending",
+    organizationId: ORGANIZATION_ID,
+    projectId,
+    jobId: JOB_ID,
+    completion: {
+      packageId,
+      packageDigest,
+      completedAt: "2026-11-01T04:45:00.000Z"
+    },
+    finalObligation: { obligationId, obligationDigest },
+    financialClearance: {
+      kind: "provider_confirmed_final_payment",
+      referenceId: "46000000-0000-4000-8000-000000000021",
+      clearedAt: "2026-11-01T05:00:00.000Z"
+    },
+    handoff: null,
+    action: {
+      handoffAvailable: true,
+      reason: "provider cs_must_not_reach_the_operator_response"
+    }
+  };
+  const canonicalPaymentProjection = {
+    schema: "sitesourcery.custom-build-final-payments-owner/v1",
+    organizationId: ORGANIZATION_ID,
+    jobId: JOB_ID,
+    finalPayment: {
+      schema: "sitesourcery.custom-build-final-handoff/v1",
+      state: "checkout_ready"
+    },
+    owner: { canReconcileCreation: false }
+  };
+
+  function selectedApi(
+    capabilities,
+    source = rawHandoff,
+    paymentProjection = canonicalPaymentProjection
+  ) {
+    const selected = new Set(capabilities);
+    const calls = [];
+    function requireHandoffAuthority() {
+      if (
+        !selected.has("service_job_manage") ||
+        !selected.has("service_document_manage")
+      ) {
+        throw new HostedError(
+          "OPERATOR_ACCESS_REQUIRED",
+          "handoff authority required",
+          { status: 403 }
+        );
+      }
+    }
+    return {
+      calls,
+      api: createHostedApi(service(), {
+        customServicesCustomBuildFinalPayment: {
+          async readOwnerFinalPayments() {
+            if (!selected.has("service_payment_reconcile")) {
+              throw new HostedError(
+                "OPERATOR_ACCESS_REQUIRED",
+                "payment authority required",
+                { status: 403 }
+              );
+            }
+            calls.push({ action: "payment-read" });
+            return structuredClone(paymentProjection);
+          },
+          async reconcileCheckoutCreation() {
+            throw new Error("not used");
+          }
+        },
+        customServicesCustomBuildHandoff: {
+          async readOwner(actor, jobId, organizationId) {
+            requireHandoffAuthority();
+            calls.push({
+              action: "handoff-read",
+              actor,
+              jobId,
+              organizationId
+            });
+            return structuredClone(source);
+          },
+          async createHandoff(actor, jobId, input) {
+            requireHandoffAuthority();
+            calls.push({ action: "handoff-create", actor, jobId, input });
+            return {
+              schema: "sitesourcery.custom-build-handoff-command/v1",
+              state: "handed_off"
+            };
+          }
+        }
+      })
+    };
+  }
+
+  const allowed = selectedApi([
+    "service_job_manage",
+    "service_document_manage"
+  ]);
+  const read = await allowed.api.fetch(request({ path: readPath }));
+  assert.equal(read.status, 200);
+  const projection = await read.json();
+  assert.equal(projection.state, "handoff_available");
+  assert.equal(projection.action.handoffAvailable, true);
+  assert.doesNotMatch(
+    JSON.stringify(projection),
+    /cs_|checkout|payment|provider|attempt|event|reconciliation|referenceId|receiptId/u
+  );
+  const created = await allowed.api.fetch(request({
+    body,
+    method: "POST",
+    path: `${root}/handoff`
+  }));
+  assert.equal(created.status, 201);
+  assert.deepEqual(allowed.calls.map(({ action }) => action), [
+    "handoff-read",
+    "handoff-create"
+  ]);
+  const deniedPaymentRead = await allowed.api.fetch(request({
+    path: `${root}/final-payments?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(deniedPaymentRead.status, 403);
+  assert.equal(
+    (await deniedPaymentRead.json()).error.code,
+    "OPERATOR_ACCESS_REQUIRED"
+  );
+
+  for (const capabilities of [
+    [],
+    ["service_job_manage"],
+    ["service_document_manage"],
+    ["service_payment_reconcile"],
+    ["service_payment_reconcile", "service_job_manage"],
+    ["service_payment_reconcile", "service_document_manage"]
+  ]) {
+    const denied = selectedApi(capabilities);
+    const deniedRead = await denied.api.fetch(request({ path: readPath }));
+    assert.equal(deniedRead.status, 403);
+    assert.equal(
+      (await deniedRead.json()).error.code,
+      "OPERATOR_ACCESS_REQUIRED"
+    );
+    const deniedCreate = await denied.api.fetch(request({
+      body,
+      method: "POST",
+      path: `${root}/handoff`
+    }));
+    assert.equal(deniedCreate.status, 403);
+    assert.equal(
+      (await deniedCreate.json()).error.code,
+      "OPERATOR_ACCESS_REQUIRED"
+    );
+    const paymentRead = await denied.api.fetch(request({
+      path: `${root}/final-payments?organizationId=${ORGANIZATION_ID}`
+    }));
+    if (capabilities.includes("service_payment_reconcile")) {
+      assert.equal(paymentRead.status, 200);
+      assert.equal(
+        (await paymentRead.json()).finalPayment.state,
+        "checkout_ready"
+      );
+      assert.deepEqual(denied.calls, [{ action: "payment-read" }]);
+    } else {
+      assert.equal(paymentRead.status, 403);
+      assert.equal(
+        (await paymentRead.json()).error.code,
+        "OPERATOR_ACCESS_REQUIRED"
+      );
+      assert.deepEqual(denied.calls, []);
+    }
+  }
+
+  const retainedReady = selectedApi(
+    [
+      "service_job_manage",
+      "service_document_manage",
+      "service_payment_reconcile"
+    ],
+    {
+      ...rawHandoff,
+      state: "payment_reconciliation_required",
+      financialClearance: null,
+      action: {
+        handoffAvailable: false,
+        reason: "payment_reconciliation_required"
+      }
+    }
+  );
+  const retainedReadyPayment = await retainedReady.api.fetch(request({
+    path: `${root}/final-payments?organizationId=${ORGANIZATION_ID}`
+  }));
+  assert.equal(retainedReadyPayment.status, 200);
+  assert.equal(
+    (await retainedReadyPayment.json()).finalPayment.state,
+    "checkout_ready"
+  );
+  const retainedReadyRead = await retainedReady.api.fetch(
+    request({ path: readPath })
+  );
+  assert.equal(retainedReadyRead.status, 200);
+  const retainedReadyProjection = await retainedReadyRead.json();
+  assert.equal(retainedReadyProjection.state, "handoff_not_ready");
+  assert.deepEqual(retainedReadyProjection.action, {
+    handoffAvailable: false,
+    reason: "financial_clearance_required"
+  });
+  assert.doesNotMatch(
+    JSON.stringify(retainedReadyProjection),
+    /checkout|payment|provider|reconciliation/u
+  );
 });
 
 test("owner Custom-build progress routes bind exact job, organization, updates, and requests", async () => {

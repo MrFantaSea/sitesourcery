@@ -273,6 +273,14 @@ async function verifyPlatformSchema(pool) {
       ) is not null as service_custom_build_final_payment_receipts,
       to_regprocedure('ss.hosted_runtime_contract_v46()') is not null
         as custom_build_final_payment_runtime_contract,
+      to_regclass(
+        'ss.service_custom_build_handoff_receipts'
+      ) is not null as service_custom_build_handoff_receipts,
+      to_regprocedure(
+        'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)'
+      ) is not null as custom_build_handoff_callable,
+      to_regprocedure('ss.hosted_runtime_contract_v47()') is not null
+        as custom_build_handoff_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -2218,12 +2226,16 @@ async function verifyPlatformSchema(pool) {
             '%service_job_manage%'
           and lower(pg_get_functiondef(procedure_record.oid)) like
             '%/custom-build-jobs/%/evidence/%'
-          and lower(pg_get_functiondef(procedure_record.oid)) not like
+          and lower(pg_get_functiondef(procedure_record.oid)) like
             '%document_kind = ''handoff''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_handoff_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.media_type <> ''application/json''%'
         from pg_proc procedure_record
         where procedure_record.oid =
           'ss.guard_service_assessment_document()'::regprocedure
-      ) as bounded_existing_job_evidence_kind,
+      ) as bounded_existing_job_evidence_and_handoff_kinds,
       (
         select
           lower(pg_get_functiondef(procedure_record.oid)) like
@@ -2742,6 +2754,219 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build final-payment migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildHandoff = await pool.query(`
+    select
+      ss.hosted_runtime_contract_v47() =
+        'canonical-ss-v47-custom-build-handoff'
+        as exact_v47_runtime_marker,
+      (
+        select relation.relrowsecurity
+          and relation.relforcerowsecurity
+          and has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'TRUNCATE'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege('anon', relation.oid, 'SELECT')
+          and not has_table_privilege('anon', relation.oid, 'INSERT')
+        from pg_class relation
+        where relation.oid =
+          'ss.service_custom_build_handoff_receipts'::regclass
+      ) as exact_append_only_table_security,
+      (
+        select count(*) = 1
+        from information_schema.columns column_record
+        where column_record.table_schema = 'ss'
+          and column_record.table_name =
+            'service_custom_build_handoff_receipts'
+          and column_record.column_name = 'handoff_digest'
+          and column_record.is_generated = 'ALWAYS'
+          and column_record.generation_expression like
+            '%service_custom_build_handoff_digest%'
+      ) as database_generated_handoff_digest,
+      (
+        select count(*) = 7
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_handoff_receipts'::regclass
+          and constraint_record.contype = 'u'
+          and pg_get_constraintdef(constraint_record.oid) in (
+            'UNIQUE (job_id)',
+            'UNIQUE (completion_package_id)',
+            'UNIQUE (final_obligation_id)',
+            'UNIQUE (final_payment_receipt_id)',
+            'UNIQUE (zero_balance_clearance_id)',
+            'UNIQUE (document_id)',
+            'UNIQUE (handed_off_by_operator_user_id, job_id, command_id)'
+          )
+      ) as one_handoff_and_durable_command_axes,
+      (
+        select count(*) = 2
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_handoff_receipts'::regclass
+          and constraint_record.contype = 'f'
+          and constraint_record.condeferrable
+          and constraint_record.condeferred
+          and constraint_record.confrelid in (
+            'ss.service_documents'::regclass,
+            'ss.service_document_payloads'::regclass
+          )
+      ) as deferred_atomic_document_identity,
+      (
+        select
+          procedure_record.prosecdef
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%select job.id into discovered_job_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%ss-custom-build-h1m:%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_job_manage%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_document_manage%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%request_digest is distinct from%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%expected_completion_package_digest%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%expected_final_obligation_digest%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_final_payment_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_final_zero_balance_clearances%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%command.state = ''running''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%attempt.state in (%''provider_pending'', ''ready'', ''persistence_unknown''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%event.state in (''pending'', ''reconciliation_required'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_handoff_receipts%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_documents%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_document_payloads%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%/custom-build-jobs/%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%/handoff/%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%selected_document_id::text%''.json''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '%checkout_session_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '%payment_intent_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '%stripe_customer_id%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)'::regprocedure
+      ) as exact_atomic_handoff_callable,
+      has_function_privilege(
+        'service_role',
+        'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'authenticated',
+        'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'anon',
+        'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)',
+        'EXECUTE'
+      ) as owner_service_only_callable,
+      ss.service_custom_build_workmanship_end(
+        '2026-03-01T12:00:00-05'::timestamptz
+      ) - '2026-03-01T12:00:00-05'::timestamptz =
+        interval '720 hours'
+      and ss.service_custom_build_workmanship_end(
+        '2026-10-15T12:00:00-04'::timestamptz
+      ) - '2026-10-15T12:00:00-04'::timestamptz =
+        interval '720 hours'
+        as exact_elapsed_workmanship_across_dst,
+      (
+        select count(*) = 4
+        from pg_trigger trigger_record
+        where trigger_record.tgname in (
+          'service_custom_build_progress_updates_00_handoff_guard',
+          'service_custom_build_work_requests_00_handoff_guard',
+          'service_access_requests_00_custom_build_handoff_guard',
+          'service_custom_build_final_checkout_00_handoff_guard'
+        )
+          and not trigger_record.tgisinternal
+      ) as explicit_post_handoff_closure,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%document_kind = ''job_evidence''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%document_kind = ''handoff''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.media_type <> ''application/json''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%new.byte_count not between 1 and 65536%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_handoff_receipts%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_assessment_document()'::regprocedure
+      ) as narrow_receipt_bound_document_guard,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%convert_from(new.payload, ''utf8'')::jsonb%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%service_custom_build_handoff_canonical_json(decoded_payload)%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%<> new.payload%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%octet_length(new.payload) not between 1 and 65536%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_completion_payload()'::regprocedure
+      ) as canonical_bounded_json_payload_guard,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_custom_build_handoff_receipts'::regclass
+          and trigger_record.tgname =
+            'service_custom_build_handoff_receipts_immutable'
+          and not trigger_record.tgisinternal
+      ) as immutable_handoff_receipt,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_handoff_receipts'::regclass
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(customBuildHandoff.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build handoff migration contract failed: ${name}`
     );
   }
 }

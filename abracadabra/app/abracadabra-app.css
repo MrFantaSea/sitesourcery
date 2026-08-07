@@ -299,6 +299,10 @@
 .customer-custom-build-access-fields[hidden]{display:none}
 .customer-custom-build-access-fields legend{padding:0 .35rem;color:var(--spark-mint);font-size:.8rem;font-weight:800}
 .customer-custom-build-change-completion{border-color:rgba(241,207,137,.38);background:linear-gradient(145deg,rgba(241,207,137,.07),rgba(25,16,35,.72))}
+.customer-custom-build-final{border-color:rgba(131,231,193,.38);background:linear-gradient(145deg,rgba(131,231,193,.065),rgba(25,16,35,.72))}
+.customer-custom-build-final>.spark-button,.customer-custom-build-owner-final>.spark-button{justify-self:start}
+.customer-custom-build-final-body,.customer-custom-build-owner-final,.customer-custom-build-owner-handoff{display:grid;gap:.85rem;min-width:0}
+.customer-custom-build-owner-handoff>.spark-button{justify-self:start}
 .customer-custom-build-change-completion>.spark-button,.customer-custom-build-owner-change-completion>.spark-button,.customer-custom-build-change-expire{justify-self:start}
 .customer-custom-build-change-completion-body,.customer-custom-build-change-card,.customer-custom-build-completion-card,.customer-custom-build-owner-change-completion,.customer-custom-build-owner-change,.customer-custom-build-owner-evidence,.customer-custom-build-owner-completion{display:grid;gap:.85rem;min-width:0}
 .customer-custom-build-change-card,.customer-custom-build-completion-card,.customer-custom-build-owner-change-completion{margin-top:.5rem;padding:1rem;border:1px solid rgba(241,207,137,.27);border-radius:.9rem;background:rgba(241,207,137,.04)}

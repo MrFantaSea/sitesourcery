@@ -59,6 +59,17 @@ const PAID_OPERATOR_ID = "94000000-0000-4000-8000-000000000001";
 const PAID_CHANGE_ACCEPTANCE_ID = "95000000-0000-4000-8000-000000000001";
 const PAID_CHANGE_INVOICE_ID = "96000000-0000-4000-8000-000000000001";
 const PAID_CHANGE_ATTEMPT_ID = "97000000-0000-4000-8000-000000000001";
+const PAID_FINAL_PACKAGE_ID = "a1000000-0000-4000-8000-000000000001";
+const PAID_FINAL_OBLIGATION_ID = "a2000000-0000-4000-8000-000000000002";
+const PAID_FINAL_INVOICE_ID = "a3000000-0000-4000-8000-000000000003";
+const PAID_FINAL_ATTEMPT_ID = "a4000000-0000-4000-8000-000000000004";
+const PAID_FINAL_PAYMENT_RECEIPT_ID =
+  "a5000000-0000-4000-8000-000000000005";
+const PAID_FINAL_ZERO_CLEARANCE_ID =
+  "a6000000-0000-4000-8000-000000000006";
+const PAID_FINAL_DOCUMENT_ID = "a7000000-0000-4000-8000-000000000007";
+const PAID_FINAL_HANDOFF_RECEIPT_ID =
+  "a8000000-0000-4000-8000-000000000008";
 const PAID_QUOTE_DIGEST = "a".repeat(64);
 const PAID_DISCLOSURE_DIGEST = "b".repeat(64);
 const PAID_INVOICE_DIGEST = "c".repeat(64);
@@ -72,6 +83,13 @@ const PAID_CHANGE_SETTLED_AT = "2026-08-06T17:00:00.000Z";
 const PAID_CHANGE_CHECKOUT_EXPIRES_AT = "2026-08-13T16:30:00.000Z";
 const PAID_CHANGE_CHECKOUT_URL =
   "https://checkout.stripe.com/c/pay/cs_test_sitesourcery_change_0001";
+const PAID_FINAL_PACKAGE_DIGEST = "6".repeat(64);
+const PAID_FINAL_OBLIGATION_DIGEST = "7".repeat(64);
+const PAID_FINAL_INVOICE_DIGEST = "8".repeat(64);
+const PAID_FINAL_COMPLETED_AT = "2026-11-01T04:45:00.000Z";
+const PAID_FINAL_CLEARED_AT = "2026-11-01T05:00:00.000Z";
+const PAID_FINAL_HANDED_OFF_AT = "2026-11-01T05:30:00.000Z";
+const PAID_FINAL_WORKMANSHIP_ENDS_AT = "2026-12-01T05:30:00.000Z";
 const PAID_PAYMENT_MODES = Object.freeze([
   "payment-checkout",
   "payment-paid",
@@ -79,6 +97,11 @@ const PAID_PAYMENT_MODES = Object.freeze([
   "payment-customer-held",
   "payment-customer-malformed",
   "payment-customer-uncertain",
+]);
+const PAID_FINAL_MODES = Object.freeze([
+  "final-paid",
+  "final-zero",
+  "final-race",
 ]);
 const PAID_DESKTOP_EVIDENCE_BYTES = await readFile(
   path.join(ROOT, "assets/work-demo-bright-spark.png"),
@@ -529,7 +552,9 @@ function paidCompletionEvidence(id, viewport, owner = false) {
 }
 
 function paidChangeCompletion(mode, owner = false) {
-  const completionMode = mode === "completion";
+  const completionMode = mode === "completion"
+    || (PAID_FINAL_MODES.includes(mode) && mode !== "final-race");
+  const readyForDelivery = mode === "final-zero";
   const paymentMode = PAID_PAYMENT_MODES.includes(mode);
   const paidMode = mode === "payment-paid";
   const evidence = [
@@ -545,7 +570,9 @@ function paidChangeCompletion(mode, owner = false) {
     ),
   ];
   const completion = completionMode ? {
-    state: "ready_for_final_payment",
+    state: readyForDelivery
+      ? "ready_for_delivery"
+      : "ready_for_final_payment",
     customerSummary:
       "The approved scope is complete and every documented customer-visible check passed.",
     checks: {
@@ -580,7 +607,9 @@ function paidChangeCompletion(mode, owner = false) {
     return {
       schema: "sitesourcery.custom-build-change-completion/v1",
       state: completionMode
-        ? "ready_for_final_payment"
+        ? readyForDelivery
+          ? "ready_for_delivery"
+          : "ready_for_final_payment"
         : paidMode
           ? "building"
           : paymentMode
@@ -595,7 +624,9 @@ function paidChangeCompletion(mode, owner = false) {
   return {
     schema: "sitesourcery.custom-build-change-completion/v1",
     state: completionMode
-      ? "ready_for_final_payment"
+      ? readyForDelivery
+        ? "ready_for_delivery"
+        : "ready_for_final_payment"
       : paidMode
         ? "building"
         : paymentMode
@@ -620,6 +651,297 @@ function paidChangeCompletion(mode, owner = false) {
     changeOrders,
     evidence: completionMode ? evidence : [],
     completion,
+  };
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+  ).join(",")}}`;
+}
+
+function paidFinalCompletionRequired() {
+  return {
+    schema: "sitesourcery.custom-build-final-handoff/v1",
+    state: "completion_required",
+    projectId: PAID_PROJECT_ID,
+    jobId: null,
+    completion: null,
+    obligation: null,
+    invoice: null,
+    payment: null,
+    handoff: {
+      state: "unavailable",
+      documentId: null,
+      workmanshipStartsAt: null,
+      workmanshipEndsAt: null,
+    },
+    action: {
+      checkoutAvailable: false,
+      handoffAvailable: false,
+      reason: "completion_required",
+    },
+  };
+}
+
+function paidHandoffDocument(mode) {
+  const zeroBalance = mode === "final-zero";
+  const payload = {
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    state: "handed_off",
+    projectId: PAID_PROJECT_ID,
+    jobId: PAID_JOB_ID,
+    completion: {
+      packageId: PAID_FINAL_PACKAGE_ID,
+      packageDigest: PAID_FINAL_PACKAGE_DIGEST,
+    },
+    finalObligation: {
+      obligationId: PAID_FINAL_OBLIGATION_ID,
+      obligationDigest: PAID_FINAL_OBLIGATION_DIGEST,
+    },
+    financialClearance: {
+      kind: zeroBalance
+        ? "zero_balance_clearance"
+        : "provider_confirmed_final_payment",
+      referenceId: zeroBalance
+        ? PAID_FINAL_ZERO_CLEARANCE_ID
+        : PAID_FINAL_PAYMENT_RECEIPT_ID,
+      clearedAt: PAID_FINAL_CLEARED_AT,
+    },
+    customerSummary:
+      "Your accepted website build is delivered with the items listed below.",
+    deliveryManifest: [{
+      label: "Website files",
+      description: "Final accepted website deliverables",
+    }, {
+      label: "Handoff notes",
+      description: "Scope, delivery, and workmanship details",
+    }],
+    handoff: {
+      receiptId: PAID_FINAL_HANDOFF_RECEIPT_ID,
+      documentId: PAID_FINAL_DOCUMENT_ID,
+      handedOffAt: PAID_FINAL_HANDED_OFF_AT,
+      workmanship: {
+        coverage: "[start,end)",
+        termDays: 30,
+        startsAt: PAID_FINAL_HANDED_OFF_AT,
+        endsAt: PAID_FINAL_WORKMANSHIP_ENDS_AT,
+      },
+    },
+  };
+  const bytes = Buffer.from(canonicalJson(payload), "utf8");
+  return {
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    documentId: PAID_FINAL_DOCUMENT_ID,
+    contentDigest: createHash("sha256").update(bytes).digest("hex"),
+    mediaType: "application/json",
+    byteCount: bytes.byteLength,
+    payload,
+  };
+}
+
+function paidFinalState(mode, handedOff = false) {
+  const zeroBalance = mode === "final-zero";
+  const amountMinor = zeroBalance ? 0 : 60000;
+  const taxMinor = zeroBalance ? null : 5400;
+  const state = handedOff
+    ? "handed_off"
+    : zeroBalance
+      ? "cleared_no_balance_handoff_pending"
+      : "paid_handoff_pending";
+  return {
+    schema: "sitesourcery.custom-build-final-handoff/v1",
+    state,
+    projectId: PAID_PROJECT_ID,
+    jobId: PAID_JOB_ID,
+    completion: {
+      packageId: PAID_FINAL_PACKAGE_ID,
+      packageDigest: PAID_FINAL_PACKAGE_DIGEST,
+      completedAt: PAID_FINAL_COMPLETED_AT,
+    },
+    obligation: {
+      obligationId: PAID_FINAL_OBLIGATION_ID,
+      obligationDigest: PAID_FINAL_OBLIGATION_DIGEST,
+      amount: { amountMinor, currency: "USD" },
+      installmentNumber: zeroBalance ? null : 2,
+      workmanshipCorrectionDays: 30,
+      boundAt: "2026-11-01T04:46:00.000Z",
+    },
+    invoice: zeroBalance ? null : {
+      invoiceId: PAID_FINAL_INVOICE_ID,
+      invoiceNumber:
+        `SSCB-FINAL-${PAID_FINAL_INVOICE_ID.replaceAll("-", "").toUpperCase()}`,
+      invoiceDigest: PAID_FINAL_INVOICE_DIGEST,
+      purpose: "custom_build_final",
+      issuedAt: "2026-11-01T04:47:00.000Z",
+      lines: [{
+        lineNumber: 1,
+        componentKey: "custom_build_final_installment",
+        displayName: "Custom website build final installment",
+        quantity: 1,
+        unitAmountMinor: amountMinor,
+        amountMinor,
+        creditMinor: 0,
+        currency: "USD",
+      }],
+      subtotal: { amountMinor, currency: "USD" },
+      credit: { amountMinor: 0, currency: "USD" },
+      tax: { amountMinor: taxMinor, state: "settled" },
+      total: {
+        amountMinor: amountMinor + taxMinor,
+        currency: "USD",
+        state: "settled",
+      },
+    },
+    payment: zeroBalance ? {
+      state: "cleared_no_balance",
+      chargeOccurred: false,
+      zeroBalanceClearance: {
+        clearanceId: PAID_FINAL_ZERO_CLEARANCE_ID,
+        clearanceDigest: "9".repeat(64),
+        clearedAt: PAID_FINAL_CLEARED_AT,
+      },
+    } : {
+      state: "paid",
+      chargeOccurred: true,
+      checkoutUrl: null,
+      checkoutExpiresAt: null,
+      settledAt: PAID_FINAL_CLEARED_AT,
+    },
+    handoff: handedOff ? {
+      state: "handed_off",
+      documentId: PAID_FINAL_DOCUMENT_ID,
+      contentDigest: paidHandoffDocument(mode).contentDigest,
+      handedOffAt: PAID_FINAL_HANDED_OFF_AT,
+      workmanshipStartsAt: PAID_FINAL_HANDED_OFF_AT,
+      workmanshipEndsAt: PAID_FINAL_WORKMANSHIP_ENDS_AT,
+    } : {
+      state: "pending",
+      documentId: null,
+      workmanshipStartsAt: null,
+      workmanshipEndsAt: null,
+    },
+    action: {
+      checkoutAvailable: false,
+      handoffAvailable: false,
+      reason: state,
+    },
+  };
+}
+
+function ownerFinalPayments(mode, handedOff = false) {
+  return {
+    schema: "sitesourcery.custom-build-final-payments-owner/v1",
+    organizationId: PAID_ORGANIZATION_ID,
+    jobId: PAID_JOB_ID,
+    finalPayment: paidFinalState(mode, handedOff),
+    owner: {
+      attemptId: mode === "final-zero" ? null : PAID_FINAL_ATTEMPT_ID,
+      attemptState: mode === "final-zero" ? null : "paid",
+      canReconcileCreation: false,
+      canReconcileSettlement: false,
+      eventId: null,
+      eventState: null,
+      providerEffectCertainty: mode === "final-zero" ? null : "confirmed",
+      providerErrorCode: null,
+      providerRequestExpiresAt: null,
+      receiptSource: mode === "final-zero" ? null : "provider_readback",
+      reconciliationCode: null,
+    },
+  };
+}
+
+function ownerFinalCompletionRequired() {
+  return {
+    schema: "sitesourcery.custom-build-final-payments-owner/v1",
+    organizationId: PAID_ORGANIZATION_ID,
+    jobId: PAID_JOB_ID,
+    finalPayment: paidFinalCompletionRequired(),
+    owner: {
+      attemptId: null,
+      attemptState: null,
+      canReconcileCreation: false,
+      canReconcileSettlement: false,
+      eventId: null,
+      eventState: null,
+      providerEffectCertainty: null,
+      providerErrorCode: null,
+      providerRequestExpiresAt: null,
+      receiptSource: null,
+      reconciliationCode: null,
+    },
+  };
+}
+
+function ownerHandoffReadiness(mode, handedOff = false) {
+  return {
+    schema: "sitesourcery.custom-build-handoff-owner-readiness/v1",
+    state: handedOff ? "handed_off" : "handoff_available",
+    organizationId: PAID_ORGANIZATION_ID,
+    projectId: PAID_PROJECT_ID,
+    jobId: PAID_JOB_ID,
+    completion: {
+      packageId: PAID_FINAL_PACKAGE_ID,
+      packageDigest: PAID_FINAL_PACKAGE_DIGEST,
+      completedAt: PAID_FINAL_COMPLETED_AT,
+    },
+    finalObligation: {
+      obligationId: PAID_FINAL_OBLIGATION_ID,
+      obligationDigest: PAID_FINAL_OBLIGATION_DIGEST,
+    },
+    financialClearance: { clearedAt: PAID_FINAL_CLEARED_AT },
+    handoff: handedOff ? {
+      documentId: PAID_FINAL_DOCUMENT_ID,
+      contentDigest: paidHandoffDocument(mode).contentDigest,
+      handedOffAt: PAID_FINAL_HANDED_OFF_AT,
+      workmanship: {
+        coverage: "[start,end)",
+        termDays: 30,
+        startsAt: PAID_FINAL_HANDED_OFF_AT,
+        endsAt: PAID_FINAL_WORKMANSHIP_ENDS_AT,
+      },
+    } : null,
+    action: {
+      handoffAvailable: !handedOff,
+      reason: handedOff ? "handed_off" : "financial_clearance_confirmed",
+    },
+  };
+}
+
+function paidHandoffCommand(mode) {
+  return {
+    schema: "sitesourcery.custom-build-handoff-command/v1",
+    state: "handed_off",
+    organizationId: PAID_ORGANIZATION_ID,
+    projectId: PAID_PROJECT_ID,
+    jobId: PAID_JOB_ID,
+    receiptId: PAID_FINAL_HANDOFF_RECEIPT_ID,
+    documentId: PAID_FINAL_DOCUMENT_ID,
+    documentDigest: paidHandoffDocument(mode).contentDigest,
+    completionPackageDigest: PAID_FINAL_PACKAGE_DIGEST,
+    finalObligationDigest: PAID_FINAL_OBLIGATION_DIGEST,
+    financialClearance: {
+      kind: mode === "final-zero"
+        ? "zero_balance_clearance"
+        : "provider_confirmed_final_payment",
+      referenceId: mode === "final-zero"
+        ? PAID_FINAL_ZERO_CLEARANCE_ID
+        : PAID_FINAL_PAYMENT_RECEIPT_ID,
+      clearedAt: PAID_FINAL_CLEARED_AT,
+    },
+    handedOffAt: PAID_FINAL_HANDED_OFF_AT,
+    workmanship: {
+      coverage: "[start,end)",
+      termDays: 30,
+      startsAt: PAID_FINAL_HANDED_OFF_AT,
+      endsAt: PAID_FINAL_WORKMANSHIP_ENDS_AT,
+    },
   };
 }
 
@@ -769,12 +1091,8 @@ function safeArtifactPath(pathname) {
 async function startServer() {
   const apiRequests = [];
   const missingFiles = [];
-  let paidJobReads = 0;
-  let customerChangeCompletionReads = 0;
-  let ownerChangeCompletionReads = 0;
-  let customerChangeInvoiceReads = 0;
-  let ownerChangePaymentReads = 0;
-  let ownerChangePaymentReconciled = false;
+  const paidFixtures = new Map();
+  let paidFixtureSequence = 0;
   const server = createHttpServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (url.pathname.startsWith("/api/v1/")) {
@@ -782,11 +1100,12 @@ async function startServer() {
         .split(";")
         .map((entry) => entry.trim())
         .find((entry) => entry.startsWith(`${PAID_FIXTURE_COOKIE}=`));
-      const paidMode = paidCookie
+      const paidFixtureToken = paidCookie
         ? decodeURIComponent(paidCookie.split("=", 2)[1] || "")
         : "";
-      const paidFixture = ["issued", "completion", ...PAID_PAYMENT_MODES]
-        .includes(paidMode);
+      const paidState = paidFixtures.get(paidFixtureToken) || null;
+      const paidMode = paidState?.mode || "";
+      const paidFixture = Boolean(paidState);
       let body = null;
       try {
         if (!["GET", "HEAD"].includes(request.method || "GET")) {
@@ -803,10 +1122,12 @@ async function startServer() {
         pathname: url.pathname,
         search: url.search,
         paidFixture,
+        paidFixtureToken,
         paidMode,
         body,
         idempotencyKey: String(request.headers["idempotency-key"] || ""),
         expectedWrite: false,
+        fixtureStatus: null,
       };
       apiRequests.push(apiRequest);
       if (request.method === "GET" && url.pathname === "/api/v1/me") {
@@ -959,8 +1280,8 @@ async function startServer() {
           url.pathname ===
             "/api/v1/operator/custom-services/custom-build-jobs"
         ) {
-          paidJobReads += 1;
-          if (paidJobReads === 1) {
+          paidState.paidJobReads += 1;
+          if (paidState.paidJobReads === 1) {
             json(response, 200, ownerPaidCustomBuildJobs());
           } else {
             json(response, 200, {
@@ -984,11 +1305,11 @@ async function startServer() {
           url.pathname ===
             `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-completion`
         ) {
-          ownerChangeCompletionReads += 1;
+          paidState.ownerChangeCompletionReads += 1;
           json(
             response,
             200,
-            ownerChangeCompletionReads === 1
+            paidState.ownerChangeCompletionReads === 1
               || PAID_PAYMENT_MODES.includes(paidMode)
               ? paidChangeCompletion(paidMode, true)
               : {
@@ -1002,12 +1323,66 @@ async function startServer() {
           url.pathname ===
             `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-payments`
         ) {
-          ownerChangePaymentReads += 1;
+          paidState.ownerChangePaymentReads += 1;
           json(
             response,
             200,
-            ownerChangePayments(paidMode, ownerChangePaymentReconciled),
+            ownerChangePayments(
+              paidMode,
+              paidState.ownerChangePaymentReconciled,
+            ),
           );
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-payments`
+        ) {
+          paidState.ownerFinalPaymentReads += 1;
+          if (["final-paid", "final-zero"].includes(paidMode)) {
+            apiRequest.fixtureStatus = 403;
+            json(response, 403, {
+              error: {
+                code: "FORBIDDEN",
+                message:
+                  "This exact operator has handoff authority without payment-reconciliation authority.",
+              },
+            });
+          } else if (paidMode === "final-race") {
+            await delay(1500);
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, ownerFinalPayments(paidMode, true));
+          } else {
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, ownerFinalCompletionRequired());
+          }
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-handoff`
+        ) {
+          paidState.ownerFinalHandoffReads += 1;
+          if (paidMode === "final-race") {
+            await delay(1500);
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, ownerHandoffReadiness(paidMode, true));
+          } else if (PAID_FINAL_MODES.includes(paidMode)) {
+            apiRequest.fixtureStatus = 200;
+            json(
+              response,
+              200,
+              ownerHandoffReadiness(paidMode, paidState.finalHandoffCreated),
+            );
+          } else {
+            apiRequest.fixtureStatus = 503;
+            json(response, 503, {
+              error: {
+                code: "CUSTOM_BUILD_HANDOFF_HELD",
+                message: "Completion is required before handoff readiness exists.",
+              },
+            });
+          }
           return;
         }
         if (
@@ -1035,11 +1410,12 @@ async function startServer() {
           url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-completion`
         ) {
-          customerChangeCompletionReads += 1;
+          paidState.customerChangeCompletionReads += 1;
+          if (paidMode === "final-race") await delay(500);
           json(
             response,
             200,
-            customerChangeCompletionReads === 1
+            paidState.customerChangeCompletionReads === 1
               || PAID_PAYMENT_MODES.includes(paidMode)
               ? paidChangeCompletion(paidMode, false)
               : {
@@ -1053,7 +1429,7 @@ async function startServer() {
           url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoice`
         ) {
-          customerChangeInvoiceReads += 1;
+          paidState.customerChangeInvoiceReads += 1;
           if (paidMode === "payment-customer-held") {
             json(response, 503, {
               error: {
@@ -1063,7 +1439,7 @@ async function startServer() {
             });
           } else if (
             paidMode === "payment-customer-malformed"
-            && customerChangeInvoiceReads > 1
+            && paidState.customerChangeInvoiceReads > 1
           ) {
             json(response, 200, {
               ...paidChangeInvoice("checkout_available"),
@@ -1080,6 +1456,78 @@ async function startServer() {
             json(response, 200, paidChangeInvoice("checkout_available"));
           } else {
             json(response, 200, unavailableChangeInvoice());
+          }
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-final-handoff`
+        ) {
+          paidState.customerFinalReads += 1;
+          if (
+            paidState.customerFinalFailureArmed
+            && ["final-paid", "final-zero"].includes(paidMode)
+          ) {
+            await delay(200);
+            apiRequest.fixtureStatus = 503;
+            json(response, 503, {
+              error: {
+                code: "CUSTOM_BUILD_HANDOFF_HELD",
+                message:
+                  "Final delivery state is temporarily unavailable after the retained receipt was loaded.",
+              },
+            });
+          } else if (paidMode === "final-race") {
+            await delay(1500);
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, paidFinalState(paidMode, true));
+          } else if (PAID_FINAL_MODES.includes(paidMode)) {
+            apiRequest.fixtureStatus = 200;
+            json(
+              response,
+              200,
+              paidFinalState(paidMode, paidState.finalHandoffCreated),
+            );
+          } else {
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, paidFinalCompletionRequired());
+          }
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-handoff-documents/${PAID_FINAL_DOCUMENT_ID}`
+        ) {
+          paidState.customerHandoffDocumentReads += 1;
+          if (
+            PAID_FINAL_MODES.includes(paidMode)
+            && (paidState.finalHandoffCreated || paidMode === "final-race")
+            && paidState.customerHandoffDocumentReads === 1
+          ) {
+            apiRequest.fixtureStatus = 200;
+            json(response, 200, paidHandoffDocument(paidMode));
+          } else if (
+            PAID_FINAL_MODES.includes(paidMode)
+            && (paidState.finalHandoffCreated || paidMode === "final-race")
+          ) {
+            paidState.customerFinalFailureArmed = true;
+            apiRequest.fixtureStatus = 503;
+            await delay(200);
+            json(response, 503, {
+              error: {
+                code: "CUSTOM_BUILD_HANDOFF_DOCUMENT_HELD",
+                message:
+                  "The retained handoff document is temporarily unavailable.",
+              },
+            });
+          } else {
+            apiRequest.fixtureStatus = 404;
+            json(response, 404, {
+              error: {
+                code: "CUSTOM_BUILD_HANDOFF_DOCUMENT_NOT_FOUND",
+                message: "No immutable handoff document exists yet.",
+              },
+            });
           }
           return;
         }
@@ -1124,8 +1572,28 @@ async function startServer() {
           `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/change-payments/${PAID_CHANGE_ATTEMPT_ID}/checkout-reconciliation`
       ) {
         apiRequest.expectedWrite = true;
-        ownerChangePaymentReconciled = true;
+        paidState.ownerChangePaymentReconciled = true;
         json(response, 200, ownerChangeReconciliation());
+        return;
+      }
+      if (
+        paidFixture
+        && request.method === "POST"
+        && url.pathname ===
+          `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/handoff`
+      ) {
+        apiRequest.expectedWrite = true;
+        if (!["final-paid", "final-zero"].includes(paidMode)) {
+          json(response, 409, {
+            error: {
+              code: "CUSTOM_BUILD_HANDOFF_NOT_READY",
+              message: "This fixture is not ready for an owner handoff command.",
+            },
+          });
+          return;
+        }
+        paidState.finalHandoffCreated = true;
+        json(response, 200, paidHandoffCommand(paidMode));
         return;
       }
       json(response, 404, {
@@ -1169,32 +1637,74 @@ async function startServer() {
     address && typeof address === "object"
       ? address.port
       : 0;
+  const fixtureReadCount = (token, field) =>
+    paidFixtures.get(token)?.[field] ?? 0;
   return Object.freeze({
     apiRequests,
     missingFiles,
     origin: `http://127.0.0.1:${port}`,
-    paidJobReadCount() {
-      return paidJobReads;
+    beginPaidFixture(mode, viewport, journey) {
+      if (![
+        "issued",
+        "completion",
+        ...PAID_PAYMENT_MODES,
+        ...PAID_FINAL_MODES,
+      ].includes(mode)) {
+        throw new Error(`Unknown paid browser fixture mode: ${mode}`);
+      }
+      const runNonce = `${Date.now().toString(36)}-${++paidFixtureSequence}`;
+      const token = [
+        mode,
+        viewport.label,
+        `${viewport.width}x${viewport.height}`,
+        journey,
+        runNonce,
+      ].join(".");
+      paidFixtures.set(token, {
+        mode,
+        journey,
+        viewport: viewport.label,
+        paidJobReads: 0,
+        customerChangeCompletionReads: 0,
+        ownerChangeCompletionReads: 0,
+        customerChangeInvoiceReads: 0,
+        ownerChangePaymentReads: 0,
+        ownerChangePaymentReconciled: false,
+        customerFinalReads: 0,
+        ownerFinalPaymentReads: 0,
+        ownerFinalHandoffReads: 0,
+        customerHandoffDocumentReads: 0,
+        finalHandoffCreated: false,
+        customerFinalFailureArmed: false,
+      });
+      return token;
     },
-    customerChangeCompletionReadCount() {
-      return customerChangeCompletionReads;
+    paidJobReadCount(token) {
+      return fixtureReadCount(token, "paidJobReads");
     },
-    ownerChangeCompletionReadCount() {
-      return ownerChangeCompletionReads;
+    customerChangeCompletionReadCount(token) {
+      return fixtureReadCount(token, "customerChangeCompletionReads");
     },
-    customerChangeInvoiceReadCount() {
-      return customerChangeInvoiceReads;
+    ownerChangeCompletionReadCount(token) {
+      return fixtureReadCount(token, "ownerChangeCompletionReads");
     },
-    ownerChangePaymentReadCount() {
-      return ownerChangePaymentReads;
+    customerChangeInvoiceReadCount(token) {
+      return fixtureReadCount(token, "customerChangeInvoiceReads");
     },
-    resetPaidFixture() {
-      paidJobReads = 0;
-      customerChangeCompletionReads = 0;
-      ownerChangeCompletionReads = 0;
-      customerChangeInvoiceReads = 0;
-      ownerChangePaymentReads = 0;
-      ownerChangePaymentReconciled = false;
+    ownerChangePaymentReadCount(token) {
+      return fixtureReadCount(token, "ownerChangePaymentReads");
+    },
+    customerFinalReadCount(token) {
+      return fixtureReadCount(token, "customerFinalReads");
+    },
+    ownerFinalPaymentReadCount(token) {
+      return fixtureReadCount(token, "ownerFinalPaymentReads");
+    },
+    ownerFinalHandoffReadCount(token) {
+      return fixtureReadCount(token, "ownerFinalHandoffReads");
+    },
+    customerHandoffDocumentReadCount(token) {
+      return fixtureReadCount(token, "customerHandoffDocumentReads");
     },
     close: () =>
       new Promise((resolve) => server.close(resolve)),
@@ -1352,6 +1862,15 @@ async function navigate(cdp, url) {
       return true;
     })()`,
     true,
+  );
+}
+
+async function isolatePaidJourney(cdp) {
+  await cdp.send("Page.stopLoading");
+  await cdp.send("Page.navigate", { url: "about:blank" });
+  await waitFor(
+    cdp,
+    `document.readyState === "complete" && location.href === "about:blank"`,
   );
 }
 
@@ -1565,14 +2084,19 @@ async function makerJourney(cdp, origin) {
 }
 
 async function paidCustomBuildJourney(cdp, server, viewport, mode) {
-  server.resetPaidFixture();
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    mode,
+    viewport,
+    "paid-custom-build",
+  );
   await cdp.send("Storage.clearDataForOrigin", {
     origin: server.origin,
     storageTypes: "all",
   });
   const cookie = await cdp.send("Network.setCookie", {
     name: PAID_FIXTURE_COOKIE,
-    value: mode,
+    value: fixtureToken,
     url: `${server.origin}/`,
     httpOnly: true,
     sameSite: "Strict",
@@ -1581,13 +2105,27 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
   await setViewport(cdp, viewport);
   await navigate(cdp, `${server.origin}/abracadabra/app/`);
   await openHostedAccount(cdp);
+  const expectedCompletionAuthority = mode === "completion"
+    ? "terminal"
+    : "open";
+  const expectedOwnerProgress = mode === "completion"
+    ? "Verified completion is immutable"
+    : "Action needed from you";
   try {
     await waitFor(
       cdp,
       `document.querySelector("[data-owner-custom-build-work]")?.hidden === false
         && document.querySelectorAll("[data-paid-custom-build-job]").length === 1
+        && document.querySelector("[data-owner-job-progress]")
+          ?.getAttribute("data-owner-progress-completion-authority") === ${JSON.stringify(
+            expectedCompletionAuthority,
+          )}
         && document.querySelector("[data-owner-job-progress]")?.textContent
-          .includes("Action needed from you")
+          .includes(${JSON.stringify(expectedOwnerProgress)})
+        && document.querySelector("[data-owner-job-change-completion]")
+          ?.getAttribute("data-owner-change-completion-authority") === ${JSON.stringify(
+            expectedCompletionAuthority,
+          )}
         && document.querySelector("[data-owner-job-change-completion]")?.textContent
           .includes(${JSON.stringify(
             mode === "completion"
@@ -1603,7 +2141,23 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
         roomHidden: document.getElementById("control-room")?.hidden,
         accountStatus: document.getElementById("platform-status")?.textContent.trim(),
         ownerHidden: document.querySelector("[data-owner-custom-build-work]")?.hidden,
-        ownerStatus: document.querySelector(".customer-owner-custom-build-status")?.textContent.trim(),
+        ownerStatus: document.querySelector(
+          "[data-owner-custom-build-work] .customer-owner-custom-build-status"
+        )?.textContent.trim(),
+        ownerJobCount: document.querySelectorAll(
+          "[data-paid-custom-build-job]"
+        ).length,
+        ownerProgressText: document.querySelector("[data-owner-job-progress]")
+          ?.textContent.replace(/\\s+/g, " ").trim().slice(0, 500),
+        ownerChangeText: document.querySelector(
+          "[data-owner-job-change-completion]"
+        )?.textContent.replace(/\\s+/g, " ").trim().slice(0, 1000),
+        ownerChangeAuthority: document.querySelector(
+          "[data-owner-job-change-completion]"
+        )?.getAttribute("data-owner-change-completion-authority"),
+        ownerFinalText: document.querySelector(
+          "[data-owner-custom-build-final]"
+        )?.textContent.replace(/\\s+/g, " ").trim().slice(0, 500),
         apiMethod: typeof globalThis.SiteSourceryAbracadabraAPI
           ?.createClient({ baseUrl: "/api/v1" }).listOwnerCustomBuildJobs,
         accountId: globalThis.SiteSourceryAbracadabraHostedSession
@@ -1631,8 +2185,16 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
         && document.querySelector(".customer-custom-build-status")?.textContent
           .includes("Your Custom website project is open")
         && document.querySelector("[data-customer-custom-build-progress]")?.hidden === false
+        && document.querySelector("[data-customer-custom-build-progress]")
+          ?.getAttribute("data-customer-progress-completion-authority") === ${JSON.stringify(
+            expectedCompletionAuthority,
+          )}
         && document.querySelector("[data-custom-build-active-request]")?.textContent
           .includes("Choose the approved contact wording")
+        && document.querySelector("[data-customer-custom-build-change-completion]")
+          ?.getAttribute("data-customer-change-completion-authority") === ${JSON.stringify(
+            expectedCompletionAuthority,
+          )}
         && document.querySelector("[data-customer-custom-build-change-completion]")?.textContent
           .includes(${JSON.stringify(
             mode === "completion"
@@ -1721,6 +2283,18 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
           .replace(/\\s+/g, " ").trim(),
         ownerChangeText: ownerChange.textContent
           .replace(/\\s+/g, " ").trim(),
+        ownerProgressAuthority: ownerProgress.getAttribute(
+          "data-owner-progress-completion-authority"
+        ),
+        ownerChangeAuthority: ownerChange.getAttribute(
+          "data-owner-change-completion-authority"
+        ),
+        customerProgressAuthority: customerProgress.getAttribute(
+          "data-customer-progress-completion-authority"
+        ),
+        customerChangeAuthority: customerChange.getAttribute(
+          "data-customer-change-completion-authority"
+        ),
         customerProgressMilestones: [
           ...customerProgress.querySelectorAll(
             ".customer-custom-build-progress-milestone"
@@ -1765,16 +2339,16 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
   const changeRefreshDeadline = Date.now() + 5000;
   while (
     (
-      server.customerChangeCompletionReadCount() < 2
-      || server.ownerChangeCompletionReadCount() < 2
+      server.customerChangeCompletionReadCount(fixtureToken) < 2
+      || server.ownerChangeCompletionReadCount(fixtureToken) < 2
     )
     && Date.now() < changeRefreshDeadline
   ) {
     await delay(25);
   }
   if (
-    server.customerChangeCompletionReadCount() < 2
-    || server.ownerChangeCompletionReadCount() < 2
+    server.customerChangeCompletionReadCount(fixtureToken) < 2
+    || server.ownerChangeCompletionReadCount(fixtureToken) < 2
   ) {
     throw new Error(
       "Change/completion refresh did not reach the browser-audit server.",
@@ -1808,12 +2382,12 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
   );
   const refreshDeadline = Date.now() + 5000;
   while (
-    server.paidJobReadCount() < 2
+    server.paidJobReadCount(fixtureToken) < 2
     && Date.now() < refreshDeadline
   ) {
     await delay(25);
   }
-  if (server.paidJobReadCount() < 2) {
+  if (server.paidJobReadCount(fixtureToken) < 2) {
     throw new Error("Paid-job refresh did not reach the browser-audit server.");
   }
   await delay(250);
@@ -1885,14 +2459,19 @@ async function customBuildChangePaymentJourney(
   mode,
   checkoutNavigations,
 ) {
-  server.resetPaidFixture();
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    mode,
+    viewport,
+    "change-payment",
+  );
   await cdp.send("Storage.clearDataForOrigin", {
     origin: server.origin,
     storageTypes: "all",
   });
   const cookie = await cdp.send("Network.setCookie", {
     name: PAID_FIXTURE_COOKIE,
-    value: mode,
+    value: fixtureToken,
     url: `${server.origin}/`,
     httpOnly: true,
     sameSite: "Strict",
@@ -1939,7 +2518,7 @@ async function customBuildChangePaymentJourney(
   if (mode === "payment-owner-uncertain") {
     const ownerDeadline = Date.now() + 5000;
     while (
-      server.ownerChangePaymentReadCount() < 1
+      server.ownerChangePaymentReadCount(fixtureToken) < 1
       && Date.now() < ownerDeadline
     ) await delay(25);
     await delay(100);
@@ -2050,7 +2629,9 @@ async function customBuildChangePaymentJourney(
       `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/`
       + `${PAID_CHANGE_INVOICE_ID}/checkout-command`;
     const prior = server.apiRequests.filter(
-      (entry) => entry.method === "POST" && entry.pathname === path,
+      (entry) => entry.paidFixtureToken === fixtureToken
+        && entry.method === "POST"
+        && entry.pathname === path,
     ).length;
     const navigationCount = checkoutNavigations.length;
     const keyboardFocused = await activateByKeyboard(
@@ -2059,7 +2640,9 @@ async function customBuildChangePaymentJourney(
     );
     const request = await waitForApiRequest(
       server,
-      (entry) => entry.method === "POST" && entry.pathname === path,
+      (entry) => entry.paidFixtureToken === fixtureToken
+        && entry.method === "POST"
+        && entry.pathname === path,
       prior,
     );
     if (mode === "payment-checkout") {
@@ -2104,14 +2687,14 @@ async function customBuildChangePaymentJourney(
         : null,
     };
   } else if (mode === "payment-customer-malformed") {
-    const prior = server.customerChangeInvoiceReadCount();
+    const prior = server.customerChangeInvoiceReadCount(fixtureToken);
     const keyboardFocused = await activateByKeyboard(
       cdp,
       "[data-customer-change-completion-refresh]",
     );
     const deadline = Date.now() + 5000;
     while (
-      server.customerChangeInvoiceReadCount() === prior
+      server.customerChangeInvoiceReadCount(fixtureToken) === prior
       && Date.now() < deadline
     ) await delay(25);
     await delay(150);
@@ -2144,7 +2727,9 @@ async function customBuildChangePaymentJourney(
       `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/`
       + `change-payments/${PAID_CHANGE_ATTEMPT_ID}/checkout-reconciliation`;
     const prior = server.apiRequests.filter(
-      (entry) => entry.method === "POST" && entry.pathname === path,
+      (entry) => entry.paidFixtureToken === fixtureToken
+        && entry.method === "POST"
+        && entry.pathname === path,
     ).length;
     const keyboardFocused = await activateByKeyboard(
       cdp,
@@ -2153,7 +2738,9 @@ async function customBuildChangePaymentJourney(
     const request = keyboardFocused
       ? await waitForApiRequest(
           server,
-          (entry) => entry.method === "POST" && entry.pathname === path,
+          (entry) => entry.paidFixtureToken === fixtureToken
+            && entry.method === "POST"
+            && entry.pathname === path,
           prior,
         )
       : null;
@@ -2204,6 +2791,608 @@ async function customBuildChangePaymentJourney(
     url: `${server.origin}/`,
   });
   return { action, initial };
+}
+
+async function customBuildFinalHandoffJourney(
+  cdp,
+  server,
+  viewport,
+  mode,
+) {
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    mode,
+    viewport,
+    "final-handoff",
+  );
+  await cdp.send("Storage.clearDataForOrigin", {
+    origin: server.origin,
+    storageTypes: "all",
+  });
+  const cookie = await cdp.send("Network.setCookie", {
+    name: PAID_FIXTURE_COOKIE,
+    value: fixtureToken,
+    url: `${server.origin}/`,
+    httpOnly: true,
+    sameSite: "Strict",
+  });
+  if (!cookie.success) throw new Error("Final-handoff fixture cookie was rejected.");
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${server.origin}/abracadabra/app/`);
+  await openHostedAccount(cdp);
+  await waitFor(
+    cdp,
+    `document.querySelectorAll("[data-paid-custom-build-job]").length === 1
+      && document.querySelector("[data-owner-custom-build-handoff-form]")
+      && !document.querySelector("[data-owner-custom-build-final-payment]")`,
+  );
+  await evaluate(
+    cdp,
+    `(() => {
+      const card = document.querySelector("[data-paid-custom-build-job]");
+      if (!card.open) card.querySelector("summary").click();
+      return card.open;
+    })()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-paid-custom-build-job]")?.open === true`,
+  );
+  const initialOwner = await evaluate(
+    cdp,
+    `(() => {
+      const section = document.querySelector("[data-owner-custom-build-final]");
+      const form = section.querySelector("[data-owner-custom-build-handoff-form]");
+      const controls = [...section.querySelectorAll("button, input, textarea")]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden"
+            && rect.width > 0 && rect.height > 0;
+        })
+        .map((element) => ({
+          name: element.name || element.textContent.trim().replace(/\\s+/g, " "),
+          height: Math.round(element.getBoundingClientRect().height * 10) / 10,
+        }));
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        formVisible: Boolean(form),
+        paymentProjectionVisible: Boolean(section.querySelector(
+          "[data-owner-custom-build-final-payment]"
+        )),
+        text: section.textContent.replace(/\\s+/g, " ").trim(),
+        controls,
+      };
+    })()`,
+  );
+  const ownerPaymentRead = server.apiRequests.findLast((entry) =>
+    entry.method === "GET"
+      && entry.paidFixtureToken === fixtureToken
+      && entry.pathname ===
+        `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-payments`
+  ) || null;
+  const ownerReadinessRead = server.apiRequests.findLast((entry) =>
+    entry.method === "GET"
+      && entry.paidFixtureToken === fixtureToken
+      && entry.pathname ===
+        `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-handoff`
+  ) || null;
+  const handoffPath =
+    `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/handoff`;
+  const priorHandoffWrites = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST"
+      && entry.pathname === handoffPath,
+  ).length;
+  const ownerKeyboardFocused = await activateByKeyboard(
+    cdp,
+    "[data-owner-custom-build-handoff-form] button[type=submit]",
+  );
+  const ownerRequest = ownerKeyboardFocused
+    ? await waitForApiRequest(
+        server,
+        (entry) => entry.paidFixtureToken === fixtureToken
+          && entry.method === "POST"
+          && entry.pathname === handoffPath,
+        priorHandoffWrites,
+      )
+    : null;
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-owner-custom-build-final]")?.textContent
+      .includes("Immutable handoff created. The 30-day workmanship window now begins.")
+      && document.querySelector("[data-owner-custom-build-final]")?.textContent
+        .includes("Handoff is immutable")
+      && !document.querySelector("[data-owner-custom-build-handoff-form]")`,
+  );
+  const ownerAfter = await evaluate(
+    cdp,
+    `(() => {
+      const section = document.querySelector("[data-owner-custom-build-final]");
+      return {
+        text: section.textContent.replace(/\\s+/g, " ").trim(),
+        handoffFormCount: section.querySelectorAll(
+          "[data-owner-custom-build-handoff-form]"
+        ).length,
+        paymentProjectionCount: section.querySelectorAll(
+          "[data-owner-custom-build-final-payment]"
+        ).length,
+      };
+    })()`,
+  );
+
+  await waitFor(cdp, `document.querySelector("[data-project-list] button")`);
+  await evaluate(
+    cdp,
+    `document.querySelector("[data-project-list] button").click()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-handoff-receipt=ready]")
+      && document.querySelector("[data-customer-progress-completion-authority=terminal]")
+      && document.querySelector("[data-customer-change-completion-authority=terminal]")`,
+  );
+  const customer = await evaluate(
+    cdp,
+    `(() => {
+      const visible = (element) => {
+        if (!element || element.hidden) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden"
+          && rect.width > 0 && rect.height > 0;
+      };
+      const finalPanel = document.querySelector(
+        "[data-customer-custom-build-final]"
+      );
+      const progress = document.querySelector(
+        "[data-customer-custom-build-progress]"
+      );
+      const change = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const owner = document.querySelector("[data-owner-custom-build-work]");
+      const controls = [
+        ...finalPanel.querySelectorAll("button, a, input, textarea"),
+        ...progress.querySelectorAll("button, a, input, textarea"),
+        ...change.querySelectorAll("button, a, input, textarea")
+      ].filter(visible).map((element) => ({
+        text: (element.name || element.textContent).trim().replace(/\\s+/g, " "),
+        height: Math.round(element.getBoundingClientRect().height * 10) / 10,
+      }));
+      const finalText = finalPanel.textContent.replace(/\\s+/g, " ").trim();
+      const changeText = change.textContent.replace(/\\s+/g, " ").trim();
+      const handoff = finalPanel.querySelector(
+        "[data-customer-custom-build-handoff]"
+      );
+      const workmanshipFacts = Object.fromEntries(
+        [...handoff.querySelectorAll(".customer-alakazam-fact")].map((row) => [
+          row.querySelector("dt")?.textContent.trim() || "",
+          row.querySelector("dd")?.textContent.trim() || ""
+        ])
+      );
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        finalText,
+        changeText,
+        progressAuthority: progress.getAttribute(
+          "data-customer-progress-completion-authority"
+        ),
+        changeAuthority: change.getAttribute(
+          "data-customer-change-completion-authority"
+        ),
+        responseFormCount: progress.querySelectorAll(
+          "[data-custom-build-response-form]"
+        ).length,
+        customerChangeMutationCount: [...change.querySelectorAll("button, form")]
+          .filter((element) => /Accept exact added work|Decline added work|Continue to secure payment/iu.test(
+            element.textContent
+          )).length,
+        ownerProgressMutationCount: owner.querySelectorAll(
+          "[data-owner-progress-form], [data-owner-request-form], [data-owner-resolution-form]"
+        ).length,
+        ownerChangeMutationCount: owner.querySelectorAll(
+          "[data-owner-change-order-form], [data-owner-change-order-void], [data-owner-change-order-expire], [data-owner-completion-evidence-form], [data-owner-completion-form], [data-owner-custom-build-change-payment-reconcile]"
+        ).length,
+        receiptReady: finalPanel.querySelector(
+          "[data-customer-custom-build-handoff-receipt]"
+        )?.getAttribute("data-customer-custom-build-handoff-receipt") || "",
+        deliveredItems: [...finalPanel.querySelectorAll(
+          ".customer-custom-build-completion-checks li"
+        )].map((entry) => entry.textContent.trim()),
+        identifierLeaks: [
+          ${JSON.stringify(PAID_JOB_ID)},
+          ${JSON.stringify(PAID_FINAL_DOCUMENT_ID)},
+          ${JSON.stringify(PAID_FINAL_HANDOFF_RECEIPT_ID)},
+          "cs_test_",
+          "pi_",
+          "ch_",
+          "cus_",
+          "evt_"
+        ].filter((needle) => finalText.includes(needle)),
+        expectedHandoffAt: new Date(
+          ${JSON.stringify(PAID_FINAL_HANDED_OFF_AT)}
+        ).toLocaleString(),
+        expectedWorkmanshipEndsAt: new Date(
+          ${JSON.stringify(PAID_FINAL_WORKMANSHIP_ENDS_AT)}
+        ).toLocaleString(),
+        workmanshipFacts,
+        workmanshipCoverageCopy: handoff.textContent.includes(
+          "30-day [start,end) window starts at handoff"
+        ),
+        controls,
+      };
+    })()`,
+  );
+
+  const documentReadCount = server.customerHandoffDocumentReadCount(
+    fixtureToken,
+  );
+  const documentKeyboardFocused = await activateByKeyboard(
+    cdp,
+    "[data-customer-custom-build-handoff-document]",
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-final]")
+      ?.getAttribute("aria-busy") === "true"`,
+  );
+  const documentBusy = await evaluate(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-final]")
+      .textContent.replace(/\\s+/g, " ").trim()`,
+  );
+  const documentDeadline = Date.now() + 5000;
+  while (
+    server.customerHandoffDocumentReadCount(fixtureToken) <= documentReadCount
+    && Date.now() < documentDeadline
+  ) await delay(25);
+  await waitFor(
+    cdp,
+    `(() => {
+      const panel = document.querySelector("[data-customer-custom-build-final]");
+      return panel?.querySelector(
+        "[data-customer-custom-build-handoff-receipt=ready]"
+      ) && panel.querySelector(".customer-owner-quote-form-error")
+        && panel.contains(document.activeElement);
+    })()`,
+  );
+  const retained = await evaluate(
+    cdp,
+    `(() => {
+      const panel = document.querySelector("[data-customer-custom-build-final]");
+      const status = panel.querySelector(".customer-custom-build-final-status");
+      return {
+        text: panel.textContent.replace(/\\s+/g, " ").trim(),
+        receiptReady: panel.querySelector(
+          "[data-customer-custom-build-handoff-receipt]"
+        )?.getAttribute("data-customer-custom-build-handoff-receipt") || "",
+        deliveredItemCount: panel.querySelectorAll(
+          ".customer-custom-build-completion-checks li"
+        ).length,
+        error: panel.querySelector(".customer-owner-quote-form-error")
+          ?.textContent.trim() || "",
+        statusFocused: document.activeElement === status,
+      };
+    })()`,
+  );
+  const finalReadCount = server.customerFinalReadCount(fixtureToken);
+  const finalRefreshKeyboardFocused = await activateByKeyboard(
+    cdp,
+    "[data-customer-custom-build-final-refresh]",
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-final]")
+      ?.getAttribute("aria-busy") === "true"`,
+  );
+  const finalBusy = await evaluate(
+    cdp,
+    `document.querySelector("[data-customer-custom-build-final]")
+      .textContent.replace(/\\s+/g, " ").trim()`,
+  );
+  const finalReadDeadline = Date.now() + 5000;
+  while (
+    server.customerFinalReadCount(fixtureToken) <= finalReadCount
+    && Date.now() < finalReadDeadline
+  ) await delay(25);
+  await waitFor(
+    cdp,
+    `(() => {
+      const panel = document.querySelector("[data-customer-custom-build-final]");
+      return panel?.querySelector(
+        "[data-customer-custom-build-handoff-receipt=ready]"
+      ) && panel.querySelector(".customer-owner-quote-form-error")
+        && panel.contains(document.activeElement);
+    })()`,
+  );
+  const retainedFinal = await evaluate(
+    cdp,
+    `(() => {
+      const panel = document.querySelector("[data-customer-custom-build-final]");
+      const status = panel.querySelector(".customer-custom-build-final-status");
+      return {
+        text: panel.textContent.replace(/\\s+/g, " ").trim(),
+        receiptReady: panel.querySelector(
+          "[data-customer-custom-build-handoff-receipt]"
+        )?.getAttribute("data-customer-custom-build-handoff-receipt") || "",
+        deliveredItems: [...panel.querySelectorAll(
+          ".customer-custom-build-completion-checks li"
+        )].map((entry) => entry.textContent.trim()),
+        error: panel.querySelector(".customer-owner-quote-form-error")
+          ?.textContent.trim() || "",
+        statusFocused: document.activeElement === status,
+      };
+    })()`,
+  );
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+  return {
+    customer,
+    documentBusy,
+    documentKeyboardFocused,
+    finalBusy,
+    finalRefreshKeyboardFocused,
+    initialOwner,
+    ownerAfter,
+    ownerKeyboardFocused,
+    ownerPaymentRead,
+    ownerReadinessRead,
+    ownerRequest,
+    retained,
+    retainedFinal,
+  };
+}
+
+async function customBuildFinalAuthorityRaceJourney(
+  cdp,
+  server,
+  viewport,
+) {
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    "final-race",
+    viewport,
+    "final-authority-race",
+  );
+  await cdp.send("Storage.clearDataForOrigin", {
+    origin: server.origin,
+    storageTypes: "all",
+  });
+  const cookie = await cdp.send("Network.setCookie", {
+    name: PAID_FIXTURE_COOKIE,
+    value: fixtureToken,
+    url: `${server.origin}/`,
+    httpOnly: true,
+    sameSite: "Strict",
+  });
+  if (!cookie.success) throw new Error("Final-authority race cookie was rejected.");
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${server.origin}/abracadabra/app/`);
+  await openHostedAccount(cdp);
+  await waitFor(cdp, `document.querySelector("[data-project-list] button")`);
+  await evaluate(
+    cdp,
+    `document.querySelector("[data-project-list] button").click()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector(
+      "[data-customer-progress-completion-authority=unknown]"
+    ) && document.querySelector("[data-custom-build-active-request]")`,
+  );
+  const unknown = await evaluate(
+    cdp,
+    `(() => {
+      const progress = document.querySelector(
+        "[data-customer-custom-build-progress]"
+      );
+      const change = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      return {
+        progressAuthority: progress.getAttribute(
+          "data-customer-progress-completion-authority"
+        ),
+        responseForms: progress.querySelectorAll(
+          "[data-custom-build-response-form]"
+        ).length,
+        changeAuthority: change.getAttribute(
+          "data-customer-change-completion-authority"
+        ),
+        changeDecisionButtons: [...change.querySelectorAll("button")].filter(
+          (button) => /Accept exact added work|Decline added work/iu.test(
+            button.textContent
+          )
+        ).length,
+      };
+    })()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector(
+      "[data-customer-change-completion-authority=open]"
+    ) && document.querySelector("[data-custom-build-response-form]")
+      && [...document.querySelectorAll(
+        "[data-customer-custom-build-change-completion] button"
+      )].some((button) => button.textContent.includes("Accept exact added work"))`,
+  );
+  const open = await evaluate(
+    cdp,
+    `(() => {
+      const progress = document.querySelector(
+        "[data-customer-custom-build-progress]"
+      );
+      const change = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const buttons = [...change.querySelectorAll("button")];
+      const accept = buttons.find((button) =>
+        button.textContent.includes("Accept exact added work")
+      );
+      const acceptCheck = accept?.parentElement?.querySelector(
+        'input[type="checkbox"]'
+      );
+      globalThis.__ssStaleFinalAuthorityControls = {
+        accept,
+        acceptCheck,
+        responseForm: progress.querySelector("[data-custom-build-response-form]")
+      };
+      return {
+        progressAuthority: progress.getAttribute(
+          "data-customer-progress-completion-authority"
+        ),
+        changeAuthority: change.getAttribute(
+          "data-customer-change-completion-authority"
+        ),
+        responseForms: progress.querySelectorAll(
+          "[data-custom-build-response-form]"
+        ).length,
+        acceptButtons: accept ? 1 : 0,
+      };
+    })()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector(
+      "[data-customer-progress-completion-authority=terminal]"
+    ) && document.querySelector(
+      "[data-customer-change-completion-authority=terminal]"
+    ) && !document.querySelector("[data-custom-build-response-form]")
+      && ![...document.querySelectorAll(
+        "[data-customer-custom-build-change-completion] button"
+      )].some((button) => /Accept exact added work|Decline added work/iu.test(
+        button.textContent
+      )) && document.querySelector(
+        "[data-owner-progress-completion-authority=terminal]"
+      ) && document.querySelector(
+        "[data-owner-change-completion-authority=terminal]"
+      )`,
+  );
+  const priorMutationWrites = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST",
+  ).length;
+  const priorUnexpectedMutationWrites = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST"
+      && !entry.expectedWrite,
+  ).length;
+  const terminal = await evaluate(
+    cdp,
+    `(() => {
+      const retained = globalThis.__ssStaleFinalAuthorityControls || {};
+      if (retained.acceptCheck && retained.accept) {
+        retained.acceptCheck.checked = true;
+        retained.acceptCheck.dispatchEvent(new Event("change", { bubbles: true }));
+        retained.accept.click();
+      }
+      if (retained.responseForm) {
+        const note = retained.responseForm.querySelector('[name="responseNote"]');
+        if (note) note.value = "This stale response must never be sent.";
+        retained.responseForm.dispatchEvent(new Event("submit", {
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+      const progress = document.querySelector(
+        "[data-customer-custom-build-progress]"
+      );
+      const change = document.querySelector(
+        "[data-customer-custom-build-change-completion]"
+      );
+      const owner = document.querySelector("[data-owner-custom-build-work]");
+      const ownerProgress = owner.querySelector("[data-owner-job-progress]");
+      const ownerChange = owner.querySelector(
+        "[data-owner-job-change-completion]"
+      );
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        progressAuthority: progress.getAttribute(
+          "data-customer-progress-completion-authority"
+        ),
+        changeAuthority: change.getAttribute(
+          "data-customer-change-completion-authority"
+        ),
+        responseForms: progress.querySelectorAll(
+          "[data-custom-build-response-form]"
+        ).length,
+        changeDecisionButtons: [...change.querySelectorAll("button")].filter(
+          (button) => /Accept exact added work|Decline added work/iu.test(
+            button.textContent
+          )
+        ).length,
+        customerReadOnlyMarker: change.hasAttribute(
+          "data-customer-change-completion-read-only"
+        ),
+        customerHistoryVisible: Boolean(change.querySelector(
+          "[data-customer-change-order-read-only]"
+        )),
+        customerRefreshCount: document.querySelectorAll(
+          "[data-customer-change-completion-refresh], [data-customer-custom-build-final-refresh]"
+        ).length,
+        progressHistoryVisible: Boolean(progress.querySelector(
+          "[data-custom-build-request-read-only]"
+        )),
+        ownerProgressAuthority: ownerProgress.getAttribute(
+          "data-owner-progress-completion-authority"
+        ),
+        ownerChangeAuthority: ownerChange.getAttribute(
+          "data-owner-change-completion-authority"
+        ),
+        ownerReadOnlyMarkers: owner.querySelectorAll(
+          "[data-owner-progress-read-only], [data-owner-change-completion-read-only]"
+        ).length,
+        ownerMutationForms: owner.querySelectorAll(
+          "[data-owner-progress-form], [data-owner-request-form], [data-owner-resolution-form], [data-owner-change-order-form], [data-owner-change-order-void], [data-owner-change-order-expire], [data-owner-completion-evidence-form], [data-owner-completion-form], [data-owner-custom-build-change-payment-reconcile]"
+        ).length,
+        ownerHistoryVisible: Boolean(owner.querySelector(
+          "[data-owner-active-request], [data-owner-change-order-read-only]"
+        )),
+        ownerRefreshCount: owner.querySelectorAll(
+          "[data-owner-change-completion-refresh], [data-owner-custom-build-final-refresh]"
+        ).length,
+        changeReadOnlyCopy: change.textContent.includes(
+          "Verified completion is immutable"
+        ),
+      };
+    })()`,
+  );
+  await delay(150);
+  const mutationWrites = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST",
+  ).length - priorMutationWrites;
+  const unexpectedMutationWrites = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST"
+      && !entry.expectedWrite,
+  ).length - priorUnexpectedMutationWrites;
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+  return {
+    mutationWrites,
+    open,
+    terminal,
+    unexpectedMutationWrites,
+    unknown,
+  };
 }
 
 await buildHostedArtifact({ root: ROOT });
@@ -2406,12 +3595,23 @@ try {
       || !paid.initial.ownerProgressText.includes(
         "Choose the approved contact wording"
       )
-      || !paid.initial.customerProgressText.includes("Action needed from you")
       || !paid.initial.customerProgressText.includes(
         "Choose the approved contact wording"
       )
       || paid.initial.customerProgressText.includes(PAID_JOB_ID)
       || paid.initial.customerProgressText.includes(PAID_REQUEST_ID)
+      || paid.initial.ownerProgressAuthority !== (
+        mode === "completion" ? "terminal" : "open"
+      )
+      || paid.initial.ownerChangeAuthority !== (
+        mode === "completion" ? "terminal" : "open"
+      )
+      || paid.initial.customerProgressAuthority !== (
+        mode === "completion" ? "terminal" : "open"
+      )
+      || paid.initial.customerChangeAuthority !== (
+        mode === "completion" ? "terminal" : "open"
+      )
       || paid.initial.credentialFields.length
       || paid.initial.moneyOrRefundFields.length
       || paid.initial.customerIdentifierLeaks.length
@@ -2428,7 +3628,13 @@ try {
         )
       ))
       || (mode === "completion" && (
-        !paid.initial.customerChangeText.includes(
+        !paid.initial.ownerProgressText.includes(
+          "Verified completion is immutable"
+        )
+        || !paid.initial.customerProgressText.includes(
+          "Completion is immutable"
+        )
+        || !paid.initial.customerChangeText.includes(
           "Completion proof is prepared"
         )
         || !paid.initial.customerChangeText.includes(
@@ -2444,6 +3650,10 @@ try {
         || !paid.initial.evidenceDimensions.some(
           (entry) => entry.includes("390 × 844 pixels")
         )
+      ))
+      || (mode === "issued" && (
+        !paid.initial.ownerProgressText.includes("Action needed from you")
+        || !paid.initial.customerProgressText.includes("Action needed from you")
       ))
       || requiredMilestones.some(
         (label) => !paid.initial.customerProgressMilestones.some(
@@ -2659,6 +3869,251 @@ try {
     }
   }
 
+  for (const viewport of VIEWPORTS) {
+    for (const mode of ["final-paid", "final-zero"]) {
+      let purposeTwo;
+      try {
+        purposeTwo = await customBuildFinalHandoffJourney(
+          cdp,
+          server,
+          viewport,
+          mode,
+        );
+      } catch (error) {
+        failures.push(
+          `${viewport.label} ${mode} Purpose-2 handoff journey did not complete: `
+            + error.message,
+        );
+        continue;
+      }
+      const {
+        customer,
+        documentBusy,
+        documentKeyboardFocused,
+        finalBusy,
+        finalRefreshKeyboardFocused,
+        initialOwner,
+        ownerAfter,
+        ownerKeyboardFocused,
+        ownerPaymentRead,
+        ownerReadinessRead,
+        ownerRequest,
+        retained,
+        retainedFinal,
+      } = purposeTwo;
+      const expectedDocument = paidHandoffDocument(mode);
+      const body = ownerRequest?.body || {};
+      const bodyKeys = Object.keys(body).sort();
+      const shortControls = [
+        ...initialOwner.controls,
+        ...customer.controls,
+      ].filter(({ height }) => height < 44);
+      if (
+        !initialOwner.formVisible
+        || initialOwner.viewportWidth !== viewport.width
+        || initialOwner.scrollWidth !== initialOwner.viewportWidth
+        || initialOwner.paymentProjectionVisible
+        || !initialOwner.text.includes(
+          "Verified financial clearance is ready for immutable handoff"
+        )
+        || shortControls.length
+        || ownerPaymentRead?.search !==
+          `?organizationId=${encodeURIComponent(PAID_ORGANIZATION_ID)}`
+        || ownerPaymentRead?.fixtureStatus !== 403
+        || ownerReadinessRead?.search !==
+          `?organizationId=${encodeURIComponent(PAID_ORGANIZATION_ID)}`
+        || ownerReadinessRead?.fixtureStatus !== 200
+        || !ownerKeyboardFocused
+        || !ownerRequest
+        || JSON.stringify(bodyKeys) !== JSON.stringify([
+          "commandId",
+          "customerSummary",
+          "deliveryManifest",
+          "expectedCompletionPackageDigest",
+          "expectedFinalObligationDigest",
+          "organizationId",
+        ])
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+          .test(body.commandId || "")
+        || ownerRequest.idempotencyKey !== body.commandId
+        || body.organizationId !== PAID_ORGANIZATION_ID
+        || body.expectedCompletionPackageDigest !== PAID_FINAL_PACKAGE_DIGEST
+        || body.expectedFinalObligationDigest !== PAID_FINAL_OBLIGATION_DIGEST
+        || body.customerSummary !== expectedDocument.payload.customerSummary
+        || JSON.stringify(body.deliveryManifest) !==
+          JSON.stringify(expectedDocument.payload.deliveryManifest)
+        || ownerAfter.handoffFormCount !== 0
+        || ownerAfter.paymentProjectionCount !== 0
+        || !ownerAfter.text.includes(
+          "Immutable handoff created. The 30-day workmanship window now begins."
+        )
+        || !ownerAfter.text.includes("Handoff is immutable")
+      ) {
+        failures.push(
+          `${viewport.label} ${mode} owner handoff authority/input binding failed: `
+            + JSON.stringify({
+              body,
+              initialOwner,
+              ownerAfter,
+              ownerKeyboardFocused,
+              ownerPaymentRead,
+              ownerReadinessRead,
+              shortControls,
+            }),
+        );
+      }
+      const zeroWordingLeak = mode === "final-zero"
+        && /stripe|provider|\bpayment\b/iu
+          .test(customer.finalText);
+      const zeroTransientWordingLeak = mode === "final-zero"
+        && /stripe|provider|\bpayment\b/iu
+          .test([
+            documentBusy,
+            finalBusy,
+            retained.text,
+            retainedFinal.text,
+          ].join(" "));
+      if (
+        customer.viewportWidth !== viewport.width
+        || customer.scrollWidth !== customer.viewportWidth
+        || customer.progressAuthority !== "terminal"
+        || customer.changeAuthority !== "terminal"
+        || customer.responseFormCount !== 0
+        || customer.customerChangeMutationCount !== 0
+        || customer.ownerProgressMutationCount !== 0
+        || customer.ownerChangeMutationCount !== 0
+        || customer.receiptReady !== "ready"
+        || customer.deliveredItems.length !== 2
+        || !customer.finalText.includes(
+          expectedDocument.payload.customerSummary
+        )
+        || !customer.finalText.includes("Website files")
+        || !customer.finalText.includes("Handoff notes")
+        || customer.identifierLeaks.length
+        || customer.workmanshipFacts["Handed off"] !==
+          customer.expectedHandoffAt
+        || customer.workmanshipFacts["Workmanship corrections begin"] !==
+          customer.expectedHandoffAt
+        || customer.workmanshipFacts["Workmanship corrections end"] !==
+          customer.expectedWorkmanshipEndsAt
+        || !customer.workmanshipCoverageCopy
+        || zeroWordingLeak
+        || zeroTransientWordingLeak
+        || (mode === "final-zero" && (
+          !customer.changeText.includes("Ready for delivery")
+          || !customer.finalText.includes("Delivery and workmanship")
+          || !customer.finalText.includes("$0.00 USD")
+          || !customer.finalText.includes("zero-balance clearance")
+        ))
+        || (mode === "final-paid" && (
+          !customer.changeText.includes("Final payment is required before delivery")
+          || !customer.finalText.includes("$600.00 USD")
+          || !customer.finalText.includes("Final payment, delivery, and workmanship")
+          || !customer.finalText.includes(
+            "verified provider-confirmed final-payment clearance"
+          )
+          || !customer.finalText.includes("SSCB-FINAL-")
+        ))
+      ) {
+        failures.push(
+          `${viewport.label} ${mode} customer immutable receipt/terminal layout failed: `
+            + JSON.stringify({
+              ...customer,
+              controls: customer.controls,
+              zeroTransientWordingLeak,
+              zeroWordingLeak,
+            }),
+        );
+      }
+      if (
+        !documentKeyboardFocused
+        || retained.receiptReady !== "ready"
+        || retained.deliveredItemCount !== 2
+        || !retained.error
+        || !retained.statusFocused
+        || !retained.text.includes(expectedDocument.payload.customerSummary)
+        || (mode === "final-paid"
+          && !documentBusy.includes("final-payment"))
+      ) {
+        failures.push(
+          `${viewport.label} ${mode} handoff-document error retention failed: `
+            + JSON.stringify({ documentKeyboardFocused, retained }),
+        );
+      }
+      if (
+        !finalRefreshKeyboardFocused
+        || retainedFinal.receiptReady !== "ready"
+        || retainedFinal.deliveredItems.length !== 2
+        || JSON.stringify(retainedFinal.deliveredItems) !== JSON.stringify([
+          "Website files · Final accepted website deliverables",
+          "Handoff notes · Scope, delivery, and workmanship details",
+        ])
+        || !retainedFinal.error
+        || !retainedFinal.statusFocused
+        || !retainedFinal.text.includes(
+          expectedDocument.payload.customerSummary
+        )
+        || (mode === "final-paid"
+          && !finalBusy.includes("final payment"))
+        || zeroTransientWordingLeak
+      ) {
+        failures.push(
+          `${viewport.label} ${mode} final-state error retained exact document failed: `
+            + JSON.stringify({ finalRefreshKeyboardFocused, retainedFinal }),
+        );
+      }
+    }
+
+    let race;
+    try {
+      race = await customBuildFinalAuthorityRaceJourney(
+        cdp,
+        server,
+        viewport,
+      );
+    } catch (error) {
+      failures.push(
+        `${viewport.label} final-authority delayed race did not complete: `
+          + error.message,
+      );
+      continue;
+    }
+    if (
+      race.unknown.progressAuthority !== "unknown"
+      || race.unknown.changeAuthority !== "unknown"
+      || race.unknown.responseForms !== 0
+      || race.unknown.changeDecisionButtons !== 0
+      || race.open.progressAuthority !== "open"
+      || race.open.changeAuthority !== "open"
+      || race.open.responseForms !== 1
+      || race.open.acceptButtons !== 1
+      || race.terminal.progressAuthority !== "terminal"
+      || race.terminal.changeAuthority !== "terminal"
+      || race.terminal.responseForms !== 0
+      || race.terminal.changeDecisionButtons !== 0
+      || !race.terminal.customerReadOnlyMarker
+      || !race.terminal.customerHistoryVisible
+      || race.terminal.customerRefreshCount < 2
+      || !race.terminal.progressHistoryVisible
+      || race.terminal.ownerProgressAuthority !== "terminal"
+      || race.terminal.ownerChangeAuthority !== "terminal"
+      || race.terminal.ownerReadOnlyMarkers < 2
+      || race.terminal.ownerMutationForms !== 0
+      || !race.terminal.ownerHistoryVisible
+      || race.terminal.ownerRefreshCount < 2
+      || !race.terminal.changeReadOnlyCopy
+      || race.terminal.scrollWidth !== race.terminal.viewportWidth
+      || race.terminal.viewportWidth !== viewport.width
+      || race.mutationWrites !== 0
+      || race.unexpectedMutationWrites !== 0
+    ) {
+      failures.push(
+        `${viewport.label} final-authority rerender/fail-closed race failed: `
+          + JSON.stringify(race),
+      );
+    }
+  }
+
   if (server.missingFiles.length) {
     failures.push(
       `artifact requested missing files: ${JSON.stringify([...new Set(server.missingFiles)])}`,
@@ -2684,7 +4139,32 @@ try {
       && url.endsWith(
         `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
       );
-    return !expectedHeldRead && !expectedUncertainCheckout;
+    const expectedHandoffHeld = text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      && url.includes(
+        `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-handoff`
+      );
+    const expectedPaymentCapabilityDenial = text ===
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      && url.includes(
+        `/api/v1/operator/custom-services/custom-build-jobs/${PAID_JOB_ID}/final-payments`
+      );
+    const expectedDocumentHeld = text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      && url.endsWith(
+        `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-handoff-documents/${PAID_FINAL_DOCUMENT_ID}`
+      );
+    const expectedFinalReadHeld = text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      && url.endsWith(
+        `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-final-handoff`
+      );
+    return !expectedHeldRead
+      && !expectedUncertainCheckout
+      && !expectedHandoffHeld
+      && !expectedPaymentCapabilityDenial
+      && !expectedDocumentHeld
+      && !expectedFinalReadHeld;
   });
   if (unexpectedBrowserErrors.length) {
     failures.push(
@@ -2704,7 +4184,7 @@ try {
   }
   console.log(
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
-      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, issued-change plus ready-completion fixtures, and H1N Purpose-1 customer/owner payment journeys with exact commands, keyboard activation, retained fail-closed errors, and 44px controls at 320×720, 390×844, and 1440×1000.",
+      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, issued-change plus ready-completion fixtures, H1N Purpose-1 customer/owner change-payment journeys, and Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity, retained document and final-state errors, a delayed-authority zero-write race, keyboard activation, and 44px controls at 320×720, 390×844, and 1440×1000.",
   );
 } finally {
   if (cdp) cdp.close();

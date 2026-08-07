@@ -715,6 +715,62 @@ test("custom-services foundation is actor-bound and strictly pre-commerce", asyn
     `);
     assert.deepEqual(cascadingForeignKeys.rows, []);
 
+    const uncreatedHandoffJobId = randomUUID();
+    const handoffBoundary = await client.query(`
+      select
+        ss.hosted_runtime_contract_v47() =
+          'canonical-ss-v47-custom-build-handoff' as exact_marker,
+        relation.relrowsecurity as row_security,
+        relation.relforcerowsecurity as forced_row_security,
+        has_table_privilege(
+          'service_role', relation.oid, 'SELECT'
+        ) as service_select,
+        has_table_privilege(
+          'service_role', relation.oid, 'INSERT'
+        ) as service_insert,
+        has_table_privilege(
+          'service_role', relation.oid, 'UPDATE'
+        ) as service_update,
+        has_table_privilege(
+          'service_role', relation.oid, 'DELETE'
+        ) as service_delete,
+        has_table_privilege(
+          'authenticated', relation.oid, 'SELECT'
+        ) as authenticated_select,
+        has_function_privilege(
+          'service_role',
+          'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)',
+          'EXECUTE'
+        ) as service_callable,
+        has_function_privilege(
+          'authenticated',
+          'ss.create_service_custom_build_handoff(uuid,text,uuid,ss.sha256_hex,ss.sha256_hex,text,jsonb)',
+          'EXECUTE'
+        ) as authenticated_callable,
+        (
+          select count(*)::int
+          from ss.service_custom_build_handoff_receipts
+          where organization_id = $1
+            and job_id = $2
+        ) as handoff_count
+      from pg_class relation
+      where relation.oid =
+        'ss.service_custom_build_handoff_receipts'::regclass
+    `, [authority.organizationId, uncreatedHandoffJobId]);
+    assert.deepEqual(handoffBoundary.rows[0], {
+      exact_marker: true,
+      row_security: true,
+      forced_row_security: true,
+      service_select: true,
+      service_insert: false,
+      service_update: false,
+      service_delete: false,
+      authenticated_select: false,
+      service_callable: true,
+      authenticated_callable: false,
+      handoff_count: 0
+    });
+
     await client.query("savepoint authenticated_denial");
     await client.query("set local role authenticated");
     await assert.rejects(

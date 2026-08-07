@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { deflateSync } from "node:zlib";
 
@@ -43,13 +44,24 @@ import {
 import {
   createPostgresCustomServicesCustomBuildChangePayment
 } from "../../hosted/custom-services-custom-build-change-payment-postgres.mjs";
+import {
+  createPostgresCustomServicesCustomBuildFinalPayment
+} from "../../hosted/custom-services-custom-build-final-payment-postgres.mjs";
+import {
+  createPostgresCustomServicesCustomBuildHandoff
+} from "../../hosted/custom-services-custom-build-handoff-postgres.mjs";
 import { ExternalEffectError } from "../../domain/errors.mjs";
 import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
-import { digest } from "../../hosted/security.mjs";
+import { canonicalJson, digest } from "../../hosted/security.mjs";
 
-const { Pool } = pg;
+const require = createRequire(import.meta.url);
+const {
+  createClient: createAbracadabraClient
+} = require("../../../abracadabra/app/abracadabra-api.js");
+
+const { Client, Pool } = pg;
 const DATABASE_URL =
   process.env.SITESOURCERY_PG_CUSTOM_SERVICE_QUOTES_TEST_URL ??
   process.env.SITESOURCERY_PG_CUSTOM_SERVICES_TEST_URL ??
@@ -145,6 +157,40 @@ function isoAfter({ days = 0, hours = 0 } = {}) {
 
 function dateAfter(days) {
   return isoAfter({ days }).slice(0, 10);
+}
+
+function deliveryManifestAtCanonicalByteCount(targetBytes) {
+  const manifest = {
+    items: Array.from({ length: 40 }, (_, index) => ({
+      label: `Delivery item ${String(index + 1).padStart(2, "0")}`,
+      description: "ok"
+    }))
+  };
+  let remaining = targetBytes - Buffer.byteLength(
+    canonicalJson(manifest),
+    "utf8"
+  );
+  assert.ok(remaining >= 0, "manifest byte target is below its envelope");
+  for (const item of manifest.items) {
+    const capacity = 500 - Array.from(item.description).length;
+    const twoByteCharacters = Math.min(
+      capacity,
+      Math.floor(remaining / 2)
+    );
+    item.description += "é".repeat(twoByteCharacters);
+    remaining -= twoByteCharacters * 2;
+    if (remaining === 1 && twoByteCharacters < capacity) {
+      item.description += "x";
+      remaining -= 1;
+    }
+    if (remaining === 0) break;
+  }
+  assert.equal(remaining, 0, "manifest byte target exceeds bounded fields");
+  assert.equal(
+    Buffer.byteLength(canonicalJson(manifest), "utf8"),
+    targetBytes
+  );
+  return manifest;
 }
 
 function deferred() {
@@ -376,7 +422,16 @@ async function seedCustomerAssessmentRequest(client, authority) {
   };
 }
 
-async function seedOperator(client, label) {
+async function seedOperator(
+  client,
+  label,
+  capabilities = [
+    "service_quote_author",
+    "service_job_manage",
+    "service_document_manage",
+    "service_payment_reconcile"
+  ]
+) {
   const operatorUserId = randomUUID();
   const controlUserId = randomUUID();
   await client.query(
@@ -400,12 +455,7 @@ async function seedOperator(client, label) {
     authorized_by_user_id: controlUserId,
     authorized_at: isoAfter()
   });
-  for (const capability of [
-    "service_quote_author",
-    "service_job_manage",
-    "service_document_manage",
-    "service_payment_reconcile"
-  ]) {
+  for (const capability of capabilities) {
     await insertRow(client, "operator_permissions", {
       operator_user_id: operatorUserId,
       capability,
@@ -506,6 +556,45 @@ async function insertQuoteRevision(
 test("custom-service assessment quotes are exact, append-only, and account-bound", async () => {
   const pool = new Pool({ connectionString: DATABASE_URL, max: 4 });
   const client = await pool.connect();
+  const providerRunToken = randomUUID().replaceAll("-", "_");
+  const providerIds = Object.freeze({
+    assessmentCheckout:
+      `cs_test_service_assessment_1_${providerRunToken}`,
+    assessmentConcurrent:
+      `cs_test_service_assessment_concurrent_${providerRunToken}`,
+    assessmentExpired:
+      `cs_test_service_assessment_expired_${providerRunToken}`,
+    assessmentForeignEvent:
+      `evt_test_service_assessment_foreign_${providerRunToken}`,
+    assessmentLockOrder:
+      `cs_test_service_assessment_lock_order_${providerRunToken}`,
+    assessmentMismatchEvent:
+      `evt_test_service_assessment_mismatch_${providerRunToken}`,
+    assessmentPaymentIntent:
+      `pi_test_service_assessment_settlement_${providerRunToken}`,
+    assessmentPersistence:
+      `cs_test_service_assessment_persistence_${providerRunToken}`,
+    assessmentReplacement:
+      `cs_test_service_assessment_replacement_${providerRunToken}`,
+    assessmentSettlementEvent:
+      `evt_test_service_assessment_settlement_${providerRunToken}`,
+    assessmentSettlementEventAlias:
+      `evt_test_service_assessment_settlement_alias_${providerRunToken}`,
+    assessmentStripeCustomer:
+      `cus_test_service_assessment_settlement_${providerRunToken}`,
+    buildChangeCheckout:
+      `cs_test_custom_build_change_1_${providerRunToken}`,
+    buildChangeEvent:
+      `evt_test_custom_build_change_1_${providerRunToken}`,
+    buildChangePaymentIntent:
+      `pi_test_custom_build_change_1_${providerRunToken}`,
+    buildStartCheckout:
+      `cs_test_custom_build_start_1_${providerRunToken}`,
+    buildStartEvent:
+      `evt_test_custom_build_start_1_${providerRunToken}`,
+    buildStartPaymentIntent:
+      `pi_test_custom_build_start_1_${providerRunToken}`
+  });
   try {
     await client.query("begin");
 
@@ -542,6 +631,11 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     const firstOperatorId = await seedOperator(client, "first");
     const secondOperatorId = await seedOperator(client, "second");
     const thirdOperatorId = await seedOperator(client, "third");
+    const handoffOnlyOperatorId = await seedOperator(
+      client,
+      "handoff-only",
+      ["service_job_manage", "service_document_manage"]
+    );
 
     await client.query("set local role service_role");
     const request = await seedCustomerAssessmentRequest(client, customer);
@@ -1139,7 +1233,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           async createServiceAssessmentCheckout(input) {
             checkoutCalls.push(structuredClone(input));
             return {
-              checkoutId: "cs_test_service_assessment_1",
+              checkoutId: providerIds.assessmentCheckout,
               url:
                 "https://checkout.stripe.com/c/pay/service_assessment_1",
               expiresAt: isoAfter({ hours: 1 })
@@ -1350,7 +1444,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
                   "ASSESSMENT_CHECKOUT_IN_PROGRESS"
             );
             return {
-              checkoutId: "cs_test_service_assessment_concurrent",
+              checkoutId: providerIds.assessmentConcurrent,
               url:
                 "https://checkout.stripe.com/c/pay/service_assessment_concurrent",
               expiresAt: isoAfter({ hours: 1 })
@@ -1464,7 +1558,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           async createServiceAssessmentCheckout() {
             persistenceProviderCalls += 1;
             return {
-              checkoutId: "cs_test_service_assessment_persistence",
+              checkoutId: providerIds.assessmentPersistence,
               url:
                 "https://checkout.stripe.com/c/pay/service_assessment_persistence",
               expiresAt: isoAfter({ hours: 1 })
@@ -1546,13 +1640,13 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       `update ss.service_assessment_checkout_attempts
           set state = 'ready',
               provider_effect_certainty = 'confirmed',
-              checkout_session_id = 'cs_test_service_assessment_expired',
+              checkout_session_id = $2,
               checkout_url =
                 'https://checkout.stripe.com/c/pay/service_assessment_expired',
               expires_at =
                 clock_timestamp() - interval '100 milliseconds'
         where id = $1`,
-      [expiredAttemptId]
+      [expiredAttemptId, providerIds.assessmentExpired]
     );
     const expiredProjection =
       await invoiceRepository.readCurrentInvoice(quoteScope);
@@ -1571,7 +1665,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         expiredProviderCalls += 1;
         return {
           checkoutId:
-            "cs_test_service_assessment_replacement",
+            providerIds.assessmentReplacement,
           url:
             "https://checkout.stripe.com/c/pay/service_assessment_replacement",
           expiresAt: isoAfter({ hours: 1 })
@@ -1584,7 +1678,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         expiredLifecycleCalls += 1;
         assert.equal(
           input.checkoutSessionId,
-          "cs_test_service_assessment_expired"
+          providerIds.assessmentExpired
         );
         return {
           schema:
@@ -1956,7 +2050,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             await releaseProvider.promise;
             return {
               checkoutId:
-                "cs_test_service_assessment_lock_order",
+                providerIds.assessmentLockOrder,
               url:
                 "https://checkout.stripe.com/c/pay/service_assessment_lock_order",
               expiresAt: isoAfter({ hours: 1 })
@@ -2066,10 +2160,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         "sitesourcery.stripe-service-assessment-payment-facts/v1",
       provider: "stripe",
       checkoutSessionId:
-        "cs_test_service_assessment_lock_order",
+        providerIds.assessmentLockOrder,
       paymentIntentId:
-        "pi_test_service_assessment_settlement",
-      customerId: "cus_test_service_assessment_settlement",
+        providerIds.assessmentPaymentIntent,
+      customerId: providerIds.assessmentStripeCustomer,
       paymentStatus: "paid",
       subtotalMinor: 20000,
       taxMinor: 1450,
@@ -2081,7 +2175,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     };
     paymentFacts.providerFactsDigest = digest(paymentFacts);
     const settlementEvent = {
-      id: "evt_test_service_assessment_settlement",
+      id: providerIds.assessmentSettlementEvent,
       type: "checkout.session.completed",
       livemode: false,
       api_version: "2026-06-24.dahlia",
@@ -2090,7 +2184,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       ),
       data: {
         object: {
-          id: "cs_test_service_assessment_lock_order",
+          id: providerIds.assessmentLockOrder,
           metadata: settlementMetadata
         }
       }
@@ -2128,7 +2222,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         settlementReadCalls += 1;
         assert.deepEqual(input, {
           checkoutSessionId:
-            "cs_test_service_assessment_lock_order",
+            providerIds.assessmentLockOrder,
           purpose: retainedPurpose,
           purposeDigest: retainedPurposeDigest
         });
@@ -2171,7 +2265,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     });
     const mismatchEvent = {
       ...settlementEvent,
-      id: "evt_test_service_assessment_mismatch"
+      id: providerIds.assessmentMismatchEvent
     };
     assert.deepEqual(
       await settlement.ingestStripeEvent(mismatchEvent),
@@ -2291,7 +2385,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
 
     const aliasEvent = {
       ...settlementEvent,
-      id: "evt_test_service_assessment_settlement_alias"
+      id: providerIds.assessmentSettlementEventAlias
     };
     assert.deepEqual(
       await settlement.ingestStripeEvent(aliasEvent),
@@ -2325,7 +2419,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
              and desktop_review_included
              and phone_review_included) as jobs`,
       [
-        "cs_test_service_assessment_lock_order",
+        providerIds.assessmentLockOrder,
         retainedPurpose.invoiceId
       ]
     );
@@ -2337,7 +2431,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     });
 
     const foreignEvent = structuredClone(settlementEvent);
-    foreignEvent.id = "evt_test_service_assessment_foreign";
+    foreignEvent.id = providerIds.assessmentForeignEvent;
     foreignEvent.data.object.metadata.tenant_id = randomUUID();
     await assert.rejects(
       settlement.ingestStripeEvent(foreignEvent),
@@ -2908,12 +3002,285 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       acceptedBuild
     );
 
-    // Exercise the positive Site path in one isolated transaction, then roll
-    // it back so the existing quote-void and Card Plus zero-balance journey
-    // continues unchanged. All hosted adapters below share this client.
+    // The second customer is a durable, disjoint Site-build fixture for the
+    // final-settlement-versus-handoff race. It lets the real PostgreSQL
+    // sessions commit their effects without changing the original customer's
+    // quote-void and Card Plus zero-balance journey below.
+    const raceAssessmentScope = {
+      actorId: other.userId,
+      customerId: other.userId,
+      organizationId: other.organizationId,
+      projectId: other.projectId
+    };
+    const raceAssessmentAuthority = {
+      async service(context, work) {
+        const transactionClient = await pool.connect();
+        try {
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          const selectedActorKind =
+            context.actorKind ??
+            (context.userId === secondOperatorId
+              ? "operator"
+              : "customer");
+          const selectedUserId =
+            context.userId ?? other.userId;
+          await setActor(
+            transactionClient,
+            selectedActorKind,
+            {
+              organizationId:
+                context.organizationId ?? other.organizationId,
+              userId: selectedUserId
+            },
+            selectedUserId
+          );
+          const result = await work(transactionClient);
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
+      }
+    };
+    const raceQuoteRepository =
+      createPostgresCustomServicesAssessmentQuoteRepository({
+        authority: raceAssessmentAuthority
+      });
+    const raceQuoteSnapshot =
+      await raceQuoteRepository.readCurrentQuote(raceAssessmentScope);
+    const raceQuoteProjection = projectCustomServicesAssessmentQuote({
+      scope: raceAssessmentScope,
+      snapshot: raceQuoteSnapshot
+    });
+    assert.equal(raceQuoteProjection.state, "review_required");
+    await raceQuoteRepository.acceptCurrentQuote({
+      ...raceAssessmentScope,
+      acceptanceStatement: "accepted_exact_quote_and_delivery_date",
+      acceptedDisclosureDigest:
+        raceQuoteProjection.quote.disclosureDigest,
+      acceptedQuoteDigest: raceQuoteProjection.quote.quoteDigest,
+      commandId: `v47-race-assessment-accept-${randomUUID()}`,
+      quoteId: raceQuoteProjection.quote.quoteId,
+      quoteRevision: raceQuoteProjection.quote.revision
+    });
+    const raceInvoiceRepository =
+      createPostgresCustomServicesInvoiceRepository({
+        authority: raceAssessmentAuthority,
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    const raceAssessmentInvoice =
+      await raceInvoiceRepository.readCurrentInvoice(raceAssessmentScope);
+    let raceAssessmentPurpose = null;
+    const raceAssessmentSessionId =
+      `cs_test_v47_race_assessment_${randomUUID().replaceAll("-", "_")}`;
+    const raceAssessmentPaymentIntentId =
+      `pi_test_v47_race_assessment_${randomUUID().replaceAll("-", "_")}`;
+    const raceAssessmentStripeCustomerId = foreignFinalStripeCustomerId;
+    const raceAssessmentEventId =
+      `evt_test_v47_race_assessment_${randomUUID().replaceAll("-", "_")}`;
+    const raceAssessmentPayment =
+      createPostgresCustomServicesAssessmentPayment({
+        authority: raceAssessmentAuthority,
+        provider: {
+          async createServiceAssessmentCheckout(input) {
+            raceAssessmentPurpose = structuredClone(input.purpose);
+            return {
+              checkoutId: raceAssessmentSessionId,
+              url:
+                "https://checkout.stripe.com/c/pay/v47_race_assessment",
+              expiresAt: isoAfter({ hours: 1 })
+            };
+          }
+        },
+        release: APPROVED_ASSESSMENT_PAYMENT_RELEASE
+      });
+    await raceAssessmentPayment.createCheckout({
+      ...raceAssessmentScope,
+      commandId: `v47-race-assessment-checkout-${randomUUID()}`,
+      invoiceId: raceAssessmentInvoice.invoice.invoiceId,
+      invoiceDigest: raceAssessmentInvoice.invoice.invoiceDigest
+    });
+    assert.ok(raceAssessmentPurpose);
+    const raceAssessmentPurposeDigest = digest(raceAssessmentPurpose);
+    const raceAssessmentSettledAt = new Date().toISOString();
+    const raceAssessmentProviderPaidAt = new Date(
+      Date.parse(raceAssessmentSettledAt) - 1000
+    ).toISOString();
+    const raceAssessmentPaymentFacts = {
+      schema:
+        "sitesourcery.stripe-service-assessment-payment-facts/v1",
+      provider: "stripe",
+      checkoutSessionId: raceAssessmentSessionId,
+      paymentIntentId: raceAssessmentPaymentIntentId,
+      customerId: raceAssessmentStripeCustomerId,
+      paymentStatus: "paid",
+      subtotalMinor: 20000,
+      taxMinor: 1600,
+      totalMinor: 21600,
+      taxMode: "automatic",
+      currency: "USD",
+      purposeDigest: raceAssessmentPurposeDigest,
+      providerPaymentTime: raceAssessmentProviderPaidAt
+    };
+    raceAssessmentPaymentFacts.providerFactsDigest = digest(
+      raceAssessmentPaymentFacts
+    );
+    const raceAssessmentSettlement =
+      createPostgresCustomServicesAssessmentSettlement({
+        authority: raceAssessmentAuthority,
+        provider: {
+          async retrieveServiceAssessmentPayment() {
+            return structuredClone(raceAssessmentPaymentFacts);
+          },
+          async retrieveServiceAssessmentCheckoutLifecycle() {
+            throw new Error(
+              "v47 race assessment settlement must use payment readback"
+            );
+          }
+        },
+        clock: { now: () => raceAssessmentSettledAt },
+        ids: { next: () => randomUUID() }
+      });
+    const raceAssessmentSettlementReceipt =
+      await raceAssessmentSettlement.ingestStripeEvent({
+        id: raceAssessmentEventId,
+        type: "checkout.session.completed",
+        livemode: false,
+        api_version: "2026-06-24.dahlia",
+        created: Math.floor(
+          (Date.parse(raceAssessmentSettledAt) - 500) / 1000
+        ),
+        data: {
+          object: {
+            id: raceAssessmentSessionId,
+            metadata: {
+              schema: "sitesourcery_service_assessment_checkout_v1",
+              tenant_id: raceAssessmentPurpose.tenantId,
+              customer_id: raceAssessmentPurpose.customerId,
+              project_id: raceAssessmentPurpose.projectId,
+              invoice_id: raceAssessmentPurpose.invoiceId,
+              invoice_number: raceAssessmentPurpose.invoiceNumber,
+              quote_id: raceAssessmentPurpose.quoteId,
+              accepted_disclosure_digest:
+                raceAssessmentPurpose.acceptedDisclosureDigest,
+              invoice_digest: raceAssessmentPurpose.invoiceDigest,
+              purpose_digest: raceAssessmentPurposeDigest
+            }
+          }
+        }
+      });
+    assert.equal(
+      raceAssessmentSettlementReceipt.status,
+      "payment_settled"
+    );
+    const raceAssessmentWork =
+      createPostgresCustomServicesAssessmentWork({
+        authority: raceAssessmentAuthority,
+        clock: { now: () => raceAssessmentSettledAt },
+        randomUUID
+      });
+    const raceAssessmentJobs =
+      await raceAssessmentWork.listJobs(operatorActor);
+    const raceAssessmentJob = raceAssessmentJobs.jobs.find(
+      (entry) => entry.jobId === raceAssessmentSettlementReceipt.jobId
+    );
+    assert.ok(raceAssessmentJob);
+    for (const reviewTarget of raceAssessmentJob.scope.reviewTargets) {
+      for (const viewport of ["desktop", "phone"]) {
+        await raceAssessmentWork.uploadEvidence(
+          operatorActor,
+          raceAssessmentJob.jobId,
+          {
+            accessibleDescription:
+              `V47 race fixture ${viewport} proof for ` +
+              `${reviewTarget.kind} ${reviewTarget.value}.`,
+            bytesBase64: evidenceBytes.toString("base64"),
+            commandId: `v47-race-assessment-evidence-${randomUUID()}`,
+            mediaType: "image/png",
+            organizationId: other.organizationId,
+            reviewTarget,
+            viewport
+          }
+        );
+      }
+    }
+    const raceAssessmentReadyJobs =
+      await raceAssessmentWork.listJobs(operatorActor);
+    const raceAssessmentReadyJob = raceAssessmentReadyJobs.jobs.find(
+      (entry) => entry.jobId === raceAssessmentJob.jobId
+    );
+    assert.ok(raceAssessmentReadyJob);
+    const raceAssessmentDelivery =
+      await raceAssessmentWork.deliverReport(
+        operatorActor,
+        raceAssessmentJob.jobId,
+        {
+          commandId: `v47-race-assessment-delivery-${randomUUID()}`,
+          expectedWorkDigest: raceAssessmentReadyJob.workDigest,
+          organizationId: other.organizationId,
+          overallSummary:
+            "The isolated V47 Site-build fixture has complete desktop and phone assessment evidence."
+        }
+      );
+    assert.equal(raceAssessmentDelivery.credit.amountMinor, 20000);
+
+    const raceBuildIssue = {
+      commandId: `v47-race-custom-build-issue-${randomUUID()}`,
+      organizationId: other.organizationId,
+      tierId: "site",
+      craftedPages: 4,
+      sections: 16,
+      uniqueLayouts: 4,
+      contentWords: 1800,
+      suppliedMedia: 12,
+      scopeStatement:
+        "Build the isolated four-page Site fixture for the final settlement and handoff race.",
+      targetCompletionDate: dateAfter(45),
+      expiresAt: isoAfter({ days: 14 })
+    };
+    const raceIssuedBuild = await customBuild.issueQuote(
+      operatorActor,
+      raceAssessmentJob.jobId,
+      raceBuildIssue
+    );
+    const raceCustomerBuildIssued = await customBuild.readCurrentQuote(
+      raceAssessmentScope
+    );
+    const raceAcceptedBuild = await customBuild.acceptCurrentQuote({
+      ...raceAssessmentScope,
+      acceptanceStatement: "accepted_exact_custom_build_quote",
+      acceptedDisclosureDigest:
+        raceCustomerBuildIssued.quote.disclosureDigest,
+      acceptedQuoteDigest: raceCustomerBuildIssued.quote.quoteDigest,
+      commandId: `v47-race-custom-build-accept-${randomUUID()}`,
+      quoteId: raceCustomerBuildIssued.quote.quoteId,
+      quoteRevision: raceCustomerBuildIssued.quote.quoteRevision
+    });
+    assert.equal(raceIssuedBuild.quote.pricing.finalDueMinor, 60000);
+    assert.equal(raceAcceptedBuild.state, "accepted");
+    const positiveDigestForeignCustomerId = customer.userId;
+    assert.notEqual(
+      positiveDigestForeignCustomerId,
+      other.userId,
+      "positive final-obligation digest proof requires distinct customers"
+    );
+
+    // Materialize this disjoint positive Site path, commit its pending final
+    // evidence, then coordinate its settlement and handoff from independent
+    // PostgreSQL transactions below.
     await client.query("begin");
     await client.query("set local role service_role");
     try {
+      const customer = other;
+      const customerAssessmentScope = raceAssessmentScope;
+      const issuedBuild = raceIssuedBuild;
+      const paidJob = raceAssessmentJob;
+      const foreignFinalStripeCustomerId =
+        providerIds.assessmentStripeCustomer;
       const positiveAuthority = {
         async service(context, work) {
           await setActor(
@@ -2936,7 +3303,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         `pi_test_v46_positive_start_${randomUUID().replaceAll("-", "_")}`;
       const positiveStartEventId =
         `evt_test_v46_positive_start_${randomUUID().replaceAll("-", "_")}`;
-      const positiveCustomerId = "cus_test_service_assessment_settlement";
+      const positiveCustomerId = raceAssessmentStripeCustomerId;
       const positiveStartProvider = {
         async createCustomBuildStartCheckout(input) {
           positiveStartPurpose = structuredClone(input.purpose);
@@ -3073,10 +3440,52 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       );
       assert.equal(positiveChecking.progress.revision, 1);
 
+      const positiveEvidenceCapturedAt = new Date(
+        Date.parse(positiveChecking.progress.updatedAt) + 1
+      ).toISOString();
       const positiveCompletion =
         createPostgresCustomServicesCustomBuildChangeCompletion({
-          authority: positiveAuthority
+          authority: positiveAuthority,
+          // PostgreSQL retains microseconds while the projection intentionally
+          // returns milliseconds. One millisecond after the projected boundary
+          // remains deterministic and cannot fall before retained progress.
+          clock: { now: () => positiveEvidenceCapturedAt }
         });
+      const positiveEvidenceBoundary = await client.query(
+        `select
+           job.state as job_state,
+           progress.stage as progress_stage,
+           progress.recorded_at <= $2::timestamptz as captured_after_progress,
+           $2::timestamptz <= clock_timestamp() as captured_not_future,
+           not exists (
+             select 1
+             from ss.service_custom_build_completion_packages package
+             where package.organization_id = job.organization_id
+               and package.job_id = job.id
+           ) as completion_absent
+         from ss.service_custom_build_jobs job
+         left join lateral (
+           select candidate.stage, candidate.recorded_at
+           from ss.service_custom_build_progress_updates candidate
+           where candidate.organization_id = job.organization_id
+             and candidate.job_id = job.id
+           order by candidate.revision desc
+           limit 1
+         ) progress on true
+         where job.organization_id = $1 and job.id = $3`,
+        [
+          customer.organizationId,
+          positiveEvidenceCapturedAt,
+          positiveJobId
+        ]
+      );
+      assert.deepEqual(positiveEvidenceBoundary.rows, [{
+        job_state: "open",
+        progress_stage: "checking",
+        captured_after_progress: true,
+        captured_not_future: true,
+        completion_absent: true
+      }]);
       const positiveDesktop = await positiveCompletion.uploadEvidence(
         operatorActor,
         positiveJobId,
@@ -3170,6 +3579,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       const customerBoundDigest = await client.query(
         `select
            obligation_digest,
+           customer_user_id,
+           $2::uuid as alternate_customer_user_id,
            ss.custom_build_final_obligation_digest(
              organization_id,
              project_id,
@@ -3220,7 +3631,19 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
            ) as other_customer_digest
          from ss.service_custom_build_final_obligations
          where id = $1`,
-        [positiveFinalRow.obligation_id, other.userId]
+        [positiveFinalRow.obligation_id, positiveDigestForeignCustomerId]
+      );
+      assert.equal(
+        customerBoundDigest.rows[0].customer_user_id,
+        customer.userId
+      );
+      assert.equal(
+        customerBoundDigest.rows[0].alternate_customer_user_id,
+        positiveDigestForeignCustomerId
+      );
+      assert.notEqual(
+        customerBoundDigest.rows[0].alternate_customer_user_id,
+        customerBoundDigest.rows[0].customer_user_id
       );
       assert.equal(
         customerBoundDigest.rows[0].exact_customer_digest,
@@ -3285,6 +3708,54 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         `pi_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
       const finalChargeId =
         `ch_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
+      const positiveHandoffCommandId =
+        `custom-build-v47-handoff-${randomUUID()}`;
+      const positiveHandoffSummary =
+        "The completed Site build, final review evidence, and customer delivery files are ready in one immutable handoff.";
+      const positiveDeliveryManifest = {
+        items: [
+          {
+            label: "Production website package",
+            description:
+              "The reviewed production website and its launch-ready files."
+          },
+          {
+            label: "Final review notes",
+            description:
+              "Plain-language delivery, maintenance, and final review notes."
+          }
+        ]
+      };
+      const positiveHandoffSql =
+        `select *
+         from ss.create_service_custom_build_handoff(
+           $1, $2, $3, $4, $5, $6, $7::jsonb
+         )`;
+      const positiveHandoffParameters = (
+        deliveryManifest = positiveDeliveryManifest,
+        commandId = positiveHandoffCommandId,
+        customerSummary = positiveHandoffSummary
+      ) => [
+        positiveJobId,
+        commandId,
+        customer.organizationId,
+        positiveFinalRow.completion_package_digest,
+        positiveFinalRow.obligation_digest,
+        customerSummary,
+        JSON.stringify(deliveryManifest)
+      ];
+      const createPositiveHandoff = (
+        deliveryManifest = positiveDeliveryManifest,
+        commandId = positiveHandoffCommandId,
+        customerSummary = positiveHandoffSummary
+      ) => client.query(
+        positiveHandoffSql,
+        positiveHandoffParameters(
+          deliveryManifest,
+          commandId,
+          customerSummary
+        )
+      );
 
       await setActor(client, "customer", customer);
       await client.query(
@@ -3370,6 +3841,13 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         signature_verified_at: signatureVerifiedAt,
         state: "pending"
       });
+      await setActor(client, "operator", customer, secondOperatorId);
+      await expectRejected(
+        client,
+        createPositiveHandoff,
+        /lacks exact completion and financial clearance/iu
+      );
+      await setActor(client, "system", customer);
       const finalProviderPaidAt = new Date().toISOString();
       const finalProviderFactsWithoutDigest = {
         schema: "sitesourcery.stripe-custom-build-final-payment-facts/v1",
@@ -3463,11 +3941,510 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         ),
         /service_custom_build_final_receipt_stripe_customer_org_fk/iu
       );
+
+      await setActor(client, "operator", customer, secondOperatorId);
+      const runningReconciliationId = randomUUID();
+      const runningReconciliationCommandId =
+        `custom-build-v47-final-reconcile-${randomUUID()}`;
+      const runningRequestDigest = await client.query(
+        `select ss.custom_build_final_reconciliation_request_digest(
+           $1, $2, $3, $4, $5
+         ) as digest`,
+        [
+          secondOperatorId,
+          customer.organizationId,
+          positiveJobId,
+          finalAttemptId,
+          runningReconciliationCommandId
+        ]
+      );
       await insertRow(
         client,
-        "service_custom_build_final_payment_receipts",
-        finalReceipt
+        "service_custom_build_final_reconciliation_commands",
+        {
+          id: runningReconciliationId,
+          organization_id: customer.organizationId,
+          job_id: positiveJobId,
+          checkout_attempt_id: finalAttemptId,
+          operator_user_id: secondOperatorId,
+          command_id: runningReconciliationCommandId,
+          request_digest: runningRequestDigest.rows[0].digest,
+          state: "running"
+        }
       );
+      await expectRejected(
+        client,
+        createPositiveHandoff,
+        /lacks exact completion and financial clearance/iu
+      );
+
+      const manifestAtLimit = deliveryManifestAtCanonicalByteCount(
+        30 * 1024
+      );
+      const manifestOverLimit = deliveryManifestAtCanonicalByteCount(
+        30 * 1024 + 1
+      );
+      const manifestBoundary = await client.query(
+        `select
+           ss.service_custom_build_handoff_manifest_is_valid(
+             $1::jsonb
+           ) as at_limit,
+           ss.service_custom_build_handoff_manifest_is_valid(
+             $2::jsonb
+           ) as over_limit`,
+        [JSON.stringify(manifestAtLimit), JSON.stringify(manifestOverLimit)]
+      );
+      assert.deepEqual(manifestBoundary.rows[0], {
+        at_limit: true,
+        over_limit: false
+      });
+
+      for (const [name, manifest] of [
+        [
+          "extra-top-level",
+          {
+            ...positiveDeliveryManifest,
+            launchUrl: "https://customer.example.com/"
+          }
+        ],
+        [
+          "wrong-item-keys",
+          {
+            items: [{
+              label: "Production website package",
+              path: "delivery/site-production.zip"
+            }]
+          }
+        ],
+        [
+          "extra-item-key",
+          {
+            items: [{
+              ...positiveDeliveryManifest.items[0],
+              type: "website_archive"
+            }]
+          }
+        ],
+        [
+          "duplicate-portable-label",
+          {
+            items: [
+              {
+                label: "Production package",
+                description: "The first customer delivery item."
+              },
+              {
+                label: "production package",
+                description: "The second customer delivery item."
+              }
+            ]
+          }
+        ],
+        [
+          "over-canonical-byte-limit",
+          manifestOverLimit
+        ],
+        [
+          "raw-provider-identifier",
+          {
+            items: [{
+              label: "Receipt evt_test_customer_leak_123456",
+              description: "The reviewed customer delivery item."
+            }]
+          }
+        ],
+        [
+          "bearer-token",
+          {
+            items: [{
+              label: "Production package",
+              description:
+                "Use Bearer abcdefghijklmnopqrstuvwxyz for delivery."
+            }]
+          }
+        ]
+      ]) {
+        await expectRejected(
+          client,
+          () => createPositiveHandoff(
+            manifest,
+            `custom-build-v47-invalid-${name}-${randomUUID()}`
+          ),
+          /handoff input lacks bounded owner authority/iu
+        );
+      }
+      for (const [name, summary] of [
+        [
+          "query-token",
+          "Open the customer delivery with ?token=customer-secret-value."
+        ],
+        [
+          "raw-provider",
+          "The customer reference is cs_test_customer_leak_123456."
+        ]
+      ]) {
+        await expectRejected(
+          client,
+          () => createPositiveHandoff(
+            positiveDeliveryManifest,
+            `custom-build-v47-invalid-summary-${name}-${randomUUID()}`,
+            summary
+          ),
+          /handoff input lacks bounded owner authority/iu
+        );
+      }
+      for (const commandId of [
+        " handoff-padded-command ",
+        "handoff-secret-command",
+        "handoff-cs_test_customer_leak_123456"
+      ]) {
+        await expectRejected(
+          client,
+          () => createPositiveHandoff(
+            positiveDeliveryManifest,
+            commandId
+          ),
+          /handoff input lacks bounded owner authority/iu
+        );
+      }
+
+      // Commit the pending final-payment evidence so independent sessions can
+      // observe one exact job. A gate transaction queues handoff first and
+      // settlement second on the shared H1M key. The settlement transaction
+      // then stays open after its receipt write while the successful handoff
+      // retry queues behind it. This proves both orderings without sleeps.
+      await client.query("commit");
+      const exactHandoffCapabilities = await client.query(
+        `select
+           ss.service_operator_has_capability(
+             $1, 'service_job_manage', clock_timestamp()
+           ) as job_manage,
+           ss.service_operator_has_capability(
+             $1, 'service_document_manage', clock_timestamp()
+           ) as document_manage,
+           ss.service_operator_has_capability(
+             $1, 'service_payment_reconcile', clock_timestamp()
+           ) as payment_reconcile`,
+        [handoffOnlyOperatorId]
+      );
+      assert.deepEqual(exactHandoffCapabilities.rows, [{
+        job_manage: true,
+        document_manage: true,
+        payment_reconcile: false
+      }]);
+      const handoffOnlyAuthority = {
+        async service(context, work) {
+          const transactionClient = await pool.connect();
+          try {
+            await transactionClient.query("begin");
+            await transactionClient.query("set local role service_role");
+            await setActor(
+              transactionClient,
+              context.actorKind,
+              customer,
+              context.userId
+            );
+            const result = await work(transactionClient);
+            await transactionClient.query("commit");
+            return result;
+          } catch (error) {
+            await transactionClient.query("rollback").catch(() => {});
+            throw error;
+          } finally {
+            transactionClient.release();
+          }
+        }
+      };
+      const handoffOnlyBoundary =
+        createPostgresCustomServicesCustomBuildHandoff({
+          authority: handoffOnlyAuthority
+        });
+      const handoffOnlyReadiness = await handoffOnlyBoundary.readOwner(
+        { userId: handoffOnlyOperatorId },
+        positiveJobId,
+        customer.organizationId
+      );
+      assert.equal(
+        handoffOnlyReadiness.state,
+        "payment_reconciliation_required"
+      );
+      assert.equal(
+        handoffOnlyReadiness.action.handoffAvailable,
+        false
+      );
+      assert.deepEqual(
+        Object.keys(handoffOnlyReadiness).sort(),
+        [
+          "action",
+          "completion",
+          "finalObligation",
+          "financialClearance",
+          "handoff",
+          "jobId",
+          "organizationId",
+          "projectId",
+          "schema",
+          "state"
+        ]
+      );
+      const readinessKeys = [];
+      const collectReadinessKeys = (value) => {
+        if (!value || typeof value !== "object") return;
+        for (const [key, selected] of Object.entries(value)) {
+          readinessKeys.push(key);
+          collectReadinessKeys(selected);
+        }
+      };
+      collectReadinessKeys(handoffOnlyReadiness);
+      assert.deepEqual(
+        readinessKeys.filter((key) => [
+          "attemptId",
+          "attemptState",
+          "checkoutSessionId",
+          "eventId",
+          "eventState",
+          "paymentIntentId",
+          "provider",
+          "providerEffectCertainty",
+          "providerErrorCode",
+          "reconciliationCode",
+          "receiptSource"
+        ].includes(key)),
+        [],
+        "handoff readiness leaked payment lifecycle or provider fields"
+      );
+      const reconcileOnlyBoundary =
+        createPostgresCustomServicesCustomBuildFinalPayment({
+          authority: handoffOnlyAuthority,
+          provider: {
+            async createCustomBuildFinalCheckout() {
+              throw new Error("capability denial must precede Checkout");
+            },
+            async retrieveCustomBuildFinalPayment() {
+              throw new Error("capability denial must precede readback");
+            },
+            async retrieveCustomBuildFinalCheckoutLifecycle() {
+              throw new Error("capability denial must precede lifecycle");
+            }
+          },
+          release: {
+            approved: false,
+            currency: "USD",
+            holdScope: "new_checkout_creation_only",
+            providerEffectProcessing:
+              "settlement_and_reconciliation_continue",
+            taxMode: "automatic"
+          }
+        });
+      await assert.rejects(
+        reconcileOnlyBoundary.readOwnerFinalPayments(
+          { userId: handoffOnlyOperatorId },
+          positiveJobId,
+          customer.organizationId
+        ),
+        (error) =>
+          error.code === "CUSTOM_BUILD_FINAL_PAYMENT_UNAVAILABLE" &&
+          error.status === 404
+      );
+
+      const pendingHandoffEntered = deferred();
+      const settlementEntered = deferred();
+      const settlementWritten = deferred();
+      const releaseSettlement = deferred();
+      const retryHandoffEntered = deferred();
+      const runPositiveHandoff = async (entered) => {
+        const transactionClient = new Client({
+          connectionString: DATABASE_URL
+        });
+        try {
+          await transactionClient.connect();
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          await setActor(
+            transactionClient,
+            "operator",
+            customer,
+            handoffOnlyOperatorId
+          );
+          const backend = await transactionClient.query(
+            "select pg_backend_pid()::int as pid"
+          );
+          entered.resolve(backend.rows[0].pid);
+          const result = await transactionClient.query(
+            positiveHandoffSql,
+            positiveHandoffParameters()
+          );
+          await transactionClient.query("set constraints all immediate");
+          await transactionClient.query("commit");
+          return result;
+        } catch (error) {
+          entered.reject(error);
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          await transactionClient.end().catch(() => {});
+        }
+      };
+      const runFinalSettlement = async () => {
+        const transactionClient = new Client({
+          connectionString: DATABASE_URL
+        });
+        try {
+          await transactionClient.connect();
+          await transactionClient.query("begin");
+          await transactionClient.query("set local role service_role");
+          await setActor(transactionClient, "system", customer);
+          const backend = await transactionClient.query(
+            "select pg_backend_pid()::int as pid"
+          );
+          settlementEntered.resolve(backend.rows[0].pid);
+          // The production receipt trigger discovers the immutable job and
+          // acquires the shared H1M lock. Do not pre-lock it in test code: the
+          // blocked PID below must prove the real settlement mutation waits.
+          await insertRow(
+            transactionClient,
+            "service_custom_build_final_payment_receipts",
+            finalReceipt
+          );
+          await setActor(
+            transactionClient,
+            "operator",
+            customer,
+            secondOperatorId
+          );
+          await transactionClient.query(
+            `update ss.service_custom_build_final_reconciliation_commands
+             set state = 'completed',
+                 result = jsonb_build_object(
+                   'schema',
+                   'sitesourcery.custom-build-final-reconciliation/v1',
+                   'status',
+                   'payment_already_settled'
+                 ),
+                 result_digest = ss.service_json_digest(
+                   jsonb_build_object(
+                     'schema',
+                     'sitesourcery.custom-build-final-reconciliation/v1',
+                     'status',
+                     'payment_already_settled'
+                   )
+                 ),
+                 completed_at = clock_timestamp()
+             where id = $1`,
+            [runningReconciliationId]
+          );
+          await transactionClient.query("set constraints all immediate");
+          settlementWritten.resolve();
+          await releaseSettlement.promise;
+          await transactionClient.query("commit");
+          return finalReceipt.id;
+        } catch (error) {
+          settlementEntered.reject(error);
+          settlementWritten.reject(error);
+          await transactionClient.query("rollback").catch(() => {});
+          throw error;
+        } finally {
+          await transactionClient.end().catch(() => {});
+        }
+      };
+
+      let raceGateOpen = false;
+      let positiveHandoff;
+      let settlementPromise;
+      let retryHandoffPromise;
+      try {
+        await client.query("begin");
+        raceGateOpen = true;
+        await client.query(
+          `select pg_advisory_xact_lock(
+             hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+           )`,
+          [positiveJobId]
+        );
+        const pendingHandoffPromise = runPositiveHandoff(
+          pendingHandoffEntered
+        );
+        pendingHandoffPromise.catch(() => {});
+        const pendingHandoffPid = await within(
+          pendingHandoffEntered.promise,
+          "pending handoff transaction did not start",
+          15_000
+        );
+        assert.equal(
+          await waitForDatabaseLock(client, pendingHandoffPid),
+          true,
+          "pending handoff did not queue on the shared H1M lock"
+        );
+
+        settlementPromise = runFinalSettlement();
+        settlementPromise.catch(() => {});
+        const settlementPid = await within(
+          settlementEntered.promise,
+          "final settlement transaction did not start",
+          15_000
+        );
+        assert.equal(
+          await waitForDatabaseLock(client, settlementPid),
+          true,
+          "final settlement did not queue behind pending handoff"
+        );
+
+        await client.query("commit");
+        raceGateOpen = false;
+        await assert.rejects(
+          within(
+            pendingHandoffPromise,
+            "pending handoff did not reject before settlement",
+            15_000
+          ),
+          /lacks exact completion and financial clearance/iu
+        );
+        await within(
+          settlementWritten.promise,
+          "final settlement did not write verified evidence",
+          15_000
+        );
+
+        retryHandoffPromise = runPositiveHandoff(
+          retryHandoffEntered
+        );
+        retryHandoffPromise.catch(() => {});
+        const retryHandoffPid = await within(
+          retryHandoffEntered.promise,
+          "post-settlement handoff retry did not start",
+          15_000
+        );
+        assert.equal(
+          await waitForDatabaseLock(client, retryHandoffPid),
+          true,
+          "handoff retry did not queue behind the open settlement"
+        );
+        releaseSettlement.resolve();
+        assert.equal(
+          await within(
+            settlementPromise,
+            "final settlement did not commit",
+            15_000
+          ),
+          finalReceipt.id
+        );
+        positiveHandoff = await within(
+          retryHandoffPromise,
+          "handoff retry did not commit after settlement",
+          15_000
+        );
+      } finally {
+        releaseSettlement.resolve();
+        if (raceGateOpen) {
+          await client.query("rollback").catch(() => {});
+        }
+        await settlementPromise?.catch(() => {});
+        await retryHandoffPromise?.catch(() => {});
+      }
+
+      await client.query("begin");
+      await client.query("set local role service_role");
+      await setActor(client, "system", customer);
       const positiveSettlement = await client.query(
         `select
            attempt.state as attempt_state,
@@ -3495,6 +4472,395 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         disputed: false,
         claim_count: 3
       });
+      const reconciledCommand = await client.query(
+        `select state
+           from ss.service_custom_build_final_reconciliation_commands
+          where id = $1`,
+        [runningReconciliationId]
+      );
+      assert.deepEqual(reconciledCommand.rows, [{ state: "completed" }]);
+
+      assert.equal(positiveHandoff.rowCount, 1);
+      assert.match(
+        positiveHandoff.rows[0].handoff_digest,
+        /^[0-9a-f]{64}$/u
+      );
+      assert.equal(
+        positiveHandoff.rows[0].workmanship_starts_at.toISOString(),
+        positiveHandoff.rows[0].handed_off_at.toISOString()
+      );
+      assert.equal(
+        positiveHandoff.rows[0].workmanship_ends_at.getTime() -
+          positiveHandoff.rows[0].workmanship_starts_at.getTime(),
+        30 * 24 * 60 * 60 * 1000
+      );
+      await client.query("set constraints all immediate");
+
+      const positiveHandoffStored = await client.query(
+        `select
+           receipt.*,
+           document.document_kind,
+           document.object_key,
+           document.visibility,
+           document.retention_class,
+           document.media_type,
+           document.byte_count,
+           payload.content_digest as payload_digest,
+           payload.byte_count as payload_byte_count,
+           payload.payload as payload_bytes,
+           convert_from(payload.payload, 'UTF8')::jsonb as payload_json
+         from ss.service_custom_build_handoff_receipts receipt
+         join ss.service_documents document
+           on document.organization_id = receipt.organization_id
+          and document.id = receipt.document_id
+         join ss.service_document_payloads payload
+           on payload.organization_id = receipt.organization_id
+          and payload.document_id = receipt.document_id
+         where receipt.id = $1`,
+        [positiveHandoff.rows[0].receipt_id]
+      );
+      assert.equal(positiveHandoffStored.rowCount, 1);
+      const positiveHandoffRow = positiveHandoffStored.rows[0];
+      const positiveRaceCounts = await client.query(
+        `select
+           (select count(*)::int
+              from ss.service_custom_build_final_payment_receipts
+             where job_id = $1) as payment_receipts,
+           (select count(*)::int
+              from ss.service_custom_build_handoff_receipts
+             where job_id = $1) as handoff_receipts,
+           (select count(*)::int
+              from ss.service_documents document
+             where document.organization_id = $2
+               and document.project_id = $3
+               and document.document_kind = 'handoff'
+               and document.object_key like $4) as documents,
+           (select count(*)::int
+              from ss.service_document_payloads payload
+              join ss.service_custom_build_handoff_receipts receipt
+                on receipt.organization_id = payload.organization_id
+               and receipt.document_id = payload.document_id
+             where receipt.job_id = $1) as payloads`,
+        [
+          positiveJobId,
+          customer.organizationId,
+          customer.projectId,
+          `%/custom-build-jobs/${positiveJobId}/handoff/%`
+        ]
+      );
+      assert.deepEqual(positiveRaceCounts.rows, [{
+        payment_receipts: 1,
+        handoff_receipts: 1,
+        documents: 1,
+        payloads: 1
+      }]);
+      assert.equal(
+        positiveHandoffRow.financial_clearance_kind,
+        "provider_confirmed_final_payment"
+      );
+      assert.equal(
+        positiveHandoffRow.final_payment_receipt_id,
+        finalReceipt.id
+      );
+      assert.equal(positiveHandoffRow.zero_balance_clearance_id, null);
+      assert.equal(positiveHandoffRow.final_invoice_id, positiveFinalRow.invoice_id);
+      assert.equal(
+        positiveHandoffRow.completion_package_digest,
+        positiveFinalRow.completion_package_digest
+      );
+      assert.equal(
+        positiveHandoffRow.final_obligation_digest,
+        positiveFinalRow.obligation_digest
+      );
+      assert.equal(positiveHandoffRow.workmanship_interval_bounds, "[)");
+      assert.equal(positiveHandoffRow.document_kind, "handoff");
+      assert.equal(positiveHandoffRow.visibility, "customer");
+      assert.equal(positiveHandoffRow.retention_class, "project");
+      assert.equal(positiveHandoffRow.media_type, "application/json");
+      assert.equal(
+        Number(positiveHandoffRow.byte_count),
+        Number(positiveHandoffRow.payload_byte_count)
+      );
+      assert.equal(
+        positiveHandoffRow.document_content_digest,
+        positiveHandoffRow.payload_digest
+      );
+      assert.equal(
+        positiveHandoffRow.object_key,
+        `service-documents/${customer.organizationId}/` +
+          `${customer.projectId}/custom-build-jobs/${positiveJobId}/` +
+          `handoff/${positiveHandoff.rows[0].document_id}.json`
+      );
+      assert.deepEqual(
+        positiveHandoffRow.payload_json.deliveryManifest,
+        positiveDeliveryManifest.items
+      );
+      assert.equal(
+        positiveHandoffRow.payload_json.financialClearance.kind,
+        "provider_confirmed_final_payment"
+      );
+      assert.equal(
+        positiveHandoffRow.payload_json.handoff.workmanship.coverage,
+        "[start,end)"
+      );
+      assert.doesNotMatch(
+        JSON.stringify(positiveHandoffRow.payload_json),
+        /(?:cs|pi|ch|cus|evt)_test_/u
+      );
+      const durableHandoffReader =
+        createPostgresCustomServicesCustomBuildHandoff({
+          authority: {
+            async service(context, work) {
+              await setActor(
+                client,
+                context.actorKind,
+                customer,
+                context.userId
+              );
+              return work(client);
+            }
+          }
+        });
+      const durableDocument =
+        await durableHandoffReader.readCustomerDocument(
+          {
+            actorId: customer.userId,
+            customerId: customer.userId,
+            organizationId: customer.organizationId,
+            projectId: customer.projectId
+          },
+          positiveHandoff.rows[0].document_id
+        );
+      const durableCustomerBytes = Buffer.from(
+        canonicalJson(durableDocument.payload),
+        "utf8"
+      );
+      assert.equal(
+        durableDocument.byteCount,
+        durableCustomerBytes.byteLength
+      );
+      assert.equal(
+        durableDocument.contentDigest,
+        digest(durableCustomerBytes)
+      );
+      assert.equal(
+        durableDocument.byteCount,
+        Number(positiveHandoffRow.document_byte_count)
+      );
+      assert.equal(
+        durableDocument.contentDigest,
+        positiveHandoffRow.document_content_digest
+      );
+      assert.deepEqual(
+        durableDocument.payload,
+        positiveHandoffRow.payload_json
+      );
+      assert.deepEqual(
+        durableCustomerBytes,
+        Buffer.from(positiveHandoffRow.payload_bytes),
+        "hosted handoff reader must return the exact stored canonical bytes"
+      );
+      const retainedHandoffState =
+        await durableHandoffReader.readCustomer({
+          actorId: customer.userId,
+          customerId: customer.userId,
+          organizationId: customer.organizationId,
+          projectId: customer.projectId
+        });
+      const paidFinalState = await reconcileOnlyBoundary.readCurrentState({
+        actorId: customer.userId,
+        customerId: customer.userId,
+        organizationId: customer.organizationId,
+        projectId: customer.projectId
+      });
+      assert.equal(paidFinalState.state, "paid_handoff_pending");
+      assert.equal(retainedHandoffState.state, "handed_off");
+      const browserFinalState = {
+        ...structuredClone(paidFinalState),
+        state: "handed_off",
+        handoff: {
+          state: "handed_off",
+          documentId: retainedHandoffState.handoff.documentId,
+          contentDigest: retainedHandoffState.handoff.contentDigest,
+          handedOffAt: retainedHandoffState.handoff.handedOffAt,
+          workmanshipStartsAt:
+            retainedHandoffState.handoff.workmanship.startsAt,
+          workmanshipEndsAt:
+            retainedHandoffState.handoff.workmanship.endsAt
+        },
+        action: {
+          checkoutAvailable: false,
+          handoffAvailable: false,
+          reason: "handed_off"
+        }
+      };
+      const abracadabraRequests = [];
+      const abracadabraClient = createAbracadabraClient({
+        baseUrl: "/api/v1",
+        fetch: async (url, options) => {
+          abracadabraRequests.push({ url, options });
+          return {
+            ok: true,
+            status: 200,
+            headers: {
+              get(name) {
+                if (name.toLowerCase() === "content-type") {
+                  return "application/json";
+                }
+                if (name.toLowerCase() === "x-request-id") {
+                  return "req_v47_exact_handoff_document";
+                }
+                return null;
+              }
+            },
+            async json() {
+              return structuredClone(durableDocument);
+            },
+            async text() {
+              return JSON.stringify(durableDocument);
+            }
+          };
+        }
+      });
+      const browserValidatedDocument =
+        await abracadabraClient.getCustomServicesCustomBuildHandoffDocument(
+          customer.projectId,
+          durableDocument.documentId,
+          { expectedState: browserFinalState }
+        );
+      assert.equal(abracadabraRequests.length, 1);
+      assert.deepEqual(browserValidatedDocument, durableDocument);
+      const browserValidatedBytes = Buffer.from(
+        canonicalJson(browserValidatedDocument.payload),
+        "utf8"
+      );
+      assert.deepEqual(
+        browserValidatedBytes,
+        Buffer.from(positiveHandoffRow.payload_bytes),
+        "Abracadabra validation must not transform the post-hash payload"
+      );
+      assert.equal(
+        browserValidatedDocument.byteCount,
+        browserValidatedBytes.byteLength
+      );
+      assert.equal(
+        browserValidatedDocument.contentDigest,
+        digest(browserValidatedBytes)
+      );
+      for (const timestamp of [
+        browserValidatedDocument.payload.financialClearance.clearedAt,
+        browserValidatedDocument.payload.handoff.handedOffAt,
+        browserValidatedDocument.payload.handoff.workmanship.startsAt,
+        browserValidatedDocument.payload.handoff.workmanship.endsAt
+      ]) {
+        assert.match(
+          timestamp,
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
+        );
+        assert.equal(new Date(timestamp).toISOString(), timestamp);
+      }
+      await setActor(
+        client,
+        "operator",
+        customer,
+        handoffOnlyOperatorId
+      );
+      assert.deepEqual(
+        (await createPositiveHandoff()).rows,
+        positiveHandoff.rows
+      );
+      await expectRejected(
+        client,
+        () => client.query(
+          `select *
+           from ss.create_service_custom_build_handoff(
+             $1, $2, $3, $4, $5, $6, $7::jsonb
+           )`,
+          [
+            positiveJobId,
+            positiveHandoffCommandId,
+            customer.organizationId,
+            positiveFinalRow.completion_package_digest,
+            positiveFinalRow.obligation_digest,
+            `${positiveHandoffSummary} Conflicting replay.`,
+            JSON.stringify(positiveDeliveryManifest)
+          ]
+        ),
+        /command digest conflicts/iu
+      );
+      await setActor(client, "operator", customer, secondOperatorId);
+      await expectRejected(
+        client,
+        createPositiveHandoff,
+        /already has an immutable handoff/iu
+      );
+      const retainedHandoffReceiptCount = await client.query(
+        `select count(*)::int as count
+         from ss.service_custom_build_handoff_receipts receipt
+         where receipt.organization_id = $1
+           and receipt.job_id = $2`,
+        [customer.organizationId, positiveJobId]
+      );
+      assert.equal(
+        retainedHandoffReceiptCount.rows[0].count,
+        1,
+        "changed-command and other-operator conflicts retain exactly one handoff receipt"
+      );
+      await expectRejected(
+        client,
+        () => client.query(
+          `update ss.service_documents
+           set content_digest = $2
+           where id = $1`,
+          [positiveHandoff.rows[0].document_id, "f".repeat(64)]
+        ),
+        /(?:immutable|permission denied)/iu
+      );
+      await expectRejected(
+        client,
+        () => client.query(
+          `update ss.service_document_payloads
+           set payload = convert_to('{"corrupt":true}', 'UTF8')
+           where document_id = $1`,
+          [positiveHandoff.rows[0].document_id]
+        ),
+        /(?:immutable|permission denied)/iu
+      );
+      await expectRejected(
+        client,
+        () => insertRow(
+          client,
+          "service_custom_build_final_checkout_attempts",
+          {
+            id: randomUUID(),
+            organization_id: customer.organizationId,
+            project_id: customer.projectId,
+            customer_user_id: customer.userId,
+            job_id: positiveJobId,
+            obligation_id: positiveFinalRow.obligation_id,
+            completion_package_id: positiveFinalRow.completion_package_id,
+            invoice_id: positiveFinalRow.invoice_id,
+            command_id: `custom-build-v47-closed-${randomUUID()}`,
+            provider: "stripe",
+            purpose: "custom_build_final",
+            purpose_digest: finalPurposeDigest,
+            obligation_digest: positiveFinalRow.obligation_digest,
+            completion_package_digest:
+              positiveFinalRow.completion_package_digest,
+            invoice_digest: positiveFinalRow.invoice_digest,
+            accepted_quote_digest: positiveFinalRow.accepted_quote_digest,
+            accepted_disclosure_digest:
+              positiveFinalRow.accepted_disclosure_digest,
+            expected_subtotal_minor: 60000,
+            currency: "USD",
+            tax_mode: "automatic",
+            provider_request_expires_at: isoAfter({ hours: 1 }),
+            state: "provider_pending",
+            provider_effect_certainty: "ambiguous"
+          }
+        ),
+        /closed by immutable handoff/iu
+      );
     } finally {
       await client.query("rollback");
     }
@@ -3567,9 +4933,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(replacementAccepted.credit.state, "reserved");
 
     let retainedBuildPurpose = null;
-    const buildCheckoutId = "cs_test_custom_build_start_1";
-    const buildCustomerId = "cus_test_service_assessment_settlement";
-    const buildPaymentIntentId = "pi_test_custom_build_start_1";
+    const buildCheckoutId = providerIds.buildStartCheckout;
+    const buildCustomerId = providerIds.assessmentStripeCustomer;
+    const buildPaymentIntentId = providerIds.buildStartPaymentIntent;
     const customBuildPaymentProvider = {
       async createCustomBuildStartCheckout(input) {
         retainedBuildPurpose = structuredClone(input.purpose);
@@ -3692,7 +5058,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       purpose_digest: buildPurposeDigest
     };
     const buildStripeEvent = {
-      id: "evt_test_custom_build_start_1",
+      id: providerIds.buildStartEvent,
       type: "checkout.session.completed",
       livemode: false,
       api_version: "2026-06-24.dahlia",
@@ -4280,8 +5646,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
 
     let retainedChangePurpose = null;
-    const changeCheckoutId = "cs_test_custom_build_change_1";
-    const changePaymentIntentId = "pi_test_custom_build_change_1";
+    const changeCheckoutId = providerIds.buildChangeCheckout;
+    const changePaymentIntentId = providerIds.buildChangePaymentIntent;
     const initialChangeCreateEntered = deferred();
     const releaseInitialChangeCreate = deferred();
     const initialChangeProviderRequests = [];
@@ -4714,7 +6080,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       purpose_digest: changePurposeDigest
     };
     const changeStripeEvent = {
-      id: "evt_test_custom_build_change_1",
+      id: providerIds.buildChangeEvent,
       type: "checkout.session.completed",
       livemode: false,
       api_version: "2026-06-24.dahlia",
@@ -5353,6 +6719,356 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       },
       { invoices: 0, attempts: 0, events: 0, receipts: 0 }
     );
+
+    const zeroHandoffCommandId =
+      `custom-build-v47-zero-handoff-${randomUUID()}`;
+    const zeroHandoffSummary =
+      "The completed Card Plus build and its final customer files are ready with no remaining balance.";
+    const zeroDeliveryManifest = {
+      items: [
+        {
+          label: "Card Plus website package",
+          description:
+            "The reviewed Card Plus website and its launch-ready files."
+        }
+      ]
+    };
+    const zeroHandoffParameters = [
+      buildJobId,
+      zeroHandoffCommandId,
+      customer.organizationId,
+      zeroFinal.rows[0].completion_package_digest,
+      zeroFinal.rows[0].obligation_digest,
+      zeroHandoffSummary,
+      JSON.stringify(zeroDeliveryManifest)
+    ];
+    const zeroHandoffSql =
+      `select *
+       from ss.create_service_custom_build_handoff(
+         $1, $2, $3, $4, $5, $6, $7::jsonb
+       )`;
+
+    await client.query("begin");
+    try {
+      const noCapabilityOperatorId = randomUUID();
+      await client.query(
+        "insert into auth.users (id, email) values ($1, $2)",
+        [
+          noCapabilityOperatorId,
+          `v47-no-capability-${noCapabilityOperatorId}@example.test`
+        ]
+      );
+      await insertRow(client, "operator_profiles", {
+        user_id: noCapabilityOperatorId,
+        display_label: "v47 no-capability operator",
+        state: "held",
+        authorized_by_user_id: secondOperatorId,
+        authorized_at: new Date().toISOString()
+      });
+      await client.query("set local role service_role");
+      await setActor(
+        client,
+        "operator",
+        customer,
+        noCapabilityOperatorId
+      );
+      await expectRejected(
+        client,
+        () => client.query(zeroHandoffSql, zeroHandoffParameters),
+        /lacks operator capabilities/iu
+      );
+    } finally {
+      await client.query("rollback");
+    }
+
+    await client.query("begin");
+    try {
+      await client.query("set local role service_role");
+      await setActor(client, "operator", customer, secondOperatorId);
+      await expectRejected(
+        client,
+        () => client.query(
+          zeroHandoffSql,
+          [
+            ...zeroHandoffParameters.slice(0, 3),
+            "f".repeat(64),
+            ...zeroHandoffParameters.slice(4)
+          ]
+        ),
+        /lacks exact completion and financial clearance/iu
+      );
+      await expectRejected(
+        client,
+        () => insertRow(client, "service_documents", {
+          id: randomUUID(),
+          organization_id: customer.organizationId,
+          project_id: customer.projectId,
+          case_id: paidJob.caseId,
+          document_kind: "handoff",
+          object_key:
+            `service-documents/${customer.organizationId}/` +
+            `${customer.projectId}/wrong-handoff-path.json`,
+          content_digest: "e".repeat(64),
+          media_type: "application/json",
+          byte_count: 2,
+          visibility: "customer",
+          retention_class: "project",
+          created_by_kind: "operator",
+          created_by_user_id: secondOperatorId
+        }),
+        /lacks bounded authority/iu
+      );
+    } finally {
+      await client.query("rollback");
+    }
+
+    const firstHandoffEntered = deferred();
+    const secondHandoffEntered = deferred();
+    const runZeroHandoff = async (entered) => {
+      const transactionClient = new Client({ connectionString: DATABASE_URL });
+      try {
+        await transactionClient.connect();
+        await transactionClient.query("begin");
+        await transactionClient.query("set local role service_role");
+        await setActor(
+          transactionClient,
+          "operator",
+          customer,
+          secondOperatorId
+        );
+        const backend = await transactionClient.query(
+          "select pg_backend_pid()::int as pid"
+        );
+        entered.resolve(backend.rows[0].pid);
+        const result = await transactionClient.query(
+          zeroHandoffSql,
+          zeroHandoffParameters
+        );
+        await transactionClient.query("set constraints all immediate");
+        await transactionClient.query("commit");
+        return result.rows[0];
+      } catch (error) {
+        await transactionClient.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        await transactionClient.end();
+      }
+    };
+
+    await client.query("begin");
+    await client.query(
+      `select pg_advisory_xact_lock(
+         hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+       )`,
+      [buildJobId]
+    );
+    const firstHandoffPromise = runZeroHandoff(firstHandoffEntered);
+    const secondHandoffPromise = runZeroHandoff(secondHandoffEntered);
+    firstHandoffPromise.catch(() => {});
+    secondHandoffPromise.catch(() => {});
+    const firstHandoffPid = await within(
+      firstHandoffEntered.promise,
+      "first duplicate-handoff transaction did not start"
+    );
+    const secondHandoffPid = await within(
+      secondHandoffEntered.promise,
+      "second duplicate-handoff transaction did not start"
+    );
+    assert.equal(
+      await waitForDatabaseLock(client, firstHandoffPid),
+      true,
+      "first handoff did not wait on the shared H1M lock"
+    );
+    assert.equal(
+      await waitForDatabaseLock(client, secondHandoffPid),
+      true,
+      "second handoff did not wait on the shared H1M lock"
+    );
+    await client.query("commit");
+    const [firstZeroHandoff, secondZeroHandoff] = await Promise.all([
+      within(firstHandoffPromise, "first duplicate handoff did not finish"),
+      within(secondHandoffPromise, "second duplicate handoff did not replay")
+    ]);
+    assert.deepEqual(secondZeroHandoff, firstZeroHandoff);
+
+    const zeroHandoffStored = await pool.query(
+      `select
+         receipt.*,
+         document.object_key,
+         document.content_digest,
+         document.byte_count,
+         convert_from(payload.payload, 'UTF8')::jsonb as payload_json,
+         extract(epoch from (
+           receipt.workmanship_ends_at - receipt.workmanship_starts_at
+         ))::bigint as workmanship_elapsed_seconds
+       from ss.service_custom_build_handoff_receipts receipt
+       join ss.service_documents document
+         on document.organization_id = receipt.organization_id
+        and document.id = receipt.document_id
+       join ss.service_document_payloads payload
+         on payload.organization_id = receipt.organization_id
+        and payload.document_id = receipt.document_id
+       where receipt.job_id = $1`,
+      [buildJobId]
+    );
+    assert.equal(zeroHandoffStored.rowCount, 1);
+    const zeroHandoffRow = zeroHandoffStored.rows[0];
+    assert.equal(
+      zeroHandoffRow.financial_clearance_kind,
+      "zero_balance_clearance"
+    );
+    assert.equal(zeroHandoffRow.final_payment_receipt_id, null);
+    assert.equal(
+      zeroHandoffRow.zero_balance_clearance_id,
+      zeroFinal.rows[0].clearance_id
+    );
+    assert.equal(zeroHandoffRow.final_invoice_id, null);
+    assert.equal(Number(zeroHandoffRow.final_due_minor), 0);
+    assert.equal(zeroHandoffRow.workmanship_interval_bounds, "[)");
+    assert.equal(
+      Number(zeroHandoffRow.workmanship_elapsed_seconds),
+      30 * 24 * 60 * 60
+    );
+    assert.equal(
+      zeroHandoffRow.object_key,
+      `service-documents/${customer.organizationId}/` +
+        `${customer.projectId}/custom-build-jobs/${buildJobId}/` +
+        `handoff/${zeroHandoffRow.document_id}.json`
+    );
+    assert.equal(
+      zeroHandoffRow.content_digest,
+      zeroHandoffRow.document_content_digest
+    );
+    assert.equal(
+      Number(zeroHandoffRow.byte_count),
+      Number(zeroHandoffRow.document_byte_count)
+    );
+      assert.deepEqual(
+        zeroHandoffRow.payload_json.deliveryManifest,
+        zeroDeliveryManifest.items
+    );
+    assert.equal(
+      zeroHandoffRow.payload_json.financialClearance.kind,
+      "zero_balance_clearance"
+    );
+    assert.equal(
+        zeroHandoffRow.payload_json.handoff.workmanship.coverage,
+      "[start,end)"
+    );
+    assert.doesNotMatch(
+      JSON.stringify(zeroHandoffRow.payload_json),
+      /(?:cs|pi|ch|cus)_test_/u
+    );
+
+    await client.query("begin");
+    try {
+      await client.query("set local role service_role");
+      await setActor(client, "operator", customer, secondOperatorId);
+      await expectRejected(
+        client,
+        () => insertRow(client, "service_custom_build_progress_updates", {
+          organization_id: customer.organizationId,
+          project_id: customer.projectId,
+          case_id: paidJob.caseId,
+          customer_user_id: customer.userId,
+          job_id: buildJobId,
+          expected_revision: 3,
+          revision: 4,
+          stage: "checking",
+          structure_milestone: "done",
+          content_milestone: "done",
+          responsive_milestone: "done",
+          quality_milestone: "done",
+          customer_summary:
+            "This write must remain closed after immutable handoff.",
+          next_step: "No post-handoff progress mutation is permitted.",
+          created_by_operator_user_id: secondOperatorId,
+          command_id: `custom-build-v47-closed-${randomUUID()}`,
+          request_digest: "a".repeat(64),
+          recorded_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        }),
+        /closed by immutable handoff/iu
+      );
+      await expectRejected(
+        client,
+        () => insertRow(client, "service_custom_build_work_requests", {
+          organization_id: customer.organizationId,
+          project_id: customer.projectId,
+          case_id: paidJob.caseId,
+          customer_user_id: customer.userId,
+          job_id: buildJobId,
+          request_kind: "customer_decision",
+          title: "Closed handoff request",
+          customer_message:
+            "This request must not reopen a handed-off Custom build.",
+          safe_instructions:
+            "No response is needed because the immutable handoff is complete.",
+          target_date_impact: "none",
+          expected_progress_revision: 3,
+          created_by_operator_user_id: secondOperatorId,
+          create_command_id: `custom-build-v47-closed-${randomUUID()}`,
+          create_digest: "b".repeat(64)
+        }),
+        /closed by immutable handoff/iu
+      );
+      await expectRejected(
+        client,
+        () => insertRow(client, "service_access_requests", {
+          organization_id: customer.organizationId,
+          project_id: customer.projectId,
+          case_id: paidJob.caseId,
+          customer_user_id: customer.userId,
+          requested_by_operator_user_id: secondOperatorId,
+          provider_label: "Spaceship",
+          account_label: "Customer domain account",
+          delegated_role: "DNS manager",
+          reason_code: "custom_build_execution",
+          state: "drafted",
+          expires_at: isoAfter({ days: 7 }),
+          job_id: buildJobId
+        }),
+        /closed by immutable handoff/iu
+      );
+      await expectRejected(
+        client,
+        () => insertRow(
+          client,
+          "service_custom_build_final_checkout_attempts",
+          {
+            id: randomUUID(),
+            organization_id: customer.organizationId,
+            project_id: customer.projectId,
+            customer_user_id: customer.userId,
+            job_id: buildJobId,
+            obligation_id: zeroFinal.rows[0].obligation_id,
+            completion_package_id:
+              zeroFinal.rows[0].completion_package_id,
+            invoice_id: randomUUID(),
+            command_id: `custom-build-v47-closed-${randomUUID()}`,
+            provider: "stripe",
+            purpose: "custom_build_final",
+            purpose_digest: "c".repeat(64),
+            obligation_digest: zeroFinal.rows[0].obligation_digest,
+            completion_package_digest:
+              zeroFinal.rows[0].completion_package_digest,
+            invoice_digest: "d".repeat(64),
+            accepted_quote_digest: retainedBuildPurpose.acceptedQuoteDigest,
+            accepted_disclosure_digest:
+              retainedBuildPurpose.acceptedDisclosureDigest,
+            expected_subtotal_minor: 1,
+            currency: "USD",
+            tax_mode: "automatic",
+            provider_request_expires_at: isoAfter({ hours: 1 }),
+            state: "provider_pending",
+            provider_effect_certainty: "ambiguous"
+          }
+        ),
+        /closed by immutable handoff/iu
+      );
+    } finally {
+      await client.query("rollback");
+    }
 
     const retainedBuildPaymentClaims = await pool.query(
       `select purpose, provider_object_kind, provider_object_id

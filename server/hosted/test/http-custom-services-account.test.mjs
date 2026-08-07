@@ -53,6 +53,9 @@ function assessmentWorkMethods() {
     async getCustomBuildFinalHandoff() {
       throw new Error("unexpected Custom build final handoff read");
     },
+    async getCustomBuildHandoffDocument() {
+      throw new Error("unexpected Custom build handoff document read");
+    },
     async getCustomBuildCompletionEvidence() {
       throw new Error("unexpected Custom build completion evidence read");
     },
@@ -97,6 +100,7 @@ function completeAccountBoundary(overrides = {}) {
     getCustomBuildChangeCompletion: noOp,
     getCustomBuildChangeInvoice: noOp,
     getCustomBuildFinalHandoff: noOp,
+    getCustomBuildHandoffDocument: noOp,
     getCustomBuildCompletionEvidence: noOp,
     createCustomBuildCheckout: noOp,
     createCustomBuildChangeCheckout: noOp,
@@ -880,6 +884,65 @@ test("Custom-build final payment HTTP routes are exact, authenticated, and isola
   }));
   assert.equal(signedOutWrite.status, 401);
   assert.equal(calls.length, 2);
+});
+
+test("Custom-build handoff document HTTP route is authenticated, project-bound, exact, and read-only", async () => {
+  const calls = [];
+  const documentId =
+    "61000000-0000-4000-8000-000000000006";
+  const document = {
+    schema: "sitesourcery.custom-build-handoff-document/v1",
+    documentId,
+    contentDigest: "b".repeat(64),
+    mediaType: "application/json",
+    byteCount: 512,
+    payload: { state: "handed_off" }
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildHandoffDocument(
+        actor,
+        projectId,
+        selectedDocumentId
+      ) {
+        calls.push({ actor, projectId, documentId: selectedDocumentId });
+        return document;
+      }
+    })
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}/custom-services/`
+      + `custom-build-handoff-documents/${documentId}`;
+
+  const opened = await api.fetch(request({ path }));
+  assert.equal(opened.status, 200);
+  assert.deepEqual(await opened.json(), document);
+  assert.deepEqual(calls, [
+    {
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      documentId
+    }
+  ]);
+
+  const expandedQuery = await api.fetch(request({
+    path: `${path}?download=true`
+  }));
+  assert.equal(expandedQuery.status, 400);
+  assert.equal(
+    (await expandedQuery.json()).error.code,
+    "INVALID_CUSTOM_BUILD_HANDOFF_INPUT"
+  );
+  const signedOut = await api.fetch(request({ path, signedIn: false }));
+  assert.equal(signedOut.status, 401);
+  const wrongMethod = await api.fetch(request({
+    body: {},
+    method: "POST",
+    path,
+    write: true
+  }));
+  assert.equal(wrongMethod.status, 404);
+  assert.equal(calls.length, 1);
 });
 
 test("Custom build progress HTTP routes bind the exact project and safe customer response", async () => {

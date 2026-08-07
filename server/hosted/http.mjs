@@ -13,7 +13,8 @@ import {
   createHeldHostedDownloadCommerce
 } from "../commerce-v2/hosted-download.mjs";
 import {
-  createHeldHostedCustomServicesAccount
+  createHeldHostedCustomServicesAccount,
+  createHostedCustomServicesCustomBuildHandoffOwner
 } from "./custom-services-account-hosted.mjs";
 import {
   createHeldCustomServicesOwner
@@ -39,6 +40,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildFinalPayment
 } from "./custom-services-custom-build-final-payment-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildHandoff
+} from "./custom-services-custom-build-handoff-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -383,6 +387,7 @@ export function createHostedApi(
     customServicesCustomBuildChangeCompletion = null,
     customServicesCustomBuildChangePayment = null,
     customServicesCustomBuildFinalPayment = null,
+    customServicesCustomBuildHandoff = null,
     customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
@@ -518,6 +523,22 @@ export function createHostedApi(
     "Hosted Custom-build final payment boundary is invalid.",
     { status: 500 }
   );
+  const customServicesCustomBuildHandoffBoundary =
+    customServicesCustomBuildHandoff ??
+    createHeldCustomServicesCustomBuildHandoff();
+  invariant(
+    typeof customServicesCustomBuildHandoffBoundary.readOwner ===
+        "function" &&
+      typeof customServicesCustomBuildHandoffBoundary.createHandoff ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom-build handoff boundary is invalid.",
+    { status: 500 }
+  );
+  const customServicesCustomBuildHandoffOwnerBoundary =
+    createHostedCustomServicesCustomBuildHandoffOwner({
+      customBuildHandoff: customServicesCustomBuildHandoffBoundary
+    });
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
   const alakazamAccountBoundary =
@@ -582,6 +603,8 @@ export function createHostedApi(
       typeof customServicesAccountBoundary.getCustomBuildChangeInvoice ===
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildFinalHandoff ===
+        "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildHandoffDocument ===
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildCompletionEvidence ===
         "function" &&
@@ -955,13 +978,14 @@ export function createHostedApi(
           method === "GET" &&
           (route = match(
             pathname,
-            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/final-handoff$/u
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/final-payments$/u
           ))
         ) {
+          // Payment lifecycle and reconciliation are a distinct authority.
           invariant(
             actor !== null,
             "AUTHENTICATION_REQUIRED",
-            "Sign in before opening Custom-build final payment and handoff.",
+            "Sign in before opening Custom-build final payment.",
             { status: 401 }
           );
           const query = exactRouteQuery(
@@ -971,7 +995,76 @@ export function createHostedApi(
             "The Custom-build final payment query is invalid."
           );
           result = await customServicesCustomBuildFinalPaymentBoundary
-            .readOwnerFinalPayments(actor, route[0], query.organizationId);
+            .readOwnerFinalPayments(
+              actor,
+              route[0],
+              query.organizationId
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/final-handoff$/u
+          ))
+        ) {
+          // Handoff readiness intentionally uses only the handoff boundary,
+          // whose PostgreSQL authority is service_job_manage plus
+          // service_document_manage. It must not borrow payment reconciliation.
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom-build handoff.",
+            { status: 401 }
+          );
+          const query = exactRouteQuery(
+            url,
+            ["organizationId"],
+            "INVALID_CUSTOM_BUILD_HANDOFF_INPUT",
+            "The Custom-build handoff query is invalid."
+          );
+          result = await customServicesCustomBuildHandoffOwnerBoundary
+            .readOwnerState(actor, route[0], query.organizationId);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/handoff$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before handing off a completed Custom build.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_HANDOFF_INPUT",
+            "The Custom-build handoff query is invalid."
+          );
+          const input = exactRouteBody(
+            body,
+            [
+              "commandId",
+              "customerSummary",
+              "deliveryManifest",
+              "expectedCompletionPackageDigest",
+              "expectedFinalObligationDigest",
+              "organizationId"
+            ],
+            "INVALID_CUSTOM_BUILD_HANDOFF_INPUT",
+            "The Custom-build handoff command is invalid."
+          );
+          invariant(
+            input.commandId === commandId(request),
+            "INVALID_CUSTOM_BUILD_HANDOFF_INPUT",
+            "The Custom-build handoff command is invalid.",
+            { status: 400 }
+          );
+          result = await customServicesCustomBuildHandoffOwnerBoundary
+            .createHandoff(actor, route[0], input);
+          status = 201;
         } else if (
           method === "POST" &&
           (route = match(
@@ -2006,6 +2099,27 @@ export function createHostedApi(
           );
           result = await customServicesAccountBoundary
             .getCustomBuildFinalHandoff(actor, route[0]);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-handoff-documents\/([^/]+)$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening a Custom-build handoff document.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_HANDOFF_INPUT",
+            "The Custom-build handoff document query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .getCustomBuildHandoffDocument(actor, route[0], route[1]);
         } else if (
           method === "GET" &&
           (route = match(

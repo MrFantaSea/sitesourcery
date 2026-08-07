@@ -6,7 +6,7 @@ import {
   createConfiguredCustomBuildChangePaymentRelease
 } from "../custom-services-custom-build-change-payment-config.mjs";
 
-test("production composes Purpose-1 PostgreSQL payment separately while H1M completion remains held", async () => {
+test("production composes Purpose-1 PostgreSQL payment separately alongside the PostgreSQL completion authority", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -22,7 +22,7 @@ test("production composes Purpose-1 PostgreSQL payment separately while H1M comp
   );
   assert.match(
     source,
-    /const customServicesCustomBuildChangeCompletion\s*=\s*createHeldCustomServicesCustomBuildChangeCompletion\(\)/u
+    /const customServicesCustomBuildChangeCompletion\s*=\s*createPostgresCustomServicesCustomBuildChangeCompletion\(\{\s*authority,\s*clock:\s*commerceV2\.clock,\s*randomUUID:\s*\(\)\s*=>\s*commerceV2\.ids\.next\("custom_build_change_completion"\)\s*\}\)/u
   );
   assert.match(
     source,
@@ -43,6 +43,10 @@ test("production composes Purpose-1 PostgreSQL payment separately while H1M comp
   assert.doesNotMatch(
     source,
     /createHeldCustomServicesCustomBuildChangePayment/u
+  );
+  assert.doesNotMatch(
+    source,
+    /createHeldCustomServicesCustomBuildChangeCompletion/u
   );
 });
 

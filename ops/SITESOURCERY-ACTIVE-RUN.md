@@ -36,11 +36,11 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from sealed H1N Purpose 1 at `9a9511c`. Purpose-2 migration 46 now
-derives and settles the separate completion-bound final obligation locally;
-migration 47 must add immutable handoff and only then derive the 30-day
-workmanship window. All real provider effects and public-service release gates
-remain held until each preceding local boundary is proven.
+Seal H1N Purpose 2 migration 47 on base `f9950ae`. Migration 46 already derives
+and settles the separate completion-bound final obligation; migration 47 now
+adds the immutable handoff and only then derives the 30-day workmanship window.
+The all-47 PostgreSQL, full candidate and browser proofs are green. All real
+provider effects and public-service release gates remain held.
 
 ## Owner visual rulings captured 2026-08-06
 
@@ -63,14 +63,10 @@ remain held until each preceding local boundary is proven.
 - The aesthetic lead owns `vnext.css`, visual assets, and public presentation
   for Domains, Custom/Sorcery, Responder, Work/Spell Book, About, Contact, FAQ,
   and Legal. The homepage is design-locked. Build must not edit those files.
-- The preserved aesthetic handoff is currently dirty and uncommitted:
-  `domains/index.html` plus `vnext.css` make
-  `site-sourcery-main-street-v2.webp` the Domains background, remove its
-  floating hero image, and add a frosted intro; `responder/index.html` removes
-  its floating hero and interactive ten-minute picker in favor of one visible
-  five-step flow; `work/index.html` and `work/work.css` contain the preserved
-  in-flight portfolio simplification. Do not discard or mix any of those files
-  into a backend checkpoint.
+- Public presentation is sealed at `2b0f9e0` and public truth at `ea38093`.
+  Separate branch tips `035d76a` and `4b30ce5` are not ancestors of this
+  candidate and must not be counted, absorbed, staged or committed from the
+  migration-47 lane without explicit cross-lane integration.
 - Completion reporting now comes only from
   `ops/SITESOURCERY-100-PERCENT-COMPLETION-MATRIX-2026-08-06.md`, with Core
   Launch and Expansion calculated separately. Do not report an informal
@@ -1422,12 +1418,12 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Seal the path-limited H1N Purpose-2 migration-46 checkpoint on public base
-`ea38093`, with only the matching customer-control asset-hash hunk from the
-shared manifest. Then begin migration 47 for immutable handoff and the
-handoff-derived workmanship clock. Preserve Purpose 1 and the public checkpoint,
-reserve migration 48 for hosted Privacy V3, and keep provider release, push,
-deployment, and DNS held.
+Seal the path-limited H1N Purpose-2 migration-47 checkpoint on base `f9950ae`.
+Stage only its backend/API/control/browser/test/ledger files and the two exact
+Abracadabra staging hashes; include no public-route files. After the commit,
+resume the remaining launch-critical Alakazam invoice/lifecycle/control gaps.
+Reserve migration 48 for hosted Privacy V3 and keep provider release, push,
+deployment and DNS held.
 
 ## Batch 3B write scope
 
@@ -1627,3 +1623,171 @@ The public lane is sealed at `ea38093`. The v46 backend, API, control, audit,
 ledger files and exact customer-control manifest hash are ready for one
 path-limited commit. Audit the cached paths and manifest diff, commit v46, then
 start v47 only from that checkpoint. Reserve v48 for Privacy V3.
+
+## H1N Purpose 2 — migration-47 immutable handoff checkpoint
+
+Checkpoint time: 2026-08-07T10:01:17-0400 (EDT)
+
+This checkpoint completes H1N Purpose 2 through migration 47. Migration 48
+remains reserved for hosted Privacy V3. No public-route source belongs to this
+checkpoint.
+
+### Implemented authority
+
+- Additive migration `202608060047_custom_build_handoff.sql` creates exactly
+  one immutable handoff receipt per Custom-build job only after either the
+  exact provider-confirmed final-payment receipt or the explicit database-
+  authorized zero-balance clearance exists. Accepted-change payments remain
+  separate and cannot be charged again in the final purpose.
+- The transaction discovers the immutable job, takes the shared
+  `ss-custom-build-h1m:<job>` advisory lock, verifies exact organization/job,
+  completion package, final obligation and financial clearance, then writes
+  one canonical customer-safe JSON document and its receipt in one boundary.
+  Unique `job_id` is the hard duplicate backstop; same-command exact replay
+  returns the retained result and a new command after handoff returns conflict.
+- SQL validators are no broader than the service/browser readers for canonical
+  byte size, exact top-level and manifest item keys, portable ASCII label
+  folding, Unicode/code-point bounds, credentials, URL query secrets and raw
+  provider identifiers. The customer GET returns the exact stored bytes with
+  matching SHA-256 and UTF-8 byte count.
+- PostgreSQL derives workmanship start from immutable handoff and end exactly
+  720 hours later in UTC. The canonical document records millisecond-Z values
+  and `[start,end)` semantics; completion or launch alone never starts the
+  clock.
+- Owner final-payment state remains behind `service_payment_reconcile`; owner
+  handoff readiness/create uses exactly `service_job_manage` plus
+  `service_document_manage` and leaks no payment lifecycle fields. Customer
+  and owner API/HTTP/control composition preserve that split.
+- Verified completion is terminal. Owner/customer progress, requests, accepted
+  changes, evidence, completion and reconciliation controls use a fail-closed
+  `open`/`terminal`/`unknown` authority state. Terminal and unknown retain
+  history/refresh but render no mutation controls; handlers recheck authority
+  immediately before every client call.
+- A fresh handed-off customer view auto-loads the exact bound document and
+  retains the last verified receipt through later document/final-read errors.
+  Paid and zero-balance copy stay distinct; zero states never invent provider
+  or payment wording.
+
+### Defects corrected before seal
+
+- Handoff manifest/customer-summary/command validators, canonical byte guards,
+  duplicate-label folding and timestamp serialization were aligned across SQL,
+  service and Abracadabra readers so immutable direct-database input cannot
+  become unreadable.
+- Document identity now hashes and returns the same customer-visible payload;
+  no reduced projection is paired with the stored document digest.
+- The final-payment receipt trigger itself acquires the shared H1M advisory
+  lock. The real settlement-versus-handoff race uses that production trigger,
+  not a test-only lock, and proves both orderings.
+- Final-obligation effective change digests retain migration-44 canonical
+  change-number order and are projected from PostgreSQL as JSON arrays.
+- Owner payment reconciliation and handoff commands bind separate exact
+  snapshots; the removed combined owner shape has no runtime references.
+- Browser paid/zero/delayed-authority fixtures are isolated by a unique
+  journey-and-viewport token. Every critical request lookup/count filters that
+  token, and each prior page is retired before the next cookie is installed,
+  so late traffic cannot satisfy or contaminate another run.
+- Final SQL review added `organization_id + job_id` to both retained-receipt
+  lookups, scoped the foundation receipt count to an exact job, and proves one
+  retained receipt immediately after changed-command and other-operator
+  conflicts. New-command/same-content semantic replay was deliberately not
+  added: canonical v47 permits only same-key exact replay.
+- Two obsolete production-source tests that still required held H1M completion
+  now strictly require the PostgreSQL completion authority and forbid the old
+  held fallback.
+
+### Migration-47 proof
+
+- Focused migration structure passes **39/39**. Handoff/final-payment,
+  capability, API, HTTP, composition and DOM suites are green on the final
+  integrated source; `git diff --check` is clean.
+- Exact pinned commands used Node `24.18.0`; the local PostgreSQL admin URL was
+  injected only through `SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL` and was never
+  placed in subprocess argv or persisted here:
+  - Full candidate: `/usr/bin/env
+    PATH=/private/tmp/sitesourcery-node24-path.IJtn3K:/opt/homebrew/bin:/usr/bin:/bin
+    node scripts/core-release.mjs`.
+  - Affected structure gate:
+    `/private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node
+    --test server/data-plane/tests/postgres-migration-structure.test.mjs`.
+  - Narrow current-byte PostgreSQL rerun, with the required PostgreSQL admin
+    URL supplied through the environment:
+    `/private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node /private/tmp/sitesourcery-v47-narrow-proof-20260807.mjs`.
+- The narrow proof helper SHA-256 is
+  `72db9831cc6fd46501bf69480eb511be3085666bb9d87171bcfdcb1cb02eb83c`;
+  committed Core helper `scripts/core-release.mjs` is
+  `52c7110653309cb61f27b535789484aeeded492f82ef8952597a37af5cffc03a`.
+- Exact pinned Node `24.18.0` Core run
+  `ss_core_release_20260807t135415807z_6b34890859c9` replayed all **47**
+  migrations, passed all **4/4** launch-critical real-PostgreSQL
+  Custom-services journeys, removed the exact database and proved absence,
+  then passed the complete candidate `npm test`, including **386** Node tests
+  (**384 pass, 2 intentional real-PostgreSQL skips, 0 fail**), **52/52** ops
+  tests, exact 74-file Pages and hosted artifacts, and the maintained browser
+  audit. Result: `databaseAbsent: true`.
+- The browser audit passes 15 hosted routes at exact `320x720`, `390x844` and
+  `1440x1000`. Purpose 2 covers provider-paid and exact-zero handoff, exact
+  owner input-to-stored-document identity, two-capability readiness, final
+  payment denial to that operator, retained document/final errors, exact
+  workmanship facts, keyboard/focus/44px/no-overflow/no-provider-ID checks and
+  a delayed-authority disconnected-stale-button zero-write race.
+- After the final narrow SQL review, fresh database
+  `ss_core_release_20260807t135950166z_2c36b2fb31f9` replayed the current 47
+  migrations, passed the affected **4/4** real PostgreSQL journeys, removed the
+  exact database and proved absence. The only affected candidate gate,
+  migration structure, reran **39/39**. Browser/API/artifact bytes were
+  unchanged from the full green Core run. Its exact final result was
+  `{"ok":true,"databaseName":"ss_core_release_20260807t135950166z_2c36b2fb31f9","databaseAbsent":true,"candidateGatesRun":false}`;
+  this narrow pass is not a second full candidate run.
+- The hosted manifest contains exactly the current API SHA-256
+  `321d17e139fa0ebff4830c7dc1da860320cdf3241213da82e15937451ccc23ce`
+  and customer-control SHA-256
+  `c755aae3a8635379f58dfe88522f2573946b4bb545b6dca89c239b031f4525dc`.
+  No public/aesthetic source, live provider, credential, production/customer
+  data, push, deployment, DNS, release approval or migration-48 authority was
+  changed.
+- The strict matrix recount is **94 DONE / 33 PARTIAL / 9 NOT STARTED =
+  69.1% Core Launch**. Separate branch tips `035d76a` and `4b30ce5` are not
+  ancestors and earn no credit in this candidate.
+- Fresh independent saved-byte adversarial review returned `BLOCKER: NO` after
+  checking the final settlement/clearance gate, canonical document boundary,
+  two-capability split, production-lock race, terminal UI, token-isolated
+  browser journeys, all-47 ledger evidence and exact 94/33/9 matrix recount.
+  The reviewer changed no files or external state and did not substitute a
+  second long test run for the recorded executable proof.
+
+### Seal boundary and next action
+
+The exact 26-path commit scope is:
+
+- `abracadabra/app/abracadabra-api.js`
+- `abracadabra/app/abracadabra-app.css`
+- `abracadabra/app/abracadabra-customer-control-dom.js`
+- `ops/SITESOURCERY-100-PERCENT-COMPLETION-MATRIX-2026-08-06.md`
+- `ops/SITESOURCERY-ACTIVE-RUN.md`
+- `scripts/browser-audit-current.mjs`
+- `scripts/hosted-truth/manifest.mjs` (only the two exact asset hashes)
+- `scripts/test/abracadabra-api.test.mjs`
+- `server/data-plane/supabase/migrations/202608060047_custom_build_handoff.sql`
+- `server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs`
+- `server/data-plane/tests/custom-services-foundation-postgres.integration.test.mjs`
+- `server/data-plane/tests/postgres-migration-structure.test.mjs`
+- `server/data-plane/tests/verify-empty-postgres-migrations.mjs`
+- `server/hosted/bin/server.mjs`
+- `server/hosted/custom-services-account-hosted.mjs`
+- `server/hosted/custom-services-custom-build-final-payment-postgres.mjs`
+- `server/hosted/custom-services-custom-build-handoff-postgres.mjs`
+- `server/hosted/http.mjs`
+- `server/hosted/test/custom-build-change-completion-production-hold.test.mjs`
+- `server/hosted/test/custom-build-change-payment-production-composition.test.mjs`
+- `server/hosted/test/custom-build-final-payment-production-composition.test.mjs`
+- `server/hosted/test/custom-services-account-hosted.test.mjs`
+- `server/hosted/test/custom-services-custom-build-final-payment-postgres.test.mjs`
+- `server/hosted/test/custom-services-custom-build-handoff-postgres.test.mjs`
+- `server/hosted/test/http-custom-services-account.test.mjs`
+- `server/hosted/test/http-custom-services-owner.test.mjs`
+
+Stage and audit only those paths, make one path-limited local commit, and report
+its hash. Then resume launch-critical Alakazam invoice, lifecycle/control and
+final staging/cutover gates. Keep all live provider effects, provider test/live
+release approval, public staging, owner cutover, push, deployment and DNS held.

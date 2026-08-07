@@ -72,7 +72,7 @@ import {
   createPostgresCustomServicesCustomBuildProgress
 } from "../custom-services-custom-build-progress-postgres.mjs";
 import {
-  createHeldCustomServicesCustomBuildChangeCompletion
+  createPostgresCustomServicesCustomBuildChangeCompletion
 } from "../custom-services-custom-build-change-completion-postgres.mjs";
 import {
   assertApprovedCustomBuildChangePaymentReady,
@@ -88,6 +88,9 @@ import {
 import {
   createPostgresCustomServicesCustomBuildFinalPayment
 } from "../custom-services-custom-build-final-payment-postgres.mjs";
+import {
+  createPostgresCustomServicesCustomBuildHandoff
+} from "../custom-services-custom-build-handoff-postgres.mjs";
 import {
   createPostgresCustomServicesCustomBuildPayment
 } from "../custom-services-custom-build-payment-postgres.mjs";
@@ -394,7 +397,11 @@ async function start() {
   const customServicesCustomBuildProgress =
     createPostgresCustomServicesCustomBuildProgress({ authority });
   const customServicesCustomBuildChangeCompletion =
-    createHeldCustomServicesCustomBuildChangeCompletion();
+    createPostgresCustomServicesCustomBuildChangeCompletion({
+      authority,
+      clock: commerceV2.clock,
+      randomUUID: () => commerceV2.ids.next("custom_build_change_completion")
+    });
   const customBuildChangePayment =
     createPostgresCustomServicesCustomBuildChangePayment({
       authority,
@@ -409,6 +416,11 @@ async function start() {
       provider: stripeComposition.adapter,
       release: customBuildFinalPaymentComposition.release,
       clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
+  const customBuildHandoff =
+    createPostgresCustomServicesCustomBuildHandoff({
+      authority,
       ids: commerceV2.ids
     });
   const customBuildPayment =
@@ -427,6 +439,7 @@ async function start() {
         customServicesCustomBuildChangeCompletion,
       customBuildChangePayment,
       customBuildFinalPayment,
+      customBuildHandoff,
       customBuildPayment,
       customBuildProgress: customServicesCustomBuildProgress,
       invoiceRepository: customServicesInvoiceRepository,
@@ -588,6 +601,8 @@ async function start() {
   );
   await customServicesCustomBuildWork.readiness();
   await customServicesCustomBuildProgress.readiness();
+  await customServicesCustomBuildChangeCompletion.readiness();
+  await customBuildHandoff.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -623,6 +638,8 @@ async function start() {
           customBuildChangePayment,
         customServicesCustomBuildFinalPayment:
           customBuildFinalPayment,
+        customServicesCustomBuildHandoff:
+          customBuildHandoff,
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,

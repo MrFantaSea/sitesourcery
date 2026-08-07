@@ -18,7 +18,9 @@
   var SAFE_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
   var CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
   var CUSTOM_BUILD_CREDENTIAL =
-    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase)/iu;
+    /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase|bearer\s+[a-z0-9._~-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:token|key|secret|password)=)/iu;
+  var CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER =
+    /(^|[^a-z0-9_])(?:cs|pi|ch|cus|evt|pm|seti|src|tok|sub|price|prod|re)_[a-z0-9][a-z0-9_-]{5,}($|[^a-z0-9_])/iu;
   var MAXIMUM_ASSESSMENT_EVIDENCE_BYTES = 700 * 1024;
   var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
     "sitesourcery.custom-build-change-completion/v1";
@@ -32,6 +34,24 @@
     "sitesourcery.custom-build-change-payment-reconciliation-command/v1";
   var CUSTOM_BUILD_CHANGE_PAYMENT_SETTLEMENT_SCHEMA =
     "sitesourcery.custom-build-change-settlement/v1";
+  var CUSTOM_BUILD_FINAL_STATE_SCHEMA =
+    "sitesourcery.custom-build-final-handoff/v1";
+  var CUSTOM_BUILD_FINAL_CHECKOUT_SCHEMA =
+    "sitesourcery.custom-build-final-checkout/v1";
+  var CUSTOM_BUILD_FINAL_PAYMENTS_OWNER_SCHEMA =
+    "sitesourcery.custom-build-final-payments-owner/v1";
+  var CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA =
+    "sitesourcery.custom-build-handoff-owner-readiness/v1";
+  var CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA =
+    "sitesourcery.custom-build-handoff-document/v1";
+  var CUSTOM_BUILD_HANDOFF_COMMAND_SCHEMA =
+    "sitesourcery.custom-build-handoff-command/v1";
+  var CUSTOM_BUILD_FINAL_OWNER_RECONCILIATION_SCHEMA =
+    "sitesourcery.custom-build-final-payment-reconciliation-command/v1";
+  var CUSTOM_BUILD_FINAL_SETTLEMENT_SCHEMA =
+    "sitesourcery.custom-build-final-settlement/v1";
+  var CUSTOM_BUILD_FINAL_INVOICE_NUMBER =
+    /^SSCB-FINAL-[0-9A-F]{32}$/u;
   var CUSTOM_BUILD_CHANGE_PAYMENT_STATES = [
     "not_available",
     "payment_held",
@@ -232,8 +252,8 @@
   function boundedText(value, field, minimum, maximum) {
     var selected = String(value == null ? "" : value).trim();
     if (
-      selected.length < minimum
-      || selected.length > maximum
+      Array.from(selected).length < minimum
+      || Array.from(selected).length > maximum
       || CONTROL_CHARACTER.test(selected)
     ) {
       throw new APIError({
@@ -247,7 +267,10 @@
 
   function customBuildSafeText(value, field, minimum, maximum) {
     var selected = boundedText(value, field, minimum, maximum);
-    if (CUSTOM_BUILD_CREDENTIAL.test(selected)) {
+    if (
+      CUSTOM_BUILD_CREDENTIAL.test(selected)
+      || CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER.test(selected)
+    ) {
       throw new APIError({
         code: "INVALID_INPUT",
         message: field
@@ -255,6 +278,34 @@
       });
     }
     return selected;
+  }
+
+  function customBuildCanonicalJson(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return "[" + value.map(customBuildCanonicalJson).join(",") + "]";
+    }
+    return "{" + Object.keys(value).sort().map(function (key) {
+      return JSON.stringify(key) + ":" + customBuildCanonicalJson(value[key]);
+    }).join(",") + "}";
+  }
+
+  function customBuildUtf8ByteLength(value) {
+    if (typeof TextEncoder !== "function") {
+      throw new APIError({
+        code: "INVALID_INPUT",
+        message: "This browser cannot safely size the handoff document."
+      });
+    }
+    return new TextEncoder().encode(value).byteLength;
+  }
+
+  function portableCustomBuildLabelKey(value) {
+    return value.replace(/[A-Z]/gu, function (character) {
+      return character.toLowerCase();
+    });
   }
 
   function requiredDate(value, field) {
@@ -2011,6 +2062,842 @@
     });
   }
 
+  function invalidCustomBuildFinalResponse() {
+    return new APIError({
+      code: "INVALID_CUSTOM_BUILD_FINAL_RESPONSE",
+      message:
+        "Site Sourcery returned invalid final-payment or handoff information. Refresh before replacing the last verified information.",
+      retryable: true
+    });
+  }
+
+  function finalInvariant(condition) {
+    if (!condition) throw invalidCustomBuildFinalResponse();
+  }
+
+  function finalObject(value, expected) {
+    finalInvariant(
+      isObject(value)
+      && (Object.getPrototypeOf(value) === Object.prototype
+        || Object.getPrototypeOf(value) === null)
+      && JSON.stringify(Object.keys(value).sort()) ===
+        JSON.stringify(expected.slice().sort())
+    );
+    return value;
+  }
+
+  function finalUuid(value) {
+    finalInvariant(typeof value === "string" && UUID.test(value));
+    return value;
+  }
+
+  function finalDigest(value) {
+    finalInvariant(typeof value === "string" && SHA256.test(value));
+    return value;
+  }
+
+  function finalIso(value) {
+    finalInvariant(
+      typeof value === "string"
+      && Number.isFinite(Date.parse(value))
+      && new Date(value).toISOString() === value
+    );
+    return value;
+  }
+
+  function finalInteger(value, minimum, maximum) {
+    finalInvariant(
+      typeof value === "number"
+      && Number.isSafeInteger(value)
+      && value >= minimum
+      && value <= maximum
+    );
+    return value;
+  }
+
+  function finalMoney(value, allowZero) {
+    var source = finalObject(value, ["amountMinor", "currency"]);
+    return {
+      amountMinor: finalInteger(
+        source.amountMinor,
+        allowZero ? 0 : 1,
+        Number.MAX_SAFE_INTEGER
+      ),
+      currency: source.currency === "USD" ? "USD" : finalInvariant(false)
+    };
+  }
+
+  function finalWorkmanship(value) {
+    var source = finalObject(
+      value,
+      ["coverage", "endsAt", "startsAt", "termDays"]
+    );
+    var startsAt = finalIso(source.startsAt);
+    var endsAt = finalIso(source.endsAt);
+    finalInvariant(
+      source.coverage === "[start,end)"
+      && source.termDays === 30
+      && Date.parse(endsAt) - Date.parse(startsAt) ===
+        30 * 24 * 60 * 60 * 1000
+    );
+    return {
+      coverage: "[start,end)",
+      termDays: 30,
+      startsAt: startsAt,
+      endsAt: endsAt
+    };
+  }
+
+  function finalResponseHasRawProviderIdentifiers(value) {
+    var forbidden = new Set([
+      "chargeId",
+      "checkoutSessionId",
+      "eventId",
+      "paymentIntentId",
+      "stripeCustomerId"
+    ]);
+    function visit(selected) {
+      if (Array.isArray(selected)) return selected.some(visit);
+      if (!isObject(selected)) return false;
+      return Object.keys(selected).some(function (key) {
+        return forbidden.has(key) || visit(selected[key]);
+      });
+    }
+    return visit(value);
+  }
+
+  function validateCustomBuildFinalState(value, expectedProjectId) {
+    var source = finalObject(value, [
+      "action",
+      "completion",
+      "handoff",
+      "invoice",
+      "jobId",
+      "obligation",
+      "payment",
+      "projectId",
+      "schema",
+      "state"
+    ]);
+    var projectId = finalUuid(source.projectId);
+    var states = [
+      "completion_required",
+      "checkout_held",
+      "checkout_available",
+      "checkout_ready",
+      "checkout_expired",
+      "payment_reconciliation_required",
+      "paid_handoff_pending",
+      "cleared_no_balance_handoff_pending",
+      "handed_off"
+    ];
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_FINAL_STATE_SCHEMA
+      && states.includes(source.state)
+      && (!expectedProjectId || projectId === expectedProjectId)
+      && !finalResponseHasRawProviderIdentifiers(source)
+    );
+    var actionSource = finalObject(
+      source.action,
+      ["checkoutAvailable", "handoffAvailable", "reason"]
+    );
+    finalInvariant(
+      typeof actionSource.checkoutAvailable === "boolean"
+      && typeof actionSource.handoffAvailable === "boolean"
+      && actionSource.checkoutAvailable ===
+        (source.state === "checkout_available")
+      && actionSource.handoffAvailable === false
+      && (actionSource.reason === null
+        || (typeof actionSource.reason === "string"
+          && actionSource.reason.length <= 100))
+    );
+    if (source.state === "completion_required") {
+      var unavailable = finalObject(
+        source.handoff,
+        ["documentId", "state", "workmanshipEndsAt", "workmanshipStartsAt"]
+      );
+      finalInvariant(
+        source.jobId === null
+        && source.completion === null
+        && source.obligation === null
+        && source.invoice === null
+        && source.payment === null
+        && unavailable.state === "unavailable"
+        && unavailable.documentId === null
+        && unavailable.workmanshipStartsAt === null
+        && unavailable.workmanshipEndsAt === null
+      );
+      return deepFreezeProjection(structuredClone(source));
+    }
+
+    var jobId = finalUuid(source.jobId);
+    var completionSource = finalObject(
+      source.completion,
+      ["completedAt", "packageDigest", "packageId"]
+    );
+    var completion = {
+      packageId: finalUuid(completionSource.packageId),
+      packageDigest: finalDigest(completionSource.packageDigest),
+      completedAt: finalIso(completionSource.completedAt)
+    };
+    var obligationSource = finalObject(source.obligation, [
+      "amount",
+      "boundAt",
+      "installmentNumber",
+      "obligationDigest",
+      "obligationId",
+      "workmanshipCorrectionDays"
+    ]);
+    var obligation = {
+      obligationId: finalUuid(obligationSource.obligationId),
+      obligationDigest: finalDigest(obligationSource.obligationDigest),
+      amount: finalMoney(obligationSource.amount, true),
+      installmentNumber: obligationSource.installmentNumber,
+      workmanshipCorrectionDays: obligationSource.workmanshipCorrectionDays,
+      boundAt: finalIso(obligationSource.boundAt)
+    };
+    finalInvariant(
+      obligation.workmanshipCorrectionDays === 30
+      && (obligation.installmentNumber === null
+        || obligation.installmentNumber === 2)
+      && (obligation.amount.amountMinor === 0
+        ? obligation.installmentNumber === null
+        : obligation.installmentNumber === 2)
+    );
+
+    var invoice = null;
+    if (source.invoice !== null) {
+      var invoiceSource = finalObject(source.invoice, [
+        "credit",
+        "invoiceDigest",
+        "invoiceId",
+        "invoiceNumber",
+        "issuedAt",
+        "lines",
+        "purpose",
+        "subtotal",
+        "tax",
+        "total"
+      ]);
+      finalInvariant(
+        invoiceSource.purpose === "custom_build_final"
+        && CUSTOM_BUILD_FINAL_INVOICE_NUMBER.test(invoiceSource.invoiceNumber)
+        && invoiceSource.invoiceNumber === "SSCB-FINAL-"
+          + finalUuid(invoiceSource.invoiceId).replace(/-/gu, "").toUpperCase()
+        && finalDigest(invoiceSource.invoiceDigest)
+        && Array.isArray(invoiceSource.lines)
+        && invoiceSource.lines.length === 1
+      );
+      var lineSource = finalObject(invoiceSource.lines[0], [
+        "amountMinor",
+        "componentKey",
+        "creditMinor",
+        "currency",
+        "displayName",
+        "lineNumber",
+        "quantity",
+        "unitAmountMinor"
+      ]);
+      var subtotal = finalMoney(invoiceSource.subtotal, false);
+      var credit = finalMoney(invoiceSource.credit, true);
+      finalInvariant(
+        lineSource.lineNumber === 1
+        && lineSource.componentKey === "custom_build_final_installment"
+        && lineSource.displayName ===
+          "Custom website build final installment"
+        && lineSource.quantity === 1
+        && lineSource.currency === "USD"
+        && lineSource.creditMinor === 0
+        && lineSource.unitAmountMinor === obligation.amount.amountMinor
+        && lineSource.amountMinor === obligation.amount.amountMinor
+        && subtotal.amountMinor === obligation.amount.amountMinor
+        && credit.amountMinor === 0
+      );
+      var taxSource = finalObject(
+        invoiceSource.tax,
+        ["amountMinor", "state"]
+      );
+      var totalSource = finalObject(
+        invoiceSource.total,
+        ["amountMinor", "currency", "state"]
+      );
+      finalInvariant(
+        totalSource.currency === "USD"
+        && (
+          (taxSource.state === "calculated_at_checkout"
+            && taxSource.amountMinor === null
+            && totalSource.state === "shown_at_checkout"
+            && totalSource.amountMinor === null)
+          || (taxSource.state === "settled"
+            && finalInteger(taxSource.amountMinor, 0, Number.MAX_SAFE_INTEGER) >= 0
+            && totalSource.state === "settled"
+            && finalInteger(totalSource.amountMinor, 1, Number.MAX_SAFE_INTEGER) ===
+              obligation.amount.amountMinor + taxSource.amountMinor)
+        )
+      );
+      invoice = {
+        invoiceId: invoiceSource.invoiceId,
+        invoiceNumber: invoiceSource.invoiceNumber,
+        invoiceDigest: invoiceSource.invoiceDigest,
+        purpose: "custom_build_final",
+        issuedAt: finalIso(invoiceSource.issuedAt),
+        lines: [structuredClone(lineSource)],
+        subtotal: subtotal,
+        credit: credit,
+        tax: structuredClone(taxSource),
+        total: structuredClone(totalSource)
+      };
+    }
+
+    var payment;
+    if (obligation.amount.amountMinor === 0) {
+      var zeroSource = finalObject(
+        source.payment,
+        ["chargeOccurred", "state", "zeroBalanceClearance"]
+      );
+      var clearanceSource = finalObject(
+        zeroSource.zeroBalanceClearance,
+        ["clearanceDigest", "clearanceId", "clearedAt"]
+      );
+      finalInvariant(
+        invoice === null
+        && zeroSource.state === "cleared_no_balance"
+        && zeroSource.chargeOccurred === false
+        && source.state !== "paid_handoff_pending"
+      );
+      payment = {
+        state: "cleared_no_balance",
+        chargeOccurred: false,
+        zeroBalanceClearance: {
+          clearanceId: finalUuid(clearanceSource.clearanceId),
+          clearanceDigest: finalDigest(clearanceSource.clearanceDigest),
+          clearedAt: finalIso(clearanceSource.clearedAt)
+        }
+      };
+    } else {
+      finalInvariant(invoice !== null);
+      var paymentSource = finalObject(source.payment, [
+        "chargeOccurred",
+        "checkoutExpiresAt",
+        "checkoutUrl",
+        "settledAt",
+        "state"
+      ]);
+      finalInvariant(
+        [
+          "held",
+          "checkout_available",
+          "checkout_ready",
+          "checkout_expired",
+          "reconciliation_required",
+          "paid"
+        ].includes(paymentSource.state)
+        && typeof paymentSource.chargeOccurred === "boolean"
+        && paymentSource.chargeOccurred === (paymentSource.state === "paid")
+      );
+      if (paymentSource.state === "checkout_ready") {
+        finalIso(paymentSource.checkoutExpiresAt);
+        changePaymentCheckoutUrl(
+          paymentSource.checkoutUrl,
+          paymentSource.checkoutExpiresAt
+        );
+      } else {
+        finalInvariant(
+          paymentSource.checkoutUrl === null
+          && paymentSource.checkoutExpiresAt === null
+        );
+      }
+      finalInvariant(
+        paymentSource.state === "paid"
+          ? Boolean(finalIso(paymentSource.settledAt))
+          : paymentSource.settledAt === null
+      );
+      payment = structuredClone(paymentSource);
+    }
+
+    var handoff;
+    if (source.state === "handed_off") {
+      var handedSource = finalObject(source.handoff, [
+        "contentDigest",
+        "documentId",
+        "handedOffAt",
+        "state",
+        "workmanshipEndsAt",
+        "workmanshipStartsAt"
+      ]);
+      var handedOffAt = finalIso(handedSource.handedOffAt);
+      var startsAt = finalIso(handedSource.workmanshipStartsAt);
+      var endsAt = finalIso(handedSource.workmanshipEndsAt);
+      finalInvariant(
+        handedSource.state === "handed_off"
+        && startsAt === handedOffAt
+        && Date.parse(endsAt) - Date.parse(startsAt) ===
+          30 * 24 * 60 * 60 * 1000
+        && ["paid", "cleared_no_balance"].includes(payment.state)
+      );
+      handoff = {
+        state: "handed_off",
+        documentId: finalUuid(handedSource.documentId),
+        contentDigest: finalDigest(handedSource.contentDigest),
+        handedOffAt: handedOffAt,
+        workmanshipStartsAt: startsAt,
+        workmanshipEndsAt: endsAt
+      };
+    } else {
+      var pendingSource = finalObject(
+        source.handoff,
+        ["documentId", "state", "workmanshipEndsAt", "workmanshipStartsAt"]
+      );
+      finalInvariant(
+        ["pending", "unavailable"].includes(pendingSource.state)
+        && pendingSource.documentId === null
+        && pendingSource.workmanshipStartsAt === null
+        && pendingSource.workmanshipEndsAt === null
+      );
+      handoff = structuredClone(pendingSource);
+    }
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_FINAL_STATE_SCHEMA,
+      state: source.state,
+      projectId: projectId,
+      jobId: jobId,
+      completion: completion,
+      obligation: obligation,
+      invoice: invoice,
+      payment: payment,
+      handoff: handoff,
+      action: {
+        checkoutAvailable: actionSource.checkoutAvailable,
+        handoffAvailable: false,
+        reason: actionSource.reason
+      }
+    });
+  }
+
+  function validateCustomBuildFinalCheckout(value, expectedStateInput) {
+    var source = finalObject(value, ["checkout", "schema", "state"]);
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_FINAL_CHECKOUT_SCHEMA
+      && source.state === "ready"
+    );
+    var checkoutSource = finalObject(source.checkout, [
+      "chargeOccurred",
+      "expiresAt",
+      "invoiceId",
+      "invoiceNumber",
+      "subtotal",
+      "tax",
+      "total",
+      "url"
+    ]);
+    var invoiceId = finalUuid(checkoutSource.invoiceId);
+    var expiresAt = finalIso(checkoutSource.expiresAt);
+    var subtotal = finalMoney(checkoutSource.subtotal, false);
+    var tax = finalObject(checkoutSource.tax, ["amountMinor", "state"]);
+    var total = finalObject(
+      checkoutSource.total,
+      ["amountMinor", "currency", "state"]
+    );
+    finalInvariant(
+      CUSTOM_BUILD_FINAL_INVOICE_NUMBER.test(checkoutSource.invoiceNumber)
+      && checkoutSource.invoiceNumber === "SSCB-FINAL-"
+        + invoiceId.replace(/-/gu, "").toUpperCase()
+      && tax.amountMinor === null
+      && tax.state === "calculated_at_checkout"
+      && total.amountMinor === null
+      && total.currency === "USD"
+      && total.state === "shown_at_checkout"
+      && checkoutSource.chargeOccurred === false
+    );
+    var expectedState = expectedStateInput === undefined
+      ? null
+      : validateCustomBuildFinalState(expectedStateInput);
+    if (expectedState !== null) {
+      finalInvariant(
+        expectedState.state === "checkout_available"
+        && expectedState.invoice.invoiceId === invoiceId
+        && expectedState.invoice.invoiceNumber === checkoutSource.invoiceNumber
+        && expectedState.invoice.subtotal.amountMinor === subtotal.amountMinor
+      );
+    }
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_FINAL_CHECKOUT_SCHEMA,
+      state: "ready",
+      checkout: {
+        invoiceId: invoiceId,
+        invoiceNumber: checkoutSource.invoiceNumber,
+        url: changePaymentCheckoutUrl(checkoutSource.url, expiresAt),
+        expiresAt: expiresAt,
+        subtotal: subtotal,
+        tax: { amountMinor: null, state: "calculated_at_checkout" },
+        total: {
+          amountMinor: null,
+          currency: "USD",
+          state: "shown_at_checkout"
+        },
+        chargeOccurred: false
+      }
+    });
+  }
+
+  function validateCustomBuildHandoffOwnerReadiness(value, expected) {
+    var source = finalObject(value, [
+      "action",
+      "completion",
+      "finalObligation",
+      "financialClearance",
+      "handoff",
+      "jobId",
+      "organizationId",
+      "projectId",
+      "schema",
+      "state"
+    ]);
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA
+      && source.organizationId === expected.organizationId
+      && source.jobId === expected.jobId
+      && source.projectId === expected.projectId
+      && ["handoff_available", "handoff_not_ready", "handed_off"]
+        .includes(source.state)
+      && !finalResponseHasRawProviderIdentifiers(source)
+    );
+    var completion = finalObject(
+      source.completion,
+      ["completedAt", "packageDigest", "packageId"]
+    );
+    var obligation = finalObject(
+      source.finalObligation,
+      ["obligationDigest", "obligationId"]
+    );
+    completion = {
+      packageId: finalUuid(completion.packageId),
+      packageDigest: finalDigest(completion.packageDigest),
+      completedAt: finalIso(completion.completedAt)
+    };
+    obligation = {
+      obligationId: finalUuid(obligation.obligationId),
+      obligationDigest: finalDigest(obligation.obligationDigest)
+    };
+    var clearance = null;
+    if (source.financialClearance !== null) {
+      var clearanceSource = finalObject(
+        source.financialClearance,
+        ["clearedAt"]
+      );
+      clearance = {
+        clearedAt: finalIso(clearanceSource.clearedAt)
+      };
+    }
+    var action = finalObject(
+      source.action,
+      ["handoffAvailable", "reason"]
+    );
+    finalInvariant(
+      typeof action.handoffAvailable === "boolean"
+      && (action.reason === null || typeof action.reason === "string")
+    );
+    var retainedHandoff = null;
+    if (source.handoff !== null) {
+      var handoffSource = finalObject(source.handoff, [
+        "contentDigest",
+        "documentId",
+        "handedOffAt",
+        "workmanship"
+      ]);
+      retainedHandoff = {
+        documentId: finalUuid(handoffSource.documentId),
+        contentDigest: finalDigest(handoffSource.contentDigest),
+        handedOffAt: finalIso(handoffSource.handedOffAt),
+        workmanship: finalWorkmanship(handoffSource.workmanship)
+      };
+      finalInvariant(
+        retainedHandoff.workmanship.startsAt === retainedHandoff.handedOffAt
+      );
+    }
+    finalInvariant(
+      source.state === "handed_off"
+        ? retainedHandoff !== null
+          && clearance !== null
+          && action.handoffAvailable === false
+          && action.reason === "handed_off"
+        : source.state === "handoff_available"
+          ? retainedHandoff === null
+            && clearance !== null
+            && action.handoffAvailable === true
+            && action.reason === "financial_clearance_confirmed"
+          : retainedHandoff === null
+            && action.handoffAvailable === false
+            && (clearance === null
+              ? action.reason === "financial_clearance_required"
+              : action.reason === "handoff_boundary_not_ready")
+    );
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_HANDOFF_OWNER_READINESS_SCHEMA,
+      state: source.state,
+      organizationId: source.organizationId,
+      projectId: source.projectId,
+      jobId: source.jobId,
+      completion: structuredClone(completion),
+      finalObligation: structuredClone(obligation),
+      financialClearance: clearance,
+      handoff: retainedHandoff,
+      action: {
+        handoffAvailable: action.handoffAvailable,
+        reason: action.reason
+      }
+    });
+  }
+
+  function validateCustomBuildFinalPaymentsOwner(value, expected) {
+    var source = finalObject(value, [
+      "finalPayment",
+      "jobId",
+      "organizationId",
+      "owner",
+      "schema"
+    ]);
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_FINAL_PAYMENTS_OWNER_SCHEMA
+      && source.organizationId === expected.organizationId
+      && source.jobId === expected.jobId
+    );
+    var finalPayment = validateCustomBuildFinalState(
+      source.finalPayment,
+      expected.projectId
+    );
+    var ownerSource = finalObject(source.owner, [
+      "attemptId",
+      "attemptState",
+      "canReconcileCreation",
+      "canReconcileSettlement",
+      "eventId",
+      "eventState",
+      "providerEffectCertainty",
+      "providerErrorCode",
+      "providerRequestExpiresAt",
+      "receiptSource",
+      "reconciliationCode"
+    ]);
+    finalInvariant(
+      (ownerSource.attemptId === null || UUID.test(ownerSource.attemptId))
+      && typeof ownerSource.canReconcileCreation === "boolean"
+      && typeof ownerSource.canReconcileSettlement === "boolean"
+      && (ownerSource.providerRequestExpiresAt === null
+        || Boolean(finalIso(ownerSource.providerRequestExpiresAt)))
+      && (ownerSource.receiptSource === null
+        || ["stripe_event", "provider_readback"].includes(
+          ownerSource.receiptSource
+        ))
+    );
+    return deepFreezeProjection({
+      schema: CUSTOM_BUILD_FINAL_PAYMENTS_OWNER_SCHEMA,
+      organizationId: source.organizationId,
+      jobId: source.jobId,
+      finalPayment: finalPayment,
+      owner: structuredClone(ownerSource)
+    });
+  }
+
+  function validateCustomBuildHandoffDocument(value, expected) {
+    var source = finalObject(value, [
+      "byteCount",
+      "contentDigest",
+      "documentId",
+      "mediaType",
+      "payload",
+      "schema"
+    ]);
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA
+      && source.mediaType === "application/json"
+      && finalUuid(source.documentId) === expected.documentId
+      && finalDigest(source.contentDigest) === expected.contentDigest
+      && finalInteger(source.byteCount, 1, 64 * 1024) >= 1
+      && !finalResponseHasRawProviderIdentifiers(source)
+    );
+    var payload = finalObject(source.payload, [
+      "completion",
+      "customerSummary",
+      "deliveryManifest",
+      "finalObligation",
+      "financialClearance",
+      "handoff",
+      "jobId",
+      "projectId",
+      "schema",
+      "state"
+    ]);
+    var completion = finalObject(
+      payload.completion,
+      ["packageDigest", "packageId"]
+    );
+    var obligation = finalObject(
+      payload.finalObligation,
+      ["obligationDigest", "obligationId"]
+    );
+    var clearance = finalObject(
+      payload.financialClearance,
+      ["clearedAt", "kind", "referenceId"]
+    );
+    var handoff = finalObject(
+      payload.handoff,
+      ["documentId", "handedOffAt", "receiptId", "workmanship"]
+    );
+    finalInvariant(
+      payload.schema === CUSTOM_BUILD_HANDOFF_DOCUMENT_SCHEMA
+      && payload.state === "handed_off"
+      && payload.projectId === expected.projectId
+      && payload.jobId === expected.jobId
+      && handoff.documentId === source.documentId
+      && finalUuid(handoff.receiptId)
+      && finalIso(handoff.handedOffAt)
+      && finalWorkmanship(handoff.workmanship).startsAt === handoff.handedOffAt
+      && finalUuid(completion.packageId)
+      && finalDigest(completion.packageDigest)
+      && finalUuid(obligation.obligationId)
+      && finalDigest(obligation.obligationDigest)
+      && [
+        "provider_confirmed_final_payment",
+        "zero_balance_clearance"
+      ].includes(clearance.kind)
+      && finalUuid(clearance.referenceId)
+      && finalIso(clearance.clearedAt)
+      && customBuildSafeText(
+        payload.customerSummary,
+        "Custom-build handoff summary",
+        20,
+        2000
+      )
+      && Array.isArray(payload.deliveryManifest)
+      && payload.deliveryManifest.length >= 1
+      && payload.deliveryManifest.length <= 40
+    );
+    var labels = new Set();
+    payload.deliveryManifest.forEach(function (entry) {
+      var item = finalObject(entry, ["description", "label"]);
+      var label = customBuildSafeText(
+        item.label,
+        "Handoff item label",
+        2,
+        120
+      );
+      customBuildSafeText(
+        item.description,
+        "Handoff item description",
+        2,
+        500
+      );
+      var labelKey = portableCustomBuildLabelKey(label);
+      finalInvariant(!labels.has(labelKey));
+      labels.add(labelKey);
+    });
+    return deepFreezeProjection(structuredClone(source));
+  }
+
+  function validateCustomBuildHandoffCommand(value, expected) {
+    var source = finalObject(value, [
+      "completionPackageDigest",
+      "documentDigest",
+      "documentId",
+      "financialClearance",
+      "finalObligationDigest",
+      "handedOffAt",
+      "jobId",
+      "organizationId",
+      "projectId",
+      "receiptId",
+      "schema",
+      "state",
+      "workmanship"
+    ]);
+    var clearance = finalObject(
+      source.financialClearance,
+      ["clearedAt", "kind", "referenceId"]
+    );
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_HANDOFF_COMMAND_SCHEMA
+      && source.state === "handed_off"
+      && source.organizationId === expected.organizationId
+      && source.projectId === expected.projectId
+      && source.jobId === expected.jobId
+      && source.completionPackageDigest ===
+        expected.expectedCompletionPackageDigest
+      && source.finalObligationDigest ===
+        expected.expectedFinalObligationDigest
+      && finalUuid(source.receiptId)
+      && finalUuid(source.documentId)
+      && finalDigest(source.documentDigest)
+      && finalIso(source.handedOffAt)
+      && finalWorkmanship(source.workmanship).startsAt === source.handedOffAt
+      && [
+        "provider_confirmed_final_payment",
+        "zero_balance_clearance"
+      ].includes(clearance.kind)
+      && finalUuid(clearance.referenceId)
+      && finalIso(clearance.clearedAt)
+    );
+    return deepFreezeProjection(structuredClone(source));
+  }
+
+  function validateCustomBuildFinalOwnerReconciliation(value, expected) {
+    var source = finalObject(value, [
+      "action",
+      "attemptId",
+      "checkout",
+      "invoiceId",
+      "jobId",
+      "next",
+      "organizationId",
+      "reason",
+      "schema",
+      "settlement",
+      "status"
+    ]);
+    finalInvariant(
+      source.schema === CUSTOM_BUILD_FINAL_OWNER_RECONCILIATION_SCHEMA
+      && source.organizationId === expected.organizationId
+      && source.jobId === expected.jobId
+      && source.attemptId === expected.attemptId
+      && source.invoiceId === expected.invoiceId
+      && [
+        "checkout_ready",
+        "payment_settled",
+        "checkout_expired",
+        "reconciliation_required"
+      ].includes(source.status)
+      && (source.reason === null
+        || (typeof source.reason === "string" && source.reason.length <= 200))
+    );
+    if (source.status === "checkout_ready") {
+      validateCustomBuildFinalCheckout(source.checkout);
+      finalInvariant(source.settlement === null);
+    } else if (source.status === "payment_settled") {
+      var settlement = finalObject(source.settlement, [
+        "completionPackageId",
+        "invoiceId",
+        "jobId",
+        "next",
+        "receiptId",
+        "schema",
+        "status"
+      ]);
+      finalInvariant(
+        source.checkout === null
+        && settlement.schema === CUSTOM_BUILD_FINAL_SETTLEMENT_SCHEMA
+        && settlement.status === "payment_settled"
+        && settlement.invoiceId === expected.invoiceId
+        && settlement.jobId === expected.jobId
+        && settlement.next === "custom_build_handoff"
+        && finalUuid(settlement.completionPackageId)
+        && finalUuid(settlement.receiptId)
+      );
+    } else {
+      finalInvariant(source.checkout === null && source.settlement === null);
+    }
+    return deepFreezeProjection(structuredClone(source));
+  }
+
   function rejectClaimedAuthority(source) {
     if (Array.isArray(source)) {
       source.forEach(rejectClaimedAuthority);
@@ -2060,6 +2947,38 @@
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
     var csrfToken = null;
     var csrfBootstrap = null;
+
+    async function verifyCustomBuildHandoffDocumentIntegrity(documentValue) {
+      var canonical = customBuildCanonicalJson(documentValue.payload);
+      var bytes;
+      try {
+        bytes = new TextEncoder().encode(canonical);
+      } catch (_error) {
+        throw invalidCustomBuildFinalResponse();
+      }
+      finalInvariant(bytes.byteLength === documentValue.byteCount);
+      if (
+        !cryptoImpl
+        || !cryptoImpl.subtle
+        || typeof cryptoImpl.subtle.digest !== "function"
+      ) {
+        throw new APIError({
+          code: "HANDOFF_INTEGRITY_UNAVAILABLE",
+          message:
+            "This browser cannot verify the immutable handoff record. Update the browser and try again."
+        });
+      }
+      var calculated;
+      try {
+        calculated = new Uint8Array(
+          await cryptoImpl.subtle.digest("SHA-256", bytes)
+        );
+      } catch (_error) {
+        throw invalidCustomBuildFinalResponse();
+      }
+      finalInvariant(hexFromBytes(calculated) === documentValue.contentDigest);
+      return documentValue;
+    }
 
     async function ensureCsrf() {
       if (csrfToken) return;
@@ -3450,6 +4369,371 @@
           value,
           options.expectedChangeOrder
         );
+      });
+    }
+
+    function getCustomServicesCustomBuildFinalHandoff(
+      projectId,
+      requestOptions
+    ) {
+      var selectedProjectId = requiredUuid(
+        projectId,
+        "Custom-build project ID"
+      );
+      return request(
+        "GET",
+        "/projects/" + segment(selectedProjectId, "Project ID")
+          + "/custom-services/custom-build-final-handoff",
+        { signal: requestOptions && requestOptions.signal }
+      ).then(function (value) {
+        return validateCustomBuildFinalState(value, selectedProjectId);
+      });
+    }
+
+    function createCustomServicesCustomBuildFinalCheckout(
+      projectId,
+      invoiceId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "invoiceDigest"],
+        "Custom-build final payment"
+      );
+      rejectClaimedAuthority(source);
+      var selectedProjectId = requiredUuid(
+        projectId,
+        "Custom-build project ID"
+      );
+      var selectedInvoiceId = requiredUuid(
+        invoiceId,
+        "Custom-build final invoice ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build final payment command ID"
+      );
+      var invoiceDigest = requiredDigest(
+        source.invoiceDigest,
+        "Custom-build final invoice digest"
+      );
+      var options = requestOptions || {};
+      var expectedState = validateCustomBuildFinalState(
+        options.expectedState,
+        selectedProjectId
+      );
+      finalInvariant(
+        expectedState.state === "checkout_available"
+        && expectedState.invoice.invoiceId === selectedInvoiceId
+        && expectedState.invoice.invoiceDigest === invoiceDigest
+      );
+      return request(
+        "POST",
+        "/projects/" + segment(selectedProjectId, "Project ID")
+          + "/custom-services/custom-build-final-invoices/"
+          + segment(selectedInvoiceId, "Custom-build final invoice ID")
+          + "/checkout-command",
+        {
+          body: {
+            commandId: commandId,
+            invoiceDigest: invoiceDigest
+          },
+          idempotencyKey: commandId,
+          signal: options.signal
+        }
+      ).then(function (value) {
+        return validateCustomBuildFinalCheckout(value, expectedState);
+      });
+    }
+
+    function getCustomServicesCustomBuildHandoffDocument(
+      projectId,
+      documentId,
+      requestOptions
+    ) {
+      var selectedProjectId = requiredUuid(
+        projectId,
+        "Custom-build project ID"
+      );
+      var selectedDocumentId = requiredUuid(
+        documentId,
+        "Custom-build handoff document ID"
+      );
+      var options = requestOptions || {};
+      var expectedState = validateCustomBuildFinalState(
+        options.expectedState,
+        selectedProjectId
+      );
+      finalInvariant(
+        expectedState.state === "handed_off"
+        && expectedState.handoff.documentId === selectedDocumentId
+      );
+      return request(
+        "GET",
+        "/projects/" + segment(selectedProjectId, "Project ID")
+          + "/custom-services/custom-build-handoff-documents/"
+          + segment(selectedDocumentId, "Custom-build handoff document ID"),
+        { signal: options.signal }
+      ).then(function (value) {
+        var documentValue = validateCustomBuildHandoffDocument(value, {
+          projectId: selectedProjectId,
+          jobId: expectedState.jobId,
+          documentId: selectedDocumentId,
+          contentDigest: expectedState.handoff.contentDigest
+        });
+        return verifyCustomBuildHandoffDocumentIntegrity(documentValue);
+      });
+    }
+
+    function getOwnerCustomBuildFinalPayments(
+      jobId,
+      organizationId,
+      requestOptions
+    ) {
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedOrganizationId = requiredUuid(
+        organizationId,
+        "Organization ID"
+      );
+      var options = requestOptions || {};
+      var expectedProjectId = requiredUuid(
+        options.expectedProjectId,
+        "Custom-build project ID"
+      );
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/final-payments?organizationId="
+          + encodeURIComponent(selectedOrganizationId),
+        { signal: options.signal }
+      ).then(function (value) {
+        return validateCustomBuildFinalPaymentsOwner(value, {
+          organizationId: selectedOrganizationId,
+          projectId: expectedProjectId,
+          jobId: selectedJobId
+        });
+      });
+    }
+
+    function getOwnerCustomBuildFinalHandoff(
+      jobId,
+      organizationId,
+      requestOptions
+    ) {
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedOrganizationId = requiredUuid(
+        organizationId,
+        "Organization ID"
+      );
+      var options = requestOptions || {};
+      var expectedProjectId = requiredUuid(
+        options.expectedProjectId,
+        "Custom-build project ID"
+      );
+      return request(
+        "GET",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/final-handoff?organizationId="
+          + encodeURIComponent(selectedOrganizationId),
+        { signal: options.signal }
+      ).then(function (value) {
+        return validateCustomBuildHandoffOwnerReadiness(value, {
+          organizationId: selectedOrganizationId,
+          projectId: expectedProjectId,
+          jobId: selectedJobId
+        });
+      });
+    }
+
+    function reconcileOwnerCustomBuildFinalCheckout(
+      jobId,
+      attemptId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(
+        input,
+        ["commandId", "organizationId"],
+        "Custom-build final Checkout reconciliation"
+      );
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedAttemptId = requiredUuid(
+        attemptId,
+        "Custom-build final Checkout attempt ID"
+      );
+      var selectedOrganizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build final Checkout reconciliation command ID"
+      );
+      var options = requestOptions || {};
+      var expected = validateCustomBuildFinalPaymentsOwner(
+        options.expectedState,
+        {
+          organizationId: selectedOrganizationId,
+          projectId: options.expectedProjectId,
+          jobId: selectedJobId
+        }
+      );
+      finalInvariant(
+        expected.owner.attemptId === selectedAttemptId
+        && (expected.owner.canReconcileCreation
+          || expected.owner.canReconcileSettlement)
+        && expected.finalPayment.invoice !== null
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/final-payments/"
+          + segment(selectedAttemptId, "Custom-build final attempt ID")
+          + "/checkout-reconciliation",
+        {
+          body: {
+            commandId: commandId,
+            organizationId: selectedOrganizationId
+          },
+          idempotencyKey: commandId,
+          signal: options.signal
+        }
+      ).then(function (value) {
+        return validateCustomBuildFinalOwnerReconciliation(value, {
+          organizationId: selectedOrganizationId,
+          jobId: selectedJobId,
+          attemptId: selectedAttemptId,
+          invoiceId: expected.finalPayment.invoice.invoiceId
+        });
+      });
+    }
+
+    function createOwnerCustomBuildHandoff(
+      jobId,
+      input,
+      requestOptions
+    ) {
+      var source = exactInput(input, [
+        "commandId",
+        "customerSummary",
+        "deliveryManifest",
+        "expectedCompletionPackageDigest",
+        "expectedFinalObligationDigest",
+        "organizationId"
+      ], "Custom-build handoff");
+      rejectClaimedAuthority(source);
+      var selectedJobId = requiredUuid(jobId, "Custom-build job ID");
+      var selectedOrganizationId = requiredUuid(
+        source.organizationId,
+        "Organization ID"
+      );
+      var commandId = customBuildChangeCommandId(
+        source.commandId,
+        "Custom-build handoff command ID"
+      );
+      var manifest = Array.isArray(source.deliveryManifest)
+        ? source.deliveryManifest.map(function (entry, index) {
+            var item = exactInput(
+              entry,
+              ["description", "label"],
+              "Custom-build handoff item " + String(index + 1)
+            );
+            return {
+              label: customBuildSafeText(
+                item.label,
+                "Handoff item label",
+                2,
+                120
+              ),
+              description: customBuildSafeText(
+                item.description,
+                "Handoff item description",
+                2,
+                500
+              )
+            };
+          })
+        : [];
+      if (manifest.length < 1 || manifest.length > 40) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "Include between one and forty exact handoff items."
+        });
+      }
+      if (
+        new Set(manifest.map(function (entry) {
+          return portableCustomBuildLabelKey(entry.label);
+        })).size !== manifest.length
+        || customBuildUtf8ByteLength(customBuildCanonicalJson({
+          items: manifest
+        })) > 30 * 1024
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "Handoff labels must be unique and the exact manifest must be 30 KiB or smaller."
+        });
+      }
+      var body = {
+        commandId: commandId,
+        customerSummary: customBuildSafeText(
+          source.customerSummary,
+          "Customer handoff summary",
+          20,
+          2000
+        ),
+        deliveryManifest: manifest,
+        expectedCompletionPackageDigest: requiredDigest(
+          source.expectedCompletionPackageDigest,
+          "Expected completion-package digest"
+        ),
+        expectedFinalObligationDigest: requiredDigest(
+          source.expectedFinalObligationDigest,
+          "Expected final-obligation digest"
+        ),
+        organizationId: selectedOrganizationId
+      };
+      var options = requestOptions || {};
+      var expected = validateCustomBuildHandoffOwnerReadiness(
+        options.expectedState,
+        {
+          organizationId: selectedOrganizationId,
+          projectId: options.expectedProjectId,
+          jobId: selectedJobId
+        }
+      );
+      finalInvariant(
+        expected.action.handoffAvailable === true
+        && expected.completion.packageDigest ===
+          body.expectedCompletionPackageDigest
+        && expected.finalObligation.obligationDigest ===
+          body.expectedFinalObligationDigest
+      );
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-jobs/"
+          + segment(selectedJobId, "Custom-build job ID")
+          + "/handoff",
+        {
+          body: body,
+          idempotencyKey: commandId,
+          signal: options.signal
+        }
+      ).then(function (value) {
+        return validateCustomBuildHandoffCommand(value, {
+          organizationId: selectedOrganizationId,
+          projectId: options.expectedProjectId,
+          jobId: selectedJobId,
+          expectedCompletionPackageDigest:
+            body.expectedCompletionPackageDigest,
+          expectedFinalObligationDigest:
+            body.expectedFinalObligationDigest
+        });
       });
     }
 
@@ -4990,6 +6274,12 @@
         getCustomServicesCustomBuildChangeCompletion,
       getCustomServicesCustomBuildChangeInvoice:
         getCustomServicesCustomBuildChangeInvoice,
+      getCustomServicesCustomBuildFinalHandoff:
+        getCustomServicesCustomBuildFinalHandoff,
+      createCustomServicesCustomBuildFinalCheckout:
+        createCustomServicesCustomBuildFinalCheckout,
+      getCustomServicesCustomBuildHandoffDocument:
+        getCustomServicesCustomBuildHandoffDocument,
       getCustomServicesCustomBuildCompletionEvidence:
         getCustomServicesCustomBuildCompletionEvidence,
       acceptCustomServicesCustomBuildChangeOrder:
@@ -5004,6 +6294,14 @@
         getOwnerCustomBuildChangePayments,
       reconcileOwnerCustomBuildChangeCheckout:
         reconcileOwnerCustomBuildChangeCheckout,
+      getOwnerCustomBuildFinalHandoff:
+        getOwnerCustomBuildFinalHandoff,
+      getOwnerCustomBuildFinalPayments:
+        getOwnerCustomBuildFinalPayments,
+      reconcileOwnerCustomBuildFinalCheckout:
+        reconcileOwnerCustomBuildFinalCheckout,
+      createOwnerCustomBuildHandoff:
+        createOwnerCustomBuildHandoff,
       issueOwnerCustomBuildChangeOrder:
         issueOwnerCustomBuildChangeOrder,
       voidOwnerCustomBuildChangeOrder:

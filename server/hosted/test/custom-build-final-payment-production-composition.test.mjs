@@ -6,7 +6,7 @@ import {
   createConfiguredCustomBuildFinalPaymentRelease
 } from "../custom-services-custom-build-final-payment-config.mjs";
 
-test("production composes v46 final payment separately while H1M completion remains held", async () => {
+test("production composes v47 completion, final payment, and handoff as separate boundaries", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -22,7 +22,11 @@ test("production composes v46 final payment separately while H1M completion rema
   );
   assert.match(
     source,
-    /const customServicesCustomBuildChangeCompletion\s*=\s*createHeldCustomServicesCustomBuildChangeCompletion\(\)/u
+    /const customServicesCustomBuildChangeCompletion\s*=\s*createPostgresCustomServicesCustomBuildChangeCompletion\(\{\s*authority,\s*clock:\s*commerceV2\.clock,\s*randomUUID:\s*\(\)\s*=>\s*commerceV2\.ids\.next\("custom_build_change_completion"\)\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /const customBuildHandoff\s*=\s*createPostgresCustomServicesCustomBuildHandoff\(\{\s*authority,\s*ids:\s*commerceV2\.ids\s*\}\)/u
   );
   assert.match(
     source,
@@ -30,11 +34,15 @@ test("production composes v46 final payment separately while H1M completion rema
   );
   assert.match(
     source,
-    /createHostedCustomServicesAccount\(\{[\s\S]*?customBuildFinalPayment,[\s\S]*?customBuildPayment,/u
+    /createHostedCustomServicesAccount\(\{[\s\S]*?customBuildFinalPayment,[\s\S]*?customBuildHandoff,[\s\S]*?customBuildPayment,/u
   );
   assert.match(
     source,
-    /createHostedApi\(service, \{[\s\S]*?customServicesCustomBuildFinalPayment:\s*customBuildFinalPayment,/u
+    /createHostedApi\(service, \{[\s\S]*?customServicesCustomBuildFinalPayment:\s*customBuildFinalPayment,[\s\S]*?customServicesCustomBuildHandoff:\s*customBuildHandoff,/u
+  );
+  assert.match(
+    source,
+    /await customServicesCustomBuildChangeCompletion\.readiness\(\);\s*await customBuildHandoff\.readiness\(\);/u
   );
   assert.match(
     source,
@@ -43,6 +51,49 @@ test("production composes v46 final payment separately while H1M completion rema
   assert.doesNotMatch(
     source,
     /createHeldCustomServicesCustomBuildFinalPayment/u
+  );
+  assert.doesNotMatch(
+    source,
+    /createHeldCustomServicesCustomBuildChangeCompletion/u
+  );
+  assert.doesNotMatch(
+    source,
+    /createHeldCustomServicesCustomBuildHandoff/u
+  );
+});
+
+test("owner v47 HTTP composition keeps payment lifecycle and handoff readiness on separate authorities", async () => {
+  const [httpSource, accountSource] = await Promise.all([
+    readFile(new URL("../http.mjs", import.meta.url), "utf8"),
+    readFile(
+      new URL("../custom-services-account-hosted.mjs", import.meta.url),
+      "utf8"
+    )
+  ]);
+
+  assert.match(
+    accountSource,
+    /export const CUSTOM_BUILD_OWNER_HANDOFF_READINESS_SCHEMA\s*=\s*"sitesourcery\.custom-build-handoff-owner-readiness\/v1"/u
+  );
+  assert.match(
+    accountSource,
+    /createHostedCustomServicesCustomBuildHandoffOwner[\s\S]*?readOwnerState[\s\S]*?boundary\.readOwner/u
+  );
+  assert.match(
+    httpSource,
+    /custom-build-jobs\\\/\(\[\^\/\]\+\)\\\/final-payments\$[\s\S]*?readOwnerFinalPayments/u
+  );
+  assert.match(
+    httpSource,
+    /custom-build-jobs\\\/\(\[\^\/\]\+\)\\\/final-handoff\$[\s\S]*?customServicesCustomBuildHandoffOwnerBoundary[\s\S]*?\.readOwnerState/u
+  );
+  assert.match(
+    httpSource,
+    /custom-build-jobs\\\/\(\[\^\/\]\+\)\\\/handoff\$[\s\S]*?customServicesCustomBuildHandoffOwnerBoundary[\s\S]*?\.createHandoff/u
+  );
+  assert.doesNotMatch(
+    httpSource,
+    /ownerCustomBuildFinalHandoffProjection/u
   );
 });
 
