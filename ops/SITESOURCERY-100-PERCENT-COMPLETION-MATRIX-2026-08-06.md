@@ -1,23 +1,22 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-07T10:01:17-0400 (EDT)
+Generated at: 2026-08-07T10:17:04-0400 (EDT)
 
 Repository snapshot:
 
 - Branch: build/sitesourcery-v2-20260730
-- Base HEAD: f9950ae (sealed migration 46 on top of public-truth commit
-  ea38093; the migration-47 checkpoint is the path-limited commit containing
-  this matrix)
+- Base HEAD: 3c008bb (integrated checker-authority and held-Alakazam commits
+  on top of migration-47 checkpoint f1c265e; this evidence-reconciliation
+  commit contains the updated matrix)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
 - Active ledger reviewed completely through the migration-47 seal:
   ops/SITESOURCERY-ACTIVE-RUN.md
 - Package gates reviewed: package.json and server/data-plane/package.json
 - H1M remains sealed at c4277ce, the distinct local public-page visual
   checkpoint is sealed at 2b0f9e0, and H1N Purpose 1 is sealed at 9a9511c.
-  H1N migration 46 is sealed at f9950ae and public truth is sealed at ea38093.
-  This matrix is part of the path-limited migration-47 seal. The separate
-  public branches 035d76a and 4b30ce5 are not ancestors of this candidate and
-  are not counted as release proof.
+  H1N migration 47 is sealed at f1c265e. Checker authority is integrated at
+  81075b7 and held Alakazam surfaces at 3c008bb. The combined public/legal/
+  checker/Work checkpoint is part of this evidence reconciliation.
 
 ## Authority, status, and percentage rules
 
@@ -91,7 +90,7 @@ of this file.
 
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| CORE LAUNCH | 94 | 33 | 9 | 0 | 136 | 69.1% |
+| CORE LAUNCH | 97 | 30 | 9 | 0 | 136 | 71.3% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
@@ -266,8 +265,8 @@ of this file.
 | --- | --- | --- | --- | --- | --- |
 | TRUTH-01 | Publish $25/$35/$50 ladder and $20/$30/$45 first-payment outcomes | Aesthetic + Polish/Integration | PARTIAL | Backend/account tests carry exact tiers and outcomes; public FAQ, Domains and legal still say only $25 at faq/index.html:57, domains/index.html:44 and legal terms:96-100 | Publish canonical ladder only after $35/$50 fulfillment is launch-ready or clearly mark unavailable tiers. |
 | TRUTH-02 | Cash App/Venmo only at $50 and three-version history at $35+ | Build + Aesthetic | PARTIAL | $50 compiler gating is tested; $35 history/editor authority and reconciled public copy are absent | Implement retained tier controls then update copy/tests. |
-| TRUTH-03 | Replace “$25 = your own .com” with label.sitesourcery.me | Aesthetic + Polish/Integration | PARTIAL | Account/terms use label.sitesourcery.me; hosted fragments still advertise own-domain hosting at scripts/hosted-truth/fragments/abracadabra-landing-main.html:80-90 | Remove tier/domain conflation from every public/hosted source. |
-| TRUTH-04 | Remove invented cancellation, grace, suspension, retention, deletion and refund language until policy is approved | Aesthetic + Polish/Integration | PARTIAL | Audit exists, but legal/website-terms/index.html:96-101 and source-only controls still state invented clocks | Remove/hold public claims now; reintroduce only after Lane G policy/proof. |
+| TRUTH-03 | Replace “$25 = your own .com” with label.sitesourcery.me | Aesthetic + Polish/Integration | DONE | Combined public-truth/legal checkpoint at 81075b7 and 3c008bb reconciles hosted fragments and legal language to `label.sitesourcery.me`; checker-authority and 99/99 public/legal/Work preflight gates pass | Preserve the platform-subdomain truth until a registrar/product authority is released. |
+| TRUTH-04 | Remove invented cancellation, grace, suspension, retention, deletion and refund language until policy is approved | Aesthetic + Polish/Integration | DONE | Combined legal/public truth at 81075b7 and 3c008bb removes unsupported lifecycle/refund claims; 99/99 public-truth, legal, checker-authority and Work preflight proof is green | Reintroduce policy only from a separately approved, executable authority. |
 | TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Hosted legal fragments exist for earlier Download authority; current public legal source conflicts with hosted account reality and all-tier contract | Rewrite from canonical contracts, then run legal/copy tests and browser audit. |
 | TRUTH-06 | Remove five legacy direct Stripe Payment Links from all public and production artifacts | Build + Aesthetic | DONE | commit ea38093 removes the direct-link rails and legacy paid bridge from reviewed artifacts; scripts/check-site.mjs, domain-public-truth and hosted-artifact tests require zero public checkout rails while authenticated purpose-specific server Checkout remains private | Preserve zero direct payment links in both Pages and hosted artifacts. |
 | TRUTH-07 | Assessment intake, written offer, account invoice and payment sequencing | Build | DONE | migrations 34-39; authenticated routes/tests; commits ccce671 through 5c34845 | Re-run as part of final public-to-account journey. |
@@ -331,7 +330,7 @@ commercial/public truth remain PARTIAL until that separate lane is sealed.
 | AESTH-01 | Domains uses its own storefront background, no floating duplicate, readable frosted hero and mobile containment | Aesthetic | DONE | commit 2b0f9e0; page-scoped environment/CSS/assets; maintained 15-route exact-width browser audit | Preserve the visual checkpoint while the separate Domains truth lane finishes. |
 | AESTH-02 | Custom Sorcery route has unique page presentation and no arbitrary floating repeated graphics | Aesthetic | DONE | commit 2b0f9e0; distinct Custom environment and exact-width browser audit | Preserve presentation; commercial authority remains a separate truth obligation. |
 | AESTH-03 | Responder removes planner/floating art, shows the whole five-step flow directly and is held/non-sellable | Aesthetic | DONE | visual presentation is sealed at 2b0f9e0; held/non-sellable public, FAQ and legal truth plus maintained checks are sealed at ea38093; current 15-route exact-width browser audit is green | Preserve the visual flow and operational hold until Responder Expansion is real. |
-| AESTH-04 | Work/Spell Book is an explorable work gallery without clutter or invented client claims | Aesthetic | PARTIAL | Local gallery presentation is sealed at 2b0f9e0; final public-truth review of founder/fictional claims is not yet sealed | Complete and seal the claim audit separately. |
+| AESTH-04 | Work/Spell Book is an explorable work gallery without clutter or invented client claims | Aesthetic | DONE | Visual gallery is sealed at 2b0f9e0; Work public-truth/preflight and founder/fictional-claim audit are sealed by the integrated 81075b7/3c008bb checkpoint with 99/99 combined public/legal/checker/Work proof | Preserve the explorable gallery and claim boundaries. |
 | AESTH-05 | About has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `one-person-studio` asset/page class; exact-width browser audit | Preserve. |
 | AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `signal-room` asset/page class; exact-width browser audit | Preserve form/contact readability. |
 | AESTH-07 | FAQ has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `index-room` asset/page class; exact-width browser audit | Preserve visual behavior while FAQ copy is sealed separately. |
@@ -409,39 +408,32 @@ held and non-sellable. They determine the separate Expansion percentage.
 
 ## Immediate next action
 
-Seal the path-limited migration-47 checkpoint on base `f9950ae`, including
-only the two exact Abracadabra asset hashes from the shared manifest and no
-public-route files. After that commit, resume the remaining launch-critical
-Alakazam invoice/lifecycle/control gaps. Reserve migration 48 for hosted
-Privacy V3 and retain the provider-release, push, deployment and DNS holds.
+The integrated candidate is sealed locally at `3c008bb` on top of `f1c265e`.
+Record this evidence reconciliation only, then pause for owner coordination.
+Do not start Privacy V3 or later backend work from this checkpoint. Keep
+provider release, push, deployment and DNS held.
 
 ## Current evidence gaps that control the next actions
 
-1. H1N Purpose 1 is sealed at 9a9511c and migration 46 at f9950ae. Migration 47
-   now adds the exact financial-clearance-gated immutable handoff, canonical
-   customer document, split customer/owner controls, terminal write closure and
-   database-derived 30-day workmanship interval. Its path-limited commit is the
-   immediate seal action.
+1. H1N Purpose 1 is sealed at 9a9511c, migration 46 at f9950ae, and migration
+   47 at f1c265e. The integrated candidate proves the complete handoff path and
+   its combined public/legal/checker/Work truth.
 2. Canonical Alakazam invoices, Portal/cancellation, lifecycle transitions,
    $35/$50 controls/care, customer publication controls and owner
    reconciliation remain incomplete.
 3. Public/legal/catalog/domain/Responder truth is sealed separately at
    `ea38093`; it remains a held-truth checkpoint rather than evidence that
    unavailable commerce rails are sellable.
-4. Local page visuals are sealed at 2b0f9e0 and the Responder visual/truth row
-   is complete through ea38093. Work and Legal combined rows remain PARTIAL.
-   Separate branch tips 035d76a and 4b30ce5 are not ancestors and earn no Core
-   credit in this candidate.
-5. Exact Node 24 Core run
-   `ss_core_release_20260807t135415807z_6b34890859c9` replayed all 47
+4. Local page visuals are sealed at 2b0f9e0; Responder truth is sealed through
+   ea38093; and the integrated checker-authority/held-Alakazam/Work checkpoint
+   at 81075b7 and 3c008bb closes TRUTH-03, TRUTH-04 and AESTH-04.
+5. Exact Node 24 Core run on integrated HEAD
+   `ss_core_release_20260807t141504956z_f6b306ba2097` replayed all 47
    migrations, passed 4/4 real Custom-services journeys, removed and proved
-   absence of the database, then passed the full candidate and exact
-   three-width browser gate. After the narrow organization/job receipt-scope
-   review, fresh database
-   `ss_core_release_20260807t135950166z_2c36b2fb31f9` replayed current all-47
-   bytes, passed the affected 4/4 PostgreSQL journeys and proved exact absence;
-   the only affected candidate gate, migration structure, passed 39/39.
-   Provider test mode, private staging, cutover and rollback proof remain.
+   absence, then passed the full candidate and exact three-width browser gate.
+   Result: `databaseAbsent:true`. The combined public/legal/checker/Work
+   preflight is independently **99/99** green with clean diff check. Provider
+   test mode, private staging, cutover and rollback proof remain held.
 
 ## Row coverage and recount
 
@@ -482,7 +474,7 @@ Roadmap coverage audit:
 Recount arithmetic:
 
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 = 136.
-- Core status recount: 94 DONE + 33 PARTIAL + 9 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 94 / 136 = 69.1% after one-decimal rounding.
+- Core status recount: 97 DONE + 30 PARTIAL + 9 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 97 / 136 = 71.3% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 136 + 24 + 5 = 165 total classified rows.

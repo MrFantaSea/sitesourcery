@@ -1791,3 +1791,43 @@ Stage and audit only those paths, make one path-limited local commit, and report
 its hash. Then resume launch-critical Alakazam invoice, lifecycle/control and
 final staging/cutover gates. Keep all live provider effects, provider test/live
 release approval, public staging, owner cutover, push, deployment and DNS held.
+
+## Combined public-truth and checker integration checkpoint
+
+Checkpoint time: 2026-08-07T10:17:04-0400 (EDT)
+
+The migration-47 checkpoint is now integrated with checker authority and the
+held-Alakazam public controls. This section supersedes the earlier v47
+“next action” wording for the current HEAD; it is evidence reconciliation only.
+
+- Checker authority is integrated at `81075b7`; held Alakazam customer
+  surfaces are integrated at `3c008bb`; migration-47 handoff remains sealed at
+  `f1c265e`.
+- The only integration conflicts were resolved as specified: final-payment and
+  handoff controls remain unconditionally mounted; both Alakazam mounts remain
+  release-only. No final-payment/handoff control was accidentally placed behind
+  a release hold, and no held Alakazam surface was made sellable.
+- The combined public-truth, legal, checker-authority and Work preflight is
+  **99/99 green** with clean `git diff --check`. All 13 held fragment hashes
+  and the associated durable ledgers remain retained.
+- The hosted asset hashes remain exact: API
+  `321d17e139fa0ebff4830c7dc1da860320cdf3241213da82e15937451ccc23ce`; combined
+  customer-control DOM
+  `c4a4ac13709ee585b1c7458ed38eb2022bc6941e8f843e6b8eddf5d5fabeb00f`.
+- One exact pinned Node 24.18.0 `release:core` run on current HEAD created
+  `ss_core_release_20260807t141504956z_f6b306ba2097`, replayed all 47
+  migrations, passed **4/4** launch-critical real-PostgreSQL journeys,
+  removed the exact database and proved `databaseAbsent:true`, then passed
+  **386** Node tests (**384 pass, 2 intentional skips**), **52/52** ops tests,
+  exact 74-file Pages/hosted artifacts, and the maintained 15-route ×
+  three-width browser audit at 320×720, 390×844 and 1440×1000.
+- The strict Core matrix is now **97 DONE / 30 PARTIAL / 9 NOT STARTED =
+  71.3%**. Only TRUTH-03, TRUTH-04 and AESTH-04 were promoted by this
+  reconciliation. No other row status changed.
+
+### Combined checkpoint boundary
+
+The current integrated candidate is sealed locally for this reconciliation.
+Do not start Privacy V3, later backend work, provider staging, cutover, push,
+deployment or DNS changes from this checkpoint until the owner coordinates the
+next step.
