@@ -1,18 +1,20 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-06T20:58:42-0400 (EDT)
+Generated at: 2026-08-07T06:18:23-0400 (EDT)
 
 Repository snapshot:
 
 - Branch: build/sitesourcery-v2-20260730
-- HEAD: 2b0f9e08d45961afa38ac541d3a065f29f467b68
+- Base HEAD: ea38093 (sealed public truth on top of H1N Purpose 1; the
+  migration-46 checkpoint is the path-limited commit containing this matrix)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
-- Active ledger reviewed completely: ops/SITESOURCERY-ACTIVE-RUN.md, 1,528 lines
+- Active ledger reviewed completely: ops/SITESOURCERY-ACTIVE-RUN.md, 1,629 lines
 - Package gates reviewed: package.json and server/data-plane/package.json
-- H1M remains sealed at c4277ce and the distinct local public-page visual
-  checkpoint is sealed at HEAD 2b0f9e0. This matrix is part of the path-limited
-  H1N Purpose-1 seal. Concurrent public/legal/checker/shared-manifest truth
-  edits remain outside that checkpoint and are not treated as release proof.
+- H1M remains sealed at c4277ce, the distinct local public-page visual
+  checkpoint is sealed at 2b0f9e0, and H1N Purpose 1 is sealed at 9a9511c.
+  This matrix is part of the path-limited migration-46 seal. Concurrent
+  public/legal/checker/shared-manifest truth edits remain outside that
+  checkpoint and are not treated as release proof.
 
 ## Authority, status, and percentage rules
 
@@ -306,12 +308,12 @@ settlement, handoff, or permission to skip either financial purpose.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| H1N-FINAL-01 | After all accepted changes are effective and completion is evidenced, derive the exact final obligation from accepted quote/installment and effective scope | Build | NOT STARTED | Active ledger:1383-1409 defines the requirement; no migration 45 or final-obligation table/service exists; latest migration is 44 | Design immutable obligation/digest authority with database prerequisites on CO-05 and completion evidence. |
-| H1N-FINAL-02 | Materialize the final invoice and immutable line items, including an explicit zero-balance path | Build | NOT STARTED | Current migration 42 stores final_due_minor/final_payment_state only; no final invoice materializer exists | Add additive migration and exact invoice projection without treating zero due as an implicit payment. |
-| H1N-FINAL-03 | Use a dedicated final-payment Checkout purpose with retained attempt and event ledger | Build | NOT STARTED | Existing custom-build payment purpose covers first payment only; no final-purpose code/test found | Reuse reserve-before-effect patterns with a distinct final purpose that cannot settle a change-order invoice. |
-| H1N-FINAL-04 | Require provider-confirmed final settlement or explicit database-authorized zero-balance clearance | Build | NOT STARTED | No final receipt/clearance authority found; active ledger:1394-1399 states the exact requirement | Implement readback, atomic settlement/clearance, replay and ambiguity reconciliation. |
+| H1N-FINAL-01 | After all accepted changes are effective and completion is evidenced, derive the exact final obligation from accepted quote/installment and effective scope | Build | DONE | migration 202608060046 obligation/completion prerequisites and immutable digests; final-payment PostgreSQL service/tests; active-ledger migration-46 checkpoint; checkpoint commit containing this matrix | Preserve this exact obligation as migration 47 consumes it for handoff. |
+| H1N-FINAL-02 | Materialize the final invoice and immutable line items, including an explicit zero-balance path | Build | DONE | migration 202608060046 final invoice/line and explicit zero-balance-clearance authority; migration structure and real all-46 replay; active-ledger migration-46 checkpoint | Keep zero clearance explicit and prohibit zero/forged Checkout creation. |
+| H1N-FINAL-03 | Use a dedicated final-payment Checkout purpose with retained attempt and event ledger | Build | DONE | final-payment service, Stripe adapter/config, migration-46 attempts/events/global purpose fence, HTTP/composition/webhook tests; active-ledger migration-46 checkpoint | Preserve global first/change/final effect isolation and held-by-default new creation. |
+| H1N-FINAL-04 | Require provider-confirmed final settlement or explicit database-authorized zero-balance clearance | Build | DONE | migration-46 immutable receipt/clearance triggers; exact provider line-item/readback checks; durable owner replay/conflict; 7/7 service, 195/195 independent and all-46 clean-room proof in active ledger | Permit migration-47 handoff only from these two exact authorities. |
 | H1N-FINAL-05 | Create immutable handoff/delivery receipt only after final settlement/clearance and close later work writes | Build | NOT STARTED | No service handoff receipt/table exists; migration 44 explicitly says completion is not handoff | Add evidenced handoff transaction, financial prerequisite and terminal write guards. |
-| H1N-FINAL-06 | Expose bounded customer and owner final-obligation/payment/handoff projections and responsive journeys | Build | NOT STARTED | No H1N schema/routes/controls/tests exist | Add account-safe and private owner surfaces with authenticated desktop/mobile proof across both financial purposes. |
+| H1N-FINAL-06 | Expose bounded customer and owner final-obligation/payment/handoff projections and responsive journeys | Build | PARTIAL | v46 customer/account and owner/API/HTTP final-obligation/payment projections are exact and provider-ID-safe; handoff projections, final controls and final browser journey do not exist | Add migration-47 handoff projections and the complete authenticated customer/owner browser journey. |
 | H1N-FINAL-07 | Derive immutable 30-day workmanship start/end in PostgreSQL from evidenced handoff | Build | NOT STARTED | Quote promises 30 days in migration 41 and UI, but no handoff-derived clock exists; completion UI says clock has not started | Materialize start/end only from handoff time and prove exact inclusive/exclusive boundaries and immutable replay. |
 
 ### Owner-directed aesthetic launch corrections
@@ -404,34 +406,33 @@ held and non-sellable. They determine the separate Expansion percentage.
 
 ## Immediate next action
 
-Seal the path-limited H1N Purpose-1 checkpoint and pause after reporting its
-commit hash. Begin Purpose 2 only from a fresh continuation and the technical
-lead's exact blueprint. Purpose 2 must derive the completion-bound final
-obligation only after every accepted change is effective, and must retain the
+Seal the path-limited migration-46 checkpoint on public base `ea38093`, with
+only the exact customer-control asset-hash hunk from the shared manifest. Then
+implement migration 47 immutable handoff and the handoff-derived 30-day
+workmanship window. Reserve migration 48 for hosted Privacy V3 and retain the
 provider-release, push, deployment and DNS holds.
 
 ## Current evidence gaps that control the next actions
 
-1. H1N Purpose 1 now has an exact invoice, dedicated Checkout, provider-confirmed
-   receipt, durable reconciliation and atomic effective transition. Purpose 2
-   remains absent: final obligation/invoice, final Checkout,
-   settlement/zero-balance clearance, handoff, final projections and the
-   handoff-derived workmanship clock are still NOT STARTED.
+1. H1N Purpose 1 is sealed at 9a9511c. Migration 46 now has the exact final
+   obligation/invoice, dedicated final Checkout, provider-confirmed settlement
+   or explicit zero-balance clearance, owner reconciliation and bounded backend
+   projections. Immutable handoff, final customer/owner controls and the
+   handoff-derived workmanship clock remain for migration 47.
 2. Canonical Alakazam invoices, Portal/cancellation, lifecycle transitions,
    $35/$50 controls/care, customer publication controls and owner
    reconciliation remain incomplete.
-3. The public/legal truth lane is actively correcting catalog, Domains,
-   Responder, legacy Pages, Alakazam and legal contradictions, but its dirty
-   source/checker/manifest work is not yet a sealed launch candidate.
+3. Public/legal/catalog/domain/Responder truth is sealed separately at
+   `ea38093`; it remains a held-truth checkpoint rather than evidence that
+   unavailable commerce rails are sellable.
 4. Local page visuals are sealed at 2b0f9e0; Responder, Work and Legal rows that
    combine presentation with truth remain PARTIAL until their truth is sealed.
-5. `scripts/core-release.mjs` now includes fresh migration and Custom-services
-   PostgreSQL journeys. A provisional moving-tree run replayed all 45
-   migrations, passed all three journeys and removed its exact database, but
-   the concurrent public lane then failed 1/587 candidate tests at the hosted
-   artifact public-dollar assertion. Final clean-room Node 24, provider
-   test-mode, staging, operations, cutover and rollback proof must rerun on one
-   stopped, sealed candidate.
+5. Both the isolated migration-46 tree and the final combined tree on public
+   base `ea38093` replayed all 46 migrations, passed 4/4 real Custom-services
+   journeys, removed and proved absence of their exact disposable databases,
+   and passed the full Node 24 candidate and exact browser gate. Provider
+   test-mode, private staging, cutover and rollback proof still belong to the
+   later release candidate after migration 47.
 
 ## Row coverage and recount
 
@@ -472,7 +473,7 @@ Roadmap coverage audit:
 Recount arithmetic:
 
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 = 136.
-- Core status recount: 74 DONE + 43 PARTIAL + 19 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 74 / 136 = 54.4% after one-decimal rounding.
+- Core status recount: 78 DONE + 44 PARTIAL + 14 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 78 / 136 = 57.4% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 136 + 24 + 5 = 165 total classified rows.

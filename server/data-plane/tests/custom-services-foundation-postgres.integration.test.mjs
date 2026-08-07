@@ -869,3 +869,140 @@ test("customer assessment requests save, submit, withdraw, and restart through t
     await pool.end();
   }
 });
+
+test("global Custom-build Stripe claims reject both uniqueness axes without retry loops", async () => {
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    max: 3
+  });
+  const setup = await pool.connect();
+  const first = await pool.connect();
+  const second = await pool.connect();
+  const suffix = randomUUID().replaceAll("-", "_");
+  let firstOpen = false;
+  let secondOpen = false;
+
+  const claim = (
+    client,
+    { authorityId, objectId, purpose = "custom_build_final" }
+  ) => client.query(
+    `select ss.claim_service_custom_build_stripe_payment_effect(
+       $1, 'checkout_session', $2, $3, 'checkout_attempt', $4,
+       clock_timestamp()
+     )`,
+    [organizationId, objectId, purpose, authorityId]
+  );
+
+  let organizationId;
+  try {
+    await setup.query("begin");
+    const authority = await seedAccountProject(setup);
+    organizationId = authority.organizationId;
+    await setup.query("commit");
+
+    const exactAuthority = randomUUID();
+    const exactObject = `cs_test_v46_exact_${suffix}`;
+    await claim(setup, {
+      authorityId: exactAuthority,
+      objectId: exactObject
+    });
+    await claim(setup, {
+      authorityId: exactAuthority,
+      objectId: exactObject
+    });
+
+    await setup.query("set statement_timeout = '2s'");
+    await assert.rejects(
+      claim(setup, {
+        authorityId: randomUUID(),
+        objectId: exactObject,
+        purpose: "custom_build_change"
+      }),
+      (error) =>
+        error.code === "23505" &&
+        /object .* belongs to .* authority/iu.test(error.message)
+    );
+    await assert.rejects(
+      claim(setup, {
+        authorityId: exactAuthority,
+        objectId: `cs_test_v46_other_${suffix}`
+      }),
+      (error) =>
+        error.code === "23505" &&
+        /authority .* already maps to object/iu.test(error.message)
+    );
+
+    const concurrentObject = `cs_test_v46_object_race_${suffix}`;
+    await first.query("begin");
+    firstOpen = true;
+    await second.query("begin");
+    secondOpen = true;
+    await second.query("set local statement_timeout = '2s'");
+    await claim(first, {
+      authorityId: randomUUID(),
+      objectId: concurrentObject,
+      purpose: "custom_build_start"
+    });
+    const objectLoser = claim(second, {
+      authorityId: randomUUID(),
+      objectId: concurrentObject,
+      purpose: "custom_build_final"
+    });
+    objectLoser.catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await first.query("commit");
+    firstOpen = false;
+    await assert.rejects(
+      objectLoser,
+      (error) =>
+        error.code === "23505" &&
+        /object .* belongs to .* authority/iu.test(error.message)
+    );
+    await second.query("rollback");
+    secondOpen = false;
+
+    const concurrentAuthority = randomUUID();
+    await first.query("begin");
+    firstOpen = true;
+    await second.query("begin");
+    secondOpen = true;
+    await second.query("set local statement_timeout = '2s'");
+    await claim(first, {
+      authorityId: concurrentAuthority,
+      objectId: `cs_test_v46_authority_a_${suffix}`
+    });
+    const authorityLoser = claim(second, {
+      authorityId: concurrentAuthority,
+      objectId: `cs_test_v46_authority_b_${suffix}`
+    });
+    authorityLoser.catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await first.query("commit");
+    firstOpen = false;
+    await assert.rejects(
+      authorityLoser,
+      (error) =>
+        error.code === "23505" &&
+        /authority .* already maps to object/iu.test(error.message)
+    );
+    await second.query("rollback");
+    secondOpen = false;
+
+    const retained = await setup.query(
+      `select provider_object_id, authority_id
+       from ss.service_custom_build_stripe_payment_claims
+       where organization_id = $1
+         and provider_object_id like $2
+       order by provider_object_id`,
+      [organizationId, `cs_test_v46_%_${suffix}`]
+    );
+    assert.equal(retained.rowCount, 3);
+  } finally {
+    if (firstOpen) await first.query("rollback").catch(() => {});
+    if (secondOpen) await second.query("rollback").catch(() => {});
+    setup.release();
+    first.release();
+    second.release();
+    await pool.end();
+  }
+});

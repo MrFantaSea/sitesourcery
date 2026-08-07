@@ -7,6 +7,9 @@ import {
 import {
   CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA
 } from "../custom-services-custom-build-change-payment-postgres.mjs";
+import {
+  CUSTOM_BUILD_FINAL_PAYMENT_METADATA_SCHEMA
+} from "../custom-services-custom-build-final-payment-postgres.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
 
 function event(metadata = {}) {
@@ -34,6 +37,9 @@ function fixture(
     customBuildChangeResult = {
       status: "custom_build_change"
     },
+    customBuildFinalResult = {
+      status: "custom_build_final"
+    },
     alakazamResult = { status: "alakazam" }
   } = {}
 ) {
@@ -44,6 +50,7 @@ function fixture(
     assessment: [],
     customBuild: [],
     customBuildChange: [],
+    customBuildFinal: [],
     alakazam: []
   };
   const router = createStripeWebhookRouter({
@@ -83,6 +90,14 @@ function fixture(
           structuredClone(input)
         );
         return structuredClone(customBuildChangeResult);
+      }
+    },
+    customBuildFinalCommerce: {
+      async ingestStripeEvent(input) {
+        calls.customBuildFinal.push(
+          structuredClone(input)
+        );
+        return structuredClone(customBuildFinalResult);
       }
     },
     alakazamCommerce: {
@@ -184,12 +199,39 @@ test("shared webhook router sends only exact Custom-build change metadata to Pur
   );
 });
 
+test("shared webhook router sends only exact Custom-build final metadata to final settlement even while new Checkout creation is held", async () => {
+  const selected = event({
+    schema: CUSTOM_BUILD_FINAL_PAYMENT_METADATA_SCHEMA
+  });
+  const context = fixture(selected);
+  assert.deepEqual(
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from("custom-build-final-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "custom_build_final" }
+  );
+  assert.equal(context.calls.verify.length, 1);
+  assert.equal(context.calls.customBuildFinal.length, 1);
+  assert.equal(context.calls.customBuildChange.length, 0);
+  assert.equal(context.calls.customBuild.length, 0);
+  assert.equal(context.calls.assessment.length, 0);
+  assert.equal(context.calls.download.length, 0);
+  assert.equal(context.calls.alakazam.length, 0);
+  assert.equal(context.calls.canonical.length, 0);
+  assert.deepEqual(
+    context.calls.customBuildFinal[0],
+    selected
+  );
+});
+
 test("nearby payment schemas never enter Custom-build change settlement", async () => {
   for (const schema of [
     "sitesourcery_custom_build_start_checkout_v1",
     "sitesourcery_service_assessment_checkout_v1",
     "sitesourcery_download_checkout_v2",
     ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+    CUSTOM_BUILD_FINAL_PAYMENT_METADATA_SCHEMA,
     `${CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA}_drift`
   ]) {
     const context = fixture(event({ schema }));
@@ -199,6 +241,28 @@ test("nearby payment schemas never enter Custom-build change settlement", async 
     });
     assert.equal(
       context.calls.customBuildChange.length,
+      0,
+      schema
+    );
+  }
+});
+
+test("nearby payment schemas never enter Custom-build final settlement", async () => {
+  for (const schema of [
+    "sitesourcery_custom_build_start_checkout_v1",
+    "sitesourcery_service_assessment_checkout_v1",
+    "sitesourcery_download_checkout_v2",
+    ALAKAZAM_PROVIDER_METADATA_SCHEMA,
+    CUSTOM_BUILD_CHANGE_PAYMENT_METADATA_SCHEMA,
+    `${CUSTOM_BUILD_FINAL_PAYMENT_METADATA_SCHEMA}_drift`
+  ]) {
+    const context = fixture(event({ schema }));
+    await context.router.ingestStripeWebhook({
+      rawBody: Buffer.from(schema),
+      signature: "stripe-signature"
+    });
+    assert.equal(
+      context.calls.customBuildFinal.length,
       0,
       schema
     );

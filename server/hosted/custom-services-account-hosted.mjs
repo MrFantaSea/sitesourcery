@@ -9,6 +9,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildChangePayment
 } from "./custom-services-custom-build-change-payment-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildFinalPayment
+} from "./custom-services-custom-build-final-payment-postgres.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -192,6 +195,14 @@ export function createHeldHostedCustomServicesAccount() {
         { status: 503 }
       );
     },
+    async getCustomBuildFinalHandoff(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_FINAL_PAYMENT_HELD",
+        "Custom-build final payment and handoff are held in this runtime.",
+        { status: 503 }
+      );
+    },
     async getCustomBuildCompletionEvidence(actor) {
       requireActor(actor);
       throw new HostedError(
@@ -245,6 +256,14 @@ export function createHeldHostedCustomServicesAccount() {
       throw new HostedError(
         "CUSTOM_BUILD_CHANGE_PAYMENT_HELD",
         "Custom-build change payment is held in this runtime.",
+        { status: 503 }
+      );
+    },
+    async createCustomBuildFinalCheckout(actor) {
+      requireActor(actor);
+      throw new HostedError(
+        "CUSTOM_BUILD_FINAL_PAYMENT_HELD",
+        "Custom-build final payment is held in this runtime.",
         { status: 503 }
       );
     },
@@ -328,6 +347,7 @@ export function createHostedCustomServicesAccount({
   customBuild,
   customBuildChangeCompletion = null,
   customBuildChangePayment = null,
+  customBuildFinalPayment = null,
   customBuildPayment,
   customBuildProgress,
   invoiceRepository,
@@ -343,6 +363,9 @@ export function createHostedCustomServicesAccount({
   const customBuildChangePaymentBoundary =
     customBuildChangePayment ??
     createHeldCustomServicesCustomBuildChangePayment();
+  const customBuildFinalPaymentBoundary =
+    customBuildFinalPayment ??
+    createHeldCustomServicesCustomBuildFinalPayment();
   invariant(
     assessmentWork &&
       typeof assessmentWork.readCustomerReport === "function" &&
@@ -393,6 +416,13 @@ export function createHostedCustomServicesAccount({
       typeof customBuildChangePaymentBoundary.createCheckout === "function",
     "invalid_configuration",
     "the Custom-build change payment boundary is required",
+    { status: 500 }
+  );
+  invariant(
+    typeof customBuildFinalPaymentBoundary.readCurrentState === "function" &&
+      typeof customBuildFinalPaymentBoundary.createCheckout === "function",
+    "invalid_configuration",
+    "the Custom-build final payment boundary is required",
     { status: 500 }
   );
   invariant(
@@ -506,6 +536,15 @@ export function createHostedCustomServicesAccount({
       return customBuildChangePaymentBoundary.readCurrentInvoice(scope);
     },
 
+    async getCustomBuildFinalHandoff(actorInput, projectIdInput) {
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildFinalPaymentBoundary.readCurrentState(scope);
+    },
+
     async getCustomBuildCompletionEvidence(
       actorInput,
       projectIdInput,
@@ -611,6 +650,27 @@ export function createHostedCustomServicesAccount({
         projectIdInput
       );
       return customBuildChangePaymentBoundary.createCheckout({
+        ...scope,
+        commandId: input.commandId,
+        invoiceDigest: input.invoiceDigest,
+        invoiceId
+      });
+    },
+
+    async createCustomBuildFinalCheckout(
+      actorInput,
+      projectIdInput,
+      invoiceIdInput,
+      value
+    ) {
+      const input = exactCheckoutCommand(value);
+      const invoiceId = requireProjectId(invoiceIdInput);
+      const { scope } = await projectScope(
+        resolveSession,
+        actorInput,
+        projectIdInput
+      );
+      return customBuildFinalPaymentBoundary.createCheckout({
         ...scope,
         commandId: input.commandId,
         invoiceDigest: input.invoiceDigest,

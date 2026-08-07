@@ -36,12 +36,11 @@ After a context compaction, terminal restart, or agent handoff:
 
 ## Current objective
 
-Continue H1 from the sealed change/completion boundary. H1N first invoices and
-settles each accepted change order into `effective`, then derives and settles
-the separate completion-bound final obligation before immutable handoff and
-the database-derived 30-day workmanship window. All real provider effects and
-public-service release gates remain held until each preceding local boundary
-is proven.
+Continue H1 from sealed H1N Purpose 1 at `9a9511c`. Purpose-2 migration 46 now
+derives and settles the separate completion-bound final obligation locally;
+migration 47 must add immutable handoff and only then derive the 30-day
+workmanship window. All real provider effects and public-service release gates
+remain held until each preceding local boundary is proven.
 
 ## Owner visual rulings captured 2026-08-06
 
@@ -1423,10 +1422,12 @@ Batch 3C sealed checkpoint gates:
 
 ## Next action
 
-Begin H1N with the accepted-change-order invoice and verified settlement
-boundary before the separate completion-bound final obligation. Preserve the
-H1M backend checkpoint, leave every aesthetic file to its owner, and keep
-provider release, push, deployment, and DNS held.
+Seal the path-limited H1N Purpose-2 migration-46 checkpoint on public base
+`ea38093`, with only the matching customer-control asset-hash hunk from the
+shared manifest. Then begin migration 47 for immutable handoff and the
+handoff-derived workmanship clock. Preserve Purpose 1 and the public checkpoint,
+reserve migration 48 for hosted Privacy V3, and keep provider release, push,
+deployment, and DNS held.
 
 ## Batch 3B write scope
 
@@ -1526,3 +1527,103 @@ durable evidence documents. Concurrent public, legal, landing, checker, and
 shared-manifest truth hunks remain unstaged. After this commit, pause and report
 its hash. Begin H1N Purpose 2 only from a fresh continuation and the technical
 lead's exact blueprint.
+
+## H1N Purpose 2 — migration-46 final-obligation and payment checkpoint
+
+Checkpoint time: 2026-08-07T06:18:23-0400 (EDT)
+
+This checkpoint stops at migration 46. It does not create handoff, delivery,
+the workmanship-correction clock, or any migration-47/48 authority.
+
+### Implemented authority
+
+- Additive migration `202608060046_custom_build_final_payment.sql` derives one
+  immutable completion-bound final obligation only after all accepted changes
+  are effective. It materializes exact final invoice/line authority, a separate
+  explicit zero-balance clearance, dedicated final Checkout attempts/events,
+  durable owner reconciliation commands, immutable provider-confirmed final
+  receipts, and one global Stripe-effect fence across first, change, and final
+  Custom-build payment purposes.
+- `custom-services-custom-build-final-payment-postgres.mjs` preserves the H1M
+  job-lock order on every mutation, reserves authority before Stripe, retains
+  the exact Stripe Customer and expiration across same-key recovery, fences
+  ambiguous effects for owner-only readback, rejects browser money/mark-paid
+  authority, and keeps accepted-change money out of the final installment.
+- The Stripe adapter verifies exactly one one-time final-installment line, USD
+  amount/product/description, quantity, exclusive automatic tax, subtotal,
+  discount, tax, total, paid PaymentIntent, captured unreversed Charge, bound
+  Customer, and exact purpose metadata before settlement can be retained.
+- Production composition injects the final service into customer account/API,
+  owner reads/reconciliation and webhook settlement while new final Checkout
+  creation remains held by default. Customer projections expose no raw provider
+  identifiers.
+- Completion-bound zero due cannot reach Stripe and is not treated as an
+  implicit payment. Positive due requires provider-confirmed settlement; both
+  paths remain prerequisites for migration-47 handoff.
+
+### Defects corrected before seal
+
+- The obligation digest now includes the customer identity, and final receipts
+  require the Stripe Customer to be bound to the same organization.
+- The global effect-fence conflict loop now handles both uniqueness axes
+  without spinning or crossing first/change/final purposes.
+- Provider readback now proves exact line-item truth rather than only aggregate
+  totals. Pending Stripe events project reconciliation-required instead of a
+  customer-retryable payment page.
+- Owner/concurrent settlement now seals a retained Stripe event once even when
+  PostgreSQL query rows are immutable snapshots. The direct harness returns
+  cloned snapshots so it cannot hide a second update through shared references.
+- Final and Purpose-1 Checkout expiration use a 31-minute local reservation so
+  Stripe still receives at least its provider-side 30-minute minimum.
+- The previously accepted Purpose-1 browser gate was reproduced on untouched
+  `9a9511c` and failed identically, proving v46 did not cause its 28 null-command
+  failures. The maintained audit now uses real Space-key activation, reads the
+  actual `Idempotency-Key`, intercepts only the proven Stripe handoff document,
+  permits only exact expected held/uncertain 503/409 responses, counts visible
+  actionable completion controls, and waits for restored owner focus. Owner
+  job details now remain open across asynchronous rerenders instead of losing
+  the reconciliation status and keyboard focus.
+
+### Migration-46 proof
+
+- Direct final-payment service proof passes **7/7** with snapshot semantics;
+  the combined provider/migration/Purpose-1/final focused set passes
+  **142/142**. All hosted tests pass **369**, skip two real-PostgreSQL-only
+  cases, and fail zero out of **371**. Browser/API/provider/migration contracts
+  pass **178/178**.
+- Fresh independent backend review returned `BLOCKER: NO` after the retained-
+  event repair and independently passed **195/195** focused checks. A separate
+  browser/control reviewer returned `BLOCKER: NO`; it confirmed that the exact
+  status-route error exceptions cannot hide unrelated failures and that the
+  focus/open-panel correction strengthens rather than bypasses the journey.
+- Exact isolated tree `/private/tmp/sitesourcery-v46-isolated-20260807-01`
+  passed the maintained browser audit across 15 hosted routes at exact
+  `320x720`, `390x844`, and `1440x1000` with commands, idempotency, held,
+  malformed, uncertain, paid/effective, focus, 44px, no-overflow and no-leak
+  assertions.
+- The exact Node 24 Core release command created disposable database
+  `ss_core_release_20260807t101455077z_2e809cf7acd1`, replayed all **46**
+  migrations, passed all **4/4** launch-critical real-PostgreSQL Custom-services
+  journeys including both global effect-fence axes, verified zero active target
+  sessions, removed that exact database, verified absence, and then passed the
+  full candidate `npm test`, including the final 15-route/three-width browser
+  audit. Result: `databaseAbsent: true`.
+- Public truth then sealed separately at `ea38093` without absorbing a v46
+  path. The shared manifest received only the reviewed
+  `abracadabra-customer-control-dom.js` SHA-256 hunk for v46. The final combined
+  tree created disposable database
+  `ss_core_release_20260807t102634703z_ab0cb8768e43`, replayed all **46**
+  migrations, passed the same **4/4** real-PostgreSQL journeys, removed that
+  exact database and verified absence, then passed the updated public/backend
+  Node 24 candidate, hosted artifact, operations and 15-route/three-width
+  browser gates. Result: `databaseAbsent: true`.
+- No live Stripe/registrar effect, production/customer-data write, credential
+  handling, push, deployment, DNS change, handoff, workmanship-clock or
+  migration-48 implementation occurred.
+
+### Seal boundary and next action
+
+The public lane is sealed at `ea38093`. The v46 backend, API, control, audit,
+ledger files and exact customer-control manifest hash are ready for one
+path-limited commit. Audit the cached paths and manifest diff, commit v46, then
+start v47 only from that checkpoint. Reserve v48 for Privacy V3.

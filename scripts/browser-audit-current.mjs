@@ -805,7 +805,7 @@ async function startServer() {
         paidFixture,
         paidMode,
         body,
-        idempotencyKey: String(request.headers["x-idempotency-key"] || ""),
+        idempotencyKey: String(request.headers["idempotency-key"] || ""),
         expectedWrite: false,
       };
       apiRequests.push(apiRequest);
@@ -1851,17 +1851,19 @@ async function activateByKeyboard(cdp, selector) {
   if (!focused) return false;
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyDown",
-    key: "Enter",
-    code: "Enter",
-    windowsVirtualKeyCode: 13,
-    nativeVirtualKeyCode: 13,
+    key: " ",
+    code: "Space",
+    text: " ",
+    unmodifiedText: " ",
+    windowsVirtualKeyCode: 32,
+    nativeVirtualKeyCode: 32,
   });
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyUp",
-    key: "Enter",
-    code: "Enter",
-    windowsVirtualKeyCode: 13,
-    nativeVirtualKeyCode: 13,
+    key: " ",
+    code: "Space",
+    windowsVirtualKeyCode: 32,
+    nativeVirtualKeyCode: 32,
   });
   return true;
 }
@@ -2016,9 +2018,13 @@ async function customBuildChangePaymentJourney(
         firstPaymentCount: document.querySelectorAll(
           "[data-custom-build-invoice]"
         ).length,
-        completionControlCount: document.querySelectorAll(
+        completionControlCount: [...document.querySelectorAll(
           "[data-customer-custom-build-completion], [data-owner-completion-control]"
-        ).length,
+        )].filter((element) => visible(element) && Boolean(
+          element.querySelector(
+            "[data-owner-completion-form], [data-completion-evidence-control]"
+          )
+        )).length,
         ownerVisible: visible(ownerPayment),
         ownerText: ownerPayment
           ? ownerPayment.textContent.replace(/\\s+/g, " ").trim()
@@ -2151,7 +2157,19 @@ async function customBuildChangePaymentJourney(
           prior,
         )
       : null;
-    if (request) await delay(150);
+    if (request) {
+      await waitFor(
+        cdp,
+        `(() => {
+          const panel = document.querySelector(
+            "[data-owner-custom-build-change-payments]"
+          );
+          return panel?.textContent.includes(
+            "reconciled and retained for the customer"
+          ) && panel.contains(document.activeElement);
+        })()`,
+      );
+    }
     action = {
       keyboardFocused,
       request,
@@ -2225,15 +2243,19 @@ const checkoutNavigations = [];
 try {
   cdp = new Cdp(await pageSocket(port, processState));
   cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
-    browserErrors.push(
-      exceptionDetails?.exception?.description
-      || exceptionDetails?.text
-      || "Unknown browser exception",
-    );
+    browserErrors.push({
+      text: exceptionDetails?.exception?.description
+        || exceptionDetails?.text
+        || "Unknown browser exception",
+      url: "",
+    });
   });
   cdp.on("Log.entryAdded", ({ entry }) => {
     if (entry?.level === "error") {
-      browserErrors.push(entry.text || "Unknown browser log error");
+      browserErrors.push({
+        text: entry.text || "Unknown browser log error",
+        url: entry.url || "",
+      });
     }
   });
   cdp.on("Network.requestWillBeSent", ({ request, type }) => {
@@ -2242,11 +2264,42 @@ try {
       && String(request?.url || "").startsWith("https://checkout.stripe.com/")
     ) checkoutNavigations.push(request.url);
   });
+  cdp.on("Fetch.requestPaused", ({ requestId, request, resourceType }) => {
+    const checkout = resourceType === "Document"
+      && String(request?.url || "").startsWith(
+        "https://checkout.stripe.com/"
+      );
+    const command = checkout
+      ? cdp.send("Fetch.fulfillRequest", {
+          requestId,
+          responseCode: 200,
+          responseHeaders: [{
+            name: "Content-Type",
+            value: "text/html; charset=utf-8",
+          }],
+          body: Buffer.from("<!doctype html><title>Checkout handoff</title>")
+            .toString("base64"),
+        })
+      : cdp.send("Fetch.continueRequest", { requestId });
+    command.catch((error) => {
+      browserErrors.push({
+        text: `Checkout interception failed: ${error.message}`,
+        url: String(request?.url || ""),
+      });
+    });
+  });
   await Promise.all([
     cdp.send("Page.enable"),
     cdp.send("Runtime.enable"),
     cdp.send("Log.enable"),
     cdp.send("Network.enable"),
+    cdp.send("Fetch.enable", {
+      patterns: [{
+        urlPattern: "https://checkout.stripe.com/*",
+        resourceType: "Document",
+        requestStage: "Request",
+      }],
+    }),
   ]);
 
   const sitemap = await readFile(
@@ -2620,9 +2673,27 @@ try {
       `guest browser audit made unexpected API writes: ${JSON.stringify(writes)}`,
     );
   }
-  if (browserErrors.length) {
+  const unexpectedBrowserErrors = browserErrors.filter(({ text, url }) => {
+    const expectedHeldRead = text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      && url.endsWith(
+        `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoice`
+      );
+    const expectedUncertainCheckout = text ===
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      && url.endsWith(
+        `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
+      );
+    return !expectedHeldRead && !expectedUncertainCheckout;
+  });
+  if (unexpectedBrowserErrors.length) {
     failures.push(
-      `browser errors: ${JSON.stringify([...new Set(browserErrors)])}`,
+      `browser errors: ${JSON.stringify([...new Map(
+        unexpectedBrowserErrors.map((entry) => [
+          `${entry.text}\u0000${entry.url}`,
+          entry,
+        ]),
+      ).values()])}`,
     );
   }
 

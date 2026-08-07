@@ -82,6 +82,13 @@ import {
   createPostgresCustomServicesCustomBuildChangePayment
 } from "../custom-services-custom-build-change-payment-postgres.mjs";
 import {
+  assertApprovedCustomBuildFinalPaymentReady,
+  createConfiguredCustomBuildFinalPaymentRelease
+} from "../custom-services-custom-build-final-payment-config.mjs";
+import {
+  createPostgresCustomServicesCustomBuildFinalPayment
+} from "../custom-services-custom-build-final-payment-postgres.mjs";
+import {
   createPostgresCustomServicesCustomBuildPayment
 } from "../custom-services-custom-build-payment-postgres.mjs";
 import {
@@ -299,6 +306,8 @@ async function start() {
     createConfiguredCustomBuildPaymentRelease();
   const customBuildChangePaymentComposition =
     createConfiguredCustomBuildChangePaymentRelease();
+  const customBuildFinalPaymentComposition =
+    createConfiguredCustomBuildFinalPaymentRelease();
   const alakazamComposition =
     createConfiguredAlakazamRelease();
   const downloadPayment =
@@ -394,6 +403,14 @@ async function start() {
       clock: commerceV2.clock,
       ids: commerceV2.ids
     });
+  const customBuildFinalPayment =
+    createPostgresCustomServicesCustomBuildFinalPayment({
+      authority,
+      provider: stripeComposition.adapter,
+      release: customBuildFinalPaymentComposition.release,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
   const customBuildPayment =
     createPostgresCustomServicesCustomBuildPayment({
       authority,
@@ -409,6 +426,7 @@ async function start() {
       customBuildChangeCompletion:
         customServicesCustomBuildChangeCompletion,
       customBuildChangePayment,
+      customBuildFinalPayment,
       customBuildPayment,
       customBuildProgress: customServicesCustomBuildProgress,
       invoiceRepository: customServicesInvoiceRepository,
@@ -562,6 +580,12 @@ async function start() {
     await customServicesCustomBuild.readiness(),
     await customBuildChangePayment.readiness()
   );
+  assertApprovedCustomBuildFinalPaymentReady(
+    customBuildFinalPaymentComposition,
+    readiness.payments,
+    await customServicesCustomBuild.readiness(),
+    await customBuildFinalPayment.readiness()
+  );
   await customServicesCustomBuildWork.readiness();
   await customServicesCustomBuildProgress.readiness();
   assertApprovedAlakazamReady(
@@ -597,6 +621,8 @@ async function start() {
         customServicesCustomBuildChangeCompletion,
         customServicesCustomBuildChangePayment:
           customBuildChangePayment,
+        customServicesCustomBuildFinalPayment:
+          customBuildFinalPayment,
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,
@@ -609,7 +635,9 @@ async function start() {
           customBuildCommerce: customBuildPayment,
           alakazamCommerce,
           customBuildChangeCommerce:
-            customBuildChangePayment
+            customBuildChangePayment,
+          customBuildFinalCommerce:
+            customBuildFinalPayment
         })
       })
     )

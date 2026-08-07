@@ -9439,7 +9439,8 @@
       progressRead,
       changeCompletionRead,
       changePaymentRead,
-      globallyBusy
+      globallyBusy,
+      keepOpen
     ) {
       var card = accountElement(
         documentRef,
@@ -9447,6 +9448,7 @@
         "customer-owner-quote-card customer-owner-custom-build-card"
       );
       card.setAttribute("data-paid-custom-build-job", entry.job.jobId);
+      card.open = Boolean(keepOpen);
       card.style.minWidth = "0";
       card.appendChild(
         accountElement(
@@ -9517,6 +9519,12 @@
       render: function (state) {
         var visible = Boolean(state && state.revealed === true);
         panel.hidden = !visible;
+        var openJobIds = new Set(Array.prototype.map.call(
+          body.querySelectorAll("[data-paid-custom-build-job][open]"),
+          function (entry) {
+            return entry.getAttribute("data-paid-custom-build-job");
+          }
+        ));
         body.replaceChildren();
         nextCursor = "";
         nextPage.hidden = true;
@@ -9561,7 +9569,8 @@
               && state.changeCompletionByJob[entry.job.jobId],
             state.changePaymentsByJob
               && state.changePaymentsByJob[entry.job.jobId],
-            interfaceBusy
+            interfaceBusy,
+            openJobIds.has(entry.job.jobId)
           );
         });
         if (jobs.hasMore) {

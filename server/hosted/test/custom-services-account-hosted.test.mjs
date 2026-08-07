@@ -67,6 +67,8 @@ function context({ scope, snapshot } = {}) {
     customBuildChangeCheckout: [],
     customBuildChangeDecline: [],
     customBuildChangeInvoiceRead: [],
+    customBuildFinalCheckout: [],
+    customBuildFinalRead: [],
     customBuildCompletionEvidenceRead: [],
     customBuildAcceptance: [],
     customBuildInvoiceRead: [],
@@ -157,6 +159,24 @@ function context({ scope, snapshot } = {}) {
         calls.customBuildChangeCheckout.push(structuredClone(value));
         return {
           schema: "sitesourcery.custom-build-change-checkout/v1",
+          state: "ready"
+        };
+      }
+    },
+    customBuildFinalPayment: {
+      async readCurrentState(value) {
+        calls.customBuildFinalRead.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-final-handoff/v1",
+          state: "checkout_available",
+          invoice: { invoiceId: OTHER_ID },
+          handoff: null
+        };
+      },
+      async createCheckout(value) {
+        calls.customBuildFinalCheckout.push(structuredClone(value));
+        return {
+          schema: "sitesourcery.custom-build-final-checkout/v1",
           state: "ready"
         };
       }
@@ -632,6 +652,52 @@ test("hosted Custom-build change invoice and checkout stay project-bound and dis
   assert.equal(selected.calls.customBuildChangeCheckout.length, 1);
 });
 
+test("hosted Custom-build final state and checkout stay project-bound and cannot accept browser-supplied money", async () => {
+  const selected = context();
+  const state = await selected.service.getCustomBuildFinalHandoff(
+    actor(),
+    PROJECT_ID
+  );
+  assert.equal(state.state, "checkout_available");
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000005";
+  const input = {
+    commandId: "custom-build-final-checkout-command-1",
+    invoiceDigest: "f".repeat(64)
+  };
+  const checkout = await selected.service.createCustomBuildFinalCheckout(
+    actor(),
+    PROJECT_ID,
+    invoiceId,
+    input
+  );
+  assert.equal(checkout.state, "ready");
+
+  const scope = {
+    actorId: CUSTOMER_ID,
+    customerId: CUSTOMER_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID
+  };
+  assert.deepEqual(selected.calls.customBuildFinalRead, [scope]);
+  assert.deepEqual(selected.calls.customBuildFinalCheckout, [
+    { ...scope, ...input, invoiceId }
+  ]);
+  assert.deepEqual(selected.calls.customBuildChangeCheckout, []);
+  assert.deepEqual(selected.calls.customBuildCheckout, []);
+
+  await assert.rejects(
+    selected.service.createCustomBuildFinalCheckout(
+      actor(),
+      PROJECT_ID,
+      invoiceId,
+      { ...input, amountMinor: 50_000 }
+    ),
+    isError("invalid_input", 400)
+  );
+  assert.equal(selected.calls.customBuildFinalCheckout.length, 1);
+});
+
 test("hosted Custom build progress read and response stay bound to the resolved project", async () => {
   const selected = context();
   const progress = await selected.service.getCustomBuildProgress(
@@ -923,6 +989,10 @@ test("held custom-services account authenticates but exposes no read", async () 
     isError("CUSTOM_BUILD_CHANGE_PAYMENT_HELD", 503)
   );
   await assert.rejects(
+    held.getCustomBuildFinalHandoff(actor(), PROJECT_ID),
+    isError("CUSTOM_BUILD_FINAL_PAYMENT_HELD", 503)
+  );
+  await assert.rejects(
     held.getCustomBuildCompletionEvidence(actor(), PROJECT_ID, EVIDENCE_ID),
     isError("CUSTOM_BUILD_CHANGE_COMPLETION_HELD", 503)
   );
@@ -946,6 +1016,15 @@ test("held custom-services account authenticates but exposes no read", async () 
       {}
     ),
     isError("CUSTOM_BUILD_CHANGE_PAYMENT_HELD", 503)
+  );
+  await assert.rejects(
+    held.createCustomBuildFinalCheckout(
+      actor(),
+      PROJECT_ID,
+      OTHER_ID,
+      {}
+    ),
+    isError("CUSTOM_BUILD_FINAL_PAYMENT_HELD", 503)
   );
   await assert.rejects(
     held.getAssessmentRequest(actor(), PROJECT_ID),

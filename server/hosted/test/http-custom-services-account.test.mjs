@@ -50,6 +50,9 @@ function assessmentWorkMethods() {
     async getCustomBuildChangeInvoice() {
       throw new Error("unexpected Custom build change invoice read");
     },
+    async getCustomBuildFinalHandoff() {
+      throw new Error("unexpected Custom build final handoff read");
+    },
     async getCustomBuildCompletionEvidence() {
       throw new Error("unexpected Custom build completion evidence read");
     },
@@ -58,6 +61,9 @@ function assessmentWorkMethods() {
     },
     async createCustomBuildChangeCheckout() {
       throw new Error("unexpected Custom build change checkout");
+    },
+    async createCustomBuildFinalCheckout() {
+      throw new Error("unexpected Custom build final checkout");
     },
     async respondToCustomBuildRequest() {
       throw new Error("unexpected Custom build response");
@@ -90,9 +96,11 @@ function completeAccountBoundary(overrides = {}) {
     getCustomBuildProgress: noOp,
     getCustomBuildChangeCompletion: noOp,
     getCustomBuildChangeInvoice: noOp,
+    getCustomBuildFinalHandoff: noOp,
     getCustomBuildCompletionEvidence: noOp,
     createCustomBuildCheckout: noOp,
     createCustomBuildChangeCheckout: noOp,
+    createCustomBuildFinalCheckout: noOp,
     acceptCustomBuildQuote: noOp,
     respondToCustomBuildRequest: noOp,
     acceptCustomBuildChangeOrder: noOp,
@@ -740,6 +748,131 @@ test("Custom-build change payment HTTP routes are exact, authenticated, and isol
   assert.equal(signedOutRead.status, 401);
   const signedOutWrite = await api.fetch(request({
     body: { invoiceDigest: "f".repeat(64) },
+    method: "POST",
+    path: checkoutPath,
+    signedIn: false,
+    write: true
+  }));
+  assert.equal(signedOutWrite.status, 401);
+  assert.equal(calls.length, 2);
+});
+
+test("Custom-build final payment HTTP routes are exact, authenticated, and isolated from earlier payment purposes", async () => {
+  const calls = [];
+  const invoiceId =
+    "60000000-0000-4000-8000-000000000005";
+  const state = {
+    schema: "sitesourcery.custom-build-final-handoff/v1",
+    state: "checkout_available",
+    invoice: { invoiceId },
+    handoff: null
+  };
+  const checkout = {
+    schema: "sitesourcery.custom-build-final-checkout/v1",
+    state: "ready"
+  };
+  const api = createHostedApi(service(), {
+    customServicesAccount: completeAccountBoundary({
+      async getCustomBuildFinalHandoff(actor, projectId) {
+        calls.push({ action: "final-read", actor, projectId });
+        return state;
+      },
+      async createCustomBuildFinalCheckout(
+        actor,
+        projectId,
+        selectedInvoiceId,
+        input
+      ) {
+        calls.push({
+          action: "final-checkout",
+          actor,
+          projectId,
+          invoiceId: selectedInvoiceId,
+          input
+        });
+        return checkout;
+      },
+      async createCustomBuildCheckout() {
+        throw new Error("final payment crossed into first payment");
+      },
+      async createCustomBuildChangeCheckout() {
+        throw new Error("final payment crossed into change payment");
+      }
+    })
+  });
+  const root =
+    `/api/v1/projects/${PROJECT_ID}/custom-services`;
+  const readPath = `${root}/custom-build-final-handoff`;
+  const checkoutPath =
+    `${root}/custom-build-final-invoices/${invoiceId}/checkout-command`;
+
+  const read = await api.fetch(request({ path: readPath }));
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), state);
+
+  const paid = await api.fetch(request({
+    body: { invoiceDigest: "a".repeat(64) },
+    method: "POST",
+    path: checkoutPath,
+    write: true
+  }));
+  assert.equal(paid.status, 201);
+  assert.deepEqual(await paid.json(), checkout);
+  assert.deepEqual(calls, [
+    {
+      action: "final-read",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID
+    },
+    {
+      action: "final-checkout",
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      invoiceId,
+      input: {
+        commandId: "accept-command-1",
+        invoiceDigest: "a".repeat(64)
+      }
+    }
+  ]);
+
+  const wrongQuery = await api.fetch(request({
+    path: `${readPath}?state=paid`
+  }));
+  assert.equal(wrongQuery.status, 400);
+  assert.equal(
+    (await wrongQuery.json()).error.code,
+    "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT"
+  );
+
+  for (const expanded of [
+    { amountMinor: 50_000 },
+    { changeAmountMinor: 12_500 },
+    { assessmentCreditMinor: 20_000 },
+    { provider: "stripe" },
+    { state: "paid" },
+    { markPaid: true }
+  ]) {
+    const response = await api.fetch(request({
+      body: { invoiceDigest: "a".repeat(64), ...expanded },
+      method: "POST",
+      path: checkoutPath,
+      write: true
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(
+      (await response.json()).error.code,
+      "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT"
+    );
+  }
+
+  const signedOutRead = await api.fetch(request({
+    path: readPath,
+    signedIn: false
+  }));
+  assert.equal(signedOutRead.status, 401);
+  const signedOutWrite = await api.fetch(request({
+    body: { invoiceDigest: "a".repeat(64) },
     method: "POST",
     path: checkoutPath,
     signedIn: false,

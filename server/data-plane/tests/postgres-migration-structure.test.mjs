@@ -1972,3 +1972,172 @@ test("Custom build change payment is a distinct provider-confirmed financial pur
     /custom_build_final|handoff|on delete cascade|grant all privileges/iu
   );
 });
+
+test("Custom build final payment freezes completion-bound obligation and globally fences Stripe effects", async () => {
+  const finalPayment = (await migrations()).find(
+    ({ name }) =>
+      name === "202608060046_custom_build_final_payment.sql"
+  );
+  assert.ok(
+    finalPayment,
+    "missing migration 46 Custom build final-payment boundary"
+  );
+
+  for (const table of [
+    "service_custom_build_stripe_payment_claims",
+    "service_custom_build_final_obligations",
+    "service_custom_build_final_invoices",
+    "service_custom_build_final_invoice_lines",
+    "service_custom_build_final_zero_balance_clearances",
+    "service_custom_build_final_checkout_attempts",
+    "service_custom_build_final_reconciliation_commands",
+    "service_custom_build_final_stripe_events",
+    "service_custom_build_final_payment_receipts"
+  ]) {
+    assert.match(
+      finalPayment.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu"),
+      `missing ${table}`
+    );
+  }
+
+  assert.match(
+    finalPayment.sql,
+    /unique \(provider, provider_object_kind, provider_object_id\)[\s\S]*unique \(purpose, authority_kind, authority_id, provider_object_kind\)/iu
+  );
+  const claimStart = finalPayment.sql.indexOf(
+    "create function ss.claim_service_custom_build_stripe_payment_effect"
+  );
+  const claimEnd = finalPayment.sql.indexOf("$$;", claimStart);
+  assert.ok(claimStart >= 0 && claimEnd > claimStart);
+  const claimFunction = finalPayment.sql.slice(claimStart, claimEnd);
+  assert.match(
+    claimFunction,
+    /provider_object_id = selected_provider_object_id[\s\S]*authority_id = selected_authority_id/iu
+  );
+  assert.match(
+    claimFunction,
+    /when unique_violation[\s\S]*Re-resolve both axes once/iu
+  );
+  assert.doesNotMatch(claimFunction, /\bloop\b|on conflict/iu);
+
+  for (const source of [
+    "service_custom_build_checkout_attempts",
+    "service_custom_build_change_checkout_attempts",
+    "service_custom_build_stripe_events",
+    "service_custom_build_change_stripe_events",
+    "service_custom_build_payment_receipts",
+    "service_custom_build_change_payment_receipts"
+  ]) {
+    assert.match(
+      finalPayment.sql,
+      new RegExp(`from ss\\.${source}\\b`, "iu"),
+      `missing retained ${source} backfill`
+    );
+  }
+  assert.match(
+    finalPayment.sql,
+    /create table ss\.service_custom_build_final_obligations[\s\S]*quote_id uuid not null[\s\S]*quote_revision_id uuid not null[\s\S]*quote_acceptance_id uuid not null[\s\S]*completion_package_digest ss\.sha256_hex not null[\s\S]*effective_change_order_digests ss\.sha256_hex\[\] not null[\s\S]*commercial_contract_digest ss\.sha256_hex not null[\s\S]*obligation_digest ss\.sha256_hex generated always/iu
+  );
+  const obligationDigestStart = finalPayment.sql.indexOf(
+    "create function ss.custom_build_final_obligation_digest"
+  );
+  const obligationDigestEnd = finalPayment.sql.indexOf(
+    "$$;",
+    obligationDigestStart
+  );
+  assert.ok(
+    obligationDigestStart >= 0 && obligationDigestEnd > obligationDigestStart
+  );
+  const obligationDigestFunction = finalPayment.sql.slice(
+    obligationDigestStart,
+    obligationDigestEnd
+  );
+  assert.match(
+    obligationDigestFunction,
+    /'customerUserId', customer_user_id/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /create function ss\.ensure_service_custom_build_final_obligation[\s\S]*select package\.job_id into discovered_job_id[\s\S]*pg_advisory_xact_lock[\s\S]*ss-custom-build-h1m:[\s\S]*revision_final_due_minor is distinct from source\.final_due_minor[\s\S]*installment_credit_minor <> 0[\s\S]*insert into ss\.service_custom_build_final_obligations/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /source\.final_due_minor > 0[\s\S]*insert into ss\.service_custom_build_final_invoices[\s\S]*custom_build_final_installment[\s\S]*source\.final_due_minor[\s\S]*else[\s\S]*insert into ss\.service_custom_build_final_zero_balance_clearances/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /subtotal_minor bigint not null check \(subtotal_minor > 0\)[\s\S]*credit_minor bigint not null check \(credit_minor = 0\)/iu
+  );
+  assert.doesNotMatch(
+    finalPayment.sql,
+    /assessment_build_credit|change_(?:unit|subtotal)_minor|final_due_minor\s*\+/iu
+  );
+
+  assert.match(
+    finalPayment.sql,
+    /create trigger service_custom_build_completion_final_obligation[\s\S]*after insert on ss\.service_custom_build_completion_packages/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /select id[\s\S]*from ss\.service_custom_build_completion_packages[\s\S]*ensure_service_custom_build_final_obligation\(retained\.id\)/iu
+  );
+
+  assert.match(
+    finalPayment.sql,
+    /create table ss\.service_custom_build_final_checkout_attempts[\s\S]*obligation_id uuid not null[\s\S]*obligation_digest ss\.sha256_hex not null[\s\S]*purpose text not null check \(purpose = 'custom_build_final'\)/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /create table ss\.service_custom_build_final_payment_receipts[\s\S]*charge_captured boolean not null check \(charge_captured\)[\s\S]*amount_refunded_minor bigint not null check \(amount_refunded_minor = 0\)[\s\S]*disputed boolean not null check \(not disputed\)/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /alter table ss\.stripe_customers[\s\S]*constraint stripe_customers_organization_stripe_customer_unique[\s\S]*unique \(organization_id, stripe_customer_id\)/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /constraint service_custom_build_final_receipt_stripe_customer_org_fk[\s\S]*foreign key \(organization_id, stripe_customer_id\)[\s\S]*references ss\.stripe_customers\([\s\S]*organization_id, stripe_customer_id[\s\S]*\)/iu
+  );
+  const receiptGuardStart = finalPayment.sql.indexOf(
+    "create function ss.guard_service_custom_build_final_payment_receipt"
+  );
+  const receiptGuardEnd = finalPayment.sql.indexOf(
+    "$$;",
+    receiptGuardStart
+  );
+  assert.ok(receiptGuardStart >= 0 && receiptGuardEnd > receiptGuardStart);
+  const receiptGuard = finalPayment.sql.slice(
+    receiptGuardStart,
+    receiptGuardEnd
+  );
+  for (const invariant of [
+    /custom_build_final_provider_facts_digest/iu,
+    /attempt\.state = 'ready'/iu,
+    /line\.component_key = 'custom_build_final_installment'/iu,
+    /new\.receipt_source = 'provider_readback'/iu
+  ]) {
+    assert.match(receiptGuard, invariant);
+  }
+  assert.match(
+    finalPayment.sql,
+    /create table ss\.service_custom_build_final_reconciliation_commands[\s\S]*unique \(command_id\)[\s\S]*custom_build_final_reconciliation_request_digest/iu
+  );
+
+  assert.match(
+    finalPayment.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /revoke all on function ss\.ensure_service_custom_build_final_obligation\(uuid\)[\s\S]*from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    finalPayment.sql,
+    /create function ss\.hosted_runtime_contract_v46\(\)[\s\S]*canonical-ss-v46-custom-build-final-payment[\s\S]*grant execute on function ss\.hosted_runtime_contract_v46\(\)/iu
+  );
+  assert.doesNotMatch(
+    finalPayment.sql,
+    /service_custom_build_handoff_receipts|workmanship_starts_at|workmanship_ends_at|hosted_runtime_contract_v4[78]|on delete cascade|grant all privileges/iu
+  );
+});

@@ -993,6 +993,16 @@ test(
           return { status: "not_custom_build" };
         }
       },
+      customBuildChangeCommerce: {
+        async ingestStripeEvent() {
+          return { status: "not_custom_build_change" };
+        }
+      },
+      customBuildFinalCommerce: {
+        async ingestStripeEvent() {
+          return { status: "not_custom_build_final" };
+        }
+      },
       alakazamCommerce: {
         async ingestStripeEvent() {
           return { status: "not_alakazam" };

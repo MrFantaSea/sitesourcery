@@ -249,6 +249,30 @@ async function verifyPlatformSchema(pool) {
       ) is not null as service_custom_build_change_payment_receipts,
       to_regprocedure('ss.hosted_runtime_contract_v45()') is not null
         as custom_build_change_payment_runtime_contract,
+      to_regclass('ss.service_custom_build_stripe_payment_claims') is not null
+        as service_custom_build_stripe_payment_claims,
+      to_regclass('ss.service_custom_build_final_obligations') is not null
+        as service_custom_build_final_obligations,
+      to_regclass('ss.service_custom_build_final_invoices') is not null
+        as service_custom_build_final_invoices,
+      to_regclass('ss.service_custom_build_final_invoice_lines') is not null
+        as service_custom_build_final_invoice_lines,
+      to_regclass(
+        'ss.service_custom_build_final_zero_balance_clearances'
+      ) is not null as service_custom_build_final_zero_balance_clearances,
+      to_regclass(
+        'ss.service_custom_build_final_checkout_attempts'
+      ) is not null as service_custom_build_final_checkout_attempts,
+      to_regclass(
+        'ss.service_custom_build_final_reconciliation_commands'
+      ) is not null as service_custom_build_final_reconciliation_commands,
+      to_regclass('ss.service_custom_build_final_stripe_events') is not null
+        as service_custom_build_final_stripe_events,
+      to_regclass(
+        'ss.service_custom_build_final_payment_receipts'
+      ) is not null as service_custom_build_final_payment_receipts,
+      to_regprocedure('ss.hosted_runtime_contract_v46()') is not null
+        as custom_build_final_payment_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -2500,6 +2524,224 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build change-payment migration contract failed: ${name}`
+    );
+  }
+
+  const customBuildFinalPayment = await pool.query(`
+    with expected_tables(table_name, insertable, updatable) as (
+      values
+        ('service_custom_build_stripe_payment_claims', false, false),
+        ('service_custom_build_final_obligations', false, false),
+        ('service_custom_build_final_invoices', false, false),
+        ('service_custom_build_final_invoice_lines', false, false),
+        ('service_custom_build_final_zero_balance_clearances', false, false),
+        ('service_custom_build_final_checkout_attempts', true, true),
+        ('service_custom_build_final_reconciliation_commands', true, true),
+        ('service_custom_build_final_stripe_events', true, true),
+        ('service_custom_build_final_payment_receipts', true, false)
+    )
+    select
+      ss.hosted_runtime_contract_v46() =
+        'canonical-ss-v46-custom-build-final-payment'
+        as exact_v46_runtime_marker,
+      (
+        select count(*) = 9
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(
+            has_table_privilege('service_role', relation.oid, 'SELECT')
+            and has_table_privilege(
+              'service_role', relation.oid, 'INSERT'
+            ) = expected.insertable
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = expected.updatable
+            and not has_table_privilege(
+              'service_role', relation.oid, 'DELETE'
+            )
+            and not has_table_privilege(
+              'service_role', relation.oid, 'TRUNCATE'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'SELECT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'INSERT'
+            )
+            and not has_table_privilege(
+              'authenticated', relation.oid, 'UPDATE'
+            )
+            and not has_table_privilege('anon', relation.oid, 'SELECT')
+            and not has_table_privilege('anon', relation.oid, 'INSERT')
+            and not has_table_privilege('anon', relation.oid, 'UPDATE')
+          )
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+         and relation.relkind = 'r'
+      ) as exact_table_security_boundary,
+      (
+        select count(*) = 2
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_custom_build_stripe_payment_claims'::regclass
+          and constraint_record.contype = 'u'
+          and pg_get_constraintdef(constraint_record.oid) in (
+            'UNIQUE (provider, provider_object_kind, provider_object_id)',
+            'UNIQUE (purpose, authority_kind, authority_id, provider_object_kind)'
+          )
+      ) as both_global_claim_axes,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%provider_object_id = selected_provider_object_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%authority_id = selected_authority_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%when unique_violation%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%re-resolve both axes once%'
+          and lower(pg_get_functiondef(procedure_record.oid)) not like
+            '% loop%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.claim_service_custom_build_stripe_payment_effect(uuid,text,text,text,text,text,timestamp with time zone)'::regprocedure
+      ) as bounded_dual_axis_claim_resolution,
+      (
+        select count(*) = 9
+        from pg_trigger trigger_record
+        join pg_class relation on relation.oid = trigger_record.tgrelid
+        where relation.relnamespace = 'ss'::regnamespace
+          and trigger_record.tgname in (
+            'service_custom_build_start_checkout_session_claim',
+            'service_custom_build_change_checkout_session_claim',
+            'service_custom_build_final_checkout_session_claim',
+            'service_custom_build_start_stripe_event_claim',
+            'service_custom_build_change_stripe_event_claim',
+            'service_custom_build_final_stripe_event_claim',
+            'service_custom_build_start_payment_receipt_claim',
+            'service_custom_build_change_payment_receipt_claim',
+            'service_custom_build_final_payment_receipt_claim'
+          )
+          and not trigger_record.tgisinternal
+      ) as all_three_payment_purposes_claimed,
+      (
+        select count(*) = 1
+        from information_schema.columns column_record
+        where column_record.table_schema = 'ss'
+          and column_record.table_name =
+            'service_custom_build_final_obligations'
+          and column_record.column_name = 'obligation_digest'
+          and column_record.is_generated = 'ALWAYS'
+          and column_record.generation_expression like
+            '%custom_build_final_obligation_digest%'
+      ) as database_generated_obligation_digest,
+      (
+        select count(*) = 1
+          and bool_and(
+            lower(pg_get_functiondef(procedure_record.oid)) like
+              '%''customeruserid'', customer_user_id%'
+          )
+        from pg_proc procedure_record
+        where procedure_record.pronamespace = 'ss'::regnamespace
+          and procedure_record.proname =
+            'custom_build_final_obligation_digest'
+      ) as customer_bound_obligation_digest,
+      (
+        exists (
+          select 1
+          from pg_constraint constraint_record
+          where constraint_record.conrelid = 'ss.stripe_customers'::regclass
+            and constraint_record.conname =
+              'stripe_customers_organization_stripe_customer_unique'
+            and constraint_record.contype = 'u'
+        )
+        and exists (
+          select 1
+          from pg_constraint constraint_record
+          where constraint_record.conrelid =
+            'ss.service_custom_build_final_payment_receipts'::regclass
+            and constraint_record.conname =
+              'service_custom_build_final_receipt_stripe_customer_org_fk'
+            and constraint_record.contype = 'f'
+            and lower(pg_get_constraintdef(constraint_record.oid)) like
+              '%foreign key (organization_id, stripe_customer_id)%references ss.stripe_customers(organization_id, stripe_customer_id)%'
+        )
+      ) as organization_bound_stripe_customer_receipt,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%select package.job_id into discovered_job_id%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%ss-custom-build-h1m:%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%revision_final_due_minor is distinct from source.final_due_minor%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%installment_credit_minor <> 0%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_final_invoices%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%insert into ss.service_custom_build_final_zero_balance_clearances%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.ensure_service_custom_build_final_obligation(uuid)'::regprocedure
+      ) as exact_completion_obligation_materializer,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_custom_build_completion_packages'::regclass
+          and trigger_record.tgname =
+            'service_custom_build_completion_final_obligation'
+          and not trigger_record.tgisinternal
+      ) as completion_bound_materialization,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%chargecaptured%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%amountrefundedminor%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%disputed%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%attempt.state = ''ready''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%line.component_key = ''custom_build_final_installment''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%custom_build_final_provider_facts_digest%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.guard_service_custom_build_final_payment_receipt()'::regprocedure
+      ) as captured_unrefunded_uncontested_receipt,
+      not has_function_privilege(
+        'service_role',
+        'ss.ensure_service_custom_build_final_obligation(uuid)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'service_role',
+        'ss.claim_service_custom_build_stripe_payment_effect(uuid,text,text,text,text,text,timestamp with time zone)',
+        'EXECUTE'
+      ) as trigger_only_materialization_authority,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          select format('ss.%I', table_name)::regclass
+          from expected_tables
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retention_safe_foreign_keys
+  `);
+  for (
+    const [name, ready] of Object.entries(
+      customBuildFinalPayment.rows[0]
+    )
+  ) {
+    assert.equal(
+      ready,
+      true,
+      `Custom build final-payment migration contract failed: ${name}`
     );
   }
 }

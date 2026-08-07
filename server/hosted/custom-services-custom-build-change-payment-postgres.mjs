@@ -31,7 +31,9 @@ const RUNTIME_CONTRACT =
 const CHECKOUT_ROUTE =
   "custom-services.custom-build-change-checkout";
 const EVENT_TYPE = "checkout.session.completed";
-const CHECKOUT_TTL_MILLISECONDS = 30 * 60 * 1000;
+// Stripe measures its 30-minute minimum from provider-side creation time.
+// Retain one minute of submission margin while keeping a short-lived page.
+const CHECKOUT_TTL_MILLISECONDS = 31 * 60 * 1000;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;

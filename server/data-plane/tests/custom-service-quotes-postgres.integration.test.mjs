@@ -533,6 +533,12 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
 
     const customer = await seedAccountProject(client, "quote-customer");
     const other = await seedAccountProject(client, "other-customer");
+    const foreignFinalStripeCustomerId =
+      `cus_test_v46_foreign_${randomUUID().replaceAll("-", "_")}`;
+    await insertRow(client, "stripe_customers", {
+      organization_id: other.organizationId,
+      stripe_customer_id: foreignFinalStripeCustomerId
+    });
     const firstOperatorId = await seedOperator(client, "first");
     const secondOperatorId = await seedOperator(client, "second");
     const thirdOperatorId = await seedOperator(client, "third");
@@ -2902,6 +2908,597 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       acceptedBuild
     );
 
+    // Exercise the positive Site path in one isolated transaction, then roll
+    // it back so the existing quote-void and Card Plus zero-balance journey
+    // continues unchanged. All hosted adapters below share this client.
+    await client.query("begin");
+    await client.query("set local role service_role");
+    try {
+      const positiveAuthority = {
+        async service(context, work) {
+          await setActor(
+            client,
+            context.actorKind,
+            {
+              organizationId:
+                context.organizationId ?? customer.organizationId,
+              userId: context.userId ?? customer.userId
+            },
+            context.userId ?? customer.userId
+          );
+          return work(client);
+        }
+      };
+      let positiveStartPurpose = null;
+      const positiveStartSessionId =
+        `cs_test_v46_positive_start_${randomUUID().replaceAll("-", "_")}`;
+      const positiveStartPaymentIntentId =
+        `pi_test_v46_positive_start_${randomUUID().replaceAll("-", "_")}`;
+      const positiveStartEventId =
+        `evt_test_v46_positive_start_${randomUUID().replaceAll("-", "_")}`;
+      const positiveCustomerId = "cus_test_service_assessment_settlement";
+      const positiveStartProvider = {
+        async createCustomBuildStartCheckout(input) {
+          positiveStartPurpose = structuredClone(input.purpose);
+          assert.equal(input.purpose.price.amountMinor, 40000);
+          assert.equal(input.purpose.quoteId, issuedBuild.quote.quoteId);
+          return {
+            checkoutId: positiveStartSessionId,
+            url: "https://checkout.stripe.com/c/pay/v46_positive_start",
+            expiresAt: isoAfter({ hours: 1 })
+          };
+        },
+        async retrieveCustomBuildStartPayment(input) {
+          assert.deepEqual(input.purpose, positiveStartPurpose);
+          const facts = {
+            schema:
+              "sitesourcery.stripe-custom-build-start-payment-facts/v1",
+            provider: "stripe",
+            checkoutSessionId: positiveStartSessionId,
+            paymentIntentId: positiveStartPaymentIntentId,
+            customerId: positiveCustomerId,
+            paymentStatus: "paid",
+            subtotalMinor: 40000,
+            taxMinor: 3200,
+            totalMinor: 43200,
+            taxMode: "automatic",
+            currency: "USD",
+            purposeDigest: input.purposeDigest,
+            providerPaymentTime: isoAfter()
+          };
+          return Object.freeze({
+            ...facts,
+            providerFactsDigest: digest(facts)
+          });
+        },
+        async retrieveCustomBuildStartCheckoutLifecycle(input) {
+          return {
+            schema:
+              "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1",
+            provider: "stripe",
+            checkoutSessionId: input.checkoutSessionId,
+            purposeDigest: input.purposeDigest,
+            state: "expired"
+          };
+        }
+      };
+      const positiveStartPayment =
+        createPostgresCustomServicesCustomBuildPayment({
+          authority: positiveAuthority,
+          provider: positiveStartProvider,
+          release: {
+            approved: true,
+            currency: "USD",
+            paymentWindowDays: 7,
+            taxMode: "automatic"
+          },
+          clock: { now: () => new Date().toISOString() },
+          ids: { next: () => randomUUID() }
+        });
+      const positiveStartInvoice =
+        await positiveStartPayment.readCurrentInvoice(customerAssessmentScope);
+      assert.equal(positiveStartInvoice.invoice.subtotal.amountMinor, 40000);
+      assert.equal(positiveStartInvoice.invoice.finalHandoff.amountMinor, 60000);
+      const positiveStartCheckout = await positiveStartPayment.createCheckout({
+        ...customerAssessmentScope,
+        commandId: `custom-build-v46-positive-${randomUUID()}`,
+        invoiceId: positiveStartInvoice.invoice.invoiceId,
+        invoiceDigest: positiveStartInvoice.invoice.invoiceDigest
+      });
+      assert.equal(positiveStartCheckout.state, "ready");
+      const positiveStartPurposeDigest = digest(positiveStartPurpose);
+      const positiveStartEvent = {
+        id: positiveStartEventId,
+        type: "checkout.session.completed",
+        livemode: false,
+        api_version: "2026-06-24.dahlia",
+        created: Math.floor(Date.now() / 1000) - 1,
+        data: {
+          object: {
+            id: positiveStartSessionId,
+            metadata: {
+              schema: "sitesourcery_custom_build_start_checkout_v1",
+              tenant_id: positiveStartPurpose.tenantId,
+              customer_id: positiveStartPurpose.customerId,
+              project_id: positiveStartPurpose.projectId,
+              quote_id: positiveStartPurpose.quoteId,
+              quote_revision_id: positiveStartPurpose.quoteRevisionId,
+              quote_acceptance_id: positiveStartPurpose.quoteAcceptanceId,
+              credit_application_id:
+                positiveStartPurpose.creditApplicationId,
+              invoice_id: positiveStartPurpose.invoiceId,
+              invoice_number: positiveStartPurpose.invoiceNumber,
+              accepted_quote_digest:
+                positiveStartPurpose.acceptedQuoteDigest,
+              accepted_disclosure_digest:
+                positiveStartPurpose.acceptedDisclosureDigest,
+              invoice_digest: positiveStartPurpose.invoiceDigest,
+              purpose_digest: positiveStartPurposeDigest
+            }
+          }
+        }
+      };
+      const positiveStartSettlement =
+        await positiveStartPayment.ingestStripeEvent(positiveStartEvent);
+      assert.equal(positiveStartSettlement.status, "payment_settled");
+      const positivePaid =
+        await positiveStartPayment.readCurrentInvoice(customerAssessmentScope);
+      const positiveJobId = positivePaid.job.jobId;
+      assert.equal(positivePaid.job.finalHandoff.amountMinor, 60000);
+      assert.equal(positivePaid.job.finalHandoff.state, "unpaid");
+
+      const positiveProgress =
+        createPostgresCustomServicesCustomBuildProgress({
+          authority: positiveAuthority
+        });
+      const positiveChecking = await positiveProgress.recordProgress(
+        operatorActor,
+        positiveJobId,
+        {
+          commandId: `custom-build-v46-progress-${randomUUID()}`,
+          customerSummary:
+            "The exact Site scope is complete and ready for final payment proof.",
+          expectedRevision: 0,
+          milestones: {
+            structure: "done",
+            content: "done",
+            responsive: "done",
+            quality: "done"
+          },
+          nextStep:
+            "Attach the final desktop and phone evidence for this Site build.",
+          organizationId: customer.organizationId,
+          stage: "checking"
+        }
+      );
+      assert.equal(positiveChecking.progress.revision, 1);
+
+      const positiveCompletion =
+        createPostgresCustomServicesCustomBuildChangeCompletion({
+          authority: positiveAuthority
+        });
+      const positiveDesktop = await positiveCompletion.uploadEvidence(
+        operatorActor,
+        positiveJobId,
+        {
+          accessibleDescription:
+            "Positive final-payment Site proof at the reviewed desktop width.",
+          commandId: `custom-build-v46-evidence-${randomUUID()}`,
+          dataBase64: completionPng(1440, 1000, 72).toString("base64"),
+          mediaType: "image/png",
+          organizationId: customer.organizationId,
+          viewport: "desktop"
+        }
+      );
+      const positivePhone = await positiveCompletion.uploadEvidence(
+        operatorActor,
+        positiveJobId,
+        {
+          accessibleDescription:
+            "Positive final-payment Site proof at the reviewed phone width.",
+          commandId: `custom-build-v46-evidence-${randomUUID()}`,
+          dataBase64: completionPng(390, 844, 88).toString("base64"),
+          mediaType: "image/png",
+          organizationId: customer.organizationId,
+          viewport: "phone"
+        }
+      );
+      const positiveEvidenceIds = positivePhone.evidence
+        .filter((entry) => entry.progressRevision === 1)
+        .map((entry) => entry.evidenceId)
+        .sort();
+      assert.equal(positiveEvidenceIds.length, 2);
+      assert.equal(positiveDesktop.evidence.length, 1);
+      const positiveCompleted = await positiveCompletion.recordCompletion(
+        operatorActor,
+        positiveJobId,
+        {
+          checks: {
+            accessibilityBasics: true,
+            contactActions: true,
+            desktop: true,
+            links: true,
+            phone: true,
+            scope: true
+          },
+          commandId: `custom-build-v46-completion-${randomUUID()}`,
+          customerSummary:
+            "The exact Site scope passed all final desktop, phone, link, contact, and accessibility checks.",
+          evidenceIds: positiveEvidenceIds,
+          organizationId: customer.organizationId
+        }
+      );
+      assert.equal(positiveCompleted.state, "ready_for_final_payment");
+
+      const positiveFinal = await client.query(
+        `select
+           obligation.id as obligation_id,
+           obligation.obligation_digest,
+           obligation.completion_package_id,
+           obligation.completion_package_digest,
+           to_json(obligation.effective_change_order_digests)
+             as effective_change_order_digests,
+           obligation.accepted_quote_digest,
+           obligation.accepted_disclosure_digest,
+           obligation.final_due_minor,
+           obligation.credit_minor,
+           obligation.workmanship_correction_days,
+           invoice.id as invoice_id,
+           invoice.invoice_number,
+           invoice.invoice_digest,
+           invoice.subtotal_minor,
+           invoice.credit_minor as invoice_credit_minor,
+           line.component_key,
+           line.amount_minor,
+           line.credit_minor as line_credit_minor,
+           line.quote_installment_id,
+           (select count(*)::int
+            from ss.service_custom_build_final_zero_balance_clearances clearance
+            where clearance.job_id = obligation.job_id) as clearance_count
+         from ss.service_custom_build_final_obligations obligation
+         join ss.service_custom_build_final_invoices invoice
+           on invoice.organization_id = obligation.organization_id
+          and invoice.obligation_id = obligation.id
+         join ss.service_custom_build_final_invoice_lines line
+           on line.organization_id = invoice.organization_id
+          and line.invoice_id = invoice.id
+         where obligation.job_id = $1`,
+        [positiveJobId]
+      );
+      assert.equal(positiveFinal.rowCount, 1);
+      const positiveFinalRow = positiveFinal.rows[0];
+      const customerBoundDigest = await client.query(
+        `select
+           obligation_digest,
+           ss.custom_build_final_obligation_digest(
+             organization_id,
+             project_id,
+             customer_user_id,
+             job_id,
+             quote_id,
+             quote_revision,
+             quote_revision_id,
+             quote_acceptance_id,
+             completion_package_id,
+             completion_package_digest,
+             base_scope_digest,
+             effective_change_order_digests,
+             effective_scope_digest,
+             accepted_quote_digest,
+             accepted_disclosure_digest,
+             commercial_contract_id,
+             commercial_contract_digest,
+             quote_installment_id,
+             final_due_minor,
+             currency,
+             workmanship_correction_days,
+             bound_at
+           ) as exact_customer_digest,
+           ss.custom_build_final_obligation_digest(
+             organization_id,
+             project_id,
+             $2::uuid,
+             job_id,
+             quote_id,
+             quote_revision,
+             quote_revision_id,
+             quote_acceptance_id,
+             completion_package_id,
+             completion_package_digest,
+             base_scope_digest,
+             effective_change_order_digests,
+             effective_scope_digest,
+             accepted_quote_digest,
+             accepted_disclosure_digest,
+             commercial_contract_id,
+             commercial_contract_digest,
+             quote_installment_id,
+             final_due_minor,
+             currency,
+             workmanship_correction_days,
+             bound_at
+           ) as other_customer_digest
+         from ss.service_custom_build_final_obligations
+         where id = $1`,
+        [positiveFinalRow.obligation_id, other.userId]
+      );
+      assert.equal(
+        customerBoundDigest.rows[0].exact_customer_digest,
+        customerBoundDigest.rows[0].obligation_digest
+      );
+      assert.notEqual(
+        customerBoundDigest.rows[0].other_customer_digest,
+        customerBoundDigest.rows[0].exact_customer_digest,
+        "changing only customerUserId must change the obligation digest"
+      );
+      assert.deepEqual(positiveFinalRow.effective_change_order_digests, []);
+      assert.equal(Number(positiveFinalRow.final_due_minor), 60000);
+      assert.equal(Number(positiveFinalRow.credit_minor), 0);
+      assert.equal(positiveFinalRow.workmanship_correction_days, 30);
+      assert.match(positiveFinalRow.invoice_number, /^SSCB-FINAL-/u);
+      assert.equal(Number(positiveFinalRow.subtotal_minor), 60000);
+      assert.equal(Number(positiveFinalRow.invoice_credit_minor), 0);
+      assert.equal(
+        positiveFinalRow.component_key,
+        "custom_build_final_installment"
+      );
+      assert.equal(Number(positiveFinalRow.amount_minor), 60000);
+      assert.equal(Number(positiveFinalRow.line_credit_minor), 0);
+      assert.ok(positiveFinalRow.quote_installment_id);
+      assert.equal(positiveFinalRow.clearance_count, 0);
+
+      const finalPurpose = {
+        schema: "sitesourcery.custom-build-final-checkout-purpose/v1",
+        purpose: "custom_build_final",
+        tenantId: customer.organizationId,
+        customerId: customer.userId,
+        projectId: customer.projectId,
+        jobId: positiveJobId,
+        finalObligationId: positiveFinalRow.obligation_id,
+        finalObligationDigest: positiveFinalRow.obligation_digest,
+        completionPackageId: positiveFinalRow.completion_package_id,
+        completionPackageDigest:
+          positiveFinalRow.completion_package_digest,
+        effectiveChangeOrderDigests:
+          positiveFinalRow.effective_change_order_digests,
+        invoiceId: positiveFinalRow.invoice_id,
+        invoiceNumber: positiveFinalRow.invoice_number,
+        invoiceDigest: positiveFinalRow.invoice_digest,
+        acceptedQuoteDigest: positiveFinalRow.accepted_quote_digest,
+        acceptedDisclosureDigest:
+          positiveFinalRow.accepted_disclosure_digest,
+        price: { amountMinor: 60000, currency: "USD" },
+        taxMode: "automatic"
+      };
+      assert.deepEqual(finalPurpose.effectiveChangeOrderDigests, []);
+      const finalPurposeDigest = digest(finalPurpose);
+      const finalAttemptId = randomUUID();
+      const finalCreatedAt = new Date().toISOString();
+      const finalExpiresAt = new Date(
+        Date.parse(finalCreatedAt) + 3_600_000
+      ).toISOString();
+      const finalSessionId =
+        `cs_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
+      const finalEventId =
+        `evt_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
+      const finalPaymentIntentId =
+        `pi_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
+      const finalChargeId =
+        `ch_test_v46_final_${randomUUID().replaceAll("-", "_")}`;
+
+      await setActor(client, "customer", customer);
+      await client.query(
+        `select pg_advisory_xact_lock(
+           hashtextextended('ss-custom-build-h1m:' || $1::text, 0)
+         )`,
+        [positiveJobId]
+      );
+      await insertRow(client, "service_custom_build_final_checkout_attempts", {
+        id: finalAttemptId,
+        organization_id: customer.organizationId,
+        project_id: customer.projectId,
+        customer_user_id: customer.userId,
+        job_id: positiveJobId,
+        obligation_id: positiveFinalRow.obligation_id,
+        completion_package_id: positiveFinalRow.completion_package_id,
+        invoice_id: positiveFinalRow.invoice_id,
+        command_id: `custom-build-v46-final-${randomUUID()}`,
+        provider: "stripe",
+        purpose: "custom_build_final",
+        purpose_digest: finalPurposeDigest,
+        obligation_digest: positiveFinalRow.obligation_digest,
+        completion_package_digest:
+          positiveFinalRow.completion_package_digest,
+        invoice_digest: positiveFinalRow.invoice_digest,
+        accepted_quote_digest: positiveFinalRow.accepted_quote_digest,
+        accepted_disclosure_digest:
+          positiveFinalRow.accepted_disclosure_digest,
+        expected_subtotal_minor: 60000,
+        currency: "USD",
+        tax_mode: "automatic",
+        provider_request_expires_at: finalExpiresAt,
+        state: "provider_pending",
+        provider_effect_certainty: "ambiguous",
+        created_at: finalCreatedAt
+      });
+      await client.query(
+        `update ss.service_custom_build_final_checkout_attempts
+         set state = 'ready',
+             provider_effect_certainty = 'confirmed',
+             checkout_session_id = $2,
+             checkout_url = $3,
+             expires_at = provider_request_expires_at
+         where id = $1`,
+        [
+          finalAttemptId,
+          finalSessionId,
+          "https://checkout.stripe.com/c/pay/v46_positive_final"
+        ]
+      );
+
+      await setActor(client, "system", customer);
+      await expectRejected(
+        client,
+        () => client.query(
+          `update ss.service_custom_build_final_checkout_attempts
+           set state = 'paid'
+           where id = $1`,
+          [finalAttemptId]
+        ),
+        /transition lacks authority/iu
+      );
+      const providerCreatedAt = new Date(
+        Date.now() - 1000
+      ).toISOString();
+      const signatureVerifiedAt = new Date().toISOString();
+      await insertRow(client, "service_custom_build_final_stripe_events", {
+        id: finalEventId,
+        organization_id: customer.organizationId,
+        project_id: customer.projectId,
+        customer_user_id: customer.userId,
+        job_id: positiveJobId,
+        obligation_id: positiveFinalRow.obligation_id,
+        completion_package_id: positiveFinalRow.completion_package_id,
+        invoice_id: positiveFinalRow.invoice_id,
+        checkout_attempt_id: finalAttemptId,
+        event_type: "checkout.session.completed",
+        livemode: false,
+        api_version: "2026-06-24.dahlia",
+        checkout_session_id: finalSessionId,
+        payload_digest: digest({ id: finalEventId, purpose: finalPurpose }),
+        provider_created_at: providerCreatedAt,
+        signature_verified_at: signatureVerifiedAt,
+        state: "pending"
+      });
+      const finalProviderPaidAt = new Date().toISOString();
+      const finalProviderFactsWithoutDigest = {
+        schema: "sitesourcery.stripe-custom-build-final-payment-facts/v1",
+        provider: "stripe",
+        checkoutSessionId: finalSessionId,
+        paymentIntentId: finalPaymentIntentId,
+        chargeId: finalChargeId,
+        customerId: positiveCustomerId,
+        paymentStatus: "paid",
+        chargeCaptured: true,
+        amountRefundedMinor: 0,
+        disputed: false,
+        subtotalMinor: 60000,
+        taxMinor: 4800,
+        totalMinor: 64800,
+        taxMode: "automatic",
+        currency: "USD",
+        purposeDigest: finalPurposeDigest,
+        providerPaymentTime: finalProviderPaidAt
+      };
+      const finalProviderFactsDigest = digest(
+        finalProviderFactsWithoutDigest
+      );
+      const finalProviderFacts = {
+        ...finalProviderFactsWithoutDigest,
+        providerFactsDigest: finalProviderFactsDigest
+      };
+      const finalReceipt = {
+        id: randomUUID(),
+        organization_id: customer.organizationId,
+        project_id: customer.projectId,
+        case_id: paidJob.caseId,
+        customer_user_id: customer.userId,
+        job_id: positiveJobId,
+        obligation_id: positiveFinalRow.obligation_id,
+        completion_package_id: positiveFinalRow.completion_package_id,
+        invoice_id: positiveFinalRow.invoice_id,
+        checkout_attempt_id: finalAttemptId,
+        receipt_source: "stripe_event",
+        stripe_event_id: finalEventId,
+        provider: "stripe",
+        checkout_session_id: finalSessionId,
+        payment_intent_id: finalPaymentIntentId,
+        charge_id: finalChargeId,
+        stripe_customer_id: positiveCustomerId,
+        payment_status: "paid",
+        charge_captured: true,
+        amount_refunded_minor: 0,
+        disputed: false,
+        subtotal_minor: 60000,
+        tax_minor: 4800,
+        total_minor: 64800,
+        tax_mode: "automatic",
+        currency: "USD",
+        purpose: "custom_build_final",
+        purpose_digest: finalPurposeDigest,
+        obligation_digest: positiveFinalRow.obligation_digest,
+        completion_package_digest:
+          positiveFinalRow.completion_package_digest,
+        invoice_digest: positiveFinalRow.invoice_digest,
+        accepted_quote_digest: positiveFinalRow.accepted_quote_digest,
+        accepted_disclosure_digest:
+          positiveFinalRow.accepted_disclosure_digest,
+        provider_facts: finalProviderFacts,
+        provider_facts_digest: finalProviderFactsDigest,
+        provider_paid_at: finalProviderPaidAt,
+        settled_at: new Date().toISOString()
+      };
+      const foreignCustomerProviderFactsWithoutDigest = {
+        ...finalProviderFactsWithoutDigest,
+        customerId: foreignFinalStripeCustomerId
+      };
+      const foreignCustomerProviderFactsDigest = digest(
+        foreignCustomerProviderFactsWithoutDigest
+      );
+      await expectRejected(
+        client,
+        () => insertRow(
+          client,
+          "service_custom_build_final_payment_receipts",
+          {
+            ...finalReceipt,
+            id: randomUUID(),
+            stripe_customer_id: foreignFinalStripeCustomerId,
+            provider_facts: {
+              ...foreignCustomerProviderFactsWithoutDigest,
+              providerFactsDigest: foreignCustomerProviderFactsDigest
+            },
+            provider_facts_digest: foreignCustomerProviderFactsDigest
+          }
+        ),
+        /service_custom_build_final_receipt_stripe_customer_org_fk/iu
+      );
+      await insertRow(
+        client,
+        "service_custom_build_final_payment_receipts",
+        finalReceipt
+      );
+      const positiveSettlement = await client.query(
+        `select
+           attempt.state as attempt_state,
+           event.state as event_state,
+           receipt.charge_captured,
+           receipt.amount_refunded_minor,
+           receipt.disputed,
+           (select count(*)::int
+            from ss.service_custom_build_stripe_payment_claims claim
+            where claim.organization_id = receipt.organization_id
+              and claim.purpose = 'custom_build_final') as claim_count
+         from ss.service_custom_build_final_payment_receipts receipt
+         join ss.service_custom_build_final_checkout_attempts attempt
+           on attempt.id = receipt.checkout_attempt_id
+         join ss.service_custom_build_final_stripe_events event
+           on event.id = receipt.stripe_event_id
+         where receipt.job_id = $1`,
+        [positiveJobId]
+      );
+      assert.deepEqual(positiveSettlement.rows[0], {
+        attempt_state: "paid",
+        event_state: "processed",
+        charge_captured: true,
+        amount_refunded_minor: "0",
+        disputed: false,
+        claim_count: 3
+      });
+    } finally {
+      await client.query("rollback");
+    }
+
     const voidedBuild = await customBuild.voidQuote(
       operatorActor,
       issuedBuild.quote.quoteId,
@@ -4488,6 +5085,24 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       evidenceIds: completionEvidenceIds,
       organizationId: customer.organizationId
     };
+    const preCompletionFinal = await pool.query(
+      `select
+         (select count(*)::int
+          from ss.service_custom_build_final_obligations
+          where job_id = $1) as obligations,
+         (select count(*)::int
+          from ss.service_custom_build_final_invoices
+          where job_id = $1) as invoices,
+         (select count(*)::int
+          from ss.service_custom_build_final_zero_balance_clearances
+          where job_id = $1) as clearances`,
+      [buildJobId]
+    );
+    assert.deepEqual(preCompletionFinal.rows[0], {
+      obligations: 0,
+      invoices: 0,
+      clearances: 0
+    });
     const completionRaceEntered = deferred();
     const progressRaceEntered = deferred();
     const raceAuthority = (entered, blockingQuery) => ({
@@ -4656,6 +5271,110 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(
       customerCompletionEvidence.imageHeight,
       selectedEvidenceProjection.imageHeight
+    );
+    const zeroFinal = await pool.query(
+      `select
+         obligation.id as obligation_id,
+         obligation.quote_id,
+         obligation.quote_revision_id,
+         obligation.quote_acceptance_id,
+         obligation.quote_installment_id,
+         obligation.completion_package_id,
+         obligation.completion_package_digest,
+         to_json(obligation.effective_change_order_digests)
+           as effective_change_order_digests,
+         obligation.commercial_contract_digest,
+         obligation.final_due_minor,
+         obligation.credit_minor,
+         obligation.workmanship_correction_days,
+         obligation.obligation_digest,
+         clearance.id as clearance_id,
+         clearance.clearance_digest,
+         clearance.reason,
+         clearance.cleared_at,
+         package.prepared_at,
+         (select count(*)::int
+          from ss.service_custom_build_final_invoices invoice
+          where invoice.job_id = obligation.job_id) as invoice_count,
+         (select count(*)::int
+          from ss.service_custom_build_final_checkout_attempts attempt
+          where attempt.job_id = obligation.job_id) as attempt_count,
+         (select count(*)::int
+          from ss.service_custom_build_final_stripe_events event
+          where event.job_id = obligation.job_id) as event_count,
+         (select count(*)::int
+          from ss.service_custom_build_final_payment_receipts receipt
+          where receipt.job_id = obligation.job_id) as receipt_count
+       from ss.service_custom_build_final_obligations obligation
+       join ss.service_custom_build_final_zero_balance_clearances clearance
+         on clearance.organization_id = obligation.organization_id
+        and clearance.obligation_id = obligation.id
+       join ss.service_custom_build_completion_packages package
+         on package.organization_id = obligation.organization_id
+        and package.id = obligation.completion_package_id
+       where obligation.job_id = $1`,
+      [buildJobId]
+    );
+    assert.equal(zeroFinal.rowCount, 1);
+    assert.equal(zeroFinal.rows[0].quote_id, replacementBuild.quote.quoteId);
+    assert.equal(
+      zeroFinal.rows[0].quote_revision_id,
+      retainedBuildPurpose.quoteRevisionId
+    );
+    assert.equal(
+      zeroFinal.rows[0].quote_acceptance_id,
+      retainedBuildPurpose.quoteAcceptanceId
+    );
+    assert.equal(zeroFinal.rows[0].quote_installment_id, null);
+    assert.deepEqual(
+      zeroFinal.rows[0].effective_change_order_digests,
+      [payableChange.quoteDigest]
+    );
+    assert.equal(zeroFinal.rows[0].commercial_contract_digest, CONTRACT_DIGEST);
+    assert.equal(Number(zeroFinal.rows[0].final_due_minor), 0);
+    assert.equal(Number(zeroFinal.rows[0].credit_minor), 0);
+    assert.equal(zeroFinal.rows[0].workmanship_correction_days, 30);
+    assert.match(zeroFinal.rows[0].obligation_digest, /^[0-9a-f]{64}$/u);
+    assert.match(zeroFinal.rows[0].clearance_digest, /^[0-9a-f]{64}$/u);
+    assert.equal(
+      zeroFinal.rows[0].reason,
+      "accepted_quote_has_no_final_balance"
+    );
+    assert.equal(
+      new Date(zeroFinal.rows[0].cleared_at).toISOString(),
+      new Date(zeroFinal.rows[0].prepared_at).toISOString()
+    );
+    assert.deepEqual(
+      {
+        invoices: zeroFinal.rows[0].invoice_count,
+        attempts: zeroFinal.rows[0].attempt_count,
+        events: zeroFinal.rows[0].event_count,
+        receipts: zeroFinal.rows[0].receipt_count
+      },
+      { invoices: 0, attempts: 0, events: 0, receipts: 0 }
+    );
+
+    const retainedBuildPaymentClaims = await pool.query(
+      `select purpose, provider_object_kind, provider_object_id
+       from ss.service_custom_build_stripe_payment_claims
+       where organization_id = $1
+         and purpose in ('custom_build_start', 'custom_build_change')
+       order by purpose, provider_object_kind`,
+      [customer.organizationId]
+    );
+    assert.deepEqual(
+      retainedBuildPaymentClaims.rows.map((row) => ({
+        kind: row.provider_object_kind,
+        purpose: row.purpose
+      })),
+      [
+        { kind: "checkout_session", purpose: "custom_build_change" },
+        { kind: "payment_intent", purpose: "custom_build_change" },
+        { kind: "stripe_event", purpose: "custom_build_change" },
+        { kind: "checkout_session", purpose: "custom_build_start" },
+        { kind: "payment_intent", purpose: "custom_build_start" },
+        { kind: "stripe_event", purpose: "custom_build_start" }
+      ]
     );
     await assert.rejects(
       customBuildChangeCompletion.issueChangeOrder(

@@ -36,6 +36,9 @@ import {
 import {
   createHeldCustomServicesCustomBuildChangePayment
 } from "./custom-services-custom-build-change-payment-postgres.mjs";
+import {
+  createHeldCustomServicesCustomBuildFinalPayment
+} from "./custom-services-custom-build-final-payment-postgres.mjs";
 
 const JSON_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -379,6 +382,7 @@ export function createHostedApi(
     customServicesCustomBuild = null,
     customServicesCustomBuildChangeCompletion = null,
     customServicesCustomBuildChangePayment = null,
+    customServicesCustomBuildFinalPayment = null,
     customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
@@ -502,6 +506,18 @@ export function createHostedApi(
     "Hosted Custom-build change payment boundary is invalid.",
     { status: 500 }
   );
+  const customServicesCustomBuildFinalPaymentBoundary =
+    customServicesCustomBuildFinalPayment ??
+    createHeldCustomServicesCustomBuildFinalPayment();
+  invariant(
+    typeof customServicesCustomBuildFinalPaymentBoundary
+        .readOwnerFinalPayments === "function" &&
+      typeof customServicesCustomBuildFinalPaymentBoundary
+        .reconcileCheckoutCreation === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Custom-build final payment boundary is invalid.",
+    { status: 500 }
+  );
   const stripeWebhookBoundary =
     stripeWebhook ?? service;
   const alakazamAccountBoundary =
@@ -565,12 +581,16 @@ export function createHostedApi(
         "function" &&
       typeof customServicesAccountBoundary.getCustomBuildChangeInvoice ===
         "function" &&
+      typeof customServicesAccountBoundary.getCustomBuildFinalHandoff ===
+        "function" &&
       typeof customServicesAccountBoundary.getCustomBuildCompletionEvidence ===
         "function" &&
       typeof customServicesAccountBoundary.createCustomBuildCheckout ===
         "function" &&
       typeof customServicesAccountBoundary
         .createCustomBuildChangeCheckout === "function" &&
+      typeof customServicesAccountBoundary
+        .createCustomBuildFinalCheckout === "function" &&
       typeof customServicesAccountBoundary.acceptCustomBuildQuote ===
         "function" &&
       typeof customServicesAccountBoundary.respondToCustomBuildRequest ===
@@ -931,6 +951,64 @@ export function createHostedApi(
               actor,
               cursorValues[0] ?? null
             );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/final-handoff$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before opening Custom-build final payment and handoff.",
+            { status: 401 }
+          );
+          const query = exactRouteQuery(
+            url,
+            ["organizationId"],
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment query is invalid."
+          );
+          result = await customServicesCustomBuildFinalPaymentBoundary
+            .readOwnerFinalPayments(actor, route[0], query.organizationId);
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-jobs\/([^/]+)\/final-payments\/([^/]+)\/checkout-reconciliation$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before reconciling an uncertain Custom-build final Checkout.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment query is invalid."
+          );
+          const input = exactRouteBody(
+            body,
+            ["commandId", "organizationId"],
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment reconciliation is invalid."
+          );
+          invariant(
+            input.commandId === commandId(request),
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment reconciliation command is invalid.",
+            { status: 400 }
+          );
+          result = await customServicesCustomBuildFinalPaymentBoundary
+            .reconcileCheckoutCreation(actor, route[0], {
+              attemptId: route[1],
+              commandId: input.commandId,
+              organizationId: input.organizationId
+            });
         } else if (
           method === "GET" &&
           (route = match(
@@ -1592,6 +1670,38 @@ export function createHostedApi(
             );
           status = 201;
         } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-final-invoices\/([^/]+)\/checkout-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before paying a Custom-build final invoice.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .createCustomBuildFinalCheckout(
+              actor,
+              route[0],
+              route[1],
+              exactRouteBody(
+                write,
+                ["commandId", "invoiceDigest"],
+                "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+                "The Custom-build final invoice checkout request is invalid."
+              )
+            );
+          status = 201;
+        } else if (
           method === "GET" &&
           (route = match(
             pathname,
@@ -1875,6 +1985,27 @@ export function createHostedApi(
           );
           result = await customServicesAccountBoundary
             .getCustomBuildChangeInvoice(actor, route[0]);
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/custom-services\/custom-build-final-handoff$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Custom-build final payment and handoff.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "INVALID_CUSTOM_BUILD_FINAL_PAYMENT_INPUT",
+            "The Custom-build final payment query is invalid."
+          );
+          result = await customServicesAccountBoundary
+            .getCustomBuildFinalHandoff(actor, route[0]);
         } else if (
           method === "GET" &&
           (route = match(
