@@ -554,7 +554,7 @@ async function start() {
     });
   const recoveryMailPort =
     await createConfiguredRecoveryMailPort();
-  const projectLegalAuthority =
+  const projectLegalAuthorityConfig =
     createProjectLegalAuthorityFromEnvironment();
   const service = createCanonicalPostgresService({
     authority,
@@ -569,7 +569,8 @@ async function start() {
     contactVault,
     paymentProvider: stripeComposition.adapter,
     domainRuntime,
-    projectLegalAuthority,
+    projectLegalAuthority: projectLegalAuthorityConfig.authority,
+    projectLegalAuthorityDiagnostic: projectLegalAuthorityConfig.diagnostic,
     licensedBaseDomain
   });
 

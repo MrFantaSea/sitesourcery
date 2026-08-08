@@ -164,20 +164,42 @@ export function createProjectLegalAuthorityFromEnvironment(
   ];
   const supplied = names.map((name) => environment[name]);
   if (supplied.every((value) => value === undefined || value === "")) {
-    return null;
+    return Object.freeze({
+      authority: null,
+      diagnostic: Object.freeze({
+        state: "held",
+        code: "LEGAL_CONFIGURATION_REQUIRED",
+        reason: "Privacy V3 constants are not sealed."
+      })
+    });
   }
-  return createProjectLegalAuthority({
-    privacyV3: {
-      version: environment.SITESOURCERY_HOSTED_PRIVACY_V3_VERSION,
-      contentDigest: environment.SITESOURCERY_HOSTED_PRIVACY_V3_SHA256,
-      contentUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_URI,
-      effectiveAt: environment.SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT,
-      byteCount: Number(environment.SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT),
-      artifactUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI,
-      authorityDigest:
-        environment.SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256
-    }
-  });
+  try {
+    return Object.freeze({
+      authority: createProjectLegalAuthority({
+        privacyV3: {
+          version: environment.SITESOURCERY_HOSTED_PRIVACY_V3_VERSION,
+          contentDigest: environment.SITESOURCERY_HOSTED_PRIVACY_V3_SHA256,
+          contentUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_URI,
+          effectiveAt: environment.SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT,
+          byteCount: Number(environment.SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT),
+          artifactUri: environment.SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI,
+          authorityDigest:
+            environment.SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256
+        }
+      }),
+      diagnostic: null
+    });
+  } catch (error) {
+    return Object.freeze({
+      authority: null,
+      diagnostic: Object.freeze({
+        state: "held",
+        code: "LEGAL_CONFIGURATION_REQUIRED",
+        reason: "Privacy V3 constants are incomplete or invalid.",
+        detail: error?.code ?? null
+      })
+    });
+  }
 }
 
 export function publicProjectLegalAuthority(authority) {

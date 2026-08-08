@@ -597,7 +597,8 @@ export function createCanonicalPostgresService({
   exportWorkerId: suppliedExportWorkerId = null,
   exportLeaseMs = DEFAULT_EXPORT_LEASE_MS,
   licensedBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN,
-  projectLegalAuthority = null
+  projectLegalAuthority = null,
+  projectLegalAuthorityDiagnostic = null
 } = {}) {
   invariant(
     authority?.kind === "canonical-postgres" &&
@@ -695,6 +696,16 @@ export function createCanonicalPostgresService({
     return status.ready === true &&
       status.projectCreationLegal?.ready === true &&
       await authority.projectLegalAuthorityMatches(legalAuthority);
+  }
+  async function projectLegalArtifactsReadable() {
+    if (typeof authority.readiness !== "function") return false;
+    try {
+      const status = await authority.readiness();
+      return status.ready === true &&
+        status.projectCreationLegal?.v2Artifact === true;
+    } catch {
+      return false;
+    }
   }
   normalizeHostname(`probe.${licensedBaseDomain}`);
   const domains =
@@ -1181,7 +1192,7 @@ export function createCanonicalPostgresService({
     const legal = await loadProjectLegal(
       client,
       projectId,
-      legalAuthority && await projectLegalReadiness()
+      await projectLegalArtifactsReadable()
     );
     return {
       id: row.id,
@@ -1221,7 +1232,6 @@ export function createCanonicalPostgresService({
     const result = await client.query(
       `select acceptance.document_id, document.kind, document.version,
               document.content_digest,
-              document.content_uri as evidence_uri,
               acceptance.accepted_at,
               required.acceptance_id is not null as is_current
          from ss.term_acceptances acceptance
@@ -1256,7 +1266,7 @@ export function createCanonicalPostgresService({
         kind: row.kind,
         version: row.version,
         contentDigest: row.content_digest,
-        evidenceUri: evidence.get(row.document_id) ?? row.evidence_uri,
+        evidenceUri: evidence.get(row.document_id) ?? null,
         acceptedAt: iso(row.accepted_at)
       };
       if (row.is_current === true) {
@@ -6186,17 +6196,12 @@ export function createCanonicalPostgresService({
                       const expected = legalAcceptance.documents[index];
                       const expectedArtifact =
                         legalAuthority.artifactBindings[index];
-                      const artifactValid = document.artifact_uri === null
-                        ? expectedArtifact.artifactUri === null
-                        : expectedArtifact.artifactUri === null
-                          ? constantTimeDigestEqual(
-                              document.artifact_sha256,
-                              document.content_digest
-                            ) &&
-                            Number(document.byte_count) > 0 &&
-                            document.media_type ===
-                              "text/html; charset=utf-8"
-                          : document.artifact_uri === expectedArtifact.artifactUri &&
+                      const artifactValid = expectedArtifact.artifactUri === null
+                        ? document.artifact_uri === null &&
+                          document.artifact_sha256 === null &&
+                          document.byte_count === null &&
+                          document.media_type === null
+                        : document.artifact_uri === expectedArtifact.artifactUri &&
                             constantTimeDigestEqual(
                               document.artifact_sha256,
                               expectedArtifact.artifactSha256
@@ -9012,6 +9017,31 @@ export function createCanonicalPostgresService({
             "DOMAIN_PROVIDER_NOT_READY"
         };
       }
+      let projectCreationLegal = {
+        ready: false,
+        diagnostic: projectLegalAuthorityDiagnostic ?? {
+          state: "held",
+          code: "LEGAL_CONFIGURATION_REQUIRED",
+          reason: "Privacy V3 constants are not sealed."
+        }
+      };
+      if (legalAuthority) {
+        try {
+          projectCreationLegal = {
+            ready: await projectLegalReadiness(),
+            diagnostic: null
+          };
+        } catch (error) {
+          projectCreationLegal = {
+            ready: false,
+            diagnostic: {
+              state: "held",
+              code: error?.code ?? "LEGAL_CONFIGURATION_REQUIRED",
+              reason: "Privacy V3 authority could not be verified."
+            }
+          };
+        }
+      }
       return {
         ready:
           persistence.ready &&
@@ -9037,6 +9067,7 @@ export function createCanonicalPostgresService({
         service: "sitesourcery-hosted-runtime",
         runtime: process.version,
         persistence,
+        projectCreationLegal,
         compiler: {
           ready: true,
           schema: compiler.schema,

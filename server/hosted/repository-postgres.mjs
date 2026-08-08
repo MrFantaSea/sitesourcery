@@ -286,71 +286,256 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
         select 1 from pg_proc procedure_row
          where procedure_row.oid =
            to_regprocedure('ss.hosted_runtime_contract_v48()')
-           and procedure_row.prosrc like '%canonical-ss-v48-hosted-privacy-v3%'
+           and procedure_row.prokind = 'f'
+           and procedure_row.pronargs = 0
+           and procedure_row.provolatile = 's'
+           and not procedure_row.prosecdef
+           and procedure_row.prorettype = 'text'::regtype
+           and btrim(procedure_row.prosrc) =
+             'select ''canonical-ss-v48-hosted-privacy-v3'''
+           and not exists (
+             select 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+              where privilege.grantee = 0
+                and privilege.privilege_type = 'EXECUTE'
+           )
            and not has_function_privilege(
-             'public', procedure_row.oid, 'EXECUTE'
+             'anon', procedure_row.oid, 'EXECUTE'
+           )
+           and not has_function_privilege(
+             'authenticated', procedure_row.oid, 'EXECUTE'
            )
            and has_function_privilege(
              'service_role', procedure_row.oid, 'EXECUTE'
+           )
+           and not exists (
+             select 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+               left join pg_roles grantee
+                 on grantee.oid = privilege.grantee
+              where privilege.grantee <> procedure_row.proowner
+                and not (
+                  grantee.rolname = 'service_role'
+                  and privilege.privilege_type = 'EXECUTE'
+                  and not privilege.is_grantable
+                )
+           )
+           and (
+             select count(*) = 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+              where privilege.grantee <> procedure_row.proowner
            )
       ) end as v48_catalog_contract,
     to_regclass('ss.legal_document_artifacts') is not null
       and to_regclass('ss.project_legal_acceptance_receipts') is not null
       as v48_catalog_tables,
     (
-      select count(*) = 11
+      (
+        select count(*) = 11
+        and bool_and(coalesce(
+          attribute_row.attgenerated = ''
+          and attribute_row.attidentity = ''
+          and case attribute_row.attname
+            when 'id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'organization_id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'project_id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'user_id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'request_id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'schema_version' then
+              attribute_row.atttypid = 'text'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'acceptance_statement' then
+              attribute_row.atttypid = 'text'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'authority_digest' then
+              attribute_row.atttypid = to_regtype('ss.sha256_hex')
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'user_agent_digest' then
+              attribute_row.atttypid = to_regtype('ss.sha256_hex')
+              and not attribute_row.attnotnull and default_row.oid is null
+            when 'accepted_at' then
+              attribute_row.atttypid = 'timestamptz'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'created_at' then
+              attribute_row.atttypid = 'timestamptz'::regtype
+              and attribute_row.attnotnull
+              and pg_get_expr(
+                default_row.adbin, default_row.adrelid, false
+              ) = 'clock_timestamp()'
+            else false
+          end,
+          false
+        ))
         from pg_attribute attribute_row
         join pg_class relation on relation.oid = attribute_row.attrelid
         join pg_namespace namespace on namespace.oid = relation.relnamespace
+        left join pg_attrdef default_row
+          on default_row.adrelid = attribute_row.attrelid
+         and default_row.adnum = attribute_row.attnum
        where namespace.nspname = 'ss'
          and relation.relname = 'project_legal_acceptance_receipts'
          and attribute_row.attnum > 0
          and not attribute_row.attisdropped
-         and attribute_row.attname in (
-           'id', 'organization_id', 'project_id', 'user_id', 'request_id',
-           'schema_version', 'acceptance_statement', 'authority_digest',
-           'user_agent_digest', 'accepted_at', 'created_at'
-         )
+      )
+      and (
+        select count(*) = 1
+          and bool_and(coalesce(
+            attribute_row.atttypid = 'uuid'::regtype
+            and not attribute_row.attnotnull
+            and attribute_row.attgenerated = ''
+            and attribute_row.attidentity = ''
+            and default_row.oid is null,
+            false
+          ))
+          from pg_attribute attribute_row
+          join pg_class relation on relation.oid = attribute_row.attrelid
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+          left join pg_attrdef default_row
+            on default_row.adrelid = attribute_row.attrelid
+           and default_row.adnum = attribute_row.attnum
+         where namespace.nspname = 'ss'
+           and relation.relname = 'term_acceptances'
+           and attribute_row.attnum > 0
+           and not attribute_row.attisdropped
+           and attribute_row.attname = 'legal_receipt_id'
+      )
     ) as v48_catalog_receipt_columns,
     (
       select count(*) = 6
+        and bool_and(coalesce(
+          attribute_row.attgenerated = ''
+          and attribute_row.attidentity = ''
+          and case attribute_row.attname
+            when 'document_id' then
+              attribute_row.atttypid = 'uuid'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'artifact_uri' then
+              attribute_row.atttypid = 'text'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'artifact_sha256' then
+              attribute_row.atttypid = to_regtype('ss.sha256_hex')
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'byte_count' then
+              attribute_row.atttypid = 'bigint'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'media_type' then
+              attribute_row.atttypid = 'text'::regtype
+              and attribute_row.attnotnull and default_row.oid is null
+            when 'created_at' then
+              attribute_row.atttypid = 'timestamptz'::regtype
+              and attribute_row.attnotnull
+              and pg_get_expr(
+                default_row.adbin, default_row.adrelid, false
+              ) = 'clock_timestamp()'
+            else false
+          end,
+          false
+        ))
         from pg_attribute attribute_row
         join pg_class relation on relation.oid = attribute_row.attrelid
         join pg_namespace namespace on namespace.oid = relation.relnamespace
+        left join pg_attrdef default_row
+          on default_row.adrelid = attribute_row.attrelid
+         and default_row.adnum = attribute_row.attnum
        where namespace.nspname = 'ss'
          and relation.relname = 'legal_document_artifacts'
          and attribute_row.attnum > 0
          and not attribute_row.attisdropped
-         and attribute_row.attname in (
-           'document_id', 'artifact_uri', 'artifact_sha256', 'byte_count',
-           'media_type', 'created_at'
-         )
     ) as v48_catalog_artifact_columns,
     (
-      select count(*) = 10
-        from pg_trigger trigger_row
-        join pg_class relation on relation.oid = trigger_row.tgrelid
-        join pg_namespace namespace on namespace.oid = relation.relnamespace
-       where namespace.nspname = 'ss'
-         and relation.relname in (
-           'legal_document_artifacts',
-           'project_legal_acceptance_receipts',
-           'term_acceptances',
-           'legal_documents'
-         )
-         and trigger_row.tgname in (
-           'legal_document_artifacts_no_update',
-           'legal_document_artifacts_no_delete',
-           'project_legal_receipts_no_update',
-           'project_legal_receipts_no_delete',
-           'term_acceptances_no_update_v48',
-           'term_acceptances_no_delete_v48',
-           'legal_documents_no_delete_v48',
-           'project_required_terms_no_delete_v48',
-           'project_required_terms_monotonic_v48',
-           'project_legal_receipt_exact_bundle'
-         )
+      select count(*) = 11
+        and bool_and(trigger_row.oid is not null)
+        and bool_and(trigger_row.tgenabled = 'O')
+        and bool_and(trigger_row.tgtype = expected.type_code)
+        and bool_and(trigger_row.tgdeferrable = expected.deferrable)
+        and bool_and(
+          trigger_row.tginitdeferred = expected.initially_deferred
+        )
+        and bool_and(coalesce(
+          trigger_row.tgfoid =
+            to_regprocedure(expected.function_signature),
+          false
+        ))
+        from (values
+          ('legal_document_artifact_matches_document', 'legal_document_artifacts', 'ss.validate_legal_document_artifact()', 21, true, true),
+          ('legal_document_artifacts_no_update', 'legal_document_artifacts', 'ss.reject_update()', 19, false, false),
+          ('legal_document_artifacts_no_delete', 'legal_document_artifacts', 'ss.reject_delete_v48()', 11, false, false),
+          ('project_legal_receipt_exact_bundle', 'project_legal_acceptance_receipts', 'ss.validate_project_legal_acceptance_receipt()', 21, true, true),
+          ('project_legal_receipts_no_update', 'project_legal_acceptance_receipts', 'ss.reject_update()', 19, false, false),
+          ('project_legal_receipts_no_delete', 'project_legal_acceptance_receipts', 'ss.reject_delete_v48()', 11, false, false),
+          ('term_acceptances_no_update_v48', 'term_acceptances', 'ss.reject_update()', 19, false, false),
+          ('term_acceptances_no_delete_v48', 'term_acceptances', 'ss.reject_delete_v48()', 11, false, false),
+          ('legal_documents_no_delete_v48', 'legal_documents', 'ss.reject_delete_v48()', 11, false, false),
+          ('project_required_terms_no_delete_v48', 'project_required_terms', 'ss.reject_delete_v48()', 11, false, false),
+          ('project_required_terms_monotonic_v48', 'project_required_terms', 'ss.validate_project_required_term_monotonicity()', 19, false, false)
+        ) expected(
+          name, relation_name, function_signature, type_code,
+          deferrable, initially_deferred
+        )
+        left join pg_namespace namespace on namespace.nspname = 'ss'
+        left join pg_class relation
+          on relation.relnamespace = namespace.oid
+         and relation.relname = expected.relation_name
+        left join pg_trigger trigger_row
+         on trigger_row.tgrelid = relation.oid
+         and trigger_row.tgname = expected.name
          and not trigger_row.tgisinternal
+       having (
+         select count(*) = 13
+           and count(*) filter (
+             where relation.relname = 'legal_documents'
+               and trigger_row.tgname = 'legal_documents_no_update'
+               and trigger_row.tgenabled = 'O'
+               and trigger_row.tgtype = 19
+               and not trigger_row.tgdeferrable
+               and not trigger_row.tginitdeferred
+               and trigger_row.tgfoid =
+                 to_regprocedure('ss.reject_update()')
+           ) = 1
+           and count(*) filter (
+             where relation.relname = 'project_required_terms'
+               and trigger_row.tgname = 'project_required_terms_match'
+               and trigger_row.tgenabled = 'O'
+               and trigger_row.tgtype = 21
+               and trigger_row.tgdeferrable
+               and trigger_row.tginitdeferred
+               and trigger_row.tgfoid =
+                 to_regprocedure('ss.validate_project_term()')
+           ) = 1
+           from pg_trigger trigger_row
+           join pg_class relation on relation.oid = trigger_row.tgrelid
+           join pg_namespace namespace
+             on namespace.oid = relation.relnamespace
+          where namespace.nspname = 'ss'
+            and relation.relname in (
+              'legal_document_artifacts',
+              'project_legal_acceptance_receipts',
+              'term_acceptances',
+              'legal_documents',
+              'project_required_terms'
+            )
+            and not trigger_row.tgisinternal
+       )
     ) as v48_catalog_immutability_triggers,
     (
       select count(*) = 2
@@ -365,47 +550,276 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and relation.relforcerowsecurity
     ) as v48_catalog_rls,
     (
-      select count(*) >= 7
-        from pg_constraint constraint_row
-        join pg_class relation on relation.oid = constraint_row.conrelid
-        join pg_namespace namespace on namespace.oid = relation.relnamespace
-       where namespace.nspname = 'ss'
-         and relation.relname = 'project_legal_acceptance_receipts'
+      (
+        select count(*) = 7
+          and bool_and(constraint_row.oid is not null)
+          from (values
+            ('PRIMARY KEY (id)'),
+            ('UNIQUE (organization_id, id)'),
+            ('UNIQUE (project_id, request_id)'),
+            ('FOREIGN KEY (user_id) REFERENCES auth.users(id)'),
+            ('FOREIGN KEY (organization_id, project_id) REFERENCES ss.projects(organization_id, id)'),
+            ('CHECK ((schema_version = ''sitesourcery.project-legal-acceptance/v3''::text))'),
+            ('CHECK ((acceptance_statement = ''accepted_exact_project_terms_and_acknowledged_privacy''::text))')
+          ) expected(definition)
+          left join pg_namespace namespace on namespace.nspname = 'ss'
+          left join pg_class relation
+            on relation.relnamespace = namespace.oid
+           and relation.relname = 'project_legal_acceptance_receipts'
+          left join pg_constraint constraint_row
+            on constraint_row.conrelid = relation.oid
+           and pg_get_constraintdef(constraint_row.oid, false) =
+             expected.definition
+      )
+      and (
+        select count(*) = 7
+          from pg_constraint constraint_row
+          join pg_class relation on relation.oid = constraint_row.conrelid
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname = 'project_legal_acceptance_receipts'
+      )
+      and (
+        select count(*) = 7
+          and bool_and(constraint_row.oid is not null)
+          from (values
+            ('PRIMARY KEY (id)'),
+            ('UNIQUE (project_id, document_id, user_id, request_id)'),
+            ('UNIQUE (organization_id, id)'),
+            ('FOREIGN KEY (user_id) REFERENCES auth.users(id)'),
+            ('FOREIGN KEY (document_id) REFERENCES ss.legal_documents(id)'),
+            ('FOREIGN KEY (organization_id, project_id) REFERENCES ss.projects(organization_id, id)'),
+            ('FOREIGN KEY (organization_id, legal_receipt_id) REFERENCES ss.project_legal_acceptance_receipts(organization_id, id)')
+          ) expected(definition)
+          left join pg_namespace namespace on namespace.nspname = 'ss'
+          left join pg_class relation
+            on relation.relnamespace = namespace.oid
+           and relation.relname = 'term_acceptances'
+          left join pg_constraint constraint_row
+            on constraint_row.conrelid = relation.oid
+           and pg_get_constraintdef(constraint_row.oid, false) =
+             expected.definition
+      )
+      and (
+        select count(*) = 7
+          from pg_constraint constraint_row
+          join pg_class relation on relation.oid = constraint_row.conrelid
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname = 'term_acceptances'
+      )
     ) as v48_catalog_receipt_constraints,
     (
-      select count(*) >= 3
-        from pg_constraint constraint_row
-        join pg_class relation on relation.oid = constraint_row.conrelid
-        join pg_namespace namespace on namespace.oid = relation.relnamespace
-       where namespace.nspname = 'ss'
+      select count(*) = 5
+        and bool_and(constraint_row.oid is not null)
+        from (values
+          ('PRIMARY KEY (document_id)'),
+          ('UNIQUE (artifact_uri)'),
+          ('FOREIGN KEY (document_id) REFERENCES ss.legal_documents(id)'),
+          ('CHECK ((byte_count > 0))'),
+          ('CHECK ((media_type = ''text/html; charset=utf-8''::text))')
+        ) expected(definition)
+        left join pg_namespace namespace on namespace.nspname = 'ss'
+        left join pg_class relation
+          on relation.relnamespace = namespace.oid
          and relation.relname = 'legal_document_artifacts'
+        left join pg_constraint constraint_row
+          on constraint_row.conrelid = relation.oid
+         and pg_get_constraintdef(constraint_row.oid, false) =
+           expected.definition
+       having (
+         select count(*) = 5
+           from pg_constraint constraint_row
+           join pg_class relation on relation.oid = constraint_row.conrelid
+           join pg_namespace namespace
+             on namespace.oid = relation.relnamespace
+          where namespace.nspname = 'ss'
+            and relation.relname = 'legal_document_artifacts'
+       )
     ) as v48_catalog_artifact_constraints,
     (
-      select count(*) >= 2
+      select count(*) = 3
+        and bool_and(policy_row.polpermissive)
+        and bool_and(coalesce(
+          case policy_row.polname
+            when 'legal_document_artifacts_authenticated_read' then
+              relation.relname = 'legal_document_artifacts'
+              and policy_row.polcmd = 'r'
+              and policy_row.polroles = array[
+                (select oid from pg_roles where rolname = 'authenticated')
+              ]::oid[]
+              and lower(pg_get_expr(
+                policy_row.polqual, policy_row.polrelid, false
+              )) = '(ss.current_user_id() is not null)'
+              and policy_row.polwithcheck is null
+            when 'project_legal_acceptance_receipts_service_read' then
+              relation.relname = 'project_legal_acceptance_receipts'
+              and policy_row.polcmd = 'r'
+              and policy_row.polroles = array[
+                (select oid from pg_roles where rolname = 'service_role')
+              ]::oid[]
+              and pg_get_expr(
+                policy_row.polqual, policy_row.polrelid, false
+              ) = 'true'
+              and policy_row.polwithcheck is null
+            when 'project_legal_acceptance_receipts_service_insert' then
+              relation.relname = 'project_legal_acceptance_receipts'
+              and policy_row.polcmd = 'a'
+              and policy_row.polroles = array[
+                (select oid from pg_roles where rolname = 'service_role')
+              ]::oid[]
+              and policy_row.polqual is null
+              and pg_get_expr(
+                policy_row.polwithcheck, policy_row.polrelid, false
+              ) = 'true'
+            else false
+          end,
+          false
+        ))
         from pg_policy policy_row
         join pg_class relation on relation.oid = policy_row.polrelid
-        join pg_namespace namespace on namespace.oid = relation.relnamespace
+        join pg_namespace namespace
+          on namespace.oid = relation.relnamespace
        where namespace.nspname = 'ss'
-         and relation.relname in (
-           'legal_document_artifacts',
-           'project_legal_acceptance_receipts'
+         and (
+           relation.relname, policy_row.polname
+         ) in (
+           ('legal_document_artifacts', 'legal_document_artifacts_authenticated_read'),
+           ('project_legal_acceptance_receipts', 'project_legal_acceptance_receipts_service_read'),
+           ('project_legal_acceptance_receipts', 'project_legal_acceptance_receipts_service_insert')
          )
+       having (
+         select count(*) = 3
+           from pg_policy policy_row
+           join pg_class relation on relation.oid = policy_row.polrelid
+           join pg_namespace namespace
+             on namespace.oid = relation.relnamespace
+          where namespace.nspname = 'ss'
+            and relation.relname in (
+              'legal_document_artifacts',
+              'project_legal_acceptance_receipts'
+            )
+       )
     ) as v48_catalog_policies,
     case when to_regclass('ss.legal_document_artifacts') is null
       or to_regclass('ss.project_legal_acceptance_receipts') is null
       then false else (
+      not exists (
+        select 1
+          from information_schema.table_privileges privilege
+         where privilege.table_schema = 'ss'
+           and privilege.table_name in (
+             'legal_document_artifacts',
+             'project_legal_acceptance_receipts'
+           )
+           and privilege.grantee = 'PUBLIC'
+      )
+      and not exists (
+        select 1
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+          cross join lateral aclexplode(coalesce(
+            relation.relacl,
+            acldefault('r', relation.relowner)
+          )) privilege
+          left join pg_roles grantee on grantee.oid = privilege.grantee
+         where namespace.nspname = 'ss'
+           and relation.relname in (
+             'legal_document_artifacts',
+             'project_legal_acceptance_receipts'
+           )
+           and privilege.grantee <> relation.relowner
+           and not (
+             relation.relname = 'legal_document_artifacts'
+             and grantee.rolname in ('authenticated', 'service_role')
+             and privilege.privilege_type = 'SELECT'
+             and not privilege.is_grantable
+           )
+           and not (
+             relation.relname = 'project_legal_acceptance_receipts'
+             and grantee.rolname = 'service_role'
+             and privilege.privilege_type in ('SELECT', 'INSERT')
+             and not privilege.is_grantable
+           )
+      )
+      and (
+        select count(*) = 4
+          from pg_class relation
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+          cross join lateral aclexplode(coalesce(
+            relation.relacl,
+            acldefault('r', relation.relowner)
+          )) privilege
+         where namespace.nspname = 'ss'
+           and relation.relname in (
+             'legal_document_artifacts',
+             'project_legal_acceptance_receipts'
+           )
+           and privilege.grantee <> relation.relowner
+      )
+      and not exists (
+        select 1
+          from pg_attribute attribute_row
+          join pg_class relation on relation.oid = attribute_row.attrelid
+          join pg_namespace namespace
+            on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname in (
+             'legal_document_artifacts',
+             'project_legal_acceptance_receipts'
+           )
+           and attribute_row.attnum > 0
+           and not attribute_row.attisdropped
+           and attribute_row.attacl is not null
+           and cardinality(attribute_row.attacl) > 0
+      )
+      and
       has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'SELECT')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'INSERT')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'UPDATE')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'DELETE')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'TRUNCATE')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'REFERENCES')
+      and not has_table_privilege('authenticated', 'ss.legal_document_artifacts', 'TRIGGER')
       and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'SELECT')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'INSERT')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'UPDATE')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'DELETE')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'TRUNCATE')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'REFERENCES')
+      and not has_table_privilege('anon', 'ss.legal_document_artifacts', 'TRIGGER')
       and has_table_privilege('service_role', 'ss.legal_document_artifacts', 'SELECT')
-      and to_regclass('ss.project_legal_acceptance_receipts') is not null
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'INSERT')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'UPDATE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'DELETE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'TRUNCATE')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'REFERENCES')
+      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'TRIGGER')
       and has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'SELECT')
       and has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'INSERT')
       and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'UPDATE')
       and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'DELETE')
       and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'TRUNCATE')
-      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'UPDATE')
-      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'DELETE')
-      and not has_table_privilege('service_role', 'ss.legal_document_artifacts', 'TRUNCATE')
+      and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'REFERENCES')
+      and not has_table_privilege('service_role', 'ss.project_legal_acceptance_receipts', 'TRIGGER')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'SELECT')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'INSERT')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'UPDATE')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'DELETE')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'TRUNCATE')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'REFERENCES')
+      and not has_table_privilege('anon', 'ss.project_legal_acceptance_receipts', 'TRIGGER')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'SELECT')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'INSERT')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'UPDATE')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'DELETE')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'TRUNCATE')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'REFERENCES')
+      and not has_table_privilege('authenticated', 'ss.project_legal_acceptance_receipts', 'TRIGGER')
     ) end as v48_catalog_privileges
 `;
 
@@ -417,6 +831,15 @@ const PROJECT_LEGAL_DATA_QUERY = `
       select 1 from ss.legal_document_artifacts artifact
       join ss.legal_documents document on document.id = artifact.document_id
       where document.id = '00000000-0000-4000-8000-000000000022'
+        and document.kind = 'privacy'
+        and document.version = 'SS-HOSTED-PRIVACY-2026-07-30-V2'
+        and document.content_digest =
+          'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
+        and document.content_uri = 'https://sitesourcery.com/legal/privacy/'
+        and document.effective_at = '2026-07-30T00:00:00Z'::timestamptz
+        and document.retired_at is null
+        and artifact.artifact_uri =
+          'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/'
         and artifact.artifact_sha256 =
           'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
         and artifact.byte_count = 19935
@@ -432,6 +855,12 @@ const PROJECT_LEGAL_DATA_QUERY = `
         and artifact.artifact_sha256 = document.content_digest
         and artifact.byte_count > 0
         and artifact.media_type = 'text/html; charset=utf-8'
+    ) and not exists (
+      select 1 from ss.legal_document_artifacts artifact
+       where artifact.document_id in (
+         '00000000-0000-4000-8000-000000000021'::uuid,
+         '00000000-0000-4000-8000-000000000023'::uuid
+       )
     ) as v3_artifact_ready,
     exists (
       select 1 from ss.legal_documents document
@@ -475,13 +904,16 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
     ) as exact_documents_ready,
     (
       select count(*) = 1
+        and bool_and(
+          artifact.document_id = $19::uuid
+          and artifact.artifact_uri = $20::text
+          and artifact.artifact_sha256 = $21::text
+          and artifact.byte_count = $22::bigint
+          and artifact.media_type = $23::text
+        )
         from ss.legal_document_artifacts artifact
-       where artifact.document_id = $19::uuid
-         and artifact.artifact_uri = $20::text
-         and artifact.artifact_sha256 = $21::text
-         and artifact.byte_count = $22::bigint
-         and artifact.media_type = $23::text
-    ) as exact_v3_artifact_ready,
+       where artifact.document_id in ($1::uuid, $7::uuid, $13::uuid)
+    ) as exact_artifacts_ready,
     ss.service_json_digest(jsonb_build_object(
       'documents', jsonb_build_array(
         jsonb_build_object(
@@ -1799,7 +2231,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     const row = result.rows[0] ?? {};
     return row.contract_marker_ready === true &&
       row.exact_documents_ready === true &&
-      row.exact_v3_artifact_ready === true &&
+      row.exact_artifacts_ready === true &&
       row.authority_digest_ready === true;
   }
 
