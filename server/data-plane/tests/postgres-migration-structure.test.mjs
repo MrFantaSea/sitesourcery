@@ -2470,3 +2470,73 @@ test("Custom build handoff atomically binds exact financial clearance to one imm
     /hosted_runtime_contract_v48|privacy|on delete cascade|grant all privileges|create table ss\.service_custom_build_(?!handoff_receipts)/iu
   );
 });
+
+test("Alakazam customer publication controls store only exact held revision-bound authorization", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) =>
+      name ===
+        "202608080101_alakazam_customer_publication_controls.sql"
+  );
+  assert.ok(migration, "missing held Alakazam publication controls");
+  assert.match(
+    migration.sql,
+    /begin;[\s\S]*hosted_runtime_contract_v33\(\)[\s\S]*hosted_runtime_contract_v47\(\)[\s\S]*commit;/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.alakazam_customer_publication_commands[\s\S]*subscription_revision bigint not null[\s\S]*authority_operation_id uuid not null[\s\S]*action in \('publish', 'rollback', 'unpublish'\)[\s\S]*state text not null default 'held'[\s\S]*commercial_cutover_not_authorized/iu
+  );
+  for (const constraint of [
+    "alakazam_publication_customer_user_fk",
+    "alakazam_publication_project_fk",
+    "alakazam_publication_membership_fk",
+    "alakazam_publication_subscription_fk",
+    "alakazam_publication_operation_fk",
+    "alakazam_publication_current_release_fk",
+    "alakazam_publication_target_release_fk",
+    "alakazam_publication_target_version_fk",
+    "alakazam_publication_command_scope_uniq",
+    "alakazam_publication_command_digest_uniq",
+    "alakazam_publication_revision_check",
+    "alakazam_publication_action_check",
+    "alakazam_publication_projection_check",
+    "alakazam_publication_state_check",
+    "alakazam_publication_hold_reason_check",
+    "alakazam_publication_current_release_check",
+    "alakazam_publication_action_target_check"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`constraint ${constraint}\\b`, "iu"),
+      `missing exact held publication constraint ${constraint}`
+    );
+  }
+  assert.match(
+    migration.sql,
+    /create constraint trigger alakazam_customer_publication_commands_validate[\s\S]*deferrable initially deferred[\s\S]*validate_alakazam_customer_publication_command/iu
+  );
+  assert.match(
+    migration.sql,
+    /subscription\.revision = new\.subscription_revision[\s\S]*subscription\.status in \('active', 'grace'\)[\s\S]*projection\.current_release_id is not distinct from[\s\S]*new\.current_release_id/iu
+  );
+  assert.match(
+    migration.sql,
+    /version_state\.state = 'accepted_release'[\s\S]*new\.target_artifact_digest <> accepted_artifact_digest[\s\S]*operation\.state = 'published'[\s\S]*release\.id = new\.target_release_id/iu
+  );
+  assert.match(
+    migration.sql,
+    /immutable held evidence[\s\S]*before update or delete on ss\.alakazam_customer_publication_commands/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*revoke all on table ss\.alakazam_customer_publication_commands[\s\S]*grant select, insert on table[\s\S]*to service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.hosted_alakazam_publication_contract\(\)[\s\S]*canonical-alakazam-customer-publication-held-v1/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /stripe|provider_effects_authorized\s*=\s*true|on delete cascade|create table ss\.alakazam_(?:subscriptions|fulfillment_operations|fulfillment_projection)/iu
+  );
+});

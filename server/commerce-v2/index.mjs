@@ -41,5 +41,7 @@ export * from "./alakazam-downgrade-activation.mjs";
 export * from "./alakazam-webhook.mjs";
 export * from "./alakazam-account.mjs";
 export * from "./alakazam-fulfillment.mjs";
+export * from "./alakazam-publication.mjs";
 export * from "./hosted-alakazam-account.mjs";
+export * from "./hosted-alakazam-publication.mjs";
 export * from "./hosted-alakazam-billing.mjs";

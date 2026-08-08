@@ -22,6 +22,12 @@ const OTHER_PROJECT_ID =
 const ACCEPTED_VERSION_ID =
   "31000000-0000-4000-8000-000000000001";
 const SITE_SETUP_DIGEST = "2".repeat(64);
+const CURRENT_RELEASE_ID =
+  "32000000-0000-4000-8000-000000000001";
+const PRIOR_RELEASE_ID =
+  "32000000-0000-4000-8000-000000000002";
+const PRIOR_VERSION_ID =
+  "31000000-0000-4000-8000-000000000002";
 
 function response(status, payload) {
   return {
@@ -137,6 +143,68 @@ function site(
       ? "https://moonlit-cafe.sitesourcery.me/"
       : null,
     ...overrides,
+  };
+}
+
+function publication(overrides = {}) {
+  const source = {
+    schema: "sitesourcery.alakazam-publication/v1",
+    projectId: PROJECT_ID,
+    state: "held",
+    holdReason: "commercial_cutover_not_authorized",
+    subscription: {
+      subscriptionId:
+        "33000000-0000-4000-8000-000000000001",
+      revision: 4,
+      tierId: "alakazam_35",
+      status: "active",
+    },
+    site: {
+      hostname: "moonlit-cafe.sitesourcery.me",
+      state: "live",
+      acceptedVersionId: ACCEPTED_VERSION_ID,
+      acceptedArtifactDigest: "a".repeat(64),
+      currentReleaseId: CURRENT_RELEASE_ID,
+      currentVersionId: ACCEPTED_VERSION_ID,
+      updatedAt: "2026-08-04T18:00:00.000Z",
+    },
+    history: [{
+      releaseId: CURRENT_RELEASE_ID,
+      versionId: ACCEPTED_VERSION_ID,
+      artifactDigest: "a".repeat(64),
+      releasedAt: "2026-08-04T18:00:00.000Z",
+      isCurrent: true,
+    }, {
+      releaseId: PRIOR_RELEASE_ID,
+      versionId: PRIOR_VERSION_ID,
+      artifactDigest: "b".repeat(64),
+      releasedAt: "2026-08-03T18:00:00.000Z",
+      isCurrent: false,
+    }],
+    actions: {
+      publish: false,
+      rollback: true,
+      unpublish: true,
+      rollbackTargetReleaseId: PRIOR_RELEASE_ID,
+    },
+    snapshotDigest: "c".repeat(64),
+    command: null,
+  };
+  return {
+    ...source,
+    ...overrides,
+    subscription: {
+      ...source.subscription,
+      ...(overrides.subscription || {}),
+    },
+    site: {
+      ...source.site,
+      ...(overrides.site || {}),
+    },
+    actions: {
+      ...source.actions,
+      ...(overrides.actions || {}),
+    },
   };
 }
 
@@ -596,6 +664,211 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
   assert.equal(
     calls[0].options.headers["X-CSRF-Token"],
     undefined
+  );
+});
+
+test("the Abracadabra client reads only the selected project's held publication authority", async () => {
+  const calls = [];
+  const expected = {
+    schema: "sitesourcery.alakazam-publication/v1",
+    state: "held"
+  };
+  const controller = new AbortController();
+  const client = createClient({
+    baseUrl: "/api/v1",
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return response(200, expected);
+    },
+  });
+  assert.deepEqual(
+    await client.getAlakazamPublication(PROJECT_ID, {
+      signal: controller.signal,
+    }),
+    expected
+  );
+  assert.equal(
+    calls[0].url,
+    `/api/v1/projects/${PROJECT_ID}/alakazam/publication`
+  );
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.signal, controller.signal);
+  assert.equal(calls[0].options.body, undefined);
+});
+
+test("publication commands send only exact held action authority with CSRF and stable identity", async () => {
+  const calls = [];
+  const commandId =
+    "50000000-0000-4000-8000-000000000011";
+  const client = createClient({
+    baseUrl: "/api/v1",
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf-publication" });
+      }
+      return response(202, { state: "held" });
+    },
+  });
+  await client.requestAlakazamPublication(
+    PROJECT_ID,
+    {
+      action: "rollback",
+      snapshotDigest: "a".repeat(64),
+      targetReleaseId:
+        "50000000-0000-4000-8000-000000000001",
+    },
+    { idempotencyKey: commandId }
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(
+    calls[1].url,
+    `/api/v1/projects/${PROJECT_ID}/alakazam/publication-commands`
+  );
+  assert.equal(calls[1].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    action: "rollback",
+    snapshotDigest: "a".repeat(64),
+    targetReleaseId:
+      "50000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(
+    calls[1].options.headers["Idempotency-Key"],
+    commandId
+  );
+  assert.equal(
+    calls[1].options.headers["X-CSRF-Token"],
+    "csrf-publication"
+  );
+  assert.throws(
+    () => client.requestAlakazamPublication(
+      PROJECT_ID,
+      {
+        action: "unpublish",
+        snapshotDigest: "a".repeat(64),
+        targetReleaseId:
+          "50000000-0000-4000-8000-000000000001",
+      }
+    ),
+    /exact prior release/iu
+  );
+});
+
+test("the customer validator accepts exact held release history and rejects manufactured authority", () => {
+  const snapshot = publication();
+  assert.deepEqual(
+    customerControl.verifiedAlakazamPublication(
+      snapshot,
+      PROJECT_ID
+    ),
+    snapshot
+  );
+  const command = {
+    commandId:
+      "34000000-0000-4000-8000-000000000001",
+    action: "rollback",
+    state: "held",
+    holdReason: "commercial_cutover_not_authorized",
+    snapshotDigest: snapshot.snapshotDigest,
+    commandDigest: "d".repeat(64),
+    targetReleaseId: PRIOR_RELEASE_ID,
+    targetVersionId: PRIOR_VERSION_ID,
+    requestedAt: "2026-08-04T18:05:00.000Z",
+  };
+  assert.deepEqual(
+    customerControl.verifiedAlakazamPublication(
+      publication({ command }),
+      PROJECT_ID
+    ).command,
+    command
+  );
+  for (const changed of [
+    publication({ state: "live" }),
+    publication({ holdReason: "provider_approved" }),
+    publication({
+      actions: { rollbackTargetReleaseId: CURRENT_RELEASE_ID },
+    }),
+    publication({
+      site: { currentVersionId: PRIOR_VERSION_ID },
+      actions: { publish: false },
+    }),
+    publication({
+      history: [{
+        ...snapshot.history[0],
+        artifactDigest: "not-a-digest",
+      }],
+    }),
+    publication({
+      command: { ...command, state: "applied" },
+    }),
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamPublication(
+        changed,
+        PROJECT_ID
+      ),
+      null
+    );
+  }
+});
+
+test("the held publication panel source is exact-authority, retry-safe, responsive, and provider-free", async () => {
+  const [source, css] = await Promise.all([
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-customer-control-dom.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../../abracadabra/app/abracadabra-app.css",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+  ]);
+  const panelStart = source.indexOf(
+    "function createAlakazamPublicationPanel"
+  );
+  const panelEnd = source.indexOf(
+    "function fragmentToken",
+    panelStart
+  );
+  const requestStart = source.indexOf(
+    "function requestAlakazamPublicationCommand"
+  );
+  const requestEnd = source.indexOf(
+    "function refreshAlakazamAccountAfterSetup",
+    requestStart
+  );
+  const panelSource = source.slice(panelStart, panelEnd);
+  const requestSource = source.slice(requestStart, requestEnd);
+  assert.match(panelSource, /data-alakazam-publication/u);
+  assert.match(panelSource, /Publish accepted version/u);
+  assert.match(panelSource, /Roll back to prior release/u);
+  assert.match(panelSource, /Unpublish website/u);
+  assert.match(panelSource, /record exact customer authorization only/u);
+  assert.match(panelSource, /no live provider effect, cancellation, or deletion occurs/u);
+  assert.match(requestSource, /snapshot\.actions\[action\] !== true/u);
+  assert.match(requestSource, /capabilities\.alakazamPublication !== true/u);
+  assert.match(requestSource, /snapshotDigest:\s*snapshot\.snapshotDigest/u);
+  assert.match(requestSource, /targetReleaseId:\s*targetReleaseId/u);
+  assert.match(requestSource, /idempotencyKey:\s*commandId/u);
+  assert.match(requestSource, /confirmed\.command\.state !== "held"/u);
+  assert.doesNotMatch(
+    requestSource,
+    /stripe|providerPort|publishProject|rollbackProject|unpublishProject/iu
+  );
+  assert.match(css, /customer-alakazam-publication-actions/u);
+  assert.match(
+    css,
+    /customer-alakazam-publication-actions[^}]*min-height:44px/u
+  );
+  assert.match(
+    css,
+    /customer-alakazam-publication-actions\{grid-template-columns:1fr\}/u
   );
 });
 
@@ -1979,7 +2252,7 @@ test("the panel source declares the responsive, accessible, retry-safe quote acc
   assert.match(source, /Subscription checkout is not open yet\. Nothing can be charged/u);
   assert.match(
     source,
-    /alakazamQuote:\s*false,\s*alakazamCheckout:\s*false,\s*alakazamDowngrade:\s*false/u
+    /alakazamQuote:\s*false,\s*alakazamCheckout:\s*false,\s*alakazamDowngrade:\s*false,\s*alakazamPublication:\s*false/u
   );
   assert.match(source, /windowRef\.location\.assign\(destination\)/u);
   assert.match(

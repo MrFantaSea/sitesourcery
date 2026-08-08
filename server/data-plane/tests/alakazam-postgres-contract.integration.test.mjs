@@ -30,11 +30,17 @@ import {
   createAlakazamSiteSetupDigest
 } from "../../commerce-v2/alakazam-account.mjs";
 import {
+  createAlakazamPublicationService
+} from "../../commerce-v2/alakazam-publication.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
   createPostgresAlakazamRepository
 } from "../../hosted/alakazam-postgres.mjs";
+import {
+  createPostgresAlakazamPublicationRepository
+} from "../../hosted/alakazam-publication-postgres.mjs";
 import {
   createAlakazamFulfillmentWorker
 } from "../../hosted/alakazam-fulfillment-worker.mjs";
@@ -1506,7 +1512,7 @@ test(
   "Alakazam PostgreSQL contract proves start, fixed upgrade, and boundary downgrade",
   { skip: !DATABASE_URL },
   async () => {
-    const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+    const pool = new Pool({ connectionString: DATABASE_URL, max: 3 });
     const client = await pool.connect();
     let runtimeRoot = null;
     let runtime = null;
@@ -2430,6 +2436,308 @@ test(
       await flushConstraints(client);
       assert.equal((await worker.runOnce()).status, "idle");
 
+      const publicationTimes = [
+        "2026-08-02T12:17:00.000Z",
+        "2026-08-02T12:17:01.000Z",
+        "2026-08-02T12:17:02.000Z",
+        "2026-08-02T12:17:03.000Z",
+        "2026-08-02T12:17:04.000Z",
+        "2026-08-02T12:17:05.000Z"
+      ];
+      const publicationRepository =
+        createPostgresAlakazamPublicationRepository({
+          authority: {
+            async service(_context, work) {
+              return work(client);
+            }
+          }
+        });
+      const publication = createAlakazamPublicationService({
+        repository: publicationRepository,
+        clock: {
+          now() {
+            return new Date(publicationTimes.shift());
+          }
+        }
+      });
+      const publicationScope = {
+        tenantId: authority.organizationId,
+        customerId: authority.userId,
+        actorId: authority.userId,
+        projectId: authority.projectId
+      };
+      const publicationReady =
+        await publicationRepository.readiness();
+      assert.deepEqual(
+        {
+          authorization: publicationReady.authorization,
+          providerEffects: publicationReady.providerEffects,
+          state: publicationReady.state
+        },
+        {
+          authorization: true,
+          providerEffects: false,
+          state: "held"
+        }
+      );
+      await client.query(
+        `grant select on table
+           ss.alakazam_customer_publication_commands
+         to authenticated`
+      );
+      await assert.rejects(
+        publicationRepository.readiness(),
+        /table privileges is not ready/iu
+      );
+      await client.query(
+        `revoke select on table
+           ss.alakazam_customer_publication_commands
+         from authenticated`
+      );
+      await client.query(
+        `grant select (snapshot_digest) on
+           ss.alakazam_customer_publication_commands
+         to authenticated`
+      );
+      await assert.rejects(
+        publicationRepository.readiness(),
+        /column privileges is not ready/iu
+      );
+      await client.query(
+        `revoke select (snapshot_digest) on
+           ss.alakazam_customer_publication_commands
+         from authenticated`
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         disable trigger
+           alakazam_customer_publication_commands_immutable`
+      );
+      await assert.rejects(
+        publicationRepository.readiness(),
+        /triggers is not ready/iu
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         enable trigger
+           alakazam_customer_publication_commands_immutable`
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         drop constraint alakazam_publication_state_check`
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         add constraint alakazam_publication_state_check
+         check (state in ('held', 'rogue'))`
+      );
+      await assert.rejects(
+        publicationRepository.readiness(),
+        /constraints is not ready/iu
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         drop constraint alakazam_publication_state_check`
+      );
+      await client.query(
+        `alter table ss.alakazam_customer_publication_commands
+         add constraint alakazam_publication_state_check
+         check (state = 'held')`
+      );
+      assert.equal(
+        (await publicationRepository.readiness()).ready,
+        true
+      );
+      const livePublication =
+        await publication.read(publicationScope);
+      assert.equal(
+        livePublication.site.currentReleaseId,
+        upgradedLive.releaseId
+      );
+      assert.equal(livePublication.history.length, 2);
+      assert.deepEqual(livePublication.actions, {
+        publish: false,
+        rollback: true,
+        unpublish: true,
+        rollbackTargetReleaseId: live.releaseId
+      });
+      const beforeHeldCommands = await client.query(
+        `select
+           serving.state as serving_state,
+           serving.current_release_id,
+           projection.state as projection_state,
+           projection.current_release_id as projection_release_id,
+           (select count(*)::integer
+              from ss.releases release
+             where release.organization_id = $1
+               and release.project_id = $2) as release_count
+         from ss.project_serving_projection serving
+         join ss.alakazam_fulfillment_projection projection
+           on projection.organization_id = serving.organization_id
+          and projection.project_id = serving.project_id
+        where serving.organization_id = $1
+          and serving.project_id = $2`,
+        [authority.organizationId, authority.projectId]
+      );
+      const rollbackCommandId = randomUUID();
+      const heldRollback = await publication.request(
+        publicationScope,
+        {
+          commandId: rollbackCommandId,
+          action: "rollback",
+          snapshotDigest: livePublication.snapshotDigest,
+          targetReleaseId: live.releaseId
+        }
+      );
+      assert.equal(heldRollback.command.state, "held");
+      assert.equal(
+        heldRollback.command.targetReleaseId,
+        live.releaseId
+      );
+      await flushConstraints(client);
+      assert.equal(
+        (await publication.request(publicationScope, {
+          commandId: rollbackCommandId,
+          action: "rollback",
+          snapshotDigest: livePublication.snapshotDigest,
+          targetReleaseId: live.releaseId
+        })).command.commandDigest,
+        heldRollback.command.commandDigest
+      );
+      await assert.rejects(
+        publication.request(publicationScope, {
+          commandId: randomUUID(),
+          action: "rollback",
+          snapshotDigest: "f".repeat(64),
+          targetReleaseId: live.releaseId
+        }),
+        (error) =>
+          error.code === "publication_authority_changed" &&
+          error.status === 409
+      );
+      const heldUnpublish = await publication.request(
+        publicationScope,
+        {
+          commandId: randomUUID(),
+          action: "unpublish",
+          snapshotDigest: livePublication.snapshotDigest,
+          targetReleaseId: null
+        }
+      );
+      assert.equal(heldUnpublish.command.state, "held");
+      assert.equal(heldUnpublish.command.targetVersionId, null);
+      await flushConstraints(client);
+
+      await client.query(
+        `update ss.alakazam_fulfillment_projection
+            set state = 'dark',
+                current_release_id = null,
+                updated_at = $3
+          where organization_id = $1
+            and project_id = $2`,
+        [
+          authority.organizationId,
+          authority.projectId,
+          "2026-08-02T12:17:10.000Z"
+        ]
+      );
+      const darkPublication =
+        await publication.read(publicationScope);
+      assert.deepEqual(darkPublication.actions, {
+        publish: true,
+        rollback: false,
+        unpublish: false,
+        rollbackTargetReleaseId: null
+      });
+      const heldPublish = await publication.request(
+        publicationScope,
+        {
+          commandId: randomUUID(),
+          action: "publish",
+          snapshotDigest: darkPublication.snapshotDigest,
+          targetReleaseId: null
+        }
+      );
+      assert.equal(heldPublish.command.state, "held");
+      assert.equal(
+        heldPublish.command.targetVersionId,
+        acceptedSite.versionId
+      );
+      await flushConstraints(client);
+      await assert.rejects(
+        publication.read({
+          ...publicationScope,
+          projectId: randomUUID()
+        }),
+        (error) =>
+          error.code === "project_unavailable" &&
+          error.status === 404
+      );
+      const heldProof = await client.query(
+        `select
+           (select count(*)::integer
+              from ss.alakazam_customer_publication_commands
+             where organization_id = $1
+               and project_id = $2) as command_count,
+           (select count(*)::integer
+              from ss.releases release
+             where release.organization_id = $1
+               and release.project_id = $2) as release_count,
+           serving.state as serving_state,
+           serving.current_release_id
+         from ss.project_serving_projection serving
+        where serving.organization_id = $1
+          and serving.project_id = $2`,
+        [authority.organizationId, authority.projectId]
+      );
+      assert.deepEqual(
+        {
+          commandCount: heldProof.rows[0].command_count,
+          releaseCount: heldProof.rows[0].release_count,
+          servingState: heldProof.rows[0].serving_state,
+          currentReleaseId:
+            heldProof.rows[0].current_release_id
+        },
+        {
+          commandCount: 3,
+          releaseCount:
+            beforeHeldCommands.rows[0].release_count,
+          servingState:
+            beforeHeldCommands.rows[0].serving_state,
+          currentReleaseId:
+            beforeHeldCommands.rows[0].current_release_id
+        }
+      );
+      await client.query(
+        `update ss.alakazam_fulfillment_projection
+            set state = 'live',
+                current_release_id = $3,
+                updated_at = $4
+          where organization_id = $1
+            and project_id = $2`,
+        [
+          authority.organizationId,
+          authority.projectId,
+          upgradedLive.releaseId,
+          "2026-08-02T12:17:20.000Z"
+        ]
+      );
+      await flushConstraints(client);
+      const changedAfterHeldCommand =
+        await publication.read(publicationScope);
+      assert.equal(changedAfterHeldCommand.command, null);
+      await assert.rejects(
+        publication.request(publicationScope, {
+          commandId: heldPublish.command.commandId,
+          action: "publish",
+          snapshotDigest: darkPublication.snapshotDigest,
+          targetReleaseId: null
+        }),
+        (error) =>
+          error.code === "publication_authority_changed" &&
+          error.status === 409
+      );
+
       const downgradeQuoteId = await insertQuote(client, authority, {
         changeKind: "downgrade",
         currentSubscriptionId: subscriptionId,
@@ -3214,6 +3522,89 @@ test(
         authenticated_select: false,
         anon_insert: false
       });
+      await client.query("commit");
+
+      const concurrentRepository =
+        createPostgresAlakazamPublicationRepository({
+          authority: {
+            async service(context, work) {
+              assert.equal(context.userId, authority.userId);
+              assert.equal(
+                context.organizationId,
+                authority.organizationId
+              );
+              if (context.readOnly !== true) {
+                assert.equal(
+                  context.isolation,
+                  "read-committed"
+                );
+              }
+              const isolated = await pool.connect();
+              try {
+                await isolated.query(
+                  "begin isolation level read committed"
+                );
+                await isolated.query(
+                  "set constraints all deferred"
+                );
+                const result = await work(isolated);
+                await isolated.query(
+                  "set constraints all immediate"
+                );
+                await isolated.query("commit");
+                return result;
+              } catch (error) {
+                await isolated.query("rollback").catch(() => {});
+                throw error;
+              } finally {
+                isolated.release();
+              }
+            }
+          }
+        });
+      const concurrentPublication =
+        createAlakazamPublicationService({
+          repository: concurrentRepository,
+          clock: {
+            now() {
+              return new Date(
+                "2026-09-02T12:09:00.000Z"
+              );
+            }
+          }
+        });
+      const concurrentSnapshot =
+        await concurrentPublication.read(publicationScope);
+      const concurrentCommandId = randomUUID();
+      const concurrentRequest = {
+        commandId: concurrentCommandId,
+        action: "rollback",
+        snapshotDigest: concurrentSnapshot.snapshotDigest,
+        targetReleaseId:
+          concurrentSnapshot.actions.rollbackTargetReleaseId
+      };
+      const concurrentResults = await Promise.all([
+        concurrentPublication.request(
+          publicationScope,
+          concurrentRequest
+        ),
+        concurrentPublication.request(
+          publicationScope,
+          concurrentRequest
+        )
+      ]);
+      assert.equal(
+        concurrentResults[0].command.commandDigest,
+        concurrentResults[1].command.commandDigest
+      );
+      const concurrentRows = await client.query(
+        `select count(*)::integer as count
+           from ss.alakazam_customer_publication_commands
+          where organization_id = $1
+            and id = $2`,
+        [authority.organizationId, concurrentCommandId]
+      );
+      assert.equal(concurrentRows.rows[0].count, 1);
     } finally {
       await client.query("rollback").catch(() => {});
       client.release();

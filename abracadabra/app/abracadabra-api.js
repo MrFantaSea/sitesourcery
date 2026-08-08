@@ -3400,6 +3400,58 @@
       );
     }
 
+    function getAlakazamPublication(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/publication",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function requestAlakazamPublication(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      var action = oneOf(
+        source.action,
+        "Publication action",
+        ["publish", "rollback", "unpublish"]
+      );
+      var targetReleaseId = source.targetReleaseId == null
+        ? null
+        : requiredText(
+            source.targetReleaseId,
+            "Rollback release ID",
+            36
+          );
+      if (
+        (action === "rollback") !==
+          (targetReleaseId !== null)
+      ) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "An exact prior release is required only for rollback."
+        });
+      }
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/publication-commands",
+        {
+          body: {
+            action: action,
+            snapshotDigest: requiredDigest(
+              source.snapshotDigest,
+              "Publication snapshot digest"
+            ),
+            targetReleaseId: targetReleaseId
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function getCustomServicesAssessmentRequest(projectId, requestOptions) {
       return request(
         "GET",
@@ -6218,6 +6270,9 @@
       listProjects: listProjects,
       getProject: getProject,
       getAlakazamAccount: getAlakazamAccount,
+      getAlakazamPublication: getAlakazamPublication,
+      requestAlakazamPublication:
+        requestAlakazamPublication,
       getCustomServicesAssessmentRequest:
         getCustomServicesAssessmentRequest,
       saveCustomServicesAssessmentRequest:

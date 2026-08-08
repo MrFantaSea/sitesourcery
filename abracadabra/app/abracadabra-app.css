@@ -374,6 +374,14 @@
 .customer-alakazam-receipt-list{display:grid;gap:.55rem;margin:0;padding:0;list-style:none}
 .customer-alakazam-receipt{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.8rem;align-items:start;padding:.75rem .85rem;border:1px solid var(--spark-line);border-radius:.7rem}
 .customer-alakazam-actions-note{margin:1rem 0 0;padding:.8rem .9rem;border-left:3px solid var(--spark-gold);color:var(--spark-muted);background:rgba(241,207,137,.06);font-size:.84rem;line-height:1.5}
+.customer-alakazam-publication{border-color:rgba(130,231,196,.3);background:linear-gradient(145deg,rgba(130,231,196,.07),rgba(25,16,35,.72))}
+.customer-alakazam-publication-history{margin-top:1.2rem}
+.customer-alakazam-publication-history h4{margin:0 0 .65rem}
+.customer-alakazam-publication-list{display:grid;gap:.55rem;margin:0;padding:0;list-style:none}
+.customer-alakazam-publication-list li{display:grid;gap:.2rem;padding:.75rem .85rem;border:1px solid var(--spark-line);border-radius:.7rem;overflow-wrap:anywhere}
+.customer-alakazam-publication-list span{color:var(--spark-muted);font-size:.82rem;line-height:1.45}
+.customer-alakazam-publication-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin-top:1rem}
+.customer-alakazam-publication-actions .spark-button{width:100%;min-height:44px}
 .customer-separate-help{display:flex;max-width:58rem;align-items:flex-start;gap:.55rem;margin-top:1rem;padding:1rem 1.1rem;border:1px solid rgba(130,231,196,.2);border-radius:1rem;color:var(--spark-muted);background:rgba(130,231,196,.045);line-height:1.55}
 .customer-separate-help strong{flex:0 0 auto;color:var(--spark-text)}
 
@@ -505,7 +513,7 @@
   .customer-control-progress{grid-template-columns:repeat(2,1fr)}
   .customer-control-progress li:nth-child(3){border-left:0}
   .customer-control-progress li:nth-child(n+3){border-top:1px solid var(--spark-line)}
-  .customer-download-facts,.customer-quote-review dl,.customer-alakazam-facts,.customer-alakazam-tier-list,.customer-alakazam-quote-facts{grid-template-columns:1fr}
+  .customer-download-facts,.customer-quote-review dl,.customer-alakazam-facts,.customer-alakazam-tier-list,.customer-alakazam-quote-facts,.customer-alakazam-publication-actions{grid-template-columns:1fr}
   .customer-download-facts>div+div{border-left:0;border-top:1px solid var(--spark-line)}
   .customer-quote-review dl>div:nth-child(even){border-left:0}
   .customer-quote-review dl>div:nth-child(n+2){border-top:1px solid var(--spark-line)}

@@ -40,6 +40,10 @@
     "sitesourcery.alakazam-checkout-ready/v1";
   var ALAKAZAM_DOWNGRADE_SCHEMA =
     "sitesourcery.alakazam-downgrade-scheduled/v1";
+  var ALAKAZAM_PUBLICATION_SCHEMA =
+    "sitesourcery.alakazam-publication/v1";
+  var ALAKAZAM_PUBLICATION_HOLD_REASON =
+    "commercial_cutover_not_authorized";
   var ALAKAZAM_PUBLIC_OFFER_STATE = "held";
   var ALAKAZAM_ACCOUNT_STATES = [
     "available",
@@ -878,6 +882,192 @@
       heading: copy.heading,
       summary: copy.summary
     });
+  }
+
+  function verifiedAlakazamPublicationCommand(
+    value,
+    snapshot
+  ) {
+    if (value === null) return true;
+    return exactKeys(
+      value,
+      [
+        "action",
+        "commandDigest",
+        "commandId",
+        "holdReason",
+        "requestedAt",
+        "snapshotDigest",
+        "state",
+        "targetReleaseId",
+        "targetVersionId"
+      ]
+    )
+      && UUID.test(text(value.commandId))
+      && ["publish", "rollback", "unpublish"]
+        .includes(value.action)
+      && value.state === "held"
+      && value.holdReason ===
+        ALAKAZAM_PUBLICATION_HOLD_REASON
+      && value.snapshotDigest === snapshot.snapshotDigest
+      && SHA256.test(text(value.commandDigest))
+      && safeIso(value.requestedAt)
+      && (
+        value.action === "rollback"
+          ? UUID.test(text(value.targetReleaseId))
+            && UUID.test(text(value.targetVersionId))
+          : value.targetReleaseId === null
+            && (
+              value.action === "publish"
+                ? UUID.test(text(value.targetVersionId))
+                : value.targetVersionId === null
+            )
+      );
+  }
+
+  function verifiedAlakazamPublication(value, projectId) {
+    if (
+      !exactKeys(
+        value,
+        [
+          "actions",
+          "command",
+          "history",
+          "holdReason",
+          "projectId",
+          "schema",
+          "site",
+          "snapshotDigest",
+          "state",
+          "subscription"
+        ]
+      )
+      || value.schema !== ALAKAZAM_PUBLICATION_SCHEMA
+      || text(value.projectId) !== text(projectId)
+      || value.state !== "held"
+      || value.holdReason !==
+        ALAKAZAM_PUBLICATION_HOLD_REASON
+      || !SHA256.test(text(value.snapshotDigest))
+      || !exactKeys(
+        value.subscription,
+        ["revision", "status", "subscriptionId", "tierId"]
+      )
+      || !UUID.test(text(value.subscription.subscriptionId))
+      || !Number.isSafeInteger(value.subscription.revision)
+      || value.subscription.revision < 1
+      || !["active", "grace"]
+        .includes(value.subscription.status)
+      || !["alakazam_25", "alakazam_35", "alakazam_50"]
+        .includes(value.subscription.tierId)
+      || !exactKeys(
+        value.site,
+        [
+          "acceptedArtifactDigest",
+          "acceptedVersionId",
+          "currentReleaseId",
+          "currentVersionId",
+          "hostname",
+          "state",
+          "updatedAt"
+        ]
+      )
+      || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.sitesourcery\.me$/u
+        .test(text(value.site.hostname))
+      || !["live", "dark", "failed"]
+        .includes(value.site.state)
+      || !UUID.test(text(value.site.acceptedVersionId))
+      || !SHA256.test(text(value.site.acceptedArtifactDigest))
+      || !safeIso(value.site.updatedAt)
+      || !(
+        (
+          value.site.currentReleaseId === null
+          && value.site.currentVersionId === null
+          && value.site.state !== "live"
+        )
+        || (
+          UUID.test(text(value.site.currentReleaseId))
+          && UUID.test(text(value.site.currentVersionId))
+        )
+      )
+      || !Array.isArray(value.history)
+      || value.history.length > 3
+      || !exactKeys(
+        value.actions,
+        [
+          "publish",
+          "rollback",
+          "rollbackTargetReleaseId",
+          "unpublish"
+        ]
+      )
+      || typeof value.actions.publish !== "boolean"
+      || typeof value.actions.rollback !== "boolean"
+      || typeof value.actions.unpublish !== "boolean"
+    ) return null;
+    var releaseIds = new Set();
+    var history = value.history.every(function (entry) {
+      if (
+        !exactKeys(
+          entry,
+          [
+            "artifactDigest",
+            "isCurrent",
+            "releaseId",
+            "releasedAt",
+            "versionId"
+          ]
+        )
+        || !UUID.test(text(entry.releaseId))
+        || releaseIds.has(entry.releaseId)
+        || !UUID.test(text(entry.versionId))
+        || !SHA256.test(text(entry.artifactDigest))
+        || !safeIso(entry.releasedAt)
+        || typeof entry.isCurrent !== "boolean"
+        || entry.isCurrent !== (
+          entry.releaseId === value.site.currentReleaseId
+        )
+      ) return false;
+      releaseIds.add(entry.releaseId);
+      return true;
+    });
+    var rollbackTarget = value.site.state === "live"
+      ? value.history.find(function (entry) {
+          return entry.isCurrent === false;
+        }) || null
+      : null;
+    var expected = {
+      publish:
+        ["dark", "failed"].includes(value.site.state)
+        || value.site.currentVersionId !==
+          value.site.acceptedVersionId,
+      rollback:
+        value.site.state === "live"
+        && rollbackTarget !== null,
+      unpublish:
+        value.site.state === "live"
+        && value.site.currentReleaseId !== null,
+      rollbackTargetReleaseId:
+        rollbackTarget ? rollbackTarget.releaseId : null
+    };
+    if (
+      !history
+      || (
+        value.site.currentReleaseId !== null
+        && !value.history.some(function (entry) {
+          return entry.isCurrent;
+        })
+      )
+      || value.actions.publish !== expected.publish
+      || value.actions.rollback !== expected.rollback
+      || value.actions.unpublish !== expected.unpublish
+      || value.actions.rollbackTargetReleaseId !==
+        expected.rollbackTargetReleaseId
+      || !verifiedAlakazamPublicationCommand(
+        value.command,
+        value
+      )
+    ) return null;
+    return clone(value);
   }
 
   function verifiedAlakazamDueNow(value) {
@@ -2179,7 +2369,7 @@
       site_publishing:
         "Publication is automatic. This page will show the verified live address when it is ready.",
       site_attention_required:
-        "The saved website needs attention. No manual publish, rollback, or unpublish action is available here."
+        "The saved website needs attention. Review the separate publication authority panel for any exact held action that is available."
     }[account.actions.reason];
     if (!actionNote) {
       actionNote = account.subscription
@@ -13339,6 +13529,291 @@
     });
   }
 
+  function createAlakazamPublicationPanel(
+    documentRef,
+    actions
+  ) {
+    actions = actions || {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-account customer-alakazam-publication"
+    );
+    panel.hidden = true;
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-alakazam-publication-title"
+    );
+    panel.setAttribute("data-alakazam-publication", "");
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Website publication"
+    );
+    heading.id = "customer-alakazam-publication-title";
+    var status = accountElement(
+      documentRef,
+      "p",
+      "customer-alakazam-load-state",
+      "Choose an active Alakazam project to review publication."
+    );
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("tabindex", "-1");
+    status.setAttribute(
+      "data-alakazam-publication-status",
+      ""
+    );
+    var body = accountElement(
+      documentRef,
+      "div",
+      "customer-alakazam-publication-body"
+    );
+    var retry = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Try loading publication authority again"
+    );
+    retry.type = "button";
+    retry.hidden = true;
+    retry.setAttribute(
+      "data-alakazam-publication-retry",
+      ""
+    );
+    retry.addEventListener("click", function () {
+      if (typeof actions.retry === "function") {
+        actions.retry();
+      }
+    });
+    panel.append(heading, status, body, retry);
+
+    function actionButton(label, action, snapshot, enabled) {
+      var button = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        label
+      );
+      button.type = "button";
+      button.disabled = !enabled;
+      button.setAttribute(
+        "data-alakazam-publication-action",
+        action
+      );
+      button.addEventListener("click", function () {
+        if (typeof actions.command === "function") {
+          actions.command(action, snapshot);
+        }
+      });
+      return button;
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof status.focus === "function") status.focus();
+      },
+      render: function (readState) {
+        var visible = Boolean(
+          readState
+          && readState.projectId
+          && readState.phase !== "unavailable"
+        );
+        panel.hidden = !visible;
+        body.replaceChildren();
+        if (!visible) return;
+        var busy = readState.phase === "loading"
+          || readState.phase === "commanding";
+        panel.setAttribute("aria-busy", String(busy));
+        retry.disabled = busy;
+        retry.hidden = ![
+          "error",
+          "command_error"
+        ].includes(readState.phase);
+        if (readState.phase === "loading") {
+          status.textContent =
+            "Loading exact publication authority…";
+          body.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-placeholder",
+              "Current release, accepted version, and eligible history are loading."
+            )
+          );
+          return;
+        }
+        var snapshot = verifiedAlakazamPublication(
+          readState.snapshot,
+          readState.projectId
+        );
+        if (!snapshot) {
+          status.textContent =
+            "Publication authority could not be verified.";
+          body.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-error",
+              "No publication action is available until exact project authority can be loaded."
+            )
+          );
+          return;
+        }
+        status.textContent = readState.phase === "commanding"
+          ? "Recording the exact customer authorization…"
+          : readState.phase === "command_error"
+            ? readState.error
+              || "The authorization was not confirmed. No live publication effect was requested."
+            : snapshot.command
+              ? "Authorization recorded. Publication remains held."
+              : "Exact publication authority loaded.";
+        var facts = accountElement(
+          documentRef,
+          "dl",
+          "customer-alakazam-facts"
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Publication state",
+          accountWords(snapshot.site.state)
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Hosted address",
+          snapshot.site.hostname
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Accepted version",
+          snapshot.site.acceptedVersionId
+        );
+        appendAccountFact(
+          documentRef,
+          facts,
+          "Current live version",
+          snapshot.site.currentVersionId
+            || "No live version"
+        );
+        body.appendChild(facts);
+
+        var history = accountElement(
+          documentRef,
+          "section",
+          "customer-alakazam-publication-history"
+        );
+        history.appendChild(
+          accountElement(
+            documentRef,
+            "h4",
+            "",
+            "Eligible release history"
+          )
+        );
+        if (snapshot.history.length === 0) {
+          history.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-site-help",
+              "No eligible Alakazam release has been recorded yet."
+            )
+          );
+        } else {
+          var list = accountElement(
+            documentRef,
+            "ol",
+            "customer-alakazam-publication-list"
+          );
+          snapshot.history.forEach(function (entry) {
+            var item = accountElement(
+              documentRef,
+              "li",
+              ""
+            );
+            item.append(
+              accountElement(
+                documentRef,
+                "strong",
+                "",
+                entry.isCurrent
+                  ? "Current release"
+                  : "Prior release"
+              ),
+              accountElement(
+                documentRef,
+                "span",
+                "",
+                accountDate(entry.releasedAt)
+                  + " · Version " + entry.versionId
+              )
+            );
+            list.appendChild(item);
+          });
+          history.appendChild(list);
+        }
+        body.appendChild(history);
+
+        var controls = accountElement(
+          documentRef,
+          "div",
+          "customer-alakazam-publication-actions"
+        );
+        var capability =
+          readState.capability === true;
+        controls.append(
+          actionButton(
+            "Publish accepted version",
+            "publish",
+            snapshot,
+            !busy && capability && snapshot.actions.publish
+          ),
+          actionButton(
+            "Roll back to prior release",
+            "rollback",
+            snapshot,
+            !busy && capability && snapshot.actions.rollback
+          ),
+          actionButton(
+            "Unpublish website",
+            "unpublish",
+            snapshot,
+            !busy && capability && snapshot.actions.unpublish
+          )
+        );
+        body.appendChild(controls);
+        body.appendChild(
+          accountElement(
+            documentRef,
+            "p",
+            "customer-alakazam-actions-note",
+            capability
+              ? "These controls record exact customer authorization only. Alakazam publication remains held; no live provider effect, cancellation, or deletion occurs."
+              : "Customer publication authorization is not open in this held build. No live provider effect can occur."
+          )
+        );
+        if (snapshot.command) {
+          body.appendChild(
+            accountElement(
+              documentRef,
+              "p",
+              "customer-alakazam-command-state",
+              accountWords(snapshot.command.action)
+                + " authorization recorded "
+                + accountDate(snapshot.command.requestedAt)
+                + ". It remains held without a provider effect."
+            )
+          );
+        }
+      }
+    });
+  }
+
   function fragmentToken(locationObject, key) {
     var hash = text(locationObject && locationObject.hash);
     var prefix = "#" + key + "=";
@@ -14116,6 +14591,20 @@
       presentation: null
     };
     var alakazamReadAcceptedVersionId = "";
+    var alakazamPublicationSequence = 0;
+    var alakazamPublicationRead = {
+      projectId: "",
+      phase: "idle",
+      snapshot: null,
+      error: ""
+    };
+    var alakazamPublicationAttempt = {
+      projectId: "",
+      action: "",
+      snapshotDigest: "",
+      targetReleaseId: null,
+      commandId: ""
+    };
     var alakazamCommandSequence = 0;
     var alakazamCommand = {
       projectId: "",
@@ -14146,6 +14635,7 @@
       alakazamQuote: false,
       alakazamCheckout: false,
       alakazamDowngrade: false,
+      alakazamPublication: false,
       domainPurchase: false,
       publishing: false
     });
@@ -14544,6 +15034,26 @@
           }
         }
       );
+    var alakazamPublicationPanel =
+      createAlakazamPublicationPanel(
+        documentRef,
+        {
+          retry: function () {
+            var projectId = idOf(
+              lastState && lastState.project
+            );
+            if (lastState.account && projectId) {
+              requestAlakazamPublicationSnapshot(projectId);
+            }
+          },
+          command: function (action, snapshot) {
+            requestAlakazamPublicationCommand(
+              action,
+              snapshot
+            );
+          }
+        }
+      );
     var alakazamAnchor =
       one(".customer-separate-help");
     if (
@@ -14596,6 +15106,10 @@
           alakazamPanel.element,
           alakazamAnchor
         );
+        alakazamAnchor.parentNode.insertBefore(
+          alakazamPublicationPanel.element,
+          alakazamAnchor
+        );
       }
     } else {
       var controlShell = one(
@@ -14633,6 +15147,9 @@
         if (ALAKAZAM_PUBLIC_OFFER_STATE === "released") {
           controlShell.appendChild(
             alakazamPanel.element
+          );
+          controlShell.appendChild(
+            alakazamPublicationPanel.element
           );
         }
       }
@@ -19303,6 +19820,253 @@
         });
     }
 
+    function renderAlakazamPublicationPanel() {
+      alakazamPublicationPanel.render({
+        projectId: alakazamPublicationRead.projectId,
+        phase: alakazamPublicationRead.phase,
+        snapshot: alakazamPublicationRead.snapshot,
+        error: alakazamPublicationRead.error,
+        capability: capabilities.alakazamPublication
+      });
+    }
+
+    function alakazamPublicationIsCurrent(
+      sequence,
+      projectId
+    ) {
+      return sequence === alakazamPublicationSequence
+        && Boolean(lastState.account)
+        && idOf(lastState.project) === projectId;
+    }
+
+    function resetAlakazamPublication(projectId) {
+      alakazamPublicationSequence += 1;
+      alakazamPublicationRead = {
+        projectId: text(projectId),
+        phase: projectId ? "loading" : "idle",
+        snapshot: null,
+        error: ""
+      };
+      alakazamPublicationAttempt = {
+        projectId: "",
+        action: "",
+        snapshotDigest: "",
+        targetReleaseId: null,
+        commandId: ""
+      };
+    }
+
+    function requestAlakazamPublicationSnapshot(projectId) {
+      if (ALAKAZAM_PUBLIC_OFFER_STATE !== "released") {
+        return Promise.resolve(null);
+      }
+      var selectedProjectId = text(projectId);
+      var sequence = ++alakazamPublicationSequence;
+      alakazamPublicationRead = {
+        projectId: selectedProjectId,
+        phase: "loading",
+        snapshot: null,
+        error: ""
+      };
+      renderAlakazamPublicationPanel();
+      if (
+        !client
+        || typeof client.getAlakazamPublication !== "function"
+      ) {
+        alakazamPublicationRead = {
+          projectId: selectedProjectId,
+          phase: "error",
+          snapshot: null,
+          error:
+            "Publication controls are unavailable in this build."
+        };
+        renderAlakazamPublicationPanel();
+        return Promise.resolve(null);
+      }
+      return client.getAlakazamPublication(selectedProjectId)
+        .then(function (result) {
+          if (!alakazamPublicationIsCurrent(
+            sequence,
+            selectedProjectId
+          )) return null;
+          var snapshot = verifiedAlakazamPublication(
+            result,
+            selectedProjectId
+          );
+          if (!snapshot) {
+            throw new Error(
+              "The publication authority response was invalid."
+            );
+          }
+          alakazamPublicationRead = {
+            projectId: selectedProjectId,
+            phase: "ready",
+            snapshot: snapshot,
+            error: ""
+          };
+          renderAlakazamPublicationPanel();
+          return snapshot;
+        })
+        .catch(function (error) {
+          if (!alakazamPublicationIsCurrent(
+            sequence,
+            selectedProjectId
+          )) return null;
+          var unavailable = Number(error && error.status) === 404;
+          alakazamPublicationRead = {
+            projectId: selectedProjectId,
+            phase: unavailable ? "unavailable" : "error",
+            snapshot: null,
+            error: unavailable
+              ? ""
+              : explain(
+                  error,
+                  "Publication authority could not be loaded."
+                )
+          };
+          renderAlakazamPublicationPanel();
+          return null;
+        });
+    }
+
+    function requestAlakazamPublicationCommand(
+      actionInput,
+      snapshotInput
+    ) {
+      var projectId = idOf(lastState && lastState.project);
+      var action = text(actionInput);
+      var snapshot = verifiedAlakazamPublication(
+        snapshotInput,
+        projectId
+      );
+      var targetReleaseId = action === "rollback"
+        && snapshot
+        ? snapshot.actions.rollbackTargetReleaseId
+        : null;
+      if (
+        !projectId
+        || !snapshot
+        || !["publish", "rollback", "unpublish"]
+          .includes(action)
+        || snapshot.actions[action] !== true
+        || capabilities.alakazamPublication !== true
+        || !client
+        || typeof client.requestAlakazamPublication !==
+          "function"
+      ) return Promise.resolve(null);
+      var reusable =
+        alakazamPublicationAttempt.projectId === projectId
+        && alakazamPublicationAttempt.action === action
+        && alakazamPublicationAttempt.snapshotDigest ===
+          snapshot.snapshotDigest
+        && alakazamPublicationAttempt.targetReleaseId ===
+          targetReleaseId
+        && UUID.test(
+          text(alakazamPublicationAttempt.commandId)
+        );
+      var commandId;
+      try {
+        commandId = reusable
+          ? alakazamPublicationAttempt.commandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamPublicationRead = {
+          projectId: projectId,
+          phase: "command_error",
+          snapshot: snapshot,
+          error: explain(
+            error,
+            "Publication authorization could not be identified."
+          )
+        };
+        renderAlakazamPublicationPanel();
+        alakazamPublicationPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      alakazamPublicationAttempt = {
+        projectId: projectId,
+        action: action,
+        snapshotDigest: snapshot.snapshotDigest,
+        targetReleaseId: targetReleaseId,
+        commandId: commandId
+      };
+      var sequence = ++alakazamPublicationSequence;
+      alakazamPublicationRead = {
+        projectId: projectId,
+        phase: "commanding",
+        snapshot: snapshot,
+        error: ""
+      };
+      renderAlakazamPublicationPanel();
+      alakazamPublicationPanel.focusStatus();
+      return client.requestAlakazamPublication(
+        projectId,
+        {
+          action: action,
+          snapshotDigest: snapshot.snapshotDigest,
+          targetReleaseId: targetReleaseId
+        },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (!alakazamPublicationIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var confirmed = verifiedAlakazamPublication(
+          result,
+          projectId
+        );
+        if (
+          !confirmed
+          || !confirmed.command
+          || confirmed.command.commandId !== commandId
+          || confirmed.command.action !== action
+          || confirmed.command.snapshotDigest !==
+            snapshot.snapshotDigest
+          || confirmed.command.targetReleaseId !==
+            targetReleaseId
+          || confirmed.command.state !== "held"
+        ) {
+          throw new Error(
+            "The held publication authorization was not verified."
+          );
+        }
+        alakazamPublicationAttempt = {
+          projectId: "",
+          action: "",
+          snapshotDigest: "",
+          targetReleaseId: null,
+          commandId: ""
+        };
+        alakazamPublicationRead = {
+          projectId: projectId,
+          phase: "ready",
+          snapshot: confirmed,
+          error: ""
+        };
+        renderAlakazamPublicationPanel();
+        alakazamPublicationPanel.focusStatus();
+        return confirmed;
+      }).catch(function (error) {
+        if (!alakazamPublicationIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        alakazamPublicationRead = {
+          projectId: projectId,
+          phase: "command_error",
+          snapshot: snapshot,
+          error: explain(
+            error,
+            "Publication authorization was not confirmed. No live effect was requested."
+          )
+        };
+        renderAlakazamPublicationPanel();
+        alakazamPublicationPanel.focusStatus();
+        return null;
+      });
+    }
+
     function refreshAlakazamAccountAfterSetup(
       projectId,
       addressLabel,
@@ -20086,6 +20850,54 @@
       renderAlakazamPanel();
     }
 
+    function renderAlakazamPublication(state) {
+      if (ALAKAZAM_PUBLIC_OFFER_STATE !== "released") {
+        if (alakazamPublicationRead.projectId) {
+          resetAlakazamPublication("");
+        }
+        renderAlakazamPublicationPanel();
+        return;
+      }
+      var projectId = state.account
+        ? idOf(state.project)
+        : "";
+      if (!projectId) {
+        if (alakazamPublicationRead.projectId) {
+          resetAlakazamPublication("");
+        }
+        renderAlakazamPublicationPanel();
+        return;
+      }
+      if (alakazamPublicationRead.projectId !== projectId) {
+        requestAlakazamPublicationSnapshot(projectId);
+        return;
+      }
+      var acceptedVersionId = idOf(
+        acceptedProjectVersion(state.project)
+      );
+      if (
+        alakazamPublicationRead.phase === "ready"
+        && alakazamPublicationRead.snapshot
+        && acceptedVersionId
+        && acceptedVersionId !==
+          alakazamPublicationRead.snapshot.site
+            .acceptedVersionId
+      ) {
+        requestAlakazamPublicationSnapshot(projectId);
+        return;
+      }
+      if (
+        alakazamPublicationRead.phase === "unavailable"
+        && alakazamRead.phase === "ready"
+        && alakazamRead.presentation
+        && alakazamRead.presentation.account.subscription
+      ) {
+        requestAlakazamPublicationSnapshot(projectId);
+        return;
+      }
+      renderAlakazamPublicationPanel();
+    }
+
     function reducedMotion() {
       return (
         typeof windowRef.matchMedia === "function"
@@ -20658,6 +21470,7 @@
       renderCustomerCustomBuildChangeCompletionAccount(state);
       renderCustomerCustomBuildFinalAccount(state);
       renderAlakazamAccount(state);
+      renderAlakazamPublication(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
       syncOwnerCustomBuildAccount(state);
@@ -21209,6 +22022,9 @@
                 alakazamDowngrade:
                   ALAKAZAM_PUBLIC_OFFER_STATE === "released"
                   && source.alakazamDowngrade === true,
+                alakazamPublication:
+                  ALAKAZAM_PUBLIC_OFFER_STATE === "released"
+                  && source.alakazamPublication === true,
                 domainPurchase:
                   source.domainPurchase === true,
                 publishing:
@@ -21308,6 +22124,8 @@
       safeCheckoutDestination,
     verifiedAlakazamAccount:
       verifiedAlakazamAccount,
+    verifiedAlakazamPublication:
+      verifiedAlakazamPublication,
     verifiedAlakazamCheckout:
       verifiedAlakazamCheckout,
     verifiedAlakazamDowngrade:
