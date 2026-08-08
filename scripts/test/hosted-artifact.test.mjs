@@ -559,7 +559,15 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   ]) {
     assert.equal(count(faq, `id="${anchor}" data-faq-anchor="${anchor}"`), 1);
   }
-  assert.match(faq, /Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held\./u);
+  assert.match(
+    faq,
+    /The planned \$25, \$35, and \$50 Alakazam plans are not available\./u,
+  );
+  assert.match(
+    faq,
+    /No Alakazam subscription, hosting activation, publication, or tier feature is offered\./u,
+  );
+  assert.doesNotMatch(faq, /complete three-plan ladder is approved/iu);
   assert.match(faq, /The Responder is also held: it sends no messages and this page cannot quote or start setup\./u);
   assert.match(faq, /the final 50% becomes due after completion and before final handoff\./u);
   assert.match(faq, /It is not charged merely because completion was recorded\./u);

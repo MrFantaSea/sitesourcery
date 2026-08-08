@@ -120,7 +120,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-website-terms-main",
     file: "legal/website-terms/index.html",
     kind: "html",
-    sourceSha256: "76a7c7173012613602dd6e1f231c84f5e8a8b82bcdbcccdc64f9fe2148322b92",
+    sourceSha256: "87a828b71b905c8f7692df67ce1114cc2f7297c592ddc2dbbbcaf261280e9922",
     hostedFragment: "scripts/hosted-truth/fragments/legal-website-terms-main.html",
     hostedSha256: "8df0c8323db3b723c6c74cc6b18044bcaf2cf5fcfcf3ebf3f60882225b6967bc",
   }),
@@ -283,7 +283,8 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "faq/index.html": Object.freeze([
     "Download is $5 once per editor project",
-    "Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held.",
+    "The planned $25, $35, and $50 Alakazam plans are not available.",
+    "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),
@@ -307,12 +308,17 @@ export const heldTruthRequirements = Object.freeze({
     "The free guest maker makes temporary tab-only versions and previews. It offers no account, saved project, Checkout, or Download.",
     "Facts and made versions stay only in the current tab; refreshing the page or closing the tab clears them.",
     "Only the separate signed-in hosted account path can retain an editor project and unlock that project’s HTML Download after a completed one-time $5 payment.",
+    "The planned $25, $35, and $50 Alakazam plans are not available.",
+    "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
     "Alakazam publishing is held until a separate service and terms are released.",
     "The standard $200 assessment covers one customer, business, public website, and primary goal",
   ]),
 });
 
 export const heldTruthForbiddenPhrases = Object.freeze({
+  "faq/index.html": Object.freeze([
+    "Alakazam’s complete three-plan ladder is approved",
+  ]),
   "legal/privacy/index.html": Object.freeze([
     "SS-HOSTED-PRIVACY-2026-07-30-V2",
   ]),
@@ -324,6 +330,9 @@ export const heldTruthForbiddenPhrases = Object.freeze({
     "Make temporary versions, preview them, and download chosen HTML.",
     "open a working preview, and download a chosen self-contained HTML file.",
     "The browser may process, compile, display, and download that material on the customer’s device",
+    "Alakazam has three plans",
+    "has an approved three-plan ladder",
+    "difference-only upgrade rule",
   ]),
 });
 
@@ -365,7 +374,8 @@ export const hostedTruthRequirements = Object.freeze({
   ]),
   "faq/index.html": Object.freeze([
     "Download is $5 once per editor project",
-    "Alakazam’s complete three-plan ladder is approved, but public subscription sales remain held.",
+    "The planned $25, $35, and $50 Alakazam plans are not available.",
+    "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),

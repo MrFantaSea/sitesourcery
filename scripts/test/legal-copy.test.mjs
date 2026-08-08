@@ -101,7 +101,8 @@ test("website terms hold Alakazam, domains, lifecycle policy, and The Responder 
     "Only the separate signed-in hosted account path can retain an editor project and unlock that project’s HTML Download after a completed one-time $5 payment.",
     "A signed-in retained project’s $5 Download likewise delivers an HTML file without publishing or hosting it.",
     "That maker provides no Download, and Desiderata Labs LLC does not receive or store the material merely because a guest preview is made.",
-    "has an approved three-plan ladder and a difference-only upgrade rule, but these public terms do not offer a subscription price or authorize payment.",
+    "The planned $25, $35, and $50 Alakazam plans are not available.",
+    "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
     "These terms establish no public Alakazam cancellation, grace, suspension, retention, deletion, or refund schedule.",
     "Customer-owned domain purchase or connection inside Alakazam remains undecided and is not offered by this page.",
     "The Responder remains held until its telephony, A2P registration, message delivery, opt-out handling, monitoring, lifecycle terms, and customer proof are complete.",
@@ -123,6 +124,9 @@ test("website terms hold Alakazam, domains, lifecycle policy, and The Responder 
     /Make temporary versions, preview them, and download chosen HTML./u,
     /open a working preview, and download a chosen self-contained HTML file./u,
     /The browser may process, compile, display, and download that material on the customer’s device/u,
+    /Alakazam has three plans/iu,
+    /approved three-plan ladder/iu,
+    /difference-only upgrade rule/iu,
   ]) {
     assert.doesNotMatch(terms, staleClaim);
   }
