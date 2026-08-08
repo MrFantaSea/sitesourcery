@@ -1,10 +1,10 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-08T14:22:53-0400 (EDT)
+Generated at: 2026-08-08T15:10:54-0400 (EDT)
 
 Repository snapshot:
 
-- Matrix branch: feat/privacy-v3-matrix-20260808, starting at c05404d
+- Matrix branch: feat/privacy-v3-matrix-20260808, starting at 797d36d
 - Historical integrated candidate: a0f024d (evidence reconciliation on top of
   checker-authority, held-Alakazam and migration-47 checkpoints)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
@@ -15,7 +15,9 @@ Repository snapshot:
   checkpoint is sealed at 2b0f9e0, and H1N Purpose 1 is sealed at 9a9511c.
   H1N migration 47 is sealed at f1c265e. Checker authority is integrated at
   81075b7 and held Alakazam surfaces at 3c008bb. The combined public/legal/
-  checker/Work checkpoint is part of this evidence reconciliation.
+  checker/Work checkpoint is part of this evidence reconciliation. The exact
+  held-tier public-truth correction is sealed at 1b73ce2, and migration 48 is
+  sealed separately at bf53972.
 
 ## Authority, status, and percentage rules
 
@@ -97,7 +99,7 @@ of this file.
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | FIRST-DOLLAR LAUNCH-GATE CLOSURE | 0 | 11 | 1 | 0 | 12 | 0.0% |
-| FULL-SCOPE CORE INVENTORY (historical) | 97 | 40 | 9 | 0 | 146 | 66.4% |
+| FULL-SCOPE CORE INVENTORY (historical) | 99 | 38 | 9 | 0 | 146 | 67.8% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
@@ -115,10 +117,10 @@ denominator; an unresolved dependency keeps its mapped parent row open.
 
 | ID | Status | Current evidence boundary | Required closure |
 | --- | --- | --- | --- |
-| J-01 | PARTIAL | Public/legal audits and held-offer checks exist, but the corrected Privacy V3 source is isolated and Website Terms/public offer truth still requires a coordinated versioned correction. | Integrate approved public/legal truth and prove every visible price, link, support route and unavailable offer against the exact candidate. |
-| J-05 | PARTIAL | Custom milestone/workmanship authority is sealed; complete canonical terms, including the separately versioned Website Terms correction, are not. | Seal one internally consistent terms set for the offers actually available at first dollar. |
-| TRUTH-05 | PARTIAL | Hosted legal fragments and Privacy V3 correction commit 5a81f5f exist, but V3 is unsealed and the integrated legal surface is not canonical yet. | Integrate and seal canonical legal/privacy for the first-dollar account, payment, publication and support flow. |
-| AESTH-08 | PARTIAL | Legal-route readability is sealed at 2b0f9e0; canonical copy remains an independent unfinished authority. | Preserve the presentation while the exact integrated legal copy and browser proof close. |
+| J-01 | PARTIAL | The FAQ/non-accepted Website Terms held-tier correction is sealed at 1b73ce2 with focused 99/99 proof and an independent `BLOCKER: NO`; the corrected Privacy V3 source remains isolated and no integrated canonical legal surface exists yet. | Integrate approved public/legal truth and prove every visible price, link, support route and unavailable offer against the exact candidate. |
+| J-05 | PARTIAL | Custom milestone/workmanship authority is sealed, and 1b73ce2 corrects the non-accepted public Website Terms while preserving accepted hosted Terms V2 bytes; the canonical versioned terms set is not integrated. | Seal one internally consistent terms set for the offers actually available at first dollar. |
+| TRUTH-05 | PARTIAL | Held-tier Website Terms/FAQ truth is sealed at 1b73ce2 and Privacy V3 source correction at 5a81f5f, but V3 is unsealed and the integrated legal surface is not canonical yet. | Integrate and seal canonical legal/privacy for the first-dollar account, payment, publication and support flow. |
+| AESTH-08 | PARTIAL | Legal-route readability is sealed at 2b0f9e0 and held-tier copy at 1b73ce2; canonical integrated legal copy and final browser proof remain open. | Preserve the presentation while the exact integrated legal copy and browser proof close. |
 | J-02 | PARTIAL | The authenticated assessment/quote/invoice/payment backend path is sealed, but no current-candidate public-to-account journey proves it end to end. | Connect and browser-prove the bounded public inquiry through authenticated receipt. |
 | J-09 | PARTIAL | Individual email, payment, hosting and operations proofs exist; no single exact-candidate provider/backup/restore/monitoring/rollback proof exists. | Execute and retain one integrated provider and operations evidence bundle. |
 | J-07 | PARTIAL | Older private-staging evidence exists, not evidence for the current candidate. | Run new- and returning-customer journeys in private staging on the exact sealed candidate. |
@@ -141,10 +143,12 @@ non-credit signal of work in progress, not eleven nearly closed gates.
   A-03, E-08, E-09, F-03, F-04, F-06, F-08 and G-02 through G-06. Its existing
   source and tests earn historical inventory status only; they do not delay a
   first dollar while the offer remains non-sellable.
-- TRUTH-01 and TRUTH-02 are not standalone denominator rows. Their closure
-  dependency is strict: the $35 and $50 tiers must be visibly unavailable on
-  every public and customer surface before J-01 and TRUTH-05 can become DONE.
-  This matrix lane records that requirement but does not change UI.
+- TRUTH-01 and TRUTH-02 are not standalone denominator rows. Under the owner's
+  explicit held-posture ruling, they are DONE because 1b73ce2 makes the planned
+  $25/$35/$50 tiers and every tier feature visibly unavailable, preserves zero
+  commerce authority, and keeps existing customer code hidden/held. This
+  satisfies their dependency without closing J-01 or TRUTH-05; those whole-row
+  gates still require one integrated canonical candidate and its release proof.
 - Registrar commerce, Responder telephony and the remaining Expansion catalog
   stay held/deferred until separately promoted by the owner.
 
@@ -300,11 +304,11 @@ non-credit signal of work in progress, not eleven nearly closed gates.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| J-01 | Reconcile all public copy, links, legal, support and pricing | Aesthetic + Polish/Integration | PARTIAL | Held-offer/checker truth is integrated at 81075b7/3c008bb and Privacy V3 source correction is sealed in isolated commit 5a81f5f; the coordinated Website Terms version, integrated V3 seal and visible $35/$50 unavailable state remain open | Integrate the approved public/legal set and prove every visible price, link, support route and held offer. |
+| J-01 | Reconcile all public copy, links, legal, support and pricing | Aesthetic + Polish/Integration | PARTIAL | Held-offer/checker truth is integrated at 81075b7/3c008bb, exact $25/$35/$50 unavailability is sealed at 1b73ce2 with focused 99/99 proof and independent `BLOCKER: NO`, and Privacy V3 source correction is sealed at 5a81f5f; the coordinated integrated legal candidate remains open | Integrate the approved public/legal set and prove every visible price, link, support route and held offer. |
 | J-02 | Replace direct assessment payment with account offer/invoice/payment and exact bounded scope | Build + Aesthetic | PARTIAL | The authenticated assessment through immutable Custom handoff backend is sealed through migration 47; custom/index.html has bounded inquiry copy, but the exact-candidate public-to-account journey is not release-proven | Connect and browser-prove public inquiry/account/quote/invoice/payment/receipt on the final candidate. |
 | J-03 | One restrained “Have a website already?” section for five later lanes | Aesthetic | NOT STARTED | No consolidated five-lane section found in current homepage/custom candidate; homepage is design-locked | Add only in an approved non-home route or obtain cross-lane decision if homepage placement is required. |
 | J-04 | Publish approved starting prices/exclusions and explain stacking without duplicate work | Aesthetic + Polish/Integration | PARTIAL | Custom prices exist; overlap engine/later services are incomplete and public stacking language is not reconciled | Publish only currently supported prices; hold Expansion offers and add dedup language. |
-| J-05 | Reconcile terms for onboarding, milestones, workmanship, management, plan changes, provider costs and lawful cancellation | Polish/Integration + Aesthetic | PARTIAL | Custom milestone, settlement, handoff and workmanship authority is sealed through migration 47; accepted historical Website Terms V2 still requires a separately versioned correction and no integrated replacement is sealed | Produce the coordinated versioned terms release for only the offers available at first dollar, then rerun legal/copy proof. |
+| J-05 | Reconcile terms for onboarding, milestones, workmanship, management, plan changes, provider costs and lawful cancellation | Polish/Integration + Aesthetic | PARTIAL | Custom milestone, settlement, handoff and workmanship authority is sealed through migration 47; 1b73ce2 corrects the non-accepted public Website Terms and preserves accepted hosted Terms V2 byte-for-byte, but no coordinated integrated versioned replacement is sealed | Produce the coordinated versioned terms release for only the offers available at first dollar, then rerun legal/copy proof. |
 | J-06 | Complete mobile, desktop, accessibility, performance and security audits | Polish/Integration | PARTIAL | browser-audit-current.mjs covers responsive/browser checks; no final-source run and no complete performance/security release report exists | Run all audits on sealed candidate and store exact evidence. |
 | J-07 | New and returning customer journeys in private staging | Polish/Integration | PARTIAL | ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md proves an older staging build; neither the migration-47 candidate nor the Privacy V3 successor is proven in private staging | Deploy the reviewed final candidate and run both journeys. |
 | J-08 | Owner Mac and Pixel operations journeys | Polish/Integration | PARTIAL | Custom-service owner journeys through migration 47 include authenticated 390x844 and 1440x1000 evidence; no final Privacy/legal candidate owner journey exists | Run the complete authenticated owner walk on the exact final candidate. |
@@ -317,11 +321,11 @@ non-credit signal of work in progress, not eleven nearly closed gates.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| TRUTH-01 | Publish $25/$35/$50 ladder and $20/$30/$45 first-payment outcomes | Aesthetic + Polish/Integration | PARTIAL | Backend/account tests carry exact tiers and outcomes; $35/$50 fulfillment is held and no exact-candidate proof shows both tiers visibly unavailable across every public/customer surface | Keep $35/$50 non-sellable and visibly unavailable; this is a closure dependency of first-dollar J-01/TRUTH-05, not a separate denominator row. |
-| TRUTH-02 | Cash App/Venmo only at $50 and three-version history at $35+ | Build + Aesthetic | PARTIAL | $50 compiler gating is tested; $35 history/editor authority is absent and the held $35/$50 presentation is not release-proven | Keep the premium claims and controls visibly unavailable; implement them only after owner promotion beyond the first-dollar finish line. |
+| TRUTH-01 | Keep planned $25/$35/$50 Alakazam subscriptions and $20/$30/$45 first-payment outcomes visibly unavailable while subscription fulfillment is held | Aesthetic + Polish/Integration | DONE | Owner approved visible unavailability as closure; sealed commit 1b73ce2 puts exact $25/$35/$50 unavailable copy in FAQ and non-accepted public Website Terms, offers no subscription/hosting activation/publication/tier feature, preserves zero commerce authority, and passes the focused 99/99 suite plus independent `BLOCKER: NO` | Preserve the exact unavailable disclosure and narrow checker exception until the owner separately promotes and proves subscription fulfillment. |
+| TRUTH-02 | Keep $35+ version-history and $50 Cash App/Venmo tier features visibly unavailable and hidden while those tiers are held | Build + Aesthetic | DONE | Sealed commit 1b73ce2 states that no tier feature is offered; narrow pricing/site checks allow the exact unavailable disclosure only and still reject any other held-tier price occurrence, while existing customer implementation remains excluded/hidden and commerce authority stays absent; independent review reports `BLOCKER: NO` | Implement or expose premium controls only after a separate owner promotion, complete authority, and end-to-end proof. |
 | TRUTH-03 | Replace “$25 = your own .com” with label.sitesourcery.me | Aesthetic + Polish/Integration | DONE | Combined public-truth/legal checkpoint at 81075b7 and 3c008bb reconciles hosted fragments and legal language to `label.sitesourcery.me`; checker-authority and 99/99 public/legal/Work preflight gates pass | Preserve the platform-subdomain truth until a registrar/product authority is released. |
 | TRUTH-04 | Remove invented cancellation, grace, suspension, retention, deletion and refund language until policy is approved | Aesthetic + Polish/Integration | DONE | Combined legal/public truth at 81075b7 and 3c008bb removes unsupported lifecycle/refund claims; 99/99 public-truth, legal, checker-authority and Work preflight proof is green | Reintroduce policy only from a separately approved, executable authority. |
-| TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Privacy V3 source truth is corrected in isolated commit 5a81f5f with a path-limited `BLOCKER: NO`; V3 remains unsealed/unintegrated and historical Website Terms require a separately versioned correction | Seal and integrate one canonical legal/privacy set, visibly hold $35/$50, then run exact legal/copy/browser release proof. |
+| TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Privacy V3 source truth is corrected at 5a81f5f and held-tier Website Terms/FAQ truth at 1b73ce2, each with `BLOCKER: NO`; V3 remains unsealed/unintegrated and the coordinated versioned legal set is not canonical yet | Seal and integrate one canonical legal/privacy set while preserving the held-tier disclosure, then run exact legal/copy/browser release proof. |
 | TRUTH-06 | Remove five legacy direct Stripe Payment Links from all public and production artifacts | Build + Aesthetic | DONE | commit ea38093 removes the direct-link rails and legacy paid bridge from reviewed artifacts; scripts/check-site.mjs, domain-public-truth and hosted-artifact tests require zero public checkout rails while authenticated purpose-specific server Checkout remains private | Preserve zero direct payment links in both Pages and hosted artifacts. |
 | TRUTH-07 | Assessment intake, written offer, account invoice and payment sequencing | Build | DONE | migrations 34-39; authenticated routes/tests; commits ccce671 through 5c34845 | Re-run as part of final public-to-account journey. |
 | TRUTH-08 | Minimum Custom estimate/invoice/deposit/milestone/job ledger before advertised operational | Build | DONE | Migrations 41-47, commits 9221072/52644fa/a46fb40/c4277ce/9a9511c/f9950ae and the migration-47 checkpoint provide estimate, accepted scope, first/change/final invoices and settlement, retained job/progress/completion, immutable handoff and 30-day workmanship authority; active ledger records all-47 PostgreSQL and browser proof | Preserve the full ordered ledger in staging and production release proof. |
@@ -360,13 +364,13 @@ durable matrix authority:
 | --- | --- | --- | --- | --- | --- |
 | PV3-01 | Retain and publish the exact immutable Privacy V2 evidence artifact without changing its bytes | Build + Polish/Integration | PARTIAL | Phase-A commit ec9a82e retains `legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html` at 19,935 bytes and SHA-256 `b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b`; Phase-B review confirmed the archive remains byte-identical, but neither branch is integrated | Preserve the exact bytes through final integration, then rerun artifact allowlist and hash proof. |
 | PV3-02 | Produce byte-identical hosted Privacy V3 live/versioned artifacts and a deterministic fail-closed finalizer after separately reviewed copy | Aesthetic + Polish/Integration | PARTIAL | Phase-B correction commit 5a81f5f has a path-limited `BLOCKER: NO`; focused 27/27, Abracadabra 28/28, public-truth 77/77 and site/legal gates passed, while release constants remain intentionally unsealed | Complete owner/legal approval, freeze the exact tuple once, generate byte-identical artifacts and integrate them. |
-| PV3-03 | Add transactional migration 48 for legal artifacts, exact project acceptance receipts, immutable history, RLS, privileges, and runtime contract | Build | PARTIAL | backend worktree now contains uncommitted `202608060048_hosted_privacy_v3.sql` plus three companion readiness/proof changes; the migration deliberately aborts while its release tuple is unsealed | Review and seal the four-path migration set only after PV3-10 freezes the exact constants; do not treat structural work as executable release proof. |
-| PV3-04 | Make PostgreSQL readiness prove exact v48 catalog, V2/V3 artifacts, authority constants, and fail-closed project creation | Build | PARTIAL | commit f60e933 seals the six-file backend authority correction; additional migration/readiness proof remains uncommitted and no integrated exact-v48 PostgreSQL release proof exists | Review the four-path migration set, then prove its exact sealed tuple and fail-closed boundary in fresh PostgreSQL. |
-| PV3-05 | Expose the four-key public project legal authority and require exact three-document acceptance only on project creation | Build | PARTIAL | commit f60e933 seals differentiated held/ready authority, exact bundle validation, rogue-artifact rejection, 409 behavior and private user-agent handling; migration-48 receipt authority and end-to-end PostgreSQL/HTTP evidence remain uncommitted | Seal migration 48 after the legal tuple and prove receipt idempotency, V2 history, tenant denial and forwarded-IP handling end to end. |
+| PV3-03 | Add transactional migration 48 for legal artifacts, exact project acceptance receipts, immutable history, RLS, privileges, and runtime contract | Build | PARTIAL | commit bf53972 seals `202608060048_hosted_privacy_v3.sql` and its structure/empty-migration proof changes; the migration deliberately aborts while its release tuple is unsealed, so no executable release claim exists | After PV3-10 freezes the exact constants, integrate the sealed migration and prove it in fresh PostgreSQL; do not treat structural proof as release proof. |
+| PV3-04 | Make PostgreSQL readiness prove exact v48 catalog, V2/V3 artifacts, authority constants, and fail-closed project creation | Build | PARTIAL | commit f60e933 seals the six-file backend authority correction and bf53972 seals the migration/readiness structure; no integrated exact-v48 PostgreSQL run with a final tuple exists | Prove the exact sealed tuple and fail-closed boundary in fresh PostgreSQL after owner-approved constants are available. |
+| PV3-05 | Expose the four-key public project legal authority and require exact three-document acceptance only on project creation | Build | PARTIAL | commit f60e933 seals differentiated held/ready authority, exact bundle validation, rogue-artifact rejection, 409 behavior and private user-agent handling; bf53972 seals migration-48 receipt authority, but end-to-end PostgreSQL/HTTP evidence is absent | After the legal tuple is frozen, prove receipt idempotency, V2 history, tenant denial and forwarded-IP handling end to end. |
 | PV3-06 | Render unchecked consent, exact links/version, save-path acceptance, 409 recovery, invalidation, and V2 history in Abracadabra | Build + Aesthetic | PARTIAL | `/private/tmp/sitesourcery-privacy-v3-abracadabra-ui-20260807` has seven modified UI/test paths and no sealed commit | Reconcile with the sealed legal/backend contracts, then run focused API/DOM and exact-width keyboard/browser proof before a path-limited commit. |
 | PV3-07 | Show Domains just-in-time DNS disclosure immediately before Check, with no pre-action DNS request | Aesthetic + Polish/Integration | PARTIAL | Phase-A commit ec9a82e supplies the just-in-time interaction and exact-width proof; Phase-B commit 5a81f5f corrects the resolver/registrar wording and public-truth gates, but neither is integrated | Preserve both reviewed changes through integration and rerun exact three-query click/Enter proof. |
-| PV3-08 | Preserve existing V2 acceptance without forced reacceptance and hold only project creation during cutover | Build + Owner/cutover | PARTIAL | Owner decisions freeze no forced V2 reacceptance and a project-creation-only hold; f60e933 reads required-term history and the uncommitted migration set adds continuity proof scaffolding, but no integrated v48 proof exists | Prove V2 current/history after later acceptance and show that all non-creation continuity routes remain live during the hold. |
-| PV3-09 | Prove the Privacy-specific v47-to-v48 upgrade, unchanged V2 evidence/current pointers, exact V3 receipt bundle, and fresh empty-v48 replay | Polish/Integration | PARTIAL | An executable but uncommitted migration 48 and disposable-database proof harness now exist; final V3 constants, reviewed commit and retained successful run are absent | After PV3-10, run the dedicated upgrade/empty-database proof and obtain an independent blocker verdict; general release/browser gates remain owned by Lane J. |
+| PV3-08 | Preserve existing V2 acceptance without forced reacceptance and hold only project creation during cutover | Build + Owner/cutover | PARTIAL | Owner decisions freeze no forced V2 reacceptance and a project-creation-only hold; f60e933 reads required-term history and bf53972 adds sealed continuity proof scaffolding, but no integrated v48 proof exists | Prove V2 current/history after later acceptance and show that all non-creation continuity routes remain live during the hold. |
+| PV3-09 | Prove the Privacy-specific v47-to-v48 upgrade, unchanged V2 evidence/current pointers, exact V3 receipt bundle, and fresh empty-v48 replay | Polish/Integration | PARTIAL | Commit bf53972 seals the executable migration 48 and disposable-database proof harness; final V3 constants and a retained successful exact-tuple run are absent | After PV3-10, run the dedicated upgrade/empty-database proof and obtain an independent blocker verdict; general release/browser gates remain owned by Lane J. |
 | PV3-10 | Obtain owner/legal approval of the exact rendered V3 artifact and freeze its version, effective UTC, byte count and digests exactly once | Owner/cutover + Polish/Integration | PARTIAL | Commit 5a81f5f seals the corrected source and engineering/legal review record with `BLOCKER: NO`; counsel/owner approval of the final rendered artifact and all release constants remains intentionally open | Obtain the approvals, use the fail-closed finalizer to freeze one release tuple, and carry that tuple unchanged into migration 48 and integration. |
 
 ### Sealed H1M checkpoint — H1N is next
@@ -427,7 +431,7 @@ commercial/public truth remain PARTIAL until that separate lane is sealed.
 | AESTH-05 | About has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `one-person-studio` asset/page class; exact-width browser audit | Preserve. |
 | AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `signal-room` asset/page class; exact-width browser audit | Preserve form/contact readability. |
 | AESTH-07 | FAQ has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `index-room` asset/page class; exact-width browser audit | Preserve visual behavior while FAQ copy is sealed separately. |
-| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | PARTIAL | Local `archive-room` presentation/readability is sealed at 2b0f9e0 and corrected Privacy V3 source is sealed separately at 5a81f5f; the canonical integrated legal set and final browser proof remain open | Preserve the presentation while sealing and proving canonical integrated legal truth; do not promote it from visual evidence alone. |
+| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | PARTIAL | Local `archive-room` presentation/readability is sealed at 2b0f9e0, corrected Privacy V3 source at 5a81f5f, and held-tier public Terms copy at 1b73ce2; the canonical integrated legal set and final browser proof remain open | Preserve the presentation while sealing and proving canonical integrated legal truth; do not promote it from isolated copy evidence alone. |
 | AESTH-09 | Homepage design remains locked and is not altered by route corrections | Aesthetic | DONE | commit 2b0f9e0 excludes homepage visual changes; coordination directive locks its design | Keep visual design unchanged unless the owner explicitly reopens it; truth-only work remains separate. |
 
 ## EXPANSION matrix
@@ -502,11 +506,12 @@ Expansion percentage.
 
 ## Immediate next action
 
-Close the 12-row finish line in dependency order. First review and seal the
-currently uncommitted migration-48 and Abracadabra work after the exact Privacy
-V3 tuple is owner/legal approved; produce the separately versioned Website Terms
-correction; then integrate one candidate and close J-01, J-05, TRUTH-05 and
-AESTH-08 without exposing $35/$50. Prove J-02 and SURFACE-04 next, followed by
+Close the 12-row finish line in dependency order. First complete owner/legal
+approval of the exact Privacy V3 tuple, integrate sealed migration-48 commit
+bf53972, review/seal the remaining Abracadabra work, and carry the sealed
+1b73ce2 Website Terms/FAQ held-tier correction into one canonical candidate
+without changing accepted hosted Terms V2 bytes. Then close J-01, J-05,
+TRUTH-05 and AESTH-08. Prove J-02 and SURFACE-04 next, followed by
 the exact-candidate provider, staging, audit and owner journeys in J-09, J-07,
 J-06 and J-08. J-10 and J-11 remain last. Keep merge, push, deployment, live
 provider effects and DNS held until their explicit gates authorize them.
@@ -518,15 +523,19 @@ provider effects and DNS held until their explicit gates authorize them.
    Custom handoff path and its combined public/legal/checker/Work truth, but it
    predates all Privacy V3 work.
 2. Privacy V3 Phase-B correction is sealed at 5a81f5f with `BLOCKER: NO`, but
-   V3 is unsealed and unintegrated. Backend authority is sealed at f60e933;
-   migration 48 and its proof paths remain uncommitted, as do seven Abracadabra
+   V3 is unsealed and unintegrated. Backend authority is sealed at f60e933 and
+   migration 48 plus its structure/empty-migration proof at bf53972; the final
+   tuple and exact-v48 PostgreSQL run remain absent, as do seven Abracadabra
    UI/test paths.
-3. Historical Website Terms require a separately versioned correction. The
-   accepted V2 bytes must not be rewritten in place.
+3. The non-accepted public Website Terms and FAQ held-tier correction is sealed
+   at 1b73ce2 with focused 99/99 proof and independent `BLOCKER: NO`. It must be
+   integrated into the coordinated versioned legal release while accepted
+   hosted Website Terms V2 remains byte-identical.
 4. Alakazam invoice, Portal/cancellation, lifecycle, $35/$50 fulfillment,
    publication and reconciliation work is outside this first-dollar finish
-   line. Its safe deferral depends on every $35/$50 surface being visibly
-   unavailable and every subscription rail remaining held.
+   line. Commit 1b73ce2 closes the owner-approved visible-unavailability
+   dependency with no commerce authority; every subscription rail must remain
+   held until that deferred work is separately promoted and proven.
 5. Public/catalog/domain/Responder hold truth is sealed through ea38093,
    81075b7 and 3c008bb. That proves non-sellability, not fulfillment readiness.
 6. Exact Node 24 Core run on integrated HEAD
@@ -581,8 +590,8 @@ Recount arithmetic:
   BLOCKER = 12; 0 / 12 = 0.0%. Non-credit progress signal: 11/12 have partial
   implementation or evidence.
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 + Privacy V3 10 = 146.
-- Historical Core status recount: 97 DONE + 40 PARTIAL + 9 NOT STARTED + 0
-  EXTERNAL BLOCKER = 146; 97 / 146 = 66.4% after one-decimal rounding.
+- Historical Core status recount: 99 DONE + 38 PARTIAL + 9 NOT STARTED + 0
+  EXTERNAL BLOCKER = 146; 99 / 146 = 67.8% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 146 + 24 + 5 = 175 total classified rows.
