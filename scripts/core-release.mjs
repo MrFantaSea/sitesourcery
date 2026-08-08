@@ -222,6 +222,15 @@ export function buildCoreReleaseCommands({
       path.isAbsolute(cleanEnvironment.npm_execpath)
       ? cleanEnvironment.npm_execpath
       : null;
+  const candidateEnvironment = {
+    ...cleanEnvironment,
+    PATH: [
+      path.dirname(nodeExecutable),
+      cleanEnvironment.PATH
+    ].filter((value) =>
+      typeof value === "string" && value.length > 0
+    ).join(path.delimiter)
+  };
   return Object.freeze([
     Object.freeze({
       id: "migration-replay",
@@ -277,7 +286,7 @@ export function buildCoreReleaseCommands({
           : ["test"]
       ),
       cwd: projectRoot,
-      environment: Object.freeze({ ...cleanEnvironment })
+      environment: Object.freeze(candidateEnvironment)
     })
   ]);
 }

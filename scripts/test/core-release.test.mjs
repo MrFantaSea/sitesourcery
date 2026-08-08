@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -317,6 +318,10 @@ test("candidate npm runs through the exact pinned Node when npm exposes its CLI"
   assert.deepEqual(
     commands[2].args,
     ["/unit/npm-cli.js", "test"]
+  );
+  assert.equal(
+    commands[2].environment.PATH,
+    ["/unit", "/unit/bin"].join(path.delimiter)
   );
 });
 
