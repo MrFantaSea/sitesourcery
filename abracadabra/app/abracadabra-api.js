@@ -3400,6 +3400,34 @@
       );
     }
 
+    function getAlakazamInvoice(projectId, receiptId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/invoices/"
+          + segment(receiptId, "Alakazam receipt ID"),
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function getAlakazamCancellationPreview(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/cancellation-preview",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
+    function getAlakazamBillingStates(projectId, requestOptions) {
+      return request(
+        "GET",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/billing-states",
+        { signal: requestOptions && requestOptions.signal }
+      );
+    }
+
     function getCustomServicesAssessmentRequest(projectId, requestOptions) {
       return request(
         "GET",
@@ -6218,6 +6246,11 @@
       listProjects: listProjects,
       getProject: getProject,
       getAlakazamAccount: getAlakazamAccount,
+      getAlakazamInvoice: getAlakazamInvoice,
+      getAlakazamCancellationPreview:
+        getAlakazamCancellationPreview,
+      getAlakazamBillingStates:
+        getAlakazamBillingStates,
       getCustomServicesAssessmentRequest:
         getCustomServicesAssessmentRequest,
       saveCustomServicesAssessmentRequest:

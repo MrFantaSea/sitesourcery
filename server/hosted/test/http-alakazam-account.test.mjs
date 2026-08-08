@@ -101,7 +101,15 @@ test("the production executable composes the account route from canonical projec
   );
   assert.match(
     source,
-    /account:\s*createAlakazamAccountService\(\{\s*repository:\s*alakazamRepository\s*\}\)/u
+    /const alakazamAccountService\s*=\s*createAlakazamAccountService\(\{\s*repository:\s*alakazamRepository\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /createHostedAlakazamAccount\(\{\s*account:\s*alakazamAccountService,\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /createHostedAlakazamBillingSurfaces\(\{[\s\S]*?createPostgresAlakazamBillingRepository\(\{\s*authority\s*\}\),\s*account:\s*alakazamAccountService,\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
   );
   assert.match(
     source,
@@ -109,6 +117,6 @@ test("the production executable composes the account route from canonical projec
   );
   assert.match(
     source,
-    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,/u
+    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamBilling,\s*alakazamBillingSurfaces,/u
   );
 });

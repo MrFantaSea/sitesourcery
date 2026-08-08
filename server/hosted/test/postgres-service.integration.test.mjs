@@ -1007,6 +1007,35 @@ test(
         async ingestStripeEvent() {
           return { status: "not_alakazam" };
         }
+      },
+      alakazamLifecycle: {
+        renewal: {
+          async ingestStripeEvent() {
+            return { status: "not_alakazam_renewal" };
+          }
+        },
+        incident: {
+          async ingestStripeEvent() {
+            return { status: "not_alakazam_incident" };
+          }
+        },
+        recovery: {
+          async ingestStripeEvent() {
+            return { status: "not_alakazam_recovery" };
+          }
+        },
+        cancellation: {
+          async ingestStripeEvent() {
+            return {
+              status: "not_alakazam_cancellation"
+            };
+          }
+        },
+        reversal: {
+          async ingestStripeEvent() {
+            return { status: "not_alakazam_reversal" };
+          }
+        }
       }
     });
 

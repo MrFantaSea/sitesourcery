@@ -166,6 +166,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
 
 export const hostedStagingAssets = Object.freeze([
   "abracadabra/app/abracadabra-api.js",
+  "abracadabra/app/abracadabra-billing-views.js",
   "abracadabra/app/abracadabra-control-mode.js",
   "abracadabra/app/abracadabra-customer-control-dom.js",
   "abracadabra/app/abracadabra-hosted-control.js",

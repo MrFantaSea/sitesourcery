@@ -93,6 +93,7 @@ const ROOT = path.resolve(
 
 const EXPECTED_HOSTED_STAGING_ASSETS = [
   "abracadabra/app/abracadabra-api.js",
+  "abracadabra/app/abracadabra-billing-views.js",
   "abracadabra/app/abracadabra-control-mode.js",
   "abracadabra/app/abracadabra-customer-control-dom.js",
   "abracadabra/app/abracadabra-hosted-control.js",
@@ -249,6 +250,7 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
 
   for (const hostedOnlyAsset of [
     "abracadabra/app/abracadabra-api.js",
+    "abracadabra/app/abracadabra-billing-views.js",
     "abracadabra/app/abracadabra-customer-control-dom.js",
     "abracadabra/app/abracadabra-hosted-control.js",
   ]) {

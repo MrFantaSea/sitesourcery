@@ -10,6 +10,11 @@ import {
   createHeldHostedAlakazamBilling
 } from "../commerce-v2/hosted-alakazam-billing.mjs";
 import {
+  createHeldHostedAlakazamBillingSurfaces,
+  matchAlakazamBillingSurfaceRoute,
+  readAlakazamBillingSurface
+} from "./alakazam-billing.mjs";
+import {
   createHeldHostedDownloadCommerce
 } from "../commerce-v2/hosted-download.mjs";
 import {
@@ -405,6 +410,7 @@ export function createHostedApi(
     downloadCommerce = null,
     alakazamAccount = null,
     alakazamBilling = null,
+    alakazamBillingSurfaces = null,
     customServicesAccount = null,
     customServicesAssessmentWork = null,
     customServicesCustomBuild = null,
@@ -589,6 +595,20 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam billing boundary is invalid.",
+    { status: 500 }
+  );
+  const alakazamBillingSurfacesBoundary =
+    alakazamBillingSurfaces ??
+    createHeldHostedAlakazamBillingSurfaces();
+  invariant(
+    typeof alakazamBillingSurfacesBoundary.getInvoice ===
+      "function" &&
+      typeof alakazamBillingSurfacesBoundary
+        .getCancellationPreview === "function" &&
+      typeof alakazamBillingSurfacesBoundary
+        .getBillingStates === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Alakazam billing surfaces boundary is invalid.",
     { status: 500 }
   );
   const customServicesAccountBoundary =
@@ -848,6 +868,7 @@ export function createHostedApi(
         const body = WRITE_METHODS.has(method) ? await readJson(request) : {};
         const write = { ...body, commandId: commandId(request) };
         let route;
+        let alakazamBillingSurface;
         let result;
         let status = 200;
         let headers = { "X-Request-Id": requestId };
@@ -1875,6 +1896,19 @@ export function createHostedApi(
               actor,
               route[0]
             );
+        } else if (
+          (alakazamBillingSurface =
+            matchAlakazamBillingSurfaceRoute(
+              method,
+              pathname
+            ))
+        ) {
+          result = await readAlakazamBillingSurface(
+            alakazamBillingSurfacesBoundary,
+            actor,
+            alakazamBillingSurface,
+            url
+          );
         } else if (
           method === "GET" &&
           (route = match(

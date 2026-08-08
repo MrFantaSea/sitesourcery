@@ -14,8 +14,10 @@ export const CORE_RELEASE_ADMIN_URL_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL";
 export const CORE_RELEASE_DATABASE_NAME_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_DATABASE_NAME";
-export const CORE_RELEASE_MIGRATION_COUNT = 48;
+export const CORE_RELEASE_MIGRATION_COUNT = 52;
 export const CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT = 4;
+export const CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT = 10;
+export const CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT = 3;
 
 const MIGRATION_TEST_URL_ENV =
   "SITESOURCERY_PG_MIGRATION_TEST_URL";
@@ -23,6 +25,10 @@ const CUSTOM_SERVICES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICES_TEST_URL";
 const CUSTOM_SERVICE_QUOTES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICE_QUOTES_TEST_URL";
+const ALAKAZAM_LIFECYCLE_TEST_URL_ENV =
+  "SITESOURCERY_PG_ALAKAZAM_LIFECYCLE_TEST_URL";
+const ALAKAZAM_BILLING_TEST_URL_ENV =
+  "SITESOURCERY_PG_ALAKAZAM_BILLING_TEST_URL";
 const EXPECTED_POSTGRES_MAJOR = 16;
 const DATABASE_PREFIX = "ss_core_release_";
 const DATABASE_NAME_PATTERN =
@@ -207,8 +213,15 @@ export function buildCoreReleaseCommands({
   const customServicesEnvironment = {
     ...cleanEnvironment,
     [CUSTOM_SERVICES_TEST_URL_ENV]: targetDatabaseUrl,
-    [CUSTOM_SERVICE_QUOTES_TEST_URL_ENV]: targetDatabaseUrl
+    [CUSTOM_SERVICE_QUOTES_TEST_URL_ENV]: targetDatabaseUrl,
+    [ALAKAZAM_LIFECYCLE_TEST_URL_ENV]: targetDatabaseUrl,
+    [ALAKAZAM_BILLING_TEST_URL_ENV]: targetDatabaseUrl
   };
+  const npmExecPath =
+    typeof cleanEnvironment.npm_execpath === "string" &&
+      path.isAbsolute(cleanEnvironment.npm_execpath)
+      ? cleanEnvironment.npm_execpath
+      : null;
   return Object.freeze([
     Object.freeze({
       id: "migration-replay",
@@ -225,7 +238,7 @@ export function buildCoreReleaseCommands({
     }),
     Object.freeze({
       id: "custom-services-postgres",
-      label: "Launch-critical custom-services PostgreSQL journeys",
+      label: "Launch-critical and held Alakazam PostgreSQL journeys",
       command: nodeExecutable,
       args: Object.freeze([
         "--test",
@@ -237,6 +250,14 @@ export function buildCoreReleaseCommands({
         path.join(
           projectRoot,
           "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
+        ),
+        path.join(
+          projectRoot,
+          "server/data-plane/tests/alakazam-lifecycle-postgres.integration.test.mjs"
+        ),
+        path.join(
+          projectRoot,
+          "server/hosted/test/alakazam-billing-postgres.integration.test.mjs"
         )
       ]),
       cwd: projectRoot,
@@ -245,8 +266,16 @@ export function buildCoreReleaseCommands({
     Object.freeze({
       id: "candidate-test",
       label: "Existing candidate npm test",
-      command: process.platform === "win32" ? "npm.cmd" : "npm",
-      args: Object.freeze(["test"]),
+      command: npmExecPath
+        ? nodeExecutable
+        : process.platform === "win32"
+          ? "npm.cmd"
+          : "npm",
+      args: Object.freeze(
+        npmExecPath
+          ? [npmExecPath, "test"]
+          : ["test"]
+      ),
       cwd: projectRoot,
       environment: Object.freeze({ ...cleanEnvironment })
     })
@@ -579,6 +608,10 @@ export async function runCoreRelease({
       migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
       customServicesJourneys:
         CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
+      alakazamLifecycleJourneys:
+        CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
+      alakazamBillingJourneys:
+        CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT,
       databaseAbsent: true
     });
   } catch (primaryError) {
@@ -632,6 +665,10 @@ async function main() {
       migrationsApplied: result.migrationsApplied,
       customServicesJourneys:
         result.customServicesJourneys,
+      alakazamLifecycleJourneys:
+        result.alakazamLifecycleJourneys,
+      alakazamBillingJourneys:
+        result.alakazamBillingJourneys,
       databaseAbsent: result.databaseAbsent
     })}\n`
   );

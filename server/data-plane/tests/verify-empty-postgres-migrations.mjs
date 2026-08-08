@@ -249,10 +249,25 @@ async function applyMigrations(pool) {
     .filter((name) => name.endsWith(".sql"))
     .sort();
   const heldName = "202608060048_hosted_privacy_v3.sql";
-  assert.equal(names.length, 48, "migration proof requires exactly migrations 1-48");
-  assert.equal(names.at(-1), heldName);
+  const heldIndex = names.indexOf(heldName);
+  const postPrivacyNames = [
+    "202608080049_alakazam_lifecycle_renewal.sql",
+    "202608080050_alakazam_lifecycle_incidents.sql",
+    "202608080051_alakazam_lifecycle_cancellation.sql",
+    "202608080052_alakazam_lifecycle_reversal.sql"
+  ];
+  assert.equal(
+    names.length,
+    52,
+    "migration proof requires exactly migrations 1-52"
+  );
+  assert.equal(heldIndex, 47);
+  assert.deepEqual(
+    names.slice(heldIndex + 1),
+    postPrivacyNames
+  );
 
-  for (const name of names.slice(0, -1)) {
+  for (const name of names.slice(0, heldIndex)) {
     try {
       await pool.query(
         await readFile(new URL(name, MIGRATIONS), "utf8")
@@ -278,7 +293,28 @@ async function applyMigrations(pool) {
     /Hosted Privacy V3 release constants are unsealed/u
   );
 
-  return { appliedNames: names.slice(0, -1), heldName, heldSql };
+  return {
+    appliedNames: names.slice(0, heldIndex),
+    heldName,
+    heldSql,
+    postPrivacyNames
+  };
+}
+
+async function applyPostPrivacyMigrations(
+  pool,
+  postPrivacyNames
+) {
+  for (const name of postPrivacyNames) {
+    try {
+      await pool.query(
+        await readFile(new URL(name, MIGRATIONS), "utf8")
+      );
+    } catch (error) {
+      error.message = `${name}: ${error.message}`;
+      throw error;
+    }
+  }
 }
 
 async function v2AuthorityFingerprint(pool) {
@@ -3561,12 +3597,21 @@ export async function runMigrationVerification({
       expectedDatabase: plan.databaseName,
       label: "Migration verifier candidate connection"
     });
-    const { appliedNames, heldName, heldSql } = await applyMigrations(pool);
+    const {
+      appliedNames,
+      heldName,
+      heldSql,
+      postPrivacyNames
+    } = await applyMigrations(pool);
     await verifyPlatformSchema(pool);
     await verifyPrivacyV3Hold(pool);
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
     await applyPrivacyV3Proof(pool, heldSql);
+    await applyPostPrivacyMigrations(
+      pool,
+      postPrivacyNames
+    );
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
     const v2After = await v2AuthorityFingerprint(pool);
@@ -3575,7 +3620,7 @@ export async function runMigrationVerification({
       `Applied ${appliedNames.length} migrations; ${heldName} rejected unsealed constants.\n`
     );
     writeOutput(
-      `Applied ${appliedNames.length + 1} migrations with a disposable proof seal.\n`
+      `Applied ${appliedNames.length + 1 + postPrivacyNames.length} migrations with a disposable proof seal.\n`
     );
     writeOutput(
       `projectCreationLegalBefore ${JSON.stringify(readinessBefore)}\n`
@@ -3592,7 +3637,9 @@ export async function runMigrationVerification({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
       postgresMajor: identity.major,
-      migrationsApplied: appliedNames.length + 1
+      migrationsApplied:
+        appliedNames.length + 1 +
+        postPrivacyNames.length
     });
   } catch (error) {
     failure = error;

@@ -13,10 +13,15 @@ import {
 } from "../../selfhost/src/index.mjs";
 import {
   createAlakazamBillingService,
+  createAlakazamCancellationService,
   createAlakazamDowngradeService,
   createAlakazamDowngradeActivationService,
   createAlakazamAccountService,
+  createAlakazamPaymentIncidentService,
+  createAlakazamPaymentRecoveryService,
   createAlakazamPaymentService,
+  createAlakazamRenewalService,
+  createAlakazamReversalService,
   createAlakazamStartActivationService,
   createAlakazamStripeEventRouter,
   createAlakazamUpgradeService,
@@ -34,6 +39,18 @@ import {
 import {
   createPostgresAlakazamRepository
 } from "../alakazam-postgres.mjs";
+import {
+  createHostedAlakazamBillingSurfaces
+} from "../alakazam-billing.mjs";
+import {
+  createPostgresAlakazamBillingRepository
+} from "../alakazam-billing-postgres.mjs";
+import {
+  createConfiguredAlakazamLifecyclePolicy
+} from "../alakazam-lifecycle-policy-config.mjs";
+import {
+  createPostgresAlakazamLifecycleRepository
+} from "../alakazam-lifecycle-postgres.mjs";
 import {
   createAlakazamFulfillmentWorker
 } from "../alakazam-fulfillment-worker.mjs";
@@ -343,11 +360,22 @@ async function start() {
     });
   const alakazamRepository =
     createPostgresAlakazamRepository({ authority });
+  const alakazamAccountService =
+    createAlakazamAccountService({
+      repository: alakazamRepository
+    });
   const alakazamAccount =
     createHostedAlakazamAccount({
-      account: createAlakazamAccountService({
-        repository: alakazamRepository
-      }),
+      account: alakazamAccountService,
+      resolveSession: commerceV2.resolveSession
+    });
+  const alakazamBillingSurfaces =
+    createHostedAlakazamBillingSurfaces({
+      repository:
+        createPostgresAlakazamBillingRepository({
+          authority
+        }),
+      account: alakazamAccountService,
       resolveSession: commerceV2.resolveSession
     });
   const customServicesAccountRepository =
@@ -459,6 +487,44 @@ async function start() {
     ids: commerceV2.ids,
     release: alakazamComposition.release
   };
+  const alakazamLifecyclePolicy =
+    createConfiguredAlakazamLifecyclePolicy();
+  const alakazamLifecyclePorts = {
+    repository:
+      createPostgresAlakazamLifecycleRepository({
+        authority,
+        taxMode:
+          alakazamComposition.release.taxMode ??
+          "disabled_by_owner"
+      }),
+    provider: stripeComposition.adapter,
+    clock: commerceV2.clock,
+    ids: commerceV2.ids,
+    release: alakazamComposition.release,
+    policy: alakazamLifecyclePolicy.policy
+  };
+  const alakazamLifecycle = Object.freeze({
+    renewal:
+      createAlakazamRenewalService(
+        alakazamLifecyclePorts
+      ),
+    incident:
+      createAlakazamPaymentIncidentService(
+        alakazamLifecyclePorts
+      ),
+    recovery:
+      createAlakazamPaymentRecoveryService(
+        alakazamLifecyclePorts
+      ),
+    cancellation:
+      createAlakazamCancellationService(
+        alakazamLifecyclePorts
+      ),
+    reversal:
+      createAlakazamReversalService(
+        alakazamLifecyclePorts
+      )
+  });
   const alakazamBilling =
     createHostedAlakazamBilling({
       billing: createAlakazamBillingService(
@@ -637,6 +703,7 @@ async function start() {
         downloadCommerce,
         alakazamAccount,
         alakazamBilling,
+        alakazamBillingSurfaces,
         customServicesAccount,
         customServicesAssessmentWork,
         customServicesCustomBuild,
@@ -658,6 +725,7 @@ async function start() {
             customServicesAssessmentSettlement,
           customBuildCommerce: customBuildPayment,
           alakazamCommerce,
+          alakazamLifecycle,
           customBuildChangeCommerce:
             customBuildChangePayment,
           customBuildFinalCommerce:

@@ -4,6 +4,19 @@ import {
   isPotentialDownloadReversalEvent
 } from "../commerce-v2/index.mjs";
 import {
+  isAlakazamCancellationConfirmationEvent
+} from "../commerce-v2/alakazam-lifecycle-cancellation.mjs";
+import {
+  isAlakazamRenewalInvoiceEvent
+} from "../commerce-v2/alakazam-lifecycle-renewal.mjs";
+import {
+  isAlakazamReversalEvent
+} from "../commerce-v2/alakazam-lifecycle-reversal.mjs";
+import {
+  isAlakazamPaymentIncidentEvent,
+  isAlakazamPaymentRecoveryEvent
+} from "../commerce-v2/alakazam-lifecycle-state.mjs";
+import {
   isPotentialCustomServicesAssessmentStripeEvent
 } from "./custom-services-assessment-settlement-postgres.mjs";
 import {
@@ -34,7 +47,8 @@ export function createStripeWebhookRouter({
   customBuildCommerce,
   customBuildChangeCommerce,
   customBuildFinalCommerce,
-  alakazamCommerce
+  alakazamCommerce,
+  alakazamLifecycle
 } = {}) {
   invariant(
     provider &&
@@ -59,7 +73,18 @@ export function createStripeWebhookRouter({
         "function" &&
       alakazamCommerce &&
       typeof alakazamCommerce.ingestStripeEvent ===
-        "function",
+        "function" &&
+      alakazamLifecycle &&
+      typeof alakazamLifecycle.renewal
+        ?.ingestStripeEvent === "function" &&
+      typeof alakazamLifecycle.incident
+        ?.ingestStripeEvent === "function" &&
+      typeof alakazamLifecycle.recovery
+        ?.ingestStripeEvent === "function" &&
+      typeof alakazamLifecycle.cancellation
+        ?.ingestStripeEvent === "function" &&
+      typeof alakazamLifecycle.reversal
+        ?.ingestStripeEvent === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "The shared Stripe webhook router is incomplete.",
     { status: 500 }
@@ -152,6 +177,55 @@ export function createStripeWebhookRouter({
         return alakazamCommerce.ingestStripeEvent(
           event
         );
+      }
+      if (isAlakazamReversalEvent(event)) {
+        const result =
+          await alakazamLifecycle.reversal
+            .ingestStripeEvent(event);
+        if (result?.status !==
+          "not_alakazam_reversal") {
+          return result;
+        }
+      }
+      if (isAlakazamPaymentIncidentEvent(event)) {
+        const result =
+          await alakazamLifecycle.incident
+            .ingestStripeEvent(event);
+        if (result?.status !==
+          "not_alakazam_incident") {
+          return result;
+        }
+      }
+      if (isAlakazamRenewalInvoiceEvent(event)) {
+        const renewed =
+          await alakazamLifecycle.renewal
+            .ingestStripeEvent(event);
+        if (renewed?.status !==
+          "not_alakazam_renewal") {
+          return renewed;
+        }
+      }
+      if (isAlakazamPaymentRecoveryEvent(event)) {
+        const recovered =
+          await alakazamLifecycle.recovery
+            .ingestStripeEvent(event);
+        if (recovered?.status !==
+          "not_alakazam_recovery") {
+          return recovered;
+        }
+      }
+      if (
+        isAlakazamCancellationConfirmationEvent(
+          event
+        )
+      ) {
+        const result =
+          await alakazamLifecycle.cancellation
+            .ingestStripeEvent(event);
+        if (result?.status !==
+          "not_alakazam_cancellation") {
+          return result;
+        }
       }
       return canonicalService.ingestVerifiedStripeEvent(
         event

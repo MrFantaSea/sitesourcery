@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT,
+  CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
   CORE_RELEASE_ADMIN_URL_ENV,
   CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
   CORE_RELEASE_DATABASE_NAME_ENV,
@@ -221,6 +223,14 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
     commands[1].args[3],
     /custom-service-quotes-postgres\.integration\.test\.mjs$/u
   );
+  assert.match(
+    commands[1].args[4],
+    /alakazam-lifecycle-postgres\.integration\.test\.mjs$/u
+  );
+  assert.match(
+    commands[1].args[5],
+    /alakazam-billing-postgres\.integration\.test\.mjs$/u
+  );
   for (const command of commands) {
     const argv = JSON.stringify([
       command.command,
@@ -257,6 +267,18 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
     targetUrl
   );
   assert.equal(
+    commands[1].environment[
+      "SITESOURCERY_PG_ALAKAZAM_LIFECYCLE_TEST_URL"
+    ],
+    targetUrl
+  );
+  assert.equal(
+    commands[1].environment[
+      "SITESOURCERY_PG_ALAKAZAM_BILLING_TEST_URL"
+    ],
+    targetUrl
+  );
+  assert.equal(
     commands[2].environment[
       "SITESOURCERY_PG_MIGRATION_TEST_URL"
     ],
@@ -275,6 +297,26 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
       databaseName: DATABASE_NAME,
       databaseUrl: targetUrl
     }
+  );
+});
+
+test("candidate npm runs through the exact pinned Node when npm exposes its CLI", () => {
+  const commands = buildCoreReleaseCommands({
+    environment: {
+      ...BASE_ENVIRONMENT,
+      npm_execpath: "/unit/npm-cli.js"
+    },
+    nodeExecutable: "/unit/node-24",
+    projectRoot: "/unit/project",
+    targetDatabaseUrl: buildTargetDatabaseUrl(
+      ADMIN_URL,
+      DATABASE_NAME
+    )
+  });
+  assert.equal(commands[2].command, "/unit/node-24");
+  assert.deepEqual(
+    commands[2].args,
+    ["/unit/npm-cli.js", "test"]
   );
 });
 
@@ -324,6 +366,10 @@ test("successful orchestration drops the exact database before npm test", async 
     migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
     customServicesJourneys:
       CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
+    alakazamLifecycleJourneys:
+      CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
+    alakazamBillingJourneys:
+      CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT,
     databaseAbsent: true
   });
   assert.deepEqual(

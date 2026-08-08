@@ -32,9 +32,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-app-scripts",
     file: "abracadabra/app/index.html",
     kind: "html",
-    sourceSha256: "d21e55a1e7a8576405466ddbe8a86ab87b2b41860cd8830b25a1cd9b3dd33193",
+    sourceSha256: "1ff515c61bac2e38a1b0cf2f7bd6da2fa6da845c5cd3c9800e871179610da767",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-scripts.html",
-    hostedSha256: "1bc24e19e1f12bab1d096b65ca9f194a6e82b171f413315093f9f5d7bbf714c5",
+    hostedSha256: "faa40899eaafe6fdc35b72177d085d4ff5393268089c7e828672f8112a1cceef",
   }),
   slot({
     id: "abracadabra-app-ready",
@@ -128,7 +128,9 @@ export const hostedTruthSlots = Object.freeze([
 
 export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-api.js":
-    "321d17e139fa0ebff4830c7dc1da860320cdf3241213da82e15937451ccc23ce",
+    "b27fe011952cdebada5d55e04de7e78f14b48aa5588756df9618db522f9513bb",
+  "abracadabra/app/abracadabra-billing-views.js":
+    "3bd32e18c5ef2a9592eee0acea35cf17c4a3071e64e5ed95e7edf1dca1c5c486",
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":

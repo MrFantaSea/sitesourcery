@@ -40,7 +40,22 @@ function fixture(
     customBuildFinalResult = {
       status: "custom_build_final"
     },
-    alakazamResult = { status: "alakazam" }
+    alakazamResult = { status: "alakazam" },
+    renewalResult = {
+      status: "not_alakazam_renewal"
+    },
+    incidentResult = {
+      status: "not_alakazam_incident"
+    },
+    recoveryResult = {
+      status: "not_alakazam_recovery"
+    },
+    cancellationResult = {
+      status: "not_alakazam_cancellation"
+    },
+    reversalResult = {
+      status: "not_alakazam_reversal"
+    }
   } = {}
 ) {
   const calls = {
@@ -51,7 +66,12 @@ function fixture(
     customBuild: [],
     customBuildChange: [],
     customBuildFinal: [],
-    alakazam: []
+    alakazam: [],
+    renewal: [],
+    incident: [],
+    recovery: [],
+    cancellation: [],
+    reversal: []
   };
   const router = createStripeWebhookRouter({
     provider: {
@@ -104,6 +124,40 @@ function fixture(
       async ingestStripeEvent(input) {
         calls.alakazam.push(structuredClone(input));
         return structuredClone(alakazamResult);
+      }
+    },
+    alakazamLifecycle: {
+      renewal: {
+        async ingestStripeEvent(input) {
+          calls.renewal.push(structuredClone(input));
+          return structuredClone(renewalResult);
+        }
+      },
+      incident: {
+        async ingestStripeEvent(input) {
+          calls.incident.push(structuredClone(input));
+          return structuredClone(incidentResult);
+        }
+      },
+      recovery: {
+        async ingestStripeEvent(input) {
+          calls.recovery.push(structuredClone(input));
+          return structuredClone(recoveryResult);
+        }
+      },
+      cancellation: {
+        async ingestStripeEvent(input) {
+          calls.cancellation.push(
+            structuredClone(input)
+          );
+          return structuredClone(cancellationResult);
+        }
+      },
+      reversal: {
+        async ingestStripeEvent(input) {
+          calls.reversal.push(structuredClone(input));
+          return structuredClone(reversalResult);
+        }
       }
     }
   });
@@ -382,6 +436,114 @@ test("shared webhook router preserves canonical Stripe events without double ver
   assert.equal(context.calls.assessment.length, 0);
   assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
+});
+
+test("shared webhook router composes held Alakazam lifecycle events after existing commerce", async () => {
+  const paidInvoice = {
+    ...event(),
+    type: "invoice.paid",
+    data: {
+      object: {
+        object: "invoice",
+        id: "in_router_1",
+        subscription: "sub_router_1"
+      }
+    }
+  };
+  const renewed = fixture(paidInvoice, {
+    renewalResult: { status: "settled" }
+  });
+  assert.deepEqual(
+    await renewed.router.ingestStripeWebhook({
+      rawBody: Buffer.from("renewal-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "settled" }
+  );
+  assert.equal(renewed.calls.renewal.length, 1);
+  assert.equal(renewed.calls.recovery.length, 0);
+  assert.equal(renewed.calls.canonical.length, 0);
+
+  const recovered = fixture(paidInvoice, {
+    recoveryResult: { status: "recorded" }
+  });
+  assert.deepEqual(
+    await recovered.router.ingestStripeWebhook({
+      rawBody: Buffer.from("recovery-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "recorded" }
+  );
+  assert.equal(recovered.calls.renewal.length, 1);
+  assert.equal(recovered.calls.recovery.length, 1);
+  assert.equal(recovered.calls.canonical.length, 0);
+
+  const failedInvoice = {
+    ...paidInvoice,
+    type: "invoice.payment_failed"
+  };
+  const incident = fixture(failedInvoice, {
+    incidentResult: { status: "recorded" }
+  });
+  assert.deepEqual(
+    await incident.router.ingestStripeWebhook({
+      rawBody: Buffer.from("incident-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "recorded" }
+  );
+  assert.equal(incident.calls.incident.length, 1);
+  assert.equal(incident.calls.canonical.length, 0);
+
+  const cancellationEvent = {
+    ...event(),
+    type: "customer.subscription.updated",
+    data: {
+      object: {
+        id: "sub_router_1",
+        cancel_at_period_end: true,
+        metadata: {}
+      }
+    }
+  };
+  const cancellation = fixture(cancellationEvent, {
+    cancellationResult: { status: "confirmed" }
+  });
+  assert.deepEqual(
+    await cancellation.router.ingestStripeWebhook({
+      rawBody: Buffer.from("cancellation-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "confirmed" }
+  );
+  assert.equal(cancellation.calls.alakazam.length, 0);
+  assert.equal(cancellation.calls.cancellation.length, 1);
+  assert.equal(cancellation.calls.canonical.length, 0);
+
+  const reversalEvent = {
+    ...event(),
+    type: "charge.refunded",
+    data: {
+      object: {
+        id: "ch_router_1",
+        payment_intent: "pi_router_1"
+      }
+    }
+  };
+  const reversal = fixture(reversalEvent, {
+    downloadResult: { status: "not_download" },
+    reversalResult: { status: "recorded" }
+  });
+  assert.deepEqual(
+    await reversal.router.ingestStripeWebhook({
+      rawBody: Buffer.from("reversal-event"),
+      signature: "stripe-signature"
+    }),
+    { status: "recorded" }
+  );
+  assert.equal(reversal.calls.download.length, 1);
+  assert.equal(reversal.calls.reversal.length, 1);
+  assert.equal(reversal.calls.canonical.length, 0);
 });
 
 test("shared webhook router rejects missing raw bytes before provider verification", async () => {
