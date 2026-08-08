@@ -61,6 +61,25 @@ function readyRow(overrides = {}) {
     recovery_delivery_contract_ready: true,
     legal_contract_ready: true,
     legal_authority_ready: true,
+    legal_privacy_v3_contract_ready: true,
+    legal_privacy_v2_artifact_ready: true,
+    legal_privacy_v3_artifact_ready: true,
+    legal_acceptance_receipts_ready: true,
+    legal_privacy_v3_authority_ready: true,
+    v48_catalog_contract: true,
+    v48_catalog_tables: true,
+    v48_catalog_receipt_columns: true,
+    v48_catalog_artifact_columns: true,
+    v48_catalog_immutability_triggers: true,
+    v48_catalog_rls: true,
+    v48_catalog_receipt_constraints: true,
+    v48_catalog_artifact_constraints: true,
+    v48_catalog_policies: true,
+    v48_catalog_privileges: true,
+    v2_artifact_ready: true,
+    v3_artifact_ready: true,
+    authority_ready: true,
+    contract_marker_ready: true,
     commerce_v2_commands_ready: true,
     commerce_v2_quotes_ready: true,
     commerce_v2_preparations_ready: true,
@@ -132,7 +151,15 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
     kind: "canonical-postgres",
     code: "DATABASE_NOT_MIGRATED",
     database: "sitesourcery",
-    missing: ["versions"]
+    missing: ["versions"],
+    projectCreationLegal: {
+      ready: true,
+      contract: true,
+      v2Artifact: true,
+      v3Artifact: true,
+      receipts: true,
+      authority: true
+    }
   });
 
   authority = createCanonicalPostgresAuthority({
@@ -167,6 +194,30 @@ test("canonical readiness rejects missing migrations and any ss_hosted shadow", 
     "legal_authority",
     "legal_contract"
   ]);
+
+  authority = createCanonicalPostgresAuthority({
+    pool: fakePool(
+      readyRow({
+        v48_catalog_contract: false,
+        v48_catalog_tables: false,
+        v48_catalog_receipt_columns: false,
+        v48_catalog_immutability_triggers: false,
+        v48_catalog_rls: false,
+        v48_catalog_privileges: false
+      })
+    )
+  });
+  const heldLegal = await authority.readiness();
+  assert.equal(heldLegal.ready, true);
+  assert.deepEqual(heldLegal.missing, []);
+  assert.deepEqual(heldLegal.projectCreationLegal, {
+    ready: false,
+    contract: false,
+    v2Artifact: false,
+    v3Artifact: false,
+    receipts: false,
+    authority: false
+  });
 
   authority = createCanonicalPostgresAuthority({
     pool: fakePool(
