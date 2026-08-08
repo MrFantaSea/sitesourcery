@@ -13,6 +13,13 @@ import {
   projectAlakazamNextRenewal
 } from "../../commerce-v2/alakazam-lifecycle-renewal.mjs";
 import {
+  createAlakazamLifecyclePolicy
+} from "../../commerce-v2/alakazam-lifecycle-policy.mjs";
+import {
+  ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA,
+  decideAlakazamLifecycleTransition
+} from "../../commerce-v2/alakazam-lifecycle-state.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -816,6 +823,449 @@ test(
         "select count(*)::int as total from ss.alakazam_renewal_settlements"
       );
       assert.equal(settlements.rows[0].total, 0);
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+// ---------------------------------------------------------------
+// G-03 — payment failure, past-due, grace, suspension, restoration
+// ---------------------------------------------------------------
+
+const INCIDENT_INVOICE_ID = "in_alakazam_lifecycle_renewal";
+const FAILED_AT = "2026-08-02T12:00:20.000Z";
+const FAILED_VERIFIED_AT = "2026-08-02T12:00:25.000Z";
+const FAILED_OBSERVED_AT = "2026-08-02T12:00:30.000Z";
+
+// A hypothetical ruling used only to exercise the machinery. The owner
+// has not made this ruling; nothing ships it.
+const EXAMPLE_POLICY = createAlakazamLifecyclePolicy({
+  approved: true,
+  policyVersion: "alakazam-lifecycle.2026-08-08.v1",
+  graceHours: 72,
+  suspendAfterGraceHours: 0,
+  retentionHours: 720,
+  exportWindowHours: 336,
+  graceConsequence: "restrict_publication",
+  suspensionConsequence: "suspend_service",
+  refundConsequence: "owner_review",
+  disputeConsequence: "suspend_service"
+});
+
+function incidentInvoiceFacts(overrides = {}) {
+  const facts = {
+    schema: ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA,
+    provider: "stripe",
+    stripeInvoiceId: INCIDENT_INVOICE_ID,
+    stripeSubscriptionId: "sub_alakazam_lifecycle",
+    stripeCustomerId: "cus_alakazam_lifecycle",
+    stripePaymentIntentId: "pi_alakazam_lifecycle_renewal",
+    tierId: "alakazam_25",
+    status: "open",
+    subscriptionStatus: "past_due",
+    paymentIntentStatus: "requires_payment_method",
+    attemptCount: 1,
+    amountDueMinor: 2500,
+    amountPaidMinor: 0,
+    currency: "USD",
+    nextPaymentAttemptAt: "2026-08-05T12:00:00.000Z",
+    providerObservedAt: FAILED_OBSERVED_AT,
+    ...overrides
+  };
+  return {
+    ...facts,
+    providerFactsDigest: canonicalDigest(facts)
+  };
+}
+
+function incidentEvent(overrides = {}) {
+  return {
+    stripeEventId: "evt_alakazam_lifecycle_failed",
+    eventType: "invoice.payment_failed",
+    livemode: false,
+    apiVersion: "2026-07-30.basil",
+    stripeInvoiceId: INCIDENT_INVOICE_ID,
+    stripeSubscriptionId: "sub_alakazam_lifecycle",
+    payloadDigest: digest("failed payload"),
+    signatureVerifiedAt: FAILED_VERIFIED_AT,
+    occurredAt: FAILED_AT,
+    ...overrides
+  };
+}
+
+test(
+  "G-03: an unruled policy records the failure and changes nothing",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+      const resolved =
+        await repository.findIncidentSubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_failed",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(resolved.status, "current");
+      assert.equal(resolved.subscription.status, "active");
+      assert.equal(resolved.subscription.firstFailedAt, null);
+
+      const decision = decideAlakazamLifecycleTransition({
+        policy: createAlakazamLifecyclePolicy(),
+        from: "active",
+        signal: "payment_failed",
+        observedAt: FAILED_AT
+      });
+      const recorded = await repository.recordPaymentIncident({
+        subscription: resolved.subscription,
+        event: incidentEvent(),
+        invoice: incidentInvoiceFacts(),
+        decision,
+        eventRowId: randomUUID(),
+        incidentId: randomUUID(),
+        tierEventId: null
+      });
+      await flushConstraints(client);
+
+      assert.equal(recorded.status, "incident_recorded");
+      assert.equal(recorded.consequenceApplied, false);
+      assert.equal(recorded.subscriptionStatus, "active");
+
+      const subscription = await client.query(
+        `select revision, status, first_failed_at,
+                grace_ends_at, suspended_at
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      // Nothing moved: same revision, still active, no deadline.
+      assert.equal(subscription.rows[0].revision, "2");
+      assert.equal(subscription.rows[0].status, "active");
+      assert.equal(subscription.rows[0].first_failed_at, null);
+      assert.equal(subscription.rows[0].grace_ends_at, null);
+      assert.equal(subscription.rows[0].suspended_at, null);
+
+      const incident = await client.query(
+        `select policy_version, decided_consequence,
+                service_state, consequence_applied,
+                tier_change_event_id, customer_message_code
+           from ss.alakazam_payment_incidents
+          where subscription_id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(incident.rowCount, 1);
+      assert.equal(incident.rows[0].policy_version, null);
+      assert.equal(
+        incident.rows[0].decided_consequence,
+        "record_only"
+      );
+      assert.equal(incident.rows[0].service_state, "unchanged");
+      assert.equal(incident.rows[0].consequence_applied, false);
+      assert.equal(incident.rows[0].tier_change_event_id, null);
+      assert.equal(
+        incident.rows[0].customer_message_code,
+        "alakazam_billing_attention"
+      );
+
+      // Replay of the same provider event adds nothing.
+      const replay =
+        await repository.findIncidentSubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_failed",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(replay.status, "recorded");
+      assert.equal(
+        replay.incident.incidentId,
+        recorded.incidentId
+      );
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "G-03: the schema itself refuses a consequence without an owner ruling",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const eventRowId = await insertProcessedEvent(
+        client,
+        authority,
+        {
+          subscriptionId: seeded.subscriptionId,
+          suffix: "alakazam_lifecycle_unruled",
+          eventType: "invoice.payment_failed",
+          providerObjectId: INCIDENT_INVOICE_ID,
+          occurredAt: FAILED_AT
+        }
+      );
+      await expectRejected(
+        client,
+        () =>
+          insertRow(client, "alakazam_payment_incidents", {
+            id: randomUUID(),
+            organization_id: authority.organizationId,
+            project_id: authority.projectId,
+            subscription_id: seeded.subscriptionId,
+            stripe_event_row_id: eventRowId,
+            tier_change_event_id: null,
+            incident_kind: "payment_failed",
+            stripe_invoice_id: INCIDENT_INVOICE_ID,
+            stripe_payment_intent_id:
+              "pi_alakazam_lifecycle_renewal",
+            provider_invoice_status: "open",
+            provider_attempt_count: 1,
+            amount_due_minor: 2500,
+            currency: "USD",
+            observed_status: "active",
+            // An invented consequence with no dated ruling.
+            resulting_status: "suspended",
+            policy_version: null,
+            decided_consequence: "suspend_service",
+            service_state: "suspended",
+            customer_message_code: "alakazam_service_paused",
+            consequence_applied: true,
+            grace_ends_at: null,
+            decision: { invented: true },
+            decision_digest: digest("invented"),
+            provider_facts: { invented: true },
+            provider_facts_digest: digest("invented facts"),
+            provider_observed_at: FAILED_OBSERVED_AT,
+            occurred_at: FAILED_AT
+          }),
+        /alakazam_payment_incidents_check/u
+      );
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "G-03: a ruled policy drives grace, suspension, and restoration",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+
+      // 1. Failure moves the subscription into the ruled grace window.
+      const active =
+        await repository.findIncidentSubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_failed",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      const graceDecision =
+        decideAlakazamLifecycleTransition({
+          policy: EXAMPLE_POLICY,
+          from: "active",
+          signal: "payment_failed",
+          observedAt: FAILED_AT
+        });
+      assert.equal(graceDecision.to, "grace");
+      const graced = await repository.recordPaymentIncident({
+        subscription: active.subscription,
+        event: incidentEvent(),
+        invoice: incidentInvoiceFacts(),
+        decision: graceDecision,
+        eventRowId: randomUUID(),
+        incidentId: randomUUID(),
+        tierEventId: randomUUID()
+      });
+      await flushConstraints(client);
+      assert.equal(graced.consequenceApplied, true);
+      assert.equal(graced.subscriptionStatus, "grace");
+
+      let subscription = await client.query(
+        `select revision, status, first_failed_at,
+                grace_ends_at
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(subscription.rows[0].status, "grace");
+      assert.equal(subscription.rows[0].revision, "3");
+      assert.equal(
+        subscription.rows[0].grace_ends_at.toISOString(),
+        "2026-08-05T12:00:20.000Z"
+      );
+
+      // 2. The ruled boundary passes and the subscription suspends.
+      const inGrace =
+        await repository.findIncidentSubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_failed_2",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(inGrace.subscription.status, "grace");
+      const suspendDecision =
+        decideAlakazamLifecycleTransition({
+          policy: EXAMPLE_POLICY,
+          from: "grace",
+          signal: "grace_expired",
+          observedAt: "2026-08-05T12:00:21.000Z",
+          firstFailedAt: inGrace.subscription.firstFailedAt,
+          graceEndsAt: inGrace.subscription.graceEndsAt
+        });
+      assert.equal(suspendDecision.to, "suspended");
+      const suspended = await repository.recordPaymentIncident({
+        subscription: inGrace.subscription,
+        event: incidentEvent({
+          stripeEventId: "evt_alakazam_lifecycle_failed_2",
+          occurredAt: "2026-08-05T12:00:21.000Z",
+          signatureVerifiedAt: "2026-08-05T12:00:26.000Z"
+        }),
+        invoice: incidentInvoiceFacts({
+          attemptCount: 2,
+          nextPaymentAttemptAt: null,
+          providerObservedAt: "2026-08-05T12:00:31.000Z"
+        }),
+        decision: suspendDecision,
+        eventRowId: randomUUID(),
+        incidentId: randomUUID(),
+        tierEventId: randomUUID()
+      });
+      await flushConstraints(client);
+      assert.equal(suspended.subscriptionStatus, "suspended");
+
+      subscription = await client.query(
+        `select revision, status, suspended_at
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(subscription.rows[0].status, "suspended");
+      assert.equal(subscription.rows[0].revision, "4");
+      assert.ok(subscription.rows[0].suspended_at !== null);
+
+      // 3. The customer pays. Service is restored from provider proof.
+      const beforeRecovery =
+        await repository.findRecoverySubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_recovered",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(beforeRecovery.status, "current");
+      assert.equal(
+        beforeRecovery.subscription.status,
+        "suspended"
+      );
+      const recoveryDecision =
+        decideAlakazamLifecycleTransition({
+          policy: EXAMPLE_POLICY,
+          from: "suspended",
+          signal: "payment_recovered",
+          observedAt: "2026-08-06T09:00:00.000Z",
+          firstFailedAt:
+            beforeRecovery.subscription.firstFailedAt,
+          graceEndsAt:
+            beforeRecovery.subscription.graceEndsAt
+        });
+      const restored = await repository.recordPaymentRecovery({
+        subscription: beforeRecovery.subscription,
+        event: {
+          stripeEventId: "evt_alakazam_lifecycle_recovered",
+          eventType: "invoice.paid",
+          livemode: false,
+          apiVersion: "2026-07-30.basil",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle",
+          payloadDigest: digest("recovered payload"),
+          signatureVerifiedAt: "2026-08-06T09:00:05.000Z",
+          occurredAt: "2026-08-06T09:00:00.000Z"
+        },
+        invoice: renewalInvoiceFacts({
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          providerPaymentTime: "2026-08-06T09:00:00.000Z",
+          providerObservedAt: "2026-08-06T09:00:09.000Z",
+          subscription: renewedSubscriptionFacts({
+            providerObservedAt: "2026-08-06T09:00:09.000Z"
+          })
+        }),
+        decision: recoveryDecision,
+        eventRowId: randomUUID(),
+        receiptId: randomUUID(),
+        tierEventId: randomUUID()
+      });
+      await flushConstraints(client);
+
+      assert.equal(restored.status, "recovery_recorded");
+      assert.equal(restored.subscriptionStatus, "active");
+      assert.equal(restored.revision, 5);
+      assert.equal(restored.periodEndsAt, RENEWED_PERIOD_END);
+
+      subscription = await client.query(
+        `select revision, status, grace_ends_at,
+                current_period_ends_at
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(subscription.rows[0].status, "active");
+      assert.equal(subscription.rows[0].revision, "5");
+      assert.equal(subscription.rows[0].grace_ends_at, null);
+      assert.equal(
+        subscription.rows[0].current_period_ends_at.toISOString(),
+        RENEWED_PERIOD_END
+      );
+
+      const receipts = await client.query(
+        `select count(*)::int as total
+           from ss.alakazam_payment_receipts
+          where subscription_id = $1
+            and receipt_kind = 'renewal_payment'`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(receipts.rows[0].total, 1);
+
+      const replayed =
+        await repository.findRecoverySubscriptionByInvoice({
+          stripeEventId: "evt_alakazam_lifecycle_recovered",
+          stripeInvoiceId: INCIDENT_INVOICE_ID,
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(replayed.status, "recorded");
+      assert.equal(replayed.recovery.revision, 5);
     } finally {
       await client.query("rollback");
       client.release();
