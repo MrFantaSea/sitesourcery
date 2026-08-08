@@ -282,6 +282,7 @@ const READINESS_QUERY = `
 const PROJECT_LEGAL_CATALOG_QUERY = `
   select
     case when to_regprocedure('ss.hosted_runtime_contract_v48()') is null
+      or to_regprocedure('ss.project_legal_json_digest(jsonb)') is null
       then false else exists (
         select 1 from pg_proc procedure_row
          where procedure_row.oid =
@@ -291,7 +292,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and procedure_row.provolatile = 's'
            and not procedure_row.prosecdef
            and procedure_row.prorettype = 'text'::regtype
-           and btrim(procedure_row.prosrc) =
+           and btrim(procedure_row.prosrc, E' \\t\\n\\r') =
              'select ''canonical-ss-v48-hosted-privacy-v3'''
            and not exists (
              select 1
@@ -302,6 +303,53 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
               where privilege.grantee = 0
                 and privilege.privilege_type = 'EXECUTE'
            )
+           and not has_function_privilege(
+             'anon', procedure_row.oid, 'EXECUTE'
+           )
+           and not has_function_privilege(
+             'authenticated', procedure_row.oid, 'EXECUTE'
+           )
+           and has_function_privilege(
+             'service_role', procedure_row.oid, 'EXECUTE'
+           )
+           and not exists (
+             select 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+               left join pg_roles grantee
+                 on grantee.oid = privilege.grantee
+              where privilege.grantee <> procedure_row.proowner
+                and not (
+                  grantee.rolname = 'service_role'
+                  and privilege.privilege_type = 'EXECUTE'
+                  and not privilege.is_grantable
+                )
+           )
+           and (
+             select count(*) = 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+              where privilege.grantee <> procedure_row.proowner
+           )
+      ) and exists (
+        select 1 from pg_proc procedure_row
+         where procedure_row.oid =
+           to_regprocedure('ss.project_legal_json_digest(jsonb)')
+           and procedure_row.prokind = 'f'
+           and procedure_row.pronargs = 1
+           and procedure_row.provolatile = 'i'
+           and procedure_row.prosecdef
+           and procedure_row.proisstrict
+           and procedure_row.proparallel = 's'
+           and procedure_row.prorettype = to_regtype('ss.sha256_hex')
+           and lower(pg_get_functiondef(procedure_row.oid)) like
+             '%service_custom_build_handoff_canonical_json(value)%'
+           and lower(pg_get_functiondef(procedure_row.oid)) like
+             '%extensions.digest%'
            and not has_function_privilege(
              'anon', procedure_row.oid, 'EXECUTE'
            )
@@ -463,11 +511,13 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and not attribute_row.attisdropped
     ) as v48_catalog_artifact_columns,
     (
-      select count(*) = 11
+      select count(*) = 12
         and bool_and(trigger_row.oid is not null)
         and bool_and(trigger_row.tgenabled = 'O')
         and bool_and(trigger_row.tgtype = expected.type_code)
-        and bool_and(trigger_row.tgdeferrable = expected.deferrable)
+        and bool_and(
+          trigger_row.tgdeferrable = expected.is_deferrable
+        )
         and bool_and(
           trigger_row.tginitdeferred = expected.initially_deferred
         )
@@ -483,6 +533,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
           ('project_legal_receipt_exact_bundle', 'project_legal_acceptance_receipts', 'ss.validate_project_legal_acceptance_receipt()', 21, true, true),
           ('project_legal_receipts_no_update', 'project_legal_acceptance_receipts', 'ss.reject_update()', 19, false, false),
           ('project_legal_receipts_no_delete', 'project_legal_acceptance_receipts', 'ss.reject_delete_v48()', 11, false, false),
+          ('term_acceptance_legal_receipt_exact_bundle', 'term_acceptances', 'ss.validate_project_legal_acceptance_receipt()', 5, true, true),
           ('term_acceptances_no_update_v48', 'term_acceptances', 'ss.reject_update()', 19, false, false),
           ('term_acceptances_no_delete_v48', 'term_acceptances', 'ss.reject_delete_v48()', 11, false, false),
           ('legal_documents_no_delete_v48', 'legal_documents', 'ss.reject_delete_v48()', 11, false, false),
@@ -490,7 +541,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
           ('project_required_terms_monotonic_v48', 'project_required_terms', 'ss.validate_project_required_term_monotonicity()', 19, false, false)
         ) expected(
           name, relation_name, function_signature, type_code,
-          deferrable, initially_deferred
+          is_deferrable, initially_deferred
         )
         left join pg_namespace namespace on namespace.nspname = 'ss'
         left join pg_class relation
@@ -501,7 +552,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and trigger_row.tgname = expected.name
          and not trigger_row.tgisinternal
        having (
-         select count(*) = 13
+         select count(*) = 14
            and count(*) filter (
              where relation.relname = 'legal_documents'
                and trigger_row.tgname = 'legal_documents_no_update'
@@ -568,6 +619,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and relation.relname = 'project_legal_acceptance_receipts'
           left join pg_constraint constraint_row
             on constraint_row.conrelid = relation.oid
+           and constraint_row.contype <> 't'
            and pg_get_constraintdef(constraint_row.oid, false) =
              expected.definition
       )
@@ -579,6 +631,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
             on namespace.oid = relation.relnamespace
          where namespace.nspname = 'ss'
            and relation.relname = 'project_legal_acceptance_receipts'
+           and constraint_row.contype <> 't'
       )
       and (
         select count(*) = 7
@@ -598,6 +651,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and relation.relname = 'term_acceptances'
           left join pg_constraint constraint_row
             on constraint_row.conrelid = relation.oid
+           and constraint_row.contype <> 't'
            and pg_get_constraintdef(constraint_row.oid, false) =
              expected.definition
       )
@@ -609,6 +663,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
             on namespace.oid = relation.relnamespace
          where namespace.nspname = 'ss'
            and relation.relname = 'term_acceptances'
+           and constraint_row.contype <> 't'
       )
     ) as v48_catalog_receipt_constraints,
     (
@@ -627,6 +682,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
          and relation.relname = 'legal_document_artifacts'
         left join pg_constraint constraint_row
           on constraint_row.conrelid = relation.oid
+         and constraint_row.contype <> 't'
          and pg_get_constraintdef(constraint_row.oid, false) =
            expected.definition
        having (
@@ -637,6 +693,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
              on namespace.oid = relation.relnamespace
           where namespace.nspname = 'ss'
             and relation.relname = 'legal_document_artifacts'
+            and constraint_row.contype <> 't'
        )
     ) as v48_catalog_artifact_constraints,
     (
@@ -914,22 +971,31 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
         from ss.legal_document_artifacts artifact
        where artifact.document_id in ($1::uuid, $7::uuid, $13::uuid)
     ) as exact_artifacts_ready,
-    ss.service_json_digest(jsonb_build_object(
+    ss.project_legal_json_digest(jsonb_build_object(
       'documents', jsonb_build_array(
         jsonb_build_object(
           'kind', $2::text, 'version', $3::text,
           'contentDigest', $4::text, 'contentUri', $5::text,
-          'effectiveAt', to_char($6::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          'effectiveAt', to_char(
+            $6::timestamptz at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
         ),
         jsonb_build_object(
           'kind', $8::text, 'version', $9::text,
           'contentDigest', $10::text, 'contentUri', $11::text,
-          'effectiveAt', to_char($12::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          'effectiveAt', to_char(
+            $12::timestamptz at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
         ),
         jsonb_build_object(
           'kind', $14::text, 'version', $15::text,
           'contentDigest', $16::text, 'contentUri', $17::text,
-          'effectiveAt', to_char($18::timestamptz, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          'effectiveAt', to_char(
+            $18::timestamptz at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
         )
       ),
       'schema', 'sitesourcery.project-legal-authority/v3'

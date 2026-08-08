@@ -247,7 +247,11 @@ test("project legal readiness differentiates catalog and data proof with exact t
   const catalogQuery = calls.find(({ text }) =>
     text.includes("v48_catalog_immutability_triggers")
   ).text;
-  assert.match(catalogQuery, /select count\(\*\) = 13/u);
+  assert.match(catalogQuery, /select count\(\*\) = 14/u);
+  assert.match(
+    catalogQuery,
+    /'term_acceptance_legal_receipt_exact_bundle', 'term_acceptances', 'ss\.validate_project_legal_acceptance_receipt\(\)', 5, true, true/u
+  );
   assert.match(catalogQuery, /select count\(\*\) = 7/u);
   assert.match(catalogQuery, /select count\(\*\) = 5/u);
   assert.match(catalogQuery, /select count\(\*\) = 3/u);
