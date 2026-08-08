@@ -80,6 +80,15 @@ test("privacy separates guest work from retained Download records and discloses 
   ]) {
     assert.doesNotMatch(privacy, staleClaim);
   }
+  assert.match(privacy, /Not effective — release identity pending/u);
+  assert.match(
+    privacy,
+    /This copy is not published by an unsealed build\./u,
+  );
+  assert.doesNotMatch(
+    privacy,
+    /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3|<p class="card-kicker">Effective [A-Z][a-z]+ \d{1,2}, \d{4}<\/p>/u,
+  );
 });
 
 test("website terms hold Alakazam, domains, lifecycle policy, and The Responder without inventing an offer", async () => {

@@ -35,8 +35,17 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
+  assertPrivacyV3CandidateSources,
   assertPrivacyV3NotPublished,
+  assertUnsealedPrivacyCurrentAlias,
+  HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_PRIVACY_V3_CANDIDATE,
 } from "./hosted-truth/legal-artifacts.mjs";
+import {
+  assertRenderedPrivacyV3Page,
+  createPrivacyV3RenderPlan,
+  renderPrivacyV3CandidatePage,
+} from "./hosted-truth/privacy-v3-render.mjs";
 
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
@@ -136,6 +145,17 @@ export const hostedFileAllowlist = Object.freeze(
     ...hostedStagingAssets.filter((file) => !publicFileAllowlist.includes(file)),
   ].sort(lexical),
 );
+
+function hostedFilesForPrivacyV3Plan(plan) {
+  if (!plan) return hostedFileAllowlist;
+  return Object.freeze(
+    [...hostedFileAllowlist, plan.versionedFile].sort(lexical),
+  );
+}
+
+export function hostedFilesForPrivacyV3Render(options) {
+  return hostedFilesForPrivacyV3Plan(createPrivacyV3RenderPlan(options));
+}
 
 assertSortedUnique(hostedFileAllowlist, "hosted file allowlist");
 assertPrivacyV3NotPublished(hostedFileAllowlist, "hosted file allowlist");
@@ -670,11 +690,37 @@ async function writeHostedArtifact({
   staging,
   transformed,
   catalog,
+  privacyV3Plan,
+  artifactFiles,
 }) {
   await mkdir(staging, { recursive: false });
-  for (const file of hostedFileAllowlist) {
+  const candidatePage = transformed.get(HOSTED_PRIVACY_V3_CANDIDATE.currentFile);
+  const renderedPrivacy = privacyV3Plan
+    ? renderPrivacyV3CandidatePage(candidatePage, privacyV3Plan)
+    : null;
+  for (const file of artifactFiles) {
     const destination = path.join(staging, ...file.split("/"));
     await mkdir(path.dirname(destination), { recursive: true });
+    if (
+      file === HOSTED_PRIVACY_V3_CANDIDATE.currentFile
+      && !privacyV3Plan
+    ) {
+      await copyFile(
+        path.join(absoluteRoot, ...HOSTED_PRIVACY_V2_ARTIFACT.file.split("/")),
+        destination,
+      );
+      continue;
+    }
+    if (
+      privacyV3Plan
+      && (
+        file === HOSTED_PRIVACY_V3_CANDIDATE.currentFile
+        || file === privacyV3Plan.versionedFile
+      )
+    ) {
+      await writeFile(destination, renderedPrivacy, "utf8");
+      continue;
+    }
     let content = transformed.get(file);
     if (file === "abracadabra/app/index.html") {
       content = configureHostedAbracadabraHtml(content, { catalog });
@@ -693,20 +739,40 @@ async function writeHostedArtifact({
 export async function verifyHostedArtifact({
   root = process.cwd(),
   output = path.join(path.resolve(root), "_hosted"),
+  privacyV3Render,
 } = {}) {
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
+  const privacyV3Plan = privacyV3Render
+    ? createPrivacyV3RenderPlan(privacyV3Render)
+    : null;
+  const artifactFiles = hostedFilesForPrivacyV3Plan(privacyV3Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
+  assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputState = await lstat(absoluteOutput);
   if (!outputState.isDirectory() || outputState.isSymbolicLink()) {
     throw new Error(`hosted artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
+  if (privacyV3Plan) {
+    const current = await readFile(
+      path.join(absoluteOutput, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
+    );
+    const versioned = await readFile(
+      path.join(absoluteOutput, privacyV3Plan.versionedFile),
+    );
+    if (!current.equals(versioned)) {
+      throw new Error("hosted privacy V3 current and versioned bytes differ");
+    }
+    assertRenderedPrivacyV3Page(current.toString("utf8"), privacyV3Plan);
+  } else {
+    assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+  }
   const actual = (await walkArtifact(absoluteOutput)).sort(lexical);
-  if (JSON.stringify(actual) !== JSON.stringify(hostedFileAllowlist)) {
-    const expected = new Set(hostedFileAllowlist);
+  if (JSON.stringify(actual) !== JSON.stringify(artifactFiles)) {
+    const expected = new Set(artifactFiles);
     const seen = new Set(actual);
-    const missing = hostedFileAllowlist.filter((file) => !seen.has(file));
+    const missing = artifactFiles.filter((file) => !seen.has(file));
     const unexpected = actual.filter((file) => !expected.has(file));
     throw new Error(
       `hosted artifact ledger mismatch; missing: ${missing.join(", ") || "none"}; `
@@ -766,7 +832,14 @@ export async function verifyHostedArtifact({
       ]),
     ),
   );
-  assertRequirementMap(sources, hostedTruthRequirements, "hosted truth");
+  const applicableTruthRequirements = privacyV3Plan
+    ? Object.fromEntries(
+      Object.entries(hostedTruthRequirements).filter(
+        ([file]) => file !== HOSTED_PRIVACY_V3_CANDIDATE.currentFile,
+      ),
+    )
+    : hostedTruthRequirements;
+  assertRequirementMap(sources, applicableTruthRequirements, "hosted truth");
 
   const app = sources.get("abracadabra/app/index.html");
   if (
@@ -868,9 +941,21 @@ export async function buildHostedArtifact({
   root = process.cwd(),
   output,
   catalogFile = DEFAULT_CATALOG_FILE,
+  privacyV3Render,
 } = {}) {
   const { absoluteOutput, absoluteRoot } = resolveBuildPaths(root, output);
+  const privacyV3Plan = privacyV3Render
+    ? createPrivacyV3RenderPlan(privacyV3Render)
+    : null;
+  if (
+    privacyV3Plan
+    && absoluteOutput === path.join(absoluteRoot, "_hosted")
+  ) {
+    throw new Error("privacy V3 review/finalization output must remain outside the repository");
+  }
+  const artifactFiles = hostedFilesForPrivacyV3Plan(privacyV3Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
+  assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const rootState = await lstat(absoluteRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) {
     throw new Error(`site root must be a real directory: ${absoluteRoot}`);
@@ -896,8 +981,14 @@ export async function buildHostedArtifact({
       staging,
       transformed,
       catalog,
+      privacyV3Plan,
+      artifactFiles,
     });
-    await verifyHostedArtifact({ root: absoluteRoot, output: staging });
+    await verifyHostedArtifact({
+      root: absoluteRoot,
+      output: staging,
+      privacyV3Render,
+    });
     await promoteArtifact(staging, absoluteOutput);
   } catch (error) {
     if (await pathState(staging)) {

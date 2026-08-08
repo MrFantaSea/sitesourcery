@@ -15,8 +15,18 @@ export const HOSTED_PRIVACY_V2_ARTIFACT = Object.freeze({
   mediaType: "text/html; charset=utf-8",
 });
 
+export const HOSTED_PRIVACY_V3_CANDIDATE = Object.freeze({
+  state: "unsealed",
+  currentFile: "legal/privacy/index.html",
+  headFragment: "scripts/hosted-truth/fragments/legal-privacy-head.html",
+  mainFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
+  sourceStateMeta:
+    '<meta name="sitesourcery-privacy-v3-source-state" content="unsealed">',
+  sourceStateAttribute: 'data-privacy-v3-source-state="unsealed"',
+});
+
 /*
- * Phase A deliberately owns no V3 authority constants. The exact version,
+ * An unsealed branch deliberately owns no V3 authority constants. The exact version,
  * effective time, full-page digest, byte count, and bundle authority digest
  * are filled only after the rendered owner/legal review and cutover date are
  * frozen. Builders use this object to prove that a V3 archive has not entered
@@ -25,7 +35,7 @@ export const HOSTED_PRIVACY_V2_ARTIFACT = Object.freeze({
 export const HOSTED_PRIVACY_V3_RELEASE = Object.freeze({
   state: "unsealed",
   kind: "privacy",
-  currentFile: "legal/privacy/index.html",
+  currentFile: HOSTED_PRIVACY_V3_CANDIDATE.currentFile,
   version: null,
   versionedFile: null,
   effectiveAt: null,
@@ -92,8 +102,7 @@ function assertRegularUnaliasedFile(root, file) {
   return cursor;
 }
 
-export function assertPrivacyV3Unsealed() {
-  const release = HOSTED_PRIVACY_V3_RELEASE;
+export function assertPrivacyV3Unsealed(release = HOSTED_PRIVACY_V3_RELEASE) {
   const unset = [
     release.version,
     release.versionedFile,
@@ -103,7 +112,72 @@ export function assertPrivacyV3Unsealed() {
     release.authorityDigest,
   ];
   if (release.state !== "unsealed" || unset.some((value) => value !== null)) {
-    throw new Error("hosted privacy V3 Phase A must remain explicitly unsealed");
+    throw new Error("hosted privacy V3 must remain explicitly unsealed until owner freeze");
+  }
+  return true;
+}
+
+function occurrences(source, value) {
+  return source.split(value).length - 1;
+}
+
+function truthSlot(source, id) {
+  const start = `<!-- sitesourcery:truth-slot:${id}:start -->`;
+  const end = `<!-- sitesourcery:truth-slot:${id}:end -->`;
+  if (occurrences(source, start) !== 1 || occurrences(source, end) !== 1) {
+    throw new Error(`privacy V3 candidate truth slot is missing or duplicated: ${id}`);
+  }
+  const startIndex = source.indexOf(start) + start.length;
+  const endIndex = source.indexOf(end);
+  if (startIndex >= endIndex) {
+    throw new Error(`privacy V3 candidate truth slot is out of order: ${id}`);
+  }
+  return source.slice(startIndex, endIndex).trim();
+}
+
+export function assertPrivacyV3CandidateSources({ root = process.cwd() } = {}) {
+  assertPrivacyV3Unsealed();
+  const candidate = HOSTED_PRIVACY_V3_CANDIDATE;
+  const source = readFileSync(
+    assertRegularUnaliasedFile(root, candidate.currentFile),
+    "utf8",
+  );
+  const fragments = [
+    ["legal-privacy-head", candidate.headFragment],
+    ["legal-privacy-main", candidate.mainFragment],
+  ];
+  for (const [id, file] of fragments) {
+    const fragment = readFileSync(assertRegularUnaliasedFile(root, file), "utf8");
+    if (fragment.trim() !== truthSlot(source, id)) {
+      throw new Error(`privacy V3 candidate fragment does not match source slot: ${file}`);
+    }
+  }
+  if (
+    occurrences(source, candidate.sourceStateMeta) !== 1
+    || occurrences(source, candidate.sourceStateAttribute) !== 1
+    || !source.includes("Not effective — release identity pending")
+    || !source.includes("Privacy V3 clause-review source")
+    || FINAL_PRIVACY_V3_FILE.test(candidate.currentFile)
+    || /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u.test(source)
+    || /<p class="card-kicker">Effective [A-Z][a-z]+ \d{1,2}, \d{4}<\/p>/u.test(source)
+  ) {
+    throw new Error("privacy V3 candidate source contains sealed or ambiguous release identity");
+  }
+  return true;
+}
+
+export function assertUnsealedPrivacyCurrentAlias({ root = process.cwd() } = {}) {
+  assertPrivacyV3Unsealed();
+  const current = readFileSync(
+    assertRegularUnaliasedFile(root, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
+  );
+  const v2 = readFileSync(
+    assertRegularUnaliasedFile(root, HOSTED_PRIVACY_V2_ARTIFACT.file),
+  );
+  if (!current.equals(v2)) {
+    throw new Error(
+      "unsealed privacy publication must keep the current alias byte-identical to V2",
+    );
   }
   return true;
 }

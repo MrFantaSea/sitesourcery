@@ -23,9 +23,14 @@ import {
   assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
+  hostedFilesForPrivacyV3Render,
   verifyHostedArtifact,
 } from "../build-hosted.mjs";
-import { publicFileAllowlist } from "../build-pages.mjs";
+import {
+  buildPagesArtifact,
+  publicFileAllowlist,
+  verifyPagesArtifact,
+} from "../build-pages.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldAlakazamArtifactExcludedFiles,
@@ -45,15 +50,26 @@ import {
 import {
   assertImmutableLegalArtifactSources,
   assertLegalArtifactRelativePath,
+  assertPrivacyV3CandidateSources,
   assertPrivacyV3Unsealed,
+  assertUnsealedPrivacyCurrentAlias,
   HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_PRIVACY_V3_CANDIDATE,
   HOSTED_PRIVACY_V3_RELEASE,
 } from "../hosted-truth/legal-artifacts.mjs";
+import {
+  canonicalJson,
+  finalizePrivacyV3,
+} from "../hosted-truth/finalize-privacy-v3.mjs";
 import {
   PRIVACY_V3_REVIEW_EFFECTIVE_LABEL,
   PRIVACY_V3_REVIEW_VERSION,
   renderPrivacyV3Review,
 } from "../hosted-truth/render-privacy-v3-review.mjs";
+import {
+  PRIVACY_V3_AUTHORITY_SCHEMA,
+  PRIVACY_V3_OWNER_APPROVAL,
+} from "../hosted-truth/privacy-v3-render.mjs";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -249,6 +265,16 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
   }
 
   await assertHeldSourceTruth({ root: ROOT });
+  assert.equal(assertPrivacyV3CandidateSources({ root: ROOT }), true);
+  const privacySource = await readFile(
+    path.join(ROOT, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
+    "utf8",
+  );
+  assert.match(privacySource, /Not effective — release identity pending/u);
+  assert.doesNotMatch(
+    privacySource,
+    /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u,
+  );
   const sources = await readTruthFiles(ROOT, heldTruthRequirements);
   assertRequirements(sources, heldTruthRequirements);
   assertMissingPhrases(sources, hostedOnlyPhrases);
@@ -361,6 +387,14 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   const exactV2Archive = await readFile(v2ArchiveOutput);
   assert.equal(exactV2Archive.length, HOSTED_PRIVACY_V2_ARTIFACT.byteCount);
   assert.equal(sha256(exactV2Archive), HOSTED_PRIVACY_V2_ARTIFACT.sha256);
+  assert.equal(assertUnsealedPrivacyCurrentAlias({ root: output }), true);
+  assert.equal(
+    (await readFile(
+      path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
+    )).equals(exactV2Archive),
+    true,
+    "an ordinary unsealed hosted build must keep the current privacy alias on V2",
+  );
   assert.equal(hostedFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
   assert.equal(publicFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
   assert.equal(
@@ -584,6 +618,55 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   assert.equal(releaseControl.allowsCommercialDeployment, false);
 });
 
+test("an ordinary public build cannot publish the unsealed privacy V3 candidate", async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-public-hold-"));
+  t.after(async () => rm(temporary, { recursive: true, force: true }));
+  const output = path.join(temporary, "artifact");
+
+  assert.equal(buildPagesArtifact({ root: ROOT, output }), output);
+  assert.equal(verifyPagesArtifact({ root: ROOT, output }).output, output);
+  assert.equal(assertUnsealedPrivacyCurrentAlias({ root: output }), true);
+
+  const [sourceCandidate, publishedCurrent, publishedV2] = await Promise.all([
+    readFile(path.join(ROOT, HOSTED_PRIVACY_V3_CANDIDATE.currentFile)),
+    readFile(path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile)),
+    readFile(path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file)),
+  ]);
+  assert.equal(sourceCandidate.equals(publishedCurrent), false);
+  assert.equal(publishedCurrent.equals(publishedV2), true);
+  assert.equal(sha256(publishedCurrent), HOSTED_PRIVACY_V2_ARTIFACT.sha256);
+  assert.equal(
+    (await walk(output)).some((file) =>
+      /^legal\/privacy\/versions\/SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3\/index\.html$/u.test(file)),
+    false,
+  );
+});
+
+test("every nullable privacy V3 release field independently fails closed", () => {
+  const sentinels = {
+    version: "UNAPPROVED-V3-TEST",
+    versionedFile: "legal/privacy/versions/UNAPPROVED-V3-TEST/index.html",
+    effectiveAt: "UNAPPROVED-UTC-TEST",
+    fullPageSha256: "0".repeat(64),
+    byteCount: 1,
+    authorityDigest: "1".repeat(64),
+  };
+
+  assert.equal(assertPrivacyV3Unsealed(), true);
+  for (const [field, value] of Object.entries(sentinels)) {
+    const release = { ...HOSTED_PRIVACY_V3_RELEASE, [field]: value };
+    assert.deepEqual(
+      Object.keys(sentinels).filter((candidate) => release[candidate] !== null),
+      [field],
+    );
+    assert.throws(
+      () => assertPrivacyV3Unsealed(release),
+      /must remain explicitly unsealed/u,
+      `${field} must independently fail closed`,
+    );
+  }
+});
+
 test("privacy V3 clause/layout review stays unsealed and outside production artifacts", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-review-test-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
@@ -612,11 +695,22 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
   assert.equal(current.equals(versioned), true);
   assert.equal(review.receipt.state, "unsealed");
   assert.equal(review.receipt.sealable, false);
+  assert.equal(review.receipt.deployable, false);
+  assert.equal(review.receipt.renderPath, "real-hosted-builder");
   assert.equal(review.receipt.version, null);
   assert.equal(review.receipt.effectiveAt, null);
   assert.equal(review.receipt.fullPageSha256, null);
   assert.equal(review.receipt.byteCount, null);
   assert.equal(review.receipt.authorityDigest, null);
+  await verifyHostedArtifact({
+    root: ROOT,
+    output: path.join(outputRoot, "hosted"),
+    privacyV3Render: { mode: "review" },
+  });
+  assert.deepEqual(
+    (await walk(path.join(outputRoot, "hosted"))).sort(),
+    [...hostedFilesForPrivacyV3Render({ mode: "review" })],
+  );
 
   const source = current.toString("utf8");
   assert.ok(source.includes(PRIVACY_V3_REVIEW_VERSION));
@@ -626,6 +720,7 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
   assert.doesNotMatch(source, /Effective August 6, 2026/u);
   assert.doesNotMatch(source, /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u);
   assert.doesNotMatch(source, /sitesourcery:truth-slot:/u);
+  assert.doesNotMatch(source, /Privacy V3 clause-review source/u);
 
   for (const file of [...publicFileAllowlist, ...hostedFileAllowlist]) {
     assert.doesNotMatch(
@@ -633,6 +728,113 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
       /^legal\/privacy\/versions\/SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3\/index\.html$/u,
     );
   }
+});
+
+test("privacy V3 finalizer requires exact owner inputs and deterministically emits integration constants", async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-finalizer-test-"));
+  t.after(async () => rm(temporary, { recursive: true, force: true }));
+  const version = "SS-HOSTED-PRIVACY-2099-12-31-V3";
+  const effectiveAt = "2099-12-31T00:00:00.000Z";
+  const missingApproval = path.join(temporary, "missing-approval");
+  const mismatchedDate = path.join(temporary, "mismatched-date");
+
+  await assert.rejects(
+    finalizePrivacyV3({
+      root: ROOT,
+      outputRoot: missingApproval,
+      version,
+      effectiveAt,
+    }),
+    /owner-approved exact matching version and canonical UTC values/u,
+  );
+  await assert.rejects(access(missingApproval));
+  await assert.rejects(
+    finalizePrivacyV3({
+      root: ROOT,
+      outputRoot: mismatchedDate,
+      version,
+      effectiveAt: "2100-01-01T00:00:00.000Z",
+      ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+    }),
+    /owner-approved exact matching version and canonical UTC values/u,
+  );
+  await assert.rejects(access(mismatchedDate));
+
+  const firstOutput = path.join(temporary, "first");
+  const secondOutput = path.join(temporary, "second");
+  const options = {
+    root: ROOT,
+    version,
+    effectiveAt,
+    ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+  };
+  const first = await finalizePrivacyV3({ ...options, outputRoot: firstOutput });
+  const second = await finalizePrivacyV3({ ...options, outputRoot: secondOutput });
+  const [firstReceiptBytes, secondReceiptBytes] = await Promise.all([
+    readFile(path.join(firstOutput, "privacy-v3-release-constants.json")),
+    readFile(path.join(secondOutput, "privacy-v3-release-constants.json")),
+  ]);
+  assert.equal(firstReceiptBytes.equals(secondReceiptBytes), true);
+  assert.deepEqual(first.receipt, second.receipt);
+
+  const receipt = JSON.parse(firstReceiptBytes.toString("utf8"));
+  const [current, versioned] = await Promise.all(
+    receipt.artifacts.map(({ file }) => readFile(path.join(firstOutput, file))),
+  );
+  assert.equal(current.equals(versioned), true);
+  assert.equal(receipt.fullPageSha256, sha256(current));
+  assert.equal(receipt.byteCount, current.byteLength);
+  assert.equal(receipt.state, "owner-approved-finalization");
+  assert.equal(receipt.sealable, true);
+  assert.equal(receipt.published, false);
+  assert.equal(receipt.integrationRequired, true);
+  assert.equal(receipt.version, version);
+  assert.equal(receipt.effectiveAt, effectiveAt);
+  assert.equal(
+    receipt.authorityDigest,
+    sha256(canonicalJson({
+      documents: receipt.documents,
+      schema: PRIVACY_V3_AUTHORITY_SCHEMA,
+    })),
+  );
+  assert.deepEqual(receipt.environment, {
+    SITESOURCERY_HOSTED_PRIVACY_V3_VERSION: version,
+    SITESOURCERY_HOSTED_PRIVACY_V3_SHA256: receipt.fullPageSha256,
+    SITESOURCERY_HOSTED_PRIVACY_V3_URI: receipt.artifactUri,
+    SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT: effectiveAt,
+    SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT: String(receipt.byteCount),
+    SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI: receipt.artifactUri,
+    SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256: receipt.authorityDigest,
+  });
+  const finalSource = current.toString("utf8");
+  assert.match(finalSource, new RegExp(version, "u"));
+  assert.match(finalSource, /Effective December 31, 2099/u);
+  assert.doesNotMatch(finalSource, /noindex|unsealed|CLAUSE-LAYOUT-REVIEW/u);
+  await verifyHostedArtifact({
+    root: ROOT,
+    output: path.join(firstOutput, "hosted"),
+    privacyV3Render: {
+      mode: "final",
+      version,
+      effectiveAt,
+      ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+    },
+  });
+
+  await writeFile(path.join(firstOutput, receipt.artifacts[1].file), `${versioned}\n`);
+  await assert.rejects(
+    verifyHostedArtifact({
+      root: ROOT,
+      output: path.join(firstOutput, "hosted"),
+      privacyV3Render: {
+        mode: "final",
+        version,
+        effectiveAt,
+        ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+      },
+    }),
+    /current and versioned bytes differ/u,
+  );
 });
 
 test("missing, changed, or mixed reviewed input fails before replacing the last good artifact", async (t) => {
@@ -653,12 +855,17 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
     fixture,
     "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
   );
+  const privacyFragmentFile = path.join(
+    fixture,
+    HOSTED_PRIVACY_V3_CANDIDATE.mainFragment,
+  );
   const customerControlFile = path.join(
     fixture,
     "abracadabra/app/abracadabra-customer-control-dom.js",
   );
   const originalApp = await readFile(appFile, "utf8");
   const originalFragment = await readFile(fragmentFile, "utf8");
+  const originalPrivacyFragment = await readFile(privacyFragmentFile, "utf8");
   const originalCustomerControl = await readFile(customerControlFile, "utf8");
   const v2ArchiveFile = path.join(fixture, HOSTED_PRIVACY_V2_ARTIFACT.file);
   const originalV2Archive = await readFile(v2ArchiveFile);
@@ -724,6 +931,18 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await assert.rejects(access(output));
   await writeFile(fragmentFile, originalFragment, "utf8");
 
+  await writeFile(
+    privacyFragmentFile,
+    `${originalPrivacyFragment}\nchanged\n`,
+    "utf8",
+  );
+  await assert.rejects(
+    buildHostedArtifact({ root: fixture, output }),
+    /privacy V3 candidate fragment does not match source slot/u,
+  );
+  await assert.rejects(access(output));
+  await writeFile(privacyFragmentFile, originalPrivacyFragment, "utf8");
+
   await writeFile(customerControlFile, `${originalCustomerControl}\nchanged\n`, "utf8");
   await assert.rejects(
     buildHostedArtifact({ root: fixture, output }),
@@ -750,6 +969,25 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   const lastGoodV2Archive = await readFile(
     path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file),
   );
+  const lastGoodPrivacyCurrent = await readFile(
+    path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
+  );
+  await writeFile(
+    privacyFragmentFile,
+    `${originalPrivacyFragment}\nchanged after last good\n`,
+    "utf8",
+  );
+  await assert.rejects(
+    buildHostedArtifact({ root: fixture, output }),
+    /privacy V3 candidate fragment does not match source slot/u,
+  );
+  assert.equal(
+    (await readFile(path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile)))
+      .equals(lastGoodPrivacyCurrent),
+    true,
+    "invalid V3 candidate input must preserve the last complete V2 current alias",
+  );
+  await writeFile(privacyFragmentFile, originalPrivacyFragment, "utf8");
   await writeFile(v2ArchiveFile, changedV2Archive);
   await assert.rejects(
     buildHostedArtifact({ root: fixture, output }),

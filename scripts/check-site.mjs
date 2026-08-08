@@ -35,6 +35,7 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
+  assertPrivacyV3CandidateSources,
   immutableLegalArtifacts,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
@@ -532,8 +533,9 @@ async function checkSitemap(pages, sources) {
 const pages = (await findPages()).sort();
 try {
   assertImmutableLegalArtifactSources({ root: ROOT });
+  assertPrivacyV3CandidateSources({ root: ROOT });
 } catch (error) {
-  fail("immutable legal artifacts", error.message);
+  fail("legal artifact truth", error.message);
 }
 const sources = new Map();
 for (const page of pages) sources.set(page, await readFile(path.join(ROOT, page), "utf8"));
