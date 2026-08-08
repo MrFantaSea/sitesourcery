@@ -54,7 +54,7 @@ const LEGAL_CLAUSE_DIGESTS = Object.freeze({
     "self-service": "424423916d7a5fa13bfa4a119e9c36e93895c437a0ceaad0b654aa87f3bcb2f4",
     "address-modes": "52e2e1a0c6b061c0af50a761ee06488a4dfe52f0fcbe183ff1626cd0d4002107",
     "customer-domains": "11a9310059aa5cb8c6ce1cc6bc8018c2d3e3ca08a8f70658858a068398f7d118",
-    "billing-cancellation": "d86152f790af801387dc345559d7faf4800c94e6a5ee5b0a2bba5d0b7d7afc2f",
+    "billing-cancellation": "669b3433ca70900d70abc5b7632fff9123ab9d18fff151b7726ee8f7f4a57696",
     "publication": "278cf53f6c372032948e355210b0d25598e7c3869a5bb2bb667dbfca26cf9df3",
     "customer-content": "f58347f6daad93310ed0ed5b729e47e189544428f23baf19d308445e5d5c9452",
     "prohibited-uses": "5826a9ec8f03fb7842dd816bfc62cb2ff90b334d51a7e5e00d1fbaf3ae00e41e",

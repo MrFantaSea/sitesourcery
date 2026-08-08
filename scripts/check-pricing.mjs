@@ -10,6 +10,12 @@ import {
 
 const root = process.cwd();
 const errors = [];
+const HELD_ALAKAZAM_PRICE_DISCLOSURE =
+  "The planned $25, $35, and $50 Alakazam plans are not available.";
+const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
+  "faq/index.html",
+  "legal/website-terms/index.html",
+]);
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const {
   OFFER_AVAILABILITY,
@@ -446,7 +452,20 @@ if (
   }
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
-    for (const match of files[file].matchAll(/\$\s?\d[\d,.]*/gu)) {
+    let source = files[file];
+    if (HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES.has(file)) {
+      const disclosureCount = source.split(
+        HELD_ALAKAZAM_PRICE_DISCLOSURE
+      ).length - 1;
+      if (disclosureCount !== 1) {
+        errors.push(
+          `${file}: held Alakazam price disclosure must appear exactly once; received ${disclosureCount}`
+        );
+      } else {
+        source = source.replace(HELD_ALAKAZAM_PRICE_DISCLOSURE, "");
+      }
+    }
+    for (const match of source.matchAll(/\$\s?\d[\d,.]*/gu)) {
       observedDisplays.push(`${file}:${match[0].replace(/\s/gu, "")}`);
     }
   }

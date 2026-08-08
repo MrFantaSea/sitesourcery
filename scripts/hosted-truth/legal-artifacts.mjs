@@ -15,6 +15,23 @@ export const HOSTED_PRIVACY_V2_ARTIFACT = Object.freeze({
   mediaType: "text/html; charset=utf-8",
 });
 
+export const HOSTED_WEBSITE_TERMS_V2_ARTIFACT = Object.freeze({
+  documentIds: Object.freeze([
+    "00000000-0000-4000-8000-000000000021",
+    "00000000-0000-4000-8000-000000000023",
+  ]),
+  kinds: Object.freeze(["product", "website"]),
+  version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+  file:
+    "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
+  evidenceUri:
+    "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/",
+  canonicalUri: "https://sitesourcery.com/legal/website-terms/",
+  sha256: "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+  byteCount: 21_380,
+  mediaType: "text/html; charset=utf-8",
+});
+
 export const HOSTED_PRIVACY_V3_CANDIDATE = Object.freeze({
   state: "unsealed",
   currentFile: "legal/privacy/index.html",
@@ -46,6 +63,7 @@ export const HOSTED_PRIVACY_V3_RELEASE = Object.freeze({
 
 export const immutableLegalArtifacts = Object.freeze([
   HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_WEBSITE_TERMS_V2_ARTIFACT,
 ]);
 
 export const immutableLegalArtifactFiles = Object.freeze(
