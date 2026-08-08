@@ -7,15 +7,21 @@ import { buildHostedArtifact } from "../build-hosted.mjs";
 import { canonicalJson, digest } from "../../server/hosted/security.mjs";
 import {
   assertPrivacyV3CandidateSources,
+  assertPrivacyV3ContentInputs,
   assertPrivacyV3Unsealed,
   HOSTED_PRIVACY_V3_CANDIDATE,
 } from "./legal-artifacts.mjs";
 import {
   createPrivacyV3RenderPlan,
+  normalizePrivacyV3FinalPage,
   PRIVACY_V3_ACCEPTANCE_STATEMENT,
   PRIVACY_V3_AUTHORITY_SCHEMA,
   PRIVACY_V3_OWNER_APPROVAL,
 } from "./privacy-v3-render.mjs";
+import {
+  readPrivacyV3ContentSeal,
+  validatePrivacyV3ContentSeal,
+} from "./seal-privacy-v3-content.mjs";
 
 const PRODUCT_WEBSITE_VERSION =
   "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2";
@@ -54,6 +60,8 @@ export async function finalizePrivacyV3({
   version,
   effectiveAt,
   ownerApproval,
+  contentSeal,
+  contentSealFile,
 } = {}) {
   assertPrivacyV3Unsealed();
   assertPrivacyV3CandidateSources({ root });
@@ -66,6 +74,12 @@ export async function finalizePrivacyV3({
     effectiveAt,
     ownerApproval,
   });
+  if ((contentSeal === undefined) === (contentSealFile === undefined)) {
+    throw new Error("privacy V3 finalization requires exactly one content seal source");
+  }
+  const approvedContent = contentSealFile === undefined
+    ? validatePrivacyV3ContentSeal(contentSeal)
+    : await readPrivacyV3ContentSeal(contentSealFile);
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(outputRoot);
   if (absoluteOutput === absoluteRoot || isInside(absoluteRoot, absoluteOutput)) {
@@ -95,6 +109,19 @@ export async function finalizePrivacyV3({
     ]);
     if (!currentBytes.equals(versionedBytes)) {
       throw new Error("privacy V3 final current and versioned bytes are not identical");
+    }
+    const normalizedContentBytes = Buffer.from(
+      normalizePrivacyV3FinalPage(currentBytes.toString("utf8"), plan),
+      "utf8",
+    );
+    assertPrivacyV3ContentInputs({
+      contentTemplateBytes: normalizedContentBytes,
+    });
+    if (
+      sha256(normalizedContentBytes) !== approvedContent.contentTemplate.sha256
+      || normalizedContentBytes.byteLength !== approvedContent.contentTemplate.byteCount
+    ) {
+      throw new Error("privacy V3 final content does not match the approved content seal");
     }
     const contentDigest = sha256(currentBytes);
     const byteCount = currentBytes.byteLength;
@@ -128,7 +155,7 @@ export async function finalizePrivacyV3({
       schema: PRIVACY_V3_AUTHORITY_SCHEMA,
     }));
     const receipt = Object.freeze({
-      schema: "sitesourcery.hosted-privacy-v3-finalization/v1",
+      schema: "sitesourcery.hosted-privacy-v3-finalization/v2",
       state: "owner-approved-finalization",
       sealable: true,
       published: false,
@@ -148,6 +175,20 @@ export async function finalizePrivacyV3({
       acceptanceStatement: PRIVACY_V3_ACCEPTANCE_STATEMENT,
       authorityDigest,
       documents,
+      contentSeal: Object.freeze({
+        schema: approvedContent.schema,
+        state: approvedContent.state,
+        contentSealSha256: approvedContent.contentSealSha256,
+        approvalReceiptSchema: approvedContent.approvalReceipt.schema,
+        approvalStatement: approvedContent.approvalReceipt.statement,
+        approvalReceiptSha256: approvedContent.approvalReceiptSha256,
+        approvalReference: approvedContent.approvalReceipt.approvalReference,
+        approvedAt: approvedContent.approvalReceipt.approvedAt,
+        reviewArtifactSha256: approvedContent.reviewArtifact.sha256,
+        reviewArtifactByteCount: approvedContent.reviewArtifact.byteCount,
+        contentTemplateSha256: approvedContent.contentTemplate.sha256,
+        contentTemplateByteCount: approvedContent.contentTemplate.byteCount,
+      }),
       artifacts: Object.freeze([
         Object.freeze({ role: "current", file: currentFile, sha256: contentDigest, byteCount }),
         Object.freeze({ role: "versioned", file: versionedFile, sha256: contentDigest, byteCount }),
@@ -188,7 +229,7 @@ function parseCli(argv) {
       options.ownerApproval = PRIVACY_V3_OWNER_APPROVAL;
       continue;
     }
-    if (!["--output", "--version", "--effective-at"].includes(argument)) {
+    if (!["--content-seal", "--output", "--version", "--effective-at"].includes(argument)) {
       throw new Error(`unknown privacy V3 finalizer argument: ${argument}`);
     }
     const value = argv[index + 1];
@@ -197,7 +238,9 @@ function parseCli(argv) {
       ? "outputRoot"
       : argument === "--effective-at"
         ? "effectiveAt"
-        : "version";
+        : argument === "--content-seal"
+          ? "contentSealFile"
+          : "version";
     if (options[key]) throw new Error(`${argument} was supplied twice`);
     options[key] = value;
     index += 1;
