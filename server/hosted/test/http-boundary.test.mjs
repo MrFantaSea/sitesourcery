@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createHostedApi } from "../http.mjs";
+import { HostedError } from "../errors.mjs";
 
 const ORIGIN = "https://app.sitesourcery.test";
 const CSRF = "c".repeat(43);
@@ -17,6 +18,7 @@ function jsonBody(response) {
 function createContext({
   readiness = {
     ready: true,
+    projectCreationLegal: { ready: true },
     persistence: {
       ready: true,
       database:
@@ -39,6 +41,8 @@ function createContext({
     recovery: [],
     rollback: [],
     webhook: [],
+    projectCreates: [],
+    authorityReads: 0,
     authenticate: [],
     readiness: []
   };
@@ -182,6 +186,37 @@ function createContext({
         sha256:
           "09478158e26b658dc71c4d3f978caff6d6ee9418353d0ce29d36db96e8b0b5fe"
       };
+    },
+    async getProjectLegalAuthority() {
+      if (readiness.projectCreationLegal?.ready !== true) {
+        throw new HostedError(
+          "LEGAL_CONFIGURATION_REQUIRED",
+          "held",
+          { status: 503 }
+        );
+      }
+      calls.authorityReads += 1;
+      return {
+        schema: "sitesourcery.project-legal-authority/v3",
+        acceptanceStatement:
+          "accepted_exact_project_terms_and_acknowledged_privacy",
+        authorityDigest: "a".repeat(64),
+        documents: []
+      };
+    },
+    async projectCreationLegalReadiness() {
+      return readiness.projectCreationLegal?.ready === true;
+    },
+    async createProject(actor, organizationId, input) {
+      if (readiness.projectCreationLegal?.ready !== true) {
+        throw new HostedError(
+          "LEGAL_CONFIGURATION_REQUIRED",
+          "held",
+          { status: 503 }
+        );
+      }
+      calls.projectCreates.push({ actor, organizationId, input });
+      return { project: { id: "project_created" } };
     }
   };
   const api = createHostedApi(service, {
@@ -209,7 +244,8 @@ function writeRequest(path, {
   csrf = CSRF,
   idempotencyKey = "command-customer-1",
   method = "POST",
-  origin = ORIGIN
+  origin = ORIGIN,
+  userAgent = null
 } = {}) {
   const headers = {
     Origin: origin
@@ -220,6 +256,7 @@ function writeRequest(path, {
   if (idempotencyKey !== undefined) {
     headers["Idempotency-Key"] = idempotencyKey;
   }
+  if (userAgent !== null) headers["User-Agent"] = userAgent;
   return new Request(`${ORIGIN}${path}`, {
     method,
     headers,
@@ -386,6 +423,58 @@ test("health and readiness probes are sessionless, bounded, and nonsecret", asyn
     service: "sitesourcery-hosted-runtime"
   });
   assert.deepEqual(held.calls.authenticate, []);
+});
+
+test("project legal authority is public, exact-shaped, and project creation is held before legacy validation", async () => {
+  const context = createContext();
+  const anonymous = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/legal/project-authority`)
+  );
+  assert.equal(anonymous.status, 200);
+  assert.deepEqual(await anonymous.json(), {
+    schema: "sitesourcery.project-legal-authority/v3",
+    acceptanceStatement:
+      "accepted_exact_project_terms_and_acknowledged_privacy",
+    authorityDigest: "a".repeat(64),
+    documents: []
+  });
+  const authenticated = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/legal/project-authority`, {
+      headers: { Cookie: `ss_session=${SESSION}` }
+    })
+  );
+  assert.equal(authenticated.status, 200);
+
+  const malformed = await context.api.fetch(
+    writeRequest("/api/v1/organizations/org_1/projects", {
+      cookie: `ss_session=${SESSION}; ss_csrf=${CSRF}`,
+      body: {
+        name: "Legacy body",
+        acceptedTerms: true
+      }
+    })
+  );
+  assert.equal(malformed.status, 400);
+  assert.equal(context.calls.projectCreates.length, 0);
+
+  const held = createContext({
+    readiness: {
+      ready: true,
+      projectCreationLegal: { ready: false }
+    }
+  });
+  const heldAuthority = await held.api.fetch(
+    new Request(`${ORIGIN}/api/v1/legal/project-authority`)
+  );
+  assert.equal(heldAuthority.status, 503);
+  const heldCreate = await held.api.fetch(
+    writeRequest("/api/v1/organizations/org_1/projects", {
+      cookie: `ss_session=${SESSION}; ss_csrf=${CSRF}`,
+      body: { acceptedTerms: true }
+    })
+  );
+  assert.equal(heldCreate.status, 503);
+  assert.equal(held.calls.projectCreates.length, 0);
 });
 
 test("loopback operations probe exposes only exact nonsecret modes", async () => {

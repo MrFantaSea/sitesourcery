@@ -31,6 +31,11 @@ import {
 import { createStoredZip } from "./zip.mjs";
 import { createHeldDomainRuntime } from "./domain-postgres-runtime.mjs";
 import { DEFAULT_PLATFORM_BASE_DOMAIN } from "../selfhost/src/hostname.mjs";
+import {
+  constantTimeDigestEqual,
+  publicProjectLegalAuthority,
+  validateProjectLegalAcceptance
+} from "./project-legal-authority.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -591,7 +596,9 @@ export function createCanonicalPostgresService({
   tokenFactory = randomToken,
   exportWorkerId: suppliedExportWorkerId = null,
   exportLeaseMs = DEFAULT_EXPORT_LEASE_MS,
-  licensedBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN
+  licensedBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN,
+  projectLegalAuthority = null,
+  projectLegalAuthorityDiagnostic = null
 } = {}) {
   invariant(
     authority?.kind === "canonical-postgres" &&
@@ -674,6 +681,32 @@ export function createCanonicalPostgresService({
   const paymentProvider = validateHostedPaymentProvider(
     suppliedPaymentProvider
   );
+  const legalAuthority = projectLegalAuthority
+    ? Object.freeze(projectLegalAuthority)
+    : null;
+  async function projectLegalReadiness() {
+    if (
+      !legalAuthority ||
+      typeof authority.readiness !== "function" ||
+      typeof authority.projectLegalAuthorityMatches !== "function"
+    ) {
+      return false;
+    }
+    const status = await authority.readiness();
+    return status.ready === true &&
+      status.projectCreationLegal?.ready === true &&
+      await authority.projectLegalAuthorityMatches(legalAuthority);
+  }
+  async function projectLegalArtifactsReadable() {
+    if (typeof authority.readiness !== "function") return false;
+    try {
+      const status = await authority.readiness();
+      return status.ready === true &&
+        status.projectCreationLegal?.v2Artifact === true;
+    } catch {
+      return false;
+    }
+  }
   normalizeHostname(`probe.${licensedBaseDomain}`);
   const domains =
     domainRuntime ?? createHeldDomainRuntime();
@@ -1156,6 +1189,11 @@ export function createCanonicalPostgresService({
     const accepted = [...versions]
       .reverse()
       .find((version) => version.state === "accepted_release");
+    const legal = await loadProjectLegal(
+      client,
+      projectId,
+      await projectLegalArtifactsReadable()
+    );
     return {
       id: row.id,
       projectId: row.id,
@@ -1185,8 +1223,60 @@ export function createCanonicalPostgresService({
         currentReleaseId: row.current_release_id,
         previousReleaseId: row.previous_release_id,
         updatedAt: iso(row.updated_at)
-      }
+      },
+      legal
     };
+  }
+
+  async function loadProjectLegal(client, projectId, includeArtifacts) {
+    const result = await client.query(
+      `select acceptance.document_id, document.kind, document.version,
+              document.content_digest,
+              acceptance.accepted_at,
+              required.acceptance_id is not null as is_current
+         from ss.term_acceptances acceptance
+         join ss.legal_documents document
+           on document.id = acceptance.document_id
+         left join ss.project_required_terms required
+           on required.project_id = acceptance.project_id
+          and required.kind = document.kind
+          and required.acceptance_id = acceptance.id
+        where acceptance.project_id = $1
+        order by required.acceptance_id is not null desc,
+                 acceptance.accepted_at, document.kind, document.id`,
+      [projectId]
+    );
+    const evidence = new Map();
+    if (includeArtifacts) {
+      const artifacts = await client.query(
+        `select document_id, artifact_uri
+           from ss.legal_document_artifacts
+          where document_id = any($1::uuid[])`,
+        [result.rows.map((row) => row.document_id)]
+      );
+      for (const artifact of artifacts.rows) {
+        evidence.set(artifact.document_id, artifact.artifact_uri);
+      }
+    }
+    const current = [];
+    const history = [];
+    const seen = new Set();
+    for (const row of result.rows) {
+      const item = {
+        kind: row.kind,
+        version: row.version,
+        contentDigest: row.content_digest,
+        evidenceUri: evidence.get(row.document_id) ?? null,
+        acceptedAt: iso(row.accepted_at)
+      };
+      if (row.is_current === true) {
+        current.push(item);
+        seen.add(row.kind);
+      } else {
+        history.push(item);
+      }
+    }
+    return { current, history };
   }
 
   async function insertAddress(
@@ -5988,15 +6078,52 @@ export function createCanonicalPostgresService({
       );
     },
 
+    async getProjectLegalAuthority() {
+      invariant(
+        legalAuthority && await projectLegalReadiness(),
+        "LEGAL_CONFIGURATION_REQUIRED",
+        "The reviewed Privacy V3 authority is not configured.",
+        { status: 503 }
+      );
+      return publicProjectLegalAuthority(legalAuthority);
+    },
+
+    async projectCreationLegalReadiness() {
+      return projectLegalReadiness();
+    },
+
     async createProject(actor, organizationId, input) {
       requiredActor(actor);
       const orgId = uuid(organizationId, "Organization ID");
-      const name = requiredText(input.name, "Project name", 120, 2);
       invariant(
-        input.acceptedTerms === true,
-        "TERMS_REQUIRED",
-        "Accept the current product, privacy, and website terms to continue.",
+        legalAuthority && await projectLegalReadiness(),
+        "LEGAL_CONFIGURATION_REQUIRED",
+        "Project creation is held while reviewed legal authority is installed.",
+        { status: 503 }
+      );
+      invariant(
+        input &&
+          typeof input === "object" &&
+          !Array.isArray(input) &&
+          Object.keys(input).every((key) =>
+            new Set([
+              "accessPassword",
+              "address",
+              "commandId",
+              "legalAcceptance",
+              "name",
+              "userAgentDigest",
+              "visibility"
+            ]).has(key)
+          ),
+        "LEGAL_ACCEPTANCE_INVALID",
+        "Project creation contains an unsupported field.",
         { status: 400 }
+      );
+      const name = requiredText(input.name, "Project name", 120, 2);
+      const legalAcceptance = validateProjectLegalAcceptance(
+        input.legalAcceptance,
+        legalAuthority
       );
       const visibility = input.visibility ?? "public";
       invariant(
@@ -6029,23 +6156,72 @@ export function createCanonicalPostgresService({
                 organizationId: orgId,
                 name,
                 visibility,
-                address: normalizedAddress
+                address: normalizedAddress,
+                legalAcceptance
               },
               work: async (requestId) => {
                 const documents = await client.query(
-                  `select distinct on (kind) id, kind
-                     from ss.legal_documents
-                    where kind = any($1::text[])
-                      and effective_at <= $2
-                      and (retired_at is null or retired_at > $2)
-                    order by kind, effective_at desc, id desc`,
-                  [PRODUCT_TERM_KINDS, now(clock)]
+                  `select document.id, document.kind, document.version,
+                          document.content_digest, document.content_uri,
+                          document.effective_at, artifact.artifact_uri,
+                          artifact.artifact_sha256, artifact.byte_count,
+                          artifact.media_type
+                     from ss.legal_documents document
+                     left join ss.legal_document_artifacts artifact
+                       on artifact.document_id = document.id
+                    join (values
+                      ($1::text, $2::text),
+                      ($3::text, $4::text),
+                      ($5::text, $6::text)
+                    ) expected(kind, version)
+                      on expected.kind = document.kind
+                     and expected.version = document.version
+                    where document.retired_at is null
+                    order by array_position(
+                      array[$1::text, $3::text, $5::text], document.kind
+                    )
+                    for update of document`,
+                  [
+                    legalAcceptance.documents[0].kind,
+                    legalAcceptance.documents[0].version,
+                    legalAcceptance.documents[1].kind,
+                    legalAcceptance.documents[1].version,
+                    legalAcceptance.documents[2].kind,
+                    legalAcceptance.documents[2].version
+                  ]
                 );
                 invariant(
-                  documents.rowCount === PRODUCT_TERM_KINDS.length,
-                  "LEGAL_CONFIGURATION_REQUIRED",
-                  "Current product, privacy, and website terms must be installed before project creation.",
-                  { status: 503 }
+                  documents.rowCount === legalAcceptance.documents.length &&
+                    documents.rows.every((document, index) => {
+                      const expected = legalAcceptance.documents[index];
+                      const expectedArtifact =
+                        legalAuthority.artifactBindings[index];
+                      const artifactValid = expectedArtifact.artifactUri === null
+                        ? document.artifact_uri === null &&
+                          document.artifact_sha256 === null &&
+                          document.byte_count === null &&
+                          document.media_type === null
+                        : document.artifact_uri === expectedArtifact.artifactUri &&
+                            constantTimeDigestEqual(
+                              document.artifact_sha256,
+                              expectedArtifact.artifactSha256
+                            ) &&
+                            Number(document.byte_count) ===
+                              expectedArtifact.byteCount &&
+                            document.media_type === expectedArtifact.mediaType;
+                      return document.kind === expected.kind &&
+                        document.version === expected.version &&
+                        constantTimeDigestEqual(
+                          document.content_digest,
+                          expected.contentDigest
+                        ) &&
+                        document.content_uri === expected.contentUri &&
+                        new Date(document.effective_at).toISOString() === expected.effectiveAt &&
+                        artifactValid;
+                    }),
+                  "LEGAL_AUTHORITY_CHANGED",
+                  "The reviewed legal authority changed. Refresh and try again.",
+                  { status: 409 }
                 );
                 const policy = await client.query(
                   `select id
@@ -6078,21 +6254,43 @@ export function createCanonicalPostgresService({
                     now(clock)
                   ]
                 );
+                const receiptId = randomUUID();
+                const acceptedAt = now(clock);
+                await client.query(
+                  `insert into ss.project_legal_acceptance_receipts (
+                     id, organization_id, project_id, user_id, request_id,
+                     schema_version, acceptance_statement, authority_digest,
+                     user_agent_digest, accepted_at
+                   ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                  [
+                    receiptId,
+                    orgId,
+                    projectId,
+                    actor.userId,
+                    requestId,
+                    legalAcceptance.schema,
+                    legalAcceptance.acceptanceStatement,
+                    legalAcceptance.authorityDigest,
+                    input.userAgentDigest ?? null,
+                    acceptedAt
+                  ]
+                );
                 for (const document of documents.rows) {
                   const acceptanceId = randomUUID();
                   await client.query(
                     `insert into ss.term_acceptances (
                        id, organization_id, project_id, user_id, document_id,
-                       accepted_at, request_id
-                     ) values ($1, $2, $3, $4, $5, $6, $7)`,
+                       accepted_at, request_id, legal_receipt_id
+                     ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
                     [
                       acceptanceId,
                       orgId,
                       projectId,
                       actor.userId,
                       document.id,
-                      now(clock),
-                      requestId
+                      acceptedAt,
+                      requestId,
+                      receiptId
                     ]
                   );
                   await client.query(
@@ -8819,6 +9017,31 @@ export function createCanonicalPostgresService({
             "DOMAIN_PROVIDER_NOT_READY"
         };
       }
+      let projectCreationLegal = {
+        ready: false,
+        diagnostic: projectLegalAuthorityDiagnostic ?? {
+          state: "held",
+          code: "LEGAL_CONFIGURATION_REQUIRED",
+          reason: "Privacy V3 constants are not sealed."
+        }
+      };
+      if (legalAuthority) {
+        try {
+          projectCreationLegal = {
+            ready: await projectLegalReadiness(),
+            diagnostic: null
+          };
+        } catch (error) {
+          projectCreationLegal = {
+            ready: false,
+            diagnostic: {
+              state: "held",
+              code: error?.code ?? "LEGAL_CONFIGURATION_REQUIRED",
+              reason: "Privacy V3 authority could not be verified."
+            }
+          };
+        }
+      }
       return {
         ready:
           persistence.ready &&
@@ -8844,6 +9067,7 @@ export function createCanonicalPostgresService({
         service: "sitesourcery-hosted-runtime",
         runtime: process.version,
         persistence,
+        projectCreationLegal,
         compiler: {
           ready: true,
           schema: compiler.schema,
