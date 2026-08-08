@@ -63,6 +63,7 @@ const CANONICAL_EXEMPT = new Set(["404.html", "flyer.html"]);
 const ALLOWED_EXTERNAL = new Set([
   "https://sconesourcery.com/", // real founder-owned venture, cited as proof on /work/
   "https://daarx.money/", // second founder-owned venture, cited as proof on /work/
+  "https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/", // exact resolver privacy notice cited by /legal/privacy/
 ]);
 
 /**

@@ -46,7 +46,7 @@ test("held privacy discloses Start chooser and Proton handling without restoring
   ]);
   assert.match(
     privacy,
-    /The Start chooser uses selected buttons only to show a recommendation on the current page and sends nothing\./u,
+    /The Start chooser uses selected buttons only to show a recommendation on the current page and does not send that selection\./u,
   );
   assert.match(privacy, /processed through Proton Mail/u);
   for (const source of [privacy, terms]) {
@@ -64,11 +64,11 @@ test("privacy separates guest work from retained Download records and discloses 
   );
   for (const phrase of [
     "The free guest preview needs no account. Saving an editor project or using its $5 Download requires sign-in.",
-    "A signed-in account and retained editor project can exist before any Alakazam subscription",
-    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver.",
-    "Cloudflare also receives ordinary request and network metadata, such as the IP address, request URL, time, and user-agent information",
-    "It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
-    "Alakazam has no active cancellation, nonpayment, suspension, retained-exit, or deletion schedule under this notice; earlier day-count drafts are not policy.",
+    "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
+    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
+    "Cloudflare processes the query and connection data under its",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+    "Alakazam has no active customer lifecycle or retention schedule under this notice.",
   ]) {
     assert.ok(privacy.includes(phrase), phrase);
   }
@@ -169,7 +169,7 @@ test("Responder and FAQ expose inquiry-only held status with no active service o
 test("legal-copy gate rejects a changed substantive clause", async () => {
   const errors = await routeErrors("/legal/privacy/", (source) =>
     source.replace(
-      "Desiderata Labs LLC operates this website",
+      "Desiderata Labs LLC is the legal seller and operator of this website",
       "Desiderata Labs LLC runs this website",
     ));
   assert.match(errors.join("\n"), /substantive clause operator changed/u);

@@ -50,7 +50,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "7d39d96431b35e584f5950dfa8bb87ff19b4274d9eb77af681aa15ef5f763b5b",
+    hostedSha256: "b78c8f894ec0ab2cee71b4bc212561e736f597d17ea0c1401c3dcc49faafb283",
   }),
   slot({
     id: "abracadabra-app-control",
@@ -104,9 +104,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-privacy-main",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "cca09970190cf81f8675008f4003ab74edc83fc815aebc52603bb001087b8a2e",
+    sourceSha256: "4f8c2c02d73d072c02ea200f0f9c9a397b7bb182d5107860efb5e6083782c073",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
-    hostedSha256: "28f336bec2b753a5110ee57e59071f94286bf53108c11df0144a0b93a6fd7480",
+    hostedSha256: "08e0af445f40117754b01d71f2478c48701c5ef83f9ba71deb0d56809c4f1579",
   }),
   slot({
     id: "legal-website-terms-head",
@@ -157,7 +157,7 @@ export const heldAlakazamCopyFragmentSha256 = Object.freeze({
   "scripts/hosted-truth/fragments/faq-address-choices.html":
     "6c878981bdf46078f95a1b670e94042b67c1b781269f96eb669781c08202c297",
   "scripts/hosted-truth/fragments/faq-missed-payment.html":
-    "a06fddbb3ea93910b035f09d05030fec57143cb5918f03abbe29ed54f8890134",
+    "6c5daac54a11b686b3756330adaeec55730e6c1923bc464635dabddea4a176e7",
   "scripts/hosted-truth/fragments/faq-paths.html":
     "197c10656603f6735f690524882183d1b2f8ecef218322a8d8b152d6eaa1c764",
   "scripts/hosted-truth/fragments/faq-private-sites.html":
@@ -292,12 +292,13 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "legal/privacy/index.html": Object.freeze([
     "The free guest preview needs no account. Saving an editor project or using its $5 Download requires sign-in.",
-    "A signed-in account and retained editor project can exist before any Alakazam subscription",
     "Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
-    "Download does not publish or host the page.",
-    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver.",
-    "Cloudflare also receives ordinary request and network metadata",
-    "It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+    "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
+    "Download does not create a public Internet address or an ongoing website-hosting service.",
+    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
+    "Cloudflare processes the query and connection data under its",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+    "If Site Sourcery keeps personal data about you, you may ask what it processes and request access, correction, deletion, or a portable copy.",
     "Not effective — release identity pending",
     "processed through Proton Mail",
   ]),
@@ -351,6 +352,7 @@ export const hostedTruthRequirements = Object.freeze({
   "abracadabra/app/index.html": Object.freeze([
     "Build, preview, and download with Abracadabra",
     "Your guest preview is not saved yet.",
+    "Made versions may survive a refresh in this tab.",
     "Sign in for the $5 Download.",
     "Alakazam subscriptions and hosting activation remain held.",
     "Create an account or sign in.",

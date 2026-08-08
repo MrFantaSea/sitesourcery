@@ -36,7 +36,7 @@ export const AUTHORITY_STATEMENT = "Authorize one exact inquiry-open, checkout-d
 export const OG_PNG_SHA256 = "66b8985aff38fe4809037b89e9e153594ed5682ffe3ed33a9bf19127bb501c0b";
 export const OG_SOURCE_SHA256 = "61c324f7c5b18ac2eed19d65b3510b8730654e8718c490966c79ee3195751868";
 export const CARD_V9_PDF_SHA256 = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d73caf99029c5b3605fc";
-export const REVIEWED_DOMAIN_PREFLIGHT_SHA256 = "a2f63d8d6cc3596c064ae0ec2327245ac98008170c3e6c4f46dc4704befddf7b";
+export const REVIEWED_DOMAIN_PREFLIGHT_SHA256 = "50c2b271a8a879f27b9b10f4580196c27df3714ed2d2f3766b5b76ea538d1c5f";
 
 /*
  * The live-route proof deliberately duplicates the reviewed route contract.
@@ -141,6 +141,7 @@ export const CANDIDATE_CHANGED_PATHS = Object.freeze([
   "index.html",
   "legal/index.html",
   "legal/privacy/index.html",
+  "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/index.html",
   "og.png",
   "package.json",
@@ -267,6 +268,7 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "index.html",
   "legal/index.html",
   "legal/privacy/index.html",
+  "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/index.html",
   "og.png",
   "pricing.html",
@@ -1696,16 +1698,16 @@ export function validatePublicTruthTextSet({
     "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
   ]) requireVisible(terms, marker, "legal/website-terms/index.html", errors);
   for (const marker of [
-    "Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY",
-    "The ordinary marketing pages contain no inquiry form, visitor upload, advertising tracker, or page-level analytics code.",
-    "The Start chooser uses selected buttons only to show a recommendation on the current page and sends nothing.",
+    "Desiderata Labs LLC is the legal seller and operator of this website.",
+    "The public pages in this release are built without an inquiry form, visitor upload, advertising tracker, or page-level analytics.",
+    "The Start chooser uses selected buttons only to show a recommendation on the current page and does not send that selection.",
     "The Responder is held from sale. Its public page describes an intended flow already present in the page and does not ask for customer data, store a setup, contact a provider, create a quote, take payment, or activate a message, booking, review request, invoice action, or other integration.",
     "A guest may build, revise, and test a private preview without an account. Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
-    "Before a guest saves, the business facts, selected look, review confirmation, and made versions remain in the current editor tab and are not sent to Site Sourcery merely because a preview is made. Refreshing or closing the tab clears that unsaved work.",
-    "Download does not publish or host the page.",
-    "The lookup checks public DNS only. It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
-    "Secure card entry belongs to the payment processor identified at checkout.",
-    "Alakazam has no active cancellation, nonpayment, suspension, retained-exit, or deletion schedule under this notice; earlier day-count drafts are not policy.",
+    "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
+    "Download does not create a public Internet address or an ongoing website-hosting service.",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+    "Secure card entry belongs to Stripe at checkout.",
+    "Alakazam has no active customer lifecycle or retention schedule under this notice.",
     "The ordinary public pages and guest preview do not submit a safety report or support ticket.",
     "Email sent to sitesourcery@proton.me is processed through Proton Mail",
     "If you call or email, Site Sourcery may retain the communication and reasonable business records needed to respond, scope work, document decisions, deliver accepted work, protect the service, and meet legal obligations.",

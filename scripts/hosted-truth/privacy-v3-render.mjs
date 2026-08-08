@@ -29,12 +29,12 @@ const SOURCE_ASIDE = [
 const FINAL_SUMMARY =
   "This notice covers the public site, guest preview, account, and Download. Free guest work stays in the current tab. A signed-in customer can retain an editor project and its $5 Download. Alakazam subscriptions remain held.";
 const REQUIRED_SUBSTANTIVE_COPY = Object.freeze([
-  "Before a guest saves, the business facts, selected look, review confirmation, and made versions remain in the current editor tab and are not sent to Site Sourcery merely because a preview is made. Refreshing or closing the tab clears that unsaved work.",
+  "Pressing Make my preview does not by itself include those business facts in a Site Sourcery project API request.",
   "Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
-  "Download does not publish or host the page.",
-  "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver.",
-  "Cloudflare also receives ordinary request and network metadata, such as the IP address, request URL, time, and user-agent information, under its own terms and privacy practices.",
-  "It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+  "Download does not create a public Internet address or an ongoing website-hosting service.",
+  "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
+  "Cloudflare processes the query and connection data under its",
+  "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
 ]);
 const MONTHS = Object.freeze([
   "January",

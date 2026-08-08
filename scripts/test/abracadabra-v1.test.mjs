@@ -467,7 +467,7 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
   assert.match(appSource, /Abracadabra ready\. Your local draft stays in this tab\./u);
   assert.match(
     hostedHeroMarkup,
-    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*before saving it to your account and you will start over/u,
+    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*Made versions may survive a refresh in this tab\.[\s\S]*clearing its session storage before saving ordinarily means starting over/u,
   );
   assert.match(hostedHeroMarkup, /Sign in for the \$5 Download\./u);
   assert.match(
