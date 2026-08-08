@@ -14,6 +14,11 @@ import {
   ALAKAZAM_LIFECYCLE_DECISION_SCHEMA
 } from "../commerce-v2/alakazam-lifecycle-state.mjs";
 import {
+  ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
+  ALAKAZAM_CANCELLATION_SUBSCRIPTION_SCHEMA,
+  ALAKAZAM_EXPORT_GRANT_SCHEMA
+} from "../commerce-v2/alakazam-lifecycle-cancellation.mjs";
+import {
   CommerceV2Error,
   clone,
   deepFreeze,
@@ -543,6 +548,202 @@ function exactRecoveryInput(value) {
   });
 }
 
+
+function cancellationSubscriptionRow(row, hasOpenDowngrade) {
+  const tier = resolveAlakazamTier(row.tier_id);
+  return deepFreeze({
+    schema: ALAKAZAM_CANCELLATION_SUBSCRIPTION_SCHEMA,
+    localSubscriptionId: exactUuid(row.id, "subscription.id"),
+    tenantId: exactUuid(
+      row.organization_id,
+      "subscription.organizationId"
+    ),
+    customerId: exactUuid(
+      row.customer_user_id,
+      "subscription.customerUserId"
+    ),
+    projectId: exactUuid(
+      row.project_id,
+      "subscription.projectId"
+    ),
+    revision: exactDatabaseInteger(
+      row.revision,
+      "subscription.revision"
+    ),
+    tierId: tier.tierId,
+    amountMinor: exactDatabaseInteger(
+      row.amount_minor,
+      "subscription.amountMinor"
+    ),
+    currency: requiredText(
+      row.currency,
+      "subscription.currency"
+    ),
+    status: requiredText(row.status, "subscription.status"),
+    stripeCustomerId: requiredText(
+      row.stripe_customer_id,
+      "subscription.stripeCustomerId",
+      255
+    ),
+    stripeSubscriptionId: requiredText(
+      row.stripe_subscription_id,
+      "subscription.stripeSubscriptionId",
+      255
+    ),
+    currentPeriodStartsAt: exactDatabaseIso(
+      row.current_period_starts_at,
+      "subscription.currentPeriodStartsAt"
+    ),
+    currentPeriodEndsAt: exactDatabaseIso(
+      row.current_period_ends_at,
+      "subscription.currentPeriodEndsAt"
+    ),
+    cancelAtPeriodEnd: row.cancel_at_period_end === true,
+    hasOpenDowngrade: hasOpenDowngrade === true
+  });
+}
+
+function exportGrantRow(row) {
+  return deepFreeze({
+    schema: ALAKAZAM_EXPORT_GRANT_SCHEMA,
+    state: requiredText(row.state, "grant.state", 40),
+    availableFrom: exactDatabaseIso(
+      row.available_from,
+      "grant.availableFrom"
+    ),
+    paidThroughAt: exactDatabaseIso(
+      row.paid_through_at,
+      "grant.paidThroughAt"
+    ),
+    retentionState: requiredText(
+      row.retention_state,
+      "grant.retentionState",
+      60
+    ),
+    policyVersion:
+      row.policy_version === null
+        ? null
+        : requiredText(
+            row.policy_version,
+            "grant.policyVersion",
+            120
+          ),
+    retentionEndsAt:
+      row.retention_ends_at === null
+        ? null
+        : exactDatabaseIso(
+            row.retention_ends_at,
+            "grant.retentionEndsAt"
+          ),
+    exportWindowEndsAt:
+      row.export_window_ends_at === null
+        ? null
+        : exactDatabaseIso(
+            row.export_window_ends_at,
+            "grant.exportWindowEndsAt"
+          )
+  });
+}
+
+function scheduledCancellationResult(row, grant) {
+  return deepFreeze({
+    status: "cancellation_scheduled",
+    provider: "stripe",
+    state: "scheduled",
+    cancellationId: exactUuid(row.id, "cancellation.id"),
+    subscriptionId: exactUuid(
+      row.subscription_id,
+      "cancellation.subscriptionId"
+    ),
+    projectId: exactUuid(
+      row.project_id,
+      "cancellation.projectId"
+    ),
+    effectiveAt: exactDatabaseIso(
+      row.effective_at,
+      "cancellation.effectiveAt"
+    ),
+    revision: exactDatabaseInteger(
+      row.subscription_revision_at_request,
+      "cancellation.revision"
+    ) + 1,
+    export: grant,
+    next: "boundary_confirmation"
+  });
+}
+
+function exactCancellationConfirmationInput(value) {
+  invariant(
+    value && typeof value === "object" && !Array.isArray(value),
+    "invalid_input",
+    "the Alakazam cancellation confirmation input is invalid"
+  );
+  invariant(
+    value.subscription?.schema ===
+      ALAKAZAM_CANCELLATION_SUBSCRIPTION_SCHEMA,
+    "invalid_input",
+    "the Alakazam cancellation subscription is invalid"
+  );
+  invariant(
+    value.cancellation?.schema ===
+      ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
+    "invalid_input",
+    "the Alakazam cancellation provider evidence is invalid"
+  );
+  const grant = value.grant;
+  invariant(
+    grant?.schema === ALAKAZAM_EXPORT_GRANT_SCHEMA &&
+      grant.state === "available" &&
+      grant.paidThroughAt ===
+        value.subscription.currentPeriodEndsAt,
+    "invalid_input",
+    "the Alakazam export grant is invalid"
+  );
+  invariant(
+    grant.retentionState === "granted"
+      ? grant.policyVersion !== null &&
+          grant.retentionEndsAt !== null &&
+          grant.exportWindowEndsAt !== null
+      : grant.policyVersion === null &&
+          grant.retentionEndsAt === null &&
+          grant.exportWindowEndsAt === null,
+    "repository_conflict",
+    "an unruled Alakazam retention policy cannot promise a window",
+    { status: 500 }
+  );
+  const event = value.event;
+  invariant(
+    event &&
+      EVENT_ID.test(event.stripeEventId ?? "") &&
+      event.eventType === "customer.subscription.updated" &&
+      typeof event.livemode === "boolean" &&
+      requiredDigest(
+        event.payloadDigest,
+        "event.payloadDigest"
+      ) &&
+      requiredIso(
+        event.signatureVerifiedAt,
+        "event.signatureVerifiedAt"
+      ) &&
+      requiredIso(event.occurredAt, "event.occurredAt"),
+    "invalid_input",
+    "the Alakazam cancellation event is invalid"
+  );
+  return Object.freeze({
+    subscription: deepFreeze(clone(value.subscription)),
+    request: deepFreeze(clone(value.request)),
+    cancellation: deepFreeze(clone(value.cancellation)),
+    grant: deepFreeze(clone(grant)),
+    event: deepFreeze(clone(event)),
+    eventRowId: exactUuid(value.eventRowId, "eventRowId"),
+    tierEventId: exactUuid(value.tierEventId, "tierEventId"),
+    exportGrantId: exactUuid(
+      value.exportGrantId,
+      "exportGrantId"
+    )
+  });
+}
+
 function incidentSubscriptionRow(row) {
   const tier = resolveAlakazamTier(row.tier_id);
   return deepFreeze({
@@ -705,6 +906,19 @@ export function createPostgresAlakazamLifecycleRepository({
         where settlement.stripe_invoice_id = $1`,
       [lookup.stripeInvoiceId]
     );
+  }
+
+  async function hasOpenDowngrade(client, subscriptionId) {
+    const result = await client.query(
+      `select 1 from ss.alakazam_downgrade_schedules
+        where subscription_id = $1
+          and state in (
+            'dispatching', 'scheduled', 'reconciliation_required'
+          )
+        limit 1`,
+      [subscriptionId]
+    );
+    return result.rowCount > 0;
   }
 
   async function selectRecovery(client, stripeEventId) {
@@ -1893,6 +2107,515 @@ export function createPostgresAlakazamLifecycleRepository({
             decision: clone(decision),
             next: "complete"
           });
+        })
+      );    },
+
+    async readCancellationSubscription(value) {
+      const tenantId = exactUuid(value?.tenantId, "tenantId");
+      const customerId = exactUuid(
+        value?.customerId,
+        "customerId"
+      );
+      const projectId = exactUuid(
+        value?.projectId,
+        "projectId"
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: customerId,
+            organizationId: tenantId,
+            readOnly: true
+          },
+          async (client) => {
+            const selected = await client.query(
+              `select ${SUBSCRIPTION_COLUMNS}
+                 from ss.alakazam_subscriptions subscription
+                 join ss.stripe_customers customer
+                   on customer.organization_id =
+                      subscription.organization_id
+                  and customer.id =
+                      subscription.stripe_customer_row_id
+                where subscription.organization_id = $1
+                  and subscription.project_id = $2
+                  and subscription.customer_user_id = $3
+                  and subscription.status <> 'ended'
+                limit 1`,
+              [tenantId, projectId, customerId]
+            );
+            if (selected.rowCount === 0) return null;
+            const row = selected.rows[0];
+            if (
+              row.current_period_starts_at === null ||
+              row.current_period_ends_at === null
+            ) {
+              return null;
+            }
+            return cancellationSubscriptionRow(
+              row,
+              await hasOpenDowngrade(client, row.id)
+            );
+          }
+        )
+      );
+    },
+
+    /**
+     * Reserve one local cancellation request and its provider
+     * idempotency key. This performs NO provider effect; the Stripe
+     * mutation stays behind the held release.
+     */
+    async claimCancellationRequest(value) {
+      const cancellationId = exactUuid(
+        value?.cancellationId,
+        "cancellationId"
+      );
+      const subscription = value?.subscription;
+      invariant(
+        subscription?.schema ===
+          ALAKAZAM_CANCELLATION_SUBSCRIPTION_SCHEMA,
+        "invalid_input",
+        "the Alakazam cancellation subscription is invalid"
+      );
+      const acceptedDisclosureDigest = requiredDigest(
+        value?.acceptedDisclosureDigest,
+        "acceptedDisclosureDigest"
+      );
+      const requestedAt = requiredIso(
+        value?.requestedAt,
+        "requestedAt"
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const existing = await client.query(
+            `select * from ss.alakazam_cancellations
+              where subscription_id = $1
+                and state in (
+                  'dispatching', 'scheduled',
+                  'reconciliation_required'
+                )`,
+            [subscription.localSubscriptionId]
+          );
+          if (existing.rowCount === 1) {
+            return deepFreeze({
+              status: "existing",
+              cancellationId: exactUuid(
+                existing.rows[0].id,
+                "cancellation.id"
+              ),
+              state: requiredText(
+                existing.rows[0].state,
+                "cancellation.state",
+                40
+              )
+            });
+          }
+          const inserted = await client.query(
+            `insert into ss.alakazam_cancellations (
+               id, organization_id, project_id,
+               subscription_id, customer_user_id,
+               requested_by_user_id,
+               accepted_disclosure_digest,
+               provider_idempotency_key,
+               subscription_revision_at_request,
+               effective_at, state,
+               provider_effect_certainty, requested_at
+             ) values (
+               $1, $2, $3, $4, $5, $5, $6, $7, $8, $9,
+               'dispatching', 'not_submitted', $10
+             )
+             returning id, state`,
+            [
+              cancellationId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              subscription.customerId,
+              acceptedDisclosureDigest,
+              `alakazam:cancel:${cancellationId}`,
+              subscription.revision,
+              subscription.currentPeriodEndsAt,
+              requestedAt
+            ]
+          );
+          invariant(
+            inserted.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam cancellation request was not reserved",
+            { status: 500 }
+          );
+          return deepFreeze({
+            status: "reserved",
+            cancellationId,
+            state: "dispatching"
+          });
+        })
+      );
+    },
+
+    async findCancellationBySubscription(value) {
+      const stripeSubscriptionId = requiredText(
+        value?.stripeSubscriptionId,
+        "stripeSubscriptionId",
+        255
+      );
+      invariant(
+        SUBSCRIPTION_ID.test(stripeSubscriptionId),
+        "invalid_input",
+        "the Alakazam cancellation lookup is invalid"
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const selected = await selectRenewalSubscription(
+            client,
+            { stripeSubscriptionId }
+          );
+          if (selected.rowCount === 0) {
+            return deepFreeze({ status: "not_alakazam" });
+          }
+          const row = selected.rows[0];
+          const subscription = cancellationSubscriptionRow(
+            row,
+            await hasOpenDowngrade(client, row.id)
+          );
+          const cancellation = await client.query(
+            `select * from ss.alakazam_cancellations
+              where subscription_id = $1
+                and state in (
+                  'dispatching', 'scheduled',
+                  'reconciliation_required'
+                )
+              for update`,
+            [subscription.localSubscriptionId]
+          );
+          // No local request means Site Sourcery never asked for this
+          // stop. It is an unowned provider change for reconciliation,
+          // not a cancellation this system may confirm.
+          if (cancellation.rowCount === 0) {
+            return deepFreeze({ status: "not_alakazam" });
+          }
+          const record = cancellation.rows[0];
+          if (record.state === "scheduled") {
+            const grant = await client.query(
+              `select * from ss.alakazam_export_grants
+                where cancellation_id = $1`,
+              [record.id]
+            );
+            invariant(
+              grant.rowCount === 1,
+              "repository_conflict",
+              "a scheduled Alakazam cancellation lost its export grant",
+              { status: 500 }
+            );
+            return deepFreeze({
+              status: "scheduled",
+              provider: "stripe",
+              subscription,
+              cancellation: scheduledCancellationResult(
+                record,
+                exportGrantRow(grant.rows[0])
+              )
+            });
+          }
+          invariant(
+            record.state === "dispatching",
+            "alakazam_cancellation_reconciliation_required",
+            "The Alakazam cancellation needs owner reconciliation before it can be confirmed.",
+            { status: 409 }
+          );
+          return deepFreeze({
+            status: "requested",
+            provider: "stripe",
+            subscription,
+            cancellation: deepFreeze({
+              cancellationId: exactUuid(
+                record.id,
+                "cancellation.id"
+              ),
+              state: "dispatching",
+              effectiveAt: exactDatabaseIso(
+                record.effective_at,
+                "cancellation.effectiveAt"
+              ),
+              subscriptionRevisionAtRequest:
+                exactDatabaseInteger(
+                  record.subscription_revision_at_request,
+                  "cancellation.revision"
+                )
+            })
+          });
+        })
+      );
+    },
+
+    async confirmCancellationSchedule(value) {
+      const input = exactCancellationConfirmationInput(value);
+      const subscription = input.subscription;
+      return translated(() =>
+        database.service({}, async (client) => {
+          const record = await client.query(
+            `select * from ss.alakazam_cancellations
+              where id = $1 for update`,
+            [input.request.cancellationId]
+          );
+          invariant(
+            record.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam cancellation request disappeared",
+            { status: 500 }
+          );
+          if (record.rows[0].state === "scheduled") {
+            const grant = await client.query(
+              `select * from ss.alakazam_export_grants
+                where cancellation_id = $1`,
+              [input.request.cancellationId]
+            );
+            return scheduledCancellationResult(
+              record.rows[0],
+              exportGrantRow(grant.rows[0])
+            );
+          }
+
+          const current = await selectRenewalSubscription(
+            client,
+            {
+              stripeSubscriptionId:
+                subscription.stripeSubscriptionId
+            }
+          );
+          invariant(
+            current.rowCount === 1 &&
+              current.rows[0].cancel_at_period_end === false &&
+              exactDatabaseInteger(
+                current.rows[0].revision,
+                "cancellation.currentRevision"
+              ) === subscription.revision &&
+              exactDatabaseIso(
+                current.rows[0].current_period_ends_at,
+                "cancellation.currentPeriodEndsAt"
+              ) === subscription.currentPeriodEndsAt,
+            "alakazam_cancellation_reconciliation_required",
+            "The Alakazam subscription changed before its cancellation committed.",
+            { status: 409 }
+          );
+
+          const claimed = await client.query(
+            `select id from ss.alakazam_stripe_events
+              where stripe_event_id = $1 for update`,
+            [input.event.stripeEventId]
+          );
+          invariant(
+            claimed.rowCount === 0,
+            "stripe_event_conflict",
+            "the Alakazam cancellation event was already used for different evidence",
+            { status: 409 }
+          );
+
+          const eventFacts = {
+            schema:
+              "sitesourcery.alakazam-cancellation-event/v1",
+            stripeEventId: input.event.stripeEventId,
+            stripeSubscriptionId:
+              subscription.stripeSubscriptionId,
+            cancelAt: input.cancellation.cancelAt,
+            providerStatus:
+              input.cancellation.providerStatus,
+            providerFactsDigest:
+              input.cancellation.providerFactsDigest,
+            occurredAt: input.event.occurredAt
+          };
+          await client.query(
+            `insert into ss.alakazam_stripe_events (
+               id, organization_id, project_id,
+               quote_id, subscription_id,
+               stripe_event_id, event_type, livemode,
+               api_version, provider_object_id,
+               payload_digest, facts, state, attempt_count,
+               signature_verified_at, occurred_at
+             ) values (
+               $1, $2, $3, null, $4, $5, $6, $7, $8, $9,
+               $10, $11::jsonb, 'received', 0, $12, $13
+             )`,
+            [
+              input.eventRowId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              input.event.stripeEventId,
+              input.event.eventType,
+              input.event.livemode,
+              input.event.apiVersion,
+              subscription.stripeSubscriptionId,
+              input.event.payloadDigest,
+              JSON.stringify(eventFacts),
+              input.event.signatureVerifiedAt,
+              input.event.occurredAt
+            ]
+          );
+          await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processing',
+                    attempt_count = attempt_count + 1
+              where organization_id = $1 and id = $2
+                and state = 'received'`,
+            [subscription.tenantId, input.eventRowId]
+          );
+          const processed = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processed', processed_at = $3
+              where organization_id = $1 and id = $2
+                and state = 'processing'
+              returning id`,
+            [
+              subscription.tenantId,
+              input.eventRowId,
+              input.event.signatureVerifiedAt
+            ]
+          );
+          invariant(
+            processed.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam cancellation event was not completed",
+            { status: 500 }
+          );
+
+          const resultRevision = subscription.revision + 1;
+          const tierFacts = {
+            schema:
+              "sitesourcery.alakazam-cancellation-tier-event/v1",
+            tierId: subscription.tierId,
+            effectiveAt: subscription.currentPeriodEndsAt,
+            cancellationId: input.request.cancellationId,
+            providerFactsDigest:
+              input.cancellation.providerFactsDigest,
+            export: clone(input.grant)
+          };
+          await client.query(
+            `insert into ss.alakazam_tier_change_events (
+               id, organization_id, project_id,
+               subscription_id, quote_id,
+               stripe_event_row_id, payment_receipt_id,
+               downgrade_schedule_id,
+               download_reversal_event_id,
+               result_subscription_revision,
+               event_kind, prior_tier_id, result_tier_id,
+               occurred_at, facts, facts_digest
+             ) values (
+               $1, $2, $3, $4, null, $5, null, null, null,
+               $6, 'cancellation_scheduled', $7, $7, $8,
+               $9::jsonb, $10
+             )`,
+            [
+              input.tierEventId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              input.eventRowId,
+              resultRevision,
+              subscription.tierId,
+              input.event.occurredAt,
+              JSON.stringify(tierFacts),
+              digest(tierFacts)
+            ]
+          );
+
+          const scheduled = await client.query(
+            `update ss.alakazam_subscriptions
+                set cancel_at_period_end = true,
+                    provider_observed_at = $3,
+                    provider_facts_digest = $4
+              where organization_id = $1
+                and id = $2
+                and cancel_at_period_end = false
+                and revision = $5
+              returning revision, cancel_at_period_end`,
+            [
+              subscription.tenantId,
+              subscription.localSubscriptionId,
+              input.cancellation.providerObservedAt,
+              input.cancellation.providerFactsDigest,
+              subscription.revision
+            ]
+          );
+          invariant(
+            scheduled.rowCount === 1 &&
+              scheduled.rows[0].cancel_at_period_end === true &&
+              exactDatabaseInteger(
+                scheduled.rows[0].revision,
+                "cancellation.revision"
+              ) === resultRevision,
+            "repository_conflict",
+            "the Alakazam subscription was not scheduled to end",
+            { status: 500 }
+          );
+
+          const updated = await client.query(
+            `update ss.alakazam_cancellations
+                set state = 'scheduled',
+                    stripe_event_row_id = $2,
+                    tier_change_event_id = $3,
+                    provider_facts = $4::jsonb,
+                    provider_facts_digest = $5,
+                    provider_observed_at = $6,
+                    provider_effect_certainty = 'confirmed',
+                    scheduled_at = $7
+              where id = $1 and state = 'dispatching'
+              returning *`,
+            [
+              input.request.cancellationId,
+              input.eventRowId,
+              input.tierEventId,
+              JSON.stringify(clone(input.cancellation)),
+              input.cancellation.providerFactsDigest,
+              input.cancellation.providerObservedAt,
+              input.event.occurredAt
+            ]
+          );
+          invariant(
+            updated.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam cancellation was not confirmed",
+            { status: 500 }
+          );
+
+          // The customer keeps what they paid for. Anything beyond the
+          // paid period is recorded as an open owner ruling.
+          const grant = await client.query(
+            `insert into ss.alakazam_export_grants (
+               id, organization_id, project_id,
+               subscription_id, cancellation_id, state,
+               available_from, paid_through_at,
+               retention_state, policy_version,
+               retention_ends_at, export_window_ends_at
+             ) values (
+               $1, $2, $3, $4, $5, 'available', $6, $7,
+               $8, $9, $10, $11
+             )
+             returning *`,
+            [
+              input.exportGrantId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              input.request.cancellationId,
+              input.grant.availableFrom,
+              input.grant.paidThroughAt,
+              input.grant.retentionState,
+              input.grant.policyVersion,
+              input.grant.retentionEndsAt,
+              input.grant.exportWindowEndsAt
+            ]
+          );
+          invariant(
+            grant.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam export grant was not recorded",
+            { status: 500 }
+          );
+          return scheduledCancellationResult(
+            updated.rows[0],
+            exportGrantRow(grant.rows[0])
+          );
         })
       );
     }

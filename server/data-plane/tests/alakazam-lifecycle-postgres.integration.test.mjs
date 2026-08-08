@@ -20,6 +20,11 @@ import {
   decideAlakazamLifecycleTransition
 } from "../../commerce-v2/alakazam-lifecycle-state.mjs";
 import {
+  ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
+  previewAlakazamCancellation,
+  projectAlakazamExportGrant
+} from "../../commerce-v2/alakazam-lifecycle-cancellation.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -1266,6 +1271,304 @@ test(
         });
       assert.equal(replayed.status, "recorded");
       assert.equal(replayed.recovery.revision, 5);
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+// ---------------------------------------------------------------
+// G-04 — period-end cancellation with retained export
+// ---------------------------------------------------------------
+
+const CANCEL_REQUESTED_AT = "2026-07-20T09:00:00.000Z";
+const CANCEL_CONFIRMED_AT = "2026-07-20T09:00:10.000Z";
+const CANCEL_OBSERVED_AT = "2026-07-20T09:00:18.000Z";
+
+function cancellationProviderFacts(overrides = {}) {
+  const facts = {
+    schema: ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
+    provider: "stripe",
+    stripeSubscriptionId: "sub_alakazam_lifecycle",
+    stripeCustomerId: "cus_alakazam_lifecycle",
+    tierId: "alakazam_25",
+    currency: "USD",
+    providerStatus: "active",
+    cancelAtPeriodEnd: true,
+    cancelAt: START_PERIOD_END,
+    currentPeriodStartsAt: START_PERIOD_START,
+    currentPeriodEndsAt: START_PERIOD_END,
+    providerObservedAt: CANCEL_OBSERVED_AT,
+    ...overrides
+  };
+  return {
+    ...facts,
+    providerFactsDigest: canonicalDigest(facts)
+  };
+}
+
+function cancellationEvent(overrides = {}) {
+  return {
+    stripeEventId: "evt_alakazam_lifecycle_cancel",
+    eventType: "customer.subscription.updated",
+    livemode: false,
+    apiVersion: "2026-07-30.basil",
+    stripeSubscriptionId: "sub_alakazam_lifecycle",
+    payloadDigest: digest("cancel payload"),
+    signatureVerifiedAt: CANCEL_CONFIRMED_AT,
+    occurredAt: CANCEL_CONFIRMED_AT,
+    ...overrides
+  };
+}
+
+test(
+  "G-04: a cancelling customer keeps service and export through the paid period",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+
+      const subscription =
+        await repository.readCancellationSubscription({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId
+        });
+      assert.equal(
+        subscription.localSubscriptionId,
+        seeded.subscriptionId
+      );
+      assert.equal(subscription.cancelAtPeriodEnd, false);
+      assert.equal(subscription.hasOpenDowngrade, false);
+
+      const preview = previewAlakazamCancellation({
+        policy: createAlakazamLifecyclePolicy(),
+        subscription,
+        now: CANCEL_REQUESTED_AT
+      });
+      assert.equal(preview.eligible, true);
+      assert.equal(preview.effectiveAt, START_PERIOD_END);
+      assert.equal(
+        preview.refundTreatment,
+        "policy_decision_required"
+      );
+
+      const cancellationId = randomUUID();
+      const claimed =
+        await repository.claimCancellationRequest({
+          cancellationId,
+          subscription,
+          acceptedDisclosureDigest: digest(
+            "accepted cancellation disclosure"
+          ),
+          requestedAt: CANCEL_REQUESTED_AT
+        });
+      await flushConstraints(client);
+      assert.equal(claimed.status, "reserved");
+      assert.equal(claimed.state, "dispatching");
+
+      // A second request reuses the open one; it never opens a second.
+      const again =
+        await repository.claimCancellationRequest({
+          cancellationId: randomUUID(),
+          subscription,
+          acceptedDisclosureDigest: digest(
+            "accepted cancellation disclosure"
+          ),
+          requestedAt: CANCEL_REQUESTED_AT
+        });
+      assert.equal(again.status, "existing");
+      assert.equal(again.cancellationId, cancellationId);
+
+      const resolved =
+        await repository.findCancellationBySubscription({
+          stripeEventId: "evt_alakazam_lifecycle_cancel",
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(resolved.status, "requested");
+      assert.equal(
+        resolved.cancellation.cancellationId,
+        cancellationId
+      );
+
+      const grant = projectAlakazamExportGrant({
+        policy: createAlakazamLifecyclePolicy(),
+        availableFrom: CANCEL_CONFIRMED_AT,
+        paidThroughAt: START_PERIOD_END
+      });
+      const scheduled =
+        await repository.confirmCancellationSchedule({
+          subscription,
+          request: resolved.cancellation,
+          event: cancellationEvent(),
+          cancellation: cancellationProviderFacts(),
+          grant,
+          eventRowId: randomUUID(),
+          tierEventId: randomUUID(),
+          exportGrantId: randomUUID()
+        });
+      await flushConstraints(client);
+
+      assert.equal(scheduled.status, "cancellation_scheduled");
+      assert.equal(scheduled.state, "scheduled");
+      assert.equal(scheduled.effectiveAt, START_PERIOD_END);
+      assert.equal(scheduled.revision, 3);
+      assert.equal(scheduled.export.state, "available");
+      assert.equal(
+        scheduled.export.paidThroughAt,
+        START_PERIOD_END
+      );
+      assert.equal(
+        scheduled.export.retentionState,
+        "policy_decision_required"
+      );
+      assert.equal(scheduled.export.retentionEndsAt, null);
+
+      const row = await client.query(
+        `select revision, status, cancel_at_period_end
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(row.rows[0].cancel_at_period_end, true);
+      assert.equal(row.rows[0].status, "active");
+      assert.equal(row.rows[0].revision, "3");
+
+      const events = await client.query(
+        `select count(*)::int as total
+           from ss.alakazam_tier_change_events
+          where subscription_id = $1
+            and event_kind = 'cancellation_scheduled'`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(events.rows[0].total, 1);
+
+      // Replay converges on the same committed cancellation.
+      const replay =
+        await repository.findCancellationBySubscription({
+          stripeEventId: "evt_alakazam_lifecycle_cancel",
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      assert.equal(replay.status, "scheduled");
+      assert.deepEqual(
+        replay.cancellation,
+        scheduled
+      );
+      const grants = await client.query(
+        `select count(*)::int as total
+           from ss.alakazam_export_grants
+          where subscription_id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(grants.rows[0].total, 1);
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "G-04: the schema refuses an export window nobody ruled and refuses shrinking one",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+      const subscription =
+        await repository.readCancellationSubscription({
+          tenantId: authority.organizationId,
+          customerId: authority.userId,
+          projectId: authority.projectId
+        });
+      const cancellationId = randomUUID();
+      await repository.claimCancellationRequest({
+        cancellationId,
+        subscription,
+        acceptedDisclosureDigest: digest("accepted"),
+        requestedAt: CANCEL_REQUESTED_AT
+      });
+      await flushConstraints(client);
+      const resolved =
+        await repository.findCancellationBySubscription({
+          stripeEventId: "evt_alakazam_lifecycle_cancel",
+          stripeSubscriptionId: "sub_alakazam_lifecycle"
+        });
+      await repository.confirmCancellationSchedule({
+        subscription,
+        request: resolved.cancellation,
+        event: cancellationEvent(),
+        cancellation: cancellationProviderFacts(),
+        grant: projectAlakazamExportGrant({
+          policy: EXAMPLE_POLICY,
+          availableFrom: CANCEL_CONFIRMED_AT,
+          paidThroughAt: START_PERIOD_END
+        }),
+        eventRowId: randomUUID(),
+        tierEventId: randomUUID(),
+        exportGrantId: randomUUID()
+      });
+      await flushConstraints(client);
+
+      // A granted window is a promise; it can be extended, never cut.
+      await expectRejected(
+        client,
+        () =>
+          client.query(
+            `update ss.alakazam_export_grants
+                set export_window_ends_at =
+                      '2026-08-03T12:00:00.000Z'
+              where cancellation_id = $1`,
+            [cancellationId]
+          ),
+        /granted Alakazam export window cannot be reduced/u
+      );
+
+      // An unruled grant may not carry dates.
+      await expectRejected(
+        client,
+        () =>
+          insertRow(client, "alakazam_export_grants", {
+            id: randomUUID(),
+            organization_id: authority.organizationId,
+            project_id: authority.projectId,
+            subscription_id: seeded.subscriptionId,
+            cancellation_id: cancellationId,
+            state: "available",
+            available_from: CANCEL_CONFIRMED_AT,
+            paid_through_at: START_PERIOD_END,
+            retention_state: "policy_decision_required",
+            policy_version: null,
+            retention_ends_at: "2026-12-01T12:00:00.000Z",
+            export_window_ends_at: "2026-11-01T12:00:00.000Z"
+          }),
+        /alakazam_export_grants_check/u
+      );
     } finally {
       await client.query("rollback");
       client.release();
