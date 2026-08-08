@@ -1,13 +1,12 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-07T10:17:04-0400 (EDT)
+Generated at: 2026-08-08T13:32:08-0400 (EDT)
 
 Repository snapshot:
 
 - Branch: build/sitesourcery-v2-20260730
-- Base HEAD: 3c008bb (integrated checker-authority and held-Alakazam commits
-  on top of migration-47 checkpoint f1c265e; this evidence-reconciliation
-  commit contains the updated matrix)
+- Base HEAD: a0f024d (evidence reconciliation on top of integrated
+  checker-authority, held-Alakazam and migration-47 checkpoints)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
 - Active ledger reviewed completely through the migration-47 seal:
   ops/SITESOURCERY-ACTIVE-RUN.md
@@ -24,7 +23,9 @@ This matrix is the deterministic source for completion reporting. It covers all
 136 checkbox requirements in the canonical roadmap and adds explicit rows for
 the current H1M seal, the ordered two-purpose H1N finish line, owner-directed
 public-page corrections, release/public-truth architecture addenda, and
-Responder telephony expansion.
+Responder telephony expansion. It also adds ten explicit Core rows for the
+in-flight Privacy V3 program so dirty, isolated, or owner-held work cannot stay
+invisible to the launch percentage.
 
 Status meanings:
 
@@ -90,7 +91,7 @@ of this file.
 
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| CORE LAUNCH | 97 | 30 | 9 | 0 | 136 | 71.3% |
+| CORE LAUNCH | 97 | 38 | 11 | 0 | 146 | 66.4% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
@@ -276,6 +277,36 @@ of this file.
 | TRUTH-11 | Exclude legacy browser localStorage accounts, honor-paid state and direct-payment scripts from both GitHub Pages and hosted production artifacts | Build | DONE | commit ea38093; the reviewed 74-file Pages artifact and hosted artifact exclude legacy account/honor-paid/direct-payment scripts; hosted-artifact/site checks fail on their return | Preserve authenticated server authority and exact artifact allowlists. |
 | TRUTH-12 | Reconcile the inquiry-only public catalog with the release checker's five-sellable-rails model | Build + Polish/Integration | DONE | commit ea38093; data/public-catalog.json, server/commerce/rails.mjs and scripts/check-site.mjs classify seven offers explicitly and report zero public checkout rails; exact public/catalog/site tests are green | Require per-offer fulfillment authority before any rail becomes sellable. |
 
+### Privacy V3 program
+
+These rows are Core addenda beyond the 136 canonical roadmap checkboxes. A
+sealed isolated branch remains PARTIAL until its authority and maintained proof
+are integrated into the release candidate. Dirty work earns no completion
+credit.
+
+Owner decisions recorded for this program on 2026-08-07 and retained here as
+durable matrix authority:
+
+- Existing V2 projects are not forced to re-accept V3.
+- Cutover may hold only new project creation; reads, static pages, sign-in,
+  recovery, existing-project read/edit, already-paid repeat Download, export,
+  deletion and contact stay live.
+- The V3 version, effective UTC time, byte count and digests are frozen only
+  after the owner reviews the exact rendered artifact.
+
+| ID | Requirement | Owner lane | Status | Exact proof location | Next action |
+| --- | --- | --- | --- | --- | --- |
+| PV3-01 | Retain and publish the exact immutable Privacy V2 evidence artifact without changing its bytes | Build + Polish/Integration | PARTIAL | isolated Phase-A commit ec9a82e retains `legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html` at 19,935 bytes and SHA-256 `b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b`; it is not integrated into the release candidate | Preserve the exact bytes through Phase-B and final integration, then rerun artifact allowlist and hash proof. |
+| PV3-02 | Produce byte-identical hosted Privacy V3 live/versioned artifacts and a deterministic fail-closed finalizer after separately reviewed copy | Aesthetic + Polish/Integration | PARTIAL | pre-review draft commit 2222f3b contains exactly 13 Phase-B paths; focused Node 24 tests pass 22/22, all six non-null release fields fail closed, and release constants remain null. The uncommitted 2026-08-08 engineering review under `ops/` records 25 accuracy findings, 10 exposure findings and 16 owner-decision replacements without changing the legal fragments | Obtain owner rulings, apply only approved copy changes, and rerun the byte-identity/finalizer gates before the final legal seal. |
+| PV3-03 | Add transactional migration 48 for legal artifacts, exact project acceptance receipts, immutable history, RLS, privileges, and runtime contract | Build | NOT STARTED | all five live Privacy worktrees stop at `202608060047_custom_build_handoff.sql`; no executable migration 48 exists | Author the migration structure from the approved blueprint after the six-file backend correction seals, but do not finalize its release tuple or claim a successful authority replay until PV3-10 freezes the exact V3 constants. |
+| PV3-04 | Make PostgreSQL readiness prove exact v48 catalog, V2/V3 artifacts, authority constants, and fail-closed project creation | Build | PARTIAL | backend commits 3afbc50/4319f5e plus six dirty paths implement the boundary; the current third pass is green on 31/31 focused tests and 398/400 hosted tests with two expected database skips, but its 2026-08-08 13:28 independent review returned BLOCKER: YES because `bool_and` could false-pass on NULL, catalog column/constraint proof was incomplete, and privilege proof omitted grant options and column ACLs; real v48 PostgreSQL proof also remains absent | Correct every review blocker, rerun focused/full tests, obtain fresh BLOCKER: NO, seal the six-file correction, then prove the exact readiness query against migration 48 in fresh PostgreSQL. |
+| PV3-05 | Expose the four-key public project legal authority and require exact three-document acceptance only on project creation | Build | PARTIAL | the dirty backend third pass includes differentiated held/ready states, exact bundle validation, rogue-artifact rejection, 409 behavior and private user-agent handling, but the 2026-08-08 13:28 independent review is BLOCKER: YES and there is no sealed correction or PostgreSQL-backed receipt proof | Correct the review blockers, obtain fresh BLOCKER: NO, seal the correction, and add real PostgreSQL/HTTP receipt, idempotency, V2-history and forwarded-IP proof with migration 48. |
+| PV3-06 | Render unchecked consent, exact links/version, save-path acceptance, 409 recovery, invalidation, and V2 history in Abracadabra | Build + Aesthetic | PARTIAL | `/private/tmp/sitesourcery-privacy-v3-abracadabra-ui-20260807` currently has seven modified UI/test paths and no sealed commit; live status does not modify `scripts/hosted-truth/manifest.mjs` | Keep the UI lane paused until backend and legal contracts seal, then run focused/API/DOM and exact-width keyboard/browser proof before a path-limited commit. |
+| PV3-07 | Show Domains just-in-time DNS disclosure immediately before Check, with no pre-action DNS request | Aesthetic + Polish/Integration | PARTIAL | isolated Phase-A commit ec9a82e includes the disclosure and focused/browser proof at 320/390/1440 widths; it is not integrated into the release candidate | Preserve the sealed Phase-A behavior through integration and rerun exact three-query click/Enter proof. |
+| PV3-08 | Preserve existing V2 acceptance without forced reacceptance and hold only project creation during cutover | Build + Owner/cutover | PARTIAL | the owner decisions recorded above freeze no forced V2 reacceptance and a project-creation-only hold; isolated backend work reads required-term history, but no integrated v48 continuity proof exists | Prove V2 current/history after later acceptance and demonstrate that reads, sign-in, recovery, edit, repeat Download, export, delete and contact remain live during the hold. |
+| PV3-09 | Prove the Privacy-specific v47-to-v48 upgrade, unchanged V2 evidence/current pointers, exact V3 receipt bundle, and fresh empty-v48 replay | Polish/Integration | NOT STARTED | no executable migration 48 exists, so no real database can yet prove V2 continuity, v48 immutability or the exact three-document receipt | After reviewed seals and PV3-10 constants, run the dedicated upgrade/empty-database tests and obtain a privacy-specific independent blocker verdict; general release/browser gates remain owned by Lane J. |
+| PV3-10 | Obtain owner/legal approval of the exact rendered V3 artifact and freeze its version, effective UTC, byte count and digests exactly once | Owner/cutover + Polish/Integration | PARTIAL | the owner decision boundary, fail-closed finalizer and uncommitted numbered engineering review exist, but owner rulings, counsel review, the exact approved artifact and release constants are intentionally unresolved | Present the numbered review for owner rulings, apply and review only approved changes, then use the finalizer to freeze one release tuple; general production cutover and rollback remain owned by J-10/J-11. |
+
 ### Sealed H1M checkpoint — H1N is next
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
@@ -408,10 +439,11 @@ held and non-sellable. They determine the separate Expansion percentage.
 
 ## Immediate next action
 
-The integrated candidate is sealed locally at `3c008bb` on top of `f1c265e`.
-Record this evidence reconciliation only, then pause for owner coordination.
-Do not start Privacy V3 or later backend work from this checkpoint. Keep
-provider release, push, deployment and DNS held.
+The integrated Core candidate remains sealed locally at `a0f024d`; Privacy V3
+is active only in isolated worktrees and earns PARTIAL/NOT STARTED status until
+reviewed integration. Obtain owner rulings on the completed legal
+accuracy/exposure review and complete the six-file backend correction before
+migration 48. Keep provider release, merge, push, deployment and DNS held.
 
 ## Current evidence gaps that control the next actions
 
@@ -439,8 +471,8 @@ provider release, push, deployment and DNS held.
 
 - Canonical roadmap checkbox rows represented: 136 of 136.
 - Added current checkpoint rows: H1M 5, H1N 12, aesthetic 9, Core architecture
-  addendum 2, Responder expansion 1.
-- Total classified rows: 165.
+  addendum 2, Privacy V3 10, Responder expansion 1.
+- Total classified rows: 175.
 - Deferred rows excluded from denominators: 5.
 - Count every exact status token in the Core and Expansion tables above; do not
   infer progress from prose, commit count, elapsed time, or historical test
@@ -473,8 +505,8 @@ Roadmap coverage audit:
 
 Recount arithmetic:
 
-- Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 = 136.
-- Core status recount: 97 DONE + 30 PARTIAL + 9 NOT STARTED + 0 EXTERNAL BLOCKER = 136; 97 / 136 = 71.3% after one-decimal rounding.
+- Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 + Privacy V3 10 = 146.
+- Core status recount: 97 DONE + 38 PARTIAL + 11 NOT STARTED + 0 EXTERNAL BLOCKER = 146; 97 / 146 = 66.4% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
-- 136 + 24 + 5 = 165 total classified rows.
+- 146 + 24 + 5 = 175 total classified rows.
