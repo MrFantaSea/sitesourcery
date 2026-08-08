@@ -1337,6 +1337,7 @@ test("owner accepted-change payments expose only exact reconciliation authority"
 });
 
 test("owner reconciliation result binds command outcome to one attempt and invoice", () => {
+  const now = "2026-08-07T15:10:00.000Z";
   const payments = ownerChangePayments();
   const payment = payments.payments[0];
   const checkoutReady = ownerChangeReconciliation(payment);
@@ -1344,7 +1345,8 @@ test("owner reconciliation result binds command outcome to one attempt and invoi
     verifiedOwnerCustomBuildChangePaymentReconciliation(
       checkoutReady,
       ownerEntry(),
-      payment
+      payment,
+      now
     ),
     checkoutReady
   );
@@ -1358,7 +1360,8 @@ test("owner reconciliation result binds command outcome to one attempt and invoi
     verifiedOwnerCustomBuildChangePaymentReconciliation(
       settled,
       ownerEntry(),
-      settledPayment
+      settledPayment,
+      now
     ),
     settled
   );
@@ -1366,7 +1369,8 @@ test("owner reconciliation result binds command outcome to one attempt and invoi
     verifiedOwnerCustomBuildChangePaymentReconciliation(
       { ...checkoutReady, jobId: PROJECT_ID },
       ownerEntry(),
-      payment
+      payment,
+      now
     ),
     null
   );
@@ -1374,7 +1378,8 @@ test("owner reconciliation result binds command outcome to one attempt and invoi
     verifiedOwnerCustomBuildChangePaymentReconciliation(
       { ...checkoutReady, settlement: settled.settlement },
       ownerEntry(),
-      payment
+      payment,
+      now
     ),
     null
   );

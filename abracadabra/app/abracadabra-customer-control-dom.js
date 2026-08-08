@@ -4292,7 +4292,8 @@
   function verifiedOwnerCustomBuildChangePaymentReconciliation(
     value,
     expectedEntry,
-    expectedPayment
+    expectedPayment,
+    nowInput
   ) {
     if (
       !exactKeys(
@@ -4359,7 +4360,8 @@
       if (
         !verifiedCustomerCustomBuildChangeCheckout(
           value.checkout,
-          invoiceState
+          invoiceState,
+          nowInput
         )
         || value.settlement !== null
       ) return null;
