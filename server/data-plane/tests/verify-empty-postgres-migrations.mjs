@@ -1,15 +1,106 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 
 import pg from "pg";
 
+import { createCanonicalPostgresAuthority } from
+  "../../hosted/repository-postgres.mjs";
+import { canonicalJson, digest } from "../../hosted/security.mjs";
+
 const { Pool } = pg;
-const DATABASE_URL =
-  process.env.SITESOURCERY_PG_MIGRATION_TEST_URL ?? null;
+const ADMIN_URL =
+  process.env.SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL ?? null;
 const MIGRATIONS = new URL(
   "../supabase/migrations/",
   import.meta.url
 );
+const PRIVACY_PROOF_BYTES = Buffer.from(
+  "Site Sourcery disposable Privacy V3 migration proof.\n",
+  "utf8"
+);
+const PRIVACY_PROOF = Object.freeze({
+  version: "SS-HOSTED-PRIVACY-2099-12-31-V3",
+  contentDigest: digest(PRIVACY_PROOF_BYTES),
+  contentUri:
+    "https://privacy-v3-proof.invalid/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/",
+  effectiveAt: "2099-12-31T00:00:00.000Z",
+  byteCount: PRIVACY_PROOF_BYTES.byteLength,
+  artifactUri:
+    "https://privacy-v3-proof.invalid/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/"
+});
+const PRIVACY_PROOF_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    kind: "privacy",
+    version: PRIVACY_PROOF.version,
+    contentDigest: PRIVACY_PROOF.contentDigest,
+    contentUri: PRIVACY_PROOF.contentUri,
+    effectiveAt: PRIVACY_PROOF.effectiveAt
+  }),
+  Object.freeze({
+    kind: "product",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    contentDigest:
+      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    contentUri:
+      "https://sitesourcery.com/legal/website-terms/#self-service",
+    effectiveAt: "2026-07-30T00:00:00.000Z"
+  }),
+  Object.freeze({
+    kind: "website",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    contentDigest:
+      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    contentUri: "https://sitesourcery.com/legal/website-terms/",
+    effectiveAt: "2026-07-30T00:00:00.000Z"
+  })
+]);
+const PRIVACY_PROOF_AUTHORITY_DIGEST = digest(canonicalJson({
+  documents: PRIVACY_PROOF_DOCUMENTS,
+  schema: "sitesourcery.project-legal-authority/v3"
+}));
+const PRIVACY_PROOF_AUTHORITY = Object.freeze({
+  documents: PRIVACY_PROOF_DOCUMENTS,
+  documentBindings: Object.freeze([
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000048" }),
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000021" }),
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000023" })
+  ]),
+  artifactBindings: Object.freeze([
+    Object.freeze({
+      artifactUri: PRIVACY_PROOF.artifactUri,
+      artifactSha256: PRIVACY_PROOF.contentDigest,
+      byteCount: PRIVACY_PROOF.byteCount,
+      mediaType: "text/html; charset=utf-8"
+    }),
+    Object.freeze({ artifactUri: null }),
+    Object.freeze({ artifactUri: null })
+  ]),
+  authorityDigest: PRIVACY_PROOF_AUTHORITY_DIGEST
+});
+
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function sealedPrivacyProofSql(sql) {
+  const insertStart = sql.indexOf(
+    "insert into hosted_privacy_v3_release_constants"
+  );
+  const valuesStart = sql.indexOf("values (", insertStart);
+  const valuesEnd = sql.indexOf("\n);", valuesStart);
+  assert.ok(insertStart >= 0 && valuesStart > insertStart && valuesEnd > valuesStart);
+  const sealedValues = `values (
+  ${sqlString(PRIVACY_PROOF.version)},
+  ${sqlString(PRIVACY_PROOF.contentDigest)},
+  ${sqlString(PRIVACY_PROOF.contentUri)},
+  ${sqlString(PRIVACY_PROOF.effectiveAt)},
+  ${PRIVACY_PROOF.byteCount},
+  ${sqlString(PRIVACY_PROOF.artifactUri)},
+  ${sqlString(PRIVACY_PROOF_AUTHORITY_DIGEST)}
+)`;
+  return `${sql.slice(0, valuesStart)}${sealedValues}${sql.slice(valuesEnd + 2)}`;
+}
 
 async function applyMigrations(pool) {
   const namespace = await pool.query(
@@ -24,8 +115,10 @@ async function applyMigrations(pool) {
   const names = (await readdir(MIGRATIONS))
     .filter((name) => name.endsWith(".sql"))
     .sort();
+  const heldName = "202608060048_hosted_privacy_v3.sql";
+  assert.equal(names.at(-1), heldName);
 
-  for (const name of names) {
+  for (const name of names.slice(0, -1)) {
     try {
       await pool.query(
         await readFile(new URL(name, MIGRATIONS), "utf8")
@@ -36,7 +129,335 @@ async function applyMigrations(pool) {
     }
   }
 
-  return names;
+  const heldSql = await readFile(new URL(heldName, MIGRATIONS), "utf8");
+  let heldError = null;
+  try {
+    await pool.query(heldSql);
+  } catch (error) {
+    heldError = error;
+    await pool.query("rollback");
+  }
+  assert.ok(heldError, "unsealed Privacy V3 migration must abort");
+  assert.equal(heldError.code, "55000");
+  assert.match(
+    heldError.message,
+    /Hosted Privacy V3 release constants are unsealed/u
+  );
+
+  return { appliedNames: names.slice(0, -1), heldName, heldSql };
+}
+
+async function v2AuthorityFingerprint(pool) {
+  const result = await pool.query(`
+    select
+      document.xmin::text as row_version,
+      encode(extensions.digest(
+        convert_to(to_jsonb(document)::text, 'UTF8'),
+        'sha256'
+      ), 'hex') as row_digest,
+      document.id,
+      document.kind,
+      document.version,
+      document.content_digest,
+      document.content_uri,
+      document.effective_at,
+      document.retired_at,
+      document.created_at
+    from ss.legal_documents document
+    where document.id = '00000000-0000-4000-8000-000000000022'
+  `);
+  assert.equal(result.rowCount, 1);
+  return result.rows[0];
+}
+
+async function applyPrivacyV3Proof(pool, heldSql) {
+  await pool.query(sealedPrivacyProofSql(heldSql));
+  const artifacts = await pool.query(`
+    select document_id, artifact_uri, artifact_sha256, byte_count, media_type
+      from ss.legal_document_artifacts
+     order by document_id
+  `);
+  assert.deepEqual(artifacts.rows, [
+    {
+      document_id: "00000000-0000-4000-8000-000000000022",
+      artifact_uri:
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/",
+      artifact_sha256:
+        "b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b",
+      byte_count: "19935",
+      media_type: "text/html; charset=utf-8"
+    },
+    {
+      document_id: "00000000-0000-4000-8000-000000000048",
+      artifact_uri: PRIVACY_PROOF.artifactUri,
+      artifact_sha256: PRIVACY_PROOF.contentDigest,
+      byte_count: String(PRIVACY_PROOF.byteCount),
+      media_type: "text/html; charset=utf-8"
+    }
+  ]);
+}
+
+async function verifyReceiptRejectsFourthAcceptance(pool) {
+  const userId = randomUUID();
+  const organizationId = randomUUID();
+  const projectId = randomUUID();
+  const receiptId = randomUUID();
+  const requestId = randomUUID();
+  const acceptedAt = "2099-12-31T00:00:00.000Z";
+  const documentIds = [
+    "00000000-0000-4000-8000-000000000021",
+    "00000000-0000-4000-8000-000000000048",
+    "00000000-0000-4000-8000-000000000023"
+  ];
+
+  await pool.query("begin");
+  try {
+    await pool.query(
+      `insert into auth.users (id, email)
+       values ($1, $2)`,
+      [userId, `${userId}@privacy-v3-proof.invalid`]
+    );
+    await pool.query(
+      `insert into ss.organizations (id, created_by_user_id, name)
+       values ($1, $2, 'Privacy V3 proof')`,
+      [organizationId, userId]
+    );
+    await pool.query(
+      `insert into ss.projects (
+         id, organization_id, created_by_user_id, billing_policy_id, name
+       ) values (
+         $1, $2, $3, '00000000-0000-4000-8000-000000000014',
+         'Privacy V3 proof'
+       )`,
+      [projectId, organizationId, userId]
+    );
+    await pool.query(
+      `insert into ss.project_legal_acceptance_receipts (
+         id, organization_id, project_id, user_id, request_id,
+         schema_version, acceptance_statement, authority_digest,
+         accepted_at
+       ) values (
+         $1, $2, $3, $4, $5,
+         'sitesourcery.project-legal-acceptance/v3',
+         'accepted_exact_project_terms_and_acknowledged_privacy',
+         $6, $7
+       )`,
+      [
+        receiptId,
+        organizationId,
+        projectId,
+        userId,
+        requestId,
+        PRIVACY_PROOF_AUTHORITY_DIGEST,
+        acceptedAt
+      ]
+    );
+    for (const documentId of documentIds) {
+      await pool.query(
+        `insert into ss.term_acceptances (
+           id, organization_id, project_id, user_id, document_id,
+           accepted_at, request_id, legal_receipt_id
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          randomUUID(),
+          organizationId,
+          projectId,
+          userId,
+          documentId,
+          acceptedAt,
+          requestId,
+          receiptId
+        ]
+      );
+    }
+    await pool.query("commit");
+  } catch (error) {
+    await pool.query("rollback");
+    throw error;
+  }
+
+  let rogueError = null;
+  await pool.query("begin");
+  try {
+    await pool.query(
+      `insert into ss.term_acceptances (
+         id, organization_id, project_id, user_id, document_id,
+         accepted_at, request_id, legal_receipt_id
+       ) values (
+         $1, $2, $3, $4,
+         '00000000-0000-4000-8000-000000000022',
+         $5, $6, $7
+       )`,
+      [
+        randomUUID(),
+        organizationId,
+        projectId,
+        userId,
+        acceptedAt,
+        requestId,
+        receiptId
+      ]
+    );
+    await pool.query("commit");
+  } catch (error) {
+    rogueError = error;
+    await pool.query("rollback");
+  }
+  assert.ok(rogueError, "a fourth receipt acceptance must fail");
+  assert.equal(rogueError.code, "23514");
+  assert.match(rogueError.message, /exact reviewed three-document bundle/u);
+
+  const count = await pool.query(
+    `select count(*)::integer as acceptance_count
+       from ss.term_acceptances
+      where legal_receipt_id = $1`,
+    [receiptId]
+  );
+  assert.equal(count.rows[0].acceptance_count, 3);
+}
+
+async function verifyPrivacyV3Hold(pool) {
+  const result = await pool.query(`
+    select
+      to_regclass('ss.legal_document_artifacts') is null
+        as artifact_table_absent,
+      to_regclass('ss.project_legal_acceptance_receipts') is null
+        as receipt_table_absent,
+      to_regprocedure('ss.hosted_runtime_contract_v48()') is null
+        as contract_absent,
+      not exists (
+        select 1
+          from information_schema.columns column_record
+         where column_record.table_schema = 'ss'
+           and column_record.table_name = 'term_acceptances'
+           and column_record.column_name = 'legal_receipt_id'
+      ) as receipt_link_absent,
+      not exists (
+        select 1
+          from ss.legal_documents document
+         where document.id = '00000000-0000-4000-8000-000000000048'
+      ) as v3_document_absent,
+      exists (
+        select 1
+          from ss.legal_documents document
+         where document.id = '00000000-0000-4000-8000-000000000022'
+           and document.kind = 'privacy'
+           and document.version = 'SS-HOSTED-PRIVACY-2026-07-30-V2'
+           and document.content_digest =
+             'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/privacy/'
+           and document.effective_at =
+             '2026-07-30T00:00:00Z'::timestamptz
+           and document.retired_at is null
+      ) as v2_authority_unchanged
+  `);
+  for (const [name, ready] of Object.entries(result.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Privacy V3 unsealed rollback failed: ${name}`
+    );
+  }
+}
+
+async function verifyProjectLegalReadiness(pool, expectedReady) {
+  let queryError = null;
+  const legalDiagnostics = {};
+  const diagnosticPool = {
+    connect: (...args) => pool.connect(...args),
+    async query(...args) {
+      try {
+        const result = await pool.query(...args);
+        if (args[0].includes("v48_catalog_immutability_triggers")) {
+          legalDiagnostics.catalog = result.rows[0] ?? null;
+        } else if (args[0].includes("as v2_artifact_ready")) {
+          legalDiagnostics.data = result.rows[0] ?? null;
+        }
+        return result;
+      } catch (error) {
+        queryError = error;
+        throw error;
+      }
+    }
+  };
+  const authority = createCanonicalPostgresAuthority({
+    pool: diagnosticPool
+  });
+  const readiness = await authority.readiness();
+  if (queryError) throw queryError;
+  if (expectedReady && readiness.projectCreationLegal.ready !== true) {
+    const functions = await pool.query(`
+      select
+        procedure_record.proname,
+        procedure_record.provolatile,
+        procedure_record.prosecdef,
+        procedure_record.proisstrict,
+        procedure_record.proparallel,
+        procedure_record.prorettype::regtype::text as return_type,
+        btrim(procedure_record.prosrc) as source,
+        procedure_record.proacl::text as acl
+      from pg_proc procedure_record
+      join pg_namespace namespace
+        on namespace.oid = procedure_record.pronamespace
+      where namespace.nspname = 'ss'
+        and procedure_record.proname in (
+          'hosted_runtime_contract_v48',
+          'project_legal_json_digest'
+        )
+      order by procedure_record.proname
+    `);
+    const constraints = await pool.query(`
+      select relation.relname, pg_get_constraintdef(constraint_record.oid)
+        as definition
+      from pg_constraint constraint_record
+      join pg_class relation on relation.oid = constraint_record.conrelid
+      join pg_namespace namespace on namespace.oid = relation.relnamespace
+      where namespace.nspname = 'ss'
+        and relation.relname in (
+          'legal_document_artifacts',
+          'project_legal_acceptance_receipts',
+          'term_acceptances'
+        )
+      order by relation.relname, definition
+    `);
+    legalDiagnostics.functions = functions.rows;
+    legalDiagnostics.constraints = constraints.rows;
+  }
+  assert.equal(
+    readiness.projectCreationLegal.ready,
+    expectedReady,
+    `project legal readiness failed: ${JSON.stringify({
+      readiness,
+      legalDiagnostics
+    })}`
+  );
+  for (const key of [
+    "contract",
+    "v2Artifact",
+    "v3Artifact",
+    "receipts",
+    "authority"
+  ]) {
+    assert.equal(
+      readiness.projectCreationLegal[key],
+      expectedReady,
+      `project legal readiness mismatch: ${key}`
+    );
+  }
+  if (expectedReady) {
+    assert.equal(
+      await authority.projectLegalAuthorityMatches(
+        PRIVACY_PROOF_AUTHORITY
+      ),
+      true
+    );
+  }
+  return {
+    globalReady: readiness.ready,
+    missing: readiness.missing ?? [],
+    ...readiness.projectCreationLegal
+  };
 }
 
 async function verifyPlatformSchema(pool) {
@@ -2973,27 +3394,105 @@ async function verifyPlatformSchema(pool) {
 
 async function main() {
   assert.ok(
-    DATABASE_URL,
-    "SITESOURCERY_PG_MIGRATION_TEST_URL is required"
+    ADMIN_URL,
+    "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL is required"
   );
-  const pool = new Pool({
-    connectionString: DATABASE_URL,
+  const databaseName = `ss_privacy_v3_${randomUUID().replaceAll("-", "")}`;
+  assert.match(databaseName, /^[a-z0-9_]+$/u);
+  const databaseUrl = new URL(ADMIN_URL);
+  assert.match(databaseUrl.protocol, /^postgres(?:ql)?:$/u);
+  databaseUrl.pathname = `/${databaseName}`;
+
+  const adminPool = new Pool({
+    connectionString: ADMIN_URL,
     max: 1
   });
+  let databaseCreated = false;
+  let databaseAbsent = false;
+  let failure = null;
+  let pool = null;
   try {
+    await adminPool.query(`create database "${databaseName}"`);
+    databaseCreated = true;
+    pool = new Pool({
+      connectionString: databaseUrl.toString(),
+      max: 1
+    });
     const identity = await pool.query(
       "select current_database() as database_name"
     );
-    const names = await applyMigrations(pool);
+    assert.equal(identity.rows[0].database_name, databaseName);
+    const { appliedNames, heldName, heldSql } = await applyMigrations(pool);
     await verifyPlatformSchema(pool);
+    await verifyPrivacyV3Hold(pool);
+    const v2Before = await v2AuthorityFingerprint(pool);
+    const readinessBefore = await verifyProjectLegalReadiness(pool, false);
+    await applyPrivacyV3Proof(pool, heldSql);
+    const readinessAfter = await verifyProjectLegalReadiness(pool, true);
+    await verifyReceiptRejectsFourthAcceptance(pool);
+    const v2After = await v2AuthorityFingerprint(pool);
+    assert.deepEqual(v2After, v2Before);
     process.stdout.write(
-      `Applied ${names.length} migrations to ${
-        identity.rows[0].database_name
-      }; platform schema is present.\n`
+      `Applied ${appliedNames.length} migrations; ${heldName} rejected unsealed constants.\n`
     );
+    process.stdout.write(
+      `Applied ${appliedNames.length + 1} migrations with a disposable proof seal.\n`
+    );
+    process.stdout.write(
+      `projectCreationLegalBefore ${JSON.stringify(readinessBefore)}\n`
+    );
+    process.stdout.write(
+      `projectCreationLegalAfter ${JSON.stringify(readinessAfter)}\n`
+    );
+    process.stdout.write(
+      `v2EvidenceByteIdentical ${v2After.row_digest === v2Before.row_digest &&
+        v2After.row_version === v2Before.row_version}\n`
+    );
+    process.stdout.write("rogueFourthAcceptanceRejected true\n");
+  } catch (error) {
+    failure = error;
   } finally {
-    await pool.end();
+    if (pool) {
+      try {
+        await pool.end();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (databaseCreated) {
+      try {
+        await adminPool.query(
+          `select pg_terminate_backend(pid)
+             from pg_stat_activity
+            where datname = $1
+              and pid <> pg_backend_pid()`,
+          [databaseName]
+        );
+        await adminPool.query(`drop database if exists "${databaseName}"`);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    try {
+      const absence = await adminPool.query(
+        `select not exists (
+           select 1 from pg_database where datname = $1
+         ) as database_absent`,
+        [databaseName]
+      );
+      databaseAbsent = absence.rows[0].database_absent === true;
+    } catch (error) {
+      failure ??= error;
+    }
+    try {
+      await adminPool.end();
+    } catch (error) {
+      failure ??= error;
+    }
   }
+  process.stdout.write(`databaseAbsent ${databaseAbsent}\n`);
+  if (failure) throw failure;
+  assert.equal(databaseAbsent, true);
 }
 
 await main();

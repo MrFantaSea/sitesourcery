@@ -2470,3 +2470,163 @@ test("Custom build handoff atomically binds exact financial clearance to one imm
     /hosted_runtime_contract_v48|privacy|on delete cascade|grant all privileges|create table ss\.service_custom_build_(?!handoff_receipts)/iu
   );
 });
+
+test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
+  const privacy = (await migrations()).find(
+    ({ name }) => name === "202608060048_hosted_privacy_v3.sql"
+  );
+  assert.ok(privacy);
+  assert.match(privacy.sql, /^begin;/iu);
+  assert.match(privacy.sql, /commit;\s*$/iu);
+
+  const releaseGuard = privacy.sql.indexOf(
+    "Hosted Privacy V3 release constants are unsealed"
+  );
+  const firstPermanentDdl = privacy.sql.indexOf(
+    "create function ss.reject_delete_v48"
+  );
+  assert.ok(releaseGuard >= 0 && releaseGuard < firstPermanentDdl);
+  assert.match(
+    privacy.sql,
+    /to_regprocedure\('ss\.hosted_runtime_contract_v21\(\)'\)[\s\S]*to_regprocedure\('ss\.hosted_runtime_contract_v47\(\)'\)[\s\S]*canonical-ss-v47-custom-build-handoff[\s\S]*errcode = '55000'/iu
+  );
+  assert.match(
+    privacy.sql,
+    /create temporary table hosted_privacy_v3_release_constants[\s\S]*version text[\s\S]*content_digest text[\s\S]*content_uri text[\s\S]*effective_at timestamptz[\s\S]*byte_count bigint[\s\S]*artifact_uri text[\s\S]*authority_digest text/iu
+  );
+  assert.match(
+    privacy.sql,
+    /'SS-HOSTED-PRIVACY-V3-UNSEALED',\s*null,\s*null,\s*null,\s*null,\s*null,\s*null/iu
+  );
+  assert.doesNotMatch(
+    privacy.sql,
+    /SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3/iu
+  );
+
+  const preflight = privacy.sql.slice(0, firstPermanentDdl);
+  for (const v2Fact of [
+    /00000000-0000-4000-8000-000000000022/iu,
+    /SS-HOSTED-PRIVACY-2026-07-30-V2/iu,
+    /b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b/iu,
+    /https:\/\/sitesourcery\.com\/legal\/privacy\//iu,
+    /2026-07-30T00:00:00Z/iu,
+    /retired_at is null/iu
+  ]) assert.match(preflight, v2Fact);
+
+  assert.match(
+    privacy.sql,
+    /create table ss\.legal_document_artifacts \([\s\S]*document_id uuid primary key references ss\.legal_documents\(id\)[\s\S]*artifact_uri text not null unique[\s\S]*artifact_sha256 ss\.sha256_hex not null[\s\S]*byte_count bigint not null check \(byte_count > 0\)[\s\S]*media_type text not null[\s\S]*text\/html; charset=utf-8[\s\S]*created_at timestamptz not null default clock_timestamp\(\)/iu
+  );
+  assert.match(
+    privacy.sql,
+    /00000000-0000-4000-8000-000000000022[\s\S]*privacy\/versions\/SS-HOSTED-PRIVACY-2026-07-30-V2\/[\s\S]*b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b[\s\S]*19935[\s\S]*text\/html; charset=utf-8/iu
+  );
+  assert.match(
+    privacy.sql,
+    /insert into ss\.legal_documents[\s\S]*00000000-0000-4000-8000-000000000048[\s\S]*release\.version[\s\S]*release\.content_digest::ss\.sha256_hex[\s\S]*release\.content_uri[\s\S]*release\.effective_at[\s\S]*on conflict \(kind, version\) do nothing/iu
+  );
+
+  assert.match(
+    privacy.sql,
+    /create table ss\.project_legal_acceptance_receipts \([\s\S]*id uuid primary key[\s\S]*organization_id uuid not null[\s\S]*project_id uuid not null[\s\S]*user_id uuid not null references auth\.users\(id\)[\s\S]*request_id uuid not null[\s\S]*schema_version text not null[\s\S]*sitesourcery\.project-legal-acceptance\/v3[\s\S]*accepted_exact_project_terms_and_acknowledged_privacy[\s\S]*authority_digest ss\.sha256_hex not null[\s\S]*user_agent_digest ss\.sha256_hex[\s\S]*accepted_at timestamptz not null[\s\S]*created_at timestamptz not null default clock_timestamp\(\)[\s\S]*unique \(organization_id, id\)[\s\S]*unique \(project_id, request_id\)/iu
+  );
+  assert.match(
+    privacy.sql,
+    /alter table ss\.term_acceptances\s+add column legal_receipt_id uuid[\s\S]*foreign key \(organization_id, legal_receipt_id\)[\s\S]*references ss\.project_legal_acceptance_receipts\(organization_id, id\)/iu
+  );
+
+  const expectedTriggers = [
+    ["legal_document_artifact_matches_document", "after insert or update on ss.legal_document_artifacts", "ss.validate_legal_document_artifact()"],
+    ["legal_document_artifacts_no_update", "before update on ss.legal_document_artifacts", "ss.reject_update()"],
+    ["legal_document_artifacts_no_delete", "before delete on ss.legal_document_artifacts", "ss.reject_delete_v48()"],
+    ["project_legal_receipt_exact_bundle", "after insert or update on ss.project_legal_acceptance_receipts", "ss.validate_project_legal_acceptance_receipt()"],
+    ["project_legal_receipts_no_update", "before update on ss.project_legal_acceptance_receipts", "ss.reject_update()"],
+    ["project_legal_receipts_no_delete", "before delete on ss.project_legal_acceptance_receipts", "ss.reject_delete_v48()"],
+    ["term_acceptance_legal_receipt_exact_bundle", "after insert on ss.term_acceptances", "ss.validate_project_legal_acceptance_receipt()"],
+    ["term_acceptances_no_update_v48", "before update on ss.term_acceptances", "ss.reject_update()"],
+    ["term_acceptances_no_delete_v48", "before delete on ss.term_acceptances", "ss.reject_delete_v48()"],
+    ["legal_documents_no_delete_v48", "before delete on ss.legal_documents", "ss.reject_delete_v48()"],
+    ["project_required_terms_no_delete_v48", "before delete on ss.project_required_terms", "ss.reject_delete_v48()"],
+    ["project_required_terms_monotonic_v48", "before update on ss.project_required_terms", "ss.validate_project_required_term_monotonicity()"]
+  ];
+  for (const [name, timing, functionName] of expectedTriggers) {
+    const exact = (value) => value.replaceAll(".", "\\.")
+      .replaceAll("(", "\\(").replaceAll(")", "\\)");
+    assert.match(
+      privacy.sql,
+      new RegExp(
+        `create (?:constraint )?trigger ${name}[\\s\\S]*${exact(timing)}[\\s\\S]*execute function[\\s\\S]*${exact(functionName)}`,
+        "iu"
+      ),
+      `missing exact ${name}`
+    );
+  }
+  assert.match(
+    privacy.sql,
+    /project_legal_receipt_exact_bundle[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    privacy.sql,
+    /term_acceptance_legal_receipt_exact_bundle[\s\S]*deferrable initially deferred/iu
+  );
+  assert.match(
+    privacy.sql,
+    /legal_document_artifact_matches_document[\s\S]*deferrable initially deferred/iu
+  );
+
+  const receiptGuardStart = privacy.sql.indexOf(
+    "create function ss.validate_project_legal_acceptance_receipt"
+  );
+  const receiptGuardEnd = privacy.sql.indexOf("$$;", receiptGuardStart);
+  const receiptGuard = privacy.sql.slice(receiptGuardStart, receiptGuardEnd);
+  for (const invariant of [
+    /count\(\*\) = 3/iu,
+    /00000000-0000-4000-8000-000000000021/iu,
+    /00000000-0000-4000-8000-000000000048/iu,
+    /00000000-0000-4000-8000-000000000023/iu,
+    /tg_relid = 'ss\.project_legal_acceptance_receipts'::regclass/iu,
+    /tg_relid = 'ss\.term_acceptances'::regclass/iu,
+    /acceptance\.organization_id = receipt_record\.organization_id/iu,
+    /acceptance\.project_id = receipt_record\.project_id/iu,
+    /acceptance\.user_id = receipt_record\.user_id/iu,
+    /acceptance\.request_id = receipt_record\.request_id/iu,
+    /acceptance\.accepted_at = receipt_record\.accepted_at/iu,
+    /acceptance\.legal_receipt_id = receipt_record\.id/iu,
+    /project_legal_json_digest\(jsonb_build_object/iu,
+    /receipt_record\.authority_digest <> expected_authority_digest/iu
+  ]) assert.match(receiptGuard, invariant);
+
+  assert.match(
+    privacy.sql,
+    /create function ss\.project_legal_json_digest\(value jsonb\)[\s\S]*returns ss\.sha256_hex[\s\S]*immutable[\s\S]*strict[\s\S]*parallel safe[\s\S]*security definer[\s\S]*extensions\.digest[\s\S]*service_custom_build_handoff_canonical_json\(value\)[\s\S]*grant execute on function ss\.project_legal_json_digest\(jsonb\)\s+to service_role/iu
+  );
+
+  assert.match(
+    privacy.sql,
+    /to_jsonb\(new\) - 'acceptance_id' is distinct from[\s\S]*new_acceptance\.accepted_at < old_acceptance\.accepted_at[\s\S]*new_acceptance\.effective_at < old_acceptance\.effective_at/iu
+  );
+  assert.match(
+    privacy.sql,
+    /alter table ss\.legal_document_artifacts enable row level security[\s\S]*force row level security[\s\S]*legal_document_artifacts_authenticated_read[\s\S]*to authenticated[\s\S]*current_user_id\(\) is not null/iu
+  );
+  assert.match(
+    privacy.sql,
+    /alter table ss\.project_legal_acceptance_receipts enable row level security[\s\S]*force row level security[\s\S]*project_legal_acceptance_receipts_service_read[\s\S]*project_legal_acceptance_receipts_service_insert/iu
+  );
+  assert.match(
+    privacy.sql,
+    /revoke all on table ss\.legal_document_artifacts[\s\S]*grant select on table ss\.legal_document_artifacts\s+to authenticated, service_role/iu
+  );
+  assert.match(
+    privacy.sql,
+    /revoke all on table ss\.project_legal_acceptance_receipts[\s\S]*grant select, insert on table ss\.project_legal_acceptance_receipts\s+to service_role/iu
+  );
+  assert.match(
+    privacy.sql,
+    /create function ss\.hosted_runtime_contract_v48\(\)[\s\S]*returns text[\s\S]*language sql[\s\S]*stable[\s\S]*select 'canonical-ss-v48-hosted-privacy-v3'[\s\S]*revoke all on function ss\.hosted_runtime_contract_v48\(\)[\s\S]*grant execute on function ss\.hosted_runtime_contract_v48\(\)\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    privacy.sql,
+    /update ss\.legal_documents|delete from ss\.legal_documents|on delete cascade|grant all privileges/iu
+  );
+});
