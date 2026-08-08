@@ -46,6 +46,12 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CANONICAL_PHONE_DISPLAY = "(856) 244-1220";
 const CANONICAL_PHONE_TEL = "tel:+18562441220";
 const CANONICAL_MAILBOX = "sitesourcery@proton.me";
+const HELD_ALAKAZAM_PRICE_DISCLOSURE =
+  "The planned $25, $35, and $50 Alakazam plans are not available.";
+const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
+  "faq/index.html",
+  "legal/website-terms/index.html",
+]);
 
 /**
  * Root-level HTML that is not a route folder: the 404 page, the print flyer,
@@ -183,7 +189,21 @@ function checkContact(page, source) {
 }
 
 function checkPrices(page, source, allowed) {
-  for (const raw of source.match(PRICE) ?? []) {
+  let priceSource = source;
+  if (HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES.has(page)) {
+    const disclosureCount = source.split(
+      HELD_ALAKAZAM_PRICE_DISCLOSURE
+    ).length - 1;
+    if (disclosureCount !== 1) {
+      fail(
+        page,
+        `held Alakazam price disclosure must appear exactly once, found ${disclosureCount}`
+      );
+    } else {
+      priceSource = source.replace(HELD_ALAKAZAM_PRICE_DISCLOSURE, "");
+    }
+  }
+  for (const raw of priceSource.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
     if (!allowed.has(amount)) {
       fail(
