@@ -21,7 +21,7 @@ const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
 const SELLER_IDENTITY = "Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY. Desiderata Labs LLC is the legal seller.";
 const SELLER_IDENTITY_BY_FILE = Object.freeze({
-  "legal/privacy/index.html": "Desiderata Labs LLC is the legal seller and operator of this website. Site Sourcery is its public brand.",
+  "legal/privacy/index.html": "Desiderata Labs LLC operates this website under the filed New Jersey alternate name SITESOURCERY. Site Sourcery is the brand presentation of SITESOURCERY. Desiderata Labs LLC is the legal seller.",
 });
 const SUMMARY_WORD_LIMIT = 26;
 const SUMMARY_GRADE_LIMIT = 8;
@@ -32,7 +32,7 @@ const LEGAL_CLAUSE_DIGESTS = Object.freeze({
     "current-product": "b77fba2c1bd31df3efcb97e85fa4993548ebb1b812361fd02321dbb65d9defd6",
   }),
   "legal/privacy/index.html": Object.freeze({
-    "operator": "000edfee33e2843236cf8e3ebcf6f108f2a171bd9565bee5a02fa1e00f020345",
+    "operator": "00ba1178678958482b251b1ece742a7af5ac6115c8222830e1c416541ed263d0",
     "public-pages": "8fb6db213198a7dd5e5194560ebab2910f2ce68c66d7ee20ea523f8bedd95085",
     "accounts": "46053f73c2eadf928c1630847a32834dd33f7be46a794f8cc2a5f27e1bc1f7c2",
     "projects": "97b5bc793aaec50eccae3fe0e7adfc52684b5b6f05fae840c8eb07682df027b7",

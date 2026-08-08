@@ -1698,7 +1698,7 @@ export function validatePublicTruthTextSet({
     "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
   ]) requireVisible(terms, marker, "legal/website-terms/index.html", errors);
   for (const marker of [
-    "Desiderata Labs LLC is the legal seller and operator of this website.",
+    "Desiderata Labs LLC operates this website under the filed New Jersey alternate name SITESOURCERY.",
     "The public pages in this release are built without an inquiry form, visitor upload, advertising tracker, or page-level analytics.",
     "The Start chooser uses selected buttons only to show a recommendation on the current page and does not send that selection.",
     "The Responder is held from sale. Its public page describes an intended flow already present in the page and does not ask for customer data, store a setup, contact a provider, create a quote, take payment, or activate a message, booking, review request, invoice action, or other integration.",

@@ -169,8 +169,8 @@ test("Responder and FAQ expose inquiry-only held status with no active service o
 test("legal-copy gate rejects a changed substantive clause", async () => {
   const errors = await routeErrors("/legal/privacy/", (source) =>
     source.replace(
-      "Desiderata Labs LLC is the legal seller and operator of this website",
-      "Desiderata Labs LLC runs this website",
+      "Desiderata Labs LLC operates this website under the filed New Jersey alternate name ",
+      "Desiderata Labs LLC runs this website under ",
     ));
   assert.match(errors.join("\n"), /substantive clause operator changed/u);
 });

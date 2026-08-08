@@ -104,9 +104,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-privacy-main",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "4f8c2c02d73d072c02ea200f0f9c9a397b7bb182d5107860efb5e6083782c073",
+    sourceSha256: "8928bf10870f30392e260d6615202dc65f2b88b0a22fb151d79f5796fba26b06",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
-    hostedSha256: "08e0af445f40117754b01d71f2478c48701c5ef83f9ba71deb0d56809c4f1579",
+    hostedSha256: "e9208092c4a4e9c3c8ec0b9a64e118473c3d02bc6cc4a8697822b24949e4cfd5",
   }),
   slot({
     id: "legal-website-terms-head",
