@@ -51,10 +51,12 @@ import {
   assertImmutableLegalArtifactSources,
   assertLegalArtifactRelativePath,
   assertPrivacyV3CandidateSources,
+  assertPrivacyV3ContentApprovalPending,
   assertPrivacyV3Unsealed,
   assertUnsealedPrivacyCurrentAlias,
   HOSTED_PRIVACY_V2_ARTIFACT,
   HOSTED_PRIVACY_V3_CANDIDATE,
+  HOSTED_PRIVACY_V3_CONTENT,
   HOSTED_PRIVACY_V3_RELEASE,
   HOSTED_WEBSITE_TERMS_V2_ARTIFACT,
 } from "../hosted-truth/legal-artifacts.mjs";
@@ -68,7 +70,19 @@ import {
   renderPrivacyV3Review,
 } from "../hosted-truth/render-privacy-v3-review.mjs";
 import {
+  PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+  PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+  PRIVACY_V3_CONTENT_SEAL_SCHEMA,
+  PRIVACY_V3_CONTENT_TEMPLATE_TOKENS,
+  readPrivacyV3ContentSeal,
+  sealPrivacyV3Content,
+  validatePrivacyV3ContentApproval,
+  validatePrivacyV3ContentSeal,
+} from "../hosted-truth/seal-privacy-v3-content.mjs";
+import {
   PRIVACY_V3_AUTHORITY_SCHEMA,
+  createPrivacyV3RenderPlan,
+  normalizePrivacyV3FinalPage,
   PRIVACY_V3_OWNER_APPROVAL,
 } from "../hosted-truth/privacy-v3-render.mjs";
 
@@ -125,6 +139,17 @@ const TERMS_TOPICS = [
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function exactPrivacyV3ReviewApprovalFixture() {
+  return {
+    schema: PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+    statement: PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+    approvalReference: "TEST-ONLY-PRIVACY-V3-EXACT-REVIEW-APPROVAL",
+    approvedAt: "2099-12-30T12:34:56.000Z",
+    reviewArtifactSha256: HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+    reviewArtifactByteCount: HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
+  };
 }
 
 function marker(slot, edge) {
@@ -724,6 +749,20 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
     byteCount: null,
     authorityDigest: null,
   });
+  assert.equal(assertPrivacyV3ContentApprovalPending(), true);
+  assert.deepEqual(HOSTED_PRIVACY_V3_CONTENT, {
+    state: "review-frozen-approval-pending",
+    published: false,
+    deployable: false,
+    reviewArtifactSha256:
+      "1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14",
+    reviewArtifactByteCount: 25_994,
+    contentTemplateSha256:
+      "8bc347cf8c0755d7e923fef60f5c481660ee37ca3dd1bbaa1df4f1371a018bfc",
+    contentTemplateByteCount: 25_763,
+    approvalReceiptSha256: null,
+    contentSealSha256: null,
+  });
 
   const review = await renderPrivacyV3Review({ root: ROOT, outputRoot });
   const current = await readFile(
@@ -736,12 +775,34 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
   assert.equal(review.receipt.state, "unsealed");
   assert.equal(review.receipt.sealable, false);
   assert.equal(review.receipt.deployable, false);
+  assert.equal(
+    review.receipt.approvalState,
+    "exact-review-artifact-approval-pending",
+  );
   assert.equal(review.receipt.renderPath, "real-hosted-builder");
   assert.equal(review.receipt.version, null);
   assert.equal(review.receipt.effectiveAt, null);
   assert.equal(review.receipt.fullPageSha256, null);
   assert.equal(review.receipt.byteCount, null);
   assert.equal(review.receipt.authorityDigest, null);
+  assert.equal(
+    review.receipt.reviewArtifactSha256,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+  );
+  assert.equal(
+    review.receipt.reviewArtifactByteCount,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
+  );
+  assert.equal(
+    review.receipt.expectedReviewArtifactSha256,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+  );
+  assert.equal(
+    review.receipt.expectedReviewArtifactByteCount,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
+  );
+  assert.equal(sha256(current), HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256);
+  assert.equal(current.byteLength, HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount);
   await verifyHostedArtifact({
     root: ROOT,
     output: path.join(outputRoot, "hosted"),
@@ -768,6 +829,155 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
       /^legal\/privacy\/versions\/SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3\/index\.html$/u,
     );
   }
+});
+
+test("privacy V3 content seal freezes exact approved review bytes without inventing release authority", async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-content-seal-test-"));
+  t.after(async () => rm(temporary, { recursive: true, force: true }));
+  const approvalReceipt = exactPrivacyV3ReviewApprovalFixture();
+  assert.deepEqual(
+    validatePrivacyV3ContentApproval(approvalReceipt),
+    approvalReceipt,
+  );
+
+  const firstOutput = path.join(temporary, "first");
+  const secondOutput = path.join(temporary, "second");
+  const first = await sealPrivacyV3Content({
+    root: ROOT,
+    outputRoot: firstOutput,
+    approvalReceipt,
+  });
+  const second = await sealPrivacyV3Content({
+    root: ROOT,
+    outputRoot: secondOutput,
+    approvalReceipt,
+  });
+  const [firstReceiptBytes, secondReceiptBytes] = await Promise.all([
+    readFile(path.join(firstOutput, "privacy-v3-content-seal.json")),
+    readFile(path.join(secondOutput, "privacy-v3-content-seal.json")),
+  ]);
+  assert.equal(firstReceiptBytes.equals(secondReceiptBytes), true);
+  assert.deepEqual(first.receipt, second.receipt);
+  assert.deepEqual(
+    await readPrivacyV3ContentSeal(
+      path.join(firstOutput, "privacy-v3-content-seal.json"),
+    ),
+    first.receipt,
+  );
+
+  const receipt = JSON.parse(firstReceiptBytes.toString("utf8"));
+  assert.equal(receipt.schema, PRIVACY_V3_CONTENT_SEAL_SCHEMA);
+  assert.equal(receipt.state, "content-approved-unreleased");
+  assert.equal(receipt.published, false);
+  assert.equal(receipt.deployable, false);
+  assert.equal(receipt.releaseFinalizationRequired, true);
+  assert.deepEqual(receipt.release, {
+    version: null,
+    effectiveAt: null,
+    fullPageSha256: null,
+    byteCount: null,
+    artifactUri: null,
+    authorityDigest: null,
+  });
+  assert.equal(
+    receipt.approvalReceiptSha256,
+    sha256(canonicalJson(approvalReceipt)),
+  );
+  const receiptBody = { ...receipt };
+  delete receiptBody.contentSealSha256;
+  assert.equal(
+    receipt.contentSealSha256,
+    sha256(canonicalJson(receiptBody)),
+  );
+
+  const [reviewCurrent, reviewVersioned, templateCurrent, templateVersioned] =
+    await Promise.all([
+      readFile(path.join(firstOutput, receipt.reviewArtifact.file)),
+      readFile(path.join(firstOutput, receipt.reviewArtifact.versionedFile)),
+      readFile(path.join(firstOutput, receipt.contentTemplate.file)),
+      readFile(path.join(firstOutput, receipt.contentTemplate.versionedFile)),
+    ]);
+  assert.equal(reviewCurrent.equals(reviewVersioned), true);
+  assert.equal(templateCurrent.equals(templateVersioned), true);
+  assert.equal(sha256(reviewCurrent), receipt.reviewArtifact.sha256);
+  assert.equal(reviewCurrent.byteLength, receipt.reviewArtifact.byteCount);
+  assert.equal(sha256(templateCurrent), receipt.contentTemplate.sha256);
+  assert.equal(templateCurrent.byteLength, receipt.contentTemplate.byteCount);
+  assert.match(
+    templateCurrent.toString("utf8"),
+    new RegExp(PRIVACY_V3_CONTENT_TEMPLATE_TOKENS.version, "u"),
+  );
+  assert.match(
+    templateCurrent.toString("utf8"),
+    new RegExp(PRIVACY_V3_CONTENT_TEMPLATE_TOKENS.effectiveLabel, "u"),
+  );
+  assert.doesNotMatch(
+    templateCurrent.toString("utf8"),
+    /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3|Effective [A-Z][a-z]+ \d{1,2}, \d{4}/u,
+  );
+  await verifyHostedArtifact({
+    root: ROOT,
+    output: path.join(firstOutput, "template-hosted"),
+    privacyV3Render: { mode: "content-template" },
+  });
+
+  for (const mutation of [
+    { ...approvalReceipt, reviewArtifactSha256: "0".repeat(64) },
+    { ...approvalReceipt, reviewArtifactByteCount: approvalReceipt.reviewArtifactByteCount + 1 },
+    { ...approvalReceipt, unexpected: true },
+  ]) {
+    assert.throws(
+      () => validatePrivacyV3ContentApproval(mutation),
+      /must bind exact owner approval to the exact review artifact/u,
+    );
+  }
+
+  const invalidOutput = path.join(temporary, "invalid-approval");
+  await assert.rejects(
+    sealPrivacyV3Content({
+      root: ROOT,
+      outputRoot: invalidOutput,
+      approvalReceipt: { ...approvalReceipt, unexpected: true },
+    }),
+    /must bind exact owner approval to the exact review artifact/u,
+  );
+  await assert.rejects(access(invalidOutput));
+
+  const tamperedDigest = JSON.parse(JSON.stringify(receipt));
+  tamperedDigest.contentSealSha256 = "0".repeat(64);
+  assert.throws(
+    () => validatePrivacyV3ContentSeal(tamperedDigest),
+    /content seal digest changed/u,
+  );
+  const tamperedTemplate = JSON.parse(JSON.stringify(receipt));
+  tamperedTemplate.contentTemplate.sha256 = "0".repeat(64);
+  assert.throws(
+    () => validatePrivacyV3ContentSeal(tamperedTemplate),
+    /content template binding is invalid/u,
+  );
+  const releaseAmbiguous = JSON.parse(JSON.stringify(receipt));
+  releaseAmbiguous.release.version = "UNAPPROVED-V3-TEST";
+  assert.throws(
+    () => validatePrivacyV3ContentSeal(releaseAmbiguous),
+    /must contain no release constants/u,
+  );
+  const pathTraversal = JSON.parse(JSON.stringify(receipt));
+  pathTraversal.reviewArtifact.file = "../review.html";
+  assert.throws(
+    () => validatePrivacyV3ContentSeal(pathTraversal),
+    /invalid immutable legal artifact path/u,
+  );
+  const safeMisdirection = JSON.parse(JSON.stringify(receipt));
+  safeMisdirection.reviewArtifact.file = "review/hosted/legal/privacy/moved.html";
+  const safeMisdirectionBody = { ...safeMisdirection };
+  delete safeMisdirectionBody.contentSealSha256;
+  safeMisdirection.contentSealSha256 = sha256(
+    canonicalJson(safeMisdirectionBody),
+  );
+  assert.throws(
+    () => validatePrivacyV3ContentSeal(safeMisdirection),
+    /review artifact binding is invalid/u,
+  );
 });
 
 test("privacy V3 finalizer requires exact owner inputs and deterministically emits integration constants", async (t) => {
@@ -800,6 +1010,45 @@ test("privacy V3 finalizer requires exact owner inputs and deterministically emi
   );
   await assert.rejects(access(mismatchedDate));
 
+  const contentSealOutput = path.join(temporary, "content-seal");
+  const sealedContent = await sealPrivacyV3Content({
+    root: ROOT,
+    outputRoot: contentSealOutput,
+    approvalReceipt: exactPrivacyV3ReviewApprovalFixture(),
+  });
+  const contentSealFile = path.join(
+    contentSealOutput,
+    "privacy-v3-content-seal.json",
+  );
+  const missingContentSeal = path.join(temporary, "missing-content-seal");
+  await assert.rejects(
+    finalizePrivacyV3({
+      root: ROOT,
+      outputRoot: missingContentSeal,
+      version,
+      effectiveAt,
+      ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+    }),
+    /requires exactly one content seal source/u,
+  );
+  await assert.rejects(access(missingContentSeal));
+
+  const tamperedContentSeal = JSON.parse(JSON.stringify(sealedContent.receipt));
+  tamperedContentSeal.contentSealSha256 = "0".repeat(64);
+  const tamperedContentSealOutput = path.join(temporary, "tampered-content-seal");
+  await assert.rejects(
+    finalizePrivacyV3({
+      root: ROOT,
+      outputRoot: tamperedContentSealOutput,
+      version,
+      effectiveAt,
+      ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+      contentSeal: tamperedContentSeal,
+    }),
+    /content seal digest changed/u,
+  );
+  await assert.rejects(access(tamperedContentSealOutput));
+
   const firstOutput = path.join(temporary, "first");
   const secondOutput = path.join(temporary, "second");
   const options = {
@@ -808,8 +1057,16 @@ test("privacy V3 finalizer requires exact owner inputs and deterministically emi
     effectiveAt,
     ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
   };
-  const first = await finalizePrivacyV3({ ...options, outputRoot: firstOutput });
-  const second = await finalizePrivacyV3({ ...options, outputRoot: secondOutput });
+  const first = await finalizePrivacyV3({
+    ...options,
+    outputRoot: firstOutput,
+    contentSeal: sealedContent.receipt,
+  });
+  const second = await finalizePrivacyV3({
+    ...options,
+    outputRoot: secondOutput,
+    contentSealFile,
+  });
   const [firstReceiptBytes, secondReceiptBytes] = await Promise.all([
     readFile(path.join(firstOutput, "privacy-v3-release-constants.json")),
     readFile(path.join(secondOutput, "privacy-v3-release-constants.json")),
@@ -824,12 +1081,27 @@ test("privacy V3 finalizer requires exact owner inputs and deterministically emi
   assert.equal(current.equals(versioned), true);
   assert.equal(receipt.fullPageSha256, sha256(current));
   assert.equal(receipt.byteCount, current.byteLength);
+  assert.equal(receipt.schema, "sitesourcery.hosted-privacy-v3-finalization/v2");
   assert.equal(receipt.state, "owner-approved-finalization");
   assert.equal(receipt.sealable, true);
   assert.equal(receipt.published, false);
   assert.equal(receipt.integrationRequired, true);
   assert.equal(receipt.version, version);
   assert.equal(receipt.effectiveAt, effectiveAt);
+  assert.deepEqual(receipt.contentSeal, {
+    schema: sealedContent.receipt.schema,
+    state: sealedContent.receipt.state,
+    contentSealSha256: sealedContent.receipt.contentSealSha256,
+    approvalReceiptSchema: sealedContent.receipt.approvalReceipt.schema,
+    approvalStatement: sealedContent.receipt.approvalReceipt.statement,
+    approvalReceiptSha256: sealedContent.receipt.approvalReceiptSha256,
+    approvalReference: sealedContent.receipt.approvalReceipt.approvalReference,
+    approvedAt: sealedContent.receipt.approvalReceipt.approvedAt,
+    reviewArtifactSha256: sealedContent.receipt.reviewArtifact.sha256,
+    reviewArtifactByteCount: sealedContent.receipt.reviewArtifact.byteCount,
+    contentTemplateSha256: sealedContent.receipt.contentTemplate.sha256,
+    contentTemplateByteCount: sealedContent.receipt.contentTemplate.byteCount,
+  });
   assert.equal(
     receipt.authorityDigest,
     sha256(canonicalJson({
@@ -850,6 +1122,26 @@ test("privacy V3 finalizer requires exact owner inputs and deterministically emi
   assert.match(finalSource, new RegExp(version, "u"));
   assert.match(finalSource, /Effective December 31, 2099/u);
   assert.doesNotMatch(finalSource, /noindex|unsealed|CLAUSE-LAYOUT-REVIEW/u);
+  const normalizedFinal = Buffer.from(
+    normalizePrivacyV3FinalPage(
+      finalSource,
+      createPrivacyV3RenderPlan({
+        mode: "final",
+        version,
+        effectiveAt,
+        ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+      }),
+    ),
+    "utf8",
+  );
+  assert.equal(
+    sha256(normalizedFinal),
+    receipt.contentSeal.contentTemplateSha256,
+  );
+  assert.equal(
+    normalizedFinal.byteLength,
+    receipt.contentSeal.contentTemplateByteCount,
+  );
   await verifyHostedArtifact({
     root: ROOT,
     output: path.join(firstOutput, "hosted"),

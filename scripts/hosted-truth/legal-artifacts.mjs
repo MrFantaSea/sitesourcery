@@ -43,6 +43,25 @@ export const HOSTED_PRIVACY_V3_CANDIDATE = Object.freeze({
 });
 
 /*
+ * These are review/content identities, not release authority. They freeze the
+ * exact noindex review artifact and the release-normalized content template
+ * while exact owner approval, release identity, and publication remain open.
+ */
+export const HOSTED_PRIVACY_V3_CONTENT = Object.freeze({
+  state: "review-frozen-approval-pending",
+  published: false,
+  deployable: false,
+  reviewArtifactSha256:
+    "1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14",
+  reviewArtifactByteCount: 25_994,
+  contentTemplateSha256:
+    "8bc347cf8c0755d7e923fef60f5c481660ee37ca3dd1bbaa1df4f1371a018bfc",
+  contentTemplateByteCount: 25_763,
+  approvalReceiptSha256: null,
+  contentSealSha256: null,
+});
+
+/*
  * An unsealed branch deliberately owns no V3 authority constants. The exact version,
  * effective time, full-page digest, byte count, and bundle authority digest
  * are filled only after the rendered owner/legal review and cutover date are
@@ -131,6 +150,59 @@ export function assertPrivacyV3Unsealed(release = HOSTED_PRIVACY_V3_RELEASE) {
   ];
   if (release.state !== "unsealed" || unset.some((value) => value !== null)) {
     throw new Error("hosted privacy V3 must remain explicitly unsealed until owner freeze");
+  }
+  return true;
+}
+
+export function assertPrivacyV3ContentApprovalPending(
+  content = HOSTED_PRIVACY_V3_CONTENT,
+) {
+  if (
+    content.state !== "review-frozen-approval-pending"
+    || content.published !== false
+    || content.deployable !== false
+    || content.approvalReceiptSha256 !== null
+    || content.contentSealSha256 !== null
+  ) {
+    throw new Error(
+      "hosted privacy V3 content must remain approval-pending in source control",
+    );
+  }
+  return true;
+}
+
+function assertContentIdentity(bytes, sha256, byteCount, label) {
+  if (!(bytes instanceof Uint8Array)) {
+    throw new Error(`${label} bytes are required`);
+  }
+  if (bytes.byteLength !== byteCount || digest(bytes) !== sha256) {
+    throw new Error(`${label} identity changed without a reviewed content update`);
+  }
+}
+
+export function assertPrivacyV3ContentInputs({
+  reviewBytes,
+  contentTemplateBytes,
+} = {}) {
+  assertPrivacyV3ContentApprovalPending();
+  if (reviewBytes !== undefined) {
+    assertContentIdentity(
+      reviewBytes,
+      HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+      HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
+      "privacy V3 review artifact",
+    );
+  }
+  if (contentTemplateBytes !== undefined) {
+    assertContentIdentity(
+      contentTemplateBytes,
+      HOSTED_PRIVACY_V3_CONTENT.contentTemplateSha256,
+      HOSTED_PRIVACY_V3_CONTENT.contentTemplateByteCount,
+      "privacy V3 content template",
+    );
+  }
+  if (reviewBytes === undefined && contentTemplateBytes === undefined) {
+    throw new Error("privacy V3 content identity requires review or template bytes");
   }
   return true;
 }

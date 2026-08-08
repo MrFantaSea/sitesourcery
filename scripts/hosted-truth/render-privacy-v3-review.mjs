@@ -5,9 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildHostedArtifact } from "../build-hosted.mjs";
+import { digest } from "../../server/hosted/security.mjs";
 import {
+  assertPrivacyV3ContentInputs,
   assertPrivacyV3CandidateSources,
   assertPrivacyV3Unsealed,
+  HOSTED_PRIVACY_V3_CONTENT,
   HOSTED_PRIVACY_V3_CANDIDATE,
 } from "./legal-artifacts.mjs";
 import {
@@ -67,21 +70,35 @@ export async function renderPrivacyV3Review({
       output: hostedRoot,
       privacyV3Render: { mode: "review" },
     });
-    const rendered = await readFile(path.join(absoluteOutput, currentFile), "utf8");
+    const [currentBytes, versionedBytes] = await Promise.all([
+      readFile(path.join(absoluteOutput, currentFile)),
+      readFile(path.join(absoluteOutput, versionedFile)),
+    ]);
+    if (!currentBytes.equals(versionedBytes)) {
+      throw new Error("privacy V3 review current and versioned bytes are not identical");
+    }
+    assertPrivacyV3ContentInputs({ reviewBytes: currentBytes });
     const receipt = Object.freeze({
-      schema: "sitesourcery.hosted-privacy-v3-clause-layout-review/v2",
+      schema: "sitesourcery.hosted-privacy-v3-clause-layout-review/v3",
       state: "unsealed",
       sealable: false,
       deployable: false,
+      approvalState: "exact-review-artifact-approval-pending",
       renderPath: "real-hosted-builder",
       version: null,
       effectiveAt: null,
       fullPageSha256: null,
       byteCount: null,
       authorityDigest: null,
+      reviewArtifactSha256: digest(currentBytes),
+      reviewArtifactByteCount: currentBytes.byteLength,
+      expectedReviewArtifactSha256:
+        HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+      expectedReviewArtifactByteCount:
+        HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
       reviewLabel: PRIVACY_V3_REVIEW_VERSION,
       limitation:
-        "Real hosted clause/layout review only. Owner-approved exact version and effective UTC values must later pass the separate finalizer before release constants exist.",
+        "Real hosted clause/layout review only. Exact owner approval of this review digest and byte count is required before the nondeployable content seal; owner-approved exact release values must later pass the separate finalizer before release constants exist.",
       currentFile,
       versionedFile,
     });
@@ -90,7 +107,11 @@ export async function renderPrivacyV3Review({
       `${JSON.stringify(receipt, null, 2)}\n`,
       "utf8",
     );
-    return Object.freeze({ outputRoot: absoluteOutput, rendered, receipt });
+    return Object.freeze({
+      outputRoot: absoluteOutput,
+      rendered: currentBytes.toString("utf8"),
+      receipt,
+    });
   } catch (error) {
     await rm(absoluteOutput, { recursive: true, force: true });
     throw error;

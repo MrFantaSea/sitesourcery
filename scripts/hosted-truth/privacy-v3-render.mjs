@@ -8,6 +8,12 @@ export const PRIVACY_V3_REVIEW_VERSION =
   "SS-HOSTED-PRIVACY-CLAUSE-LAYOUT-REVIEW-DRAFT-V3";
 export const PRIVACY_V3_REVIEW_EFFECTIVE_LABEL =
   "Not effective — clause and layout review only";
+export const PRIVACY_V3_CONTENT_TEMPLATE_VERSION =
+  "SS-HOSTED-PRIVACY-CONTENT-TEMPLATE-V3";
+export const PRIVACY_V3_CONTENT_TEMPLATE_VERSION_TOKEN =
+  "__SITESOURCERY_PRIVACY_V3_VERSION__";
+export const PRIVACY_V3_CONTENT_TEMPLATE_EFFECTIVE_LABEL_TOKEN =
+  "__SITESOURCERY_PRIVACY_V3_EFFECTIVE_LABEL__";
 export const PRIVACY_V3_OWNER_APPROVAL =
   "owner-approved-exact-privacy-v3-release-values";
 export const PRIVACY_V3_AUTHORITY_SCHEMA =
@@ -100,8 +106,27 @@ export function createPrivacyV3RenderPlan(options = {}) {
         `legal/privacy/versions/${PRIVACY_V3_REVIEW_VERSION}/index.html`,
     });
   }
+  if (options?.mode === "content-template") {
+    if (
+      Object.keys(options).some((key) => key !== "mode")
+    ) {
+      throw new Error("privacy V3 content-template render accepts no release constants");
+    }
+    return Object.freeze({
+      mode: "content-template",
+      state: "content-template-unreleased",
+      sealable: false,
+      deployable: false,
+      version: null,
+      effectiveAt: null,
+      effectiveLabel: PRIVACY_V3_CONTENT_TEMPLATE_EFFECTIVE_LABEL_TOKEN,
+      displayVersion: PRIVACY_V3_CONTENT_TEMPLATE_VERSION_TOKEN,
+      versionedFile:
+        `legal/privacy/versions/${PRIVACY_V3_CONTENT_TEMPLATE_VERSION}/index.html`,
+    });
+  }
   if (options?.mode !== "final") {
-    throw new Error("privacy V3 render mode must be review or final");
+    throw new Error("privacy V3 render mode must be review, content-template, or final");
   }
   const match = String(options.version ?? "").match(FINAL_VERSION);
   if (
@@ -174,11 +199,14 @@ export function renderPrivacyV3CandidatePage(source, plan) {
         '<body class="vnext-page legal-page privacy-page" data-privacy-v3-review-state="unsealed">',
       )
       .replace(SOURCE_ASIDE, reviewAside);
-  } else if (plan?.mode === "final") {
+  } else if (
+    plan?.mode === "content-template"
+    || plan?.mode === "final"
+  ) {
     const finalAside = [
       '<aside class="quote-panel">',
       `<p class="card-kicker">${plan.effectiveLabel}</p>`,
-      `<h2>Notice ${plan.version}</h2>`,
+      `<h2>Notice ${plan.displayVersion}</h2>`,
       `<p>${FINAL_SUMMARY}</p>`,
       "</aside>",
     ].join("");
@@ -216,15 +244,49 @@ export function assertRenderedPrivacyV3Page(source, plan) {
     ) {
       throw new Error("privacy V3 review render is not visibly and technically unsealed");
     }
+  } else if (plan.mode === "content-template") {
+    if (
+      occurrences(source, PRIVACY_V3_CONTENT_TEMPLATE_VERSION_TOKEN) !== 1
+      || occurrences(
+        source,
+        PRIVACY_V3_CONTENT_TEMPLATE_EFFECTIVE_LABEL_TOKEN,
+      ) !== 1
+      || source.includes(PRIVACY_V3_REVIEW_VERSION)
+      || source.includes("noindex,nofollow")
+      || source.includes("data-privacy-v3-review-state")
+      || /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u.test(source)
+    ) {
+      throw new Error("privacy V3 content template contains release or review identity");
+    }
   } else if (
     plan.mode !== "final"
     || occurrences(source, plan.version) !== 1
     || occurrences(source, plan.effectiveLabel) !== 1
     || source.includes(PRIVACY_V3_REVIEW_VERSION)
+    || source.includes(PRIVACY_V3_CONTENT_TEMPLATE_VERSION_TOKEN)
+    || source.includes(PRIVACY_V3_CONTENT_TEMPLATE_EFFECTIVE_LABEL_TOKEN)
     || source.includes("noindex,nofollow")
     || source.includes("data-privacy-v3-review-state")
   ) {
     throw new Error("privacy V3 final render does not match its exact release plan");
   }
   return true;
+}
+
+export function normalizePrivacyV3FinalPage(source, plan) {
+  if (plan?.mode !== "final") {
+    throw new Error("privacy V3 normalization requires an exact final render plan");
+  }
+  assertRenderedPrivacyV3Page(source, plan);
+  const normalized = source
+    .replace(
+      plan.effectiveLabel,
+      PRIVACY_V3_CONTENT_TEMPLATE_EFFECTIVE_LABEL_TOKEN,
+    )
+    .replace(plan.version, PRIVACY_V3_CONTENT_TEMPLATE_VERSION_TOKEN);
+  assertRenderedPrivacyV3Page(
+    normalized,
+    createPrivacyV3RenderPlan({ mode: "content-template" }),
+  );
+  return normalized;
 }

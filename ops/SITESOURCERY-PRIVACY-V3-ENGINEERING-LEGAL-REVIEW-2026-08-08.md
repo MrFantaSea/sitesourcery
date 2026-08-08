@@ -2,9 +2,11 @@
 
 > **Status: engineering owner-review and correction record. The source remains unsealed; do not publish it or treat this record as legal advice.**
 >
-> This is an engineering review of whether the draft describes the code and database truth, plus legal-operations issue spotting for counsel. It is not a legal opinion and does not decide which statutes apply. Counsel should review the final notice and the operating procedures behind it.
+> This is an engineering review of whether the draft describes the code and database truth, plus legal-operations issue spotting. It is not a legal opinion and does not decide which statutes apply. Optional counsel review is recommended but is separate and nonblocking; the owner gives the final content sign-off in this engineering workflow.
+>
+> **2026-08-08 owner-fact update:** the owner supplied the exact New Jersey filed alternate name and current privacy contact routes recorded below. This is owner-supplied verification, not independent official-record proof or approval of the exact rendered review bytes.
 
-The Phase-B checkpoint at commit `2222f3beac6528df3ce633ca62982efee578e725` is a pre-review draft checkpoint, not approved immutable evidence. This review does not change either privacy fragment. No Privacy V3 version, effective time, digest, or byte count is assigned here.
+The Phase-B checkpoint at commit `2222f3beac6528df3ce633ca62982efee578e725` is a pre-review draft checkpoint, not approved immutable evidence. This review does not change either privacy fragment. No Privacy V3 release version, effective time, full-page release digest, release byte count, or authority digest is assigned here.
 
 ## Scope and method
 
@@ -31,17 +33,19 @@ Ranked release issues:
 6. **P1 — “does not contact a registrar” is too broad.** The browser calls Cloudflare’s DoH resolver rather than a registrar commerce API, but a recursive resolver can contact authoritative nameservers, including infrastructure operated by a registry or registrar.
 7. **P1 — held-service and security claims need deployment evidence.** Alakazam defaults to held but has an approved environment mode; TLS, backups, tracker absence, and provider settings are runtime facts that source code alone cannot prove.
 8. **P1 — the notice lacks a complete operational rights, appeal, retention, provider-category, cross-site-tracking, and material-change process.** Which items are legally mandatory depends on consumers served and statutory thresholds, but CalOPPA may apply independently of CCPA thresholds when California residents’ personally identifiable information is collected.
-9. **P2 — the filed alternate-name claim is not proved by this repository.** Obtain the official filing record before the operator sentence is sealed.
+9. **P2 — filed alternate-name fact resolved as an owner-supplied operating fact, not independent legal proof.** The owner directly verified the exact New Jersey filed name `SITESOURCERY`; an official filing record remains release evidence if the owner or release policy requires independent verification.
 
 ## Owner correction direction and implementation status
 
-At 2026-08-08 13:33 EDT, the owner directed the engineering lane to “fix what you gotta fix and get back to work.” This authorizes a source correction pass for the substantiated findings; it is not counsel approval, approval of unsupported deployment facts, or authority to assign release constants.
+At 2026-08-08 13:33 EDT, the owner directed the engineering lane to “fix what you gotta fix and get back to work.” This authorizes a source correction pass for the substantiated findings; it is not approval of unsupported deployment facts, the exact review artifact, or release constants.
 
-The correction pass addresses the source-level issues behind E-01 through E-16 in the Privacy V3 source and its exact-copy proof surfaces. Where a proposed sentence depended on missing production evidence or an unapproved fixed retention schedule, the implementation uses narrower source-backed language and keeps the corresponding pre-seal evidence condition open. The unverified filed alternate-name and DBA claims were removed from the V3 notice rather than guessed; older separately versioned or public legal surfaces remain a distinct evidence/versioning follow-up and were not rewritten in place. No V3 version, effective date, digest, byte count, or authority digest has been assigned.
+The correction pass addresses the source-level issues behind E-01 through E-16 in the Privacy V3 source and its exact-copy proof surfaces. Where a proposed sentence depended on missing production evidence or an unapproved fixed retention schedule, the implementation uses narrower source-backed language and keeps the corresponding pre-seal evidence condition open. The operator clause uses the exact owner-verified New Jersey filed alternate name `SITESOURCERY`; this review records the source of that fact without upgrading it to independent official-record proof or exact-artifact approval. Older separately versioned or public legal surfaces remain a distinct evidence/versioning follow-up and were not rewritten in place. No V3 release version, effective date, full-page release digest, release byte count, or authority digest has been assigned.
 
 Accepted historical Website Terms bytes were not rewritten. Their older refresh, Download, and entitlement wording requires a separately versioned correction before Privacy V3 can become an integrated operative release. This is an open cross-document release blocker, not a reason to mutate prior acceptance evidence.
 
-This review remains the audit of pre-correction checkpoint `2222f3b`. The corrected source must pass focused tests and a new independent blocker review before a later path-limited correction commit. Owner and counsel still have final sign-off on the exact rendered notice.
+This review remains the audit of pre-correction checkpoint `2222f3b`. The corrected source must pass focused tests and a new independent blocker review before a later path-limited correction commit. The owner retains final sign-off on the exact rendered notice; any counsel review is optional and nonblocking for this engineering gate.
+
+The current real hosted review artifact is SHA-256 `1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14`, 25,994 bytes. The owner has separately verified the exact filed-name spelling `SITESOURCERY`, phone `(856) 244-1220`, and email `sitesourcery@proton.me` as current operating facts. Those fact confirmations do **not** approve that exact review artifact: explicit owner approval bound to this digest and byte count remains open. The separately versioned Website Terms correction also remains an open integrated-release blocker.
 
 ## ACCURACY — sentence-by-sentence findings
 
@@ -67,9 +71,9 @@ This review remains the audit of pre-correction checkpoint `2222f3b`. The correc
 | A-16 | P1 | “Applicable legal rights to access, correct, delete, restrict, or receive information remain available.” | **Vague and potentially overpromising.** “Restrict” is not a uniform US consumer right; “receive information” does not explain portability; no response timing, denial explanation, appeal path, authorized-agent handling, or opt-out mechanism is stated. | Replace with jurisdiction-dependent rights and a real request/appeal process. NJDPA duties apply only if its thresholds are met; CalOPPA disclosures can apply independently. |
 | A-17 | P1 | “Those [support] records are limited to support, security, fraud prevention, abuse handling, legal compliance, and service protection.” | **Purpose promise not demonstrated end to end.** The schema supports records and controls, but the repository alone cannot prove staff access, exports, provider handling, or secondary-use restrictions. | Require an access/purpose runbook, provider contracts, and audit checks before retaining “limited to.” |
 | A-18 | P1 | “Do not put ... health information, regulated records, or sensitive customer data in a page.” | **Warning exists; prevention is not proved.** Validation and HTML escaping protect rendering, but free-text facts can still contain sensitive data. A warning is not a technical rejection or sensitive-data consent process. | `abracadabra` compiler/validation protects output syntax, not data classification. Add product controls or a documented sensitive-data incident/removal path. |
-| A-19 | P1 | “The services ... are not designed for children under 13.” | **Product-position statement, not a complete handling rule.** COPPA can still matter if a general-audience operator has actual knowledge it collected personal information from a child under 13. | Keep the audience statement only with an actual-knowledge escalation, parental-contact, and deletion runbook reviewed by counsel. |
+| A-19 | P1 | “The services ... are not designed for children under 13.” | **Product-position statement, not a complete handling rule.** COPPA can still matter if a general-audience operator has actual knowledge it collected personal information from a child under 13. | Keep the audience statement only with an owner-approved actual-knowledge escalation, parental-contact, and deletion runbook; optional counsel review is advisable but nonblocking. |
 | A-20 | P1 | “A material change ... receives a new effective date and, where required, a direct notice or fresh acceptance...” | **Reasonable promise, but the operational process is not evidenced here.** The draft does not say where the new notice appears, which customers receive direct notice, how lead time is determined, or how fresh acceptance is recorded. | Legal-document/acceptance tables exist, but require a material-change runbook and release test before this promise is sealed. |
-| A-21 | P2 | “Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY.” | **External fact not proved by source.** The 2026-08-08 official-source search did not produce a public filing record sufficient for verification. | Owner must attach the New Jersey alternate-name filing/certificate and exact legal spelling before approval. Do not infer it from branding or repository text. |
+| A-21 | P2 | “Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY.” | **External fact not proved by source; exact spelling now directly verified by the owner.** The 2026-08-08 official-source search did not produce a public filing record sufficient for independent verification. The owner-supplied confirmation resolves the engineering fact question but is not official-record proof or exact-artifact approval. | Record the owner verification as the fact source. Attach the New Jersey alternate-name filing/certificate if the owner or release policy requires independent evidence; do not infer any different spelling from branding or repository text. |
 | A-22 | P2 | “A customer-owned domain remains the customer’s.” | **Contract/policy promise, not a privacy implementation fact.** Dormant domain-procurement tables include provider receipts and domain lifecycle operations, but ownership/control depends on the written scope, registrar account arrangement, and provider terms. | Keep only if the customer agreement and operating procedure guarantee registrant/account control; otherwise say that the separate written scope states ownership and access. |
 | A-23 | P2 | “Website, account, database, backup, transactional-email, payment, file-delivery, and network providers can process records needed for their assigned role.” | **Category statement is plausible but too generic to validate sharing.** The notice does not map data categories to provider categories or clearly address Cloudflare DNS/APNIC, Stripe, transactional email, Proton Mail, object/file storage, and infrastructure logs. | Build a current subprocessor/data-flow inventory and align provider contracts/configuration with the notice. `server/hosted/resend-mail-transport.mjs` requires open/click tracking disabled, but deployment proof is still needed. |
 | A-24 | P2 | “Site Sourcery does not store the readable password.” | **Supported, with a wording improvement.** The service transiently receives the password to derive a salted scrypt PHC verifier; the database stores the verifier and parameters, not a readable password. | Identity migrations and `server/hosted/identity-postgres.mjs`. Prefer “stores a password verifier, not the readable password.” |
@@ -115,7 +119,7 @@ The refresh, “text-free,” direct-Download token, hosting, and registrar stat
 
 California Business and Professions Code § 22575 applies to an operator of a commercial website or online service that collects personally identifiable information through the Internet about California-resident consumers. Its posted-policy requirements include categories collected, categories of third parties, any maintained review/change process, material-change notification process, an effective date, the response to browser Do Not Track or comparable mechanisms if the operator engages in covered cross-site collection, and whether other parties may collect activity over time across different sites.
 
-The signed-in account path collects at least name/email-related information, so counsel should not assume that being a New Jersey LLC or falling below CCPA thresholds avoids CalOPPA. The current unsealed draft correctly has no effective date yet, but it must not be published until an effective date and the other applicable disclosures are present. The tracker statement also needs a release-time artifact and network attestation.
+The signed-in account path collects at least name/email-related information, so the owner should not assume that being a New Jersey LLC or falling below CCPA thresholds avoids CalOPPA. The current unsealed draft correctly has no effective date yet, but it must not be published until an effective date and the other applicable disclosures are present. The tracker statement also needs a release-time artifact and network attestation.
 
 ### L-03 — New Jersey Data Privacy Act applicability and notice duties are unresolved
 
@@ -123,7 +127,7 @@ The NJDPA applies only if the controller conducts business in New Jersey or targ
 
 If the NJDPA applies, its notice provisions require categories processed, processing purposes, all third-party categories, categories shared, rights and appeal instructions, a material-change process and effective date, and an active email or online contact. It also includes request/appeal timing, minimization, purpose limitation, reasonable security, sensitive-data consent, processor-contract, and risk-assessment obligations where applicable. The current draft does not provide a complete appeal flow, third-party/category mapping, or operational request timing.
 
-New Jersey proposed implementing rules for N.J.A.C. 13:45L were published in 2025, with an adoption notice expected in 2026. The official search used for this review did not establish a final adoption. **Do not treat the proposal as binding or absent; counsel must verify the official adoption page immediately before release.**
+New Jersey proposed implementing rules for N.J.A.C. 13:45L were published in 2025, with an adoption notice expected in 2026. The official search used for this review did not establish a final adoption. **Do not treat the proposal as binding or absent; the owner must verify the official adoption page immediately before release, optionally with counsel.**
 
 ### L-04 — retention and deletion disclosure is not operationally complete
 
@@ -149,7 +153,7 @@ Escaping and validation reduce injection risk but do not stop a user from enteri
 
 The service may be general audience and directed to businesses, but the FTC’s COPPA guidance explains that a general-audience service can acquire obligations upon actual knowledge that it collected personal information from a child under 13. “Not designed for children” is therefore not a complete response plan.
 
-**Engineering control:** add input guidance at collection points, a sensitive-data escalation/removal process, and an under-13 actual-knowledge runbook reviewed by counsel.
+**Engineering control:** add input guidance at collection points, a sensitive-data escalation/removal process, and an owner-approved under-13 actual-knowledge runbook. Optional counsel review remains advisable but nonblocking for the engineering gate.
 
 ### L-08 — provider and cross-site disclosures need a maintained data-flow inventory
 
@@ -165,9 +169,9 @@ The Alakazam mode defaults to held, but source explicitly supports an approved m
 
 ### L-10 — operator identity and sale/share facts need owner evidence
 
-The engineering repository cannot prove the alternate-name filing, annual statutory thresholds, or a universal “no sale/share” fact across staff, vendors, and future tooling. These are owner assertions with legal consequences.
+The engineering repository cannot prove the alternate-name filing, annual statutory thresholds, or a universal “no sale/share” fact across staff, vendors, and future tooling. The owner has now supplied the exact filed-name spelling and current phone/email as operating facts, but those remain owner assertions rather than repository or independent official-record proof. The other assertions remain open and have legal consequences.
 
-**Engineering control:** attach the official alternate-name filing; an annual state-law applicability worksheet; and a signed owner statement covering sale, sharing, targeted advertising, profiling, and financial incentives. If any answer changes, the notice and opt-out controls must be reviewed before the processing starts.
+**Engineering control:** retain the official alternate-name filing if the owner or release policy requires independent evidence; maintain an annual state-law applicability worksheet; and keep a signed owner statement covering sale, sharing, targeted advertising, profiling, and financial incentives. If any answer changes, the notice and opt-out controls must be reviewed before the processing starts.
 
 ## ENHANCE — proposed plain-language replacements for owner decision
 
@@ -307,7 +311,7 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 
 **Rationale:** Removes the false “text-free/minimal” wording and names the actual tombstone categories and purposes.
 
-**Approval condition:** owner and counsel approve a written retention schedule with a period or operational criterion for every category, plus backup/replica/support/provider deletion handling. Do not seal this replacement until that schedule exists.
+**Approval condition:** the owner approves a written retention schedule with a period or operational criterion for every category, plus backup/replica/support/provider deletion handling. Optional counsel input may inform that decision but is not an engineering seal prerequisite. Do not seal this replacement until that schedule exists.
 
 - [ ] **APPROVE E-09 after condition passes**
 - [ ] **REJECT E-09**
@@ -358,7 +362,7 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 
 **Rationale:** Removes a non-universal “restrict” promise and explains the operationally relevant rights in plain language.
 
-**Approval condition:** request/appeal runbook, deadline tracking, identity verification, export, deletion, and denial templates pass rehearsal; counsel confirms which timing and authorized-agent statements apply.
+**Approval condition:** request/appeal runbook, deadline tracking, identity verification, export, deletion, and denial templates pass rehearsal; the owner confirms which timing and authorized-agent statements will be published, optionally after counsel review.
 
 - [ ] **APPROVE E-12 after condition passes**
 - [ ] **REJECT E-12**
@@ -392,7 +396,7 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 
 **Rationale:** Adds the actual-knowledge and parent-contact path missing from a mere audience statement.
 
-**Approval condition:** counsel-approved actual-knowledge, verification, deletion, and preservation runbook exists.
+**Approval condition:** an owner-approved actual-knowledge, verification, deletion, and preservation runbook exists. Optional counsel review is recommended but nonblocking for this engineering gate.
 
 - [ ] **APPROVE E-14 after condition passes**
 - [ ] **REJECT E-14**
@@ -424,19 +428,23 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 
 > Desiderata Labs LLC is the legal seller and operates this website under the business name shown in its official New Jersey filing. Site Sourcery is the public brand for that business.
 
-**Rationale:** Keeps the intended plain voice while requiring the official record to control exact naming.
+**Rationale:** Keeps the intended plain voice, records the owner-confirmed exact naming, and leaves independent official-record evidence available if required.
 
-**Approval condition:** attach and verify the alternate-name filing, then insert only the exact filed spelling during the later source-edit review.
+**Approval condition:** the owner supplied and the corrected source already uses the exact spelling `SITESOURCERY`. The owner must still approve the exact rendered review artifact; attach the official filing record if the owner or release policy requires independent verification. Optional counsel review is separate and nonblocking. No further naming edit is authorized by this status update.
 
 - [ ] **APPROVE E-16 after condition passes**
 - [ ] **REJECT E-16**
 
 ## Pre-seal evidence checklist
 
-- [ ] Owner and privacy counsel reviewed this engineering issue list and the final replacements.
-- [ ] Official record proves the operator legal name and exact alternate/business name.
+- [ ] Owner reviewed this engineering issue list and the final replacements.
+- [x] Owner supplied the exact New Jersey filed alternate name `SITESOURCERY` and confirmed `(856) 244-1220` and `sitesourcery@proton.me` as the current privacy contact routes.
+- [ ] Owner explicitly approves exact review artifact SHA-256 `1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14`, 25,994 bytes.
+- [ ] Official record proves the operator legal name and exact alternate/business name, if the owner or release policy requires independent evidence.
+
+Optional counsel review may be obtained for legal advice, but it is not a content-seal or release-finalization prerequisite in this engineering checklist.
 - [ ] Annual applicability worksheet records consumer counts, states served, revenue, and whether personal data is sold, shared, used for targeted advertising, or used for covered profiling.
-- [ ] Counsel checked the current NJDPA statute, final status of proposed N.J.A.C. 13:45L rules, CalOPPA, CCPA/CPRA thresholds if relevant, COPPA, breach laws, and any other state laws for the actual customer footprint.
+- [ ] Owner checked the current NJDPA statute, final status of proposed N.J.A.C. 13:45L rules, CalOPPA, CCPA/CPRA thresholds if relevant, COPPA, breach laws, and any other state laws for the actual customer footprint, optionally with counsel.
 - [ ] Exact compiled public artifact and browser-network capture prove no analytics, advertising tracker, cross-site tracker, unexpected external assets, or guest-fact API request on Make Preview.
 - [ ] Reverse proxy/CDN/hosting configuration is included in the tracker, log, TLS, and security review.
 - [ ] Deployed capability manifest proves Alakazam, publication, registrar commerce, and held custom-service capabilities match the notice.
@@ -451,7 +459,8 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 - [ ] Production evidence proves TLS, secure cookies/session controls, dependency posture, backup completion, protected backup destination, restore success, monitoring, and incident contacts.
 - [ ] New Jersey-aware breach-response runbook includes State Police notification sequencing for covered incidents.
 - [ ] Material-change workflow proves page posting, direct notice when required, lead time, and fresh acceptance where required.
-- [ ] Only after every approved sentence and evidence item is complete should a later task assign version/effective/digest/byte authority and seal the exact bytes.
+- [ ] A separately versioned Website Terms correction resolves the older refresh, Download, and entitlement wording before Privacy V3 becomes an integrated operative release.
+- [ ] Only after exact review-byte approval may the nondeployable content seal be issued; only after the remaining release evidence and Website Terms blocker are complete may a later task assign version/effective/full-page-digest/byte/authority values and finalize release artifacts.
 
 ## Official primary sources consulted
 
@@ -493,4 +502,6 @@ These are proposals only. Checking **APPROVE** authorizes a later, separately re
 
 - [ ] Return approved replacement IDs for a later source-edit task.
 - [ ] Return rejected IDs with replacement direction.
-- [ ] Obtain counsel review before any exact-byte authority or publication step.
+- [ ] Explicitly approve the exact review-artifact digest and byte count before any content-seal step.
+
+Optional counsel review is recommended but remains separate and nonblocking; this owner-review section does not treat it as exact-byte authority.
