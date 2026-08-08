@@ -11,6 +11,7 @@ const {
   customerCustomBuildCompletionEvidenceUrl,
   currentOwnerCustomBuildCompletionEvidence,
   prepareCustomBuildCompletionEvidenceFile,
+  projectLegalEvidencePresentation,
   verifiedCustomerCustomBuildChangeCheckout,
   verifiedCustomerCustomBuildChangeCompletion,
   verifiedCustomerCustomBuildChangeInvoice,
@@ -23,6 +24,44 @@ const {
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
+
+test("legacy project evidence stays visibly linked as accepted privacy V2", () => {
+  const evidence = projectLegalEvidencePresentation({
+    legal: {
+      current: [{
+        kind: "privacy",
+        version: "SS-HOSTED-PRIVACY-2026-07-30-V2",
+        contentDigest:
+          "b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b",
+        evidenceUri:
+          "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/",
+        acceptedAt: "2026-08-01T12:00:00.000Z",
+      }],
+      history: [],
+    },
+  });
+  assert.equal(evidence.current.length, 1);
+  assert.equal(evidence.current[0].label, "Accepted privacy V2");
+  assert.equal(
+    evidence.current[0].evidenceUri,
+    "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/",
+  );
+  assert.doesNotMatch(evidence.current[0].label, /V3/u);
+
+  assert.deepEqual(
+    projectLegalEvidencePresentation({
+      legal: {
+        current: [{
+          ...evidence.current[0],
+          contentDigest: "b".repeat(64),
+          evidenceUri: "https://attacker.test/privacy-v2/",
+        }],
+        history: [],
+      },
+    }).current,
+    [],
+  );
+});
 
 const PROJECT_ID = "30000000-0000-4000-8000-000000000001";
 const QUOTE_ID = "50000000-0000-4000-8000-000000000001";
@@ -470,7 +509,7 @@ function customerChangeInvoice(state = "checkout_available") {
           ? "https://checkout.stripe.com/c/pay/change_1"
           : null,
         checkoutExpiresAt: ready
-          ? "2026-08-07T16:00:00.000Z"
+          ? "2099-08-07T16:00:00.000Z"
           : null,
         settledAt: paid ? "2026-08-07T15:30:00.000Z" : null
       }
@@ -492,7 +531,7 @@ function customerChangeCheckout(invoiceState) {
       invoiceNumber: invoice.invoiceNumber,
       changeOrderId: invoice.changeOrderId,
       url: "https://checkout.stripe.com/c/pay/change_1",
-      expiresAt: "2026-08-07T16:00:00.000Z",
+      expiresAt: "2099-08-07T16:00:00.000Z",
       subtotal: { ...invoice.subtotal },
       tax: { amountMinor: null, state: "calculated_at_checkout" },
       total: { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
@@ -550,7 +589,7 @@ function ownerChangePayments(
       owner: {
         attemptId: CHANGE_ATTEMPT_ID,
         ...defaults,
-        providerRequestExpiresAt: "2026-08-07T16:00:00.000Z",
+        providerRequestExpiresAt: "2099-08-07T16:00:00.000Z",
         eventId: null,
         eventState: null,
         reconciliationCode: null,

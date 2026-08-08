@@ -65,6 +65,49 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function projectLegalAuthorityFixture(overrides = {}) {
+  const privacyVersion =
+    "SS-HOSTED-PRIVACY-2099-01-01-V3";
+  return {
+    schema: "sitesourcery.project-legal-authority/v3",
+    acceptanceStatement:
+      "accepted_exact_project_terms_and_acknowledged_privacy",
+    authorityDigest: "a".repeat(64),
+    documents: [
+      {
+        kind: "privacy",
+        version: privacyVersion,
+        contentDigest: "b".repeat(64),
+        contentUri:
+          "https://sitesourcery.com/legal/privacy/versions/"
+          + privacyVersion + "/",
+        effectiveAt: "2099-01-01T00:00:00.000Z",
+      },
+      {
+        kind: "product",
+        version:
+          "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+        contentDigest:
+          "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+        contentUri:
+          "https://sitesourcery.com/legal/website-terms/#self-service",
+        effectiveAt: "2026-07-30T00:00:00.000Z",
+      },
+      {
+        kind: "website",
+        version:
+          "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+        contentDigest:
+          "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+        contentUri:
+          "https://sitesourcery.com/legal/website-terms/",
+        effectiveAt: "2026-07-30T00:00:00.000Z",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function baseApi(overrides = {}) {
   const project = {
     id: "project_1",
@@ -74,6 +117,8 @@ function baseApi(overrides = {}) {
   };
   return {
     me: async () => ({ user: { id: "user_1", email: "owner@example.com" } }),
+    getProjectLegalAuthority:
+      async () => projectLegalAuthorityFixture(),
     listOrganizations: async () => ({ organizations: [{ id: "org_1", name: "Owner org" }] }),
     listProjects: async () => ({ projects: [project] }),
     getProject: async (id) => ({ project: { ...project, id } }),
@@ -776,8 +821,8 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
   );
   assert.match(
     source,
-    /projectButton\.disabled\s*=\s*!pendingGuestCandidate/u,
-    "project creation requires a reviewed preview",
+    /projectButton\.disabled\s*=\s*!\([\s\S]*?pendingGuestCandidate[\s\S]*?legalCaptureReady/u,
+    "project creation requires a reviewed preview and exact legal capture",
   );
   assert.match(
     source,
@@ -1096,16 +1141,21 @@ test("project creation omits absent options and preserves explicit settings", as
   });
 
   await control.boot();
+  let legalCapture =
+    control.captureProjectLegalAcceptance();
   await control.createProject({
     name: "Customer preview",
-    acceptedTerms: true,
+    legalAcceptance:
+      legalCapture.legalAcceptance,
+    legalAcceptanceEpoch: legalCapture.epoch,
   });
 
   assert.deepEqual(received, {
     input: {
       organizationId: "org_1",
       name: "Customer preview",
-      acceptedTerms: true,
+      legalAcceptance:
+        legalCapture.legalAcceptance,
     },
     options: {
       idempotencyKey: "idem_create_project",
@@ -1124,9 +1174,13 @@ test("project creation omits absent options and preserves explicit settings", as
     false,
   );
 
+  legalCapture =
+    control.captureProjectLegalAcceptance();
   await control.createProject({
     name: "Private customer preview",
-    acceptedTerms: true,
+    legalAcceptance:
+      legalCapture.legalAcceptance,
+    legalAcceptanceEpoch: legalCapture.epoch,
     address: {
       kind: "licensed",
       label: "customer-preview",
@@ -1137,7 +1191,8 @@ test("project creation omits absent options and preserves explicit settings", as
   assert.deepEqual(received.input, {
     organizationId: "org_1",
     name: "Private customer preview",
-    acceptedTerms: true,
+    legalAcceptance:
+      legalCapture.legalAcceptance,
     address: {
       kind: "licensed",
       label: "customer-preview",
@@ -1145,6 +1200,140 @@ test("project creation omits absent options and preserves explicit settings", as
     visibility: "private",
     accessPassword: "long private preview phrase",
   });
+});
+
+test("legal authority boot is public and fail-closed without breaking the signed-out preview", async () => {
+  let authorityReads = 0;
+  const unauthorized = Object.assign(
+    new Error("Sign in required"),
+    { status: 401 },
+  );
+  const held = Object.assign(
+    new Error("Reviewed documents are held"),
+    { code: "LEGAL_CONFIGURATION_REQUIRED", status: 503 },
+  );
+  const control = createHostedControl({
+    api: baseApi({
+      me: async () => { throw unauthorized; },
+      getProjectLegalAuthority: async () => {
+        authorityReads += 1;
+        throw held;
+      },
+    }),
+    idempotencyFactory: () => "legal-held-key",
+  });
+
+  await control.boot();
+  const state = control.getState();
+  assert.equal(authorityReads, 1);
+  assert.equal(state.phase, "signed-out");
+  assert.equal(state.projectLegalAuthorityStatus, "held");
+  assert.equal(state.projectLegalAuthority, null);
+  assert.equal(state.localFallbackAllowed, true);
+  assert.throws(
+    () => control.captureProjectLegalAcceptance(),
+    (error) => error.code === "LEGAL_CONFIGURATION_REQUIRED",
+  );
+});
+
+test("session and organization changes invalidate an already captured legal snapshot", async () => {
+  let createCalls = 0;
+  const control = createHostedControl({
+    api: baseApi({
+      createProject: async () => {
+        createCalls += 1;
+        return { project: { id: "should_not_exist" } };
+      },
+      signOut: async () => ({ signedOut: true }),
+    }),
+    idempotencyFactory: () => "legal-invalidation-key",
+  });
+  await control.boot();
+  const beforeOrganization =
+    control.captureProjectLegalAcceptance();
+  await control.selectOrganization("org_1");
+  await assert.rejects(
+    () => control.createProject({
+      name: "Stale organization capture",
+      legalAcceptance:
+        beforeOrganization.legalAcceptance,
+      legalAcceptanceEpoch:
+        beforeOrganization.epoch,
+    }),
+    (error) => error.code === "LEGAL_AUTHORITY_CHANGED",
+  );
+  assert.equal(createCalls, 0);
+
+  const beforeSignOut =
+    control.captureProjectLegalAcceptance();
+  await control.signOut();
+  assert.notEqual(
+    control.getState().projectLegalAcceptanceEpoch,
+    beforeSignOut.epoch,
+  );
+  assert.throws(
+    () => control.createProject({
+      name: "Stale signed-out capture",
+      legalAcceptance: beforeSignOut.legalAcceptance,
+      legalAcceptanceEpoch: beforeSignOut.epoch,
+    }),
+    (error) => error.code === "ORGANIZATION_REQUIRED",
+  );
+  assert.equal(createCalls, 0);
+});
+
+test("a stale project write never refetches behind the click and explicit refresh requires recapture", async () => {
+  let authorityReads = 0;
+  let createCalls = 0;
+  const stale = Object.assign(
+    new Error("Reviewed authority changed"),
+    { code: "LEGAL_AUTHORITY_CHANGED", status: 409, retryable: true },
+  );
+  const control = createHostedControl({
+    api: baseApi({
+      getProjectLegalAuthority: async () => {
+        authorityReads += 1;
+        return projectLegalAuthorityFixture({
+          authorityDigest: String(authorityReads).repeat(64),
+        });
+      },
+      createProject: async () => {
+        createCalls += 1;
+        throw stale;
+      },
+    }),
+    idempotencyFactory: () => "stale-legal-key",
+  });
+  await control.boot();
+  const captured =
+    control.captureProjectLegalAcceptance();
+  await assert.rejects(
+    () => control.createProject({
+      name: "Stale legal project",
+      legalAcceptance: captured.legalAcceptance,
+      legalAcceptanceEpoch: captured.epoch,
+    }),
+    (error) => error.code === "LEGAL_AUTHORITY_CHANGED",
+  );
+  assert.equal(createCalls, 1);
+  assert.equal(authorityReads, 1);
+
+  await control.refreshProjectLegalAuthority();
+  assert.equal(authorityReads, 2);
+  await assert.rejects(
+    () => control.createProject({
+      name: "Old click cannot replay",
+      legalAcceptance: captured.legalAcceptance,
+      legalAcceptanceEpoch: captured.epoch,
+    }),
+    (error) => error.code === "LEGAL_AUTHORITY_CHANGED",
+  );
+  assert.equal(createCalls, 1);
+  const refreshed = control.captureProjectLegalAcceptance();
+  assert.notEqual(
+    refreshed.legalAcceptance.authorityDigest,
+    captured.legalAcceptance.authorityDigest,
+  );
 });
 
 test("hosted mode never falls back to local authority after its first mutation", async () => {

@@ -262,6 +262,7 @@
     var operationSequence = 0;
     var selectionEpoch = 0;
     var sessionEpoch = 0;
+    var legalAuthorityEpoch = 0;
     var commerceEpoch = 0;
     var downloadCommerceEpoch = 0;
     var domainSearchEpoch = 0;
@@ -271,6 +272,10 @@
     var state = {
       phase: "idle",
       account: null,
+      projectLegalAuthority: null,
+      projectLegalAuthorityStatus: "idle",
+      projectLegalAuthorityError: null,
+      projectLegalAcceptanceEpoch: 0,
       organizations: [],
       organizationId: null,
       projects: [],
@@ -298,6 +303,14 @@
       return Object.freeze({
         phase: state.phase,
         account: clone(state.account),
+        projectLegalAuthority:
+          clone(state.projectLegalAuthority),
+        projectLegalAuthorityStatus:
+          state.projectLegalAuthorityStatus,
+        projectLegalAuthorityError:
+          clone(state.projectLegalAuthorityError),
+        projectLegalAcceptanceEpoch:
+          state.projectLegalAcceptanceEpoch,
         organizations: clone(state.organizations),
         organizationId: state.organizationId,
         projects: clone(state.projects),
@@ -360,6 +373,10 @@
 
     function beginWrite() {
       state.hostedMutationStarted = true;
+    }
+
+    function invalidateProjectLegalAcceptance() {
+      state.projectLegalAcceptanceEpoch += 1;
     }
 
     function resetDomainPurchase() {
@@ -485,6 +502,70 @@
         });
     }
 
+    function projectLegalAcceptance() {
+      var authority = state.projectLegalAuthority;
+      if (
+        state.projectLegalAuthorityStatus !== "ready"
+        || !authority
+      ) {
+        throw new ControlError({
+          code: "LEGAL_CONFIGURATION_REQUIRED",
+          message: "The reviewed project documents are not available yet."
+        });
+      }
+      return Object.freeze({
+        schema: "sitesourcery.project-legal-acceptance/v3",
+        acceptanceStatement:
+          authority.acceptanceStatement,
+        authorityDigest: authority.authorityDigest,
+        documents: Object.freeze(
+          authority.documents.map(function (document) {
+            return Object.freeze(Object.assign({}, document));
+          })
+        )
+      });
+    }
+
+    function captureProjectLegalAcceptance() {
+      return Object.freeze({
+        epoch: state.projectLegalAcceptanceEpoch,
+        legalAcceptance: projectLegalAcceptance()
+      });
+    }
+
+    function refreshProjectLegalAuthority() {
+      var expectedAuthorityEpoch = ++legalAuthorityEpoch;
+      invalidateProjectLegalAcceptance();
+      state.projectLegalAuthority = null;
+      state.projectLegalAuthorityStatus = "loading";
+      state.projectLegalAuthorityError = null;
+      return task("projectLegalAuthority", async function () {
+        if (typeof api.getProjectLegalAuthority !== "function") {
+          throw new ControlError({
+            code: "LEGAL_CONFIGURATION_REQUIRED",
+            message: "The reviewed project documents could not be loaded."
+          });
+        }
+        var authority = await api.getProjectLegalAuthority();
+        if (expectedAuthorityEpoch !== legalAuthorityEpoch) return null;
+        state.projectLegalAuthority = authority;
+        state.projectLegalAuthorityStatus = "ready";
+        state.projectLegalAuthorityError = null;
+        return authority;
+      }).catch(function (error) {
+        if (expectedAuthorityEpoch === legalAuthorityEpoch) {
+          state.projectLegalAuthority = null;
+          state.projectLegalAuthorityStatus = "held";
+          state.projectLegalAuthorityError = safeError(
+            error,
+            "The reviewed project documents could not be loaded."
+          );
+          emit();
+        }
+        return null;
+      });
+    }
+
     function retry(name) {
       var retryTask = retryTasks[name];
       var operation = operations[name];
@@ -574,8 +655,10 @@
 
     function boot() {
       var expectedSessionEpoch = ++sessionEpoch;
+      invalidateProjectLegalAcceptance();
       state.phase = "loading";
-      return task("session", async function () {
+      var authorityRequest = refreshProjectLegalAuthority();
+      var sessionRequest = task("session", async function () {
         try {
           var payload = await api.me();
           return await loadAccountData(payload, expectedSessionEpoch);
@@ -597,10 +680,13 @@
           throw error;
         }
       });
+      return Promise.all([authorityRequest, sessionRequest])
+        .then(function (results) { return results[1]; });
     }
 
     function authenticate(operationName, call) {
       var expectedSessionEpoch = ++sessionEpoch;
+      invalidateProjectLegalAcceptance();
       var key = idempotencyFactory();
       var retryCall = function () {
         return task(operationName, async function () {
@@ -676,6 +762,7 @@
 
     function signOut() {
       var expectedSessionEpoch = ++sessionEpoch;
+      invalidateProjectLegalAcceptance();
       var key = idempotencyFactory();
       var retryCall = function () {
         return task("signOut", async function () {
@@ -725,6 +812,7 @@
     function selectOrganization(organizationId) {
       var selected = String(organizationId || "");
       var expectedSessionEpoch = sessionEpoch;
+      invalidateProjectLegalAcceptance();
       state.organizationId = selected;
       state.project = null;
       state.selectedVersionId = null;
@@ -781,6 +869,25 @@
 
     function createProject(input) {
       var organizationId = assertOrganization();
+      var capturedEpoch = Number(input && input.legalAcceptanceEpoch);
+      var acceptance = input && input.legalAcceptance;
+      var currentAcceptance;
+      try {
+        currentAcceptance = projectLegalAcceptance();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (
+        !Number.isSafeInteger(capturedEpoch)
+        || capturedEpoch !== state.projectLegalAcceptanceEpoch
+        || JSON.stringify(acceptance) !==
+          JSON.stringify(currentAcceptance)
+      ) {
+        return Promise.reject(new ControlError({
+          code: "LEGAL_AUTHORITY_CHANGED",
+          message: "The reviewed project documents changed. Review and accept them again."
+        }));
+      }
       var key = idempotencyFactory();
       var expectedSessionEpoch = sessionEpoch;
       var retryCall = function () {
@@ -788,7 +895,7 @@
           var request = {
             organizationId: organizationId,
             name: input && input.name,
-            acceptedTerms: input && input.acceptedTerms === true
+            legalAcceptance: clone(acceptance)
           };
           if (
             input &&
@@ -825,6 +932,7 @@
           var project = entityFrom(payload, "project");
           await refreshProjectsFor(organizationId, expectedSessionEpoch);
           if (project && idOf(project)) {
+            invalidateProjectLegalAcceptance();
             resetDomains();
             state.project = project;
             state.cancellationPreview = null;
@@ -2031,6 +2139,10 @@
       selectProject: selectProject,
       refreshSelectedProject:
         refreshSelectedProject,
+      captureProjectLegalAcceptance:
+        captureProjectLegalAcceptance,
+      refreshProjectLegalAuthority:
+        refreshProjectLegalAuthority,
       createProject: createProject,
       saveDraft: saveDraft,
       acceptMadeVersion: acceptMadeVersion,

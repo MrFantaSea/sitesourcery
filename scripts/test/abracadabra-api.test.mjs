@@ -4,7 +4,69 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { APIError, createClient } = require("../../abracadabra/app/abracadabra-api.js");
+const {
+  APIError,
+  createClient,
+  projectLegalAcceptanceFromAuthority,
+  validateProjectLegalAuthority,
+} = require("../../abracadabra/app/abracadabra-api.js");
+
+function projectLegalAuthorityFixture(overrides = {}) {
+  const privacyVersion =
+    "SS-HOSTED-PRIVACY-2099-01-01-V3";
+  const documents = [
+    {
+      kind: "privacy",
+      version: privacyVersion,
+      contentDigest: "b".repeat(64),
+      contentUri:
+        "https://sitesourcery.com/legal/privacy/versions/"
+        + privacyVersion + "/",
+      effectiveAt: "2099-01-01T00:00:00.000Z",
+    },
+    {
+      kind: "product",
+      version:
+        "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+      contentDigest:
+        "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      contentUri:
+        "https://sitesourcery.com/legal/website-terms/#self-service",
+      effectiveAt: "2026-07-30T00:00:00.000Z",
+    },
+    {
+      kind: "website",
+      version:
+        "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+      contentDigest:
+        "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      contentUri:
+        "https://sitesourcery.com/legal/website-terms/",
+      effectiveAt: "2026-07-30T00:00:00.000Z",
+    },
+  ];
+  const schema = "sitesourcery.project-legal-authority/v3";
+  const canonical = (value) => {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return `[${value.map(canonical).join(",")}]`;
+    }
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  };
+  return {
+    schema,
+    acceptanceStatement:
+      "accepted_exact_project_terms_and_acknowledged_privacy",
+    authorityDigest: createHash("sha256")
+      .update(canonical({ documents, schema }))
+      .digest("hex"),
+    documents,
+    ...overrides,
+  };
+}
 
 function response(status, payload, requestId = "req_test") {
   return {
@@ -44,6 +106,149 @@ test("authenticated reads use cookies and never put bearer credentials in browse
   assert.equal(calls[0].options.credentials, "include");
   assert.equal(calls[0].options.headers.Authorization, undefined);
   assert.equal(calls[0].options.body, undefined);
+});
+
+test("public project authority accepts only the exact sealed V3 snapshot", async () => {
+  const authority = projectLegalAuthorityFixture();
+  let call;
+  const client = createClient({
+    crypto: webcrypto,
+    fetch: async (url, options) => {
+      call = { url, options };
+      return response(200, authority);
+    },
+    idempotencyFactory: () => "legal-read-key",
+  });
+
+  const result = await client.getProjectLegalAuthority();
+  assert.equal(call.url, "/api/v1/legal/project-authority");
+  assert.equal(call.options.method, "GET");
+  assert.equal(call.options.credentials, "include");
+  assert.deepEqual(result, authority);
+  assert.ok(Object.isFrozen(result));
+  assert.ok(Object.isFrozen(result.documents));
+  assert.notEqual(result, authority);
+
+  const mismatchedDigestClient = createClient({
+    crypto: webcrypto,
+    fetch: async () => response(200, {
+      ...authority,
+      authorityDigest: "f".repeat(64),
+    }),
+    idempotencyFactory: () => "legal-mismatch-key",
+  });
+  await assert.rejects(
+    () => mismatchedDigestClient.getProjectLegalAuthority(),
+    (error) => error instanceof APIError
+      && error.code === "LEGAL_AUTHORITY_INVALID",
+  );
+
+  for (const malformed of [
+    { ...authority, extra: true },
+    {
+      ...authority,
+      documents: [
+        authority.documents[1],
+        authority.documents[0],
+        authority.documents[2],
+      ],
+    },
+    {
+      ...authority,
+      documents: authority.documents.map((document, index) =>
+        index === 0
+          ? { ...document, version: "SS-HOSTED-PRIVACY-TEST-V3" }
+          : document),
+    },
+    {
+      ...authority,
+      documents: authority.documents.map((document, index) =>
+        index === 0
+          ? { ...document, contentUri: "https://attacker.test/privacy/" }
+          : document),
+    },
+    {
+      ...authority,
+      documents: authority.documents.map((document, index) =>
+        index === 1
+          ? { ...document, contentDigest: "c".repeat(64) }
+          : document),
+    },
+  ]) {
+    assert.throws(
+      () => validateProjectLegalAuthority(malformed),
+      (error) => error instanceof APIError
+        && error.code === "LEGAL_AUTHORITY_INVALID",
+    );
+  }
+});
+
+test("project creation sends the exact captured authority and never the retired boolean", async () => {
+  const authority = projectLegalAuthorityFixture();
+  const legalAcceptance =
+    projectLegalAcceptanceFromAuthority(authority);
+  const calls = [];
+  const client = createClient({
+    crypto: webcrypto,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/legal/project-authority") {
+        return response(200, authority);
+      }
+      if (url === "/api/v1/csrf") {
+        return response(200, { csrfToken: "csrf_project_v3" });
+      }
+      return response(201, { project: { id: "project_v3" } });
+    },
+    idempotencyFactory: () => "project-v3-key",
+  });
+
+  await client.getProjectLegalAuthority();
+  await client.createProject({
+    organizationId: "org_1",
+    name: "Cedar Workshop",
+    legalAcceptance,
+  });
+  const write = calls.at(-1);
+  assert.equal(
+    write.url,
+    "/api/v1/organizations/org_1/projects",
+  );
+  assert.deepEqual(JSON.parse(write.options.body), {
+    name: "Cedar Workshop",
+    legalAcceptance,
+  });
+  assert.equal(
+    Object.hasOwn(JSON.parse(write.options.body), "acceptedTerms"),
+    false,
+  );
+
+  assert.throws(
+    () => client.createProject({
+      organizationId: "org_1",
+      name: "Retired checkbox",
+      acceptedTerms: true,
+      legalAcceptance,
+    }),
+    (error) => error instanceof APIError
+      && error.code === "LEGAL_ACCEPTANCE_INVALID",
+  );
+  assert.throws(
+    () => client.createProject({
+      organizationId: "org_1",
+      name: "Reordered documents",
+      legalAcceptance: {
+        ...legalAcceptance,
+        documents: [
+          legalAcceptance.documents[1],
+          legalAcceptance.documents[0],
+          legalAcceptance.documents[2],
+        ],
+      },
+    }),
+    (error) => error instanceof APIError
+      && error.code === "LEGAL_ACCEPTANCE_INVALID",
+  );
 });
 
 test("every browser write carries a stable idempotency key and current CSRF token", async () => {
