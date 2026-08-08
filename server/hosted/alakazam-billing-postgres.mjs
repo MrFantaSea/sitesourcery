@@ -296,6 +296,200 @@ export function createPostgresAlakazamBillingRepository({
           }
         )
       );
+    },
+
+    /**
+     * E-09. Reads the retry, replay, and reconciliation truth for one
+     * customer's Alakazam billing in a single read-only transaction, so the
+     * counts, the subscription revision, and the observation time are
+     * mutually consistent rather than stitched from separate moments.
+     */
+    async readCustomerBillingStates(value) {
+      const input = exactAlakazamBillingScope(
+        value,
+        "the Alakazam billing states input"
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: input.actorId,
+            organizationId: input.tenantId,
+            readOnly: true
+          },
+          async (client) => {
+            await requireBillingProject(client, input);
+
+            const observed = await client.query(
+              "select now() as observed_at"
+            );
+            const subscriptions = await client.query(
+              `select
+                 subscription.status,
+                 subscription.revision,
+                 subscription.first_failed_at,
+                 subscription.grace_ends_at,
+                 subscription.provider_observed_at,
+                 subscription.updated_at
+               from ss.alakazam_subscriptions subscription
+              where subscription.organization_id = $1
+                and subscription.project_id = $2
+                and subscription.customer_user_id = $3
+              order by
+                (subscription.status <> 'ended') desc,
+                subscription.created_at desc,
+                subscription.id desc
+              limit 1`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId
+              ]
+            );
+            const events = await client.query(
+              `select
+                 count(*) as total,
+                 count(*) filter (
+                   where event.state in (
+                     'received', 'processing', 'failed'
+                   )
+                 ) as outstanding,
+                 count(*) filter (
+                   where event.state = 'failed'
+                 ) as failed,
+                 coalesce(
+                   max(event.attempt_count), 0
+                 ) as maximum_attempt_count,
+                 max(event.occurred_at) as last_occurred_at,
+                 max(event.processed_at) as last_processed_at
+               from ss.alakazam_stripe_events event
+              where event.organization_id = $1
+                and event.project_id = $2`,
+              [input.tenantId, input.projectId]
+            );
+            const reconciliation = await client.query(
+              `select
+                 (
+                   select min(quote.updated_at)
+                     from ss.alakazam_change_quotes quote
+                    where quote.organization_id = $1
+                      and quote.project_id = $2
+                      and quote.customer_user_id = $3
+                      and quote.state =
+                          'reconciliation_required'
+                 ) as change_since,
+                 (
+                   select min(schedule.updated_at)
+                     from ss.alakazam_downgrade_schedules
+                          schedule
+                    where schedule.organization_id = $1
+                      and schedule.project_id = $2
+                      and schedule.state =
+                          'reconciliation_required'
+                 ) as schedule_since`,
+              [
+                input.tenantId,
+                input.projectId,
+                input.customerId
+              ]
+            );
+
+            const subscriptionRow =
+              subscriptions.rows[0] ?? null;
+            const eventRow = events.rows[0];
+            const reconciliationRow =
+              reconciliation.rows[0];
+            const changeSince = nullableDatabaseIso(
+              reconciliationRow.change_since,
+              "reconciliation.changeSince"
+            );
+            const scheduleSince = nullableDatabaseIso(
+              reconciliationRow.schedule_since,
+              "reconciliation.scheduleSince"
+            );
+            return Object.freeze({
+              projectId: input.projectId,
+              observedAt: exactDatabaseIso(
+                observed.rows[0].observed_at,
+                "billingStates.observedAt"
+              ),
+              subscription: subscriptionRow === null
+                ? null
+                : Object.freeze({
+                    status: requiredText(
+                      subscriptionRow.status,
+                      "subscription.status",
+                      50
+                    ),
+                    revision: exactDatabaseInteger(
+                      subscriptionRow.revision,
+                      "subscription.revision"
+                    ),
+                    firstFailedAt: nullableDatabaseIso(
+                      subscriptionRow.first_failed_at,
+                      "subscription.firstFailedAt"
+                    ),
+                    graceEndsAt: nullableDatabaseIso(
+                      subscriptionRow.grace_ends_at,
+                      "subscription.graceEndsAt"
+                    ),
+                    providerObservedAt: exactDatabaseIso(
+                      subscriptionRow.provider_observed_at,
+                      "subscription.providerObservedAt"
+                    ),
+                    updatedAt: exactDatabaseIso(
+                      subscriptionRow.updated_at,
+                      "subscription.updatedAt"
+                    )
+                  }),
+              events: Object.freeze({
+                total: exactDatabaseInteger(
+                  eventRow.total,
+                  "events.total"
+                ),
+                outstanding: exactDatabaseInteger(
+                  eventRow.outstanding,
+                  "events.outstanding"
+                ),
+                failed: exactDatabaseInteger(
+                  eventRow.failed,
+                  "events.failed"
+                ),
+                maximumAttemptCount: exactDatabaseInteger(
+                  eventRow.maximum_attempt_count,
+                  "events.maximumAttemptCount"
+                ),
+                lastOccurredAt: nullableDatabaseIso(
+                  eventRow.last_occurred_at,
+                  "events.lastOccurredAt"
+                ),
+                lastProcessedAt: nullableDatabaseIso(
+                  eventRow.last_processed_at,
+                  "events.lastProcessedAt"
+                )
+              }),
+              reconciliation: Object.freeze(
+                changeSince === null &&
+                  scheduleSince === null
+                  ? { kind: null, since: null }
+                  : scheduleSince === null ||
+                      (
+                        changeSince !== null &&
+                        Date.parse(changeSince) <=
+                          Date.parse(scheduleSince)
+                      )
+                    ? {
+                        kind: "tier_change",
+                        since: changeSince
+                      }
+                    : {
+                        kind: "downgrade_schedule",
+                        since: scheduleSince
+                      }
+              )
+            });
+          }
+        )
+      );
     }
   });
 }

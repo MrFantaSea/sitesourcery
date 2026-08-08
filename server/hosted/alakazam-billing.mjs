@@ -8,6 +8,9 @@ import {
 import {
   projectAlakazamCancellationPreview
 } from "./alakazam-billing-cancellation.mjs";
+import {
+  projectAlakazamBillingStates
+} from "./alakazam-billing-states.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -15,10 +18,13 @@ const INVOICE_ROUTE =
   /^\/api\/v1\/projects\/([^/]+)\/alakazam\/invoices\/([^/]+)$/u;
 const CANCELLATION_PREVIEW_ROUTE =
   /^\/api\/v1\/projects\/([^/]+)\/alakazam\/cancellation-preview$/u;
+const BILLING_STATES_ROUTE =
+  /^\/api\/v1\/projects\/([^/]+)\/alakazam\/billing-states$/u;
 
 export const ALAKAZAM_BILLING_SURFACES = Object.freeze([
   "invoice",
-  "cancellationPreview"
+  "cancellationPreview",
+  "billingStates"
 ]);
 
 const HELD_SURFACES = Object.freeze({
@@ -31,6 +37,11 @@ const HELD_SURFACES = Object.freeze({
     code: "ALAKAZAM_CANCELLATION_PREVIEW_HELD",
     message:
       "Alakazam cancellation preview is held in this runtime."
+  }),
+  billingStates: Object.freeze({
+    code: "ALAKAZAM_BILLING_STATES_HELD",
+    message:
+      "Alakazam billing states are held in this runtime."
   })
 });
 
@@ -140,7 +151,8 @@ export function createHeldHostedAlakazamBillingSurfaces() {
   }
   return Object.freeze({
     getInvoice: held("invoice"),
-    getCancellationPreview: held("cancellationPreview")
+    getCancellationPreview: held("cancellationPreview"),
+    getBillingStates: held("billingStates")
   });
 }
 
@@ -152,6 +164,8 @@ export function createHostedAlakazamBillingSurfaces({
   invariant(
     repository &&
       typeof repository.readCustomerInvoice ===
+        "function" &&
+      typeof repository.readCustomerBillingStates ===
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "The Alakazam billing repository is required.",
@@ -217,6 +231,21 @@ export function createHostedAlakazamBillingSurfaces({
           scope
         );
       });
+    },
+
+    async getBillingStates(actorInput, projectIdInput) {
+      return translated(async () => {
+        const scope = await scopeFor(
+          actorInput,
+          projectIdInput
+        );
+        return projectAlakazamBillingStates(
+          await repository.readCustomerBillingStates(
+            scope
+          ),
+          scope
+        );
+      });
     }
   });
 }
@@ -255,6 +284,14 @@ export function matchAlakazamBillingSurfaceRoute(
       receiptId: null
     });
   }
+  matched = segments(BILLING_STATES_ROUTE);
+  if (matched) {
+    return Object.freeze({
+      surface: "billingStates",
+      projectId: matched[0],
+      receiptId: null
+    });
+  }
   return null;
 }
 
@@ -268,7 +305,8 @@ export async function readAlakazamBillingSurface(
     boundary &&
       typeof boundary.getInvoice === "function" &&
       typeof boundary.getCancellationPreview ===
-        "function",
+        "function" &&
+      typeof boundary.getBillingStates === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam billing surfaces boundary is invalid.",
     { status: 500 }
@@ -299,7 +337,13 @@ export async function readAlakazamBillingSurface(
       route.receiptId
     );
   }
-  return boundary.getCancellationPreview(
+  if (route.surface === "cancellationPreview") {
+    return boundary.getCancellationPreview(
+      actor,
+      route.projectId
+    );
+  }
+  return boundary.getBillingStates(
     actor,
     route.projectId
   );
