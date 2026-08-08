@@ -1,11 +1,11 @@
 # Site Sourcery 100 percent completion matrix — 2026-08-06
 
-Generated at: 2026-08-08T13:32:08-0400 (EDT)
+Generated at: 2026-08-08T14:22:53-0400 (EDT)
 
 Repository snapshot:
 
-- Branch: build/sitesourcery-v2-20260730
-- Base HEAD: a0f024d (evidence reconciliation on top of integrated
+- Matrix branch: feat/privacy-v3-matrix-20260808, starting at c05404d
+- Historical integrated candidate: a0f024d (evidence reconciliation on top of
   checker-authority, held-Alakazam and migration-47 checkpoints)
 - Roadmap reviewed completely: ops/SITESOURCERY-MULTI-AGENT-ROADMAP-2026-08-04.md, 921 lines
 - Active ledger reviewed completely through the migration-47 seal:
@@ -19,13 +19,12 @@ Repository snapshot:
 
 ## Authority, status, and percentage rules
 
-This matrix is the deterministic source for completion reporting. It covers all
-136 checkbox requirements in the canonical roadmap and adds explicit rows for
-the current H1M seal, the ordered two-purpose H1N finish line, owner-directed
-public-page corrections, release/public-truth architecture addenda, and
-Responder telephony expansion. It also adds ten explicit Core rows for the
-in-flight Privacy V3 program so dirty, isolated, or owner-held work cannot stay
-invisible to the launch percentage.
+This matrix is the deterministic source for completion reporting. The primary
+operational metric is now the exact 12-row first-dollar launch-gate set below.
+The full 136-checkbox roadmap plus checkpoint, aesthetic, architecture,
+Privacy V3 and Responder rows remains visible as a separate historical inventory
+metric. That broader number describes implemented scope; it is not a claim that
+the release is ready for its first real customer payment.
 
 Status meanings:
 
@@ -38,9 +37,10 @@ Status meanings:
   was found. Reusable primitives do not change this status.
 - EXTERNAL BLOCKER — the remaining outcome depends on an outside party or
   external system and no internal implementation work can resolve that fact.
-- DEFERRED — deliberately outside both active finish-line denominators until a
-  dated owner ruling promotes it. A public promise automatically promotes its
-  matching row to CORE LAUNCH.
+- DEFERRED — deliberately outside the first-dollar and Expansion denominators
+  until a dated owner ruling promotes it. A public promise can make held work a
+  closure dependency of a first-dollar truth gate without creating a thirteenth
+  denominator row.
 
 Evidence policy:
 
@@ -62,27 +62,32 @@ Evidence policy:
 
 Deterministic formulas:
 
-- Core Launch percent =
+- First-dollar launch-gate closure percent = 100 × DONE / 12, where the
+  denominator is exactly J-01, J-05, TRUTH-05, AESTH-08, J-02, J-09, J-07,
+  J-06, J-08, SURFACE-04, J-10 and J-11.
+- Full-scope Core inventory percent =
   100 × CORE DONE / (CORE DONE + CORE PARTIAL + CORE NOT STARTED +
-  CORE EXTERNAL BLOCKER).
+  CORE EXTERNAL BLOCKER). This is historical scope telemetry only.
 - Expansion percent =
   100 × EXPANSION DONE / (EXPANSION DONE + EXPANSION PARTIAL +
   EXPANSION NOT STARTED + EXPANSION EXTERNAL BLOCKER).
-- DEFERRED rows are listed but excluded from both denominators.
+- DEFERRED rows are listed but excluded from all active denominators.
 - Percentages are rounded to one decimal place only after applying the formula.
 - PARTIAL earns zero completion credit. This is intentionally strict.
 
 Strict 100 percent rule:
 
-Core Launch is 100 percent only when every non-deferred Core row is DONE, the
-worktree used for release proof is explained and sealed, every public sellable
-promise passes its authenticated end-to-end journey, every unavailable offer is
-visibly held, the complete Node 24 and clean-room PostgreSQL gates pass against
-that exact source, authenticated desktop/mobile/accessibility/security/staging
-proof passes, provider test/live readiness is reviewed, and cutover plus
-rollback are verified. Expansion reaches 100 percent only when every
-non-deferred Expansion row is DONE. An Expansion external blocker never lowers
-Core Launch when its public offer is truthfully held and non-sellable.
+First-dollar launch-gate closure is 100 percent only when all 12 exact rows are
+DONE. A parent row cannot be DONE while one of its mapped Privacy V3 or held-
+offer truth dependencies is open. The worktree used for release proof must be
+explained and sealed; every sellable promise must pass its authenticated
+end-to-end journey; every unavailable offer must be visibly held; the complete
+Node 24 and clean-room PostgreSQL gates must pass against that exact source;
+authenticated desktop/mobile/accessibility/security/staging proof, provider
+test/live readiness, cutover and rollback must all be verified. Expansion
+reaches 100 percent only when every non-deferred Expansion row is DONE. An
+Expansion external blocker does not lower first-dollar closure when its public
+offer is truthfully held and non-sellable.
 
 ## Derived snapshot
 
@@ -91,11 +96,59 @@ of this file.
 
 | Finish line | DONE | PARTIAL | NOT STARTED | EXTERNAL BLOCKER | Denominator | Percent |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| CORE LAUNCH | 97 | 38 | 11 | 0 | 146 | 66.4% |
+| FIRST-DOLLAR LAUNCH-GATE CLOSURE | 0 | 11 | 1 | 0 | 12 | 0.0% |
+| FULL-SCOPE CORE INVENTORY (historical) | 97 | 40 | 9 | 0 | 146 | 66.4% |
 | EXPANSION | 1 | 8 | 14 | 1 | 24 | 4.2% |
 | DEFERRED inventory (5 rows) | 0 | 0 | 0 | 0 | excluded | n/a |
 
-## CORE LAUNCH matrix
+The non-credit progress signal is **11 PARTIAL / 1 NOT STARTED**. It shows that
+substantial implementation exists without awarding release credit before any
+whole launch gate is actually closed.
+
+## Exact first-dollar launch-gate set
+
+This table is the operational completion denominator. Its 12 IDs are existing
+authority rows, not new requirements. H-AUTH-05 is absorbed into SURFACE-04 for
+this finish line and is not counted a second time. Privacy V3 rows remain
+explicit dependencies later in this file, but they do not increase this
+denominator; an unresolved dependency keeps its mapped parent row open.
+
+| ID | Status | Current evidence boundary | Required closure |
+| --- | --- | --- | --- |
+| J-01 | PARTIAL | Public/legal audits and held-offer checks exist, but the corrected Privacy V3 source is isolated and Website Terms/public offer truth still requires a coordinated versioned correction. | Integrate approved public/legal truth and prove every visible price, link, support route and unavailable offer against the exact candidate. |
+| J-05 | PARTIAL | Custom milestone/workmanship authority is sealed; complete canonical terms, including the separately versioned Website Terms correction, are not. | Seal one internally consistent terms set for the offers actually available at first dollar. |
+| TRUTH-05 | PARTIAL | Hosted legal fragments and Privacy V3 correction commit 5a81f5f exist, but V3 is unsealed and the integrated legal surface is not canonical yet. | Integrate and seal canonical legal/privacy for the first-dollar account, payment, publication and support flow. |
+| AESTH-08 | PARTIAL | Legal-route readability is sealed at 2b0f9e0; canonical copy remains an independent unfinished authority. | Preserve the presentation while the exact integrated legal copy and browser proof close. |
+| J-02 | PARTIAL | The authenticated assessment/quote/invoice/payment backend path is sealed, but no current-candidate public-to-account journey proves it end to end. | Connect and browser-prove the bounded public inquiry through authenticated receipt. |
+| J-09 | PARTIAL | Individual email, payment, hosting and operations proofs exist; no single exact-candidate provider/backup/restore/monitoring/rollback proof exists. | Execute and retain one integrated provider and operations evidence bundle. |
+| J-07 | PARTIAL | Older private-staging evidence exists, not evidence for the current candidate. | Run new- and returning-customer journeys in private staging on the exact sealed candidate. |
+| J-06 | PARTIAL | Responsive browser checks exist; final-source accessibility, performance and security evidence is incomplete. | Run and retain all four audits against the exact sealed candidate. |
+| J-08 | PARTIAL | Custom-service owner journeys through migration 47 are sealed at required Mac/Pixel widths; no final-candidate owner journey includes the remaining Privacy/legal/runtime work. | Run the complete authenticated owner journey at both required widths. |
+| SURFACE-04 | PARTIAL | The Custom path through migration 47 has fresh PostgreSQL, race and authenticated browser evidence; final-candidate/provider coverage is absent. This row also owns H-AUTH-05 cross-tenant/site denial for first-dollar closure. | Pass fresh PostgreSQL, provider test mode, desktop/mobile, failure/race and safe-projection proof, including H-AUTH-05 adversarial denial. |
+| J-10 | NOT STARTED | No owner walkthrough or reviewed production cutover record exists. | Complete internal gates, conduct the owner walkthrough and record explicit cutover approval. |
+| J-11 | PARTIAL | The old release is retained, but the new build has no post-cutover DNS/TLS/live verification or exercised rollback. | After approved cutover, verify DNS/TLS/live behavior and prove exact rollback. |
+
+Exact arithmetic: **0 DONE / 12 total = 0.0% first-dollar launch-gate
+closure**. PARTIAL earns zero release credit. The 11 PARTIAL rows are a
+non-credit signal of work in progress, not eleven nearly closed gates.
+
+### Explicitly outside the 12-row first-dollar denominator
+
+- Every full-scope row not named above remains useful historical inventory, but
+  is not a current first-dollar blocker unless its public claim prevents J-01,
+  J-05 or TRUTH-05 from closing.
+- Remaining held Alakazam subscription work is deferred from this finish line:
+  A-03, E-08, E-09, F-03, F-04, F-06, F-08 and G-02 through G-06. Its existing
+  source and tests earn historical inventory status only; they do not delay a
+  first dollar while the offer remains non-sellable.
+- TRUTH-01 and TRUTH-02 are not standalone denominator rows. Their closure
+  dependency is strict: the $35 and $50 tiers must be visibly unavailable on
+  every public and customer surface before J-01 and TRUTH-05 can become DONE.
+  This matrix lane records that requirement but does not change UI.
+- Registrar commerce, Responder telephony and the remaining Expansion catalog
+  stay held/deferred until separately promoted by the owner.
+
+## Full-scope Core inventory (historical)
 
 ### Lane A — customer billing truth and API
 
@@ -189,7 +242,7 @@ of this file.
 | H-AUTH-02 | Owner-assisted invitation/claim for in-person customers without owner-held password | Build | NOT STARTED | Foundation has generic invited membership, but no custom-services invitation/claim route, projection, QR or journey was found | Implement expiring invite/claim, customer-set credentials and owner/customer proof. |
 | H-AUTH-03 | Owner opens same quote/invoice on Mac/Pixel and presents secure customer link/QR; manual payment evidence is reconciled | Build | PARTIAL | Owner quote desk exists in custom-services-owner-postgres.mjs and commit f2ee0b5; invoice/customer routes exist; no secure payment link/QR or manual evidence authority exists | Add account-bound presentation token/QR and explicitly bounded manual-evidence reconciliation. |
 | H-AUTH-04 | One customer-owned site asset with alakazam/custom/external origin and support/access truth | Build | PARTIAL | External site profile exists in migration 202608050034 and custom-services-account.mjs:350,836; Alakazam site authority is separate; no canonical three-origin asset exists | Add canonical site asset without duplicating existing project/address truth, then migrate projections. |
-| H-AUTH-05 | Cross-tenant/site denial and no browser claim of money, credit, units, job or provider authority | Build | PARTIAL | Extensive request/quote/payment/job denial tests exist in custom-service-quotes-postgres.integration.test.mjs and hosted HTTP tests; canonical site asset and all remaining commands are incomplete | Extend adversarial proof to site asset, H1N, support and every final owner operation. |
+| H-AUTH-05 | Cross-tenant/site denial and no browser claim of money, credit, units, job or provider authority | Build | PARTIAL | Extensive request/quote/payment/job denial tests exist in custom-service-quotes-postgres.integration.test.mjs and hosted HTTP tests; canonical site asset and all remaining commands are incomplete | Extend adversarial proof to site asset, support and every final owner operation; for first-dollar arithmetic this evidence is absorbed by SURFACE-04, not counted again. |
 
 ### Lane H1 — pre-commerce through paid Custom job
 
@@ -232,7 +285,7 @@ of this file.
 | SURFACE-01 | Responsive Mac/Pixel owner assessment review and quote issue | Build | DONE | owner quote desk source/tests; browser controls; commit f2ee0b5 | Re-run in final owner journey. |
 | SURFACE-02 | Customer views for full assessment/onboarding/quote/invoice/payment/job/access/change/handoff/management/recovery lifecycle | Build | PARTIAL | Assessment and Custom-through-H1M completion views are sealed; onboarding, H1N payment/handoff, management, tickets and some recovery states do not exist | Complete H1N and only then Expansion views. |
 | SURFACE-03 | Mac/Pixel owner search and bounded operations for full client/site/payment/job/access/management/ops/reconciliation lifecycle | Build | PARTIAL | Owner assessment, paid-job, progress and H1M change/completion controls are sealed at c4277ce; broad search, final settlement, management and reconciliation are absent | Add launch-critical owner operations and prove no mark-paid shortcut. |
-| SURFACE-04 | Every journey against fresh PostgreSQL, provider test mode, authenticated desktop/mobile, race/failure and safe projections | Polish/Integration | PARTIAL | H1M has fresh all-44 PostgreSQL, real queued-race and authenticated Chrome proof at active ledger:1361-1375; H1N, provider test-mode, current public/aesthetic and final-candidate proof remain absent | Run exact final clean-room and browser/provider matrix after H1N and public truth stabilize. |
+| SURFACE-04 | Every journey against fresh PostgreSQL, provider test mode, authenticated desktop/mobile, race/failure and safe projections | Polish/Integration | PARTIAL | H1M has fresh PostgreSQL, real queued-race and authenticated Chrome proof at active ledger:1361-1375; migration-47 evidence extends the Custom handoff, but Privacy V3, provider test-mode and final-candidate proof remain absent. First-dollar closure absorbs H-AUTH-05 here. | Run the exact final clean-room and browser/provider matrix, including cross-tenant/site and no-browser-authority adversarial proof. |
 
 ### Core truth holds for Domains and Responder
 
@@ -247,14 +300,14 @@ of this file.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| J-01 | Reconcile all public copy, links, legal, support and pricing | Aesthetic + Polish/Integration | PARTIAL | Audits exist; current legal/website-terms/index.html:96-101 still publishes only $25 and invented cancellation/grace/retention; direct links remain | Finish aesthetic pass, commercial/legal truth reconciliation and automated checks. |
-| J-02 | Replace direct assessment payment with account offer/invoice/payment and exact bounded scope | Build + Aesthetic | PARTIAL | Backend journey is sealed through H1G; custom/index.html:134 has correct scope and inquiry, but full public-to-account journey is not release-proven | Connect and browser-prove public inquiry/account/quote/invoice journey. |
+| J-01 | Reconcile all public copy, links, legal, support and pricing | Aesthetic + Polish/Integration | PARTIAL | Held-offer/checker truth is integrated at 81075b7/3c008bb and Privacy V3 source correction is sealed in isolated commit 5a81f5f; the coordinated Website Terms version, integrated V3 seal and visible $35/$50 unavailable state remain open | Integrate the approved public/legal set and prove every visible price, link, support route and held offer. |
+| J-02 | Replace direct assessment payment with account offer/invoice/payment and exact bounded scope | Build + Aesthetic | PARTIAL | The authenticated assessment through immutable Custom handoff backend is sealed through migration 47; custom/index.html has bounded inquiry copy, but the exact-candidate public-to-account journey is not release-proven | Connect and browser-prove public inquiry/account/quote/invoice/payment/receipt on the final candidate. |
 | J-03 | One restrained “Have a website already?” section for five later lanes | Aesthetic | NOT STARTED | No consolidated five-lane section found in current homepage/custom candidate; homepage is design-locked | Add only in an approved non-home route or obtain cross-lane decision if homepage placement is required. |
 | J-04 | Publish approved starting prices/exclusions and explain stacking without duplicate work | Aesthetic + Polish/Integration | PARTIAL | Custom prices exist; overlap engine/later services are incomplete and public stacking language is not reconciled | Publish only currently supported prices; hold Expansion offers and add dedup language. |
-| J-05 | Reconcile terms for onboarding, milestones, workmanship, management, plan changes, provider costs and lawful cancellation | Polish/Integration + Aesthetic | PARTIAL | Custom milestone text exists; legal file contains stale lifecycle and no complete outside-management/H1N terms | Finish H1N policy and held Expansion terms, then update legal source/tests. |
+| J-05 | Reconcile terms for onboarding, milestones, workmanship, management, plan changes, provider costs and lawful cancellation | Polish/Integration + Aesthetic | PARTIAL | Custom milestone, settlement, handoff and workmanship authority is sealed through migration 47; accepted historical Website Terms V2 still requires a separately versioned correction and no integrated replacement is sealed | Produce the coordinated versioned terms release for only the offers available at first dollar, then rerun legal/copy proof. |
 | J-06 | Complete mobile, desktop, accessibility, performance and security audits | Polish/Integration | PARTIAL | browser-audit-current.mjs covers responsive/browser checks; no final-source run and no complete performance/security release report exists | Run all audits on sealed candidate and store exact evidence. |
-| J-07 | New and returning customer journeys in private staging | Polish/Integration | PARTIAL | ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md proves an older staging build; current 44-migration/H1N candidate is not staged | Deploy reviewed private candidate and run both journeys. |
-| J-08 | Owner Mac and Pixel operations journeys | Polish/Integration | PARTIAL | H1K/L and sealed H1M authenticated owner journeys exist, including 390x844 and 1440x1000 evidence at active ledger:1368-1375; no H1N/final launch owner journey exists | Run the complete authenticated owner walk after H1N. |
+| J-07 | New and returning customer journeys in private staging | Polish/Integration | PARTIAL | ops/HOSTED-STAGING-VERIFICATION-2026-08-01.md proves an older staging build; neither the migration-47 candidate nor the Privacy V3 successor is proven in private staging | Deploy the reviewed final candidate and run both journeys. |
+| J-08 | Owner Mac and Pixel operations journeys | Polish/Integration | PARTIAL | Custom-service owner journeys through migration 47 include authenticated 390x844 and 1440x1000 evidence; no final Privacy/legal candidate owner journey exists | Run the complete authenticated owner walk on the exact final candidate. |
 | J-09 | Prove email, Stripe test payments, hosting, support, invoice, backup, restore, monitoring, alerting and rollback | Polish/Integration | PARTIAL | Individual ops proofs and Stripe mock/test boundaries exist in ops docs/tests and hosted tests; no single current-candidate integrated release proof exists | Execute full provider/staging/ops proof against exact candidate. |
 | J-10 | Owner walkthrough and reviewed production cutover | Owner/cutover | NOT STARTED | Public production remains July 22 predecessor per active ledger:32-34; no cutover record exists | Complete internal gates, conduct walkthrough, request explicit cutover approval. |
 | J-11 | Verify DNS/TLS/post-cutover and retain old-release rollback | Owner/cutover | PARTIAL | Old release is retained as fallback; no new-build cutover, post-cutover DNS/TLS or rollback exercise exists | At approved cutover, verify DNS/TLS/live behavior and rehearse exact rollback. |
@@ -264,11 +317,11 @@ of this file.
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| TRUTH-01 | Publish $25/$35/$50 ladder and $20/$30/$45 first-payment outcomes | Aesthetic + Polish/Integration | PARTIAL | Backend/account tests carry exact tiers and outcomes; public FAQ, Domains and legal still say only $25 at faq/index.html:57, domains/index.html:44 and legal terms:96-100 | Publish canonical ladder only after $35/$50 fulfillment is launch-ready or clearly mark unavailable tiers. |
-| TRUTH-02 | Cash App/Venmo only at $50 and three-version history at $35+ | Build + Aesthetic | PARTIAL | $50 compiler gating is tested; $35 history/editor authority and reconciled public copy are absent | Implement retained tier controls then update copy/tests. |
+| TRUTH-01 | Publish $25/$35/$50 ladder and $20/$30/$45 first-payment outcomes | Aesthetic + Polish/Integration | PARTIAL | Backend/account tests carry exact tiers and outcomes; $35/$50 fulfillment is held and no exact-candidate proof shows both tiers visibly unavailable across every public/customer surface | Keep $35/$50 non-sellable and visibly unavailable; this is a closure dependency of first-dollar J-01/TRUTH-05, not a separate denominator row. |
+| TRUTH-02 | Cash App/Venmo only at $50 and three-version history at $35+ | Build + Aesthetic | PARTIAL | $50 compiler gating is tested; $35 history/editor authority is absent and the held $35/$50 presentation is not release-proven | Keep the premium claims and controls visibly unavailable; implement them only after owner promotion beyond the first-dollar finish line. |
 | TRUTH-03 | Replace “$25 = your own .com” with label.sitesourcery.me | Aesthetic + Polish/Integration | DONE | Combined public-truth/legal checkpoint at 81075b7 and 3c008bb reconciles hosted fragments and legal language to `label.sitesourcery.me`; checker-authority and 99/99 public/legal/Work preflight gates pass | Preserve the platform-subdomain truth until a registrar/product authority is released. |
 | TRUTH-04 | Remove invented cancellation, grace, suspension, retention, deletion and refund language until policy is approved | Aesthetic + Polish/Integration | DONE | Combined legal/public truth at 81075b7 and 3c008bb removes unsupported lifecycle/refund claims; 99/99 public-truth, legal, checker-authority and Work preflight proof is green | Reintroduce policy only from a separately approved, executable authority. |
-| TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Hosted legal fragments exist for earlier Download authority; current public legal source conflicts with hosted account reality and all-tier contract | Rewrite from canonical contracts, then run legal/copy tests and browser audit. |
+| TRUTH-05 | Canonical legal/privacy for accounts, billing changes, publication, support and all tiers | Polish/Integration + Aesthetic | PARTIAL | Privacy V3 source truth is corrected in isolated commit 5a81f5f with a path-limited `BLOCKER: NO`; V3 remains unsealed/unintegrated and historical Website Terms require a separately versioned correction | Seal and integrate one canonical legal/privacy set, visibly hold $35/$50, then run exact legal/copy/browser release proof. |
 | TRUTH-06 | Remove five legacy direct Stripe Payment Links from all public and production artifacts | Build + Aesthetic | DONE | commit ea38093 removes the direct-link rails and legacy paid bridge from reviewed artifacts; scripts/check-site.mjs, domain-public-truth and hosted-artifact tests require zero public checkout rails while authenticated purpose-specific server Checkout remains private | Preserve zero direct payment links in both Pages and hosted artifacts. |
 | TRUTH-07 | Assessment intake, written offer, account invoice and payment sequencing | Build | DONE | migrations 34-39; authenticated routes/tests; commits ccce671 through 5c34845 | Re-run as part of final public-to-account journey. |
 | TRUTH-08 | Minimum Custom estimate/invoice/deposit/milestone/job ledger before advertised operational | Build | DONE | Migrations 41-47, commits 9221072/52644fa/a46fb40/c4277ce/9a9511c/f9950ae and the migration-47 checkpoint provide estimate, accepted scope, first/change/final invoices and settlement, retained job/progress/completion, immutable handoff and 30-day workmanship authority; active ledger records all-47 PostgreSQL and browser proof | Preserve the full ordered ledger in staging and production release proof. |
@@ -279,10 +332,19 @@ of this file.
 
 ### Privacy V3 program
 
-These rows are Core addenda beyond the 136 canonical roadmap checkboxes. A
-sealed isolated branch remains PARTIAL until its authority and maintained proof
-are integrated into the release candidate. Dirty work earns no completion
-credit.
+These rows are full-scope Core addenda beyond the 136 canonical roadmap
+checkboxes. They stay visible as critical dependencies, but do not add ten more
+items to the 12-row first-dollar denominator. A sealed isolated branch remains
+PARTIAL until its authority and maintained proof are integrated into the release
+candidate. Dirty work earns no completion credit.
+
+Dependency mapping for first-dollar closure:
+
+- PV3-01, PV3-02, PV3-07 and PV3-10 feed J-01, J-05, TRUTH-05 and AESTH-08.
+- PV3-03 through PV3-06, PV3-08 and PV3-09 feed J-02, J-09, J-07, J-06,
+  J-08 and SURFACE-04.
+- Every unresolved PV3 row remains part of the evidence boundary for J-10 and
+  J-11. No PV3 row is counted again as a thirteenth launch gate.
 
 Owner decisions recorded for this program on 2026-08-07 and retained here as
 durable matrix authority:
@@ -296,16 +358,16 @@ durable matrix authority:
 
 | ID | Requirement | Owner lane | Status | Exact proof location | Next action |
 | --- | --- | --- | --- | --- | --- |
-| PV3-01 | Retain and publish the exact immutable Privacy V2 evidence artifact without changing its bytes | Build + Polish/Integration | PARTIAL | isolated Phase-A commit ec9a82e retains `legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html` at 19,935 bytes and SHA-256 `b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b`; it is not integrated into the release candidate | Preserve the exact bytes through Phase-B and final integration, then rerun artifact allowlist and hash proof. |
-| PV3-02 | Produce byte-identical hosted Privacy V3 live/versioned artifacts and a deterministic fail-closed finalizer after separately reviewed copy | Aesthetic + Polish/Integration | PARTIAL | pre-review draft commit 2222f3b contains exactly 13 Phase-B paths; focused Node 24 tests pass 22/22, all six non-null release fields fail closed, and release constants remain null. The uncommitted 2026-08-08 engineering review under `ops/` records 25 accuracy findings, 10 exposure findings and 16 owner-decision replacements without changing the legal fragments | Obtain owner rulings, apply only approved copy changes, and rerun the byte-identity/finalizer gates before the final legal seal. |
-| PV3-03 | Add transactional migration 48 for legal artifacts, exact project acceptance receipts, immutable history, RLS, privileges, and runtime contract | Build | NOT STARTED | all five live Privacy worktrees stop at `202608060047_custom_build_handoff.sql`; no executable migration 48 exists | Author the migration structure from the approved blueprint after the six-file backend correction seals, but do not finalize its release tuple or claim a successful authority replay until PV3-10 freezes the exact V3 constants. |
-| PV3-04 | Make PostgreSQL readiness prove exact v48 catalog, V2/V3 artifacts, authority constants, and fail-closed project creation | Build | PARTIAL | backend commits 3afbc50/4319f5e plus six dirty paths implement the boundary; the current third pass is green on 31/31 focused tests and 398/400 hosted tests with two expected database skips, but its 2026-08-08 13:28 independent review returned BLOCKER: YES because `bool_and` could false-pass on NULL, catalog column/constraint proof was incomplete, and privilege proof omitted grant options and column ACLs; real v48 PostgreSQL proof also remains absent | Correct every review blocker, rerun focused/full tests, obtain fresh BLOCKER: NO, seal the six-file correction, then prove the exact readiness query against migration 48 in fresh PostgreSQL. |
-| PV3-05 | Expose the four-key public project legal authority and require exact three-document acceptance only on project creation | Build | PARTIAL | the dirty backend third pass includes differentiated held/ready states, exact bundle validation, rogue-artifact rejection, 409 behavior and private user-agent handling, but the 2026-08-08 13:28 independent review is BLOCKER: YES and there is no sealed correction or PostgreSQL-backed receipt proof | Correct the review blockers, obtain fresh BLOCKER: NO, seal the correction, and add real PostgreSQL/HTTP receipt, idempotency, V2-history and forwarded-IP proof with migration 48. |
-| PV3-06 | Render unchecked consent, exact links/version, save-path acceptance, 409 recovery, invalidation, and V2 history in Abracadabra | Build + Aesthetic | PARTIAL | `/private/tmp/sitesourcery-privacy-v3-abracadabra-ui-20260807` currently has seven modified UI/test paths and no sealed commit; live status does not modify `scripts/hosted-truth/manifest.mjs` | Keep the UI lane paused until backend and legal contracts seal, then run focused/API/DOM and exact-width keyboard/browser proof before a path-limited commit. |
-| PV3-07 | Show Domains just-in-time DNS disclosure immediately before Check, with no pre-action DNS request | Aesthetic + Polish/Integration | PARTIAL | isolated Phase-A commit ec9a82e includes the disclosure and focused/browser proof at 320/390/1440 widths; it is not integrated into the release candidate | Preserve the sealed Phase-A behavior through integration and rerun exact three-query click/Enter proof. |
-| PV3-08 | Preserve existing V2 acceptance without forced reacceptance and hold only project creation during cutover | Build + Owner/cutover | PARTIAL | the owner decisions recorded above freeze no forced V2 reacceptance and a project-creation-only hold; isolated backend work reads required-term history, but no integrated v48 continuity proof exists | Prove V2 current/history after later acceptance and demonstrate that reads, sign-in, recovery, edit, repeat Download, export, delete and contact remain live during the hold. |
-| PV3-09 | Prove the Privacy-specific v47-to-v48 upgrade, unchanged V2 evidence/current pointers, exact V3 receipt bundle, and fresh empty-v48 replay | Polish/Integration | NOT STARTED | no executable migration 48 exists, so no real database can yet prove V2 continuity, v48 immutability or the exact three-document receipt | After reviewed seals and PV3-10 constants, run the dedicated upgrade/empty-database tests and obtain a privacy-specific independent blocker verdict; general release/browser gates remain owned by Lane J. |
-| PV3-10 | Obtain owner/legal approval of the exact rendered V3 artifact and freeze its version, effective UTC, byte count and digests exactly once | Owner/cutover + Polish/Integration | PARTIAL | the owner decision boundary, fail-closed finalizer and uncommitted numbered engineering review exist, but owner rulings, counsel review, the exact approved artifact and release constants are intentionally unresolved | Present the numbered review for owner rulings, apply and review only approved changes, then use the finalizer to freeze one release tuple; general production cutover and rollback remain owned by J-10/J-11. |
+| PV3-01 | Retain and publish the exact immutable Privacy V2 evidence artifact without changing its bytes | Build + Polish/Integration | PARTIAL | Phase-A commit ec9a82e retains `legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html` at 19,935 bytes and SHA-256 `b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b`; Phase-B review confirmed the archive remains byte-identical, but neither branch is integrated | Preserve the exact bytes through final integration, then rerun artifact allowlist and hash proof. |
+| PV3-02 | Produce byte-identical hosted Privacy V3 live/versioned artifacts and a deterministic fail-closed finalizer after separately reviewed copy | Aesthetic + Polish/Integration | PARTIAL | Phase-B correction commit 5a81f5f has a path-limited `BLOCKER: NO`; focused 27/27, Abracadabra 28/28, public-truth 77/77 and site/legal gates passed, while release constants remain intentionally unsealed | Complete owner/legal approval, freeze the exact tuple once, generate byte-identical artifacts and integrate them. |
+| PV3-03 | Add transactional migration 48 for legal artifacts, exact project acceptance receipts, immutable history, RLS, privileges, and runtime contract | Build | PARTIAL | backend worktree now contains uncommitted `202608060048_hosted_privacy_v3.sql` plus three companion readiness/proof changes; the migration deliberately aborts while its release tuple is unsealed | Review and seal the four-path migration set only after PV3-10 freezes the exact constants; do not treat structural work as executable release proof. |
+| PV3-04 | Make PostgreSQL readiness prove exact v48 catalog, V2/V3 artifacts, authority constants, and fail-closed project creation | Build | PARTIAL | commit f60e933 seals the six-file backend authority correction; additional migration/readiness proof remains uncommitted and no integrated exact-v48 PostgreSQL release proof exists | Review the four-path migration set, then prove its exact sealed tuple and fail-closed boundary in fresh PostgreSQL. |
+| PV3-05 | Expose the four-key public project legal authority and require exact three-document acceptance only on project creation | Build | PARTIAL | commit f60e933 seals differentiated held/ready authority, exact bundle validation, rogue-artifact rejection, 409 behavior and private user-agent handling; migration-48 receipt authority and end-to-end PostgreSQL/HTTP evidence remain uncommitted | Seal migration 48 after the legal tuple and prove receipt idempotency, V2 history, tenant denial and forwarded-IP handling end to end. |
+| PV3-06 | Render unchecked consent, exact links/version, save-path acceptance, 409 recovery, invalidation, and V2 history in Abracadabra | Build + Aesthetic | PARTIAL | `/private/tmp/sitesourcery-privacy-v3-abracadabra-ui-20260807` has seven modified UI/test paths and no sealed commit | Reconcile with the sealed legal/backend contracts, then run focused API/DOM and exact-width keyboard/browser proof before a path-limited commit. |
+| PV3-07 | Show Domains just-in-time DNS disclosure immediately before Check, with no pre-action DNS request | Aesthetic + Polish/Integration | PARTIAL | Phase-A commit ec9a82e supplies the just-in-time interaction and exact-width proof; Phase-B commit 5a81f5f corrects the resolver/registrar wording and public-truth gates, but neither is integrated | Preserve both reviewed changes through integration and rerun exact three-query click/Enter proof. |
+| PV3-08 | Preserve existing V2 acceptance without forced reacceptance and hold only project creation during cutover | Build + Owner/cutover | PARTIAL | Owner decisions freeze no forced V2 reacceptance and a project-creation-only hold; f60e933 reads required-term history and the uncommitted migration set adds continuity proof scaffolding, but no integrated v48 proof exists | Prove V2 current/history after later acceptance and show that all non-creation continuity routes remain live during the hold. |
+| PV3-09 | Prove the Privacy-specific v47-to-v48 upgrade, unchanged V2 evidence/current pointers, exact V3 receipt bundle, and fresh empty-v48 replay | Polish/Integration | PARTIAL | An executable but uncommitted migration 48 and disposable-database proof harness now exist; final V3 constants, reviewed commit and retained successful run are absent | After PV3-10, run the dedicated upgrade/empty-database proof and obtain an independent blocker verdict; general release/browser gates remain owned by Lane J. |
+| PV3-10 | Obtain owner/legal approval of the exact rendered V3 artifact and freeze its version, effective UTC, byte count and digests exactly once | Owner/cutover + Polish/Integration | PARTIAL | Commit 5a81f5f seals the corrected source and engineering/legal review record with `BLOCKER: NO`; counsel/owner approval of the final rendered artifact and all release constants remains intentionally open | Obtain the approvals, use the fail-closed finalizer to freeze one release tuple, and carry that tuple unchanged into migration 48 and integration. |
 
 ### Sealed H1M checkpoint — H1N is next
 
@@ -365,13 +427,14 @@ commercial/public truth remain PARTIAL until that separate lane is sealed.
 | AESTH-05 | About has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `one-person-studio` asset/page class; exact-width browser audit | Preserve. |
 | AESTH-06 | Contact has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `signal-room` asset/page class; exact-width browser audit | Preserve form/contact readability. |
 | AESTH-07 | FAQ has its own awesome page background/presentation | Aesthetic | DONE | commit 2b0f9e0; `index-room` asset/page class; exact-width browser audit | Preserve visual behavior while FAQ copy is sealed separately. |
-| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | PARTIAL | Local `archive-room` presentation/readability is sealed at 2b0f9e0; canonical legal/commercial copy is concurrently edited and unsealed | Seal canonical legal truth separately; do not promote it from visual evidence. |
+| AESTH-08 | Legal routes have their own readable presentation and canonical copy | Aesthetic + Polish/Integration | PARTIAL | Local `archive-room` presentation/readability is sealed at 2b0f9e0 and corrected Privacy V3 source is sealed separately at 5a81f5f; the canonical integrated legal set and final browser proof remain open | Preserve the presentation while sealing and proving canonical integrated legal truth; do not promote it from visual evidence alone. |
 | AESTH-09 | Homepage design remains locked and is not altered by route corrections | Aesthetic | DONE | commit 2b0f9e0 excludes homepage visual changes; coordination directive locks its design | Keep visual design unchanged unless the owner explicitly reopens it; truth-only work remains separate. |
 
 ## EXPANSION matrix
 
-These rows do not lower Core Launch while their public offers are explicitly
-held and non-sellable. They determine the separate Expansion percentage.
+These rows do not lower first-dollar launch-gate closure while their public
+offers are explicitly held and non-sellable. They determine the separate
+Expansion percentage.
 
 ### Assessment reuse and later selected-findings work
 
@@ -432,34 +495,41 @@ held and non-sellable. They determine the separate Expansion percentage.
 | ID | Requirement | Owner lane | Status | Exact proof location | Promotion rule |
 | --- | --- | --- | --- | --- | --- |
 | DEF-ASSESS-07 | Optional evidence-bound AI first draft with mandatory owner review | Deferred Expansion | DEFERRED | Roadmap:307-309; no implementation | Promote only after human-authored assessment delivery remains stable and owner requests it. |
-| DEF-HQ-01 | Expose same contracts to Fantasealand Desiderata Labs HQ without second authority | Deferred Integration | DEFERRED | Roadmap:380-381; no HQ integration in this repo | Promote after Site Sourcery Core Launch is sealed. |
+| DEF-HQ-01 | Expose same contracts to Fantasealand Desiderata Labs HQ without second authority | Deferred Integration | DEFERRED | Roadmap:380-381; no HQ integration in this repo | Promote only after first-dollar launch is sealed and the owner reopens this scope. |
 | DEF-B2D-01 | Decide whether HTTP command identity enters durable downgrade scheduler | Deferred Build | DEFERRED | Roadmap:878-880; current durable quote/application idempotence is tested | Promote only on a concrete audit finding. |
 | DEF-B2D-02 | Add application-layer scheduled-boundary assertion beyond PostgreSQL enforcement | Deferred Build | DEFERRED | Roadmap:881-883; database already enforces boundary | Promote during nearby lifecycle work if low-risk. |
 | DEF-B2D-03 | Move temporary successful-schedule/failed-refresh Chrome case into maintained harness | Deferred Polish | DEFERRED | Roadmap:884-887; source regression and historical Chrome proof exist | Promote when browser harness is standardized. |
 
 ## Immediate next action
 
-The integrated Core candidate remains sealed locally at `a0f024d`; Privacy V3
-is active only in isolated worktrees and earns PARTIAL/NOT STARTED status until
-reviewed integration. Obtain owner rulings on the completed legal
-accuracy/exposure review and complete the six-file backend correction before
-migration 48. Keep provider release, merge, push, deployment and DNS held.
+Close the 12-row finish line in dependency order. First review and seal the
+currently uncommitted migration-48 and Abracadabra work after the exact Privacy
+V3 tuple is owner/legal approved; produce the separately versioned Website Terms
+correction; then integrate one candidate and close J-01, J-05, TRUTH-05 and
+AESTH-08 without exposing $35/$50. Prove J-02 and SURFACE-04 next, followed by
+the exact-candidate provider, staging, audit and owner journeys in J-09, J-07,
+J-06 and J-08. J-10 and J-11 remain last. Keep merge, push, deployment, live
+provider effects and DNS held until their explicit gates authorize them.
 
 ## Current evidence gaps that control the next actions
 
 1. H1N Purpose 1 is sealed at 9a9511c, migration 46 at f9950ae, and migration
-   47 at f1c265e. The integrated candidate proves the complete handoff path and
-   its combined public/legal/checker/Work truth.
-2. Canonical Alakazam invoices, Portal/cancellation, lifecycle transitions,
-   $35/$50 controls/care, customer publication controls and owner
-   reconciliation remain incomplete.
-3. Public/legal/catalog/domain/Responder truth is sealed separately at
-   `ea38093`; it remains a held-truth checkpoint rather than evidence that
-   unavailable commerce rails are sellable.
-4. Local page visuals are sealed at 2b0f9e0; Responder truth is sealed through
-   ea38093; and the integrated checker-authority/held-Alakazam/Work checkpoint
-   at 81075b7 and 3c008bb closes TRUTH-03, TRUTH-04 and AESTH-04.
-5. Exact Node 24 Core run on integrated HEAD
+   47 at f1c265e. The historical integrated candidate proves the complete
+   Custom handoff path and its combined public/legal/checker/Work truth, but it
+   predates all Privacy V3 work.
+2. Privacy V3 Phase-B correction is sealed at 5a81f5f with `BLOCKER: NO`, but
+   V3 is unsealed and unintegrated. Backend authority is sealed at f60e933;
+   migration 48 and its proof paths remain uncommitted, as do seven Abracadabra
+   UI/test paths.
+3. Historical Website Terms require a separately versioned correction. The
+   accepted V2 bytes must not be rewritten in place.
+4. Alakazam invoice, Portal/cancellation, lifecycle, $35/$50 fulfillment,
+   publication and reconciliation work is outside this first-dollar finish
+   line. Its safe deferral depends on every $35/$50 surface being visibly
+   unavailable and every subscription rail remaining held.
+5. Public/catalog/domain/Responder hold truth is sealed through ea38093,
+   81075b7 and 3c008bb. That proves non-sellability, not fulfillment readiness.
+6. Exact Node 24 Core run on integrated HEAD
    `ss_core_release_20260807t141504956z_f6b306ba2097` replayed all 47
    migrations, passed 4/4 real Custom-services journeys, removed and proved
    absence, then passed the full candidate and exact three-width browser gate.
@@ -474,9 +544,11 @@ migration 48. Keep provider release, merge, push, deployment and DNS held.
   addendum 2, Privacy V3 10, Responder expansion 1.
 - Total classified rows: 175.
 - Deferred rows excluded from denominators: 5.
-- Count every exact status token in the Core and Expansion tables above; do not
-  infer progress from prose, commit count, elapsed time, or historical test
-  totals.
+- First-dollar operational denominator: exactly 12 existing IDs; the PV3 rows
+  and absorbed H-AUTH-05 evidence must not be counted again.
+- Count every exact status token in the historical Core and Expansion tables;
+  do not infer completion from prose, commit count, elapsed time, or historical
+  test totals.
 
 Roadmap coverage audit:
 
@@ -505,8 +577,12 @@ Roadmap coverage audit:
 
 Recount arithmetic:
 
+- First-dollar launch gates: 0 DONE + 11 PARTIAL + 1 NOT STARTED + 0 EXTERNAL
+  BLOCKER = 12; 0 / 12 = 0.0%. Non-credit progress signal: 11/12 have partial
+  implementation or evidence.
 - Core roadmap rows 108 + H1M 5 + H1N 12 + aesthetic 9 + architecture addendum 2 + Privacy V3 10 = 146.
-- Core status recount: 97 DONE + 38 PARTIAL + 11 NOT STARTED + 0 EXTERNAL BLOCKER = 146; 97 / 146 = 66.4% after one-decimal rounding.
+- Historical Core status recount: 97 DONE + 40 PARTIAL + 9 NOT STARTED + 0
+  EXTERNAL BLOCKER = 146; 97 / 146 = 66.4% after one-decimal rounding.
 - Expansion roadmap rows 23 + Responder telephony 1 = 24.
 - Deferred roadmap rows = 5.
 - 146 + 24 + 5 = 175 total classified rows.
