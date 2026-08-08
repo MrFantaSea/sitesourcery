@@ -25,6 +25,10 @@ import {
   projectAlakazamExportGrant
 } from "../../commerce-v2/alakazam-lifecycle-cancellation.mjs";
 import {
+  ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+  decideAlakazamReversalConsequence
+} from "../../commerce-v2/alakazam-lifecycle-reversal.mjs";
+import {
   digest as canonicalDigest
 } from "../../commerce-v2/canonical.mjs";
 import {
@@ -1568,6 +1572,360 @@ test(
             export_window_ends_at: "2026-11-01T12:00:00.000Z"
           }),
         /alakazam_export_grants_check/u
+      );
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+// ---------------------------------------------------------------
+// G-05 — defensive refunds and disputes
+// ---------------------------------------------------------------
+
+const START_CHARGE_ID = "ch_alakazam_lifecycle_start";
+const START_PAYMENT_INTENT_ID =
+  "pi_alakazam_lifecycle_start";
+const REVERSAL_AT = "2026-07-25T10:00:00.000Z";
+const REVERSAL_OBSERVED_AT = "2026-07-25T10:00:09.000Z";
+
+function reversalProviderFacts(overrides = {}) {
+  const facts = {
+    schema: ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+    provider: "stripe",
+    reversalKind: "dispute",
+    outcome: "dispute_open",
+    stripeChargeId: START_CHARGE_ID,
+    stripePaymentIntentId: START_PAYMENT_INTENT_ID,
+    stripeRefundId: null,
+    stripeDisputeId: "dp_alakazam_lifecycle_1",
+    amountChargedMinor: 2500,
+    amountReversedMinor: 0,
+    currency: "USD",
+    providerObservedAt: REVERSAL_OBSERVED_AT,
+    ...overrides
+  };
+  return {
+    ...facts,
+    providerFactsDigest: canonicalDigest(facts)
+  };
+}
+
+function reversalEventInput(overrides = {}) {
+  return {
+    stripeEventId: "evt_alakazam_lifecycle_dispute",
+    eventType: "charge.dispute.created",
+    livemode: false,
+    apiVersion: "2026-07-30.basil",
+    stripeChargeId: START_CHARGE_ID,
+    stripePaymentIntentId: START_PAYMENT_INTENT_ID,
+    payloadDigest: digest("dispute payload"),
+    signatureVerifiedAt: "2026-07-25T10:00:05.000Z",
+    occurredAt: REVERSAL_AT,
+    ...overrides
+  };
+}
+
+test(
+  "G-05: an unruled policy records the reversal and touches no service",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+
+      // An unrelated PaymentIntent is not ours.
+      assert.deepEqual(
+        await repository.findReversalPaymentByCharge({
+          stripeEventId: "evt_alakazam_lifecycle_other",
+          stripeChargeId: "ch_someone_else",
+          stripePaymentIntentId: "pi_someone_else"
+        }),
+        { status: "not_alakazam" }
+      );
+
+      const resolved =
+        await repository.findReversalPaymentByCharge({
+          stripeEventId: "evt_alakazam_lifecycle_dispute",
+          stripeChargeId: START_CHARGE_ID,
+          stripePaymentIntentId: START_PAYMENT_INTENT_ID
+        });
+      assert.equal(resolved.status, "current");
+      assert.equal(resolved.currentSeverity, 0);
+      assert.equal(
+        resolved.subscription.paymentReceiptId,
+        seeded.receiptId
+      );
+      assert.equal(
+        resolved.subscription.receiptTotalMinor,
+        2500
+      );
+
+      const decision = decideAlakazamReversalConsequence({
+        policy: createAlakazamLifecyclePolicy(),
+        outcome: "dispute_open",
+        subscriptionStatus: "active",
+        currentSeverity: 0
+      });
+      const recorded = await repository.recordReversal({
+        subscription: resolved.subscription,
+        event: reversalEventInput(),
+        reversal: reversalProviderFacts(),
+        decision,
+        eventRowId: randomUUID(),
+        reversalId: randomUUID(),
+        tierEventId: null
+      });
+      await flushConstraints(client);
+
+      assert.equal(recorded.status, "reversal_recorded");
+      assert.equal(recorded.consequenceApplied, false);
+      assert.equal(recorded.ownerReviewRequired, true);
+      assert.equal(recorded.subscriptionStatus, "active");
+
+      const row = await client.query(
+        `select revision, status from ss.alakazam_subscriptions
+          where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(row.rows[0].status, "active");
+      assert.equal(row.rows[0].revision, "2");
+
+      const stored = await client.query(
+        `select policy_version, decided_consequence,
+                service_state, consequence_applied,
+                owner_review_required, severity,
+                payment_receipt_id, tier_change_event_id
+           from ss.alakazam_reversal_events
+          where subscription_id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(stored.rowCount, 1);
+      assert.equal(stored.rows[0].policy_version, null);
+      assert.equal(
+        stored.rows[0].decided_consequence,
+        "owner_review"
+      );
+      assert.equal(stored.rows[0].service_state, "unchanged");
+      assert.equal(
+        stored.rows[0].consequence_applied,
+        false
+      );
+      assert.equal(
+        stored.rows[0].owner_review_required,
+        true
+      );
+      assert.equal(stored.rows[0].severity, 30);
+      assert.equal(
+        stored.rows[0].payment_receipt_id,
+        seeded.receiptId
+      );
+      assert.equal(stored.rows[0].tier_change_event_id, null);
+
+      const replay =
+        await repository.findReversalPaymentByCharge({
+          stripeEventId: "evt_alakazam_lifecycle_dispute",
+          stripeChargeId: START_CHARGE_ID,
+          stripePaymentIntentId: START_PAYMENT_INTENT_ID
+        });
+      assert.equal(replay.status, "recorded");
+      assert.equal(replay.currentSeverity, 30);
+      assert.equal(
+        replay.reversal.reversalId,
+        recorded.reversalId
+      );
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "G-05: a ruled policy suspends on loss and never restores on a win",
+  { skip: !DATABASE_URL },
+  async () => {
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 1
+    });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set constraints all deferred");
+      const authority = await seedAuthority(client);
+      const seeded = await seedActiveSubscription(
+        client,
+        authority
+      );
+      const repository = lifecycleRepository(client);
+      const suspendingPolicy = createAlakazamLifecyclePolicy({
+        approved: true,
+        policyVersion: "alakazam-lifecycle.2026-08-08.v1",
+        graceHours: 72,
+        suspendAfterGraceHours: 0,
+        retentionHours: 720,
+        exportWindowHours: 336,
+        graceConsequence: "restrict_publication",
+        suspensionConsequence: "suspend_service",
+        refundConsequence: "suspend_service",
+        disputeConsequence: "suspend_service"
+      });
+
+      const resolved =
+        await repository.findReversalPaymentByCharge({
+          stripeEventId: "evt_alakazam_lifecycle_lost",
+          stripeChargeId: START_CHARGE_ID,
+          stripePaymentIntentId: START_PAYMENT_INTENT_ID
+        });
+      const lostDecision =
+        decideAlakazamReversalConsequence({
+          policy: suspendingPolicy,
+          outcome: "dispute_lost",
+          subscriptionStatus: "active",
+          currentSeverity: 0
+        });
+      assert.equal(lostDecision.to, "suspended");
+      const lost = await repository.recordReversal({
+        subscription: resolved.subscription,
+        event: reversalEventInput({
+          stripeEventId: "evt_alakazam_lifecycle_lost",
+          eventType: "charge.dispute.closed"
+        }),
+        reversal: reversalProviderFacts({
+          outcome: "dispute_lost",
+          amountReversedMinor: 2500
+        }),
+        decision: lostDecision,
+        eventRowId: randomUUID(),
+        reversalId: randomUUID(),
+        tierEventId: randomUUID()
+      });
+      await flushConstraints(client);
+      assert.equal(lost.consequenceApplied, true);
+      assert.equal(lost.subscriptionStatus, "suspended");
+      assert.equal(lost.severity, 80);
+
+      let row = await client.query(
+        `select revision, status, suspended_at
+           from ss.alakazam_subscriptions where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(row.rows[0].status, "suspended");
+      assert.equal(row.rows[0].revision, "3");
+      assert.ok(row.rows[0].suspended_at !== null);
+
+      // Funds reinstated later. Severity holds; service does not
+      // silently come back.
+      const after =
+        await repository.findReversalPaymentByCharge({
+          stripeEventId: "evt_alakazam_lifecycle_reinstated",
+          stripeChargeId: START_CHARGE_ID,
+          stripePaymentIntentId: START_PAYMENT_INTENT_ID
+        });
+      assert.equal(after.currentSeverity, 80);
+      const reinstatedDecision =
+        decideAlakazamReversalConsequence({
+          policy: suspendingPolicy,
+          outcome: "dispute_funds_reinstated",
+          subscriptionStatus: after.subscription.status,
+          currentSeverity: after.currentSeverity
+        });
+      assert.equal(reinstatedDecision.tierEventKind, null);
+      const reinstated = await repository.recordReversal({
+        subscription: after.subscription,
+        event: reversalEventInput({
+          stripeEventId:
+            "evt_alakazam_lifecycle_reinstated",
+          eventType: "charge.dispute.funds_reinstated",
+          occurredAt: "2026-07-28T10:00:00.000Z",
+          signatureVerifiedAt: "2026-07-28T10:00:05.000Z"
+        }),
+        reversal: reversalProviderFacts({
+          outcome: "dispute_funds_reinstated",
+          amountReversedMinor: 0,
+          providerObservedAt: "2026-07-28T10:00:09.000Z"
+        }),
+        decision: reinstatedDecision,
+        eventRowId: randomUUID(),
+        reversalId: randomUUID(),
+        tierEventId: null
+      });
+      await flushConstraints(client);
+      assert.equal(reinstated.severity, 80);
+      assert.equal(
+        reinstated.subscriptionStatus,
+        "suspended"
+      );
+      assert.equal(reinstated.consequenceApplied, false);
+
+      row = await client.query(
+        `select revision, status from ss.alakazam_subscriptions
+          where id = $1`,
+        [seeded.subscriptionId]
+      );
+      assert.equal(row.rows[0].status, "suspended");
+      assert.equal(row.rows[0].revision, "3");
+
+      // The schema itself refuses a severity that goes backwards.
+      const eventRowId = await insertProcessedEvent(
+        client,
+        authority,
+        {
+          subscriptionId: seeded.subscriptionId,
+          suffix: "alakazam_lifecycle_downgrade_severity",
+          eventType: "charge.dispute.updated",
+          providerObjectId: START_CHARGE_ID,
+          occurredAt: "2026-07-29T10:00:00.000Z"
+        }
+      );
+      await expectRejected(
+        client,
+        () =>
+          insertRow(client, "alakazam_reversal_events", {
+            id: randomUUID(),
+            organization_id: authority.organizationId,
+            project_id: authority.projectId,
+            subscription_id: seeded.subscriptionId,
+            payment_receipt_id: seeded.receiptId,
+            stripe_event_row_id: eventRowId,
+            reversal_kind: "dispute",
+            outcome: "dispute_won",
+            stripe_charge_id: START_CHARGE_ID,
+            stripe_payment_intent_id:
+              START_PAYMENT_INTENT_ID,
+            stripe_dispute_id: "dp_alakazam_lifecycle_1",
+            severity: 20,
+            amount_charged_minor: 2500,
+            amount_reversed_minor: 0,
+            currency: "USD",
+            observed_status: "suspended",
+            resulting_status: "suspended",
+            policy_version: null,
+            decided_consequence: "owner_review",
+            service_state: "unchanged",
+            consequence_applied: false,
+            owner_review_required: true,
+            provider_facts: { lowered: true },
+            provider_facts_digest: digest("lowered"),
+            provider_observed_at: "2026-07-29T10:00:09.000Z",
+            occurred_at: "2026-07-29T10:00:00.000Z"
+          }),
+        /severity cannot decrease/u
       );
     } finally {
       await client.query("rollback");

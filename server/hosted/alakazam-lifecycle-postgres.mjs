@@ -19,6 +19,11 @@ import {
   ALAKAZAM_EXPORT_GRANT_SCHEMA
 } from "../commerce-v2/alakazam-lifecycle-cancellation.mjs";
 import {
+  ALAKAZAM_REVERSAL_DECISION_SCHEMA,
+  ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+  ALAKAZAM_REVERSAL_SUBSCRIPTION_SCHEMA
+} from "../commerce-v2/alakazam-lifecycle-reversal.mjs";
+import {
   CommerceV2Error,
   clone,
   deepFreeze,
@@ -548,6 +553,117 @@ function exactRecoveryInput(value) {
   });
 }
 
+
+
+function reversalResultRow(row) {
+  const decision = row.provider_facts?.decision;
+  invariant(
+    decision?.schema === ALAKAZAM_REVERSAL_DECISION_SCHEMA,
+    "repository_conflict",
+    "the durable Alakazam reversal lost its decision evidence",
+    { status: 500 }
+  );
+  return deepFreeze({
+    status: "reversal_recorded",
+    provider: "stripe",
+    reversalId: exactUuid(row.id, "reversal.id"),
+    subscriptionId: exactUuid(
+      row.subscription_id,
+      "reversal.subscriptionId"
+    ),
+    projectId: exactUuid(
+      row.project_id,
+      "reversal.projectId"
+    ),
+    stripeChargeId: requiredText(
+      row.stripe_charge_id,
+      "reversal.stripeChargeId",
+      255
+    ),
+    severity: exactDatabaseInteger(
+      row.severity,
+      "reversal.severity"
+    ),
+    subscriptionStatus: requiredText(
+      row.resulting_status,
+      "reversal.resultingStatus",
+      40
+    ),
+    consequenceApplied: row.consequence_applied === true,
+    ownerReviewRequired: row.owner_review_required === true,
+    decision: deepFreeze(clone(decision)),
+    next: "owner_reconciliation"
+  });
+}
+
+function exactReversalInput(value) {
+  invariant(
+    value && typeof value === "object" && !Array.isArray(value),
+    "invalid_input",
+    "the Alakazam reversal input is invalid"
+  );
+  const subscription = value.subscription;
+  invariant(
+    subscription?.schema ===
+      ALAKAZAM_REVERSAL_SUBSCRIPTION_SCHEMA,
+    "invalid_input",
+    "the Alakazam reversal subscription is invalid"
+  );
+  const reversal = value.reversal;
+  invariant(
+    reversal?.schema === ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+    "invalid_input",
+    "the Alakazam reversal evidence is invalid"
+  );
+  const decision = value.decision;
+  invariant(
+    decision?.schema === ALAKAZAM_REVERSAL_DECISION_SCHEMA &&
+      decision.from === subscription.status &&
+      decision.outcome === reversal.outcome &&
+      decision.customerRefundOffered === false,
+    "invalid_input",
+    "the Alakazam reversal decision is invalid"
+  );
+  invariant(
+    decision.policyVersion !== null ||
+      (decision.to === decision.from &&
+        decision.tierEventKind === null &&
+        decision.consequence === "owner_review"),
+    "repository_conflict",
+    "an unruled Alakazam reversal policy cannot commit a consequence",
+    { status: 500 }
+  );
+  const event = value.event;
+  invariant(
+    event &&
+      EVENT_ID.test(event.stripeEventId ?? "") &&
+      typeof event.livemode === "boolean" &&
+      event.stripeChargeId === reversal.stripeChargeId &&
+      requiredDigest(
+        event.payloadDigest,
+        "event.payloadDigest"
+      ) &&
+      requiredIso(
+        event.signatureVerifiedAt,
+        "event.signatureVerifiedAt"
+      ) &&
+      requiredIso(event.occurredAt, "event.occurredAt"),
+    "invalid_input",
+    "the Alakazam reversal event is invalid"
+  );
+  return Object.freeze({
+    subscription: deepFreeze(clone(subscription)),
+    reversal: deepFreeze(clone(reversal)),
+    decision: deepFreeze(clone(decision)),
+    event: deepFreeze(clone(event)),
+    eventRowId: exactUuid(value.eventRowId, "eventRowId"),
+    reversalId: exactUuid(value.reversalId, "reversalId"),
+    tierEventId:
+      decision.tierEventKind === null
+        ? null
+        : exactUuid(value.tierEventId, "tierEventId")
+  });
+}
 
 function cancellationSubscriptionRow(row, hasOpenDowngrade) {
   const tier = resolveAlakazamTier(row.tier_id);
@@ -2616,6 +2732,437 @@ export function createPostgresAlakazamLifecycleRepository({
             updated.rows[0],
             exportGrantRow(grant.rows[0])
           );
+        })
+      );    },
+
+    async findReversalPaymentByCharge(value) {
+      const stripeChargeId = requiredText(
+        value?.stripeChargeId,
+        "stripeChargeId",
+        255
+      );
+      const stripeEventId = requiredText(
+        value?.stripeEventId,
+        "stripeEventId",
+        255
+      );
+      const stripePaymentIntentId = requiredText(
+        value?.stripePaymentIntentId,
+        "stripePaymentIntentId",
+        255
+      );
+      invariant(
+        /^ch_[A-Za-z0-9_]+$/u.test(stripeChargeId) &&
+          /^pi_[A-Za-z0-9_]+$/u.test(
+            stripePaymentIntentId
+          ) &&
+          EVENT_ID.test(stripeEventId),
+        "invalid_input",
+        "the Alakazam reversal lookup is invalid"
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const recorded = await client.query(
+            `select reversal.*
+               from ss.alakazam_reversal_events reversal
+               join ss.alakazam_stripe_events event
+                 on event.organization_id =
+                    reversal.organization_id
+                and event.id = reversal.stripe_event_row_id
+              where event.stripe_event_id = $1`,
+            [stripeEventId]
+          );
+
+          // Ownership: the charge's PaymentIntent must already back a
+          // committed Alakazam receipt. Nothing else makes an event
+          // ours, and an unowned charge is left entirely alone.
+          const owned = await client.query(
+            `select receipt.id as payment_receipt_id,
+                    receipt.stripe_payment_intent_id,
+                    receipt.total_minor,
+                    receipt.currency,
+                    subscription.id as subscription_id,
+                    subscription.organization_id,
+                    subscription.project_id,
+                    subscription.customer_user_id,
+                    subscription.tier_id,
+                    subscription.status,
+                    subscription.revision,
+                    application.id as credit_application_id
+               from ss.alakazam_payment_receipts receipt
+               join ss.alakazam_subscriptions subscription
+                 on subscription.organization_id =
+                    receipt.organization_id
+                and subscription.id = receipt.subscription_id
+               left join ss.alakazam_credit_applications
+                    application
+                 on application.organization_id =
+                    receipt.organization_id
+                and application.payment_receipt_id = receipt.id
+              where receipt.stripe_payment_intent_id = $1
+              order by receipt.created_at asc
+              limit 1`,
+            [stripePaymentIntentId]
+          );
+          if (owned.rowCount === 0) {
+            return deepFreeze({ status: "not_alakazam" });
+          }
+          const row = owned.rows[0];
+          const subscription = deepFreeze({
+            schema: ALAKAZAM_REVERSAL_SUBSCRIPTION_SCHEMA,
+            localSubscriptionId: exactUuid(
+              row.subscription_id,
+              "reversal.subscriptionId"
+            ),
+            tenantId: exactUuid(
+              row.organization_id,
+              "reversal.organizationId"
+            ),
+            customerId: exactUuid(
+              row.customer_user_id,
+              "reversal.customerUserId"
+            ),
+            projectId: exactUuid(
+              row.project_id,
+              "reversal.projectId"
+            ),
+            revision: exactDatabaseInteger(
+              row.revision,
+              "reversal.revision"
+            ),
+            tierId: resolveAlakazamTier(row.tier_id).tierId,
+            status: requiredText(
+              row.status,
+              "reversal.status",
+              40
+            ),
+            currency: requiredText(
+              row.currency,
+              "reversal.currency"
+            ),
+            paymentReceiptId: exactUuid(
+              row.payment_receipt_id,
+              "reversal.paymentReceiptId"
+            ),
+            receiptTotalMinor: exactDatabaseInteger(
+              row.total_minor,
+              "reversal.receiptTotalMinor"
+            ),
+            stripePaymentIntentId: requiredText(
+              row.stripe_payment_intent_id,
+              "reversal.stripePaymentIntentId",
+              255
+            ),
+            creditApplicationId:
+              row.credit_application_id === null
+                ? null
+                : exactUuid(
+                    row.credit_application_id,
+                    "reversal.creditApplicationId"
+                  )
+          });
+          const highest = await client.query(
+            `select coalesce(max(severity), 0) as severity
+               from ss.alakazam_reversal_events
+              where organization_id = $1
+                and stripe_charge_id = $2`,
+            [subscription.tenantId, stripeChargeId]
+          );
+          const currentSeverity = exactDatabaseInteger(
+            highest.rows[0].severity,
+            "reversal.currentSeverity"
+          );
+          if (recorded.rowCount === 1) {
+            return deepFreeze({
+              status: "recorded",
+              provider: "stripe",
+              stripeChargeId,
+              subscription,
+              currentSeverity,
+              reversal: reversalResultRow(recorded.rows[0])
+            });
+          }
+          return deepFreeze({
+            status: "current",
+            provider: "stripe",
+            stripeChargeId,
+            subscription,
+            currentSeverity
+          });
+        })
+      );
+    },
+
+    async recordReversal(value) {
+      const input = exactReversalInput(value);
+      const subscription = input.subscription;
+      const reversal = input.reversal;
+      const decision = input.decision;
+      return translated(() =>
+        database.service({}, async (client) => {
+          const existing = await client.query(
+            `select reversal.*
+               from ss.alakazam_reversal_events reversal
+               join ss.alakazam_stripe_events event
+                 on event.organization_id =
+                    reversal.organization_id
+                and event.id = reversal.stripe_event_row_id
+              where event.stripe_event_id = $1`,
+            [input.event.stripeEventId]
+          );
+          if (existing.rowCount === 1) {
+            return reversalResultRow(existing.rows[0]);
+          }
+
+          const current = await client.query(
+            `select status, revision
+               from ss.alakazam_subscriptions
+              where organization_id = $1 and id = $2
+              for update`,
+            [
+              subscription.tenantId,
+              subscription.localSubscriptionId
+            ]
+          );
+          invariant(
+            current.rowCount === 1 &&
+              current.rows[0].status === decision.from,
+            "alakazam_reversal_reconciliation_required",
+            "The Alakazam subscription changed before its reversal committed.",
+            { status: 409 }
+          );
+
+          const claimed = await client.query(
+            `select id from ss.alakazam_stripe_events
+              where stripe_event_id = $1 for update`,
+            [input.event.stripeEventId]
+          );
+          invariant(
+            claimed.rowCount === 0,
+            "stripe_event_conflict",
+            "the Alakazam reversal event was already used for different evidence",
+            { status: 409 }
+          );
+
+          const eventFacts = {
+            schema: "sitesourcery.alakazam-reversal-event/v1",
+            stripeEventId: input.event.stripeEventId,
+            eventType: input.event.eventType,
+            stripeChargeId: reversal.stripeChargeId,
+            outcome: reversal.outcome,
+            severity: decision.severity,
+            providerFactsDigest:
+              reversal.providerFactsDigest,
+            occurredAt: input.event.occurredAt
+          };
+          await client.query(
+            `insert into ss.alakazam_stripe_events (
+               id, organization_id, project_id,
+               quote_id, subscription_id,
+               stripe_event_id, event_type, livemode,
+               api_version, provider_object_id,
+               payload_digest, facts, state, attempt_count,
+               signature_verified_at, occurred_at
+             ) values (
+               $1, $2, $3, null, $4, $5, $6, $7, $8, $9,
+               $10, $11::jsonb, 'received', 0, $12, $13
+             )`,
+            [
+              input.eventRowId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              input.event.stripeEventId,
+              input.event.eventType,
+              input.event.livemode,
+              input.event.apiVersion,
+              reversal.stripeChargeId,
+              input.event.payloadDigest,
+              JSON.stringify(eventFacts),
+              input.event.signatureVerifiedAt,
+              input.event.occurredAt
+            ]
+          );
+          await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processing',
+                    attempt_count = attempt_count + 1
+              where organization_id = $1 and id = $2
+                and state = 'received'`,
+            [subscription.tenantId, input.eventRowId]
+          );
+          const processed = await client.query(
+            `update ss.alakazam_stripe_events
+                set state = 'processed', processed_at = $3
+              where organization_id = $1 and id = $2
+                and state = 'processing'
+              returning id`,
+            [
+              subscription.tenantId,
+              input.eventRowId,
+              input.event.signatureVerifiedAt
+            ]
+          );
+          invariant(
+            processed.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam reversal event was not completed",
+            { status: 500 }
+          );
+
+          let resultingStatus = subscription.status;
+          if (decision.tierEventKind !== null) {
+            const resultRevision = subscription.revision + 1;
+            const tierFacts = {
+              schema:
+                "sitesourcery.alakazam-reversal-tier-event/v1",
+              tierId: subscription.tierId,
+              outcome: reversal.outcome,
+              severity: decision.severity,
+              policyVersion: decision.policyVersion,
+              stripeChargeId: reversal.stripeChargeId
+            };
+            await client.query(
+              `insert into ss.alakazam_tier_change_events (
+                 id, organization_id, project_id,
+                 subscription_id, quote_id,
+                 stripe_event_row_id, payment_receipt_id,
+                 downgrade_schedule_id,
+                 download_reversal_event_id,
+                 result_subscription_revision,
+                 event_kind, prior_tier_id, result_tier_id,
+                 occurred_at, facts, facts_digest
+               ) values (
+                 $1, $2, $3, $4, null, $5, null, null, null,
+                 $6, 'suspended', $7, $7, $8, $9::jsonb, $10
+               )`,
+              [
+                input.tierEventId,
+                subscription.tenantId,
+                subscription.projectId,
+                subscription.localSubscriptionId,
+                input.eventRowId,
+                resultRevision,
+                subscription.tierId,
+                input.event.occurredAt,
+                JSON.stringify(tierFacts),
+                digest(tierFacts)
+              ]
+            );
+            const suspended = await client.query(
+              `update ss.alakazam_subscriptions
+                  set status = 'suspended',
+                      suspended_at =
+                        coalesce(suspended_at, $3),
+                      provider_observed_at = $4,
+                      provider_facts_digest = $5
+                where organization_id = $1
+                  and id = $2
+                  and status = $6
+                  and revision = $7
+                returning revision, status`,
+              [
+                subscription.tenantId,
+                subscription.localSubscriptionId,
+                input.event.occurredAt,
+                reversal.providerObservedAt,
+                reversal.providerFactsDigest,
+                decision.from,
+                subscription.revision
+              ]
+            );
+            invariant(
+              suspended.rowCount === 1 &&
+                suspended.rows[0].status === "suspended" &&
+                exactDatabaseInteger(
+                  suspended.rows[0].revision,
+                  "reversal.revision"
+                ) === resultRevision,
+              "repository_conflict",
+              "the Alakazam reversal consequence was not applied",
+              { status: 500 }
+            );
+            resultingStatus = "suspended";
+          }
+
+          const inserted = await client.query(
+            `insert into ss.alakazam_reversal_events (
+               id, organization_id, project_id,
+               subscription_id, payment_receipt_id,
+               credit_application_id, stripe_event_row_id,
+               reversal_kind, outcome, stripe_charge_id,
+               stripe_payment_intent_id, stripe_refund_id,
+               stripe_dispute_id, severity,
+               amount_charged_minor, amount_reversed_minor,
+               currency, observed_status, resulting_status,
+               policy_version, decided_consequence,
+               service_state, consequence_applied,
+               owner_review_required, tier_change_event_id,
+               provider_facts, provider_facts_digest,
+               provider_observed_at, occurred_at
+             ) values (
+               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+               $11, $12, $13, $14, $15, $16, 'USD', $17,
+               $18, $19, $20, $21, $22, $23, $24,
+               $25::jsonb, $26, $27, $28
+             )
+             returning *`,
+            [
+              input.reversalId,
+              subscription.tenantId,
+              subscription.projectId,
+              subscription.localSubscriptionId,
+              subscription.paymentReceiptId,
+              subscription.creditApplicationId,
+              input.eventRowId,
+              reversal.reversalKind,
+              reversal.outcome,
+              reversal.stripeChargeId,
+              reversal.stripePaymentIntentId,
+              reversal.stripeRefundId,
+              reversal.stripeDisputeId,
+              decision.severity,
+              reversal.amountChargedMinor,
+              reversal.amountReversedMinor,
+              subscription.status,
+              resultingStatus,
+              decision.policyVersion,
+              decision.consequence,
+              decision.serviceState,
+              decision.tierEventKind !== null,
+              decision.ownerReviewRequired,
+              input.tierEventId,
+              JSON.stringify({
+                ...clone(reversal),
+                decision: clone(decision)
+              }),
+              reversal.providerFactsDigest,
+              reversal.providerObservedAt,
+              input.event.occurredAt
+            ]
+          );
+          invariant(
+            inserted.rowCount === 1,
+            "repository_conflict",
+            "the Alakazam reversal was not recorded",
+            { status: 500 }
+          );
+          return deepFreeze({
+            status: "reversal_recorded",
+            provider: "stripe",
+            reversalId: input.reversalId,
+            subscriptionId: subscription.localSubscriptionId,
+            projectId: subscription.projectId,
+            stripeChargeId: reversal.stripeChargeId,
+            severity: decision.severity,
+            subscriptionStatus: resultingStatus,
+            consequenceApplied:
+              decision.tierEventKind !== null,
+            ownerReviewRequired:
+              decision.ownerReviewRequired,
+            decision: clone(decision),
+            next: "owner_reconciliation"
+          });
         })
       );
     }
