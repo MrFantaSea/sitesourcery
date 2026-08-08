@@ -258,16 +258,16 @@ function truthFixture() {
       "The current maker does not record a safety hold, report, appeal, restoration, review history, or enforcement state.",
     ].join(" "),
     privacyHtml: [
-      "Desiderata Labs LLC operates this website under the filed alternate name SITESOURCERY.",
-      "The ordinary marketing pages contain no inquiry form, visitor upload, advertising tracker, or page-level analytics code.",
-      "The Start chooser uses selected buttons only to show a recommendation on the current page and sends nothing.",
+      "Desiderata Labs LLC operates this website under the filed New Jersey alternate name SITESOURCERY. Site Sourcery is the brand presentation of SITESOURCERY. Desiderata Labs LLC is the legal seller.",
+      "The public pages in this release are built without an inquiry form, visitor upload, advertising tracker, or page-level analytics.",
+      "The Start chooser uses selected buttons only to show a recommendation on the current page and does not send that selection.",
       "The Responder is held from sale. Its public page describes an intended flow already present in the page and does not ask for customer data, store a setup, contact a provider, create a quote, take payment, or activate a message, booking, review request, invoice action, or other integration.",
       "A guest may build, revise, and test a private preview without an account. Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
-      "Before a guest saves, the business facts, selected look, review confirmation, and made versions remain in the current editor tab and are not sent to Site Sourcery merely because a preview is made. Refreshing or closing the tab clears that unsaved work.",
-      "Download does not publish or host the page.",
-      "The lookup checks public DNS only. It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
-      "Secure card entry belongs to the payment processor identified at checkout.",
-      "Alakazam has no active cancellation, nonpayment, suspension, retained-exit, or deletion schedule under this notice; earlier day-count drafts are not policy.",
+      "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
+      "Download does not create a public Internet address or an ongoing website-hosting service.",
+      "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+      "Secure card entry belongs to Stripe at checkout.",
+      "Alakazam has no active customer lifecycle or retention schedule under this notice.",
       "The ordinary public pages and guest preview do not submit a safety report or support ticket.",
       "Email sent to sitesourcery@proton.me is processed through Proton Mail.",
       "If you call or email, Site Sourcery may retain the communication and reasonable business records needed to respond, scope work, document decisions, deliver accepted work, protect the service, and meet legal obligations.",
@@ -459,6 +459,7 @@ test("candidate changed-path contract is exact, sorted, unique, and complete", (
     "index.html",
     "legal/index.html",
     "legal/privacy/index.html",
+    "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
     "legal/website-terms/index.html",
     "og.png",
     "package.json",
@@ -533,8 +534,8 @@ test("artifact exclusion contract covers generated, server, workflow, governance
   }
 });
 
-test("verifier publication ledger independently matches the reviewed 74-file held builder ledger", () => {
-  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 74);
+test("verifier publication ledger independently matches the reviewed 75-file held builder ledger", () => {
+  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 75);
   assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
   assert.deepEqual(
     [...REVIEWED_PUBLIC_ARTIFACT_PATHS].sort(),
@@ -1470,11 +1471,11 @@ test("postdeploy route fixture proves canonical pages, custom 404, redirects, an
   });
 });
 
-test("real reviewed 74-file artifact satisfies the production manifest and byte-level route contract", async () => {
+test("real reviewed 75-file artifact satisfies the production manifest and byte-level route contract", async () => {
   const files = reviewedArtifactFiles();
   const manifest = artifactManifestFor(files);
   assert.equal(manifest.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
-  assert.equal(manifest.count, 74);
+  assert.equal(manifest.count, 75);
   assert.equal(validateProductionRouteManifest(manifest), manifest);
 
   const { fetchImpl } = liveFixtureFetch(files);

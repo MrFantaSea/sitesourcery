@@ -86,9 +86,10 @@ test("public Domains surface is DNS preflight plus inquiry only", async () => {
   assert.match(page, /public-DNS preflight/u);
   assert.match(page, /This page cannot accept payment\./u);
   for (const phrase of [
-    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver.",
-    "Cloudflare also receives ordinary request and network metadata, such as the IP address, request URL, time, and user-agent information, under its own terms and privacy practices.",
-    "It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
+    "Cloudflare processes the query and connection data under its Public DNS Resolver privacy notice.",
+    "A recursive resolver may contact authoritative DNS servers to answer.",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API, and it does not prove availability, create a quote, reserve a name, authorize a purchase, or place an order.",
   ]) {
     assert.ok(page.includes(phrase), phrase);
   }
