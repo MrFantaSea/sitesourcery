@@ -13,6 +13,11 @@ import {
   heldAlakazamArtifactExcludedFiles,
   heldAlakazamExecutableSemantics,
 } from "./hosted-truth/manifest.mjs";
+import {
+  assertImmutableLegalArtifactSources,
+  assertPrivacyV3NotPublished,
+  immutableLegalArtifactFiles,
+} from "./hosted-truth/legal-artifacts.mjs";
 
 /*
  * This is intentionally an allowlist, not a recursive copy with exceptions.
@@ -74,6 +79,7 @@ export const publicFileAllowlist = Object.freeze([
   "index.html",
   "legal/index.html",
   "legal/privacy/index.html",
+  "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/index.html",
   "og.png",
   "pricing.html",
@@ -141,6 +147,12 @@ function assertSortedUniqueAllowlist() {
       throw new Error(`held Alakazam source cannot enter the public allowlist: ${file}`);
     }
   }
+  for (const file of immutableLegalArtifactFiles) {
+    if (!publicFileAllowlist.includes(file)) {
+      throw new Error(`immutable legal artifact is absent from the public allowlist: ${file}`);
+    }
+  }
+  assertPrivacyV3NotPublished(publicFileAllowlist, "public file allowlist");
 }
 
 function assertHeldAlakazamExecutableBoundary(root) {
@@ -246,6 +258,7 @@ export function buildPagesArtifact({
 } = {}) {
   assertSortedUniqueAllowlist();
   const { absoluteOutput, absoluteRoot, isExactSiteOutput } = resolveBuildPaths(root, output);
+  assertImmutableLegalArtifactSources({ root: absoluteRoot });
 
   /*
    * Validate every source before touching the existing artifact. A missing or
@@ -269,6 +282,7 @@ export function buildPagesArtifact({
       mkdirSync(path.dirname(destination), { recursive: true });
       copyFileSync(path.join(absoluteRoot, ...file.split("/")), destination);
     }
+    assertImmutableLegalArtifactSources({ root: absoluteOutput });
   } catch (error) {
     /*
      * A custom output is guaranteed not to pre-exist, so cleaning it cannot
@@ -288,10 +302,12 @@ export function verifyPagesArtifact({
   assertSortedUniqueAllowlist();
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
+  assertImmutableLegalArtifactSources({ root: absoluteRoot });
   const outputStat = lstatSync(absoluteOutput);
   if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
     throw new Error(`public artifact must be a real directory: ${absoluteOutput}`);
   }
+  assertImmutableLegalArtifactSources({ root: absoluteOutput });
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
   assertHeldAlakazamExecutableBoundary(absoluteRoot);
