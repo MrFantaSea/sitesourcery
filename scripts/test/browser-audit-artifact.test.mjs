@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  mkdir,
   mkdtemp,
   readFile,
   rm,
@@ -21,10 +20,20 @@ import {
   digest,
 } from "../../server/hosted/security.mjs";
 import {
-  PRIVACY_V3_ACCEPTANCE_STATEMENT,
+  finalizePrivacyV3,
+} from "../hosted-truth/finalize-privacy-v3.mjs";
+import {
+  HOSTED_PRIVACY_V3_CONTENT,
+} from "../hosted-truth/legal-artifacts.mjs";
+import {
   PRIVACY_V3_AUTHORITY_SCHEMA,
   PRIVACY_V3_OWNER_APPROVAL,
 } from "../hosted-truth/privacy-v3-render.mjs";
+import {
+  PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+  PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+  sealPrivacyV3Content,
+} from "../hosted-truth/seal-privacy-v3-content.mjs";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -33,94 +42,30 @@ const ROOT = path.resolve(
 const VERSION = "SS-HOSTED-PRIVACY-2099-12-31-V3";
 const EFFECTIVE_AT = "2099-12-31T00:00:00.000Z";
 
-function receiptFor(bytes) {
-  const fullPageSha256 = digest(bytes);
-  const artifactUri =
-    `https://sitesourcery.com/legal/privacy/versions/${VERSION}/`;
-  const documents = [
-    {
-      kind: "privacy",
-      version: VERSION,
-      contentDigest: fullPageSha256,
-      contentUri: artifactUri,
-      effectiveAt: EFFECTIVE_AT,
+async function writeFinalizedFixture(temporaryRoot) {
+  const contentSeal = await sealPrivacyV3Content({
+    root: ROOT,
+    outputRoot: path.join(temporaryRoot, "content-seal"),
+    approvalReceipt: {
+      schema: PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+      statement: PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+      approvalReference: "TEST-ONLY-BROWSER-FINALIZER-COMPATIBILITY",
+      approvedAt: "2099-12-30T12:34:56.000Z",
+      reviewArtifactSha256: HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+      reviewArtifactByteCount:
+        HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
     },
-    {
-      kind: "product",
-      version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-      contentDigest: "a".repeat(64),
-      contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
-      effectiveAt: "2026-07-30T00:00:00.000Z",
-    },
-    {
-      kind: "website",
-      version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-      contentDigest: "a".repeat(64),
-      contentUri: "https://sitesourcery.com/legal/website-terms/",
-      effectiveAt: "2026-07-30T00:00:00.000Z",
-    },
-  ];
-  const authorityDigest = digest(canonicalJson({
-    documents,
-    schema: PRIVACY_V3_AUTHORITY_SCHEMA,
-  }));
-  return {
-    schema: "sitesourcery.hosted-privacy-v3-finalization/v1",
-    state: "owner-approved-finalization",
-    sealable: true,
-    published: false,
-    integrationRequired: true,
-    renderPath: "real-hosted-builder",
+  });
+  const outputRoot = path.join(temporaryRoot, "finalized");
+  const finalized = await finalizePrivacyV3({
+    root: ROOT,
+    outputRoot,
     version: VERSION,
     effectiveAt: EFFECTIVE_AT,
-    contentUri: artifactUri,
-    artifactUri,
-    fullPageSha256,
-    byteCount: bytes.byteLength,
-    mediaType: "text/html; charset=utf-8",
-    authoritySchema: PRIVACY_V3_AUTHORITY_SCHEMA,
-    acceptanceStatement: PRIVACY_V3_ACCEPTANCE_STATEMENT,
-    authorityDigest,
-    documents,
-    artifacts: [
-      {
-        role: "current",
-        file: "hosted/legal/privacy/index.html",
-        sha256: fullPageSha256,
-        byteCount: bytes.byteLength,
-      },
-      {
-        role: "versioned",
-        file: `hosted/legal/privacy/versions/${VERSION}/index.html`,
-        sha256: fullPageSha256,
-        byteCount: bytes.byteLength,
-      },
-    ],
-    environment: {
-      SITESOURCERY_HOSTED_PRIVACY_V3_VERSION: VERSION,
-      SITESOURCERY_HOSTED_PRIVACY_V3_SHA256: fullPageSha256,
-      SITESOURCERY_HOSTED_PRIVACY_V3_URI: artifactUri,
-      SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT: EFFECTIVE_AT,
-      SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT: String(bytes.byteLength),
-      SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI: artifactUri,
-      SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256: authorityDigest,
-    },
-  };
-}
-
-async function writeFinalizedFixture(outputRoot) {
-  const bytes = Buffer.from("<!doctype html><title>Privacy V3 final</title>\n");
-  const receipt = receiptFor(bytes);
-  for (const { file } of receipt.artifacts) {
-    const target = path.join(outputRoot, file);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, bytes);
-  }
-  await writeFile(
-    path.join(outputRoot, "privacy-v3-release-constants.json"),
-    `${JSON.stringify(receipt, null, 2)}\n`,
-  );
-  return receipt;
+    ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
+    contentSeal: contentSeal.receipt,
+  });
+  return Object.freeze({ outputRoot, receipt: finalized.receipt });
 }
 
 test("held browser audit plan rebuilds only the repository _hosted artifact", async () => {
@@ -202,38 +147,24 @@ test("finalized browser audit input is explicit, external, and unambiguous", () 
 });
 
 test("finalized browser audit verifies the receipt and never rebuilds held defaults", async (t) => {
-  const outputRoot = await mkdtemp(
+  const temporaryRoot = await mkdtemp(
     path.join(os.tmpdir(), "sitesourcery-finalized-browser-test-"),
   );
-  t.after(async () => rm(outputRoot, { recursive: true, force: true }));
-  const receipt = await writeFinalizedFixture(outputRoot);
+  t.after(async () => rm(temporaryRoot, { recursive: true, force: true }));
+  const { outputRoot, receipt } = await writeFinalizedFixture(temporaryRoot);
   const plan = createBrowserAuditArtifactPlan({
     siteRoot: ROOT,
     environment: {},
     argv: ["--finalized-artifact-root", outputRoot],
   });
-  const verifications = [];
   const prepared = await prepareBrowserAuditArtifact({
     plan,
     async buildHostedArtifactImpl() {
       throw new Error("finalized input must not rebuild a held artifact");
     },
-    async verifyHostedArtifactImpl(options) {
-      verifications.push(options);
-    },
   });
   assert.equal(prepared.mode, "finalized");
   assert.equal(prepared.receipt.fullPageSha256, receipt.fullPageSha256);
-  assert.deepEqual(verifications, [{
-    root: ROOT,
-    output: path.join(outputRoot, "hosted"),
-    privacyV3Render: {
-      mode: "final",
-      version: VERSION,
-      effectiveAt: EFFECTIVE_AT,
-      ownerApproval: PRIVACY_V3_OWNER_APPROVAL,
-    },
-  }]);
 
   const receiptFile = path.join(
     outputRoot,
@@ -253,5 +184,80 @@ test("finalized browser audit verifies the receipt and never rebuilds held defau
       },
     }),
     /authority digest mismatch|artifact digest mismatch|deep-equal/u,
+  );
+
+  const legacy = JSON.parse(JSON.stringify(receipt));
+  legacy.schema = "sitesourcery.hosted-privacy-v3-finalization/v1";
+  await writeFile(receiptFile, `${JSON.stringify(legacy, null, 2)}\n`);
+  await assert.rejects(
+    prepareBrowserAuditArtifact({
+      plan,
+      async buildHostedArtifactImpl() {
+        throw new Error("must not build");
+      },
+      async verifyHostedArtifactImpl() {
+        throw new Error("legacy receipt must fail first");
+      },
+    }),
+    /receipt schema mismatch/u,
+  );
+
+  const changedContentSealDigest = JSON.parse(JSON.stringify(receipt));
+  changedContentSealDigest.contentSeal.contentSealSha256 = "a".repeat(64);
+  await writeFile(
+    receiptFile,
+    `${JSON.stringify(changedContentSealDigest, null, 2)}\n`,
+  );
+  await assert.rejects(
+    prepareBrowserAuditArtifact({
+      plan,
+      async buildHostedArtifactImpl() {
+        throw new Error("must not build");
+      },
+      async verifyHostedArtifactImpl() {
+        throw new Error("changed content-seal digest must fail first");
+      },
+    }),
+    /content seal digest changed/u,
+  );
+
+  const changedTerms = JSON.parse(JSON.stringify(receipt));
+  changedTerms.documents[1].contentDigest = "a".repeat(64);
+  changedTerms.documents[2].contentDigest = "a".repeat(64);
+  changedTerms.authorityDigest = digest(canonicalJson({
+    documents: changedTerms.documents,
+    schema: PRIVACY_V3_AUTHORITY_SCHEMA,
+  }));
+  await writeFile(receiptFile, `${JSON.stringify(changedTerms, null, 2)}\n`);
+  await assert.rejects(
+    prepareBrowserAuditArtifact({
+      plan,
+      async buildHostedArtifactImpl() {
+        throw new Error("must not build");
+      },
+      async verifyHostedArtifactImpl() {
+        throw new Error("substituted Terms must fail first");
+      },
+    }),
+    /deep-equal/u,
+  );
+
+  const changedContentSeal = JSON.parse(JSON.stringify(receipt));
+  changedContentSeal.contentSeal.approvalStatement = "not-owner-approved";
+  await writeFile(
+    receiptFile,
+    `${JSON.stringify(changedContentSeal, null, 2)}\n`,
+  );
+  await assert.rejects(
+    prepareBrowserAuditArtifact({
+      plan,
+      async buildHostedArtifactImpl() {
+        throw new Error("must not build");
+      },
+      async verifyHostedArtifactImpl() {
+        throw new Error("changed content seal must fail first");
+      },
+    }),
+    /actual|content approval/u,
   );
 });

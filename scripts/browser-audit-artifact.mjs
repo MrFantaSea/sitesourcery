@@ -11,14 +11,30 @@ import {
   digest,
 } from "../server/hosted/security.mjs";
 import {
+  assertPrivacyV3ContentInputs,
+  HOSTED_PRIVACY_V3_CANDIDATE,
+  HOSTED_PRIVACY_V3_CONTENT,
+  HOSTED_WEBSITE_TERMS_V2_ARTIFACT,
+} from "./hosted-truth/legal-artifacts.mjs";
+import {
   createPrivacyV3RenderPlan,
+  normalizePrivacyV3FinalPage,
   PRIVACY_V3_ACCEPTANCE_STATEMENT,
   PRIVACY_V3_AUTHORITY_SCHEMA,
   PRIVACY_V3_OWNER_APPROVAL,
 } from "./hosted-truth/privacy-v3-render.mjs";
+import {
+  PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+  PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+  PRIVACY_V3_CONTENT_SEAL_SCHEMA,
+  validatePrivacyV3ContentApproval,
+  validatePrivacyV3ContentSeal,
+} from "./hosted-truth/seal-privacy-v3-content.mjs";
 
 export const BROWSER_FINALIZED_ARTIFACT_ROOT_ENV =
   "SITESOURCERY_BROWSER_FINALIZED_ARTIFACT_ROOT";
+
+const WEBSITE_TERMS_V2_EFFECTIVE_AT = "2026-07-30T00:00:00.000Z";
 
 function isInside(parent, candidate) {
   const relative = path.relative(parent, candidate);
@@ -152,7 +168,7 @@ async function readFinalizationReceipt(plan) {
 async function verifyFinalizationReceipt(plan, receipt) {
   assert.equal(
     receipt?.schema,
-    "sitesourcery.hosted-privacy-v3-finalization/v1",
+    "sitesourcery.hosted-privacy-v3-finalization/v2",
     "finalized artifact receipt schema mismatch",
   );
   assert.equal(
@@ -164,11 +180,108 @@ async function verifyFinalizationReceipt(plan, receipt) {
   assert.equal(receipt.published, false);
   assert.equal(receipt.integrationRequired, true);
   assert.equal(receipt.renderPath, "real-hosted-builder");
+  assert.equal(receipt.documentId, "00000000-0000-4000-8000-000000000048");
+  assert.equal(receipt.kind, "privacy");
+  assert.equal(receipt.currentUri, "https://sitesourcery.com/legal/privacy/");
   assert.equal(receipt.authoritySchema, PRIVACY_V3_AUTHORITY_SCHEMA);
   assert.equal(
     receipt.acceptanceStatement,
     PRIVACY_V3_ACCEPTANCE_STATEMENT,
   );
+  const expectedContentSealKeys = [
+    "approvalReceiptSchema",
+    "approvalReceiptSha256",
+    "approvalReference",
+    "approvalStatement",
+    "approvedAt",
+    "contentSealSha256",
+    "contentTemplateByteCount",
+    "contentTemplateSha256",
+    "reviewArtifactByteCount",
+    "reviewArtifactSha256",
+    "schema",
+    "state",
+  ].sort();
+  assert.deepEqual(
+    Object.keys(receipt.contentSeal ?? {}).sort(),
+    expectedContentSealKeys,
+    "finalized artifact content-seal summary shape mismatch",
+  );
+  assert.equal(receipt.contentSeal.schema, PRIVACY_V3_CONTENT_SEAL_SCHEMA);
+  assert.equal(receipt.contentSeal.state, "content-approved-unreleased");
+  assert.match(receipt.contentSeal.contentSealSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(
+    receipt.contentSeal.approvalReceiptSchema,
+    PRIVACY_V3_CONTENT_APPROVAL_SCHEMA,
+  );
+  assert.equal(
+    receipt.contentSeal.approvalStatement,
+    PRIVACY_V3_CONTENT_APPROVAL_STATEMENT,
+  );
+  const approvalReceipt = validatePrivacyV3ContentApproval({
+    schema: receipt.contentSeal.approvalReceiptSchema,
+    statement: receipt.contentSeal.approvalStatement,
+    approvalReference: receipt.contentSeal.approvalReference,
+    approvedAt: receipt.contentSeal.approvedAt,
+    reviewArtifactSha256: receipt.contentSeal.reviewArtifactSha256,
+    reviewArtifactByteCount: receipt.contentSeal.reviewArtifactByteCount,
+  });
+  assert.equal(
+    receipt.contentSeal.approvalReceiptSha256,
+    digest(canonicalJson(approvalReceipt)),
+    "finalized artifact content approval digest mismatch",
+  );
+  assert.equal(
+    receipt.contentSeal.reviewArtifactSha256,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactSha256,
+  );
+  assert.equal(
+    receipt.contentSeal.reviewArtifactByteCount,
+    HOSTED_PRIVACY_V3_CONTENT.reviewArtifactByteCount,
+  );
+  assert.equal(
+    receipt.contentSeal.contentTemplateSha256,
+    HOSTED_PRIVACY_V3_CONTENT.contentTemplateSha256,
+  );
+  assert.equal(
+    receipt.contentSeal.contentTemplateByteCount,
+    HOSTED_PRIVACY_V3_CONTENT.contentTemplateByteCount,
+  );
+  const reviewPlan = createPrivacyV3RenderPlan({ mode: "review" });
+  const templatePlan = createPrivacyV3RenderPlan({ mode: "content-template" });
+  validatePrivacyV3ContentSeal({
+    schema: receipt.contentSeal.schema,
+    state: receipt.contentSeal.state,
+    published: false,
+    deployable: false,
+    releaseFinalizationRequired: true,
+    renderPath: "real-hosted-builder",
+    reviewArtifact: {
+      file: `review/hosted/${HOSTED_PRIVACY_V3_CANDIDATE.currentFile}`,
+      versionedFile: `review/hosted/${reviewPlan.versionedFile}`,
+      sha256: receipt.contentSeal.reviewArtifactSha256,
+      byteCount: receipt.contentSeal.reviewArtifactByteCount,
+      mediaType: "text/html; charset=utf-8",
+    },
+    contentTemplate: {
+      file: `template-hosted/${HOSTED_PRIVACY_V3_CANDIDATE.currentFile}`,
+      versionedFile: `template-hosted/${templatePlan.versionedFile}`,
+      sha256: receipt.contentSeal.contentTemplateSha256,
+      byteCount: receipt.contentSeal.contentTemplateByteCount,
+      mediaType: "text/html; charset=utf-8",
+    },
+    approvalReceipt,
+    approvalReceiptSha256: receipt.contentSeal.approvalReceiptSha256,
+    release: {
+      version: null,
+      effectiveAt: null,
+      fullPageSha256: null,
+      byteCount: null,
+      artifactUri: null,
+      authorityDigest: null,
+    },
+    contentSealSha256: receipt.contentSeal.contentSealSha256,
+  });
   const renderOptions = Object.freeze({
     mode: "final",
     version: receipt.version,
@@ -191,13 +304,30 @@ async function verifyFinalizationReceipt(plan, receipt) {
     })),
     "finalized artifact authority digest mismatch",
   );
-  assert.deepEqual(receipt.documents?.[0], {
-    kind: "privacy",
-    version: receipt.version,
-    contentDigest: receipt.fullPageSha256,
-    contentUri: expectedArtifactUri,
-    effectiveAt: receipt.effectiveAt,
-  });
+  assert.deepEqual(receipt.documents, [
+    {
+      kind: "privacy",
+      version: receipt.version,
+      contentDigest: receipt.fullPageSha256,
+      contentUri: expectedArtifactUri,
+      effectiveAt: receipt.effectiveAt,
+    },
+    {
+      kind: "product",
+      version: HOSTED_WEBSITE_TERMS_V2_ARTIFACT.version,
+      contentDigest: HOSTED_WEBSITE_TERMS_V2_ARTIFACT.sha256,
+      contentUri:
+        `${HOSTED_WEBSITE_TERMS_V2_ARTIFACT.canonicalUri}#self-service`,
+      effectiveAt: WEBSITE_TERMS_V2_EFFECTIVE_AT,
+    },
+    {
+      kind: "website",
+      version: HOSTED_WEBSITE_TERMS_V2_ARTIFACT.version,
+      contentDigest: HOSTED_WEBSITE_TERMS_V2_ARTIFACT.sha256,
+      contentUri: HOSTED_WEBSITE_TERMS_V2_ARTIFACT.canonicalUri,
+      effectiveAt: WEBSITE_TERMS_V2_EFFECTIVE_AT,
+    },
+  ]);
   assert.deepEqual(receipt.environment, {
     SITESOURCERY_HOSTED_PRIVACY_V3_VERSION: receipt.version,
     SITESOURCERY_HOSTED_PRIVACY_V3_SHA256: receipt.fullPageSha256,
@@ -207,6 +337,11 @@ async function verifyFinalizationReceipt(plan, receipt) {
     SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI: expectedArtifactUri,
     SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256:
       receipt.authorityDigest,
+  });
+  assert.deepEqual(receipt.cutoverPolicy, {
+    existingV2ProjectReacceptanceRequired: false,
+    projectCreationWriteHoldRequired: true,
+    existingReadsAndCustomerRecoveryRemainAvailable: true,
   });
   const expectedArtifacts = [
     {
@@ -249,6 +384,21 @@ async function verifyFinalizationReceipt(plan, receipt) {
     digest(bytes[0]),
     receipt.fullPageSha256,
     "finalized Privacy V3 artifact digest mismatch",
+  );
+  const normalizedContent = Buffer.from(
+    normalizePrivacyV3FinalPage(bytes[0].toString("utf8"), renderPlan),
+    "utf8",
+  );
+  assertPrivacyV3ContentInputs({ contentTemplateBytes: normalizedContent });
+  assert.equal(
+    digest(normalizedContent),
+    receipt.contentSeal.contentTemplateSha256,
+    "finalized Privacy V3 content does not match its content seal",
+  );
+  assert.equal(
+    normalizedContent.byteLength,
+    receipt.contentSeal.contentTemplateByteCount,
+    "finalized Privacy V3 content-template byte count mismatch",
   );
   return renderOptions;
 }
