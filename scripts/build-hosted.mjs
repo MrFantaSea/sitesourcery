@@ -33,6 +33,10 @@ import {
   hostedTruthRequirements,
   hostedTruthSlots,
 } from "./hosted-truth/manifest.mjs";
+import {
+  assertImmutableLegalArtifactSources,
+  assertPrivacyV3NotPublished,
+} from "./hosted-truth/legal-artifacts.mjs";
 
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
@@ -134,6 +138,7 @@ export const hostedFileAllowlist = Object.freeze(
 );
 
 assertSortedUnique(hostedFileAllowlist, "hosted file allowlist");
+assertPrivacyV3NotPublished(hostedFileAllowlist, "hosted file allowlist");
 for (const file of heldAlakazamArtifactExcludedFiles) {
   if (hostedFileAllowlist.includes(file)) {
     throw new Error(`held Alakazam source cannot enter the hosted allowlist: ${file}`);
@@ -691,10 +696,12 @@ export async function verifyHostedArtifact({
 } = {}) {
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
+  assertImmutableLegalArtifactSources({ root: absoluteRoot });
   const outputState = await lstat(absoluteOutput);
   if (!outputState.isDirectory() || outputState.isSymbolicLink()) {
     throw new Error(`hosted artifact must be a real directory: ${absoluteOutput}`);
   }
+  assertImmutableLegalArtifactSources({ root: absoluteOutput });
   const actual = (await walkArtifact(absoluteOutput)).sort(lexical);
   if (JSON.stringify(actual) !== JSON.stringify(hostedFileAllowlist)) {
     const expected = new Set(hostedFileAllowlist);
@@ -863,6 +870,7 @@ export async function buildHostedArtifact({
   catalogFile = DEFAULT_CATALOG_FILE,
 } = {}) {
   const { absoluteOutput, absoluteRoot } = resolveBuildPaths(root, output);
+  assertImmutableLegalArtifactSources({ root: absoluteRoot });
   const rootState = await lstat(absoluteRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) {
     throw new Error(`site root must be a real directory: ${absoluteRoot}`);

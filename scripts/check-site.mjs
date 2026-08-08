@@ -33,6 +33,11 @@ import {
   heldAlakazamArtifactExcludedFiles,
   heldAlakazamExecutableSemantics,
 } from "./hosted-truth/manifest.mjs";
+import {
+  assertImmutableLegalArtifactSources,
+  immutableLegalArtifacts,
+  immutableLegalArtifactFiles,
+} from "./hosted-truth/legal-artifacts.mjs";
 import { validateWorkPublicTruth } from "./work-public-truth.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -68,6 +73,10 @@ const CHECKOUT_ORIGIN = "https://buy.stripe.com/";
 
 const errors = [];
 const fail = (file, message) => errors.push(`${file}: ${message}`);
+const IMMUTABLE_LEGAL_ARTIFACTS = new Map(
+  immutableLegalArtifacts.map((artifact) => [artifact.file, artifact]),
+);
+const IMMUTABLE_LEGAL_ARTIFACT_FILES = new Set(immutableLegalArtifactFiles);
 
 // ---------------------------------------------------------------- discovery
 
@@ -282,9 +291,11 @@ function checkLinks(page, source, idsByRoute, routes) {
  */
 function checkCanonical(page, source) {
   if (CANONICAL_EXEMPT.has(page)) return;
-  const expected = `<link rel="canonical" href="https://sitesourcery.com${routeOf(page)}">`;
+  const expectedUri = IMMUTABLE_LEGAL_ARTIFACTS.get(page)?.canonicalUri
+    ?? `https://sitesourcery.com${routeOf(page)}`;
+  const expected = `<link rel="canonical" href="${expectedUri}">`;
   if (!source.includes(expected)) {
-    fail(page, `canonical must be ${JSON.stringify(`https://sitesourcery.com${routeOf(page)}`)}`);
+    fail(page, `canonical must be ${JSON.stringify(expectedUri)}`);
   }
 }
 
@@ -503,6 +514,7 @@ async function checkSitemap(pages, sources) {
   const expected = new Set(
     pages
       .filter((page) => page.endsWith("index.html"))
+      .filter((page) => !IMMUTABLE_LEGAL_ARTIFACT_FILES.has(page))
       .filter((page) => !isRedirect(sources.get(page)))
       .filter((page) => !/name="robots"\s+content="[^"]*noindex/iu.test(sources.get(page)))
       .map(routeOf),
@@ -518,6 +530,11 @@ async function checkSitemap(pages, sources) {
 // --------------------------------------------------------------------- main
 
 const pages = (await findPages()).sort();
+try {
+  assertImmutableLegalArtifactSources({ root: ROOT });
+} catch (error) {
+  fail("immutable legal artifacts", error.message);
+}
 const sources = new Map();
 for (const page of pages) sources.set(page, await readFile(path.join(ROOT, page), "utf8"));
 

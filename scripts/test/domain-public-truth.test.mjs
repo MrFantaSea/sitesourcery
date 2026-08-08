@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { publicFileAllowlist } from "../build-pages.mjs";
 import { heldAlakazamArtifactExcludedFiles } from "../hosted-truth/manifest.mjs";
 import {
@@ -84,6 +85,24 @@ test("public Domains surface is DNS preflight plus inquiry only", async () => {
   assert.match(page, /Domain registration is inquiry-only\./u);
   assert.match(page, /public-DNS preflight/u);
   assert.match(page, /This page cannot accept payment\./u);
+  for (const phrase of [
+    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in DNS queries to Cloudflare’s public DNS resolver.",
+    "Cloudflare also receives ordinary request and network metadata, such as the IP address, request URL, time, and user-agent information, under its own terms and privacy practices.",
+    "It does not contact a registrar, reserve a name, prove availability, create a quote, authorize a purchase, or place an order.",
+  ]) {
+    assert.ok(page.includes(phrase), phrase);
+  }
+  assert.match(page, /id="domain-preflight-disclosure"/u);
+  assert.equal(
+    (page.match(/aria-describedby="domain-preflight-disclosure domain-status"/gu) ?? []).length,
+    2,
+  );
+  assert.ok(
+    page.indexOf('id="domain-preflight-disclosure"')
+      < page.indexOf("data-domain-submit"),
+    "the Cloudflare notice must precede the request control",
+  );
+  assert.match(page, /href="\/legal\/privacy\/#domains"/u);
   assert.match(search, /Ask to verify /u);
   assert.match(
     search,
@@ -96,6 +115,7 @@ test("public Domains surface is DNS preflight plus inquiry only", async () => {
   }
   assert.doesNotMatch(page, /\$(?:40|45)\b/u);
   assert.doesNotMatch(search, /domain-prices\.json|CHECKOUT_BY_BAND|rent an address/iu);
+  assert.doesNotMatch(search, /receives only the name/iu);
   assert.equal(publicFileAllowlist.includes("domains/domain-prices.json"), false);
   assert.equal(publicFileAllowlist.includes("domains/domain-search.js"), true);
   assert.equal(
@@ -109,6 +129,110 @@ test("public Domains surface is DNS preflight plus inquiry only", async () => {
   for (const file of heldAlakazamArtifactExcludedFiles) {
     assert.equal(publicFileAllowlist.includes(file), false, file);
   }
+});
+
+test("Domains preflight sends nothing before action and exactly three cleaned NS lookups after click or Enter", async () => {
+  const source = await readFile(
+    path.join(ROOT, "domains/domain-search.js"),
+    "utf8",
+  );
+  const listeners = new Map();
+  const requests = [];
+  const input = {
+    value: "  Cedar Workshop  ",
+    addEventListener(type, listener) {
+      listeners.set(`input:${type}`, listener);
+    },
+  };
+  const button = {
+    disabled: false,
+    addEventListener(type, listener) {
+      listeners.set(`button:${type}`, listener);
+    },
+  };
+  const results = {
+    children: [],
+    replaceChildren(...children) {
+      this.children = children;
+    },
+  };
+  const status = { textContent: "" };
+  const form = {
+    querySelector(selector) {
+      if (selector === "[data-domain-input]") return input;
+      if (selector === "[data-domain-submit]") return button;
+      return null;
+    },
+  };
+  const document = {
+    querySelector(selector) {
+      if (selector === "[data-domain-search]") return form;
+      if (selector === "[data-domain-results]") return results;
+      if (selector === "[data-domain-status]") return status;
+      return null;
+    },
+    createElement(tagName) {
+      return {
+        tagName,
+        children: [],
+        appendChild(child) {
+          this.children.push(child);
+        },
+      };
+    },
+  };
+  const fetch = async (url, options) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      async json() {
+        return { Status: 3 };
+      },
+    };
+  };
+
+  vm.runInNewContext(source, { document, fetch, Promise });
+  assert.deepEqual(requests, []);
+  assert.equal(typeof listeners.get("button:click"), "function");
+  assert.equal(typeof listeners.get("input:keydown"), "function");
+
+  listeners.get("input:keydown")({ key: "Tab", preventDefault() {} });
+  assert.deepEqual(requests, []);
+
+  listeners.get("button:click")({ preventDefault() {} });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(
+    requests.map(({ url }) => url),
+    ["com", "net", "org"].map(
+      (ending) => `https://cloudflare-dns.com/dns-query?name=cedar-workshop.${ending}&type=NS`,
+    ),
+  );
+  for (const { options } of requests) {
+    assert.deepEqual(Object.keys(options).sort(), ["headers", "method"]);
+    assert.deepEqual(Object.keys(options.headers), ["accept"]);
+    assert.equal(options.method, "GET");
+    assert.equal(options.headers.accept, "application/dns-json");
+  }
+
+  requests.length = 0;
+  let enterPrevented = false;
+  listeners.get("input:keydown")({
+    key: "Enter",
+    preventDefault() {
+      enterPrevented = true;
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(enterPrevented, true);
+  assert.deepEqual(
+    requests.map(({ url }) => url),
+    ["com", "net", "org"].map(
+      (ending) => `https://cloudflare-dns.com/dns-query?name=cedar-workshop.${ending}&type=NS`,
+    ),
+  );
 });
 
 test("held offers cannot return through the landing, home, or flyer", async () => {
