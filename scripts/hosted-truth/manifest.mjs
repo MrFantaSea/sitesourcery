@@ -50,7 +50,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "7d39d96431b35e584f5950dfa8bb87ff19b4274d9eb77af681aa15ef5f763b5b",
+    hostedSha256: "b78c8f894ec0ab2cee71b4bc212561e736f597d17ea0c1401c3dcc49faafb283",
   }),
   slot({
     id: "abracadabra-app-control",
@@ -96,17 +96,17 @@ export const hostedTruthSlots = Object.freeze([
     id: "legal-privacy-head",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "21e3f58376224a95147ce112f02217f270f73d9d6d2443900b36f63f45e2cb9b",
+    sourceSha256: "52290d5bc8a4353afc6bc448d4670eced26fe19583061572218e2e8cecc26933",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-head.html",
-    hostedSha256: "e6b1ef4ad3ec7db0b17fa563318e9eecf6e437c13fa5ba0798977d12372e1786",
+    hostedSha256: "3f8bb91b7d7f8088a97f38695e51fea92299767a44e24d7bb0e92a55c4520d61",
   }),
   slot({
     id: "legal-privacy-main",
     file: "legal/privacy/index.html",
     kind: "html",
-    sourceSha256: "b8cc6e55659060bd6d3cd0fdb2afa53132f282fefc966a41167f46980e42e866",
+    sourceSha256: "8928bf10870f30392e260d6615202dc65f2b88b0a22fb151d79f5796fba26b06",
     hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
-    hostedSha256: "6f226664449e8cdf206a6dc7c8823062a10b3f2b6d8c0b3ff3bc0eae6076c48c",
+    hostedSha256: "e9208092c4a4e9c3c8ec0b9a64e118473c3d02bc6cc4a8697822b24949e4cfd5",
   }),
   slot({
     id: "legal-website-terms-head",
@@ -157,7 +157,7 @@ export const heldAlakazamCopyFragmentSha256 = Object.freeze({
   "scripts/hosted-truth/fragments/faq-address-choices.html":
     "6c878981bdf46078f95a1b670e94042b67c1b781269f96eb669781c08202c297",
   "scripts/hosted-truth/fragments/faq-missed-payment.html":
-    "a06fddbb3ea93910b035f09d05030fec57143cb5918f03abbe29ed54f8890134",
+    "6c5daac54a11b686b3756330adaeec55730e6c1923bc464635dabddea4a176e7",
   "scripts/hosted-truth/fragments/faq-paths.html":
     "197c10656603f6735f690524882183d1b2f8ecef218322a8d8b152d6eaa1c764",
   "scripts/hosted-truth/fragments/faq-private-sites.html":
@@ -292,8 +292,14 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "legal/privacy/index.html": Object.freeze([
     "The free guest preview needs no account. Saving an editor project or using its $5 Download requires sign-in.",
-    "A signed-in account and retained editor project can exist before any Alakazam subscription",
-    "Cloudflare also receives ordinary request and network metadata",
+    "Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
+    "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
+    "Download does not create a public Internet address or an ongoing website-hosting service.",
+    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
+    "Cloudflare processes the query and connection data under its",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+    "If Site Sourcery keeps personal data about you, you may ask what it processes and request access, correction, deletion, or a portable copy.",
+    "Not effective — release identity pending",
     "processed through Proton Mail",
   ]),
   "legal/website-terms/index.html": Object.freeze([
@@ -346,6 +352,7 @@ export const hostedTruthRequirements = Object.freeze({
   "abracadabra/app/index.html": Object.freeze([
     "Build, preview, and download with Abracadabra",
     "Your guest preview is not saved yet.",
+    "Made versions may survive a refresh in this tab.",
     "Sign in for the $5 Download.",
     "Alakazam subscriptions and hosting activation remain held.",
     "Create an account or sign in.",

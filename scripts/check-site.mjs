@@ -35,6 +35,7 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
+  assertPrivacyV3CandidateSources,
   immutableLegalArtifacts,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
@@ -62,6 +63,7 @@ const CANONICAL_EXEMPT = new Set(["404.html", "flyer.html"]);
 const ALLOWED_EXTERNAL = new Set([
   "https://sconesourcery.com/", // real founder-owned venture, cited as proof on /work/
   "https://daarx.money/", // second founder-owned venture, cited as proof on /work/
+  "https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/", // exact resolver privacy notice cited by /legal/privacy/
 ]);
 
 /**
@@ -532,8 +534,9 @@ async function checkSitemap(pages, sources) {
 const pages = (await findPages()).sort();
 try {
   assertImmutableLegalArtifactSources({ root: ROOT });
+  assertPrivacyV3CandidateSources({ root: ROOT });
 } catch (error) {
-  fail("immutable legal artifacts", error.message);
+  fail("legal artifact truth", error.message);
 }
 const sources = new Map();
 for (const page of pages) sources.set(page, await readFile(path.join(ROOT, page), "utf8"));

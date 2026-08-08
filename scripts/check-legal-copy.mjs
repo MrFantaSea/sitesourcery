@@ -21,7 +21,7 @@ const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
 const SELLER_IDENTITY = "Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY. Desiderata Labs LLC is the legal seller.";
 const SELLER_IDENTITY_BY_FILE = Object.freeze({
-  "legal/privacy/index.html": "Desiderata Labs LLC operates this website under the filed alternate name <strong>SITESOURCERY</strong>. Site Sourcery is the brand presentation of SITESOURCERY. Desiderata Labs LLC is the legal seller.",
+  "legal/privacy/index.html": "Desiderata Labs LLC operates this website under the filed New Jersey alternate name SITESOURCERY. Site Sourcery is the brand presentation of SITESOURCERY. Desiderata Labs LLC is the legal seller.",
 });
 const SUMMARY_WORD_LIMIT = 26;
 const SUMMARY_GRADE_LIMIT = 8;
@@ -32,22 +32,22 @@ const LEGAL_CLAUSE_DIGESTS = Object.freeze({
     "current-product": "b77fba2c1bd31df3efcb97e85fa4993548ebb1b812361fd02321dbb65d9defd6",
   }),
   "legal/privacy/index.html": Object.freeze({
-    "operator": "b14b9e4ebebaf97cf0c8d382f0f0d6e23bf416b1e74a98751441770427b8d2f5",
-    "public-pages": "6baee86dcd9d5423d37dab62d08939f835de68e5b591fd1b01d1a92933c5f4a9",
-    "accounts": "64e370dacfcfb7097c4b7b500644d090acdbf515abd25a43edd61e60aaa1b9f5",
-    "projects": "7efba45b7ced790e2bf1bf7ab9c3d935d45591433b3ae6b09f4476f8e174339b",
-    "published-sites": "331cf4c044a4fa35c5b81b4e6043e3efedc5beda8e516ddd94f1beb22c433521",
+    "operator": "00ba1178678958482b251b1ece742a7af5ac6115c8222830e1c416541ed263d0",
+    "public-pages": "8fb6db213198a7dd5e5194560ebab2910f2ce68c66d7ee20ea523f8bedd95085",
+    "accounts": "46053f73c2eadf928c1630847a32834dd33f7be46a794f8cc2a5f27e1bc1f7c2",
+    "projects": "97b5bc793aaec50eccae3fe0e7adfc52684b5b6f05fae840c8eb07682df027b7",
+    "published-sites": "3f0a56d3ea131ddb1af322bcd3a265598ec5cfcf5473a1b8d9ec5f22ddb31d06",
     "hive-planner": "7fe67c538ff733958dcced13676c3107ca9e6536c77cf1d82f1168d5ce3a1c65",
-    "network-records": "d193555da065b5f203d9b858b26b09b0b0899d53d16701a4516a1158393f74d7",
-    "domains": "e20bef513e76b629334eea8e76236e35658c1e668afb57445d2d1563018ec747",
-    "billing": "c72b400f0dd4466536f99ed675cb74d292e58facfa7a88903b89ba2fc415292a",
-    "retention": "96b029295c9034ac53041bcb30e9fb01e9349a8e8ddbd65246a588056d48075c",
-    "safety-support": "2ecd86c6c1d9e0a819f908c87d67e0eaa1a47373136a9a1cbf26e37b955a2f6f",
+    "network-records": "b7279451fddd5d77f279916690662fade1b6dd425ef6f2c9b85fa83d11620c2b",
+    "domains": "eebb67189a2f140a1474ff50c94e480591ba4f9b8875d175f26f915f27bdc12f",
+    "billing": "ff310e252dcbf8f21b409d10aefbfc5b9d5867eabdc89c3f13d0cc2f48f834bd",
+    "retention": "105a453f94afd5489afc9c1a59f32ce05962a6086ab0f5b1be0f330487321829",
+    "safety-support": "51d33e15c109fdc3629af8bedd648b626d7bf6115fb36709e2329f0a28849832",
     "communications": "82317ea5a50f039a4dac1c929399c24fbbc3286bb038d27a7af3f4d937d5a2c8",
-    "choices": "e57ebc6da1b439737144bea241572014e616fb1d4d445d80e978f0c16dd1c376",
-    "security": "1f819f658b262878cd0c40f4f122977f73af9a5bb573e5a0077cade20610f87d",
-    "changes": "3928c1a1acd04eeafe20d1e6382020a8bc3e58e8cf886aa95c55c8182877f199",
-    "contact": "7c6c0e369333eadd80692fa57c9975475a829dffa91c421d46e3cda282c16a1a",
+    "choices": "0a3e378d38122104023e52ea4e793b33b36aadf59c38d808cf0382887641d773",
+    "security": "09e1365b1015e1d50bc34b56ffd1656b2e8155b116f2dff01ed6f3e696580de7",
+    "changes": "a4cef0b60477478e5471d3cb7ad543853d21171fe1e53ee92cada5cbb6b67a1f",
+    "contact": "07551c660983f830c823ed55567081452e702d6af9b8bbe3bc6cbbedd7a35a58",
   }),
   "legal/website-terms/index.html": Object.freeze({
     "acceptance": "3e0cb616a7a18641d019a136fa243792cce0638cdf2f371f18a324586d9615b9",
@@ -91,6 +91,7 @@ export const LEGAL_COPY_ROUTES = Object.freeze([
     summaries: Object.freeze(["hero", ...PRIVACY_SECTION_IDS]),
     links: Object.freeze([
       ...PRIVACY_SECTION_IDS.map((id) => `#${id}`),
+      "https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/",
       "tel:+18562441220",
       "mailto:sitesourcery@proton.me",
     ]),

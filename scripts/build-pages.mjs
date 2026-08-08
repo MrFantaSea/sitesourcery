@@ -15,7 +15,11 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
+  assertPrivacyV3CandidateSources,
   assertPrivacyV3NotPublished,
+  assertUnsealedPrivacyCurrentAlias,
+  HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_PRIVACY_V3_CANDIDATE,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
 
@@ -211,6 +215,12 @@ function assertRegularSource(root, file) {
   }
 }
 
+function unsealedPublicationSource(file) {
+  return file === HOSTED_PRIVACY_V3_CANDIDATE.currentFile
+    ? HOSTED_PRIVACY_V2_ARTIFACT.file
+    : file;
+}
+
 function resolveBuildPaths(root, output) {
   const absoluteRoot = path.resolve(root);
   const rootStat = lstatSync(absoluteRoot);
@@ -259,6 +269,7 @@ export function buildPagesArtifact({
   assertSortedUniqueAllowlist();
   const { absoluteOutput, absoluteRoot, isExactSiteOutput } = resolveBuildPaths(root, output);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
+  assertPrivacyV3CandidateSources({ root: absoluteRoot });
 
   /*
    * Validate every source before touching the existing artifact. A missing or
@@ -280,9 +291,11 @@ export function buildPagesArtifact({
     for (const file of publicFileAllowlist) {
       const destination = path.join(absoluteOutput, ...file.split("/"));
       mkdirSync(path.dirname(destination), { recursive: true });
-      copyFileSync(path.join(absoluteRoot, ...file.split("/")), destination);
+      const sourceFile = unsealedPublicationSource(file);
+      copyFileSync(path.join(absoluteRoot, ...sourceFile.split("/")), destination);
     }
     assertImmutableLegalArtifactSources({ root: absoluteOutput });
+    assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
   } catch (error) {
     /*
      * A custom output is guaranteed not to pre-exist, so cleaning it cannot
@@ -303,11 +316,13 @@ export function verifyPagesArtifact({
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
+  assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputStat = lstatSync(absoluteOutput);
   if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
     throw new Error(`public artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
+  assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
   assertHeldAlakazamExecutableBoundary(absoluteRoot);
@@ -324,7 +339,8 @@ export function verifyPagesArtifact({
   }
 
   for (const file of publicFileAllowlist) {
-    const sourceBytes = readFileSync(path.join(absoluteRoot, ...file.split("/")));
+    const sourceFile = unsealedPublicationSource(file);
+    const sourceBytes = readFileSync(path.join(absoluteRoot, ...sourceFile.split("/")));
     const artifactBytes = readFileSync(path.join(absoluteOutput, ...file.split("/")));
     if (!sourceBytes.equals(artifactBytes)) {
       throw new Error(`public artifact bytes differ from source: ${file}`);
@@ -342,7 +358,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   } else if (process.argv.length === 3 && process.argv[2] === "--check") {
     const result = verifyPagesArtifact();
     console.log(
-      `Pages artifact verified at ${result.output}: ${result.files} allowlisted files, exact source bytes.`,
+      `Pages artifact verified at ${result.output}: ${result.files} allowlisted files, exact approved publication bytes.`,
     );
   } else {
     console.error("Usage: node scripts/build-pages.mjs [--check]");
