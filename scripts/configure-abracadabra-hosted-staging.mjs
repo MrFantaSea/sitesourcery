@@ -155,6 +155,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
   const hostedScripts = [
     '<script src="/abracadabra/app/abracadabra-api.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-hosted-control.js" defer></script>',
+    '<script src="/abracadabra/app/abracadabra-billing-views.js" defer></script>',
     APP_SCRIPT,
     '<script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>',
   ].join("\n  ");

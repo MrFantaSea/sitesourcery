@@ -537,6 +537,7 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   assert.doesNotMatch(app, /content="hold"/u);
   for (const asset of [
     "/abracadabra/app/abracadabra-api.js",
+    "/abracadabra/app/abracadabra-billing-views.js",
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
     "/abracadabra/app/abracadabra-customer-control-dom.js",
