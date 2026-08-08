@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import pg from "pg";
 
@@ -9,8 +11,11 @@ import { createCanonicalPostgresAuthority } from
 import { canonicalJson, digest } from "../../hosted/security.mjs";
 
 const { Pool } = pg;
-const ADMIN_URL =
-  process.env.SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL ?? null;
+export const MIGRATION_TEST_URL_ENV =
+  "SITESOURCERY_PG_MIGRATION_TEST_URL";
+export const CORE_RELEASE_ADMIN_URL_ENV =
+  "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL";
+const EXPECTED_POSTGRES_MAJOR = 16;
 const MIGRATIONS = new URL(
   "../supabase/migrations/",
   import.meta.url
@@ -79,6 +84,134 @@ const PRIVACY_PROOF_AUTHORITY = Object.freeze({
   authorityDigest: PRIVACY_PROOF_AUTHORITY_DIGEST
 });
 
+function optionalEnvironmentValue(environment, name) {
+  const value = environment?.[name];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function parsePostgresUrl(value, environmentName) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${environmentName} must be a PostgreSQL URL`);
+  }
+  assert.match(
+    parsed.protocol,
+    /^postgres(?:ql)?:$/u,
+    `${environmentName} must use postgres:// or postgresql://`
+  );
+  assert.equal(
+    parsed.hash,
+    "",
+    `${environmentName} must not contain a fragment`
+  );
+  let databaseName;
+  try {
+    databaseName = decodeURIComponent(parsed.pathname.slice(1));
+  } catch {
+    throw new Error(`${environmentName} has an invalid database path`);
+  }
+  assert.ok(
+    databaseName.length > 0
+      && !databaseName.includes("/")
+      && !databaseName.includes("\0"),
+    `${environmentName} must name one explicit database`
+  );
+  return Object.freeze({
+    connectionString: value,
+    databaseName,
+    parsed
+  });
+}
+
+export function resolveMigrationDatabasePlan({
+  environment = process.env,
+  uuid = randomUUID
+} = {}) {
+  const targetUrl = optionalEnvironmentValue(
+    environment,
+    MIGRATION_TEST_URL_ENV
+  );
+  const adminUrl = optionalEnvironmentValue(
+    environment,
+    CORE_RELEASE_ADMIN_URL_ENV
+  );
+  assert.ok(
+    !(targetUrl && adminUrl),
+    `${MIGRATION_TEST_URL_ENV} and ${CORE_RELEASE_ADMIN_URL_ENV} ` +
+      "are mutually exclusive"
+  );
+  if (targetUrl) {
+    const target = parsePostgresUrl(
+      targetUrl,
+      MIGRATION_TEST_URL_ENV
+    );
+    return Object.freeze({
+      ownership: "caller",
+      adminUrl: null,
+      databaseName: target.databaseName,
+      databaseUrl: target.connectionString
+    });
+  }
+
+  assert.ok(
+    adminUrl,
+    `${MIGRATION_TEST_URL_ENV} (caller-owned database) or ` +
+      `${CORE_RELEASE_ADMIN_URL_ENV} (standalone disposable database) ` +
+      "is required"
+  );
+  const admin = parsePostgresUrl(
+    adminUrl,
+    CORE_RELEASE_ADMIN_URL_ENV
+  );
+  const nonce = uuid().replaceAll("-", "").toLowerCase();
+  assert.match(nonce, /^[a-f0-9]{32}$/u, "UUID source returned an invalid value");
+  const databaseName = `ss_privacy_v3_${nonce}`;
+  const databaseUrl = new URL(admin.parsed.href);
+  databaseUrl.pathname = `/${databaseName}`;
+  return Object.freeze({
+    ownership: "verifier",
+    adminDatabaseName: admin.databaseName,
+    adminUrl: admin.connectionString,
+    databaseName,
+    databaseUrl: databaseUrl.href
+  });
+}
+
+export async function assertPostgres16(
+  pool,
+  { expectedDatabase, label }
+) {
+  const identity = await pool.query(`
+    select
+      current_database() as database_name,
+      current_setting('server_version_num')::integer as server_version_num
+  `);
+  assert.equal(
+    identity.rows[0]?.database_name,
+    expectedDatabase,
+    `${label} reached an unexpected database`
+  );
+  const versionNumber = Number(identity.rows[0]?.server_version_num);
+  assert.ok(
+    Number.isSafeInteger(versionNumber) && versionNumber > 0,
+    `${label} returned an invalid PostgreSQL server version`
+  );
+  assert.equal(
+    Math.floor(versionNumber / 10000),
+    EXPECTED_POSTGRES_MAJOR,
+    `${label} must run on PostgreSQL ${EXPECTED_POSTGRES_MAJOR}`
+  );
+  return Object.freeze({
+    databaseName: expectedDatabase,
+    major: EXPECTED_POSTGRES_MAJOR,
+    serverVersionNumber: versionNumber
+  });
+}
+
 function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
@@ -116,6 +249,7 @@ async function applyMigrations(pool) {
     .filter((name) => name.endsWith(".sql"))
     .sort();
   const heldName = "202608060048_hosted_privacy_v3.sql";
+  assert.equal(names.length, 48, "migration proof requires exactly migrations 1-48");
   assert.equal(names.at(-1), heldName);
 
   for (const name of names.slice(0, -1)) {
@@ -3392,36 +3526,41 @@ async function verifyPlatformSchema(pool) {
   }
 }
 
-async function main() {
-  assert.ok(
-    ADMIN_URL,
-    "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL is required"
-  );
-  const databaseName = `ss_privacy_v3_${randomUUID().replaceAll("-", "")}`;
-  assert.match(databaseName, /^[a-z0-9_]+$/u);
-  const databaseUrl = new URL(ADMIN_URL);
-  assert.match(databaseUrl.protocol, /^postgres(?:ql)?:$/u);
-  databaseUrl.pathname = `/${databaseName}`;
-
-  const adminPool = new Pool({
-    connectionString: ADMIN_URL,
-    max: 1
-  });
+export async function runMigrationVerification({
+  environment = process.env,
+  PoolImpl = Pool,
+  uuid = randomUUID,
+  writeOutput = (value) => process.stdout.write(value)
+} = {}) {
+  const plan = resolveMigrationDatabasePlan({ environment, uuid });
+  const adminPool = plan.ownership === "verifier"
+    ? new PoolImpl({
+        connectionString: plan.adminUrl,
+        max: 1
+      })
+    : null;
   let databaseCreated = false;
   let databaseAbsent = false;
   let failure = null;
   let pool = null;
+  let proof = null;
   try {
-    await adminPool.query(`create database "${databaseName}"`);
-    databaseCreated = true;
-    pool = new Pool({
-      connectionString: databaseUrl.toString(),
+    if (adminPool) {
+      await assertPostgres16(adminPool, {
+        expectedDatabase: plan.adminDatabaseName,
+        label: "Migration verifier admin connection"
+      });
+      await adminPool.query(`create database "${plan.databaseName}"`);
+      databaseCreated = true;
+    }
+    pool = new PoolImpl({
+      connectionString: plan.databaseUrl,
       max: 1
     });
-    const identity = await pool.query(
-      "select current_database() as database_name"
-    );
-    assert.equal(identity.rows[0].database_name, databaseName);
+    const identity = await assertPostgres16(pool, {
+      expectedDatabase: plan.databaseName,
+      label: "Migration verifier candidate connection"
+    });
     const { appliedNames, heldName, heldSql } = await applyMigrations(pool);
     await verifyPlatformSchema(pool);
     await verifyPrivacyV3Hold(pool);
@@ -3432,23 +3571,29 @@ async function main() {
     await verifyReceiptRejectsFourthAcceptance(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
-    process.stdout.write(
+    writeOutput(
       `Applied ${appliedNames.length} migrations; ${heldName} rejected unsealed constants.\n`
     );
-    process.stdout.write(
+    writeOutput(
       `Applied ${appliedNames.length + 1} migrations with a disposable proof seal.\n`
     );
-    process.stdout.write(
+    writeOutput(
       `projectCreationLegalBefore ${JSON.stringify(readinessBefore)}\n`
     );
-    process.stdout.write(
+    writeOutput(
       `projectCreationLegalAfter ${JSON.stringify(readinessAfter)}\n`
     );
-    process.stdout.write(
+    writeOutput(
       `v2EvidenceByteIdentical ${v2After.row_digest === v2Before.row_digest &&
         v2After.row_version === v2Before.row_version}\n`
     );
-    process.stdout.write("rogueFourthAcceptanceRejected true\n");
+    writeOutput("rogueFourthAcceptanceRejected true\n");
+    proof = Object.freeze({
+      ownership: plan.ownership,
+      databaseName: plan.databaseName,
+      postgresMajor: identity.major,
+      migrationsApplied: appliedNames.length + 1
+    });
   } catch (error) {
     failure = error;
   } finally {
@@ -3459,40 +3604,61 @@ async function main() {
         failure ??= error;
       }
     }
-    if (databaseCreated) {
+    if (databaseCreated && adminPool) {
       try {
         await adminPool.query(
           `select pg_terminate_backend(pid)
              from pg_stat_activity
             where datname = $1
               and pid <> pg_backend_pid()`,
-          [databaseName]
+          [plan.databaseName]
         );
-        await adminPool.query(`drop database if exists "${databaseName}"`);
+        await adminPool.query(
+          `drop database if exists "${plan.databaseName}"`
+        );
       } catch (error) {
         failure ??= error;
       }
     }
-    try {
-      const absence = await adminPool.query(
-        `select not exists (
-           select 1 from pg_database where datname = $1
-         ) as database_absent`,
-        [databaseName]
-      );
-      databaseAbsent = absence.rows[0].database_absent === true;
-    } catch (error) {
-      failure ??= error;
-    }
-    try {
-      await adminPool.end();
-    } catch (error) {
-      failure ??= error;
+    if (adminPool) {
+      try {
+        const absence = await adminPool.query(
+          `select not exists (
+             select 1 from pg_database where datname = $1
+           ) as database_absent`,
+          [plan.databaseName]
+        );
+        databaseAbsent = absence.rows[0].database_absent === true;
+      } catch (error) {
+        failure ??= error;
+      }
+      try {
+        await adminPool.end();
+      } catch (error) {
+        failure ??= error;
+      }
     }
   }
-  process.stdout.write(`databaseAbsent ${databaseAbsent}\n`);
   if (failure) throw failure;
-  assert.equal(databaseAbsent, true);
+  if (plan.ownership === "caller") {
+    writeOutput("databaseOwnership caller\n");
+    writeOutput("databaseRetainedForCustomJourneys true\n");
+  } else {
+    writeOutput(`databaseAbsent ${databaseAbsent}\n`);
+    assert.equal(databaseAbsent, true);
+  }
+  return Object.freeze({
+    ...proof,
+    databaseAbsent:
+      plan.ownership === "verifier" ? databaseAbsent : null,
+    databaseRetainedForCustomJourneys:
+      plan.ownership === "caller"
+  });
 }
 
-await main();
+if (
+  process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  await runMigrationVerification();
+}

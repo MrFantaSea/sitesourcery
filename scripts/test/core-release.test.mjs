@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   CORE_RELEASE_ADMIN_URL_ENV,
+  CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
   CORE_RELEASE_DATABASE_NAME_ENV,
+  CORE_RELEASE_MIGRATION_COUNT,
   CoreReleaseError,
   buildCoreReleaseCommands,
   buildTargetDatabaseUrl,
@@ -12,6 +14,11 @@ import {
   runCoreRelease,
   validateCoreReleaseDatabaseName
 } from "../core-release.mjs";
+import {
+  CORE_RELEASE_ADMIN_URL_ENV as MIGRATION_ADMIN_URL_ENV,
+  MIGRATION_TEST_URL_ENV,
+  resolveMigrationDatabasePlan
+} from "../../server/data-plane/tests/verify-empty-postgres-migrations.mjs";
 
 const DATABASE_NAME =
   "ss_core_release_unit_20260806";
@@ -26,6 +33,7 @@ const BASE_ENVIRONMENT = Object.freeze({
 function createHarness({
   databaseExists = false,
   failCommandId = null,
+  postgresVersionNumber = 160014,
   sessionsDuringCleanup = 0
 } = {}) {
   const state = {
@@ -47,8 +55,17 @@ function createHarness({
         .toLowerCase();
       state.queries.push({ sql: normalized, values });
       state.events.push(`query:${normalized}`);
-      if (normalized === "select current_database() as database_name") {
-        return { rows: [{ database_name: "postgres" }] };
+      if (
+        normalized ===
+          "select current_database() as database_name, " +
+          "current_setting('server_version_num')::integer as server_version_num"
+      ) {
+        return {
+          rows: [{
+            database_name: "postgres",
+            server_version_num: postgresVersionNumber
+          }]
+        };
       }
       if (normalized.includes("from pg_database")) {
         return { rows: [{ exists: state.databaseExists }] };
@@ -245,6 +262,51 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
     ],
     undefined
   );
+  assert.deepEqual(
+    resolveMigrationDatabasePlan({
+      environment: commands[0].environment,
+      uuid: () => {
+        throw new Error("caller-owned mode must not allocate a database");
+      }
+    }),
+    {
+      ownership: "caller",
+      adminUrl: null,
+      databaseName: DATABASE_NAME,
+      databaseUrl: targetUrl
+    }
+  );
+});
+
+test("migration verifier keeps caller ownership distinct from standalone ownership", () => {
+  const standalone = resolveMigrationDatabasePlan({
+    environment: {
+      [MIGRATION_ADMIN_URL_ENV]: ADMIN_URL
+    },
+    uuid: () => "01234567-89ab-4cde-8fab-0123456789ab"
+  });
+  assert.deepEqual(standalone, {
+    ownership: "verifier",
+    adminDatabaseName: "postgres",
+    adminUrl: ADMIN_URL,
+    databaseName:
+      "ss_privacy_v3_0123456789ab4cde8fab0123456789ab",
+    databaseUrl:
+      "postgresql://release-user:do-not-print@127.0.0.1:55439/" +
+      "ss_privacy_v3_0123456789ab4cde8fab0123456789ab?sslmode=disable"
+  });
+  assert.throws(
+    () => resolveMigrationDatabasePlan({
+      environment: {
+        [MIGRATION_TEST_URL_ENV]: buildTargetDatabaseUrl(
+          ADMIN_URL,
+          DATABASE_NAME
+        ),
+        [MIGRATION_ADMIN_URL_ENV]: ADMIN_URL
+      }
+    }),
+    /mutually exclusive/u
+  );
 });
 
 test("successful orchestration drops the exact database before npm test", async () => {
@@ -258,6 +320,10 @@ test("successful orchestration drops the exact database before npm test", async 
   assert.deepEqual(result, {
     ok: true,
     databaseName: DATABASE_NAME,
+    postgresMajor: 16,
+    migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
+    customServicesJourneys:
+      CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
     databaseAbsent: true
   });
   assert.deepEqual(
@@ -294,6 +360,26 @@ test("successful orchestration drops the exact database before npm test", async 
   assert.equal(state.errors.length, 0);
 });
 
+test("release refuses a non-PostgreSQL-16 server before creating a database", async () => {
+  const { ports, state } = createHarness({
+    postgresVersionNumber: 150013
+  });
+  await assert.rejects(
+    runCoreRelease({
+      environment: BASE_ENVIRONMENT,
+      nodeExecutable: "/unit/node-24",
+      ports,
+      projectRoot: "/unit/project"
+    }),
+    (error) =>
+      error.code === "CORE_RELEASE_POSTGRES_MAJOR_UNSUPPORTED"
+  );
+  assert.equal(state.createCount, 0);
+  assert.equal(state.dropCount, 0);
+  assert.equal(state.commands.length, 0);
+  assert.equal(state.closeCount, 1);
+});
+
 test("a pre-existing exact name is never created, dropped, or tested", async () => {
   const { ports, state } = createHarness({
     databaseExists: true
@@ -327,6 +413,8 @@ test("a PostgreSQL journey failure cleans only the proven exact target", async (
     }),
     (error) =>
       error.code === "CORE_RELEASE_SUBPROCESS_FAILED"
+        && error.databaseName === DATABASE_NAME
+        && error.databaseAbsent === true
   );
   assert.deepEqual(
     state.commands.map(({ id }) => id),
@@ -353,7 +441,8 @@ test("cleanup refuses active sessions, reports failure, and never terminates the
     (error) =>
       error.code === "CORE_RELEASE_CLEANUP_FAILED" &&
       error.cleanupError?.code ===
-        "CORE_RELEASE_DATABASE_IN_USE"
+        "CORE_RELEASE_DATABASE_IN_USE" &&
+      error.databaseAbsent === false
   );
   assert.equal(state.dropCount, 0);
   assert.equal(state.databaseExists, true);

@@ -1624,8 +1624,16 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
               invoice_digest, accepted_disclosure_digest,
               expected_subtotal_minor, currency, tax_mode,
               'provider_pending', 'not_submitted',
-              clock_timestamp() - interval '200 milliseconds',
-              clock_timestamp() - interval '200 milliseconds'
+              (
+                select max(existing.created_at) + interval '1 microsecond'
+                  from ss.service_assessment_checkout_attempts existing
+                 where existing.invoice_id = $1
+              ),
+              (
+                select max(existing.created_at) + interval '1 microsecond'
+                  from ss.service_assessment_checkout_attempts existing
+                 where existing.invoice_id = $1
+              )
          from ss.service_assessment_checkout_attempts
         where invoice_id = $1
         order by created_at desc
@@ -1644,7 +1652,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
               checkout_url =
                 'https://checkout.stripe.com/c/pay/service_assessment_expired',
               expires_at =
-                clock_timestamp() - interval '100 milliseconds'
+                greatest(
+                  clock_timestamp() - interval '100 milliseconds',
+                  created_at + interval '1 microsecond'
+                )
         where id = $1`,
       [expiredAttemptId, providerIds.assessmentExpired]
     );

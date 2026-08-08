@@ -9,7 +9,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { buildHostedArtifact } from "./build-hosted.mjs";
+import {
+  createBrowserAuditArtifactPlan,
+  prepareBrowserAuditArtifact,
+} from "./browser-audit-artifact.mjs";
 import { getBrowserSafeAlakazamCatalog } from
   "../server/commerce-v2/alakazam.mjs";
 
@@ -17,7 +20,12 @@ const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const ARTIFACT_ROOT = path.join(ROOT, "_hosted");
+const ARTIFACT_PLAN = createBrowserAuditArtifactPlan({
+  siteRoot: ROOT,
+  environment: process.env,
+  argv: process.argv.slice(2),
+});
+const ARTIFACT_ROOT = ARTIFACT_PLAN.hostedRoot;
 const EXPECTED_BROWSER =
   "Google Chrome for Testing 149.0.7827.55";
 const BROWSER_CANDIDATES = Object.freeze([
@@ -3395,7 +3403,14 @@ async function customBuildFinalAuthorityRaceJourney(
   };
 }
 
-await buildHostedArtifact({ root: ROOT });
+const preparedArtifact = await prepareBrowserAuditArtifact({
+  plan: ARTIFACT_PLAN,
+});
+console.log(
+  preparedArtifact.mode === "finalized"
+    ? `Browser audit using verified finalized artifact at ${preparedArtifact.hostedRoot}`
+    : `Browser audit using rebuilt held artifact at ${preparedArtifact.hostedRoot}`,
+);
 const browser = await browserPath();
 const server = await startServer();
 const profile = await mkdtemp(

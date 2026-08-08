@@ -1208,6 +1208,24 @@ test("accepted-change invoice and Checkout projections bind exact units, order, 
     checkout
   );
   assert.equal(
+    verifiedCustomerCustomBuildChangeCheckout(
+      checkout,
+      available,
+      checkout.checkout.expiresAt
+    ),
+    null,
+    "a Checkout projection is invalid at its exact expiration instant"
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildChangeCheckout(
+      checkout,
+      available,
+      "2100-01-01T00:00:00.000Z"
+    ),
+    null,
+    "a Checkout projection remains invalid after expiration"
+  );
+  assert.equal(
     verifiedCustomerCustomBuildChangeInvoice({
       ...available,
       invoice: {

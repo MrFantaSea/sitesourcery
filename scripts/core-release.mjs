@@ -14,6 +14,8 @@ export const CORE_RELEASE_ADMIN_URL_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL";
 export const CORE_RELEASE_DATABASE_NAME_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_DATABASE_NAME";
+export const CORE_RELEASE_MIGRATION_COUNT = 48;
+export const CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT = 4;
 
 const MIGRATION_TEST_URL_ENV =
   "SITESOURCERY_PG_MIGRATION_TEST_URL";
@@ -21,6 +23,7 @@ const CUSTOM_SERVICES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICES_TEST_URL";
 const CUSTOM_SERVICE_QUOTES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICE_QUOTES_TEST_URL";
+const EXPECTED_POSTGRES_MAJOR = 16;
 const DATABASE_PREFIX = "ss_core_release_";
 const DATABASE_NAME_PATTERN =
   /^ss_core_release_[a-z0-9](?:[a-z0-9_]{6,45}[a-z0-9])$/u;
@@ -344,7 +347,9 @@ async function countTargetSessions(admin, databaseName) {
 
 async function assertConnectedToBase(admin, expectedDatabase) {
   const result = await admin.query(
-    "select current_database() as database_name"
+    `select
+       current_database() as database_name,
+       current_setting('server_version_num')::integer as server_version_num`
   );
   if (result.rows[0]?.database_name !== expectedDatabase) {
     fail(
@@ -352,6 +357,31 @@ async function assertConnectedToBase(admin, expectedDatabase) {
       "The PostgreSQL connection did not reach the explicit admin/base database."
     );
   }
+  const versionNumber = Number(
+    result.rows[0]?.server_version_num
+  );
+  if (
+    !Number.isSafeInteger(versionNumber)
+    || versionNumber <= 0
+  ) {
+    fail(
+      "CORE_RELEASE_POSTGRES_VERSION_INVALID",
+      "PostgreSQL returned an invalid server version."
+    );
+  }
+  if (
+    Math.floor(versionNumber / 10000)
+      !== EXPECTED_POSTGRES_MAJOR
+  ) {
+    fail(
+      "CORE_RELEASE_POSTGRES_MAJOR_UNSUPPORTED",
+      `Core release requires PostgreSQL ${EXPECTED_POSTGRES_MAJOR}.`
+    );
+  }
+  return Object.freeze({
+    major: EXPECTED_POSTGRES_MAJOR,
+    serverVersionNumber: versionNumber
+  });
 }
 
 async function removeExactDatabase({
@@ -440,6 +470,8 @@ function cleanupFailure(primaryError, cleanupError, databaseName) {
     { cause: primaryError }
   );
   failure.cleanupError = cleanupError;
+  failure.databaseName = databaseName;
+  failure.databaseAbsent = false;
   return failure;
 }
 
@@ -490,7 +522,7 @@ export async function runCoreRelease({
     admin = await ports.connectAdmin({
       connectionString: configuration.adminUrl
     });
-    await assertConnectedToBase(
+    const postgresIdentity = await assertConnectedToBase(
       admin,
       configuration.baseDatabase
     );
@@ -543,6 +575,10 @@ export async function runCoreRelease({
     return Object.freeze({
       ok: true,
       databaseName: configuration.databaseName,
+      postgresMajor: postgresIdentity.major,
+      migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
+      customServicesJourneys:
+        CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
       databaseAbsent: true
     });
   } catch (primaryError) {
@@ -570,6 +606,16 @@ export async function runCoreRelease({
         );
       }
     }
+    if (
+      primaryError
+      && typeof primaryError === "object"
+      && Object.isExtensible(primaryError)
+    ) {
+      primaryError.databaseName = configuration.databaseName;
+      primaryError.databaseAbsent = createdByThisRun
+        ? removed
+        : null;
+    }
     throw primaryError;
   } finally {
     await admin?.close().catch(() => {});
@@ -582,6 +628,10 @@ async function main() {
     `${JSON.stringify({
       ok: true,
       databaseName: result.databaseName,
+      postgresMajor: result.postgresMajor,
+      migrationsApplied: result.migrationsApplied,
+      customServicesJourneys:
+        result.customServicesJourneys,
       databaseAbsent: result.databaseAbsent
     })}\n`
   );
@@ -599,7 +649,15 @@ if (
         code:
           typeof error?.code === "string"
             ? error.code
-            : "CORE_RELEASE_FAILED"
+            : "CORE_RELEASE_FAILED",
+        databaseName:
+          typeof error?.databaseName === "string"
+            ? error.databaseName
+            : null,
+        databaseAbsent:
+          typeof error?.databaseAbsent === "boolean"
+            ? error.databaseAbsent
+            : null
       })}\n`
     );
     process.exitCode = 1;
