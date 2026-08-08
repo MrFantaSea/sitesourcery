@@ -85,6 +85,7 @@ export const publicFileAllowlist = Object.freeze([
   "legal/privacy/index.html",
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/index.html",
+  "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
   "og.png",
   "pricing.html",
   "privacy.html",

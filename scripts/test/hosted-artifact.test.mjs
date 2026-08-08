@@ -56,6 +56,7 @@ import {
   HOSTED_PRIVACY_V2_ARTIFACT,
   HOSTED_PRIVACY_V3_CANDIDATE,
   HOSTED_PRIVACY_V3_RELEASE,
+  HOSTED_WEBSITE_TERMS_V2_ARTIFACT,
 } from "../hosted-truth/legal-artifacts.mjs";
 import {
   canonicalJson,
@@ -387,6 +388,19 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   const exactV2Archive = await readFile(v2ArchiveOutput);
   assert.equal(exactV2Archive.length, HOSTED_PRIVACY_V2_ARTIFACT.byteCount);
   assert.equal(sha256(exactV2Archive), HOSTED_PRIVACY_V2_ARTIFACT.sha256);
+  const termsV2ArchiveOutput = path.join(
+    output,
+    HOSTED_WEBSITE_TERMS_V2_ARTIFACT.file,
+  );
+  const exactTermsV2Archive = await readFile(termsV2ArchiveOutput);
+  assert.equal(
+    exactTermsV2Archive.length,
+    HOSTED_WEBSITE_TERMS_V2_ARTIFACT.byteCount,
+  );
+  assert.equal(
+    sha256(exactTermsV2Archive),
+    HOSTED_WEBSITE_TERMS_V2_ARTIFACT.sha256,
+  );
   assert.equal(assertUnsealedPrivacyCurrentAlias({ root: output }), true);
   assert.equal(
     (await readFile(
@@ -397,6 +411,14 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   );
   assert.equal(hostedFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
   assert.equal(publicFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
+  assert.equal(
+    hostedFileAllowlist.includes(HOSTED_WEBSITE_TERMS_V2_ARTIFACT.file),
+    true,
+  );
+  assert.equal(
+    publicFileAllowlist.includes(HOSTED_WEBSITE_TERMS_V2_ARTIFACT.file),
+    true,
+  );
   assert.equal(
     (await readFile(path.join(output, "sitemap.xml"), "utf8"))
       .includes(HOSTED_PRIVACY_V2_ARTIFACT.evidenceUri),
@@ -412,6 +434,16 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     /immutable legal artifact.*digest changed|digest changed/u,
   );
   await writeFile(v2ArchiveOutput, exactV2Archive);
+  await verifyHostedArtifact({ root: ROOT, output });
+
+  const tamperedTermsV2Archive = Buffer.from(exactTermsV2Archive);
+  tamperedTermsV2Archive[100] ^= 1;
+  await writeFile(termsV2ArchiveOutput, tamperedTermsV2Archive);
+  await assert.rejects(
+    verifyHostedArtifact({ root: ROOT, output }),
+    /immutable legal artifact.*digest changed|digest changed/u,
+  );
+  await writeFile(termsV2ArchiveOutput, exactTermsV2Archive);
   await verifyHostedArtifact({ root: ROOT, output });
 
   const customerControlOutput = path.join(
