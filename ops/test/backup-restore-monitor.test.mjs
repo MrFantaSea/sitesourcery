@@ -2196,6 +2196,14 @@ test("operations candidates keep independent approvals and provider egress holds
       .replace(
         /^SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/website-terms\/versions\/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3\/$/gmu,
         ""
+      )
+      .replace(
+        /^SITESOURCERY_HOSTED_PRIVACY_V4_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/privacy\/versions\/SS-HOSTED-PRIVACY-2026-08-09-V4\/$/gmu,
+        ""
+      )
+      .replace(
+        /^SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/website-terms\/versions\/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4\/$/gmu,
+        ""
       );
     assert.match(
       environment,
@@ -2217,6 +2225,10 @@ test("operations candidates keep independent approvals and provider egress holds
   assert.match(
     monitor,
     /^SITESOURCERY_ALERT_MODE=held$/mu
+  );
+  assert.match(
+    monitor,
+    /^SITESOURCERY_MONITOR_TIMEOUT_MS=10000$/mu
   );
   for (const environment of [backup, monitor]) {
     assert.match(
