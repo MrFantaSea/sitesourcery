@@ -10,6 +10,9 @@ import {
   createHeldHostedAlakazamBilling
 } from "../commerce-v2/hosted-alakazam-billing.mjs";
 import {
+  createHeldHostedAlakazamPublication
+} from "../commerce-v2/hosted-alakazam-publication.mjs";
+import {
   createHeldHostedAlakazamBillingSurfaces,
   matchAlakazamBillingSurfaceRoute,
   readAlakazamBillingSurface
@@ -409,6 +412,7 @@ export function createHostedApi(
     csrfTokens,
     downloadCommerce = null,
     alakazamAccount = null,
+    alakazamPublication = null,
     alakazamBilling = null,
     alakazamBillingSurfaces = null,
     customServicesAccount = null,
@@ -579,6 +583,20 @@ export function createHostedApi(
       "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam account boundary is invalid.",
+    { status: 500 }
+  );
+  const alakazamPublicationBoundary =
+    alakazamPublication ??
+    createHeldHostedAlakazamPublication();
+  invariant(
+    typeof alakazamPublicationBoundary.readiness ===
+      "function" &&
+      typeof alakazamPublicationBoundary.getSnapshot ===
+        "function" &&
+      typeof alakazamPublicationBoundary.requestCommand ===
+        "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Alakazam publication boundary is invalid.",
     { status: 500 }
   );
   const alakazamBillingBoundary =
@@ -774,6 +792,8 @@ export function createHostedApi(
                 };
           const alakazam =
             await alakazamBillingBoundary.readiness();
+          const alakazamPublicationReadiness =
+            await alakazamPublicationBoundary.readiness();
           const registration =
             readiness?.registration ?? {};
           const recovery =
@@ -798,6 +818,11 @@ export function createHostedApi(
                 alakazam.checkout === true,
               alakazamDowngrade:
                 alakazam.downgrade === true,
+              alakazamPublication:
+                alakazamPublicationReadiness.authorization ===
+                  true &&
+                alakazamPublicationReadiness.providerEffects ===
+                  false,
               domainPurchase:
                 domains.ready === true &&
                 domains.registrar === "ready",
@@ -1897,6 +1922,30 @@ export function createHostedApi(
               route[0]
             );
         } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/publication$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing Alakazam publication.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_PUBLICATION_ROUTE_BINDING_REJECTED",
+            "Alakazam publication accepts no query parameters."
+          );
+          result =
+            await alakazamPublicationBoundary.getSnapshot(
+              actor,
+              route[0]
+            );
+        } else if (
           (alakazamBillingSurface =
             matchAlakazamBillingSurfaceRoute(
               method,
@@ -1964,6 +2013,45 @@ export function createHostedApi(
                 "The assessment request details are invalid."
               )
             );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/publication-commands$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before managing Alakazam publication.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_PUBLICATION_ROUTE_BINDING_REJECTED",
+            "Alakazam publication commands accept no query parameters."
+          );
+          const publicationBody = exactRouteBody(
+            body,
+            [
+              "action",
+              "snapshotDigest",
+              "targetReleaseId"
+            ],
+            "ALAKAZAM_PUBLICATION_ROUTE_BINDING_REJECTED",
+            "The Alakazam publication command is invalid."
+          );
+          result =
+            await alakazamPublicationBoundary.requestCommand(
+              actor,
+              route[0],
+              {
+                ...publicationBody,
+                commandId: write.commandId
+              }
+            );
+          status = 202;
         } else if (
           method === "POST" &&
           (route = match(

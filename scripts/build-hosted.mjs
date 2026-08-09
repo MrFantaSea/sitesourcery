@@ -294,7 +294,7 @@ export function assertHostedAlakazamUiHeld(source) {
     || occurrences(
       capabilitySource,
       'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
-    ) !== 3
+    ) !== 4
   ) {
     throw new Error("held Alakazam capabilities must remain false despite server input");
   }

@@ -463,7 +463,7 @@ test("the production executable composes held Alakazam billing and downgrade sch
   );
   assert.match(
     source,
-    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamBilling,/u
+    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamPublication,\s*alakazamBilling,/u
   );
   assert.match(
     source,

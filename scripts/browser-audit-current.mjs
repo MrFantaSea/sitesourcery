@@ -54,6 +54,17 @@ const PAID_FIXTURE_COOKIE = "ss_browser_audit_paid";
 const PAID_CUSTOMER_ID = "10000000-0000-4000-8000-000000000001";
 const PAID_ORGANIZATION_ID = "20000000-0000-4000-8000-000000000001";
 const PAID_PROJECT_ID = "30000000-0000-4000-8000-000000000001";
+const PAID_ALAKAZAM_ACCEPTED_VERSION_ID =
+  "31000000-0000-4000-8000-000000000001";
+const PAID_ALAKAZAM_CURRENT_VERSION_ID =
+  "31000000-0000-4000-8000-000000000002";
+const PAID_ALAKAZAM_PRIOR_VERSION_ID =
+  "31000000-0000-4000-8000-000000000003";
+const PAID_ALAKAZAM_CURRENT_RELEASE_ID =
+  "32000000-0000-4000-8000-000000000001";
+const PAID_ALAKAZAM_PRIOR_RELEASE_ID =
+  "32000000-0000-4000-8000-000000000002";
+const PAID_ALAKAZAM_SNAPSHOT_DIGEST = "4".repeat(64);
 const PAID_QUOTE_ID = "40000000-0000-4000-8000-000000000001";
 const PAID_INVOICE_ID = "50000000-0000-4000-8000-000000000001";
 const PAID_JOB_ID = "60000000-0000-4000-8000-000000000001";
@@ -989,6 +1000,108 @@ function availableAlakazamAccount() {
   };
 }
 
+function activeAlakazamAccount() {
+  const selectedTier = getBrowserSafeAlakazamCatalog().tiers[1];
+  return {
+    schema: "sitesourcery.alakazam-account/v2",
+    projectId: PAID_PROJECT_ID,
+    state: "active",
+    catalog: getBrowserSafeAlakazamCatalog(),
+    downloadCredit: {
+      available: false,
+      amountMinor: 0,
+      currency: "USD",
+    },
+    subscription: {
+      tier: selectedTier,
+      status: "active",
+      paymentState: "paid",
+      price: selectedTier.price,
+      revision: 4,
+      currentPeriod: {
+        startsAt: "2026-08-01T12:00:00.000Z",
+        endsAt: "2026-09-01T12:00:00.000Z",
+      },
+      cancelAtPeriodEnd: false,
+      firstFailedAt: null,
+      graceEndsAt: null,
+    },
+    pendingChange: null,
+    nextRenewal: {
+      tierId: selectedTier.tierId,
+      amountMinor: selectedTier.price.amountMinor,
+      currency: "USD",
+      dueAt: "2026-09-01T12:00:00.000Z",
+      state: "scheduled",
+    },
+    site: {
+      acceptedVersionId: PAID_ALAKAZAM_ACCEPTED_VERSION_ID,
+      addressLabel: "avery-studio",
+      hostname: "avery-studio.sitesourcery.me",
+      look: { lookId: "look_crystal", label: "Crystal" },
+      setupDigest: "5".repeat(64),
+      state: "live",
+      updatedAt: "2026-08-08T13:30:00.000Z",
+      url: "https://avery-studio.sitesourcery.me/",
+    },
+    receipts: [],
+    actions: {
+      configureSite: false,
+      start: false,
+      changeTier: true,
+      manageBilling: false,
+      cancel: false,
+      reason: "only_tier_change_composed",
+    },
+  };
+}
+
+function heldAlakazamPublication(command = null) {
+  return {
+    schema: "sitesourcery.alakazam-publication/v1",
+    projectId: PAID_PROJECT_ID,
+    state: "held",
+    holdReason: "commercial_cutover_not_authorized",
+    subscription: {
+      subscriptionId:
+        "33000000-0000-4000-8000-000000000001",
+      revision: 4,
+      tierId: "alakazam_35",
+      status: "active",
+    },
+    site: {
+      hostname: "avery-studio.sitesourcery.me",
+      state: "live",
+      acceptedVersionId: PAID_ALAKAZAM_ACCEPTED_VERSION_ID,
+      acceptedArtifactDigest: "6".repeat(64),
+      currentReleaseId: PAID_ALAKAZAM_CURRENT_RELEASE_ID,
+      currentVersionId: PAID_ALAKAZAM_CURRENT_VERSION_ID,
+      updatedAt: "2026-08-08T13:30:00.000Z",
+    },
+    history: [{
+      releaseId: PAID_ALAKAZAM_CURRENT_RELEASE_ID,
+      versionId: PAID_ALAKAZAM_CURRENT_VERSION_ID,
+      artifactDigest: "7".repeat(64),
+      releasedAt: "2026-08-08T13:30:00.000Z",
+      isCurrent: true,
+    }, {
+      releaseId: PAID_ALAKAZAM_PRIOR_RELEASE_ID,
+      versionId: PAID_ALAKAZAM_PRIOR_VERSION_ID,
+      artifactDigest: "8".repeat(64),
+      releasedAt: "2026-08-01T13:30:00.000Z",
+      isCurrent: false,
+    }],
+    actions: {
+      publish: true,
+      rollback: true,
+      unpublish: true,
+      rollbackTargetReleaseId: PAID_ALAKAZAM_PRIOR_RELEASE_ID,
+    },
+    snapshotDigest: PAID_ALAKAZAM_SNAPSHOT_DIGEST,
+    command,
+  };
+}
+
 const delay = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -1158,6 +1271,11 @@ async function startServer() {
           accountRecoveryEmail: false,
           downloadQuote: false,
           downloadPayment: false,
+          alakazamQuote: false,
+          alakazamCheckout: false,
+          alakazamDowngrade: false,
+          alakazamPublication:
+            paidMode === "publication",
           domainPurchase: false,
           publishing: false,
         });
@@ -1250,7 +1368,20 @@ async function startServer() {
           url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/alakazam`
         ) {
-          json(response, 200, availableAlakazamAccount());
+          json(
+            response,
+            200,
+            paidMode === "publication"
+              ? activeAlakazamAccount()
+              : availableAlakazamAccount()
+          );
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/publication`
+        ) {
+          json(response, 200, heldAlakazamPublication());
           return;
         }
         if (
@@ -1556,6 +1687,38 @@ async function startServer() {
       }
       if (
         paidFixture
+        && paidMode === "publication"
+        && request.method === "POST"
+        && url.pathname ===
+          `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/publication-commands`
+      ) {
+        apiRequest.expectedWrite = true;
+        const action = body?.action;
+        const targetReleaseId = action === "rollback"
+          ? PAID_ALAKAZAM_PRIOR_RELEASE_ID
+          : null;
+        const targetVersionId = action === "rollback"
+          ? PAID_ALAKAZAM_PRIOR_VERSION_ID
+          : action === "publish"
+            ? PAID_ALAKAZAM_ACCEPTED_VERSION_ID
+            : null;
+        json(response, 202, heldAlakazamPublication({
+          commandId: apiRequest.idempotencyKey,
+          action,
+          state: "held",
+          holdReason: "commercial_cutover_not_authorized",
+          snapshotDigest: PAID_ALAKAZAM_SNAPSHOT_DIGEST,
+          commandDigest: createHash("sha256")
+            .update(`publication:${apiRequest.idempotencyKey}`)
+            .digest("hex"),
+          targetReleaseId,
+          targetVersionId,
+          requestedAt: "2026-08-08T14:00:00.000Z",
+        }));
+        return;
+      }
+      if (
+        paidFixture
         && request.method === "POST"
         && url.pathname ===
           `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
@@ -1620,7 +1783,41 @@ async function startServer() {
       return;
     }
     try {
-      const bytes = await readFile(file);
+      let bytes = await readFile(file);
+      const staticPaidCookie = String(request.headers.cookie || "")
+        .split(";")
+        .map((entry) => entry.trim())
+        .find((entry) =>
+          entry.startsWith(`${PAID_FIXTURE_COOKIE}=`)
+        );
+      const staticFixtureToken = staticPaidCookie
+        ? decodeURIComponent(
+            staticPaidCookie.split("=", 2)[1] || ""
+          )
+        : "";
+      const staticPaidMode =
+        paidFixtures.get(staticFixtureToken)?.mode || "";
+      if (
+        staticPaidMode === "publication"
+        && url.pathname ===
+          "/abracadabra/app/abracadabra-customer-control-dom.js"
+      ) {
+        const source = bytes.toString("utf8");
+        const held =
+          'var ALAKAZAM_PUBLIC_OFFER_STATE = "held";';
+        if (source.split(held).length !== 2) {
+          throw new Error(
+            "Publication browser fixture could not locate the exact held gate."
+          );
+        }
+        bytes = Buffer.from(
+          source.replace(
+            held,
+            'var ALAKAZAM_PUBLIC_OFFER_STATE = "released";'
+          ),
+          "utf8"
+        );
+      }
       response.writeHead(200, {
         "Cache-Control": "no-store",
         "Content-Length": bytes.byteLength,
@@ -1655,6 +1852,7 @@ async function startServer() {
       if (![
         "issued",
         "completion",
+        "publication",
         ...PAID_PAYMENT_MODES,
         ...PAID_FINAL_MODES,
       ].includes(mode)) {
@@ -2458,6 +2656,135 @@ async function waitForApiRequest(server, predicate, priorCount, timeoutMs = 5000
     await delay(25);
   }
   return null;
+}
+
+async function alakazamPublicationJourney(cdp, server, viewport) {
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    "publication",
+    viewport,
+    "alakazam-publication",
+  );
+  await cdp.send("Storage.clearDataForOrigin", {
+    origin: server.origin,
+    storageTypes: "all",
+  });
+  const cookie = await cdp.send("Network.setCookie", {
+    name: PAID_FIXTURE_COOKIE,
+    value: fixtureToken,
+    url: `${server.origin}/`,
+    httpOnly: true,
+    sameSite: "Strict",
+  });
+  if (!cookie.success) {
+    throw new Error("Alakazam publication fixture cookie was rejected.");
+  }
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${server.origin}/abracadabra/app/`);
+  await openHostedAccount(cdp);
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-project-list] button")`,
+  );
+  await evaluate(
+    cdp,
+    `document.querySelector("[data-project-list] button").click()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-alakazam-publication]")?.hidden === false
+      && document.querySelectorAll(
+        "[data-alakazam-publication-action]:not(:disabled)"
+      ).length === 3`,
+  );
+  const initial = await evaluate(
+    cdp,
+    `(() => {
+      const panel = document.querySelector("[data-alakazam-publication]");
+      const visible = (element) => {
+        if (!element || element.hidden) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none"
+          && style.visibility !== "hidden"
+          && rect.width > 0
+          && rect.height > 0;
+      };
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        text: panel.textContent.replace(/\\s+/g, " ").trim(),
+        historyCount: panel.querySelectorAll(
+          ".customer-alakazam-publication-list li"
+        ).length,
+        controls: [...panel.querySelectorAll(
+          "[data-alakazam-publication-action]"
+        )].filter(visible).map((element) => ({
+          action: element.getAttribute("data-alakazam-publication-action"),
+          disabled: element.disabled,
+          height: Math.round(element.getBoundingClientRect().height * 10) / 10,
+        })),
+      };
+    })()`,
+  );
+  const path =
+    `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/publication-commands`;
+  const actions = [];
+  for (const action of ["publish", "rollback", "unpublish"]) {
+    const prior = server.apiRequests.filter(
+      (entry) => entry.paidFixtureToken === fixtureToken
+        && entry.method === "POST"
+        && entry.pathname === path,
+    ).length;
+    const keyboardFocused = await activateByKeyboard(
+      cdp,
+      `[data-alakazam-publication-action="${action}"]`,
+    );
+    const request = keyboardFocused
+      ? await waitForApiRequest(
+          server,
+          (entry) => entry.paidFixtureToken === fixtureToken
+            && entry.method === "POST"
+            && entry.pathname === path,
+          prior,
+        )
+      : null;
+    if (request) {
+      await waitFor(
+        cdp,
+        `document.querySelector("[data-alakazam-publication-status]")
+          ?.textContent.includes("Authorization recorded. Publication remains held.")
+          && document.querySelector("[data-alakazam-publication]")
+            ?.contains(document.activeElement)`,
+      );
+    }
+    actions.push({
+      action,
+      keyboardFocused,
+      request,
+      retained: await evaluate(
+        cdp,
+        `(() => {
+          const panel = document.querySelector("[data-alakazam-publication]");
+          return {
+            text: panel.textContent.replace(/\\s+/g, " ").trim(),
+            statusFocused: panel.contains(document.activeElement),
+            enabledActions: [...panel.querySelectorAll(
+              "[data-alakazam-publication-action]"
+            )].filter((element) => !element.disabled).length,
+          };
+        })()`,
+      ),
+    });
+  }
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+  return { actions, initial };
 }
 
 async function customBuildChangePaymentJourney(
@@ -3575,6 +3902,105 @@ try {
     failures.push(`four-step maker journey failed: ${JSON.stringify(journey)}`);
   }
 
+  for (const viewport of VIEWPORTS) {
+    let publication;
+    try {
+      publication = await alakazamPublicationJourney(
+        cdp,
+        server,
+        viewport,
+      );
+    } catch (error) {
+      failures.push(
+        `${viewport.label} Alakazam publication journey did not complete: `
+          + error.message,
+      );
+      continue;
+    }
+    const shortControls = publication.initial.controls.filter(
+      ({ height }) => height < 44,
+    );
+    const initialActions = publication.initial.controls
+      .map(({ action }) => action)
+      .sort();
+    if (
+      publication.initial.viewportWidth !== viewport.width
+      || publication.initial.scrollWidth !==
+        publication.initial.viewportWidth
+      || publication.initial.historyCount !== 2
+      || shortControls.length
+      || JSON.stringify(initialActions) !==
+        JSON.stringify(["publish", "rollback", "unpublish"])
+      || publication.initial.controls.some(({ disabled }) => disabled)
+      || !publication.initial.text.includes(
+        PAID_ALAKAZAM_ACCEPTED_VERSION_ID
+      )
+      || !publication.initial.text.includes(
+        PAID_ALAKAZAM_CURRENT_VERSION_ID
+      )
+      || !publication.initial.text.includes(
+        PAID_ALAKAZAM_PRIOR_VERSION_ID
+      )
+      || !publication.initial.text.includes(
+        "Alakazam publication remains held"
+      )
+      || !publication.initial.text.includes(
+        "no live provider effect, cancellation, or deletion occurs"
+      )
+    ) {
+      failures.push(
+        `${viewport.label} Alakazam publication layout/authority failed: `
+          + JSON.stringify({ ...publication.initial, shortControls }),
+      );
+    }
+    const commandIds = [];
+    for (const result of publication.actions) {
+      const request = result.request;
+      const body = request?.body || {};
+      const bodyKeys = Object.keys(body).sort();
+      const expectedTarget = result.action === "rollback"
+        ? PAID_ALAKAZAM_PRIOR_RELEASE_ID
+        : null;
+      commandIds.push(request?.idempotencyKey || "");
+      if (
+        !result.keyboardFocused
+        || !request
+        || JSON.stringify(bodyKeys) !== JSON.stringify([
+          "action",
+          "snapshotDigest",
+          "targetReleaseId",
+        ])
+        || body.action !== result.action
+        || body.snapshotDigest !== PAID_ALAKAZAM_SNAPSHOT_DIGEST
+        || body.targetReleaseId !== expectedTarget
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+          .test(request.idempotencyKey || "")
+        || !result.retained.statusFocused
+        || result.retained.enabledActions !== 3
+        || !result.retained.text.includes(
+          "Authorization recorded. Publication remains held."
+        )
+        || !result.retained.text.includes(
+          `${result.action[0].toUpperCase()}${result.action.slice(1)} authorization recorded`
+        )
+        || !result.retained.text.includes(
+          "It remains held without a provider effect."
+        )
+      ) {
+        failures.push(
+          `${viewport.label} ${result.action} held publication command failed: `
+            + JSON.stringify(result),
+        );
+      }
+    }
+    if (new Set(commandIds).size !== 3) {
+      failures.push(
+        `${viewport.label} publication idempotency keys were reused: `
+          + JSON.stringify(commandIds),
+      );
+    }
+  }
+
   for (const viewport of [VIEWPORTS[1], VIEWPORTS[2]]) {
     for (const mode of ["issued", "completion"]) {
     const paid = await paidCustomBuildJourney(cdp, server, viewport, mode);
@@ -4199,7 +4625,7 @@ try {
   }
   console.log(
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
-      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, issued-change plus ready-completion fixtures, H1N Purpose-1 customer/owner change-payment journeys, and Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity, retained document and final-state errors, a delayed-authority zero-write race, keyboard activation, and 44px controls at 320×720, 390×844, and 1440×1000.",
+      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, held Alakazam publish/rollback/unpublish authorization, issued-change plus ready-completion fixtures, H1N Purpose-1 customer/owner change-payment journeys, and Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity, retained document and final-state errors, a delayed-authority zero-write race, keyboard activation, and 44px controls at 320×720, 390×844, and 1440×1000.",
   );
 } finally {
   if (cdp) cdp.close();

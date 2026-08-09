@@ -872,6 +872,12 @@ async function verifyPlatformSchema(pool) {
       ) is not null as custom_build_handoff_callable,
       to_regprocedure('ss.hosted_runtime_contract_v47()') is not null
         as custom_build_handoff_runtime_contract,
+      to_regclass(
+        'ss.alakazam_customer_publication_commands'
+      ) is not null as alakazam_customer_publication_commands,
+      to_regprocedure(
+        'ss.hosted_alakazam_publication_contract()'
+      ) is not null as alakazam_customer_publication_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -3558,6 +3564,95 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build handoff migration contract failed: ${name}`
+    );
+  }
+
+  const alakazamPublication = await pool.query(`
+    select
+      ss.hosted_alakazam_publication_contract() =
+        'canonical-alakazam-customer-publication-held-v1'
+        as exact_runtime_marker,
+      (
+        select relation.relrowsecurity
+          and relation.relforcerowsecurity
+          and has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          )
+          and has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'TRUNCATE'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege('anon', relation.oid, 'SELECT')
+          and not has_table_privilege('anon', relation.oid, 'INSERT')
+        from pg_class relation
+        where relation.oid =
+          'ss.alakazam_customer_publication_commands'::regclass
+      ) as exact_held_table_security,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.alakazam_customer_publication_commands'::regclass
+          and trigger_record.tgname =
+            'alakazam_customer_publication_commands_validate'
+          and trigger_record.tgconstraint <> 0
+          and not trigger_record.tgisinternal
+      ) as deferred_authority_validation,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.alakazam_customer_publication_commands'::regclass
+          and trigger_record.tgname =
+            'alakazam_customer_publication_commands_immutable'
+          and not trigger_record.tgisinternal
+      ) as immutable_command_evidence,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%subscription.status in (''active'', ''grace'')%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%subscription.revision = new.subscription_revision%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%version_state.state = ''accepted_release''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%operation.state = ''published''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.validate_alakazam_customer_publication_command()'::regprocedure
+      ) as exact_active_revision_and_history_authority,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.alakazam_customer_publication_commands'::regclass
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as retained_command_evidence
+  `);
+  for (
+    const [name, ready] of Object.entries(
+      alakazamPublication.rows[0]
+    )
+  ) {
+    assert.equal(
+      ready,
+      true,
+      `Alakazam publication migration contract failed: ${name}`
     );
   }
 }

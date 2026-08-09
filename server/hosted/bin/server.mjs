@@ -140,6 +140,9 @@ import {
   createExportWorker,
   exportWorkerOptionsFromEnvironment
 } from "../export-worker.mjs";
+import {
+  createAlakazamPublicationComposition
+} from "../alakazam-publication-composition.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -368,6 +371,12 @@ async function start() {
     createHostedAlakazamAccount({
       account: alakazamAccountService,
       resolveSession: commerceV2.resolveSession
+    });
+  const alakazamPublication =
+    createAlakazamPublicationComposition({
+      authority,
+      resolveSession: commerceV2.resolveSession,
+      clock: commerceV2.clock
     });
   const alakazamBillingSurfaces =
     createHostedAlakazamBillingSurfaces({
@@ -676,6 +685,7 @@ async function start() {
   await customServicesCustomBuildProgress.readiness();
   await customServicesCustomBuildChangeCompletion.readiness();
   await customBuildHandoff.readiness();
+  await alakazamPublication.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -702,6 +712,7 @@ async function start() {
       createHostedApi(service, {
         downloadCommerce,
         alakazamAccount,
+        alakazamPublication,
         alakazamBilling,
         alakazamBillingSurfaces,
         customServicesAccount,

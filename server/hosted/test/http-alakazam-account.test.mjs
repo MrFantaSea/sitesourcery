@@ -117,6 +117,6 @@ test("the production executable composes the account route from canonical projec
   );
   assert.match(
     source,
-    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamBilling,\s*alakazamBillingSurfaces,/u
+    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamPublication,\s*alakazamBilling,\s*alakazamBillingSurfaces,/u
   );
 });
