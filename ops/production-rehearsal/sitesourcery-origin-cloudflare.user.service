@@ -1,0 +1,37 @@
+[Unit]
+Description=Site Sourcery loopback origin gateway for Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/curl -fsS http://127.0.0.1:8788/api/v1/ready
+ExecStart=/opt/sitesourcery/caddy-2.11.4/caddy run --config %h/.config/sitesourcery-cloudflare/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,38 @@
+[Unit]
+Description=Site Sourcery outbound Cloudflare Tunnel connector
+After=network-online.target sitesourcery-origin.service
+Wants=network-online.target sitesourcery-origin.service
+ConditionPathExists=%h/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED
+ConditionPathExists=%h/sitesourcery-production/run/cloudflare-tunnel.token
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/curl -fsS -H Host:sitesourcery.com http://127.0.0.1:8081/api/v1/ready
+ExecStart=%h/.local/bin/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 --loglevel info --transport-loglevel warn run --token-file %h/sitesourcery-production/run/cloudflare-tunnel.token
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=default.target
