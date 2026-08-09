@@ -14244,6 +14244,97 @@
     }) || null;
   }
 
+  function safeProjectLegalEvidenceUri(value, kind, version) {
+    try {
+      var parsed = new URL(value);
+      if (
+        parsed.protocol !== "https:"
+        || parsed.hostname !== "sitesourcery.com"
+        || parsed.username !== ""
+        || parsed.password !== ""
+        || parsed.port !== ""
+        || parsed.search !== ""
+      ) return "";
+      if (kind === "privacy") {
+        return parsed.hash === ""
+          && parsed.pathname ===
+            "/legal/privacy/versions/" + version + "/"
+          ? value
+          : "";
+      }
+      if (kind === "product") {
+        return parsed.pathname === "/legal/website-terms/"
+          && parsed.hash === "#self-service"
+          ? value
+          : "";
+      }
+      return kind === "website"
+        && parsed.pathname === "/legal/website-terms/"
+        && parsed.hash === ""
+        ? value
+        : "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function projectLegalEvidencePresentation(project) {
+    var legal = project && record(project.legal)
+      ? project.legal
+      : null;
+    if (
+      !legal
+      || !Array.isArray(legal.current)
+      || !Array.isArray(legal.history)
+    ) return Object.freeze({ current: [], history: [] });
+
+    function entry(value, historical) {
+      if (
+        !exactKeys(value, [
+          "acceptedAt",
+          "contentDigest",
+          "evidenceUri",
+          "kind",
+          "version"
+        ])
+        || !["privacy", "product", "website"].includes(value.kind)
+        || !/^SS-HOSTED-[A-Z0-9-]+-V[0-9]+$/u.test(text(value.version))
+        || !SHA256.test(text(value.contentDigest))
+        || !safeIso(value.acceptedAt)
+      ) return null;
+      var evidenceUri = safeProjectLegalEvidenceUri(
+        value.evidenceUri,
+        value.kind,
+        value.version
+      );
+      if (!evidenceUri) return null;
+      var revision = text(value.version).match(/-V([0-9]+)$/u);
+      var revisionLabel = revision ? "V" + revision[1] : "versioned";
+      var kindLabel = value.kind === "privacy"
+        ? "privacy"
+        : value.kind === "product"
+          ? "self-service terms"
+          : "website terms";
+      return Object.freeze({
+        acceptedAt: value.acceptedAt,
+        evidenceUri: evidenceUri,
+        kind: value.kind,
+        label: (historical ? "Earlier accepted " : "Accepted ")
+          + kindLabel + " " + revisionLabel,
+        version: value.version
+      });
+    }
+
+    return Object.freeze({
+      current: Object.freeze(legal.current.map(function (value) {
+        return entry(value, false);
+      }).filter(Boolean)),
+      history: Object.freeze(legal.history.map(function (value) {
+        return entry(value, true);
+      }).filter(Boolean))
+    });
+  }
+
   function boot(windowObject) {
     var windowRef = windowObject;
     var documentRef =
@@ -14301,6 +14392,11 @@
     workroom.after(controlRoom);
 
     var pendingGuestCandidate = null;
+    var projectLegalAcceptanceCapture = null;
+    var projectLegalContextKey = "";
+    var projectLegalStaleNotice = false;
+    var projectLegalNotice = null;
+    var projectLegalEvidence = null;
     var draftTimer = null;
     var queuedDraft = null;
     var draftSaving = false;
@@ -21250,6 +21346,292 @@
       ) || "Site Sourcery account";
     }
 
+    function clearProjectLegalAcceptance() {
+      projectLegalAcceptanceCapture = null;
+      var checkbox = one(
+        '[name="acceptedProjectTerms"]'
+      );
+      if (checkbox) checkbox.checked = false;
+    }
+
+    function projectLegalDocument(authority, kind) {
+      return authority
+        && Array.isArray(authority.documents)
+        ? authority.documents.find(function (document) {
+            return document.kind === kind;
+          }) || null
+        : null;
+    }
+
+    function appendProjectLegalLink(
+      container,
+      document,
+      label
+    ) {
+      var link = documentRef.createElement("a");
+      link.href = document.contentUri;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = label + " — "
+        + document.version;
+      container.appendChild(link);
+    }
+
+    function renderProjectLegalAcceptanceCopy(authority) {
+      var checkbox = one(
+        '[name="acceptedProjectTerms"]'
+      );
+      var label = checkbox && checkbox.parentElement;
+      var copy = label && label.querySelector("span");
+      if (!copy) return;
+      copy.replaceChildren();
+      if (!authority) {
+        copy.textContent =
+          "The exact reviewed project documents are loading.";
+        return;
+      }
+      var privacy = projectLegalDocument(
+        authority,
+        "privacy"
+      );
+      var product = projectLegalDocument(
+        authority,
+        "product"
+      );
+      var website = projectLegalDocument(
+        authority,
+        "website"
+      );
+      copy.append("I accept the exact ");
+      appendProjectLegalLink(
+        copy,
+        website,
+        "website terms"
+      );
+      copy.append(", including the exact ");
+      appendProjectLegalLink(
+        copy,
+        product,
+        "self-service product terms"
+      );
+      copy.append(", and acknowledge the exact ");
+      appendProjectLegalLink(
+        copy,
+        privacy,
+        "privacy notice"
+      );
+      copy.append(" for this project.");
+    }
+
+    function installProjectLegalControls() {
+      var accountControl =
+        documentRef.getElementById("platform-auth");
+      if (accountControl) {
+        var storageBoundary =
+          documentRef.createElement("aside");
+        storageBoundary.className =
+          "customer-separate-help";
+        storageBoundary.setAttribute(
+          "data-project-storage-boundary",
+          ""
+        );
+        var boundaryLabel =
+          documentRef.createElement("strong");
+        boundaryLabel.textContent = "Guest preview";
+        var boundaryCopy =
+          documentRef.createElement("span");
+        boundaryCopy.textContent =
+          "Guest work stays only in this tab. Saving sends the project facts and reviewed HTML to the account service. Download requires a retained signed-in project.";
+        storageBoundary.append(
+          boundaryLabel,
+          boundaryCopy
+        );
+        accountControl.before(storageBoundary);
+      }
+      var checkbox = one(
+        '[name="acceptedProjectTerms"]'
+      );
+      var label = checkbox && checkbox.parentElement;
+      if (!checkbox || !label) return;
+      checkbox.checked = false;
+      checkbox.disabled = true;
+      renderProjectLegalAcceptanceCopy(null);
+
+      projectLegalNotice =
+        documentRef.createElement("aside");
+      projectLegalNotice.className =
+        "customer-separate-help";
+      projectLegalNotice.id =
+        "project-legal-authority-notice";
+      projectLegalNotice.tabIndex = -1;
+      projectLegalNotice.setAttribute(
+        "data-project-legal-authority",
+        ""
+      );
+      var noticeLabel =
+        documentRef.createElement("strong");
+      noticeLabel.textContent = "Before saving";
+      var noticeCopy =
+        documentRef.createElement("span");
+      noticeCopy.setAttribute(
+        "data-project-legal-notice-copy",
+        ""
+      );
+      noticeCopy.textContent =
+        "Guest work stays only in this tab. Saving sends the project facts and reviewed HTML to the account service. Download requires a retained signed-in project. Loading the reviewed document versions…";
+      projectLegalNotice.append(
+        noticeLabel,
+        noticeCopy
+      );
+      label.before(projectLegalNotice);
+      checkbox.setAttribute(
+        "aria-describedby",
+        projectLegalNotice.id
+      );
+      checkbox.addEventListener(
+        "change",
+        function () {
+          projectLegalStaleNotice = false;
+          if (!checkbox.checked) {
+            clearProjectLegalAcceptance();
+          } else {
+            try {
+              projectLegalAcceptanceCapture =
+                control.captureProjectLegalAcceptance();
+            } catch (error) {
+              clearProjectLegalAcceptance();
+              announce(
+                explain(
+                  error,
+                  "The reviewed project documents are not ready yet."
+                ),
+                "error"
+              );
+            }
+          }
+          renderProjectLegalAuthority(
+            control.getState()
+          );
+          renderCapabilities(control.getState());
+        }
+      );
+
+      projectLegalEvidence =
+        documentRef.createElement("section");
+      projectLegalEvidence.className =
+        "platform-panel";
+      projectLegalEvidence.hidden = true;
+      projectLegalEvidence.setAttribute(
+        "data-project-legal-evidence",
+        ""
+      );
+      var sessionBar = one("[data-session-bar]");
+      if (sessionBar) {
+        sessionBar.after(projectLegalEvidence);
+      }
+    }
+
+    function renderProjectLegalAuthority(state) {
+      var checkbox = one(
+        '[name="acceptedProjectTerms"]'
+      );
+      if (!checkbox || !projectLegalNotice) return;
+      var authority = state.projectLegalAuthority;
+      var contextKey =
+        String(state.projectLegalAcceptanceEpoch)
+        + ":"
+        + text(authority && authority.authorityDigest)
+        + ":"
+        + text(state.projectLegalAuthorityStatus);
+      if (projectLegalContextKey !== contextKey) {
+        projectLegalContextKey = contextKey;
+        clearProjectLegalAcceptance();
+      }
+      var ready =
+        state.projectLegalAuthorityStatus === "ready"
+        && authority;
+      checkbox.disabled = !ready;
+      renderProjectLegalAcceptanceCopy(
+        ready ? authority : null
+      );
+      var noticeCopy = one(
+        "[data-project-legal-notice-copy]",
+        projectLegalNotice
+      );
+      if (!noticeCopy) return;
+      var boundary =
+        "Guest work stays only in this tab. Saving sends the project facts and reviewed HTML to the account service. Download requires a retained signed-in project. ";
+      if (state.projectLegalAuthorityStatus === "loading") {
+        noticeCopy.textContent = boundary
+          + "Loading the reviewed document versions…";
+      } else if (!ready) {
+        noticeCopy.textContent = boundary
+          + "Project saving is paused because the reviewed documents could not be loaded. The preview still works in this tab.";
+      } else if (projectLegalStaleNotice) {
+        noticeCopy.textContent = boundary
+          + "The reviewed documents changed. Review these refreshed versions and select the unchecked box again.";
+      } else if (projectLegalAcceptanceCapture) {
+        noticeCopy.textContent = boundary
+          + "These exact document versions are selected for this project.";
+      } else {
+        noticeCopy.textContent = boundary
+          + "Review these exact document versions, then select the unchecked box to accept them for this project.";
+      }
+    }
+
+    function renderProjectLegalEvidence(state) {
+      if (!projectLegalEvidence) return;
+      var presentation =
+        projectLegalEvidencePresentation(
+          state.project
+        );
+      var rows = presentation.current.concat(
+        presentation.history
+      );
+      projectLegalEvidence.hidden = rows.length === 0;
+      projectLegalEvidence.replaceChildren();
+      if (rows.length === 0) return;
+      var kicker = documentRef.createElement("p");
+      kicker.className = "spark-kicker";
+      kicker.textContent = "Project record";
+      var heading = documentRef.createElement("strong");
+      heading.textContent = "Accepted project documents";
+      var current = documentRef.createElement("p");
+      presentation.current.forEach(function (entry, index) {
+        if (index > 0) current.append(" · ");
+        var link = documentRef.createElement("a");
+        link.href = entry.evidenceUri;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = entry.label
+          + " — " + entry.version;
+        current.appendChild(link);
+      });
+      projectLegalEvidence.append(
+        kicker,
+        heading,
+        current
+      );
+      if (presentation.history.length > 0) {
+        var details = documentRef.createElement("details");
+        var summary = documentRef.createElement("summary");
+        summary.textContent = "Earlier accepted versions";
+        var history = documentRef.createElement("p");
+        presentation.history.forEach(function (entry, index) {
+          if (index > 0) history.append(" · ");
+          var link = documentRef.createElement("a");
+          link.href = entry.evidenceUri;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = entry.label
+            + " — " + entry.version;
+          history.appendChild(link);
+        });
+        details.append(summary, history);
+        projectLegalEvidence.appendChild(details);
+      }
+    }
+
     function renderProjects(state) {
       var list = one("[data-project-list]");
       if (!list) return;
@@ -21418,12 +21800,37 @@
         one("[data-create-project]");
       var projectCopy =
         one("[data-project-availability]");
-      projectButton.disabled =
-        !pendingGuestCandidate;
-      projectCopy.textContent =
+      var legalCaptureReady = Boolean(
+        projectLegalAcceptanceCapture
+        && projectLegalAcceptanceCapture.epoch ===
+          state.projectLegalAcceptanceEpoch
+        && state.projectLegalAuthorityStatus === "ready"
+      );
+      projectButton.disabled = !(
         pendingGuestCandidate
-          ? "Your reviewed preview is ready to save."
-          : "Make and review a preview before creating its project.";
+        && state.account
+        && legalCaptureReady
+      );
+      if (!pendingGuestCandidate) {
+        projectCopy.textContent =
+          "Make and review a preview before creating its project.";
+      } else if (
+        state.projectLegalAuthorityStatus === "loading"
+      ) {
+        projectCopy.textContent =
+          "Your preview is ready. Loading the reviewed documents before project saving opens…";
+      } else if (
+        state.projectLegalAuthorityStatus !== "ready"
+      ) {
+        projectCopy.textContent =
+          "Your preview remains in this tab. Project saving is paused until the reviewed documents load.";
+      } else if (!legalCaptureReady) {
+        projectCopy.textContent =
+          "Review the exact document versions and select the unchecked box before saving.";
+      } else {
+        projectCopy.textContent =
+          "Your reviewed preview and exact document acceptance are ready to save.";
+      }
 
       var quoteButton =
         one("[data-request-download-quote]");
@@ -21465,6 +21872,8 @@
       }
       renderProjects(state);
       renderQuote(state);
+      renderProjectLegalAuthority(state);
+      renderProjectLegalEvidence(state);
       renderCapabilities(state);
       renderAssessmentAccount(state);
       renderCustomerCustomBuildAccount(state);
@@ -21701,6 +22110,8 @@
           event.currentTarget,
           function () {
             pendingGuestCandidate = null;
+            projectLegalStaleNotice = false;
+            clearProjectLegalAcceptance();
             return control
               .signOut()
               .then(function () {
@@ -21756,9 +22167,10 @@
           if (
             !one('[name="acceptedProjectTerms"]')
               .checked
+            || !projectLegalAcceptanceCapture
           ) {
             throw new Error(
-              "Accept the website terms before saving this project."
+              "Review and accept the exact project documents before saving."
             );
           }
           if (!pendingGuestCandidate) {
@@ -21768,7 +22180,11 @@
           }
           return control.createProject({
             name: value("projectName"),
-            acceptedTerms: true
+            legalAcceptance:
+              projectLegalAcceptanceCapture
+                .legalAcceptance,
+            legalAcceptanceEpoch:
+              projectLegalAcceptanceCapture.epoch
           }).then(function (project) {
             if (!project) return null;
             if (pendingGuestCandidate) {
@@ -21777,6 +22193,27 @@
               );
             }
             return project;
+          }).catch(function (error) {
+            if (
+              !error
+              || error.code !==
+                "LEGAL_AUTHORITY_CHANGED"
+            ) throw error;
+            clearProjectLegalAcceptance();
+            projectLegalStaleNotice = true;
+            return control
+              .refreshProjectLegalAuthority()
+              .then(function () {
+                render(control.getState());
+                if (projectLegalNotice) {
+                  projectLegalNotice.focus();
+                }
+                announce(
+                  "The reviewed project documents changed. Review the refreshed versions and select the checkbox again.",
+                  "error"
+                );
+                return null;
+              });
           });
         }, "Project saved.");
       });
@@ -21985,6 +22422,7 @@
       setAuthMode("create");
     }
 
+    installProjectLegalControls();
     control.subscribe(render);
     controlRoom.setAttribute(
       "data-control-ready",
@@ -22103,6 +22541,8 @@
       locationWithoutDownloadCheckoutReturn,
     locationWithoutCheckoutReturn:
       locationWithoutCheckoutReturn,
+    projectLegalEvidencePresentation:
+      projectLegalEvidencePresentation,
     ownerReviewTargets:
       ownerReviewTargets,
     ownerAssessmentCoverageComplete:

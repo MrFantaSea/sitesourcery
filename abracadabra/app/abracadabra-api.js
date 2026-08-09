@@ -17,6 +17,18 @@
   var SAFE_PAGE_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/u;
   var SAFE_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
   var CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+  var PROJECT_LEGAL_AUTHORITY_SCHEMA =
+    "sitesourcery.project-legal-authority/v3";
+  var PROJECT_LEGAL_ACCEPTANCE_SCHEMA =
+    "sitesourcery.project-legal-acceptance/v3";
+  var PROJECT_LEGAL_ACCEPTANCE_STATEMENT =
+    "accepted_exact_project_terms_and_acknowledged_privacy";
+  var PROJECT_LEGAL_PRIVACY_VERSION =
+    /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u;
+  var PROJECT_LEGAL_WEBSITE_VERSION =
+    "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2";
+  var PROJECT_LEGAL_WEBSITE_DIGEST =
+    "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196";
   var CUSTOM_BUILD_CREDENTIAL =
     /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase|bearer\s+[a-z0-9._~-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:token|key|secret|password)=)/iu;
   var CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER =
@@ -236,6 +248,166 @@
       });
     }
     return value;
+  }
+
+  function projectLegalFailure(message) {
+    throw new APIError({
+      code: "LEGAL_AUTHORITY_INVALID",
+      message: message || "The reviewed project documents could not be verified."
+    });
+  }
+
+  function projectLegalIso(value) {
+    if (typeof value !== "string") return false;
+    var parsed = new Date(value);
+    return Number.isFinite(parsed.getTime())
+      && parsed.toISOString() === value;
+  }
+
+  function projectLegalUri(value, expectedPath) {
+    if (typeof value !== "string") return false;
+    try {
+      var parsed = new URL(value);
+      return parsed.protocol === "https:"
+        && parsed.hostname === "sitesourcery.com"
+        && parsed.username === ""
+        && parsed.password === ""
+        && parsed.port === ""
+        && parsed.pathname === expectedPath
+        && parsed.search === ""
+        && parsed.hash === "";
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function validatedProjectLegalDocuments(input) {
+    if (!Array.isArray(input) || input.length !== 3) {
+      projectLegalFailure("Exactly three reviewed project documents are required.");
+    }
+    var documents = input.map(function (value) {
+      if (
+        !isObject(value)
+        || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([
+          "contentDigest",
+          "contentUri",
+          "effectiveAt",
+          "kind",
+          "version"
+        ])
+        || !SHA256.test(String(value.contentDigest || ""))
+        || !projectLegalIso(value.effectiveAt)
+      ) {
+        projectLegalFailure();
+      }
+      return {
+        kind: value.kind,
+        version: value.version,
+        contentDigest: value.contentDigest,
+        contentUri: value.contentUri,
+        effectiveAt: value.effectiveAt
+      };
+    });
+    var privacy = documents[0];
+    var product = documents[1];
+    var website = documents[2];
+    if (
+      privacy.kind !== "privacy"
+      || !PROJECT_LEGAL_PRIVACY_VERSION.test(String(privacy.version || ""))
+      || !projectLegalUri(
+        privacy.contentUri,
+        "/legal/privacy/versions/" + privacy.version + "/"
+      )
+      || product.kind !== "product"
+      || product.version !== PROJECT_LEGAL_WEBSITE_VERSION
+      || product.contentDigest !== PROJECT_LEGAL_WEBSITE_DIGEST
+      || product.effectiveAt !== "2026-07-30T00:00:00.000Z"
+      || product.contentUri !==
+        "https://sitesourcery.com/legal/website-terms/#self-service"
+      || website.kind !== "website"
+      || website.version !== PROJECT_LEGAL_WEBSITE_VERSION
+      || website.contentDigest !== PROJECT_LEGAL_WEBSITE_DIGEST
+      || website.effectiveAt !== "2026-07-30T00:00:00.000Z"
+      || website.contentUri !==
+        "https://sitesourcery.com/legal/website-terms/"
+      || !projectLegalUri(
+        website.contentUri,
+        "/legal/website-terms/"
+      )
+    ) {
+      projectLegalFailure();
+    }
+    return documents;
+  }
+
+  function validateProjectLegalAuthority(input) {
+    if (
+      !isObject(input)
+      || JSON.stringify(Object.keys(input).sort()) !== JSON.stringify([
+        "acceptanceStatement",
+        "authorityDigest",
+        "documents",
+        "schema"
+      ])
+      || input.schema !== PROJECT_LEGAL_AUTHORITY_SCHEMA
+      || input.acceptanceStatement !== PROJECT_LEGAL_ACCEPTANCE_STATEMENT
+      || !SHA256.test(String(input.authorityDigest || ""))
+    ) {
+      projectLegalFailure();
+    }
+    return deepFreezeProjection({
+      schema: input.schema,
+      acceptanceStatement: input.acceptanceStatement,
+      authorityDigest: input.authorityDigest,
+      documents: validatedProjectLegalDocuments(input.documents)
+    });
+  }
+
+  function projectLegalAcceptanceFromAuthority(input) {
+    var authority = validateProjectLegalAuthority(input);
+    return deepFreezeProjection({
+      schema: PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
+      acceptanceStatement: authority.acceptanceStatement,
+      authorityDigest: authority.authorityDigest,
+      documents: authority.documents.map(function (document) {
+        return Object.assign({}, document);
+      })
+    });
+  }
+
+  function validateProjectLegalAcceptance(input) {
+    if (
+      !isObject(input)
+      || JSON.stringify(Object.keys(input).sort()) !== JSON.stringify([
+        "acceptanceStatement",
+        "authorityDigest",
+        "documents",
+        "schema"
+      ])
+      || input.schema !== PROJECT_LEGAL_ACCEPTANCE_SCHEMA
+      || input.acceptanceStatement !== PROJECT_LEGAL_ACCEPTANCE_STATEMENT
+      || !SHA256.test(String(input.authorityDigest || ""))
+    ) {
+      throw new APIError({
+        code: "LEGAL_ACCEPTANCE_INVALID",
+        message: "Accept the exact reviewed project documents before saving."
+      });
+    }
+    var documents;
+    try {
+      documents = validatedProjectLegalDocuments(input.documents);
+    } catch (_error) {
+      throw new APIError({
+        code: "LEGAL_ACCEPTANCE_INVALID",
+        message: "Accept the exact reviewed project documents before saving."
+      });
+    }
+    return deepFreezeProjection({
+      schema: input.schema,
+      acceptanceStatement: input.acceptanceStatement,
+      authorityDigest: input.authorityDigest,
+      documents: documents
+    });
   }
 
   function requiredUuid(value, field) {
@@ -2947,6 +3119,40 @@
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
     var csrfToken = null;
     var csrfBootstrap = null;
+    var currentProjectLegalAuthority = null;
+    var projectLegalAuthoritySequence = 0;
+
+    async function verifyProjectLegalAuthority(input) {
+      var authority = validateProjectLegalAuthority(input);
+      if (
+        !cryptoImpl
+        || !cryptoImpl.subtle
+        || typeof cryptoImpl.subtle.digest !== "function"
+        || typeof TextEncoder !== "function"
+      ) {
+        projectLegalFailure(
+          "This browser cannot verify the reviewed project documents."
+        );
+      }
+      var bytes = new TextEncoder().encode(
+        customBuildCanonicalJson({
+          documents: authority.documents,
+          schema: authority.schema
+        })
+      );
+      var calculated;
+      try {
+        calculated = new Uint8Array(
+          await cryptoImpl.subtle.digest("SHA-256", bytes)
+        );
+      } catch (_error) {
+        projectLegalFailure();
+      }
+      if (hexFromBytes(calculated) !== authority.authorityDigest) {
+        projectLegalFailure();
+      }
+      return authority;
+    }
 
     async function verifyCustomBuildHandoffDocumentIntegrity(documentValue) {
       var canonical = customBuildCanonicalJson(documentValue.payload);
@@ -3378,6 +3584,19 @@
 
     function capabilities() {
       return request("GET", "/capabilities");
+    }
+
+    function getProjectLegalAuthority() {
+      var expectedSequence = ++projectLegalAuthoritySequence;
+      currentProjectLegalAuthority = null;
+      return request("GET", "/legal/project-authority")
+        .then(verifyProjectLegalAuthority)
+        .then(function (authority) {
+          if (expectedSequence === projectLegalAuthoritySequence) {
+            currentProjectLegalAuthority = authority;
+          }
+          return authority;
+        });
     }
 
     function listOrganizations() {
@@ -5649,9 +5868,36 @@
     function createProject(input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
+      if (Object.prototype.hasOwnProperty.call(source, "acceptedTerms")) {
+        throw new APIError({
+          code: "LEGAL_ACCEPTANCE_INVALID",
+          message: "The retired terms checkbox cannot authorize project creation."
+        });
+      }
+      var legalAcceptance = validateProjectLegalAcceptance(
+        source.legalAcceptance
+      );
+      if (!currentProjectLegalAuthority) {
+        throw new APIError({
+          code: "LEGAL_CONFIGURATION_REQUIRED",
+          message: "Load the reviewed project documents before saving."
+        });
+      }
+      if (
+        JSON.stringify(legalAcceptance) !== JSON.stringify(
+          projectLegalAcceptanceFromAuthority(
+            currentProjectLegalAuthority
+          )
+        )
+      ) {
+        throw new APIError({
+          code: "LEGAL_AUTHORITY_CHANGED",
+          message: "The reviewed project documents changed. Review and accept them again."
+        });
+      }
       var body = {
         name: requiredText(source.name, "Project name", 120),
-        acceptedTerms: source.acceptedTerms === true
+        legalAcceptance: legalAcceptance
       };
       if (Object.prototype.hasOwnProperty.call(source, "visibility")) {
         body.visibility = oneOf(source.visibility, "Visibility", ["public", "private"]);
@@ -6294,6 +6540,10 @@
       completeRecovery: completeRecovery,
       me: me,
       capabilities: capabilities,
+      getProjectLegalAuthority:
+        getProjectLegalAuthority,
+      projectLegalAcceptanceFromAuthority:
+        projectLegalAcceptanceFromAuthority,
       listOrganizations: listOrganizations,
       listProjects: listProjects,
       getProject: getProject,
@@ -6458,6 +6708,12 @@
 
   return Object.freeze({
     APIError: APIError,
-    createClient: createClient
+    createClient: createClient,
+    projectLegalAcceptanceFromAuthority:
+      projectLegalAcceptanceFromAuthority,
+    validateProjectLegalAcceptance:
+      validateProjectLegalAcceptance,
+    validateProjectLegalAuthority:
+      validateProjectLegalAuthority
   });
 }));

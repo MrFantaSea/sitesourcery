@@ -137,6 +137,47 @@ const PAID_DESKTOP_EVIDENCE_DIGEST = createHash("sha256")
 const PAID_PHONE_EVIDENCE_DIGEST = createHash("sha256")
   .update(PAID_PHONE_EVIDENCE_BYTES)
   .digest("hex");
+const PROJECT_LEGAL_PRIVACY_VERSION =
+  "SS-HOSTED-PRIVACY-2099-01-01-V3";
+const PROJECT_LEGAL_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    kind: "privacy",
+    version: PROJECT_LEGAL_PRIVACY_VERSION,
+    contentDigest: "2".repeat(64),
+    contentUri:
+      "https://sitesourcery.com/legal/privacy/versions/"
+      + PROJECT_LEGAL_PRIVACY_VERSION + "/",
+    effectiveAt: "2099-01-01T00:00:00.000Z",
+  }),
+  Object.freeze({
+    kind: "product",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    contentDigest:
+      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    contentUri:
+      "https://sitesourcery.com/legal/website-terms/#self-service",
+    effectiveAt: "2026-07-30T00:00:00.000Z",
+  }),
+  Object.freeze({
+    kind: "website",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    contentDigest:
+      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    contentUri:
+      "https://sitesourcery.com/legal/website-terms/",
+    effectiveAt: "2026-07-30T00:00:00.000Z",
+  }),
+]);
+const PROJECT_LEGAL_AUTHORITY = Object.freeze({
+  schema: "sitesourcery.project-legal-authority/v3",
+  acceptanceStatement:
+    "accepted_exact_project_terms_and_acknowledged_privacy",
+  authorityDigest: createHash("sha256").update(canonicalJson({
+    documents: PROJECT_LEGAL_DOCUMENTS,
+    schema: "sitesourcery.project-legal-authority/v3",
+  })).digest("hex"),
+  documents: PROJECT_LEGAL_DOCUMENTS,
+});
 
 function paidProject() {
   return {
@@ -148,6 +189,38 @@ function paidProject() {
     updatedAt: "2026-08-06T15:05:00.000Z",
     versions: [],
     visibility: "private",
+    legal: {
+      current: [
+        {
+          kind: "privacy",
+          version: "SS-HOSTED-PRIVACY-2026-07-30-V2",
+          contentDigest:
+            "b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b",
+          evidenceUri:
+            "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/",
+          acceptedAt: "2026-08-01T12:00:00.000Z",
+        },
+        {
+          kind: "product",
+          version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+          contentDigest:
+            "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+          evidenceUri:
+            "https://sitesourcery.com/legal/website-terms/#self-service",
+          acceptedAt: "2026-08-01T12:00:00.000Z",
+        },
+        {
+          kind: "website",
+          version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+          contentDigest:
+            "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+          evidenceUri:
+            "https://sitesourcery.com/legal/website-terms/",
+          acceptedAt: "2026-08-01T12:00:00.000Z",
+        },
+      ],
+      history: [],
+    },
   };
 }
 
@@ -1251,6 +1324,14 @@ async function startServer() {
         fixtureStatus: null,
       };
       apiRequests.push(apiRequest);
+      if (
+        request.method === "GET"
+        && url.pathname ===
+          "/api/v1/legal/project-authority"
+      ) {
+        json(response, 200, PROJECT_LEGAL_AUTHORITY);
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/v1/me") {
         json(response, 200, paidFixture ? {
           user: {
@@ -1721,6 +1802,22 @@ async function startServer() {
         paidFixture
         && request.method === "POST"
         && url.pathname ===
+          `/api/v1/organizations/${PAID_ORGANIZATION_ID}/projects`
+      ) {
+        apiRequest.expectedWrite = true;
+        json(response, 409, {
+          error: {
+            code: "LEGAL_AUTHORITY_CHANGED",
+            message:
+              "The reviewed legal authority changed. Refresh and try again.",
+          },
+        });
+        return;
+      }
+      if (
+        paidFixture
+        && request.method === "POST"
+        && url.pathname ===
           `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
       ) {
         apiRequest.expectedWrite = true;
@@ -2090,6 +2187,13 @@ async function openHostedAccount(cdp) {
     cdp,
     `document.documentElement.getAttribute("data-abracadabra-control-ready") === "hosted"`,
   );
+  await waitFor(
+    cdp,
+    `["ready", "held"].includes(
+      globalThis.SiteSourceryAbracadabraHostedSession
+        ?.getState().projectLegalAuthorityStatus
+    )`,
+  );
   await evaluate(
     cdp,
     `document.querySelector("[data-open-account]").click()`,
@@ -2162,6 +2266,34 @@ async function inspect(cdp) {
             .filter((src) => /abracadabra-(?:account|paid-download)\\.js$/.test(src)),
           directStripeLinks: document.querySelectorAll('a[href^="https://buy.stripe.com/"]').length,
           accountFields,
+          projectLegal: {
+            status: globalThis.SiteSourceryAbracadabraHostedSession
+              ?.getState().projectLegalAuthorityStatus || "",
+            checked: document.querySelector(
+              '[name="acceptedProjectTerms"]'
+            )?.checked === true,
+            disabled: document.querySelector(
+              '[name="acceptedProjectTerms"]'
+            )?.disabled === true,
+            saveDisabled: document.querySelector(
+              "[data-create-project]"
+            )?.disabled === true,
+            notice: clean(document.querySelector(
+              "[data-project-legal-authority]"
+            )?.textContent),
+            links: [...document.querySelectorAll(
+              '[name="acceptedProjectTerms"] + span a'
+            )].map((link) => ({
+              href: link.href,
+              text: clean(link.textContent),
+            })),
+            storageBoundary: clean(document.querySelector(
+              "[data-project-storage-boundary]"
+            )?.textContent),
+            storageBoundaryVisible: visible(document.querySelector(
+              "[data-project-storage-boundary]"
+            )),
+          },
         } : null,
       };
     })()`,
@@ -2222,6 +2354,45 @@ function snapshotFailures(snapshot, route, viewport) {
     );
     if (shortFields.length) {
       failures.push(`${label}: visible account controls below 44px ${JSON.stringify(shortFields)}`);
+    }
+    const legal = snapshot.app.projectLegal;
+    if (
+      legal.status !== "ready"
+      || legal.checked
+      || legal.disabled
+      || !legal.saveDisabled
+      || !legal.storageBoundaryVisible
+      || !legal.storageBoundary.includes(
+        "Guest work stays only in this tab"
+      )
+      || !legal.storageBoundary.includes(
+        "Saving sends the project facts and reviewed HTML to the account service"
+      )
+      || !legal.storageBoundary.includes(
+        "Download requires a retained signed-in project"
+      )
+      || !legal.notice.includes("Guest work stays only in this tab")
+      || !legal.notice.includes(
+        "Saving sends the project facts and reviewed HTML to the account service"
+      )
+      || !legal.notice.includes(
+        "Download requires a retained signed-in project"
+      )
+      || legal.links.length !== 3
+      || !legal.links.some((link) =>
+        link.href === PROJECT_LEGAL_AUTHORITY.documents[0].contentUri
+        && link.text.includes(PROJECT_LEGAL_PRIVACY_VERSION))
+      || !legal.links.some((link) =>
+        link.href === PROJECT_LEGAL_AUTHORITY.documents[1].contentUri
+        && link.text.includes(PROJECT_LEGAL_AUTHORITY.documents[1].version))
+      || !legal.links.some((link) =>
+        link.href === PROJECT_LEGAL_AUTHORITY.documents[2].contentUri
+        && link.text.includes(PROJECT_LEGAL_AUTHORITY.documents[2].version))
+    ) {
+      failures.push(
+        `${label}: exact project legal authority did not render fail-closed: `
+          + JSON.stringify(legal),
+      );
     }
   }
   return failures;
@@ -2287,6 +2458,196 @@ async function makerJourney(cdp, origin) {
       status: document.getElementById("platform-status").textContent.trim(),
     }))()`,
   );
+}
+
+async function projectLegalJourney(cdp, server, viewport) {
+  await isolatePaidJourney(cdp);
+  const fixtureToken = server.beginPaidFixture(
+    "payment-paid",
+    viewport,
+    "project-legal-v3",
+  );
+  await cdp.send("Storage.clearDataForOrigin", {
+    origin: server.origin,
+    storageTypes: "all",
+  });
+  const cookie = await cdp.send("Network.setCookie", {
+    name: PAID_FIXTURE_COOKIE,
+    value: fixtureToken,
+    url: `${server.origin}/`,
+    httpOnly: true,
+    sameSite: "Strict",
+  });
+  if (!cookie.success) {
+    throw new Error("Project-legal browser fixture cookie was rejected.");
+  }
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${server.origin}/abracadabra/app/`);
+  await openHostedAccount(cdp);
+  await waitFor(
+    cdp,
+    `globalThis.SiteSourceryAbracadabraHostedSession
+      ?.getState().phase === "ready"
+      && document.querySelector("[data-project-list] button")`,
+  );
+  await evaluate(
+    cdp,
+    `(() => {
+      const field = document.querySelector('[name="projectName"]');
+      field.value = "Browser legal project";
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      dispatchEvent(new CustomEvent("abracadabra:versionmade", {
+        detail: {
+          raw: { businessName: "Browser legal project" },
+          result: {
+            artifactDigest: ${JSON.stringify("3".repeat(64))},
+            html: "<!doctype html><title>Browser legal project</title>"
+          }
+        }
+      }));
+      return true;
+    })()`,
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector('[data-customer-stage="project"]')
+      ?.hidden === false
+      && document.querySelector('[name="acceptedProjectTerms"]')
+      ?.disabled === false`,
+  );
+  const authorityReadsBeforeClick = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "GET"
+      && entry.pathname === "/api/v1/legal/project-authority",
+  ).length;
+  const checkboxKeyboardFocused = await activateByKeyboard(
+    cdp,
+    '[name="acceptedProjectTerms"]',
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-create-project]")?.disabled === false`,
+  );
+  const authorityReadsAfterCapture = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "GET"
+      && entry.pathname === "/api/v1/legal/project-authority",
+  ).length;
+  const createPath =
+    `/api/v1/organizations/${PAID_ORGANIZATION_ID}/projects`;
+  const priorCreates = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST"
+      && entry.pathname === createPath,
+  ).length;
+  const saveKeyboardFocused = await activateByKeyboard(
+    cdp,
+    "[data-create-project]",
+  );
+  const request = await waitForApiRequest(
+    server,
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "POST"
+      && entry.pathname === createPath,
+    priorCreates,
+  );
+  await waitFor(
+    cdp,
+    `(() => {
+      const notice = document.querySelector(
+        "[data-project-legal-authority]"
+      );
+      const checkbox = document.querySelector(
+        '[name="acceptedProjectTerms"]'
+      );
+      return globalThis.SiteSourceryAbracadabraHostedSession
+        ?.getState().projectLegalAuthorityStatus === "ready"
+        && checkbox?.checked === false
+        && document.querySelector("[data-create-project]")?.disabled === true
+        && document.activeElement === notice
+        && notice?.textContent.includes("reviewed documents changed");
+    })()`,
+  );
+  const afterStale = await evaluate(
+    cdp,
+    `(() => {
+      const notice = document.querySelector(
+        "[data-project-legal-authority]"
+      );
+      const checkbox = document.querySelector(
+        '[name="acceptedProjectTerms"]'
+      );
+      return {
+        checked: checkbox.checked,
+        noticeFocused: document.activeElement === notice,
+        noticeText: notice.textContent.replace(/\\s+/g, " ").trim(),
+        saveDisabled: document.querySelector(
+          "[data-create-project]"
+        ).disabled,
+      };
+    })()`,
+  );
+  const recaptureKeyboardFocused = await activateByKeyboard(
+    cdp,
+    '[name="acceptedProjectTerms"]',
+  );
+  await waitFor(
+    cdp,
+    `document.querySelector("[data-create-project]")?.disabled === false`,
+  );
+  const projectKeyboardFocused = await activateByKeyboard(
+    cdp,
+    "[data-project-list] button",
+  );
+  await waitFor(
+    cdp,
+    `globalThis.SiteSourceryAbracadabraHostedSession
+      ?.getState().project?.id === ${JSON.stringify(PAID_PROJECT_ID)}
+      && document.querySelector("[data-project-legal-evidence]")
+      ?.hidden === false`,
+  );
+  const retained = await evaluate(
+    cdp,
+    `(() => {
+      const evidence = document.querySelector(
+        "[data-project-legal-evidence]"
+      );
+      const privacy = [...evidence.querySelectorAll("a")].find(
+        (link) => link.textContent.includes("Accepted privacy V2")
+      );
+      return {
+        viewportWidth: innerWidth,
+        scrollWidth: Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        ),
+        text: evidence.textContent.replace(/\\s+/g, " ").trim(),
+        privacyHref: privacy?.href || "",
+        privacyText: privacy?.textContent.trim() || "",
+      };
+    })()`,
+  );
+  const authorityReadsAfterStale = server.apiRequests.filter(
+    (entry) => entry.paidFixtureToken === fixtureToken
+      && entry.method === "GET"
+      && entry.pathname === "/api/v1/legal/project-authority",
+  ).length;
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+  return {
+    afterStale,
+    authorityReadsAfterCapture,
+    authorityReadsAfterStale,
+    authorityReadsBeforeClick,
+    checkboxKeyboardFocused,
+    projectKeyboardFocused,
+    recaptureKeyboardFocused,
+    request,
+    retained,
+    saveKeyboardFocused,
+  };
 }
 
 async function paidCustomBuildJourney(cdp, server, viewport, mode) {
@@ -3999,6 +4360,70 @@ try {
           + JSON.stringify(commandIds),
       );
     }
+
+    let legal;
+    try {
+      legal = await projectLegalJourney(
+        cdp,
+        server,
+        viewport,
+      );
+    } catch (error) {
+      failures.push(
+        `${viewport.label} project-legal journey did not complete: `
+          + error.message,
+      );
+      continue;
+    }
+    const acceptance = legal.request?.body
+      ?.legalAcceptance;
+    if (
+      !legal.checkboxKeyboardFocused
+      || !legal.saveKeyboardFocused
+      || !legal.recaptureKeyboardFocused
+      || !legal.projectKeyboardFocused
+      || legal.authorityReadsBeforeClick !== 1
+      || legal.authorityReadsAfterCapture !== 1
+      || legal.authorityReadsAfterStale !== 2
+      || legal.request?.expectedWrite !== true
+      || JSON.stringify(
+        Object.keys(legal.request?.body || {}).sort(),
+      ) !== JSON.stringify(["legalAcceptance", "name"])
+      || legal.request?.body?.name !==
+        "Browser legal project"
+      || acceptance?.schema !==
+        "sitesourcery.project-legal-acceptance/v3"
+      || acceptance?.acceptanceStatement !==
+        PROJECT_LEGAL_AUTHORITY.acceptanceStatement
+      || acceptance?.authorityDigest !==
+        PROJECT_LEGAL_AUTHORITY.authorityDigest
+      || JSON.stringify(acceptance?.documents) !==
+        JSON.stringify(PROJECT_LEGAL_AUTHORITY.documents)
+      || Object.hasOwn(
+        legal.request?.body || {},
+        "acceptedTerms",
+      )
+      || legal.afterStale.checked
+      || !legal.afterStale.noticeFocused
+      || !legal.afterStale.saveDisabled
+      || !legal.afterStale.noticeText.includes(
+        "select the unchecked box again"
+      )
+      || legal.retained.viewportWidth !== viewport.width
+      || legal.retained.scrollWidth !==
+        legal.retained.viewportWidth
+      || !legal.retained.privacyText.includes(
+        "Accepted privacy V2"
+      )
+      || legal.retained.privacyText.includes("V3")
+      || legal.retained.privacyHref !==
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/"
+    ) {
+      failures.push(
+        `${viewport.label} project legal authority/capture/history failed: `
+          + JSON.stringify(legal),
+      );
+    }
   }
 
   for (const viewport of [VIEWPORTS[1], VIEWPORTS[2]]) {
@@ -4580,6 +5005,11 @@ try {
       && url.endsWith(
         `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-change-invoices/${PAID_CHANGE_INVOICE_ID}/checkout-command`
       );
+    const expectedStaleProjectAuthority = text ===
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      && url.endsWith(
+        `/api/v1/organizations/${PAID_ORGANIZATION_ID}/projects`
+      );
     const expectedHandoffHeld = text ===
         "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
       && url.includes(
@@ -4602,6 +5032,7 @@ try {
       );
     return !expectedHeldRead
       && !expectedUncertainCheckout
+      && !expectedStaleProjectAuthority
       && !expectedHandoffHeld
       && !expectedPaymentCapabilityDenial
       && !expectedDocumentHeld
