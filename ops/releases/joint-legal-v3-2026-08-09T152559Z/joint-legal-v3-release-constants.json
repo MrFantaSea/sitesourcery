@@ -1,0 +1,134 @@
+{
+  "schema": "sitesourcery.hosted-joint-legal-v3-finalization/v1",
+  "state": "owner-approved-finalization",
+  "sealable": true,
+  "published": false,
+  "integrationRequired": true,
+  "renderPath": "real-hosted-builder-plus-joint-legal-v3-overlay",
+  "effectiveAt": "2026-08-09T15:25:59.000Z",
+  "authoritySchema": "sitesourcery.project-legal-authority/v3",
+  "acceptanceStatement": "accepted_exact_project_terms_and_acknowledged_privacy",
+  "authorityDigest": "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
+  "documentBindings": [
+    {
+      "kind": "privacy",
+      "id": "00000000-0000-4000-8000-000000000048"
+    },
+    {
+      "kind": "product",
+      "id": "00000000-0000-4000-8000-000000000103"
+    },
+    {
+      "kind": "website",
+      "id": "00000000-0000-4000-8000-000000000104"
+    }
+  ],
+  "documents": [
+    {
+      "kind": "privacy",
+      "version": "SS-HOSTED-PRIVACY-2026-08-09-V3",
+      "contentDigest": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+      "contentUri": "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/",
+      "effectiveAt": "2026-08-09T15:25:59.000Z"
+    },
+    {
+      "kind": "product",
+      "version": "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
+      "contentDigest": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "contentUri": "https://sitesourcery.com/legal/website-terms/#self-service",
+      "effectiveAt": "2026-08-09T15:25:59.000Z"
+    },
+    {
+      "kind": "website",
+      "version": "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
+      "contentDigest": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "contentUri": "https://sitesourcery.com/legal/website-terms/",
+      "effectiveAt": "2026-08-09T15:25:59.000Z"
+    }
+  ],
+  "contentSeal": {
+    "schema": "sitesourcery.hosted-joint-legal-v3-content-seal/v1",
+    "contentSealSha256": "9d8f0bfe025278d97d130466f641eed78e740406899741904c3db83f3ce2ebe8",
+    "approvalReceiptSchema": "sitesourcery.hosted-joint-legal-v3-content-approval/v1",
+    "approvalStatement": "owner_delegated_approval_of_exact_joint_legal_v3_review_artifacts",
+    "approvalReceiptSha256": "147ae9e84f508099842d3f0b780c103e6898f9a3041911338c08087e0ee100c2",
+    "approvalReference": "owner-delegated-chat-2026-08-09-joint-legal-v3-go-live",
+    "approvedAt": "2026-08-09T12:52:46.000Z",
+    "artifacts": {
+      "privacy": {
+        "review": {
+          "sha256": "f2e40058b8c34a5e5c6c9f4d4892ac5311ff0357ca71f84a0edd8199242ccef1",
+          "byteCount": 29874
+        },
+        "template": {
+          "sha256": "fa6c804bab0d5db93e5e30b76cea0e40e5158433d055907f637ee84366f9d29d",
+          "byteCount": 29633
+        }
+      },
+      "websiteTerms": {
+        "review": {
+          "sha256": "173b025f9a26d7cd7d491ac56a1ca3d6680a0df67cde95a8511642602b159d71",
+          "byteCount": 26224
+        },
+        "template": {
+          "sha256": "d5ec519061dbec41821bae7fc79e0220427cdeee8591c515120f3f17aaa6adc1",
+          "byteCount": 26200
+        }
+      }
+    }
+  },
+  "artifacts": [
+    {
+      "role": "privacy-current",
+      "file": "hosted/legal/privacy/index.html",
+      "sha256": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+      "byteCount": 29610
+    },
+    {
+      "role": "privacy-versioned",
+      "file": "hosted/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/index.html",
+      "sha256": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+      "byteCount": 29610
+    },
+    {
+      "role": "website-terms-current",
+      "file": "hosted/legal/website-terms/index.html",
+      "sha256": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "byteCount": 26171
+    },
+    {
+      "role": "website-terms-versioned",
+      "file": "hosted/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/index.html",
+      "sha256": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "byteCount": 26171
+    },
+    {
+      "role": "legal-center-current",
+      "file": "hosted/legal/index.html",
+      "sha256": "1f8babe61f13ce74085b23027a7e30bcfb8191bf36d2e0de4166c441acf145c8",
+      "byteCount": 4980
+    }
+  ],
+  "environment": {
+    "SITESOURCERY_HOSTED_PRIVACY_V3_VERSION": "SS-HOSTED-PRIVACY-2026-08-09-V3",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_SHA256": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_URI": "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT": "2026-08-09T15:25:59.000Z",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT": "29610",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI": "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_VERSION": "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_SHA256": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_URI": "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_EFFECTIVE_AT": "2026-08-09T15:25:59.000Z",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_BYTE_COUNT": "26171",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_ARTIFACT_URI": "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/",
+    "SITESOURCERY_HOSTED_LEGAL_V3_AUTHORITY_SHA256": "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
+    "SITESOURCERY_HOSTED_PRIVACY_V3_AUTHORITY_SHA256": "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf"
+  },
+  "cutoverPolicy": {
+    "existingV2EvidencePreserved": true,
+    "newProjectExactJointV3AcceptanceRequired": true,
+    "projectCreationWriteHoldRequiredUntilIntegrated": true,
+    "existingReadsAndCustomerRecoveryRemainAvailable": true
+  }
+}

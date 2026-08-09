@@ -2188,6 +2188,15 @@ test("operations candidates keep independent approvals and provider egress holds
     monitor,
     restore
   ]) {
+    const credentialScanSource = environment
+      .replace(
+        /^SITESOURCERY_HOSTED_PRIVACY_V3_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/privacy\/versions\/SS-HOSTED-PRIVACY-2026-08-09-V3\/$/gmu,
+        ""
+      )
+      .replace(
+        /^SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/website-terms\/versions\/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3\/$/gmu,
+        ""
+      );
     assert.match(
       environment,
       /^SITESOURCERY_STRIPE_MODE=held$/mu
@@ -2201,7 +2210,7 @@ test("operations candidates keep independent approvals and provider egress holds
       /SITESOURCERY_PAYMENT_MODE/u
     );
     assert.doesNotMatch(
-      environment,
+      credentialScanSource,
       /sk_(?:live|test)_|whsec_|https?:\/\//u
     );
   }

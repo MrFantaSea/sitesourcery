@@ -1,5 +1,5 @@
 export const JOINT_LEGAL_V3_CONTENT = Object.freeze({
-  state: "review-frozen-approval-pending",
+  state: "content-approved",
   published: false,
   deployable: false,
   privacy: Object.freeze({
@@ -17,17 +17,19 @@ export const JOINT_LEGAL_V3_CONTENT = Object.freeze({
 });
 
 export const JOINT_LEGAL_V3_RELEASE = Object.freeze({
-  state: "unsealed",
-  privacyVersion: null,
-  privacySha256: null,
-  privacyByteCount: null,
-  privacyArtifactUri: null,
-  websiteTermsVersion: null,
-  websiteTermsSha256: null,
-  websiteTermsByteCount: null,
-  websiteTermsArtifactUri: null,
-  effectiveAt: null,
-  authorityDigest: null,
+  state: "finalized",
+  privacyVersion: "SS-HOSTED-PRIVACY-2026-08-09-V3",
+  privacySha256: "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+  privacyByteCount: 29_610,
+  privacyArtifactUri:
+    "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/",
+  websiteTermsVersion: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
+  websiteTermsSha256: "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+  websiteTermsByteCount: 26_171,
+  websiteTermsArtifactUri:
+    "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/",
+  effectiveAt: "2026-08-09T15:25:59.000Z",
+  authorityDigest: "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
 });
 
 export function assertJointLegalV3Unsealed(release = JOINT_LEGAL_V3_RELEASE) {

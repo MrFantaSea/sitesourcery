@@ -1,0 +1,218 @@
+{
+  "schema": "sitesourcery.joint-legal-v3-browser-proof/v1",
+  "browser": "Google Chrome for Testing 149.0.7827.55",
+  "finalizedReceiptSchema": "sitesourcery.hosted-joint-legal-v3-finalization/v1",
+  "finalizedReceiptSha256": "d0038d91ad96f0b2c00c544fc4ad7fa9d2f0014114fba507715a8c5943430760",
+  "effectiveAt": "2026-08-09T15:25:59.000Z",
+  "authorityDigest": "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
+  "artifacts": [
+    {
+      "role": "privacy-current",
+      "file": "hosted/legal/privacy/index.html",
+      "sha256": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+      "byteCount": 29610
+    },
+    {
+      "role": "privacy-versioned",
+      "file": "hosted/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/index.html",
+      "sha256": "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
+      "byteCount": 29610
+    },
+    {
+      "role": "website-terms-current",
+      "file": "hosted/legal/website-terms/index.html",
+      "sha256": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "byteCount": 26171
+    },
+    {
+      "role": "website-terms-versioned",
+      "file": "hosted/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/index.html",
+      "sha256": "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
+      "byteCount": 26171
+    },
+    {
+      "role": "legal-center-current",
+      "file": "hosted/legal/index.html",
+      "sha256": "1f8babe61f13ce74085b23027a7e30bcfb8191bf36d2e0de4166c441acf145c8",
+      "byteCount": 4980
+    }
+  ],
+  "productionAuthority": false,
+  "productionTupleBound": true,
+  "viewports": [
+    {
+      "label": "phone-320",
+      "width": 320,
+      "height": 720,
+      "mobile": true
+    },
+    {
+      "label": "phone-390",
+      "width": 390,
+      "height": 844,
+      "mobile": true
+    },
+    {
+      "label": "desktop-1440",
+      "width": 1440,
+      "height": 1000,
+      "mobile": false
+    }
+  ],
+  "routes": [
+    "/legal/",
+    "/legal/privacy/",
+    "/legal/website-terms/"
+  ],
+  "network": {
+    "onlyLoopbackOrigin": true,
+    "missingFiles": [],
+    "responseFailures": []
+  },
+  "snapshots": [
+    {
+      "route": "/legal/",
+      "viewport": "phone-320",
+      "screenshot": "legal-center-phone-320.png",
+      "screenshotSha256": "20ccdb700533b25cd8e4b6346be58827179595b62c01870d36b37598b7e9803c",
+      "screenshotByteCount": 534307,
+      "title": "Privacy V3 and Website Terms V3 · Site Sourcery",
+      "viewportWidth": 320,
+      "scrollWidth": 320,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 0,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/privacy/",
+      "viewport": "phone-320",
+      "screenshot": "privacy-v3-phone-320.png",
+      "screenshotSha256": "f1a5a0fb3a34841c7115cffd9c355042d64b2c676e303aa95581f5436134d506",
+      "screenshotByteCount": 782878,
+      "title": "Privacy · Site Sourcery",
+      "viewportWidth": 320,
+      "scrollWidth": 320,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/website-terms/",
+      "viewport": "phone-320",
+      "screenshot": "website-terms-v3-phone-320.png",
+      "screenshotSha256": "94aaf3c6557cc032433425eabc50e16d9500c70b89325bb659a907ffca3e9ce7",
+      "screenshotByteCount": 803199,
+      "title": "Website and product terms · Site Sourcery",
+      "viewportWidth": 320,
+      "scrollWidth": 320,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/",
+      "viewport": "phone-390",
+      "screenshot": "legal-center-phone-390.png",
+      "screenshotSha256": "d6849ac17473e66ef157f73f7afb6ad0122eecbc72b14ccbed3d5c022e104053",
+      "screenshotByteCount": 582508,
+      "title": "Privacy V3 and Website Terms V3 · Site Sourcery",
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 0,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/privacy/",
+      "viewport": "phone-390",
+      "screenshot": "privacy-v3-phone-390.png",
+      "screenshotSha256": "03c85dad94117e88a146286ab6e130db9f1a31ce125cd6dc8efd7b268c61f7c3",
+      "screenshotByteCount": 826580,
+      "title": "Privacy · Site Sourcery",
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/website-terms/",
+      "viewport": "phone-390",
+      "screenshot": "website-terms-v3-phone-390.png",
+      "screenshotSha256": "1bde97b76ccbf62592e2eb7dd8ab0eaa6d896a0e8122636ac58b14cfd4c8da3d",
+      "screenshotByteCount": 856091,
+      "title": "Website and product terms · Site Sourcery",
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/",
+      "viewport": "desktop-1440",
+      "screenshot": "legal-center-desktop-1440.png",
+      "screenshotSha256": "d3b99de59456ae6f1728db8beabfbe236cf6f2996c0ef917cdeb2761bc700685",
+      "screenshotByteCount": 1830603,
+      "title": "Privacy V3 and Website Terms V3 · Site Sourcery",
+      "viewportWidth": 1440,
+      "scrollWidth": 1440,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 0,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/privacy/",
+      "viewport": "desktop-1440",
+      "screenshot": "privacy-v3-desktop-1440.png",
+      "screenshotSha256": "ffc926133cef75e0f16aa79f1fb2b07b1a990a2c86cd0905c3bfb8a84bcd8916",
+      "screenshotByteCount": 2117278,
+      "title": "Privacy · Site Sourcery",
+      "viewportWidth": 1440,
+      "scrollWidth": 1440,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    },
+    {
+      "route": "/legal/website-terms/",
+      "viewport": "desktop-1440",
+      "screenshot": "website-terms-v3-desktop-1440.png",
+      "screenshotSha256": "5e8311bb27bd3e6bae2f80993a6421ccea31477813252fa78d4215f5b53cf1df",
+      "screenshotByteCount": 2160752,
+      "title": "Website and product terms · Site Sourcery",
+      "viewportWidth": 1440,
+      "scrollWidth": 1440,
+      "mainVisible": true,
+      "h1Visible": true,
+      "detailsCount": 17,
+      "hasUnsealed": false,
+      "activeScope": true,
+      "heldScope": true
+    }
+  ]
+}

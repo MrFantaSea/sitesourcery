@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
@@ -26,6 +27,7 @@ const CONTENT_TYPES = Object.freeze({
   ".svg": "image/svg+xml",
 });
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function parseArguments(argv) {
   if (argv.length !== 2 || argv[0] !== "--finalized-artifact-root") {
@@ -212,12 +214,20 @@ const [rootState, hostedState, realRoot, realHosted] = await Promise.all([
 assert.ok(rootState.isDirectory() && !rootState.isSymbolicLink());
 assert.ok(hostedState.isDirectory() && !hostedState.isSymbolicLink());
 assert.equal(path.dirname(realHosted), realRoot);
-const receipt = JSON.parse(await readFile(
-  path.join(finalizedRoot, "joint-legal-v3-release-constants.json"), "utf8",
-));
+const receiptBytes = await readFile(
+  path.join(finalizedRoot, "joint-legal-v3-release-constants.json"),
+);
+const receipt = JSON.parse(receiptBytes);
 assert.equal(receipt.schema, "sitesourcery.hosted-joint-legal-v3-finalization/v1");
 assert.equal(receipt.published, false);
 assert.equal(receipt.integrationRequired, true);
+assert.match(receipt.authorityDigest, /^[a-f0-9]{64}$/u);
+assert.ok(Array.isArray(receipt.artifacts) && receipt.artifacts.length === 5);
+for (const artifact of receipt.artifacts) {
+  const bytes = await readFile(path.join(finalizedRoot, artifact.file));
+  assert.equal(bytes.byteLength, artifact.byteCount);
+  assert.equal(sha256(bytes), artifact.sha256);
+}
 
 const browser = await browserPath();
 const server = await startServer(hostedRoot);
@@ -295,8 +305,16 @@ try {
         format: "png", captureBeyondViewport: true, fromSurface: true,
       });
       const screenshot = `${route.label}-${viewport.label}.png`;
-      await writeFile(path.join(proofRoot, screenshot), Buffer.from(capture.data, "base64"));
-      snapshots.push({ route: route.path, viewport: viewport.label, screenshot, ...snapshot });
+      const screenshotBytes = Buffer.from(capture.data, "base64");
+      await writeFile(path.join(proofRoot, screenshot), screenshotBytes);
+      snapshots.push({
+        route: route.path,
+        viewport: viewport.label,
+        screenshot,
+        screenshotSha256: sha256(screenshotBytes),
+        screenshotByteCount: screenshotBytes.byteLength,
+        ...snapshot,
+      });
     }
   }
   assert.deepEqual(server.missing, []);
@@ -311,7 +329,16 @@ try {
     schema: "sitesourcery.joint-legal-v3-browser-proof/v1",
     browser: EXPECTED_BROWSER,
     finalizedReceiptSchema: receipt.schema,
+    finalizedReceiptSha256: sha256(receiptBytes),
+    effectiveAt: receipt.effectiveAt,
+    authorityDigest: receipt.authorityDigest,
+    artifacts: receipt.artifacts.map(
+      ({ role, file, sha256: artifactSha256, byteCount }) => ({
+        role, file, sha256: artifactSha256, byteCount,
+      }),
+    ),
     productionAuthority: false,
+    productionTupleBound: true,
     viewports: VIEWPORTS,
     routes: ROUTES.map(({ path: route }) => route),
     network: { onlyLoopbackOrigin: true, missingFiles: [], responseFailures: [] },

@@ -8,7 +8,6 @@ import pg from "pg";
 
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
-import { canonicalJson, digest } from "../../hosted/security.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -20,61 +19,53 @@ const MIGRATIONS = new URL(
   "../supabase/migrations/",
   import.meta.url
 );
-const PRIVACY_PROOF_BYTES = Buffer.from(
-  "Site Sourcery disposable Privacy V3 migration proof.\n",
-  "utf8"
-);
-const PRIVACY_PROOF = Object.freeze({
-  version: "SS-HOSTED-PRIVACY-2099-12-31-V3",
-  contentDigest: digest(PRIVACY_PROOF_BYTES),
+const PRIVACY_RELEASE = Object.freeze({
+  version: "SS-HOSTED-PRIVACY-2026-08-09-V3",
+  contentDigest:
+    "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
   contentUri:
-    "https://privacy-v3-proof.invalid/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/",
-  effectiveAt: "2099-12-31T00:00:00.000Z",
-  byteCount: PRIVACY_PROOF_BYTES.byteLength,
+    "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/",
+  effectiveAt: "2026-08-09T15:25:59.000Z",
+  byteCount: 29_610,
   artifactUri:
-    "https://privacy-v3-proof.invalid/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/"
+    "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/"
 });
-const WEBSITE_TERMS_PROOF_BYTES = Buffer.from(
-  "Site Sourcery disposable Website Terms V3 migration proof.\n",
-  "utf8"
-);
-const WEBSITE_TERMS_PROOF = Object.freeze({
-  version: "SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3",
-  contentDigest: digest(WEBSITE_TERMS_PROOF_BYTES),
+const WEBSITE_TERMS_RELEASE = Object.freeze({
+  version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
+  contentDigest:
+    "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
   artifactUri:
-    "https://terms-v3-proof.invalid/versions/SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3/",
-  byteCount: WEBSITE_TERMS_PROOF_BYTES.byteLength
+    "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/",
+  byteCount: 26_171
 });
-const PRIVACY_PROOF_DOCUMENTS = Object.freeze([
+const JOINT_LEGAL_RELEASE_DOCUMENTS = Object.freeze([
   Object.freeze({
     kind: "privacy",
-    version: PRIVACY_PROOF.version,
-    contentDigest: PRIVACY_PROOF.contentDigest,
-    contentUri: PRIVACY_PROOF.contentUri,
-    effectiveAt: PRIVACY_PROOF.effectiveAt
+    version: PRIVACY_RELEASE.version,
+    contentDigest: PRIVACY_RELEASE.contentDigest,
+    contentUri: PRIVACY_RELEASE.contentUri,
+    effectiveAt: PRIVACY_RELEASE.effectiveAt
   }),
   Object.freeze({
     kind: "product",
-    version: WEBSITE_TERMS_PROOF.version,
-    contentDigest: WEBSITE_TERMS_PROOF.contentDigest,
+    version: WEBSITE_TERMS_RELEASE.version,
+    contentDigest: WEBSITE_TERMS_RELEASE.contentDigest,
     contentUri:
       "https://sitesourcery.com/legal/website-terms/#self-service",
-    effectiveAt: PRIVACY_PROOF.effectiveAt
+    effectiveAt: PRIVACY_RELEASE.effectiveAt
   }),
   Object.freeze({
     kind: "website",
-    version: WEBSITE_TERMS_PROOF.version,
-    contentDigest: WEBSITE_TERMS_PROOF.contentDigest,
+    version: WEBSITE_TERMS_RELEASE.version,
+    contentDigest: WEBSITE_TERMS_RELEASE.contentDigest,
     contentUri: "https://sitesourcery.com/legal/website-terms/",
-    effectiveAt: PRIVACY_PROOF.effectiveAt
+    effectiveAt: PRIVACY_RELEASE.effectiveAt
   })
 ]);
-const PRIVACY_PROOF_AUTHORITY_DIGEST = digest(canonicalJson({
-  documents: PRIVACY_PROOF_DOCUMENTS,
-  schema: "sitesourcery.project-legal-authority/v3"
-}));
-const PRIVACY_PROOF_AUTHORITY = Object.freeze({
-  documents: PRIVACY_PROOF_DOCUMENTS,
+const JOINT_LEGAL_RELEASE_AUTHORITY_DIGEST =
+  "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf";
+const JOINT_LEGAL_RELEASE_AUTHORITY = Object.freeze({
+  documents: JOINT_LEGAL_RELEASE_DOCUMENTS,
   documentBindings: Object.freeze([
     Object.freeze({ id: "00000000-0000-4000-8000-000000000048" }),
     Object.freeze({ id: "00000000-0000-4000-8000-000000000103" }),
@@ -82,20 +73,20 @@ const PRIVACY_PROOF_AUTHORITY = Object.freeze({
   ]),
   artifactBindings: Object.freeze([
     Object.freeze({
-      artifactUri: PRIVACY_PROOF.artifactUri,
-      artifactSha256: PRIVACY_PROOF.contentDigest,
-      byteCount: PRIVACY_PROOF.byteCount,
+      artifactUri: PRIVACY_RELEASE.artifactUri,
+      artifactSha256: PRIVACY_RELEASE.contentDigest,
+      byteCount: PRIVACY_RELEASE.byteCount,
       mediaType: "text/html; charset=utf-8"
     }),
     Object.freeze({ artifactUri: null }),
     Object.freeze({
-      artifactUri: WEBSITE_TERMS_PROOF.artifactUri,
-      artifactSha256: WEBSITE_TERMS_PROOF.contentDigest,
-      byteCount: WEBSITE_TERMS_PROOF.byteCount,
+      artifactUri: WEBSITE_TERMS_RELEASE.artifactUri,
+      artifactSha256: WEBSITE_TERMS_RELEASE.contentDigest,
+      byteCount: WEBSITE_TERMS_RELEASE.byteCount,
       mediaType: "text/html; charset=utf-8"
     })
   ]),
-  authorityDigest: PRIVACY_PROOF_AUTHORITY_DIGEST
+  authorityDigest: JOINT_LEGAL_RELEASE_AUTHORITY_DIGEST
 });
 
 function optionalEnvironmentValue(environment, name) {
@@ -226,33 +217,6 @@ export async function assertPostgres16(
   });
 }
 
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function sealedPrivacyProofSql(sql) {
-  const insertStart = sql.indexOf(
-    "insert into hosted_joint_legal_v3_release_constants"
-  );
-  const valuesStart = sql.indexOf("values (", insertStart);
-  const valuesEnd = sql.indexOf("\n);", valuesStart);
-  assert.ok(insertStart >= 0 && valuesStart > insertStart && valuesEnd > valuesStart);
-  const sealedValues = `values (
-  ${sqlString(PRIVACY_PROOF.version)},
-  ${sqlString(PRIVACY_PROOF.contentDigest)},
-  ${sqlString(PRIVACY_PROOF.contentUri)},
-  ${sqlString(PRIVACY_PROOF.effectiveAt)},
-  ${PRIVACY_PROOF.byteCount},
-  ${sqlString(PRIVACY_PROOF.artifactUri)},
-  ${sqlString(WEBSITE_TERMS_PROOF.version)},
-  ${sqlString(WEBSITE_TERMS_PROOF.contentDigest)},
-  ${sqlString(WEBSITE_TERMS_PROOF.artifactUri)},
-  ${WEBSITE_TERMS_PROOF.byteCount},
-  ${sqlString(PRIVACY_PROOF_AUTHORITY_DIGEST)}
-)`;
-  return `${sql.slice(0, valuesStart)}${sealedValues}${sql.slice(valuesEnd + 2)}`;
-}
-
 async function applyMigrations(pool) {
   const namespace = await pool.query(
     "select to_regnamespace('ss') is not null as migrated"
@@ -266,8 +230,8 @@ async function applyMigrations(pool) {
   const names = (await readdir(MIGRATIONS))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  const heldName = "202608060048_hosted_privacy_v3.sql";
-  const heldIndex = names.indexOf(heldName);
+  const releaseName = "202608060048_hosted_privacy_v3.sql";
+  const releaseIndex = names.indexOf(releaseName);
   const postPrivacyNames = [
     "202608080049_alakazam_lifecycle_renewal.sql",
     "202608080050_alakazam_lifecycle_incidents.sql",
@@ -284,13 +248,13 @@ async function applyMigrations(pool) {
     57,
     "migration proof requires exactly 57 migrations through generic publication-control authority and retained Alakazam premium state"
   );
-  assert.equal(heldIndex, 47);
+  assert.equal(releaseIndex, 47);
   assert.deepEqual(
-    names.slice(heldIndex + 1),
+    names.slice(releaseIndex + 1),
     postPrivacyNames
   );
 
-  for (const name of names.slice(0, heldIndex)) {
+  for (const name of names.slice(0, releaseIndex)) {
     try {
       await pool.query(
         await readFile(new URL(name, MIGRATIONS), "utf8")
@@ -301,25 +265,10 @@ async function applyMigrations(pool) {
     }
   }
 
-  const heldSql = await readFile(new URL(heldName, MIGRATIONS), "utf8");
-  let heldError = null;
-  try {
-    await pool.query(heldSql);
-  } catch (error) {
-    heldError = error;
-    await pool.query("rollback");
-  }
-  assert.ok(heldError, "unsealed joint legal V3 migration must abort");
-  assert.equal(heldError.code, "55000");
-  assert.match(
-    heldError.message,
-    /Hosted joint Privacy V3 and Website Terms V3 constants are unsealed/u
-  );
-
   return {
-    appliedNames: names.slice(0, heldIndex),
-    heldName,
-    heldSql,
+    appliedNames: names.slice(0, releaseIndex),
+    releaseName,
+    releaseSql: await readFile(new URL(releaseName, MIGRATIONS), "utf8"),
     postPrivacyNames
   };
 }
@@ -363,8 +312,8 @@ async function v2AuthorityFingerprint(pool) {
   return result.rows[0];
 }
 
-async function applyPrivacyV3Proof(pool, heldSql) {
-  await pool.query(sealedPrivacyProofSql(heldSql));
+async function applyJointLegalV3Release(pool, releaseSql) {
+  await pool.query(releaseSql);
   const artifacts = await pool.query(`
     select document_id, artifact_uri, artifact_sha256, byte_count, media_type
       from ss.legal_document_artifacts
@@ -391,16 +340,16 @@ async function applyPrivacyV3Proof(pool, heldSql) {
     },
     {
       document_id: "00000000-0000-4000-8000-000000000048",
-      artifact_uri: PRIVACY_PROOF.artifactUri,
-      artifact_sha256: PRIVACY_PROOF.contentDigest,
-      byte_count: String(PRIVACY_PROOF.byteCount),
+      artifact_uri: PRIVACY_RELEASE.artifactUri,
+      artifact_sha256: PRIVACY_RELEASE.contentDigest,
+      byte_count: String(PRIVACY_RELEASE.byteCount),
       media_type: "text/html; charset=utf-8"
     },
     {
       document_id: "00000000-0000-4000-8000-000000000104",
-      artifact_uri: WEBSITE_TERMS_PROOF.artifactUri,
-      artifact_sha256: WEBSITE_TERMS_PROOF.contentDigest,
-      byte_count: String(WEBSITE_TERMS_PROOF.byteCount),
+      artifact_uri: WEBSITE_TERMS_RELEASE.artifactUri,
+      artifact_sha256: WEBSITE_TERMS_RELEASE.contentDigest,
+      byte_count: String(WEBSITE_TERMS_RELEASE.byteCount),
       media_type: "text/html; charset=utf-8"
     }
   ]);
@@ -412,7 +361,7 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
   const projectId = randomUUID();
   const receiptId = randomUUID();
   const requestId = randomUUID();
-  const acceptedAt = "2099-12-31T00:00:00.000Z";
+  const acceptedAt = PRIVACY_RELEASE.effectiveAt;
   const documentIds = [
     "00000000-0000-4000-8000-000000000103",
     "00000000-0000-4000-8000-000000000048",
@@ -457,7 +406,7 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
         projectId,
         userId,
         requestId,
-        PRIVACY_PROOF_AUTHORITY_DIGEST,
+        JOINT_LEGAL_RELEASE_AUTHORITY_DIGEST,
         acceptedAt
       ]
     );
@@ -525,7 +474,7 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
   assert.equal(count.rows[0].acceptance_count, 3);
 }
 
-async function verifyPrivacyV3Hold(pool) {
+async function verifyPreJointLegalV3State(pool) {
   const result = await pool.query(`
     select
       to_regclass('ss.legal_document_artifacts') is null
@@ -565,7 +514,7 @@ async function verifyPrivacyV3Hold(pool) {
     assert.equal(
       ready,
       true,
-      `Privacy V3 unsealed rollback failed: ${name}`
+      `Pre-joint-legal-V3 state failed: ${name}`
     );
   }
 }
@@ -657,7 +606,7 @@ async function verifyProjectLegalReadiness(pool, expectedReady) {
   if (expectedReady) {
     assert.equal(
       await authority.projectLegalAuthorityMatches(
-        PRIVACY_PROOF_AUTHORITY
+        JOINT_LEGAL_RELEASE_AUTHORITY
       ),
       true
     );
@@ -4215,14 +4164,14 @@ export async function runMigrationVerification({
     });
     const {
       appliedNames,
-      heldName,
-      heldSql,
+      releaseName,
+      releaseSql,
       postPrivacyNames
     } = await applyMigrations(pool);
-    await verifyPrivacyV3Hold(pool);
+    await verifyPreJointLegalV3State(pool);
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
-    await applyPrivacyV3Proof(pool, heldSql);
+    await applyJointLegalV3Release(pool, releaseSql);
     await applyPostPrivacyMigrations(
       pool,
       postPrivacyNames
@@ -4233,10 +4182,10 @@ export async function runMigrationVerification({
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
-      `Applied ${appliedNames.length} migrations; ${heldName} rejected unsealed constants.\n`
+      `Applied ${appliedNames.length} migrations before ${releaseName}; project creation remained held.\n`
     );
     writeOutput(
-      `Applied ${appliedNames.length + 1 + postPrivacyNames.length} migrations with a disposable proof seal.\n`
+      `Applied ${appliedNames.length + 1 + postPrivacyNames.length} migrations with the exact joint legal V3 production tuple.\n`
     );
     writeOutput(
       `projectCreationLegalBefore ${JSON.stringify(readinessBefore)}\n`

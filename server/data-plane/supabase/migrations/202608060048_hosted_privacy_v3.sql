@@ -68,8 +68,9 @@ create temporary table hosted_joint_legal_v3_release_constants (
   authority_digest text
 ) on commit drop;
 
--- Cutover replaces this one row from the joint finalization receipt. The
--- sentinels and nulls are deliberate: candidate content has no release date.
+-- Exact owner-approved joint finalization receipt generated at the real
+-- cutover UTC. Keep this tuple byte-for-byte aligned with the retained receipt,
+-- hosted artifacts, runtime environment, and project authority digest.
 insert into hosted_joint_legal_v3_release_constants (
   version,
   content_digest,
@@ -83,17 +84,17 @@ insert into hosted_joint_legal_v3_release_constants (
   website_terms_byte_count,
   authority_digest
 ) values (
-  'SS-HOSTED-PRIVACY-V3-UNSEALED',
-  null,
-  null,
-  null,
-  null,
-  null,
-  'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED',
-  null,
-  null,
-  null,
-  null
+  'SS-HOSTED-PRIVACY-2026-08-09-V3',
+  '5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967',
+  'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/',
+  '2026-08-09T15:25:59.000Z'::timestamptz,
+  29610,
+  'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V3/',
+  'SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3',
+  'b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602',
+  'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3/',
+  26171,
+  'ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf'
 );
 
 do $$
@@ -135,7 +136,7 @@ begin
     or release_record.authority_digest !~ '^[a-f0-9]{64}$'
   then
     raise exception
-      'Hosted joint Privacy V3 and Website Terms V3 constants are unsealed'
+      'Hosted joint Privacy V3 and Website Terms V3 constants are invalid or unsealed'
       using errcode = '55000';
   end if;
 end
