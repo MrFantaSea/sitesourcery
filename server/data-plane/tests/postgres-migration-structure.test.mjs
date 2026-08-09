@@ -2829,6 +2829,40 @@ test("joint Privacy V3 and Website Terms V3 are additive, exact, and owner-seale
   );
 });
 
+test("joint legal V4 authority is additive, paired, and release-held", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608090105_hosted_joint_legal_v4_authority.sql"
+  );
+  assert.ok(migration, "missing held joint legal V4 authority migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v48\(\)[\s\S]*hosted_runtime_contract_v52\(\)[\s\S]*hosted_alakazam_retained_premium_contract\(\)[\s\S]*hosted_publication_control_contract\(\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /drop constraint project_legal_acceptance_receipts_schema_version_check[\s\S]*schema_version in \([\s\S]*project-legal-acceptance\/v3[\s\S]*project-legal-acceptance\/v4/iu
+  );
+  assert.match(
+    migration.sql,
+    /create or replace function ss\.validate_project_legal_acceptance_receipt\(\)[\s\S]*project-legal-authority\/v3[\s\S]*project-legal-authority\/v4[\s\S]*00000000-0000-4000-8000-000000000049[\s\S]*00000000-0000-4000-8000-000000000105[\s\S]*00000000-0000-4000-8000-000000000106/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.hosted_runtime_contract_v53\(\)[\s\S]*canonical-ss-v53-held-joint-legal-v4-authority[\s\S]*grant execute on function ss\.hosted_runtime_contract_v53\(\)\s+to service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v4_v3_fingerprint[\s\S]*is distinct from[\s\S]*Held joint legal V4 migration changed V3 evidence or created release authority/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /insert into ss\.legal_documents|insert into ss\.legal_document_artifacts|SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4|SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4/iu
+  );
+});
+
 test("Alakazam customer publication controls store only exact held revision-bound authorization", async () => {
   const migration = (await migrations()).find(
     ({ name }) =>

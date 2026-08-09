@@ -513,8 +513,20 @@
           message: "The reviewed project documents are not available yet."
         });
       }
+      var acceptanceSchema =
+        authority.schema === "sitesourcery.project-legal-authority/v4"
+          ? "sitesourcery.project-legal-acceptance/v4"
+          : authority.schema === "sitesourcery.project-legal-authority/v3"
+            ? "sitesourcery.project-legal-acceptance/v3"
+            : null;
+      if (!acceptanceSchema) {
+        throw new ControlError({
+          code: "LEGAL_CONFIGURATION_REQUIRED",
+          message: "The reviewed project documents use an unsupported authority."
+        });
+      }
       return Object.freeze({
-        schema: "sitesourcery.project-legal-acceptance/v3",
+        schema: acceptanceSchema,
         acceptanceStatement:
           authority.acceptanceStatement,
         authorityDigest: authority.authorityDigest,

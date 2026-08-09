@@ -65,6 +65,7 @@ const JOINT_LEGAL_RELEASE_DOCUMENTS = Object.freeze([
 const JOINT_LEGAL_RELEASE_AUTHORITY_DIGEST =
   "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf";
 const JOINT_LEGAL_RELEASE_AUTHORITY = Object.freeze({
+  schema: "sitesourcery.project-legal-authority/v3",
   documents: JOINT_LEGAL_RELEASE_DOCUMENTS,
   documentBindings: Object.freeze([
     Object.freeze({ id: "00000000-0000-4000-8000-000000000048" }),
@@ -241,12 +242,13 @@ async function applyMigrations(pool) {
     "202608080102_alakazam_35_fulfillment.sql",
     "202608080103_alakazam_50_authority.sql",
     "202608080104_publication_control_authority.sql",
-    "202608090104_alakazam_retained_premium_state.sql"
+    "202608090104_alakazam_retained_premium_state.sql",
+    "202608090105_hosted_joint_legal_v4_authority.sql"
   ];
   assert.equal(
     names.length,
-    57,
-    "migration proof requires exactly 57 migrations through generic publication-control authority and retained Alakazam premium state"
+    58,
+    "migration proof requires exactly 58 migrations through the held joint legal V4 authority"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -286,6 +288,48 @@ async function applyPostPrivacyMigrations(
       error.message = `${name}: ${error.message}`;
       throw error;
     }
+  }
+}
+
+async function verifyHeldJointLegalV4State(pool) {
+  const result = await pool.query(`
+    select
+      ss.hosted_runtime_contract_v53() =
+        'canonical-ss-v53-held-joint-legal-v4-authority'
+        as v53_contract_ready,
+      not exists (
+        select 1 from ss.legal_documents document
+         where document.id in (
+           '00000000-0000-4000-8000-000000000049'::uuid,
+           '00000000-0000-4000-8000-000000000105'::uuid,
+           '00000000-0000-4000-8000-000000000106'::uuid
+         )
+      ) as v4_documents_held,
+      not exists (
+        select 1 from ss.legal_document_artifacts artifact
+         where artifact.document_id in (
+           '00000000-0000-4000-8000-000000000049'::uuid,
+           '00000000-0000-4000-8000-000000000105'::uuid,
+           '00000000-0000-4000-8000-000000000106'::uuid
+         )
+      ) as v4_artifacts_held,
+      (
+        select count(*) = 1
+          from pg_constraint constraint_row
+          join pg_class relation on relation.oid = constraint_row.conrelid
+          join pg_namespace namespace on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname = 'project_legal_acceptance_receipts'
+           and constraint_row.conname =
+             'project_legal_acceptance_receipts_schema_version_v4_check'
+           and pg_get_constraintdef(constraint_row.oid, false) =
+             'CHECK ((schema_version = ANY (ARRAY[' ||
+             '''sitesourcery.project-legal-acceptance/v3''::text, ' ||
+             '''sitesourcery.project-legal-acceptance/v4''::text])))'
+      ) as v4_receipt_schema_ready
+  `);
+  for (const [name, ready] of Object.entries(result.rows[0])) {
+    assert.equal(ready, true, `Held joint legal V4 state failed: ${name}`);
   }
 }
 
@@ -472,6 +516,55 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
     [receiptId]
   );
   assert.equal(count.rows[0].acceptance_count, 3);
+}
+
+async function verifyHeldV4ReceiptRejectsWithoutAuthority(pool) {
+  const existing = await pool.query(`
+    select organization_id, project_id, user_id, accepted_at
+      from ss.project_legal_acceptance_receipts
+     where schema_version = 'sitesourcery.project-legal-acceptance/v3'
+     order by created_at
+     limit 1
+  `);
+  assert.equal(existing.rowCount, 1);
+  const receiptId = randomUUID();
+  let rejection = null;
+  await pool.query("begin");
+  try {
+    await pool.query(
+      `insert into ss.project_legal_acceptance_receipts (
+         id, organization_id, project_id, user_id, request_id,
+         schema_version, acceptance_statement, authority_digest,
+         accepted_at
+       ) values (
+         $1, $2, $3, $4, $5,
+         'sitesourcery.project-legal-acceptance/v4',
+         'accepted_exact_project_terms_and_acknowledged_privacy',
+         $6, $7
+       )`,
+      [
+        receiptId,
+        existing.rows[0].organization_id,
+        existing.rows[0].project_id,
+        existing.rows[0].user_id,
+        randomUUID(),
+        "e".repeat(64),
+        existing.rows[0].accepted_at,
+      ],
+    );
+    await pool.query("commit");
+  } catch (error) {
+    rejection = error;
+    await pool.query("rollback");
+  }
+  assert.equal(rejection?.code, "23514");
+  const retained = await pool.query(
+    `select count(*)::integer as count
+       from ss.project_legal_acceptance_receipts
+      where id = $1`,
+    [receiptId],
+  );
+  assert.equal(retained.rows[0].count, 0);
 }
 
 async function verifyPreJointLegalV3State(pool) {
@@ -4176,9 +4269,11 @@ export async function runMigrationVerification({
       pool,
       postPrivacyNames
     );
+    await verifyHeldJointLegalV4State(pool);
     await verifyPlatformSchema(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
+    await verifyHeldV4ReceiptRejectsWithoutAuthority(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -4198,6 +4293,7 @@ export async function runMigrationVerification({
         v2After.row_version === v2Before.row_version}\n`
     );
     writeOutput("rogueFourthAcceptanceRejected true\n");
+    writeOutput("heldV4ReceiptWithoutAuthorityRejected true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

@@ -199,6 +199,7 @@ test("project legal readiness differentiates catalog and data proof with exact t
   assert.equal(readiness.projectCreationLegal.ready, true);
   assert.equal(
     await authority.projectLegalAuthorityMatches({
+      schema: "sitesourcery.project-legal-authority/v3",
       documents: [
         {
           kind: "privacy",
@@ -275,6 +276,8 @@ test("project legal readiness differentiates catalog and data proof with exact t
   assert.match(catalogQuery, /coalesce\([\s\S]*trigger_row\.tgfoid/u);
   assert.match(catalogQuery, /not privilege\.is_grantable/u);
   assert.match(catalogQuery, /procedure_row\.proowner[\s\S]*select count\(\*\) = 1/u);
+  assert.match(catalogQuery, /hosted_runtime_contract_v53\(\)/u);
+  assert.match(catalogQuery, /project-legal-acceptance\/v4/u);
   assert.match(catalogQuery, /attribute_row\.attacl is not null/u);
   assert.match(catalogQuery, /'REFERENCES'/u);
   assert.match(catalogQuery, /'TRIGGER'/u);
@@ -297,11 +300,14 @@ test("project legal readiness differentiates catalog and data proof with exact t
   );
   assert.match(constantsQuery, /select count\(\*\) = 2/u);
   assert.match(constantsQuery, /artifact\.document_id = \$24::uuid/u);
-  assert.match(constantsQuery, /\)\) = \$29::text as authority_digest_ready/u);
+  assert.match(constantsQuery, /'schema', \$29::text/u);
+  assert.match(constantsQuery, /\)\) = \$30::text as authority_digest_ready/u);
   const constantsCall = calls.find(({ text }) =>
     text.includes("as exact_artifacts_ready")
   );
-  assert.equal(constantsCall.values.length, 29);
+  assert.equal(constantsCall.values.length, 30);
   assert.equal(constantsCall.values[18], "00000000-0000-4000-8000-000000000048");
   assert.equal(constantsCall.values[23], "00000000-0000-4000-8000-000000000104");
+  assert.equal(constantsCall.values[28], "sitesourcery.project-legal-authority/v3");
+  assert.equal(constantsCall.values[29], "c".repeat(64));
 });

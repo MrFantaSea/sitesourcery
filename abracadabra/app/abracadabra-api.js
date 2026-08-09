@@ -17,16 +17,22 @@
   var SAFE_PAGE_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/u;
   var SAFE_PAGE_TYPE = /^[a-z][a-z0-9_]{1,79}$/u;
   var CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
-  var PROJECT_LEGAL_AUTHORITY_SCHEMA =
-    "sitesourcery.project-legal-authority/v3";
-  var PROJECT_LEGAL_ACCEPTANCE_SCHEMA =
-    "sitesourcery.project-legal-acceptance/v3";
+  var PROJECT_LEGAL_SCHEMAS = Object.freeze({
+    v3: Object.freeze({
+      authority: "sitesourcery.project-legal-authority/v3",
+      acceptance: "sitesourcery.project-legal-acceptance/v3",
+      privacy: /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u,
+      website: /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u
+    }),
+    v4: Object.freeze({
+      authority: "sitesourcery.project-legal-authority/v4",
+      acceptance: "sitesourcery.project-legal-acceptance/v4",
+      privacy: /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4$/u,
+      website: /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4$/u
+    })
+  });
   var PROJECT_LEGAL_ACCEPTANCE_STATEMENT =
     "accepted_exact_project_terms_and_acknowledged_privacy";
-  var PROJECT_LEGAL_PRIVACY_VERSION =
-    /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u;
-  var PROJECT_LEGAL_WEBSITE_VERSION =
-    /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u;
   var CUSTOM_BUILD_CREDENTIAL =
     /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase|bearer\s+[a-z0-9._~-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:token|key|secret|password)=)/iu;
   var CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER =
@@ -279,7 +285,23 @@
     }
   }
 
-  function validatedProjectLegalDocuments(input) {
+  function projectLegalGenerationByAuthority(schema) {
+    return Object.keys(PROJECT_LEGAL_SCHEMAS).map(function (key) {
+      return PROJECT_LEGAL_SCHEMAS[key];
+    }).find(function (candidate) {
+      return candidate.authority === schema;
+    }) || null;
+  }
+
+  function projectLegalGenerationByAcceptance(schema) {
+    return Object.keys(PROJECT_LEGAL_SCHEMAS).map(function (key) {
+      return PROJECT_LEGAL_SCHEMAS[key];
+    }).find(function (candidate) {
+      return candidate.acceptance === schema;
+    }) || null;
+  }
+
+  function validatedProjectLegalDocuments(input, generation) {
     if (!Array.isArray(input) || input.length !== 3) {
       projectLegalFailure("Exactly three reviewed project documents are required.");
     }
@@ -311,17 +333,17 @@
     var website = documents[2];
     if (
       privacy.kind !== "privacy"
-      || !PROJECT_LEGAL_PRIVACY_VERSION.test(String(privacy.version || ""))
+      || !generation.privacy.test(String(privacy.version || ""))
       || !projectLegalUri(
         privacy.contentUri,
         "/legal/privacy/versions/" + privacy.version + "/"
       )
       || product.kind !== "product"
-      || !PROJECT_LEGAL_WEBSITE_VERSION.test(String(product.version || ""))
+      || !generation.website.test(String(product.version || ""))
       || product.contentUri !==
         "https://sitesourcery.com/legal/website-terms/#self-service"
       || website.kind !== "website"
-      || !PROJECT_LEGAL_WEBSITE_VERSION.test(String(website.version || ""))
+      || !generation.website.test(String(website.version || ""))
       || website.contentUri !==
         "https://sitesourcery.com/legal/website-terms/"
       || !projectLegalUri(
@@ -339,6 +361,9 @@
   }
 
   function validateProjectLegalAuthority(input) {
+    var generation = isObject(input)
+      ? projectLegalGenerationByAuthority(input.schema)
+      : null;
     if (
       !isObject(input)
       || JSON.stringify(Object.keys(input).sort()) !== JSON.stringify([
@@ -347,7 +372,7 @@
         "documents",
         "schema"
       ])
-      || input.schema !== PROJECT_LEGAL_AUTHORITY_SCHEMA
+      || !generation
       || input.acceptanceStatement !== PROJECT_LEGAL_ACCEPTANCE_STATEMENT
       || !SHA256.test(String(input.authorityDigest || ""))
     ) {
@@ -357,14 +382,14 @@
       schema: input.schema,
       acceptanceStatement: input.acceptanceStatement,
       authorityDigest: input.authorityDigest,
-      documents: validatedProjectLegalDocuments(input.documents)
+      documents: validatedProjectLegalDocuments(input.documents, generation)
     });
   }
 
   function projectLegalAcceptanceFromAuthority(input) {
     var authority = validateProjectLegalAuthority(input);
     return deepFreezeProjection({
-      schema: PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
+      schema: projectLegalGenerationByAuthority(authority.schema).acceptance,
       acceptanceStatement: authority.acceptanceStatement,
       authorityDigest: authority.authorityDigest,
       documents: authority.documents.map(function (document) {
@@ -374,6 +399,9 @@
   }
 
   function validateProjectLegalAcceptance(input) {
+    var generation = isObject(input)
+      ? projectLegalGenerationByAcceptance(input.schema)
+      : null;
     if (
       !isObject(input)
       || JSON.stringify(Object.keys(input).sort()) !== JSON.stringify([
@@ -382,7 +410,7 @@
         "documents",
         "schema"
       ])
-      || input.schema !== PROJECT_LEGAL_ACCEPTANCE_SCHEMA
+      || !generation
       || input.acceptanceStatement !== PROJECT_LEGAL_ACCEPTANCE_STATEMENT
       || !SHA256.test(String(input.authorityDigest || ""))
     ) {
@@ -393,7 +421,7 @@
     }
     var documents;
     try {
-      documents = validatedProjectLegalDocuments(input.documents);
+      documents = validatedProjectLegalDocuments(input.documents, generation);
     } catch (_error) {
       throw new APIError({
         code: "LEGAL_ACCEPTANCE_INVALID",

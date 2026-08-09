@@ -57,6 +57,10 @@ const JOINT_LEGAL_V3_FINALIZATION_SCHEMA =
   "sitesourcery.hosted-joint-legal-v3-finalization/v1";
 const JOINT_LEGAL_V3_RECEIPT_FILE =
   "joint-legal-v3-release-constants.json";
+const JOINT_LEGAL_V4_FINALIZATION_SCHEMA =
+  "sitesourcery.hosted-joint-legal-v4-finalization/v1";
+const JOINT_LEGAL_V4_RECEIPT_FILE =
+  "joint-legal-v4-release-constants.json";
 const JOINT_LEGAL_V3_ROLES = Object.freeze([
   "privacy-current",
   "privacy-versioned",
@@ -64,6 +68,7 @@ const JOINT_LEGAL_V3_ROLES = Object.freeze([
   "website-terms-versioned",
   "legal-center-current",
 ]);
+const JOINT_LEGAL_V4_ROLES = JOINT_LEGAL_V3_ROLES;
 const JOINT_LEGAL_CURRENT_FILES = Object.freeze([
   "legal/index.html",
   "legal/privacy/index.html",
@@ -274,15 +279,91 @@ async function createJointLegalV3FinalizationPlan(input) {
   return Object.freeze({ root, receipt, artifacts: Object.freeze(artifacts) });
 }
 
-function hostedFilesForPlans(privacyV3Plan, jointLegalV3Plan) {
-  if (privacyV3Plan && jointLegalV3Plan) {
-    throw new Error("legacy Privacy V3 rendering and joint legal V3 finalization are mutually exclusive");
+async function createJointLegalV4FinalizationPlan(input) {
+  if (input === undefined || input === null) return null;
+  if (typeof input !== "string" || input.trim() === "") {
+    throw new Error("joint legal V4 finalized input must be one explicit directory");
   }
-  if (!jointLegalV3Plan) return hostedFilesForPrivacyV3Plan(privacyV3Plan);
+  const root = path.resolve(input);
+  await assertRegularSource(root, JOINT_LEGAL_V4_RECEIPT_FILE);
+  const receipt = JSON.parse(
+    await readFile(path.join(root, JOINT_LEGAL_V4_RECEIPT_FILE), "utf8"),
+  );
+  if (
+    receipt?.schema !== JOINT_LEGAL_V4_FINALIZATION_SCHEMA
+    || receipt.state !== "owner-approved-finalization"
+    || receipt.sealable !== true
+    || receipt.published !== false
+    || receipt.integrationRequired !== true
+    || receipt.authoritySchema !== "sitesourcery.project-legal-authority/v4"
+    || receipt.acceptanceSchema !== "sitesourcery.project-legal-acceptance/v4"
+    || !SHA256.test(receipt.authorityDigest ?? "")
+    || !Array.isArray(receipt.documents)
+    || receipt.documents.length !== 3
+    || !Array.isArray(receipt.documentBindings)
+    || JSON.stringify(receipt.documentBindings) !== JSON.stringify([
+      { kind: "privacy", id: "00000000-0000-4000-8000-000000000049" },
+      { kind: "product", id: "00000000-0000-4000-8000-000000000105" },
+      { kind: "website", id: "00000000-0000-4000-8000-000000000106" },
+    ])
+    || !Array.isArray(receipt.artifacts)
+    || receipt.artifacts.length !== 5
+    || JSON.stringify(receipt.artifacts.map(({ role }) => role)) !==
+      JSON.stringify(JOINT_LEGAL_V4_ROLES)
+  ) throw new Error("joint legal V4 finalization receipt is invalid");
+  const [privacy, product, website] = receipt.documents;
+  if (
+    privacy?.kind !== "privacy"
+    || product?.kind !== "product"
+    || website?.kind !== "website"
+    || !/^SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V4$/u.test(privacy.version ?? "")
+    || !/^SS-HOSTED-WEBSITE-TERMS-\d{4}-\d{2}-\d{2}-V4$/u.test(website.version ?? "")
+    || product.version !== website.version
+    || product.contentDigest !== website.contentDigest
+    || privacy.effectiveAt !== receipt.effectiveAt
+    || product.effectiveAt !== receipt.effectiveAt
+    || website.effectiveAt !== receipt.effectiveAt
+  ) throw new Error("joint legal V4 receipt document tuple is invalid");
+  const expectedFiles = [
+    "legal/privacy/index.html",
+    `legal/privacy/versions/${privacy.version}/index.html`,
+    "legal/website-terms/index.html",
+    `legal/website-terms/versions/${website.version}/index.html`,
+    "legal/index.html",
+  ];
+  const artifacts = [];
+  for (let index = 0; index < JOINT_LEGAL_V4_ROLES.length; index += 1) {
+    const artifact = exactReceiptArtifact(
+      receipt.artifacts[index],
+      JOINT_LEGAL_V4_ROLES[index],
+      expectedFiles[index],
+    );
+    await assertRegularSource(root, artifact.sourceFile);
+    const bytes = await readFile(path.join(root, artifact.sourceFile));
+    if (sha256(bytes) !== artifact.sha256 || bytes.byteLength !== artifact.byteCount) {
+      throw new Error(`joint legal V4 finalized artifact changed: ${artifact.role}`);
+    }
+    artifacts.push(artifact);
+  }
+  for (const [currentIndex, versionedIndex] of [[0, 1], [2, 3]]) {
+    if (
+      artifacts[currentIndex].sha256 !== artifacts[versionedIndex].sha256
+      || artifacts[currentIndex].byteCount !== artifacts[versionedIndex].byteCount
+    ) throw new Error("joint legal V4 current and versioned receipt identities differ");
+  }
+  return Object.freeze({ root, receipt, artifacts: Object.freeze(artifacts) });
+}
+
+function hostedFilesForPlans(privacyV3Plan, jointLegalV3Plan, jointLegalV4Plan) {
+  const legalPlans = [jointLegalV3Plan, jointLegalV4Plan].filter(Boolean);
+  if ((privacyV3Plan && legalPlans.length > 0) || legalPlans.length > 1) {
+    throw new Error("legal rendering and finalization inputs are mutually exclusive");
+  }
+  if (legalPlans.length === 0) return hostedFilesForPrivacyV3Plan(privacyV3Plan);
   return Object.freeze([
     ...new Set([
       ...hostedFileAllowlist,
-      ...jointLegalV3Plan.artifacts.map(({ file }) => file),
+      ...legalPlans[0].artifacts.map(({ file }) => file),
     ]),
   ].sort(lexical));
 }
@@ -826,8 +907,10 @@ async function writeHostedArtifact({
   catalog,
   privacyV3Plan,
   jointLegalV3Plan,
+  jointLegalV4Plan,
   artifactFiles,
 }) {
+  const jointLegalPlan = jointLegalV4Plan ?? jointLegalV3Plan;
   await mkdir(staging, { recursive: false });
   const candidatePage = transformed.get(HOSTED_PRIVACY_V3_CANDIDATE.currentFile);
   const renderedPrivacy = privacyV3Plan
@@ -836,12 +919,12 @@ async function writeHostedArtifact({
   for (const file of artifactFiles) {
     const destination = path.join(staging, ...file.split("/"));
     await mkdir(path.dirname(destination), { recursive: true });
-    const finalizedLegalArtifact = jointLegalV3Plan?.artifacts.find(
+    const finalizedLegalArtifact = jointLegalPlan?.artifacts.find(
       (artifact) => artifact.file === file,
     );
     if (finalizedLegalArtifact) {
       await copyFile(
-        path.join(jointLegalV3Plan.root, finalizedLegalArtifact.sourceFile),
+        path.join(jointLegalPlan.root, finalizedLegalArtifact.sourceFile),
         destination,
       );
       continue;
@@ -929,6 +1012,38 @@ function assertJointLegalV3Truth(sources) {
   }
 }
 
+function assertJointLegalV4Truth(sources) {
+  assertRequirementMap(sources, {
+    "legal/index.html": [
+      "Privacy V4 and Website Terms V4",
+      "$5 HTML Download",
+      "$200 Website assessment",
+      "accepted Custom builds",
+    ],
+    "legal/privacy/index.html": [
+      "Cloudflare is Site Sourcery’s authoritative DNS provider",
+      "HTTPS connection terminates at Cloudflare",
+      "encrypted, outbound-only Cloudflare Tunnel",
+      "does not use Cloudflare advertising, Cloudflare Web Analytics, Workers, email routing, Turnstile",
+      "Alakazam, Care, domain-purchase, publication, and Responder checkout or billing remain held",
+    ],
+    "legal/website-terms/index.html": [
+      "completed one-time $5 payment",
+      "standard Website assessment costs $200",
+      "Custom work begins only after",
+      "Alakazam subscriptions, hosting activation, publication, Care, lifecycle, and tier features remain held",
+    ],
+  }, "joint legal V4 truth");
+  assertNoPhrases(sources, [
+    "noindex",
+    "data-legal-v4-review-state",
+    "SS-HOSTED-PRIVACY-V4-UNSEALED",
+    "SS-HOSTED-WEBSITE-TERMS-V4-UNSEALED",
+    "JOINT-REVIEW-DRAFT-V4",
+    "CONTENT-TEMPLATE",
+  ], "unreleased joint legal V4");
+}
+
 async function assertJointLegalV3Artifact(output, plan) {
   for (const artifact of plan.artifacts) {
     const bytes = await readFile(path.join(output, ...artifact.file.split("/")));
@@ -957,6 +1072,7 @@ export async function verifyHostedArtifact({
   output = path.join(path.resolve(root), "_hosted"),
   privacyV3Render,
   jointLegalV3FinalizationRoot,
+  jointLegalV4FinalizationRoot,
 } = {}) {
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
@@ -966,9 +1082,13 @@ export async function verifyHostedArtifact({
   const jointLegalV3Plan = await createJointLegalV3FinalizationPlan(
     jointLegalV3FinalizationRoot,
   );
+  const jointLegalV4Plan = await createJointLegalV4FinalizationPlan(
+    jointLegalV4FinalizationRoot,
+  );
   const artifactFiles = hostedFilesForPlans(
     privacyV3Plan,
     jointLegalV3Plan,
+    jointLegalV4Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
@@ -977,8 +1097,11 @@ export async function verifyHostedArtifact({
     throw new Error(`hosted artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
-  if (jointLegalV3Plan) {
-    await assertJointLegalV3Artifact(absoluteOutput, jointLegalV3Plan);
+  if (jointLegalV3Plan || jointLegalV4Plan) {
+    await assertJointLegalV3Artifact(
+      absoluteOutput,
+      jointLegalV4Plan ?? jointLegalV3Plan,
+    );
   } else if (privacyV3Plan) {
     const current = await readFile(
       path.join(absoluteOutput, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
@@ -1057,7 +1180,7 @@ export async function verifyHostedArtifact({
       ]),
     ),
   );
-  const applicableTruthRequirements = jointLegalV3Plan
+  const applicableTruthRequirements = (jointLegalV3Plan || jointLegalV4Plan)
     ? Object.fromEntries(
       Object.entries(hostedTruthRequirements).filter(
         ([file]) => !JOINT_LEGAL_CURRENT_FILES.includes(file),
@@ -1073,6 +1196,11 @@ export async function verifyHostedArtifact({
   assertRequirementMap(sources, applicableTruthRequirements, "hosted truth");
   if (jointLegalV3Plan) {
     assertJointLegalV3Truth(new Map(
+      JOINT_LEGAL_CURRENT_FILES.map((file) => [file, sources.get(file)]),
+    ));
+  }
+  if (jointLegalV4Plan) {
+    assertJointLegalV4Truth(new Map(
       JOINT_LEGAL_CURRENT_FILES.map((file) => [file, sources.get(file)]),
     ));
   }
@@ -1179,6 +1307,7 @@ export async function buildHostedArtifact({
   catalogFile = DEFAULT_CATALOG_FILE,
   privacyV3Render,
   jointLegalV3FinalizationRoot,
+  jointLegalV4FinalizationRoot,
 } = {}) {
   const { absoluteOutput, absoluteRoot } = resolveBuildPaths(root, output);
   const privacyV3Plan = privacyV3Render
@@ -1187,15 +1316,19 @@ export async function buildHostedArtifact({
   const jointLegalV3Plan = await createJointLegalV3FinalizationPlan(
     jointLegalV3FinalizationRoot,
   );
+  const jointLegalV4Plan = await createJointLegalV4FinalizationPlan(
+    jointLegalV4FinalizationRoot,
+  );
   if (
-    (privacyV3Plan || jointLegalV3Plan)
+    (privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan)
     && absoluteOutput === path.join(absoluteRoot, "_hosted")
   ) {
-    throw new Error("legal V3 review/finalization output must remain outside the repository");
+    throw new Error("legal review/finalization output must remain outside the repository");
   }
   const artifactFiles = hostedFilesForPlans(
     privacyV3Plan,
     jointLegalV3Plan,
+    jointLegalV4Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
@@ -1226,6 +1359,7 @@ export async function buildHostedArtifact({
       catalog,
       privacyV3Plan,
       jointLegalV3Plan,
+      jointLegalV4Plan,
       artifactFiles,
     });
     await verifyHostedArtifact({
@@ -1233,6 +1367,7 @@ export async function buildHostedArtifact({
       output: staging,
       privacyV3Render,
       jointLegalV3FinalizationRoot,
+      jointLegalV4FinalizationRoot,
     });
     await promoteArtifact(staging, absoluteOutput);
   } catch (error) {
@@ -1264,6 +1399,13 @@ function parseCli(argv) {
         throw new Error("--joint-legal-v3-finalization requires a directory");
       }
       options.jointLegalV3FinalizationRoot = value;
+      index += 1;
+    } else if (argument === "--joint-legal-v4-finalization") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("--joint-legal-v4-finalization requires a directory");
+      }
+      options.jointLegalV4FinalizationRoot = value;
       index += 1;
     } else {
       throw new Error(`unknown build:hosted argument: ${argument}`);

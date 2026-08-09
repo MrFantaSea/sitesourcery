@@ -7,6 +7,10 @@ export const PROJECT_LEGAL_SCHEMA =
   "sitesourcery.project-legal-authority/v3";
 export const PROJECT_LEGAL_ACCEPTANCE_SCHEMA =
   "sitesourcery.project-legal-acceptance/v3";
+export const PROJECT_LEGAL_V4_SCHEMA =
+  "sitesourcery.project-legal-authority/v4";
+export const PROJECT_LEGAL_V4_ACCEPTANCE_SCHEMA =
+  "sitesourcery.project-legal-acceptance/v4";
 export const PROJECT_LEGAL_ACCEPTANCE_STATEMENT =
   "accepted_exact_project_terms_and_acknowledged_privacy";
 export const PROJECT_LEGAL_KINDS = Object.freeze([
@@ -31,6 +35,17 @@ const FIXTURE_V3_VERSION =
   /^SS-HOSTED-PRIVACY-(?:([0-9]{4}-[0-9]{2}-[0-9]{2})|TEST)-V3$/u;
 const FIXTURE_WEBSITE_V3_VERSION =
   /^SS-HOSTED-WEBSITE-TERMS-(?:([0-9]{4}-[0-9]{2}-[0-9]{2})|TEST)-V3$/u;
+const V4_PRIVACY_VERSION = "SS-HOSTED-PRIVACY-V4-UNSEALED";
+const V4_WEBSITE_TERMS_VERSION =
+  "SS-HOSTED-WEBSITE-TERMS-V4-UNSEALED";
+const SEALED_V4_VERSION =
+  /^SS-HOSTED-PRIVACY-([0-9]{4}-[0-9]{2}-[0-9]{2})-V4$/u;
+const SEALED_WEBSITE_V4_VERSION =
+  /^SS-HOSTED-WEBSITE-TERMS-([0-9]{4}-[0-9]{2}-[0-9]{2})-V4$/u;
+const FIXTURE_V4_VERSION =
+  /^SS-HOSTED-PRIVACY-(?:([0-9]{4}-[0-9]{2}-[0-9]{2})|TEST)-V4$/u;
+const FIXTURE_WEBSITE_V4_VERSION =
+  /^SS-HOSTED-WEBSITE-TERMS-(?:([0-9]{4}-[0-9]{2}-[0-9]{2})|TEST)-V4$/u;
 
 // These sentinels are the only production constants handoff. The joint legal
 // finalizer supplies both exact artifacts and one release tuple at cutover. No
@@ -46,6 +61,23 @@ export const UNSEALED_PRIVACY_V3_CONSTANTS = Object.freeze({
 });
 export const UNSEALED_WEBSITE_TERMS_V3_CONSTANTS = Object.freeze({
   version: V3_WEBSITE_TERMS_VERSION,
+  contentDigest: null,
+  contentUri: null,
+  effectiveAt: null,
+  byteCount: null,
+  artifactUri: null
+});
+export const UNSEALED_PRIVACY_V4_CONSTANTS = Object.freeze({
+  version: V4_PRIVACY_VERSION,
+  contentDigest: null,
+  contentUri: null,
+  effectiveAt: null,
+  byteCount: null,
+  artifactUri: null,
+  authorityDigest: null
+});
+export const UNSEALED_WEBSITE_TERMS_V4_CONSTANTS = Object.freeze({
+  version: V4_WEBSITE_TERMS_VERSION,
   contentDigest: null,
   contentUri: null,
   effectiveAt: null,
@@ -79,11 +111,46 @@ function canonicalUtc(value) {
     new Date(Date.parse(value)).toISOString() === value;
 }
 
-function resolvedV3(constants, fixture, kind) {
-  const sentinel = kind === "privacy" ? V3_PRIVACY_VERSION : V3_WEBSITE_TERMS_VERSION;
+const V3_AUTHORITY = Object.freeze({
+  schema: PROJECT_LEGAL_SCHEMA,
+  acceptanceSchema: PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
+  label: "V3",
+  privacySentinel: V3_PRIVACY_VERSION,
+  websiteSentinel: V3_WEBSITE_TERMS_VERSION,
+  privacyPattern: SEALED_V3_VERSION,
+  websitePattern: SEALED_WEBSITE_V3_VERSION,
+  fixturePrivacyPattern: FIXTURE_V3_VERSION,
+  fixtureWebsitePattern: FIXTURE_WEBSITE_V3_VERSION,
+  documentIds: Object.freeze([
+    "00000000-0000-4000-8000-000000000048",
+    "00000000-0000-4000-8000-000000000103",
+    "00000000-0000-4000-8000-000000000104"
+  ])
+});
+const V4_AUTHORITY = Object.freeze({
+  schema: PROJECT_LEGAL_V4_SCHEMA,
+  acceptanceSchema: PROJECT_LEGAL_V4_ACCEPTANCE_SCHEMA,
+  label: "V4",
+  privacySentinel: V4_PRIVACY_VERSION,
+  websiteSentinel: V4_WEBSITE_TERMS_VERSION,
+  privacyPattern: SEALED_V4_VERSION,
+  websitePattern: SEALED_WEBSITE_V4_VERSION,
+  fixturePrivacyPattern: FIXTURE_V4_VERSION,
+  fixtureWebsitePattern: FIXTURE_WEBSITE_V4_VERSION,
+  documentIds: Object.freeze([
+    "00000000-0000-4000-8000-000000000049",
+    "00000000-0000-4000-8000-000000000105",
+    "00000000-0000-4000-8000-000000000106"
+  ])
+});
+
+function resolved(constants, fixture, kind, release) {
+  const sentinel = kind === "privacy"
+    ? release.privacySentinel
+    : release.websiteSentinel;
   const versionPattern = kind === "privacy"
-    ? (fixture ? FIXTURE_V3_VERSION : SEALED_V3_VERSION)
-    : (fixture ? FIXTURE_WEBSITE_V3_VERSION : SEALED_WEBSITE_V3_VERSION);
+    ? (fixture ? release.fixturePrivacyPattern : release.privacyPattern)
+    : (fixture ? release.fixtureWebsitePattern : release.websitePattern);
   const version = String(constants?.version ?? "");
   const match = version.match(versionPattern);
   const expectedArtifactUri = kind === "privacy"
@@ -106,37 +173,43 @@ function resolvedV3(constants, fixture, kind) {
         constants.artifactUri === expectedArtifactUri);
 }
 
-function buildProjectLegalAuthority(privacyV3, websiteTermsV3, authorityDigest, fixture) {
+function buildProjectLegalAuthority(
+  privacy,
+  websiteTerms,
+  authorityDigest,
+  fixture,
+  release
+) {
   invariant(
-    resolvedV3(privacyV3, fixture, "privacy")
-      && resolvedV3(websiteTermsV3, fixture, "website")
-      && privacyV3.effectiveAt === websiteTermsV3.effectiveAt,
+    resolved(privacy, fixture, "privacy", release)
+      && resolved(websiteTerms, fixture, "website", release)
+      && privacy.effectiveAt === websiteTerms.effectiveAt,
     "LEGAL_CONFIGURATION_REQUIRED",
-    "The reviewed joint Privacy V3 and Website Terms V3 constants are not configured.",
+    `The reviewed joint Privacy ${release.label} and Website Terms ${release.label} constants are not configured.`,
     { status: 503 }
   );
   const documents = Object.freeze([
     Object.freeze({
       kind: "privacy",
-      version: privacyV3.version,
-      contentDigest: privacyV3.contentDigest,
-      contentUri: privacyV3.contentUri,
-      effectiveAt: privacyV3.effectiveAt
+      version: privacy.version,
+      contentDigest: privacy.contentDigest,
+      contentUri: privacy.contentUri,
+      effectiveAt: privacy.effectiveAt
     }),
     Object.freeze({
       kind: "product",
-      version: websiteTermsV3.version,
-      contentDigest: websiteTermsV3.contentDigest,
+      version: websiteTerms.version,
+      contentDigest: websiteTerms.contentDigest,
       contentUri:
         "https://sitesourcery.com/legal/website-terms/#self-service",
-      effectiveAt: websiteTermsV3.effectiveAt
+      effectiveAt: websiteTerms.effectiveAt
     }),
     Object.freeze({
       kind: "website",
-      version: websiteTermsV3.version,
-      contentDigest: websiteTermsV3.contentDigest,
+      version: websiteTerms.version,
+      contentDigest: websiteTerms.contentDigest,
       contentUri: "https://sitesourcery.com/legal/website-terms/",
-      effectiveAt: websiteTermsV3.effectiveAt
+      effectiveAt: websiteTerms.effectiveAt
     })
   ]);
   invariant(
@@ -145,37 +218,36 @@ function buildProjectLegalAuthority(privacyV3, websiteTermsV3, authorityDigest, 
         authorityDigest,
         digest(canonicalJson({
           documents,
-          schema: PROJECT_LEGAL_SCHEMA
+          schema: release.schema
         }))
       ),
     "LEGAL_CONFIGURATION_REQUIRED",
-    "The reviewed joint legal V3 authority digest is not configured.",
+    `The reviewed joint legal ${release.label} authority digest is not configured.`,
     { status: 503 }
   );
   const artifactBindings = Object.freeze([
     Object.freeze({
       kind: "privacy",
-      artifactUri: privacyV3.artifactUri,
-      artifactSha256: privacyV3.contentDigest,
-      byteCount: privacyV3.byteCount,
+      artifactUri: privacy.artifactUri,
+      artifactSha256: privacy.contentDigest,
+      byteCount: privacy.byteCount,
       mediaType: "text/html; charset=utf-8"
     }),
     Object.freeze({ kind: "product", artifactUri: null }),
     Object.freeze({
       kind: "website",
-      artifactUri: websiteTermsV3.artifactUri,
-      artifactSha256: websiteTermsV3.contentDigest,
-      byteCount: websiteTermsV3.byteCount,
+      artifactUri: websiteTerms.artifactUri,
+      artifactSha256: websiteTerms.contentDigest,
+      byteCount: websiteTerms.byteCount,
       mediaType: "text/html; charset=utf-8"
     })
   ]);
-  const documentBindings = Object.freeze([
-    Object.freeze({ kind: "privacy", id: "00000000-0000-4000-8000-000000000048" }),
-    Object.freeze({ kind: "product", id: "00000000-0000-4000-8000-000000000103" }),
-    Object.freeze({ kind: "website", id: "00000000-0000-4000-8000-000000000104" })
-  ]);
+  const documentBindings = Object.freeze(PROJECT_LEGAL_KINDS.map(
+    (kind, index) => Object.freeze({ kind, id: release.documentIds[index] })
+  ));
   return Object.freeze({
-    schema: PROJECT_LEGAL_SCHEMA,
+    schema: release.schema,
+    acceptanceSchema: release.acceptanceSchema,
     acceptanceStatement: PROJECT_LEGAL_ACCEPTANCE_STATEMENT,
     authorityDigest,
     documents,
@@ -189,13 +261,48 @@ export function createProjectLegalAuthority({
   websiteTermsV3 = UNSEALED_WEBSITE_TERMS_V3_CONSTANTS,
   authorityDigest = privacyV3.authorityDigest
 } = {}) {
-  return buildProjectLegalAuthority(privacyV3, websiteTermsV3, authorityDigest, false);
+  return buildProjectLegalAuthority(
+    privacyV3,
+    websiteTermsV3,
+    authorityDigest,
+    false,
+    V3_AUTHORITY
+  );
+}
+
+export function createProjectLegalAuthorityV4({
+  privacyV4 = UNSEALED_PRIVACY_V4_CONSTANTS,
+  websiteTermsV4 = UNSEALED_WEBSITE_TERMS_V4_CONSTANTS,
+  authorityDigest = privacyV4.authorityDigest
+} = {}) {
+  return buildProjectLegalAuthority(
+    privacyV4,
+    websiteTermsV4,
+    authorityDigest,
+    false,
+    V4_AUTHORITY
+  );
 }
 
 export function createProjectLegalAuthorityFromEnvironment(
   environment = process.env
 ) {
-  const names = [
+  const v4Names = [
+    "SITESOURCERY_HOSTED_PRIVACY_V4_VERSION",
+    "SITESOURCERY_HOSTED_PRIVACY_V4_SHA256",
+    "SITESOURCERY_HOSTED_PRIVACY_V4_URI",
+    "SITESOURCERY_HOSTED_PRIVACY_V4_EFFECTIVE_AT",
+    "SITESOURCERY_HOSTED_PRIVACY_V4_BYTE_COUNT",
+    "SITESOURCERY_HOSTED_PRIVACY_V4_ARTIFACT_URI",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_VERSION",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_SHA256",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_URI",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_EFFECTIVE_AT",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_BYTE_COUNT",
+    "SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_ARTIFACT_URI",
+    "SITESOURCERY_HOSTED_LEGAL_V4_AUTHORITY_SHA256"
+  ];
+  const v3Names = [
     "SITESOURCERY_HOSTED_PRIVACY_V3_VERSION",
     "SITESOURCERY_HOSTED_PRIVACY_V3_SHA256",
     "SITESOURCERY_HOSTED_PRIVACY_V3_URI",
@@ -210,8 +317,12 @@ export function createProjectLegalAuthorityFromEnvironment(
     "SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_ARTIFACT_URI",
     "SITESOURCERY_HOSTED_LEGAL_V3_AUTHORITY_SHA256"
   ];
-  const supplied = names.map((name) => environment[name]);
-  if (supplied.every((value) => value === undefined || value === "")) {
+  const anySupplied = (names) => names.some(
+    (name) => environment[name] !== undefined
+  );
+  const v4Supplied = anySupplied(v4Names);
+  const v3Supplied = anySupplied(v3Names);
+  if (!v4Supplied && !v3Supplied) {
     return Object.freeze({
       authority: null,
       diagnostic: Object.freeze({
@@ -221,7 +332,33 @@ export function createProjectLegalAuthorityFromEnvironment(
       })
     });
   }
+  const selected = v4Supplied ? "V4" : "V3";
   try {
+    if (v4Supplied) {
+      return Object.freeze({
+        authority: createProjectLegalAuthorityV4({
+          privacyV4: {
+            version: environment.SITESOURCERY_HOSTED_PRIVACY_V4_VERSION,
+            contentDigest: environment.SITESOURCERY_HOSTED_PRIVACY_V4_SHA256,
+            contentUri: environment.SITESOURCERY_HOSTED_PRIVACY_V4_URI,
+            effectiveAt: environment.SITESOURCERY_HOSTED_PRIVACY_V4_EFFECTIVE_AT,
+            byteCount: Number(environment.SITESOURCERY_HOSTED_PRIVACY_V4_BYTE_COUNT),
+            artifactUri: environment.SITESOURCERY_HOSTED_PRIVACY_V4_ARTIFACT_URI
+          },
+          websiteTermsV4: {
+            version: environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_VERSION,
+            contentDigest: environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_SHA256,
+            contentUri: environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_URI,
+            effectiveAt: environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_EFFECTIVE_AT,
+            byteCount: Number(environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_BYTE_COUNT),
+            artifactUri: environment.SITESOURCERY_HOSTED_WEBSITE_TERMS_V4_ARTIFACT_URI
+          },
+          authorityDigest:
+            environment.SITESOURCERY_HOSTED_LEGAL_V4_AUTHORITY_SHA256
+        }),
+        diagnostic: null
+      });
+    }
     return Object.freeze({
       authority: createProjectLegalAuthority({
         privacyV3: {
@@ -250,7 +387,7 @@ export function createProjectLegalAuthorityFromEnvironment(
       diagnostic: Object.freeze({
         state: "held",
         code: "LEGAL_CONFIGURATION_REQUIRED",
-        reason: "Joint legal V3 constants are incomplete or invalid.",
+        reason: `Joint legal ${selected} constants are incomplete or invalid.`,
         detail: error?.code ?? null
       })
     });
@@ -278,7 +415,31 @@ export function createProjectLegalAuthorityFixture({
     "A distinct sealed test fixture is required.",
     { status: 503 }
   );
-  return buildProjectLegalAuthority(privacyV3, websiteTermsV3, authorityDigest, true);
+  return buildProjectLegalAuthority(
+    privacyV3,
+    websiteTermsV3,
+    authorityDigest,
+    true,
+    V3_AUTHORITY
+  );
+}
+
+export function createProjectLegalAuthorityV4Fixture({
+  privacyV4, websiteTermsV4, authorityDigest = privacyV4?.authorityDigest
+} = {}) {
+  invariant(
+    privacyV4 && privacyV4.version !== V4_PRIVACY_VERSION,
+    "LEGAL_CONFIGURATION_REQUIRED",
+    "A distinct sealed V4 test fixture is required.",
+    { status: 503 }
+  );
+  return buildProjectLegalAuthority(
+    privacyV4,
+    websiteTermsV4,
+    authorityDigest,
+    true,
+    V4_AUTHORITY
+  );
 }
 
 function exactDocument(document) {
@@ -314,7 +475,7 @@ export function validateProjectLegalAcceptance(input, authority) {
     { status: 400 }
   );
   invariant(
-    input.schema === PROJECT_LEGAL_ACCEPTANCE_SCHEMA &&
+    input.schema === authority.acceptanceSchema &&
       input.acceptanceStatement === PROJECT_LEGAL_ACCEPTANCE_STATEMENT,
     "LEGAL_ACCEPTANCE_INVALID",
     "The legal acceptance schema or statement is invalid.",

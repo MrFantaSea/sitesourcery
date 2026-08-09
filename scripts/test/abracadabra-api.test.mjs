@@ -181,6 +181,35 @@ test("public project authority accepts only the exact sealed V3 snapshot", async
   }
 });
 
+test("paired V4 authority produces only the V4 acceptance schema and rejects mixed versions", () => {
+  const authority = projectLegalAuthorityFixture();
+  const v4 = {
+    ...authority,
+    schema: "sitesourcery.project-legal-authority/v4",
+    authorityDigest: "e".repeat(64),
+    documents: authority.documents.map((document) => ({
+      ...document,
+      version: document.version.replace(/-V3$/u, "-V4"),
+      contentUri: document.kind === "privacy"
+        ? document.contentUri.replace(/-V3\/$/u, "-V4/")
+        : document.contentUri,
+    })),
+  };
+  const acceptance = projectLegalAcceptanceFromAuthority(v4);
+  assert.equal(acceptance.schema, "sitesourcery.project-legal-acceptance/v4");
+  assert.deepEqual(acceptance.documents, v4.documents);
+  assert.throws(
+    () => validateProjectLegalAuthority({
+      ...v4,
+      documents: v4.documents.map((document, index) => index === 1
+        ? { ...document, version: document.version.replace(/-V4$/u, "-V3") }
+        : document),
+    }),
+    (error) => error instanceof APIError
+      && error.code === "LEGAL_AUTHORITY_INVALID",
+  );
+});
+
 test("project creation sends the exact captured authority and never the retired boolean", async () => {
   const authority = projectLegalAuthorityFixture();
   const legalAcceptance =

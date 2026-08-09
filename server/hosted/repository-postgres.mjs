@@ -282,6 +282,7 @@ const READINESS_QUERY = `
 const PROJECT_LEGAL_CATALOG_QUERY = `
   select
     case when to_regprocedure('ss.hosted_runtime_contract_v48()') is null
+      or to_regprocedure('ss.hosted_runtime_contract_v53()') is null
       or to_regprocedure('ss.project_legal_json_digest(jsonb)') is null
       then false else exists (
         select 1 from pg_proc procedure_row
@@ -326,6 +327,43 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
                   and privilege.privilege_type = 'EXECUTE'
                   and not privilege.is_grantable
                 )
+           )
+           and (
+             select count(*) = 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+              where privilege.grantee <> procedure_row.proowner
+           )
+      ) and exists (
+        select 1 from pg_proc procedure_row
+         where procedure_row.oid =
+           to_regprocedure('ss.hosted_runtime_contract_v53()')
+           and procedure_row.prokind = 'f'
+           and procedure_row.pronargs = 0
+           and procedure_row.provolatile = 's'
+           and not procedure_row.prosecdef
+           and procedure_row.prorettype = 'text'::regtype
+           and btrim(procedure_row.prosrc, E' \\t\\n\\r') =
+             'select ''canonical-ss-v53-held-joint-legal-v4-authority'''
+           and not exists (
+             select 1
+               from aclexplode(coalesce(
+                 procedure_row.proacl,
+                 acldefault('f', procedure_row.proowner)
+               )) privilege
+              where privilege.grantee = 0
+                and privilege.privilege_type = 'EXECUTE'
+           )
+           and not has_function_privilege(
+             'anon', procedure_row.oid, 'EXECUTE'
+           )
+           and not has_function_privilege(
+             'authenticated', procedure_row.oid, 'EXECUTE'
+           )
+           and has_function_privilege(
+             'service_role', procedure_row.oid, 'EXECUTE'
            )
            and (
              select count(*) = 1
@@ -610,7 +648,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
             ('UNIQUE (project_id, request_id)'),
             ('FOREIGN KEY (user_id) REFERENCES auth.users(id)'),
             ('FOREIGN KEY (organization_id, project_id) REFERENCES ss.projects(organization_id, id)'),
-            ('CHECK ((schema_version = ''sitesourcery.project-legal-acceptance/v3''::text))'),
+            ('CHECK ((schema_version = ANY (ARRAY[''sitesourcery.project-legal-acceptance/v3''::text, ''sitesourcery.project-legal-acceptance/v4''::text])))'),
             ('CHECK ((acceptance_statement = ''accepted_exact_project_terms_and_acknowledged_privacy''::text))')
           ) expected(definition)
           left join pg_namespace namespace on namespace.nspname = 'ss'
@@ -883,7 +921,10 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
 const PROJECT_LEGAL_DATA_QUERY = `
   select
     ss.hosted_runtime_contract_v48() =
-      'canonical-ss-v48-hosted-joint-legal-v3' as contract_marker_ready,
+      'canonical-ss-v48-hosted-joint-legal-v3'
+    and ss.hosted_runtime_contract_v53() =
+      'canonical-ss-v53-held-joint-legal-v4-authority'
+      as contract_marker_ready,
     (
       select count(*) = 2
         from ss.legal_document_artifacts artifact
@@ -973,7 +1014,10 @@ const PROJECT_LEGAL_DATA_QUERY = `
 const PROJECT_LEGAL_CONSTANTS_QUERY = `
   select
     ss.hosted_runtime_contract_v48() =
-      'canonical-ss-v48-hosted-joint-legal-v3' as contract_marker_ready,
+      'canonical-ss-v48-hosted-joint-legal-v3'
+    and ss.hosted_runtime_contract_v53() =
+      'canonical-ss-v53-held-joint-legal-v4-authority'
+      as contract_marker_ready,
     (
       select count(*) = 3
         from ss.legal_documents document
@@ -1047,8 +1091,8 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
           )
         )
       ),
-      'schema', 'sitesourcery.project-legal-authority/v3'
-    )) = $29::text as authority_digest_ready
+      'schema', $29::text
+    )) = $30::text as authority_digest_ready
 `;
 
 const CUSTOM_SERVICES_READINESS_QUERY = `
@@ -2356,6 +2400,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       websiteArtifact.artifactSha256,
       websiteArtifact.byteCount,
       websiteArtifact.mediaType,
+      expected.schema,
       expected.authorityDigest
     );
     const result = await pool.query(PROJECT_LEGAL_CONSTANTS_QUERY, values);
