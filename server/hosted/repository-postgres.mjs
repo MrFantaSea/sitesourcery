@@ -1090,7 +1090,8 @@ const CUSTOM_SERVICES_READINESS_QUERY = `
               'service_cases',
               'service_case_offerings',
               'service_intakes',
-              'service_documents'
+              'service_documents',
+              'service_access_requests'
             )
           )
           and has_table_privilege(
@@ -1951,7 +1952,11 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
           and bool_and(relation.relforcerowsecurity)
           and bool_and(
             has_table_privilege('service_role', relation.oid, 'SELECT')
-            and not has_table_privilege('service_role', relation.oid, 'UPDATE')
+            and has_table_privilege(
+              'service_role', relation.oid, 'UPDATE'
+            ) = (
+              relation.relname = 'service_credit_applications'
+            )
             and not has_table_privilege('service_role', relation.oid, 'DELETE')
             and not has_table_privilege('service_role', relation.oid, 'TRUNCATE')
             and not has_table_privilege('authenticated', relation.oid, 'SELECT')
