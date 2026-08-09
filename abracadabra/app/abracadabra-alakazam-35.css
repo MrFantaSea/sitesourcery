@@ -1,0 +1,20 @@
+.alakazam-35-panel{display:grid;gap:1rem;margin-top:1rem;padding:clamp(1rem,3vw,1.5rem);border:1px solid rgba(130,231,196,.32);border-radius:1rem;background:linear-gradient(145deg,rgba(130,231,196,.07),rgba(25,16,35,.76))}
+.alakazam-35-panel h4,.alakazam-35-panel h5{margin:0;color:var(--spark-text,#f8f4ff)}
+.alakazam-35-panel h4{font-size:clamp(1.25rem,4vw,1.8rem);line-height:1.1}
+.alakazam-35-panel h5{font-size:1rem}
+.alakazam-35-eyebrow{margin:0;color:var(--spark-mint,#82e7c4);font-size:.76rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
+.alakazam-35-hold,.alakazam-35-status,.alakazam-35-help{margin:0;color:var(--spark-muted,#c8bed4);line-height:1.55}
+.alakazam-35-hold{padding:.8rem .9rem;border-left:3px solid var(--spark-gold,#f1cf89);background:rgba(241,207,137,.06)}
+.alakazam-35-status.is-error{color:#ffe3ea}
+.alakazam-35-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}
+.alakazam-35-block{display:grid;align-content:start;gap:.75rem;min-width:0;padding:.9rem;border:1px solid rgba(255,255,255,.12);border-radius:.8rem;background:rgba(255,255,255,.025)}
+.alakazam-35-label{display:grid;gap:.35rem;color:var(--spark-text,#f8f4ff);font-size:.82rem;font-weight:800}
+.alakazam-35-file,.alakazam-35-select,.alakazam-35-care{width:100%;min-height:44px;padding:.65rem .7rem;border:1px solid rgba(255,255,255,.2);border-radius:.6rem;color:var(--spark-text,#f8f4ff);background:#0d0813;font:inherit}
+.alakazam-35-care{resize:vertical}
+.alakazam-35-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.4rem .7rem;margin:0;padding:.7rem;border:1px solid rgba(255,255,255,.14);border-radius:.65rem}
+.alakazam-35-sections legend{padding:0 .3rem;color:var(--spark-muted,#c8bed4);font-size:.78rem}
+.alakazam-35-check{display:flex;min-height:44px;align-items:center;gap:.55rem;color:var(--spark-text,#f8f4ff);font-size:.82rem}
+.alakazam-35-check input{width:1.15rem;height:1.15rem;accent-color:var(--spark-mint,#82e7c4)}
+.alakazam-35-history{display:grid;gap:.45rem;margin:0;padding-left:1.35rem;color:var(--spark-muted,#c8bed4)}
+.alakazam-35-panel .spark-button{min-height:44px}
+@media(max-width:44rem){.alakazam-35-controls{grid-template-columns:1fr}.alakazam-35-sections{grid-template-columns:1fr}}

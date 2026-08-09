@@ -36,6 +36,66 @@ test("PostgreSQL migrations never repeat a column inside one UNIQUE constraint",
   }
 });
 
+test("Alakazam 35 migration is additive, held, append-only, and exact-authority bound", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608080102_alakazam_35_fulfillment.sql"
+  );
+  assert.ok(migration, "missing F03 Alakazam 35 fulfillment migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v33\(\)[\s\S]*hosted_runtime_contract_v47\(\)/iu
+  );
+  for (const table of [
+    "alakazam_35_photo_assets",
+    "alakazam_35_configurations",
+    "alakazam_35_care_requests"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  for (const functionName of [
+    "validate_alakazam_35_subscription_authority",
+    "validate_alakazam_35_photo_asset",
+    "validate_alakazam_35_configuration",
+    "validate_alakazam_35_care_request",
+    "reject_alakazam_35_evidence_mutation"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create function ss\\.${functionName}\\(`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /subscription\.status in \('active', 'grace'\)[\s\S]*alakazam_tier_rank\(subscription\.tier_id\) >= 2/iu
+  );
+  assert.match(
+    migration.sql,
+    /alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security/iu
+  );
+  assert.match(
+    migration.sql,
+    /commercial_cutover_not_authorized/iu
+  );
+  assert.match(
+    migration.sql,
+    /grant select, insert on ss\.%I to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /grant[^;]*(?:update|delete|truncate)[^;]*to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /stripe\.com|provider_effects_authorized\s*=\s*true|state\s*=\s*'released'/iu
+  );
+});
+
 test("organizations relies on its primary key without a duplicate synthetic UNIQUE", async () => {
   const foundation = (await migrations()).find(
     ({ name }) => name === "202607280001_foundation.sql"
