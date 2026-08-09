@@ -24,8 +24,10 @@ Turnstile, Web Analytics, advertising, or customer tracking.
 - Assigned nameservers are `jasmine.ns.cloudflare.com` and
   `nash.ns.cloudflare.com`; the registrar still serves the Spaceship pair.
 - Locally managed tunnel `sitesourcery-production-dell` exists with UUID
-  `211ffa61-e170-444d-a945-04fead19c972`, but it is disconnected and has no
-  public DNS route.
+  `211ffa61-e170-444d-a945-04fead19c972`. It is disconnected. The pending
+  Cloudflare zone now contains proxied apex and `www` CNAME routes to that
+  tunnel, but Spaceship remains publicly authoritative so they carry no
+  customer traffic.
 - Its tunnel-scoped credential is mode 0400 on Dell. The broader account
   certificate is confirmed absent after the local service configuration was
   installed; a fresh interactive login is required for future account-level
@@ -52,7 +54,7 @@ email, screenshots, shell history, or this runbook.
 - Two-factor method: authenticator app
 - Recovery codes: copy directly from Cloudflare to the offline book
 - Cloudflare account ID: `c3bf397ce8dac3811f16427264bce4d6`
-- Cloudflare zone ID: fill after onboarding
+- Cloudflare zone ID: `c58511cf133078327a5fe9036e14d33a`
 - Assigned nameservers: `jasmine.ns.cloudflare.com`, `nash.ns.cloudflare.com`
 - Tunnel: `sitesourcery-production-dell`
 - Tunnel UUID: `211ffa61-e170-444d-a945-04fead19c972`
@@ -152,7 +154,7 @@ Do not change nameservers while that DS is present.
 - At every rollback point, leave Stripe and all provider effects held until the
   public origin, legal notice, mail, and webhook paths are re-proven.
 
-## Dell proof already completed
+## Historical held Dell proof already completed
 
 The held Caddy configuration validates under Caddy 2.11.4. A one-time process
 owned by the operator proved, then exited:
@@ -165,5 +167,8 @@ owned by the operator proved, then exited:
 - `Cache-Control: no-store`, HSTS, frame/content-type/referrer/permissions
   headers present
 
-No Cloudflare account, DNS record, tunnel, token, public listener, provider
-effect, customer effect, or commercial release was created by that rehearsal.
+At the time of that rehearsal no Cloudflare account, DNS record, tunnel, token,
+public listener, provider effect, customer effect, or commercial release was
+created. Provider onboarding occurred later and is captured separately in
+`ops/releases/cloudflare-provider-configuration-2026-08-09T213344Z.md`; the
+connector and public delegation remain held.

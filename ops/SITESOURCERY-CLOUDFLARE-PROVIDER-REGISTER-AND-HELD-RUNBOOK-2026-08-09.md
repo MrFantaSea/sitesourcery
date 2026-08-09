@@ -1,6 +1,10 @@
 # Cloudflare provider register and held launch runbook
 
-Status: held candidate. This record does not prove a Cloudflare account, zone, tunnel, DNS record, certificate, security rule, cache rule, log setting, or Dell-origin change. It authorizes no provider action.
+Status: provider configuration evidenced; traffic and commercial release held.
+The exact observed configuration is recorded in
+`ops/releases/cloudflare-provider-configuration-2026-08-09T213344Z.md`.
+That evidence does not by itself authorize nameserver delegation, start the
+Dell connector, publish Legal V4, or lift a payment switch.
 
 ## Selected production architecture
 
