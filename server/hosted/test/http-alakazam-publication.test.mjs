@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import {
+  createAlakazamPublicationCommand,
+  createAlakazamPublicationService,
+  createHostedAlakazamPublication,
+  projectAlakazamPublication
+} from "../../commerce-v2/index.mjs";
 import { createHostedApi } from "../http.mjs";
 
 const ORIGIN = "https://app.sitesourcery.test";
@@ -13,6 +19,8 @@ const PROJECT_ID =
   "30000000-0000-4000-8000-000000000001";
 const RELEASE_ID =
   "40000000-0000-4000-8000-000000000001";
+const PRIOR_VERSION_ID =
+  "60000000-0000-4000-8000-000000000002";
 const COMMAND_ID =
   "50000000-0000-4000-8000-000000000001";
 const SNAPSHOT_DIGEST = "d".repeat(64);
@@ -45,10 +53,15 @@ function writeRequest(path, body, overrides = {}) {
     Origin: ORIGIN,
     Cookie:
       `${signedIn ? `ss_session=${SESSION_TOKEN}; ` : ""}` +
-      `ss_csrf=${CSRF}`,
-    "X-CSRF-Token": CSRF,
-    "Idempotency-Key": COMMAND_ID
+      `ss_csrf=${CSRF}`
   };
+  if (overrides.csrf !== false) {
+    headers["X-CSRF-Token"] = CSRF;
+  }
+  if (overrides.idempotency !== false) {
+    headers["Idempotency-Key"] =
+      overrides.idempotencyKey ?? COMMAND_ID;
+  }
   return new Request(`${ORIGIN}${path}`, {
     method: "POST",
     headers,
@@ -71,6 +84,13 @@ test("the default publication boundary authenticates and stays explicitly held",
   assert.equal(
     (await signedOut.json()).error.code,
     "AUTHENTICATION_REQUIRED"
+  );
+  const capabilities = await api.fetch(
+    new Request(`${ORIGIN}/api/v1/capabilities`)
+  );
+  assert.equal(
+    (await capabilities.json()).alakazamPublication,
+    false
   );
 });
 
@@ -146,6 +166,10 @@ test("publication routes preserve authenticated project, exact body, and command
   for (const request of [
     readRequest(`${path}?extra=true`),
     writeRequest(commandPath, { ...body, extra: true }),
+    writeRequest(commandPath, {
+      action: body.action,
+      snapshotDigest: body.snapshotDigest
+    }),
     writeRequest(`${commandPath}?extra=true`, body)
   ]) {
     const rejected = await api.fetch(request);
@@ -156,6 +180,180 @@ test("publication routes preserve authenticated project, exact body, and command
     );
   }
   assert.equal(calls.length, 2);
+
+  const signedOut = await api.fetch(
+    writeRequest(commandPath, body, { signedIn: false })
+  );
+  assert.equal(signedOut.status, 401);
+  assert.equal(
+    (await signedOut.json()).error.code,
+    "AUTHENTICATION_REQUIRED"
+  );
+  const noCsrf = await api.fetch(
+    writeRequest(commandPath, body, { csrf: false })
+  );
+  assert.equal(noCsrf.status, 403);
+  assert.equal(
+    (await noCsrf.json()).error.code,
+    "CSRF_TOKEN_REQUIRED"
+  );
+  const noCommandId = await api.fetch(
+    writeRequest(commandPath, body, { idempotency: false })
+  );
+  assert.equal(noCommandId.status, 400);
+  assert.equal(
+    (await noCommandId.json()).error.code,
+    "IDEMPOTENCY_KEY_REQUIRED"
+  );
+  assert.equal(calls.length, 2);
+});
+
+test("publication HTTP rejects malformed, stale, and rogue authority before recording a command", async () => {
+  const stored = {
+    projectId: PROJECT_ID,
+    subscription: {
+      subscriptionId:
+        "70000000-0000-4000-8000-000000000001",
+      revision: 4,
+      tierId: "alakazam_35",
+      status: "active"
+    },
+    site: {
+      hostname: "cedar-workshop.sitesourcery.me",
+      state: "live",
+      acceptedVersionId:
+        "60000000-0000-4000-8000-000000000001",
+      acceptedArtifactDigest: "a".repeat(64),
+      currentReleaseId: RELEASE_ID,
+      currentVersionId:
+        "60000000-0000-4000-8000-000000000001",
+      updatedAt: "2026-08-08T13:30:00.000Z"
+    },
+    history: [
+      {
+        releaseId: RELEASE_ID,
+        versionId:
+          "60000000-0000-4000-8000-000000000001",
+        artifactDigest: "a".repeat(64),
+        releasedAt: "2026-08-08T13:30:00.000Z",
+        isCurrent: true
+      },
+      {
+        releaseId:
+          "40000000-0000-4000-8000-000000000002",
+        versionId: PRIOR_VERSION_ID,
+        artifactDigest: "b".repeat(64),
+        releasedAt: "2026-08-01T13:30:00.000Z",
+        isCurrent: false
+      }
+    ],
+    lastCommand: null
+  };
+  let records = 0;
+  const publication = createAlakazamPublicationService({
+    repository: {
+      async readiness() {
+        return {
+          ready: true,
+          authorization: true,
+          providerEffects: false,
+          state: "held"
+        };
+      },
+      async readCustomerPublication() {
+        return structuredClone(stored);
+      },
+      async recordCustomerPublicationCommand(input) {
+        createAlakazamPublicationCommand({
+          scope: {
+            tenantId: input.tenantId,
+            customerId: input.customerId,
+            actorId: input.actorId,
+            projectId: input.projectId
+          },
+          publication: stored,
+          request: {
+            commandId: input.commandId,
+            action: input.action,
+            snapshotDigest: input.snapshotDigest,
+            targetReleaseId: input.targetReleaseId
+          },
+          requestedAt: input.requestedAt
+        });
+        records += 1;
+        throw new Error("invalid command passed canonical authority");
+      }
+    },
+    clock: {
+      now: () => new Date("2026-08-08T14:00:00.000Z")
+    }
+  });
+  const boundary = createHostedAlakazamPublication({
+    publication,
+    async resolveSession({ actor, projectId }) {
+      return {
+        tenantId:
+          "10000000-0000-4000-8000-000000000001",
+        customerId: actor.userId,
+        actorId: actor.userId,
+        projectId
+      };
+    }
+  });
+  const api = createHostedApi(service(), {
+    alakazamPublication: boundary
+  });
+  const commandPath =
+    `/api/v1/projects/${PROJECT_ID}` +
+    "/alakazam/publication-commands";
+  const snapshot = projectAlakazamPublication(stored);
+  const cases = [
+    {
+      request: writeRequest(
+        commandPath,
+        {
+          action: "rollback",
+          snapshotDigest: snapshot.snapshotDigest,
+          targetReleaseId:
+            "40000000-0000-4000-8000-000000000002"
+        },
+        { idempotencyKey: "not-a-command-id" }
+      ),
+      status: 400,
+      code: "ALAKAZAM_INVALID_INPUT"
+    },
+    {
+      request: writeRequest(commandPath, {
+        action: "rollback",
+        snapshotDigest: "f".repeat(64),
+        targetReleaseId:
+          "40000000-0000-4000-8000-000000000002"
+      }),
+      status: 409,
+      code: "ALAKAZAM_PUBLICATION_AUTHORITY_CHANGED"
+    },
+    {
+      request: writeRequest(commandPath, {
+        action: "rollback",
+        snapshotDigest: snapshot.snapshotDigest,
+        targetReleaseId:
+          "40000000-0000-4000-8000-000000000003"
+      }),
+      status: 409,
+      code: "ALAKAZAM_PUBLICATION_AUTHORITY_CHANGED"
+    }
+  ];
+  for (const item of cases) {
+    const response = await api.fetch(item.request);
+    const payload = await response.json();
+    assert.equal(
+      response.status,
+      item.status,
+      `${item.code}: ${JSON.stringify(payload)}`
+    );
+    assert.equal(payload.error.code, item.code);
+  }
+  assert.equal(records, 0);
 });
 
 test("publication capability reports authorization without provider effects", async () => {
