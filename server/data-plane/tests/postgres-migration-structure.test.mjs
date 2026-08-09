@@ -36,6 +36,55 @@ test("PostgreSQL migrations never repeat a column inside one UNIQUE constraint",
   }
 });
 
+test("Alakazam 50 migration is additive, held, append-only, and exact-tier bound", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name === "202608080103_alakazam_50_authority.sql"
+  );
+  assert.ok(migration, "missing F04 Alakazam 50 authority migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v33\(\)[\s\S]*hosted_runtime_contract_v47\(\)/iu
+  );
+  for (const table of [
+    "alakazam_50_configurations",
+    "alakazam_50_care_requests"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  for (const functionName of [
+    "valid_alakazam_50_menu",
+    "validate_alakazam_50_subscription_authority",
+    "validate_alakazam_50_configuration",
+    "validate_alakazam_50_care_request",
+    "reject_alakazam_50_evidence_mutation"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create function ss\\.${functionName}\\(`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /subscription\.status in \('active', 'grace'\)[\s\S]*subscription\.tier_id = 'alakazam_50'/iu
+  );
+  assert.match(migration.sql, /cash_app_handle[\s\S]*venmo_handle[\s\S]*font_choice_id[\s\S]*border_choice_id[\s\S]*menu jsonb/iu);
+  assert.match(migration.sql, /commercial_cutover_not_authorized/iu);
+  assert.match(migration.sql, /grant select, insert on ss\.%I to service_role/iu);
+  assert.doesNotMatch(
+    migration.sql,
+    /grant[^;]*(?:update|delete|truncate)[^;]*to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /stripe\.com|provider_effects_authorized\s*=\s*true|state\s*=\s*'released'/iu
+  );
+});
+
 test("organizations relies on its primary key without a duplicate synthetic UNIQUE", async () => {
   const foundation = (await migrations()).find(
     ({ name }) => name === "202607280001_foundation.sql"
