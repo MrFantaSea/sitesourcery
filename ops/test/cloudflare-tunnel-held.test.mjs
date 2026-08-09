@@ -42,14 +42,15 @@ test("Cloudflare origin is loopback-only, no-store, and exact-host routed", asyn
   assert.doesNotMatch(caddy, /cloudflare.*token/iu);
 });
 
-test("Cloudflare connector uses a private token file and double hold", async () => {
-  const [origin, tunnel] = await Promise.all([
+test("Cloudflare connector uses a tunnel-scoped credential and double hold", async () => {
+  const [origin, tunnel, config] = await Promise.all([
     read(
       "production-rehearsal/sitesourcery-origin-cloudflare.user.service"
     ),
     read(
       "production-rehearsal/sitesourcery-cloudflared.user.service"
-    )
+    ),
+    read("cloudflared-sitesourcery-production-dell.yml")
   ]);
 
   for (const unit of [origin, tunnel]) {
@@ -65,17 +66,40 @@ test("Cloudflare connector uses a private token file and double hold", async () 
 
   assert.match(
     tunnel,
-    /ConditionPathExists=%h\/sitesourcery-production\/run\/cloudflare-tunnel\.token/u
+    /ConditionPathExists=%h\/\.cloudflared\/211ffa61-e170-444d-a945-04fead19c972\.json/u
   );
   assert.match(
     tunnel,
-    /--token-file %h\/sitesourcery-production\/run\/cloudflare-tunnel\.token/u
+    /--config %h\/\.config\/sitesourcery-cloudflare\/cloudflared\.yml/u
   );
-  assert.doesNotMatch(tunnel, /--token\s/u);
+  assert.match(
+    tunnel,
+    /run 211ffa61-e170-444d-a945-04fead19c972/u
+  );
+  assert.doesNotMatch(tunnel, /--token(?:-file)?\s/u);
   assert.match(tunnel, /--metrics 127\.0\.0\.1:20241/u);
   assert.match(tunnel, /--loglevel info/u);
   assert.match(tunnel, /--transport-loglevel warn/u);
   assert.doesNotMatch(tunnel, /--loglevel debug/u);
+
+  assert.match(
+    config,
+    /^tunnel: 211ffa61-e170-444d-a945-04fead19c972$/mu
+  );
+  assert.match(
+    config,
+    /^credentials-file: \/home\/simtech\/\.cloudflared\/211ffa61-e170-444d-a945-04fead19c972\.json$/mu
+  );
+  assert.match(
+    config,
+    /hostname: sitesourcery\.com\s+service: http:\/\/127\.0\.0\.1:8081/u
+  );
+  assert.match(
+    config,
+    /hostname: www\.sitesourcery\.com\s+service: http:\/\/127\.0\.0\.1:8081/u
+  );
+  assert.match(config, /- service: http_status:404/u);
+  assert.doesNotMatch(config, /token|cert\.pem/iu);
 });
 
 test("Cloudflare cutover preserves DNSSEC, mail, legal, and commercial gates", async () => {

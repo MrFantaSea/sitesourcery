@@ -3,12 +3,13 @@ Description=Site Sourcery outbound Cloudflare Tunnel connector
 After=network-online.target sitesourcery-origin.service
 Wants=network-online.target sitesourcery-origin.service
 ConditionPathExists=%h/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED
-ConditionPathExists=%h/sitesourcery-production/run/cloudflare-tunnel.token
+ConditionPathExists=%h/.config/sitesourcery-cloudflare/cloudflared.yml
+ConditionPathExists=%h/.cloudflared/211ffa61-e170-444d-a945-04fead19c972.json
 
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/curl -fsS -H Host:sitesourcery.com http://127.0.0.1:8081/api/v1/ready
-ExecStart=%h/.local/bin/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 --loglevel info --transport-loglevel warn run --token-file %h/sitesourcery-production/run/cloudflare-tunnel.token
+ExecStart=%h/.local/bin/cloudflared tunnel --config %h/.config/sitesourcery-cloudflare/cloudflared.yml --no-autoupdate --metrics 127.0.0.1:20241 --loglevel info --transport-loglevel warn run 211ffa61-e170-444d-a945-04fead19c972
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=30s

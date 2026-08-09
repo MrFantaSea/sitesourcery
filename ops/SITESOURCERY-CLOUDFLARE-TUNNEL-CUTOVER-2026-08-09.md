@@ -8,7 +8,8 @@ Turnstile, Web Analytics, advertising, or customer tracking.
 
 ## Current fail-closed state
 
-- Production release: `e4b203916791a8136a3bc750910155faa50de54a`.
+- The held integration lineage contains Cloudflare preparation `4799b3e` and
+  paired joint Legal V4 authority `e6b62bd`; no production push exists.
 - Dell hosted API remains on `127.0.0.1:8788`; static and tenant services
   remain loopback-only.
 - Stripe mode and every customer payment/effect switch remain held.
@@ -18,7 +19,18 @@ Turnstile, Web Analytics, advertising, or customer tracking.
   `/home/simtech/.local/bin/cloudflared`. Its Linux AMD64 SHA-256 is
   `9d71c677db00134c1bd4144b7783486b654ad281b1ea62b4972098d19f770f17`.
 - The user origin and tunnel services are installed but disabled/inactive.
-- Neither `CLOUDFLARE_TUNNEL_APPROVED` nor `cloudflare-tunnel.token` exists.
+- The Cloudflare zone exists on Free and is pending nameserver activation.
+  No payment method or Zero Trust subscription was added.
+- Assigned nameservers are `jasmine.ns.cloudflare.com` and
+  `nash.ns.cloudflare.com`; the registrar still serves the Spaceship pair.
+- Locally managed tunnel `sitesourcery-production-dell` exists with UUID
+  `211ffa61-e170-444d-a945-04fead19c972`, but it is disconnected and has no
+  public DNS route.
+- Its tunnel-scoped credential is mode 0400 on Dell. The broader account
+  certificate is confirmed absent after the local service configuration was
+  installed; a fresh interactive login is required for future account-level
+  tunnel management.
+- `CLOUDFLARE_TUNNEL_APPROVED` does not exist.
 - No process listens on `127.0.0.1:8081` or `127.0.0.1:20241`.
 
 ## Account record for the owner's offline book
@@ -30,7 +42,8 @@ email, screenshots, shell history, or this runbook.
 - Provider: Cloudflare
 - Purpose: Site Sourcery authoritative DNS and production outbound tunnel
 - Dashboard: `https://dash.cloudflare.com/`
-- Email: `sitesourcery@proton.me`
+- Login identity: GitHub-linked `Misterfantasea@proton.me`
+- Business recovery/member address: `sitesourcery@proton.me` (add separately)
 - Plan: Free; no payment method
 - Domain: `sitesourcery.com`
 - Registrar: Spaceship (unchanged)
@@ -38,9 +51,11 @@ email, screenshots, shell history, or this runbook.
 - Password: copy directly from the password manager to the offline book
 - Two-factor method: authenticator app
 - Recovery codes: copy directly from Cloudflare to the offline book
-- Cloudflare account ID: fill after verification
+- Cloudflare account ID: `c3bf397ce8dac3811f16427264bce4d6`
 - Cloudflare zone ID: fill after onboarding
-- Assigned nameservers: fill after onboarding
+- Assigned nameservers: `jasmine.ns.cloudflare.com`, `nash.ns.cloudflare.com`
+- Tunnel: `sitesourcery-production-dell`
+- Tunnel UUID: `211ffa61-e170-444d-a945-04fead19c972`
 
 ## Authoritative DNS snapshot before onboarding
 
@@ -87,14 +102,18 @@ Do not change nameservers while that DS is present.
 4. Set minimum TLS 1.2 and Always Use HTTPS. Use the origin's `no-store`
    headers and a zone cache-bypass rule for `sitesourcery.com/*` and
    `www.sitesourcery.com/*`; do not create a cache-everything rule.
-5. Create remotely managed tunnel `sitesourcery-production-dell`. Configure
-   public hostname `sitesourcery.com` to `http://127.0.0.1:8081` and `www` to
-   the same origin. The loopback Caddy gateway performs the canonical `www`
-   redirect and path routing.
-6. Transfer the one-time tunnel token directly to
-   `~/sitesourcery-production/run/cloudflare-tunnel.token` on Dell, mode 0600.
-   Use a token file; never place the token in argv, shell history, clipboard,
-   Keychain, logs, screenshots, or Git.
+5. Use the locally managed tunnel `sitesourcery-production-dell`, UUID
+   `211ffa61-e170-444d-a945-04fead19c972`. The dashboard's Zero Trust Free
+   onboarding required a billing method and recurring overage authorization,
+   so it was exited untouched. The local tunnel path avoids that subscription.
+   Its ingress maps `sitesourcery.com` and `www.sitesourcery.com` to
+   `http://127.0.0.1:8081` and ends with an exact `http_status:404` catch-all.
+   The loopback Caddy gateway performs the canonical `www` redirect and path
+   routing.
+6. Keep only the tunnel-scoped JSON credential on Dell, mode 0400. Remove the
+   account-wide `cert.pem` after the named tunnel is created and the held
+   service configuration is installed. Never copy either credential into
+   argv, shell history, clipboard, Keychain, logs, screenshots, or Git.
 7. Finalize the additive joint Legal V4 authority. Privacy V4 must disclose
    Cloudflare as authoritative DNS, HTTPS reverse proxy/security edge, and
    tunnel provider. Preserve V3 evidence byte-for-byte. Deploy the V4 artifact

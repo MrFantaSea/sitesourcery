@@ -1,0 +1,9 @@
+tunnel: 211ffa61-e170-444d-a945-04fead19c972
+credentials-file: /home/simtech/.cloudflared/211ffa61-e170-444d-a945-04fead19c972.json
+
+ingress:
+  - hostname: sitesourcery.com
+    service: http://127.0.0.1:8081
+  - hostname: www.sitesourcery.com
+    service: http://127.0.0.1:8081
+  - service: http_status:404
