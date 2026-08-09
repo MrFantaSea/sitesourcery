@@ -16,6 +16,9 @@ import {
   createAlakazamLifecyclePolicy
 } from "../../commerce-v2/alakazam-lifecycle-policy.mjs";
 import {
+  ALAKAZAM_CARE_LIFECYCLE_POLICY_ID
+} from "../../commerce-v2/alakazam-care-lifecycle-policy.mjs";
+import {
   ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA,
   decideAlakazamLifecycleTransition
 } from "../../commerce-v2/alakazam-lifecycle-state.mjs";
@@ -1529,7 +1532,7 @@ test(
         event: cancellationEvent(),
         cancellation: cancellationProviderFacts(),
         grant: projectAlakazamExportGrant({
-          policy: EXAMPLE_POLICY,
+          policy: createAlakazamLifecyclePolicy(),
           availableFrom: CANCEL_CONFIRMED_AT,
           paidThroughAt: START_PERIOD_END
         }),
@@ -1537,6 +1540,22 @@ test(
         tierEventId: randomUUID(),
         exportGrantId: randomUUID()
       });
+      await flushConstraints(client);
+
+      // Promote this schema-only fixture to the exact canonical granted
+      // shape. Production performs this transition only after cancellation
+      // becomes effective.
+      await client.query(
+        `update ss.alakazam_export_grants
+            set retention_state = 'granted',
+                policy_version = $2,
+                retention_ends_at =
+                  paid_through_at + interval '30 days',
+                export_window_ends_at =
+                  paid_through_at + interval '30 days'
+          where cancellation_id = $1`,
+        [cancellationId, ALAKAZAM_CARE_LIFECYCLE_POLICY_ID]
+      );
       await flushConstraints(client);
 
       // A granted window is a promise; it can be extended, never cut.

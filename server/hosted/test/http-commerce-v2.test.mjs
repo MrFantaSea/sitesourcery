@@ -297,6 +297,9 @@ test("public capabilities enable only actions whose server boundary can succeed"
     alakazamQuote: false,
     alakazamCheckout: false,
     alakazamDowngrade: false,
+    alakazam35: false,
+    alakazam50: false,
+    alakazamRetainedPremium: false,
     alakazamPublication: false,
     domainPurchase: false,
     publishing: false
@@ -315,6 +318,9 @@ test("public capabilities enable only actions whose server boundary can succeed"
     alakazamQuote: false,
     alakazamCheckout: false,
     alakazamDowngrade: false,
+    alakazam35: false,
+    alakazam50: false,
+    alakazamRetainedPremium: false,
     alakazamPublication: false,
     domainPurchase: false,
     publishing: false

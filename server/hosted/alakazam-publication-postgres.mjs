@@ -605,6 +605,7 @@ export function createPostgresAlakazamPublicationRepository({
               and procedure_record.proname in (
                 'hosted_alakazam_publication_contract',
                 'reject_alakazam_customer_publication_command_mutation',
+                'reject_nonactive_alakazam_publication',
                 'validate_alakazam_customer_publication_command'
               )
               and privilege.grantee <>
@@ -756,6 +757,13 @@ export function createPostgresAlakazamPublicationRepository({
                 },
                 {
                   function_name:
+                    "reject_nonactive_alakazam_publication",
+                  role_name: "service_role",
+                  privilege_type: "EXECUTE",
+                  is_grantable: false
+                },
+                {
+                  function_name:
                     "validate_alakazam_customer_publication_command",
                   role_name: "service_role",
                   privilege_type: "EXECUTE",
@@ -792,6 +800,18 @@ export function createPostgresAlakazamPublicationRepository({
           );
           readinessInvariant(
             exactCatalog(triggers.rows, [
+                {
+                  name:
+                    "alakazam_customer_publication_commands_00_active",
+                  type: 7,
+                  constraint_trigger: false,
+                  enabled: "O",
+                  deferrable: false,
+                  initially_deferred: false,
+                  function_schema: "ss",
+                  function_name:
+                    "reject_nonactive_alakazam_publication"
+                },
                 {
                   name:
                     "alakazam_customer_publication_commands_immutable",

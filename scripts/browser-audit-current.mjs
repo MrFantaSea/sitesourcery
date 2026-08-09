@@ -138,44 +138,43 @@ const PAID_PHONE_EVIDENCE_DIGEST = createHash("sha256")
   .update(PAID_PHONE_EVIDENCE_BYTES)
   .digest("hex");
 const PROJECT_LEGAL_PRIVACY_VERSION =
-  "SS-HOSTED-PRIVACY-2099-01-01-V3";
+  "SS-HOSTED-PRIVACY-2026-08-09-V3";
 const PROJECT_LEGAL_DOCUMENTS = Object.freeze([
   Object.freeze({
     kind: "privacy",
     version: PROJECT_LEGAL_PRIVACY_VERSION,
-    contentDigest: "2".repeat(64),
+    contentDigest:
+      "5713fd6776c6ba41dbbac1b4d1ac0d9f1b6857ba01128e5d74c4f3c5287a4967",
     contentUri:
       "https://sitesourcery.com/legal/privacy/versions/"
       + PROJECT_LEGAL_PRIVACY_VERSION + "/",
-    effectiveAt: "2099-01-01T00:00:00.000Z",
+    effectiveAt: "2026-08-09T15:25:59.000Z",
   }),
   Object.freeze({
     kind: "product",
-    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
     contentDigest:
-      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
     contentUri:
       "https://sitesourcery.com/legal/website-terms/#self-service",
-    effectiveAt: "2026-07-30T00:00:00.000Z",
+    effectiveAt: "2026-08-09T15:25:59.000Z",
   }),
   Object.freeze({
     kind: "website",
-    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V3",
     contentDigest:
-      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      "b179ee8b6ed713b6b19b20daf320e84a9e89f2ac166504942919f8c4e280a602",
     contentUri:
       "https://sitesourcery.com/legal/website-terms/",
-    effectiveAt: "2026-07-30T00:00:00.000Z",
+    effectiveAt: "2026-08-09T15:25:59.000Z",
   }),
 ]);
 const PROJECT_LEGAL_AUTHORITY = Object.freeze({
   schema: "sitesourcery.project-legal-authority/v3",
   acceptanceStatement:
     "accepted_exact_project_terms_and_acknowledged_privacy",
-  authorityDigest: createHash("sha256").update(canonicalJson({
-    documents: PROJECT_LEGAL_DOCUMENTS,
-    schema: "sitesourcery.project-legal-authority/v3",
-  })).digest("hex"),
+  authorityDigest:
+    "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
   documents: PROJECT_LEGAL_DOCUMENTS,
 });
 
@@ -1129,6 +1128,90 @@ function activeAlakazamAccount() {
   };
 }
 
+function heldAlakazam35Snapshot() {
+  return {
+    schema: "sitesourcery.alakazam-35-snapshot/v1",
+    state: "held",
+    providerEffects: false,
+    holdReason: "commercial_cutover_not_authorized",
+    projectId: PAID_PROJECT_ID,
+    subscription: {
+      subscriptionId: "40000000-0000-4000-8000-000000000001",
+      tierId: "alakazam_35",
+      status: "active",
+      revision: 4,
+    },
+    controls: {
+      photoHeader: {
+        enabled: true,
+        mediaTypes: ["image/jpeg", "image/png"],
+        maxBytes: 2_000_000,
+        photo: null,
+      },
+      fonts: [
+        { fontChoiceId: "standard", label: "Standard" },
+        { fontChoiceId: "alt", label: "Alternate" },
+      ],
+      sections: ["about", "offerings", "practical", "contact"],
+      versionHistoryLimit: 3,
+      careClass: "modest",
+    },
+    configuration: null,
+    history: [],
+    care: {
+      state: "held",
+      requestCount: 0,
+      lastRequestedAt: null,
+    },
+  };
+}
+
+function heldRetainedPremiumSnapshot() {
+  return {
+    schema: "sitesourcery.alakazam-retained-premium-snapshot/v1",
+    policyId: "SS-ALAKAZAM-CARE-LIFECYCLE-2026-08-09-V1",
+    state: "held",
+    providerEffects: false,
+    holdReason: "commercial_cutover_not_authorized",
+    projectId: PAID_PROJECT_ID,
+    lifecycle: {
+      state: "active",
+      retentionEndsAt: null,
+      privateRead: true,
+      customerExport: true,
+      edit: true,
+      publish: true,
+      care: true,
+    },
+    subscription: {
+      tierId: "alakazam_35",
+      status: "active",
+      revision: 4,
+      cancelAtPeriodEnd: false,
+    },
+    premium: {
+      configured: false,
+      configurationRevision: null,
+      configurationDigest: null,
+      effectiveOutput: "masked",
+      values: null,
+    },
+    restoration: {
+      required: false,
+      available: false,
+      sourceConfigurationRevision: null,
+      sourceConfigurationDigest: null,
+    },
+    actions: {
+      edit: false,
+      restore: false,
+      export: true,
+      publish: true,
+      care: true,
+    },
+  };
+}
+
 function heldAlakazamPublication(command = null) {
   return {
     schema: "sitesourcery.alakazam-publication/v1",
@@ -1355,6 +1438,9 @@ async function startServer() {
           alakazamQuote: false,
           alakazamCheckout: false,
           alakazamDowngrade: false,
+          alakazam35: false,
+          alakazam50: false,
+          alakazamRetainedPremium: false,
           alakazamPublication:
             paidMode === "publication",
           domainPurchase: false,
@@ -1463,6 +1549,20 @@ async function startServer() {
             `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/publication`
         ) {
           json(response, 200, heldAlakazamPublication());
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/35`
+        ) {
+          json(response, 200, heldAlakazam35Snapshot());
+          return;
+        }
+        if (
+          url.pathname ===
+            `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/premium`
+        ) {
+          json(response, 200, heldRetainedPremiumSnapshot());
           return;
         }
         if (
@@ -2169,7 +2269,13 @@ async function navigate(cdp, url) {
 }
 
 async function isolatePaidJourney(cdp) {
-  await cdp.send("Page.stopLoading");
+  try {
+    await cdp.send("Page.stopLoading");
+  } catch (error) {
+    if (
+      error.message !== "Page.stopLoading: Not attached to an active page"
+    ) throw error;
+  }
   await cdp.send("Page.navigate", { url: "about:blank" });
   await waitFor(
     cdp,

@@ -10,6 +10,10 @@ const controls = require(
 
 const PROJECT_ID = "30000000-0000-4000-8000-000000000001";
 
+test("default $50 client binds to the ambient browser runtime", () => {
+  assert.doesNotThrow(() => controls.createClient());
+});
+
 function snapshot(overrides = {}) {
   return {
     schema: "sitesourcery.alakazam-50-snapshot/v1",
@@ -137,7 +141,7 @@ test("hosted customer composition mounts F03 before exact F04 under the unchange
   );
   assert.match(
     source,
-    /function syncAlakazam50Panel\(state\)[\s\S]*?var module = windowRef\.SiteSourceryAlakazam50;[\s\S]*?ALAKAZAM_PUBLIC_OFFER_STATE !== "released"[\s\S]*?!\["active", "grace"\]\.includes\(subscription\.status\)[\s\S]*?tierId !== "alakazam_50"[\s\S]*?alakazam50Panel = windowRef\.SiteSourceryAlakazam50\.mount/u
+    /function syncAlakazam50Panel\(state\)[\s\S]*?var module = windowRef\.SiteSourceryAlakazam50;[\s\S]*?ALAKAZAM_PUBLIC_OFFER_STATE !== "released"[\s\S]*?subscription\.status !== "active"[\s\S]*?tierId !== "alakazam_50"[\s\S]*?alakazam50Panel = windowRef\.SiteSourceryAlakazam50\.mount/u
   );
   assert.doesNotMatch(
     source.match(/function syncAlakazam50Panel\(state\)[\s\S]*?\n    \}\n/u)?.[0] ?? "",

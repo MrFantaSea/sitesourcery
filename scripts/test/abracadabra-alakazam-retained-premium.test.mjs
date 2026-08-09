@@ -9,6 +9,10 @@ const controls = require(
 );
 const PROJECT_ID = "30000000-0000-4000-8000-000000000006";
 
+test("default retained-premium client binds to the ambient browser runtime", () => {
+  assert.doesNotThrow(() => controls.createClient());
+});
+
 function snapshot(overrides = {}) {
   return {
     schema: "sitesourcery.alakazam-retained-premium-snapshot/v1",

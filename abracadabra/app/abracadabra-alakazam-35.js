@@ -1,12 +1,12 @@
 (function (root, factory) {
   "use strict";
-  var api = factory();
+  var api = factory(root);
   if (typeof module === "object" && module && module.exports) {
     module.exports = api;
   } else {
     root.SiteSourceryAlakazam35 = api;
   }
-}(typeof globalThis === "object" ? globalThis : this, function () {
+}(typeof globalThis === "object" ? globalThis : this, function (root) {
   "use strict";
 
   var SNAPSHOT_SCHEMA = "sitesourcery.alakazam-35-snapshot/v1";

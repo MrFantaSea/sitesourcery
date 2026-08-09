@@ -11,6 +11,10 @@ const controls = require(
 const PROJECT_ID = "30000000-0000-4000-8000-000000000001";
 const PHOTO_ID = "60000000-0000-4000-8000-000000000001";
 
+test("default $35 client binds to the ambient browser runtime", () => {
+  assert.doesNotThrow(() => controls.createClient());
+});
+
 function snapshot(overrides = {}) {
   const assetDigest = "a".repeat(64);
   return {
@@ -121,7 +125,7 @@ test("dedicated API client uses exact routes, CSRF, and idempotency without prov
   assert.doesNotMatch(calls[2].url, /stripe|publish|provider/u);
 });
 
-test("hosted control mounts F03 only for active or grace premium authority while the public offer stays held", async () => {
+test("hosted control mounts F03 only for active premium authority while the public offer stays held", async () => {
   const source = await readFile(
     new URL(
       "../../abracadabra/app/abracadabra-customer-control-dom.js",
@@ -132,7 +136,7 @@ test("hosted control mounts F03 only for active or grace premium authority while
   assert.match(source, /var ALAKAZAM_PUBLIC_OFFER_STATE = "held";/u);
   assert.match(
     source,
-    /ALAKAZAM_PUBLIC_OFFER_STATE !== "released"[\s\S]*!\["active", "grace"\]\.includes\(subscription\.status\)[\s\S]*!\["alakazam_35", "alakazam_50"\]\.includes\(tierId\)/u
+    /ALAKAZAM_PUBLIC_OFFER_STATE !== "released"[\s\S]*subscription\.status !== "active"[\s\S]*!\["alakazam_35", "alakazam_50"\]\.includes\(tierId\)/u
   );
   assert.match(
     source,
