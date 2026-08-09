@@ -1,16 +1,13 @@
 # Site Sourcery go-live candidate evidence — 2026-08-08
 
-Generated at: 2026-08-08T19:46:00-0400 (EDT)
+Updated at: 2026-08-08T20:12:00-0400 (EDT)
 
 Status: **held release candidate; no push, deployment, provider effect, or
 cutover authorized**
 
 This is an engineering release record, not legal advice or a claim that the
-site is live. The executable release proof is bound to commit
-`c0c11f5c33675767d2b457d3be416ed8129fd924`. Commit
-`288bd2899ef81b3d549a78b50913d45a27b1904f` adds only the owner-gated Website
-Terms V3 engineering review after that proof; it changes no executable,
-artifact, migration, or composition-root byte.
+site is live. The current executable release proof is bound to commit
+`0dfd87e90d2142e78e9915951dcdffc866d6cacc`.
 
 ## 1. Fresh integration authority
 
@@ -33,26 +30,24 @@ Integrated sealed inputs:
 | Migration-48 release harness | source `c155d2c` | `2caebe3` |
 | Privacy content-seal browser binding | source `6b8cbc6` | `7bfda49` |
 | L4 composition wiring | L2 and L3 WIRING-NOTES | `719b2ed` |
+| L1 held publication controls and migration 101 | `0c71cf77192284275562e9a530b0d52ad5139865` | `2d12155` |
+| Privacy V3 Abracadabra UI | `de7b4461ba4ec8c70009e0ce9664935527514d95` | `2246aa1` |
+| 53-migration/22-journey release harness | L4 correction | `2c892d0` |
+| Held-publication capability contract | L4 correction | `eac2bf2` |
+| Complete held-publication HTTP authority proof | L4 correction | `0dfd87e` |
 
-L4 alone changed the three composition roots. The L2 and L3 modules are wired,
-but every Alakazam commerce/publication effect remains held. L3's customer
+L4 alone changed the three composition roots. The L1, L2 and L3 modules are
+wired, but every Alakazam commerce/publication effect remains held. L3's customer
 billing-view asset is available only in the hosted staging artifact and is not
 published by the public Pages artifact.
 
 The known `scripts/hosted-truth/manifest.mjs` overlap was inspected rather than
 assumed: phase B changes the legal/held-truth area around its original lines
 96–110, while the existing Privacy UI branch changes staged-asset digests around
-128–137. Those historical hunks are disjoint. Their final digests must still be
-recomputed after the UI lane rebases because both source bytes and line numbers
-can change.
-
-Excluded because they are not sealed:
-
-- L1 publication controls remains at base `a0f024d` with 10 modified and 7
-  untracked paths, including `WIRING-NOTES-L1.md` and migration 101.
-- The old Privacy Abracadabra UI branch is sealed at `de7b446`, but was not
-  integrated because the architecture requires it after the L1 rebase. The
-  release candidate does not borrow or guess that rebase.
+128–137. Those historical hunks were disjoint. The later L1/UI merge changed
+both staged assets, so L4 recomputed the final hashes from merged bytes. The
+combined browser gate runs both the legal-authority capture and held
+publish/rollback/unpublish journeys at every viewport.
 
 ## 2. Exact PostgreSQL 16 and release proof
 
@@ -68,10 +63,11 @@ Receipt:
 ```json
 {
   "ok": true,
-  "databaseName": "ss_core_release_20260808t233525312z_7d44a43b3f06",
+  "databaseName": "ss_core_release_20260809t002028962z_ef642e68df59",
   "postgresMajor": 16,
-  "migrationsApplied": 52,
+  "migrationsApplied": 53,
   "customServicesJourneys": 4,
+  "alakazamCoreJourneys": 5,
   "alakazamLifecycleJourneys": 10,
   "alakazamBillingJourneys": 3,
   "databaseAbsent": true
@@ -79,7 +75,7 @@ Receipt:
 ```
 
 The replay applied migrations 1–47, proved migration 48 refuses unsealed
-release constants, then applied 48–52 with a disposable proof seal. It also
+release constants, then applied 48–52 and 101 with a disposable proof seal. It also
 proved the retained Privacy V2 artifact remained byte-identical and rejected a
 rogue fourth legal acceptance.
 
@@ -87,18 +83,19 @@ Exact successful counts on the same executable checkpoint:
 
 | Gate | Result |
 | --- | ---: |
-| Real PostgreSQL journeys | 17/17 |
-| Main Node tests | 680/680 |
+| Real PostgreSQL journeys | 22/22 |
+| Main Node tests | 699/699 |
 | Self-host tests | 19/19 |
-| Hosted-service tests | 439 pass, 5 intentional skips, 0 fail |
+| Hosted-service tests | 444 pass, 5 intentional skips, 0 fail |
 | Operations tests | 52/52 |
 | Public Pages allowlist | 76/76 files |
 | Browser routes and widths | 15 × 3 = 45/45 |
 
 The browser gate covered 320×720, 390×844, and 1440×1000, including the four-
-stage account room, maker preview, Custom customer/owner payment and immutable
-handoff states, keyboard activation, 44-pixel controls, failure/race behavior,
-and zero horizontal overflow.
+stage account room, maker preview, Privacy V3 legal-authority capture and stale
+recapture, held Alakazam publish/rollback/unpublish authorization, Custom
+customer/owner payment and immutable handoff states, keyboard activation,
+44-pixel controls, failure/race behavior, and zero horizontal overflow.
 
 The exact immutable Privacy V2 evidence remains 19,935 bytes with SHA-256
 `b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b`.
@@ -140,23 +137,30 @@ audit into a false performance pass.
 
 ## 4. Privacy V3 exact owner gate
 
-The current candidate deterministically renders the exact unsealed review at:
+The current candidate deterministically reproduced the exact review and sealed
+its approved content without creating release authority. Evidence is at:
 
-`/private/tmp/sitesourcery-go-live-privacy-v3-review-c0c11f5/hosted/legal/privacy/index.html`
+`/private/tmp/sitesourcery-go-live-privacy-v3-content-seal-0dfd87e/privacy-v3-content-seal.json`
 
 Exact approval identity:
 
 - SHA-256:
   `1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14`
 - Byte count: `25,994`
-- State: `exact-review-artifact-approval-pending`
+- State: `content-approved-unreleased`
 - Published/deployable: `false/false`
 - Version, effective UTC, release digest, and authority digest: all `null`
+- Content-template SHA-256:
+  `8bc347cf8c0755d7e923fef60f5c481660ee37ca3dd1bbaa1df4f1371a018bfc`
+  at `25,763` bytes
+- Content-seal SHA-256:
+  `b040ee6c95830b732e18859eec6fe5ddfec56325e7357269fc5f0f14e6861d92`
 
-An approval of an earlier rendered URL or earlier digest does not approve these
-exact bytes. Once the owner approves this tuple, the nondeployable content seal
-may be created. Release finalization must still wait for the actual cutover UTC
-so the published notice never claims to have been effective before publication.
+Release finalization must wait for the actual cutover UTC so the published
+notice never claims to have been effective before publication. The UTC date of
+that instant also selects the final version identifier. The complete rationale
+and exact content evidence are in
+`ops/SITESOURCERY-PRIVACY-V3-CONTENT-SEAL-AND-RELEASE-GATE-2026-08-08.md`.
 
 Website Terms V3 remains a separate owner decision. The 12 numbered proposed
 changes and ranked decisions are retained in
@@ -171,21 +175,21 @@ earns no release credit.
 
 | Row | Current exact boundary |
 | --- | --- |
-| J-01 | Integrated public/held-offer truth and 45/45 browser proof pass; canonical Privacy/Terms owner approval remains open. |
+| J-01 | Integrated public/held-offer truth and 45/45 browser proof pass; Privacy content is approved, but its cutover tuple and replacement Terms approval remain open. |
 | J-05 | Runtime Custom/payment/workmanship truth passes; exact Website Terms V3 owner decisions and release bytes remain open. |
-| TRUTH-05 | Privacy candidate is integrated and deterministic but unsealed; Website Terms replacement is unapproved. |
+| TRUTH-05 | Privacy content is approved and nondeployably sealed; its cutover tuple is intentionally null and Website Terms replacement is unapproved. |
 | AESTH-08 | Legal presentation passes at all three widths; final canonical legal bytes remain owner-gated. |
 | J-02 | Authenticated assessment/Custom backend and browser components pass, but no exact-candidate public inquiry → activated account → quote → invoice → Stripe TEST payment → receipt browser journey exists yet. |
 | J-09 | Provider adapters and operations gates pass; no real Stripe TEST payment exists for the $200 assessment, variable Custom build, and $5 Download on this candidate. |
 | J-07 | Candidate has not been deployed to private staging because deployment is prohibited by the current assignment. |
 | J-06 | Audit complete; performance correction remains as recorded above. |
 | J-08 | Responsive owner fixtures pass, but no physical owner Mac/Pixel walk has been signed off. |
-| SURFACE-04 | Fresh PostgreSQL, cross-tenant/failure/race, safe projection, and 45-width proof pass; real provider test-mode and integrated browser-to-database coverage remain open. |
+| SURFACE-04 | Fresh PostgreSQL 53/53, 22/22 journeys, cross-tenant/failure/race, safe projection, and 45-width proof pass; real provider test-mode and integrated browser-to-database coverage remain open. |
 | J-10 | Owner walkthrough/cutover approval is intentionally not executed. |
 | J-11 | DNS/TLS/live cutover is intentionally not executed; rollback is prepared separately. |
 
-The current single critical-path blocker is **owner approval of the exact
-canonical legal release set**: the Privacy V3 review tuple above plus the
-Website Terms V3 decisions. Provider, private-staging, performance, device, and
-cutover gates remain downstream work, not authority to bypass that legal gate.
-
+The current single critical-path blocker is **completion of the exact canonical
+legal release set**: owner rulings and exact-byte approval for Website Terms V3,
+then the actual-cutover Privacy version/effective UTC and resulting final
+digests. Provider, private-staging, performance, device, and cutover gates
+remain downstream work, not authority to bypass that legal gate.

@@ -10,9 +10,7 @@ approval does not yet exist.
 ## Current observed baseline
 
 - Executable local checkpoint:
-  `c0c11f5c33675767d2b457d3be416ed8129fd924`.
-- Documentation checkpoint after the executable proof:
-  `288bd2899ef81b3d549a78b50913d45a27b1904f`.
+  `0dfd87e90d2142e78e9915951dcdffc866d6cacc`.
 - Dell still runs held rehearsal release
   `15cab8f4d220f9a5116b89c732daa6dc9fb19a17` on loopback only.
 - Dell user services for runtime, static artifact, database tunnel, monitor
@@ -43,7 +41,7 @@ These controls must never be treated as one switch.
    migration 48 rejects them. Existing reads, sign-in, recovery, existing
    projects, repeat paid Download, export, deletion, and contact stay live;
    only new project creation is held. Lift only with exact owner-approved
-   Privacy and Website Terms artifacts and a fresh 52-migration proof.
+   Privacy and Website Terms artifacts and a fresh 53-migration proof.
 2. **Payment holds.** Stripe provider authority and each purpose release are
    independent. Private staging uses Stripe test keys with `livemode=false`.
    Public production stays held until a separate owner commercial approval.
@@ -59,16 +57,19 @@ These controls must never be treated as one switch.
 
 Stop before installation or cutover if any item is missing:
 
-- clean final integration worktree and one full 52-migration release receipt
+- clean final integration worktree and one full 53-migration release receipt
   with `databaseAbsent:true` on the exact final hash;
-- owner approval of Privacy review SHA-256
+- retained Privacy content seal
+  `b040ee6c95830b732e18859eec6fe5ddfec56325e7357269fc5f0f14e6861d92`,
+  binding owner-approved review SHA-256
   `1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14`
   at exactly 25,994 bytes;
 - owner rulings on all 12 Website Terms V3 proposed diffs, followed by approval
   of the exact rendered replacement bytes;
 - final Privacy/Terms version identifiers, byte counts, content digests,
   authority digest, and an effective UTC that is the actual publication time;
-- clean L1/UI rebase if it is required by the final release candidate;
+- L1 and Privacy UI integrated with final manifest digests and both browser
+  journeys;
 - private staging authorization and successful new/returning customer runs;
 - real Stripe TEST evidence for the $200 assessment, one variable Custom first
   payment, and one $5 Download;
@@ -103,16 +104,18 @@ Run the exact release command and retain its final JSON:
 npm_execpath=/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL=postgresql://fantaseamac@localhost:5432/postgres /private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node scripts/core-release.mjs
 ```
 
-Required result: PostgreSQL 16, 52 migrations, 4 Custom-services journeys, 10
-lifecycle journeys, 3 billing journeys, and `databaseAbsent:true`, followed by
-all source/artifact/browser gates.
+Required result: PostgreSQL 16, 53 migrations, 4 Custom-services journeys, 5
+Alakazam core journeys, 10 lifecycle journeys, 3 billing journeys, and
+`databaseAbsent:true`, followed by 699 main Node tests, 19 self-host tests, 444
+hosted-service passes plus 5 intentional skips, 52 ops tests, 76 Pages files,
+45 browser route/width checks and zero failures.
 
 ### B. Privacy and Website Terms owner sign-off
 
-The owner records both approvals without guessing a release time:
+Privacy content approval is already retained without guessing a release time:
 
 ```text
-I approve Privacy V3 review SHA-256 1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14 at exactly 25,994 bytes.
+Owner-approved Privacy V3 review SHA-256 1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14 at exactly 25,994 bytes; content seal b040ee6c95830b732e18859eec6fe5ddfec56325e7357269fc5f0f14e6861d92.
 ```
 
 Then rule on WT-01 through WT-12 in
@@ -122,7 +125,8 @@ and byte count. Preserve both V2 archives byte-for-byte.
 
 The finalizer runs only when the real cutover window is known. Use the actual
 UTC publication instant for `effectiveAt`; do not use review date or approval
-date as a substitute.
+date as a substitute. The version date must equal that UTC date. If publication
+occurs on 2026-08-09 UTC, use `SS-HOSTED-PRIVACY-2026-08-09-V3`.
 
 ### C. Private Stripe TEST walk
 
@@ -195,8 +199,8 @@ if it were real commerce.
 
 Install the final hash into a new immutable release directory. Do not overwrite
 the previous release. Build and verify `_hosted` inside that directory with
-Node 24.18.0. Record owner/group/modes and file hashes. Install migrations 48–52
-only after the final legal tuple is sealed and a backup succeeds.
+Node 24.18.0. Record owner/group/modes and file hashes. Install migrations
+48–52 and 101 only after the final legal tuple is sealed and a backup succeeds.
 
 Do not down-migrate. Migration rollback is restore-to-isolation plus a separate
 owner decision.
@@ -334,4 +338,3 @@ edge. DNS is the second fallback.
 This runbook stops at the owner gate. It is ready for review, but the current
 candidate is not deployable or first-dollar ready until the hard-stop list is
 closed and the owner supplies the exact GO record.
-
