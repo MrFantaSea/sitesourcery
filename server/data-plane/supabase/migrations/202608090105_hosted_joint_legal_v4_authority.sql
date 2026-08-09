@@ -82,6 +82,269 @@ begin
 end
 $$;
 
+create temporary table hosted_joint_legal_v4_release_constants (
+  privacy_version text,
+  privacy_content_digest text,
+  privacy_content_uri text,
+  effective_at timestamptz,
+  privacy_byte_count bigint,
+  privacy_artifact_uri text,
+  website_terms_version text,
+  website_terms_content_digest text,
+  website_terms_artifact_uri text,
+  website_terms_byte_count bigint,
+  authority_digest text
+) on commit drop;
+
+-- Exact owner-approved joint finalization receipt generated after the
+-- Cloudflare production configuration was captured. Keep this tuple
+-- byte-for-byte aligned with the retained receipt, hosted artifacts, and
+-- runtime environment.
+insert into hosted_joint_legal_v4_release_constants (
+  privacy_version,
+  privacy_content_digest,
+  privacy_content_uri,
+  effective_at,
+  privacy_byte_count,
+  privacy_artifact_uri,
+  website_terms_version,
+  website_terms_content_digest,
+  website_terms_artifact_uri,
+  website_terms_byte_count,
+  authority_digest
+) values (
+  'SS-HOSTED-PRIVACY-2026-08-09-V4',
+  '2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99',
+  'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/',
+  '2026-08-09T21:42:11.000Z'::timestamptz,
+  31451,
+  'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/',
+  'SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4',
+  '4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642',
+  'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/',
+  26215,
+  'ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968'
+);
+
+do $$
+declare
+  release_record record;
+begin
+  select * into strict release_record
+  from hosted_joint_legal_v4_release_constants;
+
+  if release_record.privacy_version !~
+      '^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4$'
+    or release_record.privacy_content_digest !~ '^[a-f0-9]{64}$'
+    or release_record.privacy_content_uri !~ '^https://[^[:space:]]+$'
+    or release_record.effective_at is null
+    or release_record.privacy_byte_count <= 0
+    or release_record.privacy_artifact_uri !~ '^https://[^[:space:]]+$'
+    or release_record.website_terms_version !~
+      '^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4$'
+    or substring(release_record.website_terms_version from
+      '([0-9]{4}-[0-9]{2}-[0-9]{2})-V4$') <>
+      substring(release_record.privacy_version from
+        '([0-9]{4}-[0-9]{2}-[0-9]{2})-V4$')
+    or release_record.website_terms_content_digest !~ '^[a-f0-9]{64}$'
+    or release_record.website_terms_artifact_uri !~ '^https://[^[:space:]]+$'
+    or release_record.website_terms_byte_count <= 0
+    or release_record.authority_digest !~ '^[a-f0-9]{64}$'
+  then
+    raise exception 'Hosted joint Legal V4 constants are invalid or unsealed'
+      using errcode = '55000';
+  end if;
+end
+$$;
+
+insert into ss.legal_documents (
+  id,
+  kind,
+  version,
+  content_digest,
+  content_uri,
+  effective_at
+)
+select
+  '00000000-0000-4000-8000-000000000049'::uuid,
+  'privacy',
+  release.privacy_version,
+  release.privacy_content_digest::ss.sha256_hex,
+  release.privacy_content_uri,
+  release.effective_at
+from hosted_joint_legal_v4_release_constants release
+union all
+select
+  '00000000-0000-4000-8000-000000000105'::uuid,
+  'product',
+  release.website_terms_version,
+  release.website_terms_content_digest::ss.sha256_hex,
+  'https://sitesourcery.com/legal/website-terms/#self-service',
+  release.effective_at
+from hosted_joint_legal_v4_release_constants release
+union all
+select
+  '00000000-0000-4000-8000-000000000106'::uuid,
+  'website',
+  release.website_terms_version,
+  release.website_terms_content_digest::ss.sha256_hex,
+  'https://sitesourcery.com/legal/website-terms/',
+  release.effective_at
+from hosted_joint_legal_v4_release_constants release
+on conflict (kind, version) do nothing;
+
+insert into ss.legal_document_artifacts (
+  document_id,
+  artifact_uri,
+  artifact_sha256,
+  byte_count,
+  media_type
+)
+select
+  '00000000-0000-4000-8000-000000000049'::uuid,
+  release.privacy_artifact_uri,
+  release.privacy_content_digest::ss.sha256_hex,
+  release.privacy_byte_count,
+  'text/html; charset=utf-8'
+from hosted_joint_legal_v4_release_constants release
+union all
+select
+  '00000000-0000-4000-8000-000000000106'::uuid,
+  release.website_terms_artifact_uri,
+  release.website_terms_content_digest::ss.sha256_hex,
+  release.website_terms_byte_count,
+  'text/html; charset=utf-8'
+from hosted_joint_legal_v4_release_constants release;
+
+do $$
+declare
+  release_record record;
+  computed_authority_digest ss.sha256_hex;
+begin
+  select * into strict release_record
+  from hosted_joint_legal_v4_release_constants;
+
+  if (
+    select count(*)
+      from ss.legal_documents document
+     where (
+       document.id = '00000000-0000-4000-8000-000000000049'::uuid
+       and document.kind = 'privacy'
+       and document.version = release_record.privacy_version
+       and document.content_digest =
+         release_record.privacy_content_digest::ss.sha256_hex
+       and document.content_uri = release_record.privacy_content_uri
+       and document.effective_at = release_record.effective_at
+       and document.retired_at is null
+     ) or (
+       document.id = '00000000-0000-4000-8000-000000000105'::uuid
+       and document.kind = 'product'
+       and document.version = release_record.website_terms_version
+       and document.content_digest =
+         release_record.website_terms_content_digest::ss.sha256_hex
+       and document.content_uri =
+         'https://sitesourcery.com/legal/website-terms/#self-service'
+       and document.effective_at = release_record.effective_at
+       and document.retired_at is null
+     ) or (
+       document.id = '00000000-0000-4000-8000-000000000106'::uuid
+       and document.kind = 'website'
+       and document.version = release_record.website_terms_version
+       and document.content_digest =
+         release_record.website_terms_content_digest::ss.sha256_hex
+       and document.content_uri =
+         'https://sitesourcery.com/legal/website-terms/'
+       and document.effective_at = release_record.effective_at
+       and document.retired_at is null
+     )
+  ) <> 3 then
+    raise exception 'Hosted joint Legal V4 document postcondition failed'
+      using errcode = '55000';
+  end if;
+
+  if (
+    select count(*)
+      from ss.legal_document_artifacts artifact
+     where (
+       artifact.document_id =
+         '00000000-0000-4000-8000-000000000049'::uuid
+       and artifact.artifact_uri = release_record.privacy_artifact_uri
+       and artifact.artifact_sha256 =
+         release_record.privacy_content_digest::ss.sha256_hex
+       and artifact.byte_count = release_record.privacy_byte_count
+       and artifact.media_type = 'text/html; charset=utf-8'
+     ) or (
+       artifact.document_id =
+         '00000000-0000-4000-8000-000000000106'::uuid
+       and artifact.artifact_uri =
+         release_record.website_terms_artifact_uri
+       and artifact.artifact_sha256 =
+         release_record.website_terms_content_digest::ss.sha256_hex
+       and artifact.byte_count = release_record.website_terms_byte_count
+       and artifact.media_type = 'text/html; charset=utf-8'
+     )
+  ) <> 2 or exists (
+    select 1 from ss.legal_document_artifacts artifact
+     where artifact.document_id =
+       '00000000-0000-4000-8000-000000000105'::uuid
+  ) then
+    raise exception 'Hosted joint Legal V4 artifact postcondition failed'
+      using errcode = '55000';
+  end if;
+
+  select ss.project_legal_json_digest(jsonb_build_object(
+    'documents', jsonb_build_array(
+      jsonb_build_object(
+        'kind', privacy.kind,
+        'version', privacy.version,
+        'contentDigest', privacy.content_digest,
+        'contentUri', privacy.content_uri,
+        'effectiveAt', to_char(
+          privacy.effective_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+      ),
+      jsonb_build_object(
+        'kind', product.kind,
+        'version', product.version,
+        'contentDigest', product.content_digest,
+        'contentUri', product.content_uri,
+        'effectiveAt', to_char(
+          product.effective_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+      ),
+      jsonb_build_object(
+        'kind', website.kind,
+        'version', website.version,
+        'contentDigest', website.content_digest,
+        'contentUri', website.content_uri,
+        'effectiveAt', to_char(
+          website.effective_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+      )
+    ),
+    'schema', 'sitesourcery.project-legal-authority/v4'
+  ))
+  into computed_authority_digest
+  from ss.legal_documents privacy
+  cross join ss.legal_documents product
+  cross join ss.legal_documents website
+  where privacy.id = '00000000-0000-4000-8000-000000000049'::uuid
+    and product.id = '00000000-0000-4000-8000-000000000105'::uuid
+    and website.id = '00000000-0000-4000-8000-000000000106'::uuid;
+
+  if computed_authority_digest is null
+    or computed_authority_digest <>
+      release_record.authority_digest::ss.sha256_hex
+  then
+    raise exception 'Hosted joint Legal V4 authority digest changed'
+      using errcode = '55000';
+  end if;
+end
+$$;
+
 alter table ss.project_legal_acceptance_receipts
   drop constraint project_legal_acceptance_receipts_schema_version_check;
 
@@ -270,7 +533,7 @@ language sql
 stable
 set search_path = pg_catalog
 as $$
-select 'canonical-ss-v53-held-joint-legal-v4-authority'
+select 'canonical-ss-v53-joint-legal-v4-authority'
 $$;
 
 revoke all on function ss.hosted_runtime_contract_v53()
@@ -308,25 +571,29 @@ begin
        where receipt.schema_version =
          'sitesourcery.project-legal-acceptance/v3'
     )
-    or exists (
-      select 1 from ss.legal_documents document
+    or (
+      select count(*) from ss.legal_documents document
        where document.id in (
          '00000000-0000-4000-8000-000000000049'::uuid,
          '00000000-0000-4000-8000-000000000105'::uuid,
          '00000000-0000-4000-8000-000000000106'::uuid
        )
-    )
-    or exists (
-      select 1 from ss.legal_document_artifacts artifact
+    ) <> 3
+    or (
+      select count(*) from ss.legal_document_artifacts artifact
        where artifact.document_id in (
          '00000000-0000-4000-8000-000000000049'::uuid,
-         '00000000-0000-4000-8000-000000000105'::uuid,
          '00000000-0000-4000-8000-000000000106'::uuid
        )
+    ) <> 2
+    or exists (
+      select 1 from ss.legal_document_artifacts artifact
+       where artifact.document_id =
+         '00000000-0000-4000-8000-000000000105'::uuid
     )
   then
     raise exception
-      'Held joint legal V4 migration changed V3 evidence or created release authority'
+      'Released joint legal V4 migration changed V3 evidence or failed exact release authority'
       using errcode = '55000';
   end if;
 end

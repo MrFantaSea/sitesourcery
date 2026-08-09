@@ -2829,12 +2829,12 @@ test("joint Privacy V3 and Website Terms V3 are additive, exact, and owner-seale
   );
 });
 
-test("joint legal V4 authority is additive, paired, and release-held", async () => {
+test("joint legal V4 authority is additive, paired, and exact-receipt released", async () => {
   const migration = (await migrations()).find(
     ({ name }) => name ===
       "202608090105_hosted_joint_legal_v4_authority.sql"
   );
-  assert.ok(migration, "missing held joint legal V4 authority migration");
+  assert.ok(migration, "missing joint legal V4 authority migration");
   assert.match(migration.sql, /^begin;/iu);
   assert.match(migration.sql, /commit;\s*$/iu);
   assert.match(
@@ -2851,15 +2851,27 @@ test("joint legal V4 authority is additive, paired, and release-held", async () 
   );
   assert.match(
     migration.sql,
-    /create function ss\.hosted_runtime_contract_v53\(\)[\s\S]*canonical-ss-v53-held-joint-legal-v4-authority[\s\S]*grant execute on function ss\.hosted_runtime_contract_v53\(\)\s+to service_role/iu
+    /create function ss\.hosted_runtime_contract_v53\(\)[\s\S]*canonical-ss-v53-joint-legal-v4-authority[\s\S]*grant execute on function ss\.hosted_runtime_contract_v53\(\)\s+to service_role/iu
   );
   assert.match(
     migration.sql,
-    /hosted_joint_legal_v4_v3_fingerprint[\s\S]*is distinct from[\s\S]*Held joint legal V4 migration changed V3 evidence or created release authority/iu
+    /hosted_joint_legal_v4_v3_fingerprint[\s\S]*is distinct from[\s\S]*Released joint legal V4 migration changed V3 evidence or failed exact release authority/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v4_release_constants[\s\S]*SS-HOSTED-PRIVACY-2026-08-09-V4[\s\S]*2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99[\s\S]*31451[\s\S]*SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4[\s\S]*4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642[\s\S]*26215[\s\S]*ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968/iu
+  );
+  assert.match(
+    migration.sql,
+    /insert into ss\.legal_documents[\s\S]*00000000-0000-4000-8000-000000000049[\s\S]*00000000-0000-4000-8000-000000000105[\s\S]*00000000-0000-4000-8000-000000000106/iu
+  );
+  assert.match(
+    migration.sql,
+    /insert into ss\.legal_document_artifacts[\s\S]*00000000-0000-4000-8000-000000000049[\s\S]*00000000-0000-4000-8000-000000000106[\s\S]*artifact\.document_id =\s*'00000000-0000-4000-8000-000000000105'::uuid/iu
   );
   assert.doesNotMatch(
     migration.sql,
-    /insert into ss\.legal_documents|insert into ss\.legal_document_artifacts|SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4|SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V4/iu
+    /update ss\.legal_documents|delete from ss\.legal_documents|update ss\.legal_document_artifacts|delete from ss\.legal_document_artifacts/iu
   );
 });
 

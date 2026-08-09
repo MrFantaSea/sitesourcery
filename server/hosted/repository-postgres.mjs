@@ -346,7 +346,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and not procedure_row.prosecdef
            and procedure_row.prorettype = 'text'::regtype
            and btrim(procedure_row.prosrc, E' \\t\\n\\r') =
-             'select ''canonical-ss-v53-held-joint-legal-v4-authority'''
+             'select ''canonical-ss-v53-joint-legal-v4-authority'''
            and not exists (
              select 1
                from aclexplode(coalesce(
@@ -923,7 +923,7 @@ const PROJECT_LEGAL_DATA_QUERY = `
     ss.hosted_runtime_contract_v48() =
       'canonical-ss-v48-hosted-joint-legal-v3'
     and ss.hosted_runtime_contract_v53() =
-      'canonical-ss-v53-held-joint-legal-v4-authority'
+      'canonical-ss-v53-joint-legal-v4-authority'
       as contract_marker_ready,
     (
       select count(*) = 2
@@ -1016,7 +1016,7 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
     ss.hosted_runtime_contract_v48() =
       'canonical-ss-v48-hosted-joint-legal-v3'
     and ss.hosted_runtime_contract_v53() =
-      'canonical-ss-v53-held-joint-legal-v4-authority'
+      'canonical-ss-v53-joint-legal-v4-authority'
       as contract_marker_ready,
     (
       select count(*) = 3

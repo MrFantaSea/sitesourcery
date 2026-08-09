@@ -22,21 +22,22 @@ export const JOINT_LEGAL_V4_CONTENT = Object.freeze({
   }),
 });
 
-// Content review and release authority are separate. No production V4 tuple
-// exists until the later finalizer receives exact owner approval after the
-// real Cloudflare configuration has been captured and reviewed.
+// Content review and release authority are separate. This tuple is copied
+// byte-for-byte from the one retained owner-approved finalization receipt.
 export const JOINT_LEGAL_V4_RELEASE = Object.freeze({
-  state: "unsealed",
-  privacyVersion: null,
-  privacySha256: null,
-  privacyByteCount: null,
-  privacyArtifactUri: null,
-  websiteTermsVersion: null,
-  websiteTermsSha256: null,
-  websiteTermsByteCount: null,
-  websiteTermsArtifactUri: null,
-  effectiveAt: null,
-  authorityDigest: null,
+  state: "finalized",
+  privacyVersion: "SS-HOSTED-PRIVACY-2026-08-09-V4",
+  privacySha256: "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+  privacyByteCount: 31_451,
+  privacyArtifactUri:
+    "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/",
+  websiteTermsVersion: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4",
+  websiteTermsSha256: "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+  websiteTermsByteCount: 26_215,
+  websiteTermsArtifactUri:
+    "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/",
+  effectiveAt: "2026-08-09T21:42:11.000Z",
+  authorityDigest: "ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968",
 });
 
 export function assertJointLegalV4Held(

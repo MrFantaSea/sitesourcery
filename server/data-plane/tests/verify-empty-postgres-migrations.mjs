@@ -89,6 +89,63 @@ const JOINT_LEGAL_RELEASE_AUTHORITY = Object.freeze({
   ]),
   authorityDigest: JOINT_LEGAL_RELEASE_AUTHORITY_DIGEST
 });
+const JOINT_LEGAL_V4_RELEASE_AUTHORITY_DIGEST =
+  "ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968";
+const JOINT_LEGAL_V4_RELEASE_AUTHORITY = Object.freeze({
+  schema: "sitesourcery.project-legal-authority/v4",
+  documents: Object.freeze([
+    Object.freeze({
+      kind: "privacy",
+      version: "SS-HOSTED-PRIVACY-2026-08-09-V4",
+      contentDigest:
+        "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+      contentUri:
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/",
+      effectiveAt: "2026-08-09T21:42:11.000Z"
+    }),
+    Object.freeze({
+      kind: "product",
+      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4",
+      contentDigest:
+        "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+      contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
+      effectiveAt: "2026-08-09T21:42:11.000Z"
+    }),
+    Object.freeze({
+      kind: "website",
+      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4",
+      contentDigest:
+        "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+      contentUri: "https://sitesourcery.com/legal/website-terms/",
+      effectiveAt: "2026-08-09T21:42:11.000Z"
+    })
+  ]),
+  documentBindings: Object.freeze([
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000049" }),
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000105" }),
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000106" })
+  ]),
+  artifactBindings: Object.freeze([
+    Object.freeze({
+      artifactUri:
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/",
+      artifactSha256:
+        "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+      byteCount: 31_451,
+      mediaType: "text/html; charset=utf-8"
+    }),
+    Object.freeze({ artifactUri: null }),
+    Object.freeze({
+      artifactUri:
+        "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/",
+      artifactSha256:
+        "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+      byteCount: 26_215,
+      mediaType: "text/html; charset=utf-8"
+    })
+  ]),
+  authorityDigest: JOINT_LEGAL_V4_RELEASE_AUTHORITY_DIGEST
+});
 
 function optionalEnvironmentValue(environment, name) {
   const value = environment?.[name];
@@ -248,7 +305,7 @@ async function applyMigrations(pool) {
   assert.equal(
     names.length,
     58,
-    "migration proof requires exactly 58 migrations through the held joint legal V4 authority"
+    "migration proof requires exactly 58 migrations through the released joint legal V4 authority"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -291,28 +348,114 @@ async function applyPostPrivacyMigrations(
   }
 }
 
-async function verifyHeldJointLegalV4State(pool) {
+async function verifyJointLegalV4ReleaseState(pool) {
   const result = await pool.query(`
     select
       ss.hosted_runtime_contract_v53() =
-        'canonical-ss-v53-held-joint-legal-v4-authority'
+        'canonical-ss-v53-joint-legal-v4-authority'
         as v53_contract_ready,
-      not exists (
-        select 1 from ss.legal_documents document
-         where document.id in (
-           '00000000-0000-4000-8000-000000000049'::uuid,
-           '00000000-0000-4000-8000-000000000105'::uuid,
-           '00000000-0000-4000-8000-000000000106'::uuid
+      (
+        select count(*) = 3
+          from ss.legal_documents document
+         where (
+           document.id = '00000000-0000-4000-8000-000000000049'::uuid
+           and document.kind = 'privacy'
+           and document.version = 'SS-HOSTED-PRIVACY-2026-08-09-V4'
+           and document.content_digest =
+             '2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/'
+           and document.effective_at =
+             '2026-08-09T21:42:11.000Z'::timestamptz
+           and document.retired_at is null
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000105'::uuid
+           and document.kind = 'product'
+           and document.version = 'SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4'
+           and document.content_digest =
+             '4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/website-terms/#self-service'
+           and document.effective_at =
+             '2026-08-09T21:42:11.000Z'::timestamptz
+           and document.retired_at is null
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000106'::uuid
+           and document.kind = 'website'
+           and document.version = 'SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4'
+           and document.content_digest =
+             '4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/website-terms/'
+           and document.effective_at =
+             '2026-08-09T21:42:11.000Z'::timestamptz
+           and document.retired_at is null
          )
-      ) as v4_documents_held,
-      not exists (
+      ) as v4_documents_ready,
+      (
+        select count(*) = 2
+          from ss.legal_document_artifacts artifact
+         where (
+           artifact.document_id =
+             '00000000-0000-4000-8000-000000000049'::uuid
+           and artifact.artifact_uri =
+             'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/'
+           and artifact.artifact_sha256 =
+             '2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99'
+           and artifact.byte_count = 31451
+           and artifact.media_type = 'text/html; charset=utf-8'
+         ) or (
+           artifact.document_id =
+             '00000000-0000-4000-8000-000000000106'::uuid
+           and artifact.artifact_uri =
+             'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/'
+           and artifact.artifact_sha256 =
+             '4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642'
+           and artifact.byte_count = 26215
+           and artifact.media_type = 'text/html; charset=utf-8'
+         )
+      ) and not exists (
         select 1 from ss.legal_document_artifacts artifact
-         where artifact.document_id in (
-           '00000000-0000-4000-8000-000000000049'::uuid,
-           '00000000-0000-4000-8000-000000000105'::uuid,
-           '00000000-0000-4000-8000-000000000106'::uuid
-         )
-      ) as v4_artifacts_held,
+         where artifact.document_id =
+           '00000000-0000-4000-8000-000000000105'::uuid
+      ) as v4_artifacts_ready,
+      (
+        select ss.project_legal_json_digest(jsonb_build_object(
+          'documents', jsonb_build_array(
+            jsonb_build_object(
+              'kind', privacy.kind,
+              'version', privacy.version,
+              'contentDigest', privacy.content_digest,
+              'contentUri', privacy.content_uri,
+              'effectiveAt', to_char(privacy.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            ),
+            jsonb_build_object(
+              'kind', product.kind,
+              'version', product.version,
+              'contentDigest', product.content_digest,
+              'contentUri', product.content_uri,
+              'effectiveAt', to_char(product.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            ),
+            jsonb_build_object(
+              'kind', website.kind,
+              'version', website.version,
+              'contentDigest', website.content_digest,
+              'contentUri', website.content_uri,
+              'effectiveAt', to_char(website.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            )
+          ),
+          'schema', 'sitesourcery.project-legal-authority/v4'
+        )) = 'ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968'
+          from ss.legal_documents privacy
+          cross join ss.legal_documents product
+          cross join ss.legal_documents website
+         where privacy.id = '00000000-0000-4000-8000-000000000049'::uuid
+           and product.id = '00000000-0000-4000-8000-000000000105'::uuid
+           and website.id = '00000000-0000-4000-8000-000000000106'::uuid
+      ) as v4_authority_digest_ready,
       (
         select count(*) = 1
           from pg_constraint constraint_row
@@ -329,7 +472,7 @@ async function verifyHeldJointLegalV4State(pool) {
       ) as v4_receipt_schema_ready
   `);
   for (const [name, ready] of Object.entries(result.rows[0])) {
-    assert.equal(ready, true, `Held joint legal V4 state failed: ${name}`);
+    assert.equal(ready, true, `Joint legal V4 release state failed: ${name}`);
   }
 }
 
@@ -518,7 +661,7 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
   assert.equal(count.rows[0].acceptance_count, 3);
 }
 
-async function verifyHeldV4ReceiptRejectsWithoutAuthority(pool) {
+async function verifyV4ReceiptRejectsFourthAcceptance(pool) {
   const existing = await pool.query(`
     select organization_id, project_id, user_id, accepted_at
       from ss.project_legal_acceptance_receipts
@@ -528,7 +671,13 @@ async function verifyHeldV4ReceiptRejectsWithoutAuthority(pool) {
   `);
   assert.equal(existing.rowCount, 1);
   const receiptId = randomUUID();
-  let rejection = null;
+  const requestId = randomUUID();
+  const acceptedAt = "2026-08-09T21:42:11.000Z";
+  const documentIds = [
+    "00000000-0000-4000-8000-000000000105",
+    "00000000-0000-4000-8000-000000000049",
+    "00000000-0000-4000-8000-000000000106"
+  ];
   await pool.query("begin");
   try {
     await pool.query(
@@ -547,24 +696,71 @@ async function verifyHeldV4ReceiptRejectsWithoutAuthority(pool) {
         existing.rows[0].organization_id,
         existing.rows[0].project_id,
         existing.rows[0].user_id,
+        requestId,
+        JOINT_LEGAL_V4_RELEASE_AUTHORITY_DIGEST,
+        acceptedAt,
+      ],
+    );
+    for (const documentId of documentIds) {
+      await pool.query(
+        `insert into ss.term_acceptances (
+           id, organization_id, project_id, user_id, document_id,
+           accepted_at, request_id, legal_receipt_id
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          randomUUID(),
+          existing.rows[0].organization_id,
+          existing.rows[0].project_id,
+          existing.rows[0].user_id,
+          documentId,
+          acceptedAt,
+          requestId,
+          receiptId,
+        ],
+      );
+    }
+    await pool.query("commit");
+  } catch (error) {
+    await pool.query("rollback");
+    throw error;
+  }
+
+  let rogueError = null;
+  await pool.query("begin");
+  try {
+    await pool.query(
+      `insert into ss.term_acceptances (
+         id, organization_id, project_id, user_id, document_id,
+         accepted_at, request_id, legal_receipt_id
+       ) values (
+         $1, $2, $3, $4,
+         '00000000-0000-4000-8000-000000000022',
+         $5, $6, $7
+       )`,
+      [
         randomUUID(),
-        "e".repeat(64),
-        existing.rows[0].accepted_at,
+        existing.rows[0].organization_id,
+        existing.rows[0].project_id,
+        existing.rows[0].user_id,
+        acceptedAt,
+        requestId,
+        receiptId,
       ],
     );
     await pool.query("commit");
   } catch (error) {
-    rejection = error;
+    rogueError = error;
     await pool.query("rollback");
   }
-  assert.equal(rejection?.code, "23514");
+  assert.equal(rogueError?.code, "23514");
+  assert.match(rogueError.message, /exact reviewed three-document bundle/u);
   const retained = await pool.query(
     `select count(*)::integer as count
-       from ss.project_legal_acceptance_receipts
-      where id = $1`,
+       from ss.term_acceptances
+      where legal_receipt_id = $1`,
     [receiptId],
   );
-  assert.equal(retained.rows[0].count, 0);
+  assert.equal(retained.rows[0].count, 3);
 }
 
 async function verifyPreJointLegalV3State(pool) {
@@ -700,6 +896,12 @@ async function verifyProjectLegalReadiness(pool, expectedReady) {
     assert.equal(
       await authority.projectLegalAuthorityMatches(
         JOINT_LEGAL_RELEASE_AUTHORITY
+      ),
+      true
+    );
+    assert.equal(
+      await authority.projectLegalAuthorityMatches(
+        JOINT_LEGAL_V4_RELEASE_AUTHORITY
       ),
       true
     );
@@ -4269,11 +4471,11 @@ export async function runMigrationVerification({
       pool,
       postPrivacyNames
     );
-    await verifyHeldJointLegalV4State(pool);
+    await verifyJointLegalV4ReleaseState(pool);
     await verifyPlatformSchema(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
-    await verifyHeldV4ReceiptRejectsWithoutAuthority(pool);
+    await verifyV4ReceiptRejectsFourthAcceptance(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -4293,7 +4495,7 @@ export async function runMigrationVerification({
         v2After.row_version === v2Before.row_version}\n`
     );
     writeOutput("rogueFourthAcceptanceRejected true\n");
-    writeOutput("heldV4ReceiptWithoutAuthorityRejected true\n");
+    writeOutput("jointLegalV4ReceiptAcceptedAndFourthRejected true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
