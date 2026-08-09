@@ -11,6 +11,7 @@ import {
   STRIPE_CUSTOM_BUILD_FINAL_METADATA_SCHEMA,
   STRIPE_CUSTOM_BUILD_FINAL_PAYMENT_SCHEMA,
   STRIPE_CUSTOM_BUILD_FINAL_PURPOSE_SCHEMA,
+  STRIPE_REQUIRED_WEBHOOK_EVENTS,
   createOfficialStripeClient,
   createStripeProviderAdapter
 } from "../adapters/stripe.mjs";
@@ -41,11 +42,44 @@ function configuration(overrides = {}) {
       "https://account.sitesourcery.test/billing/cancel",
     portalReturnUrl:
       "https://account.sitesourcery.test/account",
+    portalPrivacyPolicyUrl:
+      "https://account.sitesourcery.test/privacy",
+    portalTermsOfServiceUrl:
+      "https://account.sitesourcery.test/terms",
     approvedReturnOrigins: [
       "https://account.sitesourcery.test"
     ],
     taxMode: "disabled_by_owner",
+    taxCodes: {
+      alakazam: "txcd_10701100",
+      customBuildChange: "txcd_10701200",
+      customBuildFinal: "txcd_10701200",
+      customBuildStart: "txcd_10701200",
+      // Contract-only sentinel. Production keeps domains held until
+      // the owner approves an exact Stripe Tax classification.
+      domainRegistration: "txcd_contractdomainonly",
+      download: "txcd_10701200",
+      serviceAssessment: "txcd_10701200",
+      siteService: "txcd_10701200"
+    },
+    taxAttestation: {
+      schema: "sitesourcery.stripe-tax-attestation/v1",
+      provider: "stripe",
+      approved: true,
+      attestationId: "tax-attestation-contract",
+      approvedAt: "2026-08-09T12:00:00.000Z",
+      livemode: overrides.livemode ?? false,
+      taxMode:
+        overrides.taxMode ?? "disabled_by_owner",
+      headOfficeCountry: "US",
+      defaultTaxBehavior: "exclusive",
+      registrationDecision: "none_registered",
+      registrationIds: []
+    },
     webhookSecret: "whsec_contract_test",
+    webhookEndpointId: "we_contract_test",
+    webhookEndpointUrl:
+      "https://account.sitesourcery.test/api/v1/webhooks/stripe",
     checkoutTtlSeconds: 1800,
     domainAuthorization: {
       successUrlTemplate:
@@ -59,15 +93,17 @@ function configuration(overrides = {}) {
       {
         id: "price_site_once",
         currency: "usd",
-        unitAmount: 35000,
-        livemode: false,
-        recurring: null
+          unitAmount: 35000,
+          livemode: false,
+          taxBehavior: "exclusive",
+          recurring: null
       },
       {
         id: "price_site_month",
         currency: "usd",
-        unitAmount: 32500,
-        livemode: false,
+          unitAmount: 32500,
+          livemode: false,
+          taxBehavior: "exclusive",
         recurring: {
           interval: "month",
           intervalCount: 1
@@ -94,6 +130,7 @@ function alakazamConfiguration(overrides = {}) {
             alakazam_50: 5000
           }[tierId],
           livemode: false,
+          taxBehavior: "exclusive",
           recurring: {
             interval: "month",
             intervalCount: 1
@@ -908,7 +945,8 @@ function customBuildFinalCheckoutReadback({
           product: {
             id: "prod_test_custom_build_final_1",
             name:
-              "Site Sourcery Custom build — final installment"
+              "Site Sourcery Custom build — final installment",
+            tax_code: "txcd_10701200"
           }
         }
       }],
@@ -1087,6 +1125,7 @@ function fakePrice(expectation, overrides = {}) {
     livemode: expectation.livemode,
     currency: expectation.currency,
     unit_amount: expectation.unitAmount,
+    tax_behavior: expectation.taxBehavior,
     recurring: expectation.recurring
       ? {
           interval: expectation.recurring.interval,
@@ -1112,6 +1151,14 @@ function fakeStripe({
   checkoutRetrieveResponse = null,
   paymentIntentRetrieveError = null,
   paymentIntentRetrieveResponse = null,
+  invoiceRetrieveError = null,
+  invoiceRetrieveResponse = null,
+  chargeRetrieveError = null,
+  chargeRetrieveResponse = null,
+  refundListError = null,
+  refundListResponse = null,
+  disputeListError = null,
+  disputeListResponse = null,
   captureError = null,
   captureResponse = null,
   voidError = null,
@@ -1141,7 +1188,9 @@ function fakeStripe({
   scheduleUpdateError = null,
   scheduleUpdateResponse = null,
   webhookError = null,
-  webhookEvent = null
+  webhookEvent = null,
+  webhookEndpointError = null,
+  webhookEndpointResponse = null
 } = {}) {
   const calls = {
     prices: [],
@@ -1149,6 +1198,10 @@ function fakeStripe({
     checkouts: [],
     checkoutReads: [],
     paymentIntentReads: [],
+    invoiceReads: [],
+    chargeReads: [],
+    refundLists: [],
+    disputeLists: [],
     captures: [],
     voids: [],
     refunds: [],
@@ -1163,7 +1216,8 @@ function fakeStripe({
     scheduleCreates: [],
     scheduleReads: [],
     scheduleUpdates: [],
-    webhooks: []
+    webhooks: [],
+    webhookEndpoints: []
   };
   let subscriptionReadIndex = 0;
   let scheduleReadIndex = 0;
@@ -1187,7 +1241,8 @@ function fakeStripe({
             id,
             active: true,
             livemode: false,
-            name: "Alakazam"
+            name: "Alakazam",
+            tax_code: config.taxCodes.alakazam
           }
         );
       }
@@ -1340,6 +1395,27 @@ function fakeStripe({
         return structuredClone(voidResponse);
       }
     },
+    invoices: {
+      async retrieve(id, params) {
+        calls.invoiceReads.push({
+          id,
+          params: structuredClone(params)
+        });
+        if (invoiceRetrieveError) {
+          throw invoiceRetrieveError;
+        }
+        return structuredClone(invoiceRetrieveResponse);
+      }
+    },
+    charges: {
+      async retrieve(id) {
+        calls.chargeReads.push(id);
+        if (chargeRetrieveError) {
+          throw chargeRetrieveError;
+        }
+        return structuredClone(chargeRetrieveResponse);
+      }
+    },
     refunds: {
       async create(params, requestOptions) {
         calls.refunds.push({
@@ -1349,6 +1425,18 @@ function fakeStripe({
         });
         if (refundError) throw refundError;
         return structuredClone(refundResponse);
+      },
+      async list(params) {
+        calls.refundLists.push(structuredClone(params));
+        if (refundListError) throw refundListError;
+        return structuredClone(refundListResponse);
+      }
+    },
+    disputes: {
+      async list(params) {
+        calls.disputeLists.push(structuredClone(params));
+        if (disputeListError) throw disputeListError;
+        return structuredClone(disputeListResponse);
       }
     },
     billingPortal: {
@@ -1365,6 +1453,16 @@ function fakeStripe({
               livemode: false,
               default_return_url:
                 config.portalReturnUrl,
+              business_profile: {
+                privacy_policy_url:
+                  config.portalPrivacyPolicyUrl,
+                terms_of_service_url:
+                  config.portalTermsOfServiceUrl
+              },
+              login_page: {
+                enabled: false,
+                url: null
+              },
               features: {
                 customer_update: { enabled: false },
                 invoice_history: { enabled: true },
@@ -1518,6 +1616,43 @@ function fakeStripe({
           }
         );
       }
+    },
+    webhookEndpoints: {
+      async retrieve(id) {
+        calls.webhookEndpoints.push(id);
+        if (webhookEndpointError) {
+          throw webhookEndpointError;
+        }
+        return structuredClone(
+          webhookEndpointResponse ?? {
+            id,
+            application: null,
+            api_version: STRIPE_API_VERSION,
+            enabled_events: [
+              "charge.dispute.closed",
+              "charge.dispute.created",
+              "charge.dispute.funds_reinstated",
+              "charge.dispute.funds_withdrawn",
+              "charge.dispute.updated",
+              "charge.refunded",
+              "checkout.session.completed",
+              "customer.subscription.created",
+              "customer.subscription.deleted",
+              "customer.subscription.updated",
+              "invoice.paid",
+              "invoice.payment_action_required",
+              "invoice.payment_failed",
+              "invoice.payment_succeeded",
+              "refund.created",
+              "refund.failed",
+              "refund.updated"
+            ],
+            livemode: false,
+            status: "enabled",
+            url: config.webhookEndpointUrl
+          }
+        );
+      }
     }
   };
   return { calls, client };
@@ -1584,6 +1719,7 @@ function fakeAlakazamSubscription({
             livemode: false,
             currency: "usd",
             unit_amount: amountMinor,
+            tax_behavior: "exclusive",
             recurring: {
               interval: "month",
               interval_count: 1
@@ -1593,6 +1729,111 @@ function fakeAlakazamSubscription({
         }
       ]
     }
+  };
+}
+
+function fakeAlakazamLifecycleInvoice({
+  paid = true,
+  overrides = {}
+} = {}) {
+  const totalMinor = 2500;
+  const paymentIntent = {
+    id: "pi_alakazam_lifecycle_1",
+    customer: "cus_alakazam_customer_1",
+    livemode: false,
+    currency: "usd",
+    amount: totalMinor,
+    amount_received: paid ? totalMinor : 0,
+    status: paid ? "succeeded" : "requires_payment_method"
+  };
+  return {
+    id: "in_alakazam_lifecycle_1",
+    customer: "cus_alakazam_customer_1",
+    livemode: false,
+    currency: "usd",
+    status: paid ? "paid" : "open",
+    billing_reason: "subscription_cycle",
+    collection_method: "charge_automatically",
+    automatic_tax: { enabled: false, status: null },
+    parent: {
+      type: "subscription_details",
+      subscription_details: {
+        subscription: "sub_alakazam_subscription_1"
+      }
+    },
+    lines: {
+      has_more: false,
+      data: [{
+        livemode: false,
+        currency: "usd",
+        amount: totalMinor,
+        subtotal: totalMinor,
+        quantity: 1,
+        period: {
+          start: Date.parse(ALAKAZAM_PERIOD_START) / 1000,
+          end: Date.parse(ALAKAZAM_PERIOD_END) / 1000
+        },
+        parent: {
+          type: "subscription_item_details",
+          subscription_item_details: {
+            subscription: "sub_alakazam_subscription_1",
+            subscription_item: "si_alakazam_item_1",
+            proration: false
+          }
+        },
+        pricing: {
+          type: "price_details",
+          price_details: {
+            price: ALAKAZAM_PRICE_IDS.alakazam_25
+          }
+        }
+      }]
+    },
+    payments: {
+      has_more: false,
+      data: [{
+        livemode: false,
+        currency: "usd",
+        status: paid ? "paid" : "open",
+        amount_requested: totalMinor,
+        amount_paid: paid ? totalMinor : 0,
+        payment: {
+          type: "payment_intent",
+          payment_intent: paymentIntent
+        },
+        status_transitions: {
+          paid_at: paid ? 1785672000 : null
+        }
+      }]
+    },
+    subtotal: totalMinor,
+    total_discount_amounts: [],
+    pre_payment_credit_notes_amount: 0,
+    post_payment_credit_notes_amount: 0,
+    total_excluding_tax: totalMinor,
+    total: totalMinor,
+    amount_due: totalMinor,
+    amount_paid: paid ? totalMinor : 0,
+    amount_remaining: paid ? 0 : totalMinor,
+    amount_paid_off_stripe: 0,
+    attempt_count: 1,
+    next_payment_attempt: paid ? null : 1788350400,
+    ...overrides
+  };
+}
+
+function fakeAlakazamCharge(overrides = {}) {
+  return {
+    id: "ch_alakazam_lifecycle_1",
+    payment_intent: "pi_alakazam_lifecycle_1",
+    livemode: false,
+    currency: "usd",
+    paid: true,
+    status: "succeeded",
+    amount: 2500,
+    amount_refunded: 2500,
+    refunded: true,
+    ...overrides
   };
 }
 
@@ -1793,8 +2034,12 @@ function paidAlakazamCheckout(request) {
                 livemode: false,
                 currency: "usd",
                 unit_amount: listSubtotalMinor,
+                tax_behavior: "exclusive",
                 recurring: null,
-                product: ALAKAZAM_PRODUCT_ID
+                product: {
+                  id: ALAKAZAM_PRODUCT_ID,
+                  tax_code: "txcd_10701100"
+                }
               }
         }
       ]
@@ -2060,6 +2305,10 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "createAlakazamStartCheckout",
     "createAlakazamUpgradeCheckout",
     "retrieveAlakazamPayment",
+    "retrieveAlakazamRenewalInvoice",
+    "retrieveAlakazamIncidentInvoice",
+    "retrieveAlakazamCancellation",
+    "retrieveAlakazamReversal",
     "retrieveAlakazamSubscription",
     "retrieveAlakazamSchedule",
     "applyAlakazamUpgrade",
@@ -2155,6 +2404,62 @@ test("Alakazam construction requires three distinct exact monthly Prices bound t
   }
 });
 
+test("construction requires an approved purpose tax code for every enabled inline-price path", () => {
+  const fields = [
+    "alakazam",
+    "customBuildChange",
+    "customBuildFinal",
+    "customBuildStart",
+    "domainRegistration",
+    "download",
+    "serviceAssessment",
+    "siteService"
+  ];
+  for (const field of fields) {
+    const config = configuration();
+    config.taxCodes = { ...config.taxCodes };
+    delete config.taxCodes[field];
+    const fake = fakeStripe({ config });
+    assert.throws(
+      () => adapterFixture({ config, fake }),
+      (error) =>
+        error.code === "stripe_tax_codes_required"
+    );
+    assert.equal(fake.calls.checkouts.length, 0);
+  }
+});
+
+test("construction rejects an unapproved or mode-mismatched Stripe Tax attestation", () => {
+  for (const override of [
+    { approved: false },
+    { livemode: true },
+    { defaultTaxBehavior: "inclusive" },
+    {
+      registrationDecision: "registered",
+      registrationIds: []
+    },
+    {
+      registrationDecision: "none_registered",
+      registrationIds: ["taxreg_unapproved"]
+    }
+  ]) {
+    const config = configuration();
+    config.taxAttestation = {
+      ...config.taxAttestation,
+      ...override
+    };
+    assert.throws(
+      () =>
+        adapterFixture({
+          config,
+          fake: fakeStripe({ config })
+        }),
+      (error) =>
+        error.code === "stripe_tax_attestation_invalid"
+    );
+  }
+});
+
 test("readiness reads back every exact owner-approved Price", async () => {
   const { adapter, calls } = adapterFixture();
   assert.deepEqual(await adapter.readiness(), {
@@ -2167,12 +2472,64 @@ test("readiness reads back every exact owner-approved Price", async () => {
     priceCount: 2,
     domainAuthorization: true,
     webhookVerification: true,
-    taxMode: "disabled_by_owner"
+    webhookEndpoint: true,
+    taxMode: "disabled_by_owner",
+    taxAttestation: true
   });
   assert.deepEqual(calls.prices, [
     "price_site_once",
     "price_site_month"
   ]);
+  assert.deepEqual(calls.webhookEndpoints, [
+    "we_contract_test"
+  ]);
+});
+
+test("readiness fails closed on Webhook Endpoint URL, status, API version, mode, or event drift", async () => {
+  const config = configuration();
+  const endpoint = {
+    id: config.webhookEndpointId,
+    livemode: false,
+    status: "enabled",
+    api_version: STRIPE_API_VERSION,
+    application: null,
+    enabled_events: [...STRIPE_REQUIRED_WEBHOOK_EVENTS],
+    url: config.webhookEndpointUrl
+  };
+  for (const override of [
+    { url: "https://wrong.sitesourcery.test/webhook" },
+    { status: "disabled" },
+    { api_version: "2025-12-15.clover" },
+    { livemode: true },
+    {
+      enabled_events:
+        STRIPE_REQUIRED_WEBHOOK_EVENTS.slice(1)
+    },
+    {
+      enabled_events: [
+        ...STRIPE_REQUIRED_WEBHOOK_EVENTS,
+        "account.updated"
+      ]
+    }
+  ]) {
+    const fake = fakeStripe({
+      config,
+      webhookEndpointResponse: {
+        ...endpoint,
+        ...override
+      }
+    });
+    const readiness = await adapterFixture({
+      config,
+      fake
+    }).adapter.readiness();
+    assert.equal(readiness.ready, false);
+    assert.equal(
+      readiness.code,
+      "stripe_webhook_endpoint_mismatch"
+    );
+    assert.equal(fake.calls.checkouts.length, 0);
+  }
 });
 
 test("readiness fails closed when Stripe Price readback drifts", async () => {
@@ -2209,7 +2566,9 @@ test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Cou
     priceCount: 5,
     domainAuthorization: true,
     webhookVerification: true,
+    webhookEndpoint: true,
     taxMode: "disabled_by_owner",
+    taxAttestation: true,
     alakazam: true
   });
   assert.deepEqual(fake.calls.coupons, [
@@ -2282,6 +2641,65 @@ test("Alakazam readiness fails closed when its Product, Coupon, or Portal drifts
       /^stripe_alakazam_(?:product|coupon|portal_configuration)_mismatch$/u
     );
     assert.equal(fake.calls.checkouts.length, 0);
+  }
+});
+
+test("Alakazam readiness requires exact Portal legal URLs with direct login disabled", async () => {
+  const config = alakazamConfiguration();
+  const baseline = {
+    id: ALAKAZAM_PORTAL_CONFIGURATION_ID,
+    active: true,
+    livemode: false,
+    default_return_url: config.portalReturnUrl,
+    business_profile: {
+      privacy_policy_url: config.portalPrivacyPolicyUrl,
+      terms_of_service_url: config.portalTermsOfServiceUrl
+    },
+    login_page: { enabled: false, url: null },
+    features: {
+      customer_update: { enabled: false },
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      subscription_cancel: { enabled: false },
+      subscription_update: { enabled: false }
+    }
+  };
+  for (const response of [
+    {
+      ...baseline,
+      business_profile: {
+        ...baseline.business_profile,
+        privacy_policy_url: "https://wrong.example/privacy"
+      }
+    },
+    {
+      ...baseline,
+      business_profile: {
+        ...baseline.business_profile,
+        terms_of_service_url: "https://wrong.example/terms"
+      }
+    },
+    {
+      ...baseline,
+      login_page: {
+        enabled: true,
+        url: "https://billing.stripe.com/p/login/test"
+      }
+    }
+  ]) {
+    const fake = fakeStripe({
+      config,
+      portalConfigurationResponse: response
+    });
+    const readiness = await adapterFixture({
+      config,
+      fake
+    }).adapter.readiness();
+    assert.equal(readiness.ready, false);
+    assert.equal(
+      readiness.code,
+      "stripe_alakazam_portal_configuration_mismatch"
+    );
   }
 });
 
@@ -2507,7 +2925,8 @@ test("Alakazam upgrade Checkout collects only the fixed tier difference", async 
       price_data: {
         currency: "usd",
         unit_amount: 1000,
-        product: ALAKAZAM_PRODUCT_ID
+        product: ALAKAZAM_PRODUCT_ID,
+        tax_behavior: "exclusive"
       },
       quantity: 1
     }
@@ -2665,6 +3084,216 @@ test("Alakazam settlement rejects provider money drift even after a signed webho
   );
   assert.equal(fake.calls.subscriptionUpdates.length, 0);
   assert.equal(fake.calls.scheduleCreates.length, 0);
+});
+
+test("Alakazam lifecycle invoice readbacks bind the exact Invoice, Subscription, line, and PaymentIntent", async () => {
+  const config = alakazamConfiguration();
+  const request = {
+    stripeInvoiceId: "in_alakazam_lifecycle_1",
+    stripeSubscriptionId: "sub_alakazam_subscription_1",
+    stripeCustomerId: "cus_alakazam_customer_1"
+  };
+  const renewalFake = fakeStripe({
+    config,
+    invoiceRetrieveResponse:
+      fakeAlakazamLifecycleInvoice(),
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription()
+    ]
+  });
+  const renewal = await adapterFixture({
+    config,
+    fake: renewalFake
+  }).adapter.retrieveAlakazamRenewalInvoice(request);
+  assert.equal(
+    renewal.schema,
+    "sitesourcery.stripe-alakazam-renewal-invoice/v1"
+  );
+  assert.equal(renewal.status, "paid");
+  assert.equal(renewal.totalMinor, 2500);
+  assert.equal(renewal.taxMinor, 0);
+  assert.equal(
+    renewal.subscription.stripeSubscriptionItemId,
+    "si_alakazam_item_1"
+  );
+  assert.match(renewal.providerFactsDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(Object.isFrozen(renewal), true);
+  assert.deepEqual(renewalFake.calls.invoiceReads, [{
+    id: "in_alakazam_lifecycle_1",
+    params: {
+      expand: [
+        "lines.data.pricing.price_details.price",
+        "payments.data.payment.payment_intent"
+      ]
+    }
+  }]);
+
+  const incidentFake = fakeStripe({
+    config,
+    invoiceRetrieveResponse:
+      fakeAlakazamLifecycleInvoice({ paid: false }),
+    subscriptionRetrieveResponses: [
+      fakeAlakazamSubscription({ status: "past_due" })
+    ]
+  });
+  const incident = await adapterFixture({
+    config,
+    fake: incidentFake
+  }).adapter.retrieveAlakazamIncidentInvoice(request);
+  assert.equal(
+    incident.schema,
+    "sitesourcery.stripe-alakazam-incident-invoice/v1"
+  );
+  assert.equal(incident.status, "open");
+  assert.equal(incident.amountDueMinor, 2500);
+  assert.equal(incident.amountPaidMinor, 0);
+  assert.equal(incident.attemptCount, 1);
+  assert.equal(incident.subscriptionStatus, "past_due");
+  assert.equal(
+    incident.paymentIntentStatus,
+    "requires_payment_method"
+  );
+  assert.match(incident.providerFactsDigest, /^[a-f0-9]{64}$/u);
+});
+
+test("Alakazam lifecycle invoice readback fails closed on provider identity or payment drift", async () => {
+  const config = alakazamConfiguration();
+  const request = {
+    stripeInvoiceId: "in_alakazam_lifecycle_1",
+    stripeSubscriptionId: "sub_alakazam_subscription_1",
+    stripeCustomerId: "cus_alakazam_customer_1"
+  };
+  for (const response of [
+    fakeAlakazamLifecycleInvoice({
+      overrides: { livemode: true }
+    }),
+    fakeAlakazamLifecycleInvoice({
+      overrides: { amount_paid_off_stripe: 2500 }
+    }),
+    fakeAlakazamLifecycleInvoice({
+      overrides: {
+        payments: {
+          has_more: true,
+          data: fakeAlakazamLifecycleInvoice().payments.data
+        }
+      }
+    })
+  ]) {
+    const fake = fakeStripe({
+      config,
+      invoiceRetrieveResponse: response,
+      subscriptionRetrieveResponses: [
+        fakeAlakazamSubscription()
+      ]
+    });
+    await assert.rejects(
+      adapterFixture({ config, fake }).adapter
+        .retrieveAlakazamRenewalInvoice(request),
+      (error) =>
+        error.code === "stripe_alakazam_renewal_mismatch" &&
+        error.status === 502
+    );
+  }
+});
+
+test("Alakazam cancellation readback proves the still-current period-end stop", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({
+    config,
+    subscriptionRetrieveResponses: [{
+      ...fakeAlakazamSubscription(),
+      cancel_at_period_end: true
+    }]
+  });
+  const facts = await adapterFixture({ config, fake })
+    .adapter.retrieveAlakazamCancellation({
+      stripeSubscriptionId: "sub_alakazam_subscription_1",
+      stripeCustomerId: "cus_alakazam_customer_1"
+    });
+  assert.equal(
+    facts.schema,
+    "sitesourcery.stripe-alakazam-cancellation/v1"
+  );
+  assert.equal(facts.cancelAtPeriodEnd, true);
+  assert.equal(facts.cancelAt, ALAKAZAM_PERIOD_END);
+  assert.equal(facts.providerStatus, "active");
+  assert.match(facts.providerFactsDigest, /^[a-f0-9]{64}$/u);
+});
+
+test("Alakazam reversal readback binds one exact Refund or Dispute to its successful Charge", async () => {
+  const config = alakazamConfiguration();
+  const refundFake = fakeStripe({
+    config,
+    chargeRetrieveResponse: fakeAlakazamCharge(),
+    refundListResponse: {
+      has_more: false,
+      data: [{
+        id: "re_alakazam_lifecycle_1",
+        charge: "ch_alakazam_lifecycle_1",
+        payment_intent: "pi_alakazam_lifecycle_1",
+        livemode: false,
+        currency: "usd",
+        amount: 2500,
+        status: "succeeded"
+      }]
+    }
+  });
+  const refund = await adapterFixture({
+    config,
+    fake: refundFake
+  }).adapter.retrieveAlakazamReversal({
+    eventType: "refund.updated",
+    stripeChargeId: "ch_alakazam_lifecycle_1",
+    stripePaymentIntentId: "pi_alakazam_lifecycle_1"
+  });
+  assert.equal(refund.reversalKind, "refund");
+  assert.equal(refund.outcome, "refund_full");
+  assert.equal(refund.amountReversedMinor, 2500);
+  assert.equal(refund.stripeRefundId, "re_alakazam_lifecycle_1");
+  assert.deepEqual(refundFake.calls.refundLists, [{
+    charge: "ch_alakazam_lifecycle_1",
+    limit: 2
+  }]);
+
+  const disputeFake = fakeStripe({
+    config,
+    chargeRetrieveResponse: fakeAlakazamCharge({
+      amount_refunded: 0,
+      refunded: false
+    }),
+    disputeListResponse: {
+      has_more: false,
+      data: [{
+        id: "dp_alakazam_lifecycle_1",
+        charge: "ch_alakazam_lifecycle_1",
+        payment_intent: "pi_alakazam_lifecycle_1",
+        livemode: false,
+        currency: "usd",
+        amount: 2500,
+        status: "under_review",
+        balance_transactions: [{ amount: -2500 }]
+      }]
+    }
+  });
+  const dispute = await adapterFixture({
+    config,
+    fake: disputeFake
+  }).adapter.retrieveAlakazamReversal({
+    eventType: "charge.dispute.updated",
+    stripeChargeId: "ch_alakazam_lifecycle_1",
+    stripePaymentIntentId: "pi_alakazam_lifecycle_1"
+  });
+  assert.equal(dispute.reversalKind, "dispute");
+  assert.equal(dispute.outcome, "dispute_open");
+  assert.equal(dispute.amountReversedMinor, 2500);
+  assert.equal(
+    dispute.stripeDisputeId,
+    "dp_alakazam_lifecycle_1"
+  );
+  assert.deepEqual(disputeFake.calls.disputeLists, [{
+    charge: "ch_alakazam_lifecycle_1",
+    limit: 2
+  }]);
 });
 
 test("Alakazam upgrade swaps the existing item with no proration and proves the unchanged billing boundary", async () => {
@@ -3192,8 +3821,10 @@ test("one-time Download creates only the exact server-priced $5 Checkout", async
       price_data: {
         currency: "usd",
         unit_amount: 500,
+        tax_behavior: "exclusive",
         product_data: {
-          name: "Abracadabra Download"
+          name: "Abracadabra Download",
+          tax_code: "txcd_10701200"
         }
       },
       quantity: 1
@@ -3263,7 +3894,8 @@ test("assessment invoice creates one exact automatic-tax $200 Checkout", async (
         unit_amount: 20000,
         tax_behavior: "exclusive",
         product_data: {
-          name: "Site Sourcery website assessment"
+          name: "Site Sourcery website assessment",
+          tax_code: "txcd_10701200"
         }
       },
       quantity: 1
@@ -3717,7 +4349,8 @@ test("Custom-build first installment creates one exact variable automatic-tax Ch
         unit_amount: request.purpose.price.amountMinor,
         tax_behavior: "exclusive",
         product_data: {
-          name: "Site Sourcery Custom build — first installment"
+          name: "Site Sourcery Custom build — first installment",
+          tax_code: "txcd_10701200"
         }
       },
       quantity: 1
@@ -4070,7 +4703,8 @@ test("Custom-build change order creates one distinct exact automatic-tax Checkou
           request.purpose.price.unitAmountMinor,
         tax_behavior: "exclusive",
         product_data: {
-          name: "Site Sourcery Custom build — accepted change order"
+          name: "Site Sourcery Custom build — accepted change order",
+          tax_code: "txcd_10701200"
         }
       },
       quantity: request.purpose.price.quantity
@@ -4686,7 +5320,8 @@ test("Custom-build final payment creates one distinct exact automatic-tax instal
         unit_amount: request.purpose.price.amountMinor,
         tax_behavior: "exclusive",
         product_data: {
-          name: "Site Sourcery Custom build — final installment"
+          name: "Site Sourcery Custom build — final installment",
+          tax_code: "txcd_10701200"
         }
       },
       quantity: 1
@@ -5730,8 +6365,10 @@ test("domain purchase creates an exact manual-capture Checkout separate from web
             name: "example.com registration — 1 year",
             description:
               "Authorized now; captured only after registrar and registrant readback.",
+            tax_code: "txcd_contractdomainonly",
             metadata
-          }
+          },
+          tax_behavior: "exclusive"
         },
         quantity: 1
       }
@@ -6610,6 +7247,14 @@ test("official client construction enforces pinned version and key/mode pairing 
       livemode: true
     },
     {
+      secretKey: "rk_live_wrong",
+      livemode: false
+    },
+    {
+      secretKey: "rk_test_wrong",
+      livemode: true
+    },
+    {
       secretKey: "sk_test_wrong_version",
       livemode: false,
       apiVersion: "unreviewed"
@@ -6622,9 +7267,19 @@ test("official client construction enforces pinned version and key/mode pairing 
         !error.message.includes(input.secretKey)
     );
   }
-  const client = createOfficialStripeClient({
-    secretKey: "sk_test_contract_only",
-    livemode: false
-  });
-  assert.equal(typeof client.checkout.sessions.create, "function");
+  for (const [secretKey, livemode] of [
+    ["sk_test_contract_only", false],
+    ["rk_test_contract_only", false],
+    ["sk_live_contract_only", true],
+    ["rk_live_contract_only", true]
+  ]) {
+    const client = createOfficialStripeClient({
+      secretKey,
+      livemode
+    });
+    assert.equal(
+      typeof client.checkout.sessions.create,
+      "function"
+    );
+  }
 });

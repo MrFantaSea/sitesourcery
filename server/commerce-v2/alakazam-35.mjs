@@ -358,7 +358,7 @@ export function createAlakazam35Configuration(input) {
   invariant(
     ["alakazam_35", "alakazam_50"].includes(
       input.subscription.tierId
-    ) && ["active", "grace"].includes(input.subscription.status),
+    ) && input.subscription.status === "active",
     "alakazam_35_unavailable",
     "the active Alakazam tier does not include the $35 controls",
     { status: 409 }
@@ -409,7 +409,7 @@ export function createAlakazam35CareRequest(input) {
   invariant(
     ["alakazam_35", "alakazam_50"].includes(
       input.subscription.tierId
-    ) && ["active", "grace"].includes(input.subscription.status),
+    ) && input.subscription.status === "active",
     "alakazam_care_unavailable",
     "the active Alakazam tier does not include care requests",
     { status: 409 }
@@ -496,7 +496,7 @@ export function createAlakazam35Snapshot(input) {
   invariant(
     ["alakazam_35", "alakazam_50"].includes(
       input.subscription.tierId
-    ) && ["active", "grace"].includes(input.subscription.status),
+    ) && input.subscription.status === "active",
     "alakazam_35_unavailable",
     "the active Alakazam tier does not include the $35 controls",
     { status: 409 }

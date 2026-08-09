@@ -34,6 +34,17 @@ const PRIVACY_PROOF = Object.freeze({
   artifactUri:
     "https://privacy-v3-proof.invalid/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/"
 });
+const WEBSITE_TERMS_PROOF_BYTES = Buffer.from(
+  "Site Sourcery disposable Website Terms V3 migration proof.\n",
+  "utf8"
+);
+const WEBSITE_TERMS_PROOF = Object.freeze({
+  version: "SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3",
+  contentDigest: digest(WEBSITE_TERMS_PROOF_BYTES),
+  artifactUri:
+    "https://terms-v3-proof.invalid/versions/SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3/",
+  byteCount: WEBSITE_TERMS_PROOF_BYTES.byteLength
+});
 const PRIVACY_PROOF_DOCUMENTS = Object.freeze([
   Object.freeze({
     kind: "privacy",
@@ -44,20 +55,18 @@ const PRIVACY_PROOF_DOCUMENTS = Object.freeze([
   }),
   Object.freeze({
     kind: "product",
-    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-    contentDigest:
-      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    version: WEBSITE_TERMS_PROOF.version,
+    contentDigest: WEBSITE_TERMS_PROOF.contentDigest,
     contentUri:
       "https://sitesourcery.com/legal/website-terms/#self-service",
-    effectiveAt: "2026-07-30T00:00:00.000Z"
+    effectiveAt: PRIVACY_PROOF.effectiveAt
   }),
   Object.freeze({
     kind: "website",
-    version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-    contentDigest:
-      "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+    version: WEBSITE_TERMS_PROOF.version,
+    contentDigest: WEBSITE_TERMS_PROOF.contentDigest,
     contentUri: "https://sitesourcery.com/legal/website-terms/",
-    effectiveAt: "2026-07-30T00:00:00.000Z"
+    effectiveAt: PRIVACY_PROOF.effectiveAt
   })
 ]);
 const PRIVACY_PROOF_AUTHORITY_DIGEST = digest(canonicalJson({
@@ -68,8 +77,8 @@ const PRIVACY_PROOF_AUTHORITY = Object.freeze({
   documents: PRIVACY_PROOF_DOCUMENTS,
   documentBindings: Object.freeze([
     Object.freeze({ id: "00000000-0000-4000-8000-000000000048" }),
-    Object.freeze({ id: "00000000-0000-4000-8000-000000000021" }),
-    Object.freeze({ id: "00000000-0000-4000-8000-000000000023" })
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000103" }),
+    Object.freeze({ id: "00000000-0000-4000-8000-000000000104" })
   ]),
   artifactBindings: Object.freeze([
     Object.freeze({
@@ -79,7 +88,12 @@ const PRIVACY_PROOF_AUTHORITY = Object.freeze({
       mediaType: "text/html; charset=utf-8"
     }),
     Object.freeze({ artifactUri: null }),
-    Object.freeze({ artifactUri: null })
+    Object.freeze({
+      artifactUri: WEBSITE_TERMS_PROOF.artifactUri,
+      artifactSha256: WEBSITE_TERMS_PROOF.contentDigest,
+      byteCount: WEBSITE_TERMS_PROOF.byteCount,
+      mediaType: "text/html; charset=utf-8"
+    })
   ]),
   authorityDigest: PRIVACY_PROOF_AUTHORITY_DIGEST
 });
@@ -218,7 +232,7 @@ function sqlString(value) {
 
 function sealedPrivacyProofSql(sql) {
   const insertStart = sql.indexOf(
-    "insert into hosted_privacy_v3_release_constants"
+    "insert into hosted_joint_legal_v3_release_constants"
   );
   const valuesStart = sql.indexOf("values (", insertStart);
   const valuesEnd = sql.indexOf("\n);", valuesStart);
@@ -230,6 +244,10 @@ function sealedPrivacyProofSql(sql) {
   ${sqlString(PRIVACY_PROOF.effectiveAt)},
   ${PRIVACY_PROOF.byteCount},
   ${sqlString(PRIVACY_PROOF.artifactUri)},
+  ${sqlString(WEBSITE_TERMS_PROOF.version)},
+  ${sqlString(WEBSITE_TERMS_PROOF.contentDigest)},
+  ${sqlString(WEBSITE_TERMS_PROOF.artifactUri)},
+  ${WEBSITE_TERMS_PROOF.byteCount},
   ${sqlString(PRIVACY_PROOF_AUTHORITY_DIGEST)}
 )`;
   return `${sql.slice(0, valuesStart)}${sealedValues}${sql.slice(valuesEnd + 2)}`;
@@ -257,12 +275,14 @@ async function applyMigrations(pool) {
     "202608080052_alakazam_lifecycle_reversal.sql",
     "202608080101_alakazam_customer_publication_controls.sql",
     "202608080102_alakazam_35_fulfillment.sql",
-    "202608080103_alakazam_50_authority.sql"
+    "202608080103_alakazam_50_authority.sql",
+    "202608080104_publication_control_authority.sql",
+    "202608090104_alakazam_retained_premium_state.sql"
   ];
   assert.equal(
     names.length,
-    55,
-    "migration proof requires exactly 55 migrations through Alakazam $50 authority"
+    57,
+    "migration proof requires exactly 57 migrations through generic publication-control authority and retained Alakazam premium state"
   );
   assert.equal(heldIndex, 47);
   assert.deepEqual(
@@ -289,11 +309,11 @@ async function applyMigrations(pool) {
     heldError = error;
     await pool.query("rollback");
   }
-  assert.ok(heldError, "unsealed Privacy V3 migration must abort");
+  assert.ok(heldError, "unsealed joint legal V3 migration must abort");
   assert.equal(heldError.code, "55000");
   assert.match(
     heldError.message,
-    /Hosted Privacy V3 release constants are unsealed/u
+    /Hosted joint Privacy V3 and Website Terms V3 constants are unsealed/u
   );
 
   return {
@@ -361,10 +381,26 @@ async function applyPrivacyV3Proof(pool, heldSql) {
       media_type: "text/html; charset=utf-8"
     },
     {
+      document_id: "00000000-0000-4000-8000-000000000023",
+      artifact_uri:
+        "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/",
+      artifact_sha256:
+        "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      byte_count: "21380",
+      media_type: "text/html; charset=utf-8"
+    },
+    {
       document_id: "00000000-0000-4000-8000-000000000048",
       artifact_uri: PRIVACY_PROOF.artifactUri,
       artifact_sha256: PRIVACY_PROOF.contentDigest,
       byte_count: String(PRIVACY_PROOF.byteCount),
+      media_type: "text/html; charset=utf-8"
+    },
+    {
+      document_id: "00000000-0000-4000-8000-000000000104",
+      artifact_uri: WEBSITE_TERMS_PROOF.artifactUri,
+      artifact_sha256: WEBSITE_TERMS_PROOF.contentDigest,
+      byte_count: String(WEBSITE_TERMS_PROOF.byteCount),
       media_type: "text/html; charset=utf-8"
     }
   ]);
@@ -378,9 +414,9 @@ async function verifyReceiptRejectsFourthAcceptance(pool) {
   const requestId = randomUUID();
   const acceptedAt = "2099-12-31T00:00:00.000Z";
   const documentIds = [
-    "00000000-0000-4000-8000-000000000021",
+    "00000000-0000-4000-8000-000000000103",
     "00000000-0000-4000-8000-000000000048",
-    "00000000-0000-4000-8000-000000000023"
+    "00000000-0000-4000-8000-000000000104"
   ];
 
   await pool.query("begin");
@@ -895,6 +931,11 @@ async function verifyPlatformSchema(pool) {
         as alakazam_50_care_requests,
       to_regprocedure('ss.hosted_alakazam_50_contract()') is not null
         as alakazam_50_runtime_contract,
+      to_regclass('ss.publication_control_commands') is not null
+        as publication_control_commands,
+      to_regprocedure(
+        'ss.hosted_publication_control_contract()'
+      ) is not null as publication_control_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -3778,6 +3819,111 @@ async function verifyPlatformSchema(pool) {
     );
   }
 
+  const publicationControls = await pool.query(`
+    select
+      ss.hosted_publication_control_contract() =
+        'canonical-publication-control-held-v1'
+        as exact_runtime_marker,
+      (
+        select relation.relrowsecurity
+          and relation.relforcerowsecurity
+          and has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          )
+          and has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          )
+          and not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          )
+          and not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          )
+          and not has_table_privilege(
+            'anon', relation.oid, 'INSERT'
+          )
+          and not exists (
+            select 1 from pg_policy policy
+             where policy.polrelid = relation.oid
+          )
+        from pg_class relation
+        where relation.oid =
+          'ss.publication_control_commands'::regclass
+      ) as exact_held_table_security,
+      exists (
+        select 1
+          from pg_trigger trigger_record
+         where trigger_record.tgrelid =
+           'ss.publication_control_commands'::regclass
+           and trigger_record.tgname =
+             'publication_control_commands_validate'
+           and trigger_record.tgconstraint <> 0
+           and trigger_record.tgdeferrable
+           and trigger_record.tginitdeferred
+           and not trigger_record.tgisinternal
+      ) as deferred_exact_authority_validation,
+      exists (
+        select 1
+          from pg_trigger trigger_record
+         where trigger_record.tgrelid =
+           'ss.publication_control_commands'::regclass
+           and trigger_record.tgname =
+             'publication_control_commands_immutable'
+           and not trigger_record.tgisinternal
+      ) as immutable_command_evidence,
+      (
+        select
+          lower(pg_get_functiondef(procedure_record.oid)) like
+            '%subscription.revision = new.entitlement_revision%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%operation.capability = new.capability%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%version_state.state = ''accepted_release''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%screening.stage = ''pre_publication''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%screening.passed%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%address.kind = ''licensed''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+            '%operation.serving_revision = new.target_serving_revision%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.validate_publication_control_command()'::regprocedure
+      ) as exact_persisted_authority,
+      not exists (
+        select 1
+          from pg_constraint constraint_record
+         where constraint_record.conrelid =
+           'ss.publication_control_commands'::regclass
+           and constraint_record.contype = 'f'
+           and constraint_record.confdeltype = 'c'
+      ) as retained_command_evidence,
+      not has_function_privilege(
+        'authenticated',
+        'ss.validate_publication_control_command()',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'anon',
+        'ss.hosted_publication_control_contract()',
+        'EXECUTE'
+      ) as exact_function_security
+  `);
+  for (
+    const [name, ready] of Object.entries(
+      publicationControls.rows[0]
+    )
+  ) {
+    assert.equal(
+      ready,
+      true,
+      `generic publication-control migration contract failed: ${name}`
+    );
+  }
+
   const alakazam35 = await pool.query(`
     with expected_tables(table_name) as (
       values
@@ -3869,6 +4015,165 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Alakazam 35 migration contract failed: ${name}`
+    );
+  }
+
+  const retainedPremium = await pool.query(`
+    with expected_tables(table_name) as (
+      values
+        ('alakazam_50_premium_restorations'),
+        ('alakazam_premium_purge_receipts'),
+        ('alakazam_premium_retention_windows')
+    ), expected_triggers(table_name, trigger_name, function_name) as (
+      values
+        ('alakazam_50_premium_restorations', 'alakazam_50_premium_restorations_immutable', 'reject_alakazam_retained_premium_evidence_mutation'),
+        ('alakazam_50_premium_restorations', 'alakazam_50_premium_restorations_validate', 'validate_alakazam_50_premium_restoration'),
+        ('alakazam_premium_purge_receipts', 'alakazam_premium_purge_receipts_immutable', 'reject_alakazam_retained_premium_evidence_mutation'),
+        ('alakazam_premium_retention_windows', 'alakazam_premium_retention_windows_guard_update', 'guard_alakazam_premium_retention_window'),
+        ('alakazam_premium_retention_windows', 'alakazam_premium_retention_windows_immutable', 'reject_alakazam_retained_premium_evidence_mutation'),
+        ('alakazam_premium_retention_windows', 'alakazam_premium_retention_windows_validate', 'validate_alakazam_premium_retention_window')
+    )
+    select
+      ss.hosted_alakazam_retained_premium_contract() =
+        'canonical-alakazam-retained-premium-held-v1'
+        as exact_runtime_marker,
+      (
+        select count(*) = 3
+          and bool_and(relation.relkind = 'r')
+          and bool_and(relation.relpersistence = 'p')
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(not exists (
+            select 1 from pg_policy policy
+             where policy.polrelid = relation.oid
+          ))
+          and bool_and(not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          ))
+          and bool_and(not has_table_privilege(
+            'anon', relation.oid, 'SELECT'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          ))
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+      ) as exact_held_table_security,
+      (
+        select count(*) = 6
+          and bool_and(trigger_record.tgenabled = 'O')
+        from expected_triggers expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+        join pg_trigger trigger_record
+          on trigger_record.tgrelid = relation.oid
+         and trigger_record.tgname = expected.trigger_name
+         and not trigger_record.tgisinternal
+        join pg_proc function_record
+          on function_record.oid = trigger_record.tgfoid
+         and function_record.proname = expected.function_name
+      ) as exact_trigger_set,
+      has_table_privilege(
+        'service_role',
+        'ss.alakazam_50_premium_restorations',
+        'SELECT,INSERT'
+      ) and has_table_privilege(
+        'service_role',
+        'ss.alakazam_premium_purge_receipts',
+        'SELECT'
+      ) and has_table_privilege(
+        'service_role',
+        'ss.alakazam_premium_retention_windows',
+        'SELECT'
+      ) as exact_service_grants,
+      has_function_privilege(
+        'service_role',
+        'ss.apply_alakazam_premium_retained_exit_policy(uuid,uuid,uuid,uuid,timestamptz)',
+        'EXECUTE'
+      ) and has_function_privilege(
+        'service_role',
+        'ss.purge_expired_alakazam_premium(uuid,uuid,uuid,uuid,timestamptz)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'service_role',
+        'ss.purge_alakazam_premium_rows(uuid,uuid,uuid,uuid,text,timestamptz)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'authenticated',
+        'ss.hosted_alakazam_retained_premium_contract()',
+        'EXECUTE'
+      ) as exact_function_security,
+      (
+        select lower(pg_get_functiondef(procedure_record.oid)) like
+          '%subscription.status = ''active''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.validate_alakazam_50_subscription_authority(uuid,uuid,uuid,uuid,bigint)'::regprocedure
+      ) and (
+        select lower(pg_get_functiondef(procedure_record.oid)) like
+          '%subscription.status = ''active''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.validate_alakazam_35_subscription_authority(uuid,uuid,uuid,uuid,bigint)'::regprocedure
+      ) and exists (
+        select 1 from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.alakazam_customer_publication_commands'::regclass
+          and trigger_record.tgname =
+            'alakazam_customer_publication_commands_00_active'
+          and not trigger_record.tgisinternal
+      ) as no_grace_write_authority,
+      (
+        select lower(pg_get_functiondef(procedure_record.oid)) like
+          '%interval ''7 days''%'
+          and lower(pg_get_functiondef(procedure_record.oid)) like
+          '%interval ''30 days''%'
+        from pg_proc procedure_record
+        where procedure_record.oid =
+          'ss.apply_alakazam_premium_retained_exit_policy(uuid,uuid,uuid,uuid,timestamptz)'::regprocedure
+      ) as exact_retention_timing,
+      (
+        select pg_get_constraintdef(constraint_record.oid) like
+          '%terminal_customer_deletion%'
+          and pg_get_constraintdef(constraint_record.oid) like
+          '%retained_exit_expiry%'
+          and pg_get_constraintdef(constraint_record.oid) not like
+          '%payment_grace_expiry%'
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.alakazam_premium_purge_receipts'::regclass
+          and constraint_record.conname =
+            'alakazam_premium_purge_reason_check'
+      ) as exact_purge_reasons,
+      (
+        select pg_get_constraintdef(constraint_record.oid) like
+          '%restored_configuration_id = id%'
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.alakazam_50_premium_restorations'::regclass
+          and constraint_record.conname =
+            'alakazam_premium_restore_command_binding_check'
+      ) as exact_restoration_command_binding,
+      not exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid in (
+          'ss.alakazam_50_premium_restorations'::regclass,
+          'ss.alakazam_premium_retention_windows'::regclass
+        )
+          and constraint_record.contype = 'f'
+          and constraint_record.confdeltype = 'c'
+      ) as exact_non_cascading_foreign_keys
+  `);
+  for (const [name, ready] of Object.entries(retainedPremium.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Retained Alakazam premium migration contract failed: ${name}`
     );
   }
 }

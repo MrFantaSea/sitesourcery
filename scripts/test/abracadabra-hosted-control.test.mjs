@@ -86,22 +86,20 @@ function projectLegalAuthorityFixture(overrides = {}) {
       {
         kind: "product",
         version:
-          "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-        contentDigest:
-          "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+          "SS-HOSTED-WEBSITE-TERMS-2099-01-01-V3",
+        contentDigest: "c".repeat(64),
         contentUri:
           "https://sitesourcery.com/legal/website-terms/#self-service",
-        effectiveAt: "2026-07-30T00:00:00.000Z",
+        effectiveAt: "2099-01-01T00:00:00.000Z",
       },
       {
         kind: "website",
         version:
-          "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-        contentDigest:
-          "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+          "SS-HOSTED-WEBSITE-TERMS-2099-01-01-V3",
+        contentDigest: "c".repeat(64),
         contentUri:
           "https://sitesourcery.com/legal/website-terms/",
-        effectiveAt: "2026-07-30T00:00:00.000Z",
+        effectiveAt: "2099-01-01T00:00:00.000Z",
       },
     ],
     ...overrides,

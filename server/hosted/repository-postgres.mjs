@@ -293,7 +293,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
            and not procedure_row.prosecdef
            and procedure_row.prorettype = 'text'::regtype
            and btrim(procedure_row.prosrc, E' \\t\\n\\r') =
-             'select ''canonical-ss-v48-hosted-privacy-v3'''
+             'select ''canonical-ss-v48-hosted-joint-legal-v3'''
            and not exists (
              select 1
                from aclexplode(coalesce(
@@ -883,56 +883,97 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
 const PROJECT_LEGAL_DATA_QUERY = `
   select
     ss.hosted_runtime_contract_v48() =
-      'canonical-ss-v48-hosted-privacy-v3' as contract_marker_ready,
-    exists (
-      select 1 from ss.legal_document_artifacts artifact
-      join ss.legal_documents document on document.id = artifact.document_id
-      where document.id = '00000000-0000-4000-8000-000000000022'
-        and document.kind = 'privacy'
-        and document.version = 'SS-HOSTED-PRIVACY-2026-07-30-V2'
-        and document.content_digest =
-          'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
-        and document.content_uri = 'https://sitesourcery.com/legal/privacy/'
-        and document.effective_at = '2026-07-30T00:00:00Z'::timestamptz
-        and document.retired_at is null
-        and artifact.artifact_uri =
-          'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/'
-        and artifact.artifact_sha256 =
-          'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
-        and artifact.byte_count = 19935
-        and artifact.media_type = 'text/html; charset=utf-8'
+      'canonical-ss-v48-hosted-joint-legal-v3' as contract_marker_ready,
+    (
+      select count(*) = 2
+        from ss.legal_document_artifacts artifact
+        join ss.legal_documents document
+          on document.id = artifact.document_id
+       where (
+         document.id = '00000000-0000-4000-8000-000000000022'
+         and document.kind = 'privacy'
+         and document.version = 'SS-HOSTED-PRIVACY-2026-07-30-V2'
+         and document.content_digest =
+           'b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b'
+         and document.content_uri = 'https://sitesourcery.com/legal/privacy/'
+         and document.effective_at = '2026-07-30T00:00:00Z'::timestamptz
+         and document.retired_at is null
+         and artifact.artifact_uri =
+           'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/'
+         and artifact.artifact_sha256 = document.content_digest
+         and artifact.byte_count = 19935
+         and artifact.media_type = 'text/html; charset=utf-8'
+       ) or (
+         document.id = '00000000-0000-4000-8000-000000000023'
+         and document.kind = 'website'
+         and document.version = 'SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2'
+         and document.content_digest =
+           'bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196'
+         and document.content_uri = 'https://sitesourcery.com/legal/website-terms/'
+         and document.effective_at = '2026-07-30T00:00:00Z'::timestamptz
+         and document.retired_at is null
+         and artifact.artifact_uri =
+           'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/'
+         and artifact.artifact_sha256 = document.content_digest
+         and artifact.byte_count = 21380
+         and artifact.media_type = 'text/html; charset=utf-8'
+       )
     ) as v2_artifact_ready,
-    exists (
-      select 1 from ss.legal_documents document
-      join ss.legal_document_artifacts artifact on artifact.document_id = document.id
-      where document.id = '00000000-0000-4000-8000-000000000048'
-        and document.kind = 'privacy'
-        and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
-        and document.retired_at is null
-        and artifact.artifact_sha256 = document.content_digest
-        and artifact.byte_count > 0
-        and artifact.media_type = 'text/html; charset=utf-8'
+    (
+      select count(*) = 2
+        from ss.legal_documents document
+        join ss.legal_document_artifacts artifact
+          on artifact.document_id = document.id
+       where (
+         (
+           document.id = '00000000-0000-4000-8000-000000000048'
+           and document.kind = 'privacy'
+           and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000104'
+           and document.kind = 'website'
+           and document.version <>
+             'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED'
+         )
+       )
+       and document.retired_at is null
+       and artifact.artifact_sha256 = document.content_digest
+       and artifact.byte_count > 0
+       and artifact.media_type = 'text/html; charset=utf-8'
     ) and not exists (
       select 1 from ss.legal_document_artifacts artifact
-       where artifact.document_id in (
-         '00000000-0000-4000-8000-000000000021'::uuid,
-         '00000000-0000-4000-8000-000000000023'::uuid
-       )
+       where artifact.document_id =
+         '00000000-0000-4000-8000-000000000103'::uuid
     ) as v3_artifact_ready,
-    exists (
-      select 1 from ss.legal_documents document
-      where document.id = '00000000-0000-4000-8000-000000000048'
-        and document.kind = 'privacy'
-        and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
-        and document.retired_at is null
-        and document.content_digest ~ '^[a-f0-9]{64}$'
+    (
+      select count(*) = 3
+        from ss.legal_documents document
+       where (
+         (
+           document.id = '00000000-0000-4000-8000-000000000048'
+           and document.kind = 'privacy'
+           and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000103'
+           and document.kind = 'product'
+           and document.version <>
+             'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED'
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000104'
+           and document.kind = 'website'
+           and document.version <>
+             'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED'
+         )
+       )
+       and document.retired_at is null
+       and document.content_digest ~ '^[a-f0-9]{64}$'
     ) as authority_ready
 `;
 
 const PROJECT_LEGAL_CONSTANTS_QUERY = `
   select
     ss.hosted_runtime_contract_v48() =
-      'canonical-ss-v48-hosted-privacy-v3' as contract_marker_ready,
+      'canonical-ss-v48-hosted-joint-legal-v3' as contract_marker_ready,
     (
       select count(*) = 3
         from ss.legal_documents document
@@ -960,13 +1001,21 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
        )
     ) as exact_documents_ready,
     (
-      select count(*) = 1
+      select count(*) = 2
         and bool_and(
-          artifact.document_id = $19::uuid
-          and artifact.artifact_uri = $20::text
-          and artifact.artifact_sha256 = $21::text
-          and artifact.byte_count = $22::bigint
-          and artifact.media_type = $23::text
+          (
+            artifact.document_id = $19::uuid
+            and artifact.artifact_uri = $20::text
+            and artifact.artifact_sha256 = $21::text
+            and artifact.byte_count = $22::bigint
+            and artifact.media_type = $23::text
+          ) or (
+            artifact.document_id = $24::uuid
+            and artifact.artifact_uri = $25::text
+            and artifact.artifact_sha256 = $26::text
+            and artifact.byte_count = $27::bigint
+            and artifact.media_type = $28::text
+          )
         )
         from ss.legal_document_artifacts artifact
        where artifact.document_id in ($1::uuid, $7::uuid, $13::uuid)
@@ -999,7 +1048,7 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
         )
       ),
       'schema', 'sitesourcery.project-legal-authority/v3'
-    )) = $24::text as authority_digest_ready
+    )) = $29::text as authority_digest_ready
 `;
 
 const CUSTOM_SERVICES_READINESS_QUERY = `
@@ -2275,8 +2324,14 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     if (status.projectCreationLegal?.ready !== true) return false;
     const documents = expected?.documents ?? [];
     const ids = expected?.documentBindings ?? [];
-    const artifact = expected?.artifactBindings?.[0];
-    if (documents.length !== 3 || ids.length !== 3 || !artifact?.artifactUri) {
+    const privacyArtifact = expected?.artifactBindings?.[0];
+    const websiteArtifact = expected?.artifactBindings?.[2];
+    if (
+      documents.length !== 3 ||
+      ids.length !== 3 ||
+      !privacyArtifact?.artifactUri ||
+      !websiteArtifact?.artifactUri
+    ) {
       return false;
     }
     const values = [];
@@ -2292,10 +2347,15 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     }
     values.push(
       ids[0].id,
-      artifact.artifactUri,
-      artifact.artifactSha256,
-      artifact.byteCount,
-      artifact.mediaType,
+      privacyArtifact.artifactUri,
+      privacyArtifact.artifactSha256,
+      privacyArtifact.byteCount,
+      privacyArtifact.mediaType,
+      ids[2].id,
+      websiteArtifact.artifactUri,
+      websiteArtifact.artifactSha256,
+      websiteArtifact.byteCount,
+      websiteArtifact.mediaType,
       expected.authorityDigest
     );
     const result = await pool.query(PROJECT_LEGAL_CONSTANTS_QUERY, values);

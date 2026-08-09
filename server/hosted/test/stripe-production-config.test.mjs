@@ -3,6 +3,20 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  createAlakazamCancellationService
+} from "../../commerce-v2/alakazam-lifecycle-cancellation.mjs";
+import {
+  createAlakazamRenewalService
+} from "../../commerce-v2/alakazam-lifecycle-renewal.mjs";
+import {
+  createAlakazamReversalService
+} from "../../commerce-v2/alakazam-lifecycle-reversal.mjs";
+import {
+  createAlakazamPaymentIncidentService,
+  createAlakazamPaymentRecoveryService
+} from "../../commerce-v2/alakazam-lifecycle-state.mjs";
+
+import {
   STRIPE_PRODUCTION_CONTRACT,
   assertApprovedStripeReady,
   createConfiguredStripeProvider,
@@ -76,6 +90,7 @@ function productionEnvironment(overrides = {}) {
           livemode: true,
           currency: "usd",
           unitAmount: 2500,
+          taxBehavior: "exclusive",
           recurring: {
             interval: "month",
             intervalCount: 1
@@ -90,8 +105,41 @@ function productionEnvironment(overrides = {}) {
       "https://sitesourcery.com/abracadabra/app/?checkout=cancelled",
     SITESOURCERY_STRIPE_PORTAL_RETURN_URL:
       "https://sitesourcery.com/abracadabra/app/",
+    SITESOURCERY_STRIPE_PORTAL_PRIVACY_POLICY_URL:
+      "https://sitesourcery.com/legal/privacy/",
+    SITESOURCERY_STRIPE_PORTAL_TERMS_OF_SERVICE_URL:
+      "https://sitesourcery.com/legal/website-terms/",
+    SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_ID:
+      "we_sitesourcery_contract_only",
+    SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_URL:
+      "https://sitesourcery.com/api/v1/webhooks/stripe",
     SITESOURCERY_STRIPE_TAX_MODE:
-      "disabled_by_owner"
+      "disabled_by_owner",
+    SITESOURCERY_STRIPE_TAX_CODES_JSON:
+      JSON.stringify({
+        alakazam: "txcd_10701100",
+        customBuildChange: "txcd_10701200",
+        customBuildFinal: "txcd_10701200",
+        customBuildStart: "txcd_10701200",
+        domainRegistration: null,
+        download: "txcd_10701200",
+        serviceAssessment: "txcd_10701200",
+        siteService: "txcd_10701200"
+      }),
+    SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON:
+      JSON.stringify({
+        schema: "sitesourcery.stripe-tax-attestation/v1",
+        provider: "stripe",
+        approved: true,
+        attestationId: "tax-attestation-contract-only",
+        approvedAt: "2026-08-09T12:00:00.000Z",
+        livemode: selectedApproval.livemode,
+        taxMode: "disabled_by_owner",
+        headOfficeCountry: "US",
+        defaultTaxBehavior: "exclusive",
+        registrationDecision: "none_registered",
+        registrationIds: []
+      })
   };
   return { ...environment, ...environmentOverrides };
 }
@@ -122,6 +170,7 @@ function alakazamPriceExpectations({
         alakazam_35: 3500,
         alakazam_50: 5000
       }[tierId],
+      taxBehavior: "exclusive",
       recurring: {
         interval: "month",
         intervalCount: 1
@@ -337,6 +386,39 @@ test("approved configuration constructs the pinned official adapter without expo
   assert.doesNotMatch(output, /whsec_/u);
 });
 
+test("approved composition accepts only a mode-matched restricted runtime key and keeps it out of diagnostics", () => {
+  for (const [secretKey, livemode, deployment] of [
+    ["rk_live_contract-only", true, "production"],
+    ["rk_test_contract-only", false, "staging"]
+  ]) {
+    const selectedApproval = approval({
+      environment: deployment,
+      livemode,
+      approvalId: `approval-${deployment}-restricted-key`
+    });
+    const environment = productionEnvironment({
+      approval: selectedApproval,
+      SITESOURCERY_DEPLOYMENT_ENVIRONMENT: deployment,
+      SITESOURCERY_STRIPE_LIVEMODE: String(livemode),
+      SITESOURCERY_STRIPE_SECRET_KEY: secretKey
+    });
+    const expectations = JSON.parse(
+      environment.SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON
+    );
+    expectations[0].livemode = livemode;
+    environment.SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON =
+      JSON.stringify(expectations);
+    const composition = createConfiguredStripeProvider({
+      environment
+    });
+    assert.equal(composition.livemode, livemode);
+    assert.doesNotMatch(
+      JSON.stringify(composition),
+      /rk_(?:live|test)_/u
+    );
+  }
+});
+
 test("approved Alakazam environment constructs the pinned adapter without making provider calls", () => {
   const composition = createConfiguredStripeProvider({
     environment: alakazamEnvironment()
@@ -347,6 +429,10 @@ test("approved Alakazam environment constructs the pinned adapter without making
     "createAlakazamStartCheckout",
     "createAlakazamUpgradeCheckout",
     "retrieveAlakazamPayment",
+    "retrieveAlakazamRenewalInvoice",
+    "retrieveAlakazamIncidentInvoice",
+    "retrieveAlakazamCancellation",
+    "retrieveAlakazamReversal",
     "retrieveAlakazamSubscription",
     "applyAlakazamUpgrade",
     "scheduleAlakazamDowngrade"
@@ -360,6 +446,76 @@ test("approved Alakazam environment constructs the pinned adapter without making
     JSON.stringify(composition),
     /alakazam_contract_only|coupon_alakazam/u
   );
+});
+
+test("held and approved production construction satisfy every Alakazam lifecycle provider port without a provider call", () => {
+  const adapters = [
+    createConfiguredStripeProvider({ environment: {} }).adapter,
+    createConfiguredStripeProvider({
+      environment: alakazamEnvironment()
+    }).adapter
+  ];
+  const repository = {
+    async findRenewalSubscriptionByInvoice() {},
+    async settleRenewalPayment() {},
+    async findIncidentSubscriptionByInvoice() {},
+    async recordPaymentIncident() {},
+    async findRecoverySubscriptionByInvoice() {},
+    async recordPaymentRecovery() {},
+    async readCancellationSubscription() {},
+    async findCancellationBySubscription() {},
+    async confirmCancellationSchedule() {},
+    async findReversalPaymentByCharge() {},
+    async recordReversal() {}
+  };
+  const clock = {
+    now: () => "2026-08-09T12:00:00.000Z"
+  };
+  const ids = {
+    next: () =>
+      "10000000-0000-4000-8000-000000000001"
+  };
+  for (const provider of adapters) {
+    const services = [
+      createAlakazamRenewalService({
+        repository,
+        provider,
+        clock,
+        ids
+      }),
+      createAlakazamPaymentIncidentService({
+        repository,
+        provider,
+        clock,
+        ids
+      }),
+      createAlakazamPaymentRecoveryService({
+        repository,
+        provider,
+        clock,
+        ids
+      }),
+      createAlakazamCancellationService({
+        repository,
+        provider,
+        clock,
+        ids
+      }),
+      createAlakazamReversalService({
+        repository,
+        provider,
+        clock,
+        ids
+      })
+    ];
+    assert.ok(
+      services.every(
+        (service) =>
+          typeof service.readiness === "function" &&
+          typeof service.ingestStripeEvent === "function"
+      )
+    );
+  }
 });
 
 test("contract_test and every mismatched approval boundary are impossible in production composition", () => {
@@ -862,7 +1018,9 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
       priceCount: 3,
       domainAuthorization: true,
       webhookVerification: true,
+      webhookEndpoint: true,
       taxMode: "automatic",
+      taxAttestation: true,
       code: "stripe_price_mismatch",
       secretKey: SECRET_KEY,
       webhookSecret: WEBHOOK_SECRET,
@@ -882,7 +1040,9 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
     "priceCount",
     "provider",
     "ready",
+    "taxAttestation",
     "taxMode",
+    "webhookEndpoint",
     "webhookVerification"
   ]);
   const output = JSON.stringify(redacted);

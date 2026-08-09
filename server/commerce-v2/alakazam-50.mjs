@@ -103,8 +103,7 @@ function exactSubscription(value) {
     "subscription"
   );
   invariant(
-    value.tierId === "alakazam_50" &&
-      ["active", "grace"].includes(value.status),
+    value.tierId === "alakazam_50" && value.status === "active",
     "alakazam_50_authority_required",
     "an exact current Alakazam $50 subscription is required",
     { status: 409 }

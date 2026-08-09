@@ -15136,6 +15136,13 @@
     var alakazam35Authority = "";
     var alakazam50Panel = null;
     var alakazam50Authority = "";
+    var alakazamRetainedPremiumPanel = null;
+    var alakazamRetainedPremiumAuthority = "";
+    var alakazamRetainedPremiumHost =
+      documentRef.createElement("div");
+    alakazamRetainedPremiumHost.className =
+      "alakazam-retained-premium-host";
+    alakazamRetainedPremiumHost.hidden = true;
     var alakazamPublicationPanel =
       createAlakazamPublicationPanel(
         documentRef,
@@ -15198,6 +15205,10 @@
         customerCustomBuildFinalPanel.element,
         alakazamAnchor
       );
+      alakazamAnchor.parentNode.insertBefore(
+        alakazamRetainedPremiumHost,
+        alakazamAnchor
+      );
     }
     if (
       alakazamAnchor
@@ -15245,6 +15256,9 @@
         );
         controlShell.appendChild(
           customerCustomBuildFinalPanel.element
+        );
+        controlShell.appendChild(
+          alakazamRetainedPremiumHost
         );
         if (ALAKAZAM_PUBLIC_OFFER_STATE === "released") {
           controlShell.appendChild(
@@ -19814,7 +19828,7 @@
         || !selectedProjectId
         || !accountId
         || !subscription
-        || !["active", "grace"].includes(subscription.status)
+        || subscription.status !== "active"
         || !["alakazam_35", "alakazam_50"].includes(tierId)
         || !Number.isSafeInteger(subscription.revision)
         || !module
@@ -19876,7 +19890,7 @@
         || !selectedProjectId
         || !accountId
         || !subscription
-        || !["active", "grace"].includes(subscription.status)
+        || subscription.status !== "active"
         || tierId !== "alakazam_50"
         || !Number.isSafeInteger(subscription.revision)
         || !module
@@ -19903,6 +19917,96 @@
         projectId: selectedProjectId
       });
       alakazam50Authority = authority;
+    }
+
+    function destroyAlakazamRetainedPremiumPanel() {
+      alakazamRetainedPremiumHost.replaceChildren();
+      alakazamRetainedPremiumHost.hidden = true;
+      alakazamRetainedPremiumPanel = null;
+      alakazamRetainedPremiumAuthority = "";
+    }
+
+    function downloadAlakazamRetainedPremiumExport(value) {
+      var URLRef = windowRef.URL;
+      if (
+        !URLRef
+        || typeof URLRef.createObjectURL !== "function"
+        || typeof URLRef.revokeObjectURL !== "function"
+        || typeof windowRef.Blob !== "function"
+      ) {
+        throw new Error(
+          "This browser cannot safely prepare the retained premium export."
+        );
+      }
+      var blob = new windowRef.Blob(
+        [JSON.stringify(value, null, 2) + "\n"],
+        { type: "application/json" }
+      );
+      var objectUrl = URLRef.createObjectURL(blob);
+      var link = documentRef.createElement("a");
+      link.href = objectUrl;
+      link.download =
+        "sitesourcery-alakazam-premium-" +
+        text(value && value.projectId) + ".json";
+      link.hidden = true;
+      documentRef.body.appendChild(link);
+      link.click();
+      link.remove();
+      windowRef.setTimeout(function () {
+        URLRef.revokeObjectURL(objectUrl);
+      }, 60000);
+    }
+
+    function syncAlakazamRetainedPremiumPanel(state) {
+      var selectedProjectId = state && state.account
+        ? idOf(state.project)
+        : "";
+      var accountId = text(
+        state && state.account && state.account.id
+      );
+      var account = selectedProjectId
+        ? currentAlakazamAccount(selectedProjectId)
+        : null;
+      var subscription = account && account.subscription;
+      var module =
+        windowRef.SiteSourceryAlakazamRetainedPremium;
+      if (
+        !selectedProjectId
+        || !accountId
+        || !module
+        || typeof module.mount !== "function"
+      ) {
+        destroyAlakazamRetainedPremiumPanel();
+        return;
+      }
+      var authority = JSON.stringify([
+        accountId,
+        selectedProjectId,
+        text(
+          subscription
+          && subscription.tier
+          && subscription.tier.tierId
+        ),
+        text(subscription && subscription.status),
+        Number.isSafeInteger(
+          subscription && subscription.revision
+        )
+          ? subscription.revision
+          : null
+      ]);
+      if (
+        alakazamRetainedPremiumPanel
+        && alakazamRetainedPremiumAuthority === authority
+      ) return;
+      destroyAlakazamRetainedPremiumPanel();
+      alakazamRetainedPremiumHost.hidden = false;
+      alakazamRetainedPremiumPanel = module.mount({
+        documentRef: documentRef,
+        container: alakazamRetainedPremiumHost,
+        projectId: selectedProjectId,
+        onExport: downloadAlakazamRetainedPremiumExport
+      });
+      alakazamRetainedPremiumAuthority = authority;
     }
 
     function resetAlakazamCommand(projectId) {
@@ -22012,6 +22116,7 @@
       renderCustomerCustomBuildFinalAccount(state);
       renderAlakazamAccount(state);
       renderAlakazamPublication(state);
+      syncAlakazamRetainedPremiumPanel(state);
       syncOwnerAssessmentAccount(state);
       syncOwnerAssessmentWorkAccount(state);
       syncOwnerCustomBuildAccount(state);
@@ -22657,6 +22762,8 @@
       alakazamAccountPresentation,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
+    createAlakazamPublicationPanel:
+      createAlakazamPublicationPanel,
     customBuildPublicEstimate:
       customBuildPublicEstimate,
     currentOwnerCustomBuildCompletionEvidence:

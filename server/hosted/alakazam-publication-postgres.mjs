@@ -369,7 +369,7 @@ async function selectPublication(client, input, { lock = false } = {}) {
        on subscription.organization_id = project.organization_id
       and subscription.project_id = project.id
       and subscription.customer_user_id = $3
-      and subscription.status in ('active', 'grace')
+      and subscription.status = 'active'
      join ss.alakazam_fulfillment_projection projection
        on projection.organization_id = project.organization_id
       and projection.project_id = project.id

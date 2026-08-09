@@ -26,9 +26,7 @@
   var PROJECT_LEGAL_PRIVACY_VERSION =
     /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u;
   var PROJECT_LEGAL_WEBSITE_VERSION =
-    "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2";
-  var PROJECT_LEGAL_WEBSITE_DIGEST =
-    "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196";
+    /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$/u;
   var CUSTOM_BUILD_CREDENTIAL =
     /(password|passcode|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|recovery[ _-]?code|private[ _-]?key|seed[ _-]?phrase|bearer\s+[a-z0-9._~-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:token|key|secret|password)=)/iu;
   var CUSTOM_BUILD_RAW_PROVIDER_IDENTIFIER =
@@ -319,21 +317,21 @@
         "/legal/privacy/versions/" + privacy.version + "/"
       )
       || product.kind !== "product"
-      || product.version !== PROJECT_LEGAL_WEBSITE_VERSION
-      || product.contentDigest !== PROJECT_LEGAL_WEBSITE_DIGEST
-      || product.effectiveAt !== "2026-07-30T00:00:00.000Z"
+      || !PROJECT_LEGAL_WEBSITE_VERSION.test(String(product.version || ""))
       || product.contentUri !==
         "https://sitesourcery.com/legal/website-terms/#self-service"
       || website.kind !== "website"
-      || website.version !== PROJECT_LEGAL_WEBSITE_VERSION
-      || website.contentDigest !== PROJECT_LEGAL_WEBSITE_DIGEST
-      || website.effectiveAt !== "2026-07-30T00:00:00.000Z"
+      || !PROJECT_LEGAL_WEBSITE_VERSION.test(String(website.version || ""))
       || website.contentUri !==
         "https://sitesourcery.com/legal/website-terms/"
       || !projectLegalUri(
         website.contentUri,
         "/legal/website-terms/"
       )
+      || product.version !== website.version
+      || product.contentDigest !== website.contentDigest
+      || product.effectiveAt !== website.effectiveAt
+      || privacy.effectiveAt !== website.effectiveAt
     ) {
       projectLegalFailure();
     }

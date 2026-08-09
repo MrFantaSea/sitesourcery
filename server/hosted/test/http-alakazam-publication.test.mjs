@@ -404,15 +404,15 @@ test("the production executable composes publication authorization without a pro
   );
   assert.match(
     source,
-    /createAlakazamPublicationComposition\(\{\s*authority,\s*resolveSession:\s*commerceV2\.resolveSession,\s*clock:\s*commerceV2\.clock\s*\}\)/u
+    /createPublicationControlComposition\(\{\s*authority,\s*resolveSession:\s*commerceV2\.resolveSession,\s*clock:\s*commerceV2\.clock\s*\}\)/u
   );
   assert.match(source, /await alakazamPublication\.readiness\(\)/u);
   assert.match(
     source,
-    /createHostedApi\(service,\s*\{\s*downloadCommerce,\s*alakazamAccount,\s*alakazamPublication,/u
+    /createHostedApi\(service,\s*\{[\s\S]*?alakazamPublication,/u
   );
   const composition = source.match(
-    /createAlakazamPublicationComposition\(\{[\s\S]*?\}\);/u
+    /createPublicationControlComposition\(\{[\s\S]*?\}\);/u
   )?.[0];
   assert.ok(composition);
   assert.doesNotMatch(

@@ -17,7 +17,7 @@ begin
     or to_regprocedure('ss.current_user_id()') is null
   then
     raise exception
-      'Site Sourcery migrations through v47 must precede hosted Privacy V3'
+      'Site Sourcery migrations through v47 must precede hosted joint legal V3'
       using errcode = '55000';
   end if;
 
@@ -25,7 +25,7 @@ begin
       'canonical-ss-v47-custom-build-handoff'
   then
     raise exception
-      'Site Sourcery v47 contract does not match hosted Privacy V3'
+      'Site Sourcery v47 contract does not match hosted joint legal V3'
       using errcode = '55000';
   end if;
 end
@@ -54,30 +54,42 @@ begin
 end
 $$;
 
-create temporary table hosted_privacy_v3_release_constants (
+create temporary table hosted_joint_legal_v3_release_constants (
   version text,
   content_digest text,
   content_uri text,
   effective_at timestamptz,
   byte_count bigint,
   artifact_uri text,
+  website_terms_version text,
+  website_terms_content_digest text,
+  website_terms_artifact_uri text,
+  website_terms_byte_count bigint,
   authority_digest text
 ) on commit drop;
 
--- Owner/legal must replace this single row with the frozen release facts.
--- Nulls and the sentinel are deliberate: an unsealed migration must abort.
-insert into hosted_privacy_v3_release_constants (
+-- Cutover replaces this one row from the joint finalization receipt. The
+-- sentinels and nulls are deliberate: candidate content has no release date.
+insert into hosted_joint_legal_v3_release_constants (
   version,
   content_digest,
   content_uri,
   effective_at,
   byte_count,
   artifact_uri,
+  website_terms_version,
+  website_terms_content_digest,
+  website_terms_artifact_uri,
+  website_terms_byte_count,
   authority_digest
 ) values (
   'SS-HOSTED-PRIVACY-V3-UNSEALED',
   null,
   null,
+  null,
+  null,
+  null,
+  'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED',
   null,
   null,
   null,
@@ -89,7 +101,7 @@ declare
   release_record record;
 begin
   select * into strict release_record
-  from hosted_privacy_v3_release_constants;
+  from hosted_joint_legal_v3_release_constants;
 
   if release_record.version = 'SS-HOSTED-PRIVACY-V3-UNSEALED'
     or release_record.version is null
@@ -104,11 +116,26 @@ begin
     or release_record.byte_count <= 0
     or release_record.artifact_uri is null
     or release_record.artifact_uri !~ '^https://[^[:space:]]+$'
+    or release_record.website_terms_version =
+      'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED'
+    or release_record.website_terms_version is null
+    or release_record.website_terms_version !~
+      '^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$'
+    or substring(release_record.website_terms_version from
+      '([0-9]{4}-[0-9]{2}-[0-9]{2})-V3$') <>
+      substring(release_record.version from
+        '([0-9]{4}-[0-9]{2}-[0-9]{2})-V3$')
+    or release_record.website_terms_content_digest is null
+    or release_record.website_terms_content_digest !~ '^[a-f0-9]{64}$'
+    or release_record.website_terms_artifact_uri is null
+    or release_record.website_terms_artifact_uri !~ '^https://[^[:space:]]+$'
+    or release_record.website_terms_byte_count is null
+    or release_record.website_terms_byte_count <= 0
     or release_record.authority_digest is null
     or release_record.authority_digest !~ '^[a-f0-9]{64}$'
   then
     raise exception
-      'Hosted Privacy V3 release constants are unsealed'
+      'Hosted joint Privacy V3 and Website Terms V3 constants are unsealed'
       using errcode = '55000';
   end if;
 end
@@ -229,7 +256,25 @@ select
   release.content_digest::ss.sha256_hex,
   release.content_uri,
   release.effective_at
-from hosted_privacy_v3_release_constants release
+from hosted_joint_legal_v3_release_constants release
+union all
+select
+  '00000000-0000-4000-8000-000000000103'::uuid,
+  'product',
+  release.website_terms_version,
+  release.website_terms_content_digest::ss.sha256_hex,
+  'https://sitesourcery.com/legal/website-terms/#self-service',
+  release.effective_at
+from hosted_joint_legal_v3_release_constants release
+union all
+select
+  '00000000-0000-4000-8000-000000000104'::uuid,
+  'website',
+  release.website_terms_version,
+  release.website_terms_content_digest::ss.sha256_hex,
+  'https://sitesourcery.com/legal/website-terms/',
+  release.effective_at
+from hosted_joint_legal_v3_release_constants release
 on conflict (kind, version) do nothing;
 
 do $$
@@ -237,22 +282,39 @@ declare
   release_record record;
 begin
   select * into strict release_record
-  from hosted_privacy_v3_release_constants;
+  from hosted_joint_legal_v3_release_constants;
 
   if (
     select count(*)
       from ss.legal_documents document
-     where document.id = '00000000-0000-4000-8000-000000000048'
+     where (
+       document.id = '00000000-0000-4000-8000-000000000048'
        and document.kind = 'privacy'
        and document.version = release_record.version
-       and document.content_digest =
-         release_record.content_digest::ss.sha256_hex
+       and document.content_digest = release_record.content_digest::ss.sha256_hex
        and document.content_uri = release_record.content_uri
        and document.effective_at = release_record.effective_at
        and document.retired_at is null
-  ) <> 1 then
+     ) or (
+       document.id = '00000000-0000-4000-8000-000000000103'
+       and document.kind = 'product'
+       and document.version = release_record.website_terms_version
+       and document.content_digest = release_record.website_terms_content_digest::ss.sha256_hex
+       and document.content_uri = 'https://sitesourcery.com/legal/website-terms/#self-service'
+       and document.effective_at = release_record.effective_at
+       and document.retired_at is null
+     ) or (
+       document.id = '00000000-0000-4000-8000-000000000104'
+       and document.kind = 'website'
+       and document.version = release_record.website_terms_version
+       and document.content_digest = release_record.website_terms_content_digest::ss.sha256_hex
+       and document.content_uri = 'https://sitesourcery.com/legal/website-terms/'
+       and document.effective_at = release_record.effective_at
+       and document.retired_at is null
+     )
+  ) <> 3 then
     raise exception
-      'Hosted Privacy V3 legal document postcondition failed'
+      'Hosted joint legal V3 document postcondition failed'
       using errcode = '55000';
   end if;
 end
@@ -278,6 +340,20 @@ insert into ss.legal_document_artifacts (
   artifact_sha256,
   byte_count,
   media_type
+) values (
+  '00000000-0000-4000-8000-000000000023',
+  'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/',
+  'bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196',
+  21380,
+  'text/html; charset=utf-8'
+);
+
+insert into ss.legal_document_artifacts (
+  document_id,
+  artifact_uri,
+  artifact_sha256,
+  byte_count,
+  media_type
 )
 select
   '00000000-0000-4000-8000-000000000048'::uuid,
@@ -285,14 +361,29 @@ select
   release.content_digest::ss.sha256_hex,
   release.byte_count,
   'text/html; charset=utf-8'
-from hosted_privacy_v3_release_constants release;
+from hosted_joint_legal_v3_release_constants release;
+
+insert into ss.legal_document_artifacts (
+  document_id,
+  artifact_uri,
+  artifact_sha256,
+  byte_count,
+  media_type
+)
+select
+  '00000000-0000-4000-8000-000000000104'::uuid,
+  release.website_terms_artifact_uri,
+  release.website_terms_content_digest::ss.sha256_hex,
+  release.website_terms_byte_count,
+  'text/html; charset=utf-8'
+from hosted_joint_legal_v3_release_constants release;
 
 do $$
 declare
   release_record record;
 begin
   select * into strict release_record
-  from hosted_privacy_v3_release_constants;
+  from hosted_joint_legal_v3_release_constants;
 
   if (
     select count(*)
@@ -308,16 +399,33 @@ begin
        and artifact.media_type = 'text/html; charset=utf-8'
      ) or (
        artifact.document_id =
+         '00000000-0000-4000-8000-000000000023'
+       and artifact.artifact_uri =
+         'https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/'
+       and artifact.artifact_sha256 =
+         'bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196'
+       and artifact.byte_count = 21380
+       and artifact.media_type = 'text/html; charset=utf-8'
+     ) or (
+       artifact.document_id =
          '00000000-0000-4000-8000-000000000048'
        and artifact.artifact_uri = release_record.artifact_uri
        and artifact.artifact_sha256 =
          release_record.content_digest::ss.sha256_hex
        and artifact.byte_count = release_record.byte_count
        and artifact.media_type = 'text/html; charset=utf-8'
+     ) or (
+       artifact.document_id =
+         '00000000-0000-4000-8000-000000000104'
+       and artifact.artifact_uri = release_record.website_terms_artifact_uri
+       and artifact.artifact_sha256 =
+         release_record.website_terms_content_digest::ss.sha256_hex
+       and artifact.byte_count = release_record.website_terms_byte_count
+       and artifact.media_type = 'text/html; charset=utf-8'
      )
-  ) <> 2 then
+  ) <> 4 then
     raise exception
-      'Hosted Privacy artifact metadata postcondition failed'
+      'Hosted joint legal artifact metadata postcondition failed'
       using errcode = '55000';
   end if;
 end
@@ -394,12 +502,10 @@ begin
   select
     count(*) = 3
     and count(*) filter (
-      where document.id = '00000000-0000-4000-8000-000000000021'
+      where document.id = '00000000-0000-4000-8000-000000000103'
         and document.kind = 'product'
-        and document.version =
-          'SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2'
-        and document.content_digest =
-          'bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196'
+        and document.version ~
+          '^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$'
     ) = 1
     and count(*) filter (
       where document.id = '00000000-0000-4000-8000-000000000048'
@@ -407,12 +513,10 @@ begin
         and document.version <> 'SS-HOSTED-PRIVACY-V3-UNSEALED'
     ) = 1
     and count(*) filter (
-      where document.id = '00000000-0000-4000-8000-000000000023'
+      where document.id = '00000000-0000-4000-8000-000000000104'
         and document.kind = 'website'
-        and document.version =
-          'SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2'
-        and document.content_digest =
-          'bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196'
+        and document.version ~
+          '^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V3$'
     ) = 1
     and bool_and(
       acceptance.organization_id = receipt_record.organization_id
@@ -467,8 +571,8 @@ begin
   cross join ss.legal_documents product
   cross join ss.legal_documents website
   where privacy.id = '00000000-0000-4000-8000-000000000048'
-    and product.id = '00000000-0000-4000-8000-000000000021'
-    and website.id = '00000000-0000-4000-8000-000000000023';
+    and product.id = '00000000-0000-4000-8000-000000000103'
+    and website.id = '00000000-0000-4000-8000-000000000104';
 
   if bundle_matches is not true
     or expected_authority_digest is null
@@ -618,7 +722,7 @@ language sql
 stable
 set search_path = pg_catalog
 as $$
-select 'canonical-ss-v48-hosted-privacy-v3'
+select 'canonical-ss-v48-hosted-joint-legal-v3'
 $$;
 
 revoke all on function ss.hosted_runtime_contract_v48()
@@ -632,7 +736,7 @@ declare
   expected_authority_digest ss.sha256_hex;
 begin
   select * into strict release_record
-  from hosted_privacy_v3_release_constants;
+  from hosted_joint_legal_v3_release_constants;
 
   select ss.project_legal_json_digest(jsonb_build_object(
     'documents', jsonb_build_array(
@@ -674,14 +778,14 @@ begin
   cross join ss.legal_documents product
   cross join ss.legal_documents website
   where privacy.id = '00000000-0000-4000-8000-000000000048'
-    and product.id = '00000000-0000-4000-8000-000000000021'
-    and website.id = '00000000-0000-4000-8000-000000000023';
+    and product.id = '00000000-0000-4000-8000-000000000103'
+    and website.id = '00000000-0000-4000-8000-000000000104';
 
   if expected_authority_digest is null
     or expected_authority_digest <>
       release_record.authority_digest::ss.sha256_hex
     or ss.hosted_runtime_contract_v48() <>
-      'canonical-ss-v48-hosted-privacy-v3'
+      'canonical-ss-v48-hosted-joint-legal-v3'
     or (
       select count(*)
         from pg_class relation
@@ -778,7 +882,7 @@ begin
     )
   then
     raise exception
-      'Hosted Privacy V3 migration postcondition failed'
+      'Hosted joint legal V3 migration postcondition failed'
       using errcode = '55000';
   end if;
 end

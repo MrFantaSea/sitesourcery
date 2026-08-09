@@ -111,3 +111,119 @@ validator privilege, and non-cascading foreign keys.
 - The unchanged F-04 browser audit at 320x720, 390x844, and 1440x1000 using
   only its self-spawned loopback listener, browser process, and temporary
   profile.
+
+## F-06 retained-premium integration delta
+
+F-06 adds the accepted policy artifact
+`SS-ALAKAZAM-CARE-LIFECYCLE-2026-08-09-V1`, held retained-premium domain and
+hosted boundaries, migration `202608090104_alakazam_retained_premium_state.sql`,
+and dedicated Abracadabra assets. The policy digest is pinned to
+`d44a49dde586042c6a3b8f84d12df8079d30c87d9824a6c2ddbeb9ffad5f31c4`.
+Payment-grace expiry creates the 30-day private retained-exit; it is never a
+purge reason. Only terminal customer deletion and retained-exit expiry purge
+premium configuration.
+
+### `server/hosted/bin/server.mjs`
+
+Add this import beside the other Alakazam compositions:
+
+```js
+import {
+  createAlakazamRetainedPremiumComposition
+} from "../alakazam-retained-premium-composition.mjs";
+import {
+  createPostgresAlakazamRetainedPremiumRepository
+} from "../alakazam-retained-premium-postgres.mjs";
+```
+
+Immediately after `alakazam50`, compose the boundary without a provider port:
+
+```js
+  const alakazamRetainedPremiumRepository =
+    createPostgresAlakazamRetainedPremiumRepository({
+      authority
+    });
+  const alakazamRetainedPremium =
+    createAlakazamRetainedPremiumComposition({
+      authority,
+      resolveSession: commerceV2.resolveSession,
+      clock: commerceV2.clock,
+      repository: alakazamRetainedPremiumRepository
+    });
+```
+
+Add `alakazamRetainedPremium` beside `alakazam50` in the options passed to
+`createHostedApi`. Add its `readiness()` result to the private readiness proof;
+the accepted state is `ready:true`, `authorization:true`,
+`providerEffects:false`, `state:"held"`. Do not pass Stripe, publication, care,
+or any provider adapter to this composition.
+
+The L2 grace deadline worker must call the repository method
+`applyRetainedExitPolicy({ tenantId, projectId, subscriptionId, windowId,
+observedAt })` only after its canonical `grace_expired` transaction has stored
+the exact `suspended` event and provider-readback digest. Its retention worker
+may call `purgeExpired({ tenantId, projectId, subscriptionId, receiptId,
+observedAt })`; no worker may call the private inner purge function. The
+cancellation-confirmation path calls the same retained-exit method only after
+the confirmed effective cancellation and export-grant evidence exist.
+
+L4 completed those seams in
+`server/hosted/alakazam-retained-premium-lifecycle.mjs`. Its grace worker
+re-reads the exact suspended event, subscription revision, seven-day boundary,
+processed Stripe-event row, and provider-readback digest before applying the
+retained exit. Its expiry worker calls only the public `purgeExpired` method
+after the durable retained window ends. Its exported cancellation hook re-reads
+an `effective` / provider-`confirmed` cancellation, the matching terminal tier
+event, and the exact available export grant before applying the same retained
+exit. IDs are deterministic per durable boundary so concurrent or replayed
+workers cannot change command identity. Production composition keeps the loop
+held unless both Alakazam and its lifecycle policy are separately approved.
+
+### `server/hosted/http.mjs`
+
+Add `alakazamRetainedPremium = null` to `createHostedApi` options, import
+`createHeldHostedAlakazamRetainedPremium`, and select the fail-closed default:
+
+```js
+  const alakazamRetainedPremiumBoundary =
+    alakazamRetainedPremium ??
+    createHeldHostedAlakazamRetainedPremium();
+```
+
+Require exactly `getSnapshot`, `getExport`, `readiness`, and
+`restoreConfiguration`. Register these authenticated, query-free routes beside
+the existing `/alakazam/50` routes:
+
+```text
+GET  /api/v1/projects/:projectId/alakazam/premium
+GET  /api/v1/projects/:projectId/alakazam/premium/export
+POST /api/v1/projects/:projectId/alakazam/premium/restorations
+```
+
+The POST route uses the shared CSRF boundary, takes `commandId` only from the
+validated `Idempotency-Key`, and accepts exactly
+`expectedSourceConfigurationDigest` and `expectedSubscriptionRevision` in the
+body. Return `202`. No edit, publication, care, Stripe, or provider route is
+part of F-06.
+
+### Abracadabra registration
+
+In `scripts/configure-abracadabra-hosted-staging.mjs`, load these after the
+F-04 assets and before `abracadabra-customer-control-dom.js`:
+
+```text
+abracadabra/app/abracadabra-alakazam-retained-premium.css
+abracadabra/app/abracadabra-alakazam-retained-premium.js
+```
+
+The customer-control composition must mount this panel for authenticated
+projects whenever a retained-premium snapshot is available. During
+`payment_grace` or `retained_exit`, destroy or do not mount the F-03/F-04 edit
+and care panels and show only this read/export panel. On an active lower tier,
+show only the masked marker plus bounded customer export. On an exact active
+re-upgrade with canonical evidence, show the held restoration control. Never
+derive authority from DOM, local storage, query parameters, or account copy.
+
+In `scripts/hosted-truth/manifest.mjs`, seal the exact two new asset digests
+after L4 finishes composition; do not add a released offer slot. All Alakazam
+commercial, provider, publication-apply, and Privacy-V4 gates remain held.

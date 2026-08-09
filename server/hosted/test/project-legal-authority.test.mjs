@@ -29,6 +29,14 @@ function fixture() {
     byteCount: 1234,
     artifactUri: "https://example.test/privacy/v3.html"
   };
+  const websiteTermsV3 = {
+    version: "SS-HOSTED-WEBSITE-TERMS-TEST-V3",
+    contentDigest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    contentUri: "https://example.test/terms/v3",
+    effectiveAt: privacyV3.effectiveAt,
+    byteCount: 4321,
+    artifactUri: "https://example.test/terms/v3.html"
+  };
   const documents = [
     {
       kind: "privacy",
@@ -39,17 +47,17 @@ function fixture() {
     },
     {
       kind: "product",
-      version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-      contentDigest: "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      version: websiteTermsV3.version,
+      contentDigest: websiteTermsV3.contentDigest,
       contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
-      effectiveAt: "2026-07-30T00:00:00.000Z"
+      effectiveAt: privacyV3.effectiveAt
     },
     {
       kind: "website",
-      version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-      contentDigest: "bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196",
+      version: websiteTermsV3.version,
+      contentDigest: websiteTermsV3.contentDigest,
       contentUri: "https://sitesourcery.com/legal/website-terms/",
-      effectiveAt: "2026-07-30T00:00:00.000Z"
+      effectiveAt: privacyV3.effectiveAt
     }
   ];
   const authorityDigest = digest(canonicalJson({
@@ -57,10 +65,9 @@ function fixture() {
     schema: "sitesourcery.project-legal-authority/v3"
   }));
   return createProjectLegalAuthorityFixture({
-    privacyV3: {
-      ...privacyV3,
-      authorityDigest
-    }
+    privacyV3,
+    websiteTermsV3,
+    authorityDigest
   });
 }
 
@@ -182,7 +189,7 @@ test("production bootstrap stays held without constants", () => {
   assert.deepEqual(result.diagnostic, {
     state: "held",
     code: "LEGAL_CONFIGURATION_REQUIRED",
-    reason: "Privacy V3 constants are not sealed."
+    reason: "Joint Privacy V3 and Website Terms V3 constants are not sealed."
   });
 });
 
@@ -192,6 +199,61 @@ test("malformed partial bootstrap is held instead of throwing", () => {
   });
   assert.equal(result.authority, null);
   assert.equal(result.diagnostic.code, "LEGAL_CONFIGURATION_REQUIRED");
+});
+
+test("production bootstrap requires and binds the exact joint V3 tuple", () => {
+  const effectiveAt = "2099-12-31T00:00:00.000Z";
+  const documents = [
+    {
+      kind: "privacy",
+      version: "SS-HOSTED-PRIVACY-2099-12-31-V3",
+      contentDigest: "a".repeat(64),
+      contentUri: "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2099-12-31-V3/",
+      effectiveAt
+    },
+    {
+      kind: "product",
+      version: "SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3",
+      contentDigest: "b".repeat(64),
+      contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
+      effectiveAt
+    },
+    {
+      kind: "website",
+      version: "SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3",
+      contentDigest: "b".repeat(64),
+      contentUri: "https://sitesourcery.com/legal/website-terms/",
+      effectiveAt
+    }
+  ];
+  const authorityDigest = digest(canonicalJson({
+    documents,
+    schema: "sitesourcery.project-legal-authority/v3"
+  }));
+  const configured = createProjectLegalAuthorityFromEnvironment({
+    SITESOURCERY_HOSTED_PRIVACY_V3_VERSION: documents[0].version,
+    SITESOURCERY_HOSTED_PRIVACY_V3_SHA256: documents[0].contentDigest,
+    SITESOURCERY_HOSTED_PRIVACY_V3_URI: documents[0].contentUri,
+    SITESOURCERY_HOSTED_PRIVACY_V3_EFFECTIVE_AT: effectiveAt,
+    SITESOURCERY_HOSTED_PRIVACY_V3_BYTE_COUNT: "100",
+    SITESOURCERY_HOSTED_PRIVACY_V3_ARTIFACT_URI: documents[0].contentUri,
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_VERSION: documents[2].version,
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_SHA256: documents[2].contentDigest,
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_URI:
+      "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3/",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_EFFECTIVE_AT: effectiveAt,
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_BYTE_COUNT: "200",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V3_ARTIFACT_URI:
+      "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3/",
+    SITESOURCERY_HOSTED_LEGAL_V3_AUTHORITY_SHA256: authorityDigest
+  });
+  assert.equal(configured.diagnostic, null);
+  assert.deepEqual(configured.authority.documents, documents);
+  assert.equal(configured.authority.artifactBindings[1].artifactUri, null);
+  assert.equal(
+    configured.authority.artifactBindings[2].artifactUri,
+    "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2099-12-31-V3/"
+  );
 });
 
 test("malformed bootstrap keeps runtime reads live while legal writes stay held", async () => {
@@ -347,18 +409,10 @@ test("project creation rejects rogue product and website artifact mappings", asy
       content_digest: document.contentDigest,
       content_uri: document.contentUri,
       effective_at: document.effectiveAt,
-      artifact_uri: index === 0
-        ? authority.artifactBindings[index].artifactUri
-        : null,
-      artifact_sha256: index === 0
-        ? authority.artifactBindings[index].artifactSha256
-        : null,
-      byte_count: index === 0
-        ? authority.artifactBindings[index].byteCount
-        : null,
-      media_type: index === 0
-        ? authority.artifactBindings[index].mediaType
-        : null
+      artifact_uri: authority.artifactBindings[index].artifactUri,
+      artifact_sha256: authority.artifactBindings[index].artifactSha256 ?? null,
+      byte_count: authority.artifactBindings[index].byteCount ?? null,
+      media_type: authority.artifactBindings[index].mediaType ?? null
     }));
     Object.assign(documents[rogueIndex], {
       artifact_uri: "https://rogue.example.test/legal.html",

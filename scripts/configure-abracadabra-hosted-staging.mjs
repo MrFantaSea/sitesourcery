@@ -5,6 +5,8 @@ const ALAKAZAM_35_STYLESHEET =
   '<link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-35.css">';
 const ALAKAZAM_50_STYLESHEET =
   '<link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-50.css">';
+const ALAKAZAM_RETAINED_PREMIUM_STYLESHEET =
+  '<link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-retained-premium.css">';
 const HOLD_META =
   '<meta name="sitesourcery-abracadabra-control-mode" content="hold">';
 const HOSTED_META =
@@ -171,6 +173,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     APP_SCRIPT,
     '<script src="/abracadabra/app/abracadabra-alakazam-35.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-alakazam-50.js" defer></script>',
+    '<script src="/abracadabra/app/abracadabra-alakazam-retained-premium.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>',
   ].join("\n  ");
 
@@ -178,7 +181,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     .replace(HOLD_META, HOSTED_META)
     .replace(
       APP_STYLESHEET,
-      `${APP_STYLESHEET}\n  ${ALAKAZAM_35_STYLESHEET}\n  ${ALAKAZAM_50_STYLESHEET}`
+      `${APP_STYLESHEET}\n  ${ALAKAZAM_35_STYLESHEET}\n  ${ALAKAZAM_50_STYLESHEET}\n  ${ALAKAZAM_RETAINED_PREMIUM_STYLESHEET}`
     )
     .replace(APP_SCRIPT, hostedScripts);
 }
@@ -188,6 +191,8 @@ export const hostedStagingAssets = Object.freeze([
   "abracadabra/app/abracadabra-alakazam-35.js",
   "abracadabra/app/abracadabra-alakazam-50.css",
   "abracadabra/app/abracadabra-alakazam-50.js",
+  "abracadabra/app/abracadabra-alakazam-retained-premium.css",
+  "abracadabra/app/abracadabra-alakazam-retained-premium.js",
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-billing-views.js",
   "abracadabra/app/abracadabra-control-mode.js",

@@ -39,8 +39,8 @@ import {
   createPostgresAlakazamRepository
 } from "../../hosted/alakazam-postgres.mjs";
 import {
-  createPostgresAlakazamPublicationRepository
-} from "../../hosted/alakazam-publication-postgres.mjs";
+  createPostgresPublicationControlRepository
+} from "../../hosted/publication-control-postgres.mjs";
 import {
   createAlakazamFulfillmentWorker
 } from "../../hosted/alakazam-fulfillment-worker.mjs";
@@ -2445,7 +2445,7 @@ test(
         "2026-08-02T12:17:05.000Z"
       ];
       const publicationRepository =
-        createPostgresAlakazamPublicationRepository({
+        createPostgresPublicationControlRepository({
           authority: {
             async service(_context, work) {
               return work(client);
@@ -2548,6 +2548,24 @@ test(
         (await publicationRepository.readiness()).ready,
         true
       );
+      await client.query(
+        `grant select on table
+           ss.publication_control_commands
+         to authenticated`
+      );
+      await assert.rejects(
+        publicationRepository.readiness(),
+        /generic publication-control authority is not ready/iu
+      );
+      await client.query(
+        `revoke select on table
+           ss.publication_control_commands
+         from authenticated`
+      );
+      assert.equal(
+        (await publicationRepository.readiness()).ready,
+        true
+      );
       const livePublication =
         await publication.read(publicationScope);
       assert.equal(
@@ -2615,6 +2633,18 @@ test(
           error.code === "publication_authority_changed" &&
           error.status === 409
       );
+      const commandsAfterStaleSnapshot = await client.query(
+        `select count(*)::integer as count
+           from ss.publication_control_commands
+          where organization_id = $1
+            and project_id = $2`,
+        [authority.organizationId, authority.projectId]
+      );
+      assert.equal(
+        commandsAfterStaleSnapshot.rows[0].count,
+        1,
+        "a stale publication snapshot must not persist a command"
+      );
       const heldUnpublish = await publication.request(
         publicationScope,
         {
@@ -2676,9 +2706,30 @@ test(
       const heldProof = await client.query(
         `select
            (select count(*)::integer
-              from ss.alakazam_customer_publication_commands
+              from ss.publication_control_commands
              where organization_id = $1
                and project_id = $2) as command_count,
+           (select count(*)::integer
+              from ss.alakazam_customer_publication_commands
+             where organization_id = $1
+               and project_id = $2) as legacy_command_count,
+           (select bool_and(
+                     capability = 'publish_accepted_project_version'
+                     and entitlement_revision > 0
+                     and acceptance_event_id is not null
+                     and screening_id is not null
+                     and licensed_address_id is not null
+                     and authority_operation_id is not null
+                     and authority_serving_revision >= 0
+                     and target_operation_id is not null
+                     and target_serving_revision >= 0
+                     and state = 'held'
+                     and hold_reason =
+                       'privacy_v4_and_commercial_cutover_not_authorized'
+                   )
+              from ss.publication_control_commands
+             where organization_id = $1
+               and project_id = $2) as exact_authority_evidence,
            (select count(*)::integer
               from ss.releases release
              where release.organization_id = $1
@@ -2693,6 +2744,10 @@ test(
       assert.deepEqual(
         {
           commandCount: heldProof.rows[0].command_count,
+          legacyCommandCount:
+            heldProof.rows[0].legacy_command_count,
+          exactAuthorityEvidence:
+            heldProof.rows[0].exact_authority_evidence,
           releaseCount: heldProof.rows[0].release_count,
           servingState: heldProof.rows[0].serving_state,
           currentReleaseId:
@@ -2700,6 +2755,8 @@ test(
         },
         {
           commandCount: 3,
+          legacyCommandCount: 0,
+          exactAuthorityEvidence: true,
           releaseCount:
             beforeHeldCommands.rows[0].release_count,
           servingState:
@@ -3525,7 +3582,7 @@ test(
       await client.query("commit");
 
       const concurrentRepository =
-        createPostgresAlakazamPublicationRepository({
+        createPostgresPublicationControlRepository({
           authority: {
             async service(context, work) {
               assert.equal(context.userId, authority.userId);
@@ -3599,7 +3656,7 @@ test(
       );
       const concurrentRows = await client.query(
         `select count(*)::integer as count
-           from ss.alakazam_customer_publication_commands
+           from ss.publication_control_commands
           where organization_id = $1
             and id = $2`,
         [authority.organizationId, concurrentCommandId]

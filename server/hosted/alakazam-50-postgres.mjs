@@ -187,7 +187,7 @@ async function selectAuthority(client, input, { lock = false } = {}) {
       where subscription.organization_id = $1
         and subscription.project_id = $2
         and subscription.customer_user_id = $3
-        and subscription.status in ('active', 'grace')
+        and subscription.status = 'active'
         and subscription.tier_id = 'alakazam_50'
       order by subscription.revision desc, subscription.id desc
       limit 2${lock ? " for update of subscription" : ""}`,

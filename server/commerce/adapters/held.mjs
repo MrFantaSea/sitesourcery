@@ -21,15 +21,22 @@ export function createHeldCatalogPort() {
 }
 
 export function createHeldStripeAdapter() {
+  const reject = async () => {
+    throw new ExternalEffectError(
+      "stripe_not_configured",
+      "Stripe adapter is held",
+      { certainty: "no_effect" }
+    );
+  };
   return Object.freeze({
     async readiness() {
       return { ready: false, reason: "stripe_not_configured" };
     },
-    async createCheckout() {
-      throw new ExternalEffectError("stripe_not_configured", "Stripe adapter is held", {
-        certainty: "no_effect"
-      });
-    }
+    createCheckout: reject,
+    retrieveAlakazamRenewalInvoice: reject,
+    retrieveAlakazamIncidentInvoice: reject,
+    retrieveAlakazamCancellation: reject,
+    retrieveAlakazamReversal: reject
   });
 }
 

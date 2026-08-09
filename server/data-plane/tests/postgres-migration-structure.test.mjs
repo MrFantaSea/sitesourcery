@@ -151,6 +151,82 @@ test("Alakazam 50 migration is additive, held, append-only, and exact-tier bound
   );
 });
 
+test("retained Alakazam premium state is fenced, held, and purge bounded", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608090104_alakazam_retained_premium_state.sql"
+  );
+  assert.ok(migration, "missing F06 retained premium migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v51\(\)[\s\S]*hosted_runtime_contract_v52\(\)[\s\S]*hosted_alakazam_35_contract\(\)[\s\S]*hosted_alakazam_50_contract\(\)/iu
+  );
+  for (const table of [
+    "alakazam_premium_retention_windows",
+    "alakazam_50_premium_restorations",
+    "alakazam_premium_purge_receipts"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /SS-ALAKAZAM-CARE-LIFECYCLE-2026-08-09-V1/iu
+  );
+  assert.match(
+    migration.sql,
+    /payment_grace_expired[\s\S]*interval '7 days'[\s\S]*interval '30 days'/iu
+  );
+  assert.match(
+    migration.sql,
+    /reason in \([\s\S]*'terminal_customer_deletion'[\s\S]*'retained_exit_expiry'[\s\S]*\)/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /reason in \([\s\S]*'payment_grace_expiry'/iu
+  );
+  assert.match(
+    migration.sql,
+    /source_configuration_digest[\s\S]*downgrade_event_digest[\s\S]*upgrade_event_digest[\s\S]*provider_facts_digest[\s\S]*evidence_digest/iu
+  );
+  assert.match(
+    migration.sql,
+    /constraint alakazam_premium_restore_command_binding_check[\s\S]*restored_configuration_id = id/iu
+  );
+  assert.match(
+    migration.sql,
+    /downgrade_record\.event_kind <> 'downgrade_applied'[\s\S]*upgrade_record\.event_kind <> 'upgrade_applied'[\s\S]*upgrade_record\.stripe_event_row_id is null/iu
+  );
+  assert.match(
+    migration.sql,
+    /create or replace function ss\.validate_alakazam_35_subscription_authority[\s\S]*subscription\.status = 'active'/iu
+  );
+  assert.match(
+    migration.sql,
+    /create or replace function ss\.validate_alakazam_50_subscription_authority[\s\S]*subscription\.status = 'active'/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.reject_nonactive_alakazam_publication[\s\S]*subscription\.status = 'active'[\s\S]*alakazam_customer_publication_commands_00_active/iu
+  );
+  assert.match(
+    migration.sql,
+    /app\.terminal_purge_project_id[\s\S]*app\.alakazam_premium_purge_project_id[\s\S]*deletion_requests_00_purge_alakazam_tier_data/iu
+  );
+  assert.match(
+    migration.sql,
+    /grant select, insert on ss\.alakazam_50_premium_restorations[\s\S]*grant select on ss\.alakazam_premium_purge_receipts[\s\S]*grant select on ss\.alakazam_premium_retention_windows/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /grant[^;]*(?:update|delete|truncate)[^;]*to service_role|provider_effects_authorized\s*=\s*true|state\s*=\s*'released'/iu
+  );
+});
+
 test("organizations relies on its primary key without a duplicate synthetic UNIQUE", async () => {
   const foundation = (await migrations()).find(
     ({ name }) => name === "202607280001_foundation.sql"
@@ -2586,7 +2662,7 @@ test("Custom build handoff atomically binds exact financial clearance to one imm
   );
 });
 
-test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
+test("joint Privacy V3 and Website Terms V3 are additive, exact, and owner-sealed", async () => {
   const privacy = (await migrations()).find(
     ({ name }) => name === "202608060048_hosted_privacy_v3.sql"
   );
@@ -2595,7 +2671,7 @@ test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
   assert.match(privacy.sql, /commit;\s*$/iu);
 
   const releaseGuard = privacy.sql.indexOf(
-    "Hosted Privacy V3 release constants are unsealed"
+    "Hosted joint Privacy V3 and Website Terms V3 constants are unsealed"
   );
   const firstPermanentDdl = privacy.sql.indexOf(
     "create function ss.reject_delete_v48"
@@ -2607,11 +2683,11 @@ test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
   );
   assert.match(
     privacy.sql,
-    /create temporary table hosted_privacy_v3_release_constants[\s\S]*version text[\s\S]*content_digest text[\s\S]*content_uri text[\s\S]*effective_at timestamptz[\s\S]*byte_count bigint[\s\S]*artifact_uri text[\s\S]*authority_digest text/iu
+    /create temporary table hosted_joint_legal_v3_release_constants[\s\S]*version text[\s\S]*content_digest text[\s\S]*content_uri text[\s\S]*effective_at timestamptz[\s\S]*byte_count bigint[\s\S]*artifact_uri text[\s\S]*website_terms_version text[\s\S]*website_terms_content_digest text[\s\S]*website_terms_artifact_uri text[\s\S]*website_terms_byte_count bigint[\s\S]*authority_digest text/iu
   );
   assert.match(
     privacy.sql,
-    /'SS-HOSTED-PRIVACY-V3-UNSEALED',\s*null,\s*null,\s*null,\s*null,\s*null,\s*null/iu
+    /'SS-HOSTED-PRIVACY-V3-UNSEALED',[\s\S]*'SS-HOSTED-WEBSITE-TERMS-V3-UNSEALED',[\s\S]*null/iu
   );
   assert.doesNotMatch(
     privacy.sql,
@@ -2639,6 +2715,10 @@ test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
   assert.match(
     privacy.sql,
     /insert into ss\.legal_documents[\s\S]*00000000-0000-4000-8000-000000000048[\s\S]*release\.version[\s\S]*release\.content_digest::ss\.sha256_hex[\s\S]*release\.content_uri[\s\S]*release\.effective_at[\s\S]*on conflict \(kind, version\) do nothing/iu
+  );
+  assert.match(
+    privacy.sql,
+    /00000000-0000-4000-8000-000000000103[\s\S]*release\.website_terms_version[\s\S]*00000000-0000-4000-8000-000000000104[\s\S]*release\.website_terms_content_digest/iu
   );
 
   assert.match(
@@ -2696,9 +2776,9 @@ test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
   const receiptGuard = privacy.sql.slice(receiptGuardStart, receiptGuardEnd);
   for (const invariant of [
     /count\(\*\) = 3/iu,
-    /00000000-0000-4000-8000-000000000021/iu,
+    /00000000-0000-4000-8000-000000000103/iu,
     /00000000-0000-4000-8000-000000000048/iu,
-    /00000000-0000-4000-8000-000000000023/iu,
+    /00000000-0000-4000-8000-000000000104/iu,
     /tg_relid = 'ss\.project_legal_acceptance_receipts'::regclass/iu,
     /tg_relid = 'ss\.term_acceptances'::regclass/iu,
     /acceptance\.organization_id = receipt_record\.organization_id/iu,
@@ -2738,7 +2818,7 @@ test("hosted Privacy V3 is additive, exact, and owner-sealed", async () => {
   );
   assert.match(
     privacy.sql,
-    /create function ss\.hosted_runtime_contract_v48\(\)[\s\S]*returns text[\s\S]*language sql[\s\S]*stable[\s\S]*select 'canonical-ss-v48-hosted-privacy-v3'[\s\S]*revoke all on function ss\.hosted_runtime_contract_v48\(\)[\s\S]*grant execute on function ss\.hosted_runtime_contract_v48\(\)\s+to service_role/iu
+    /create function ss\.hosted_runtime_contract_v48\(\)[\s\S]*returns text[\s\S]*language sql[\s\S]*stable[\s\S]*select 'canonical-ss-v48-hosted-joint-legal-v3'[\s\S]*revoke all on function ss\.hosted_runtime_contract_v48\(\)[\s\S]*grant execute on function ss\.hosted_runtime_contract_v48\(\)\s+to service_role/iu
   );
   assert.doesNotMatch(
     privacy.sql,
@@ -2813,5 +2893,72 @@ test("Alakazam customer publication controls store only exact held revision-boun
   assert.doesNotMatch(
     migration.sql,
     /stripe|provider_effects_authorized\s*=\s*true|on delete cascade|create table ss\.alakazam_(?:subscriptions|fulfillment_operations|fulfillment_projection)/iu
+  );
+});
+
+test("generic publication controls persist exact fulfilled authority and stay Privacy V4 held", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) =>
+      name === "202608080104_publication_control_authority.sql"
+  );
+  assert.ok(migration, "missing generic publication-control authority");
+  assert.match(
+    migration.sql,
+    /begin;[\s\S]*hosted_alakazam_50_contract\(\)[\s\S]*create table ss\.publication_control_commands[\s\S]*commit;/iu
+  );
+  for (const fact of [
+    "entitlement_revision",
+    "entitlement_tier_id",
+    "capability",
+    "acceptance_event_id",
+    "accepted_version_id",
+    "accepted_artifact_id",
+    "accepted_artifact_digest",
+    "screening_id",
+    "screening_artifact_digest",
+    "licensed_address_id",
+    "licensed_hostname",
+    "authority_operation_id",
+    "authority_serving_revision",
+    "target_operation_id",
+    "target_serving_revision",
+    "authorized_release_id",
+    "authority_digest",
+    "command_digest"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`\\b${fact}\\b`, "iu"),
+      `missing persisted publication fact ${fact}`
+    );
+  }
+  assert.match(
+    migration.sql,
+    /action in \('publish', 'rollback', 'unpublish'\)[\s\S]*state text not null default 'held'[\s\S]*privacy_v4_and_commercial_cutover_not_authorized/iu
+  );
+  for (const invariant of [
+    /subscription\.revision = new\.entitlement_revision/iu,
+    /operation\.capability = new\.capability/iu,
+    /operation\.effective_tier_id = subscription\.tier_id/iu
+  ]) assert.match(migration.sql, invariant);
+  assert.match(
+    migration.sql,
+    /version_state\.state = 'accepted_release'[\s\S]*acceptance\.state = 'accepted_release'[\s\S]*screening\.stage = 'pre_publication'[\s\S]*screening\.passed/iu
+  );
+  assert.match(
+    migration.sql,
+    /address\.kind = 'licensed'[\s\S]*address\.ownership = 'licensed'[\s\S]*address\.state = 'configured'[\s\S]*current_address_id = address\.id/iu
+  );
+  assert.match(
+    migration.sql,
+    /create constraint trigger publication_control_commands_validate[\s\S]*deferrable initially deferred[\s\S]*immutable held evidence[\s\S]*before update or delete/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*revoke all on table ss\.publication_control_commands[\s\S]*grant select, insert on table ss\.publication_control_commands\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /on delete cascade|provider_effects_authorized\s*=\s*true|stripe|create table ss\.releases/iu
   );
 });

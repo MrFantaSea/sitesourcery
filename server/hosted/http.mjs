@@ -13,6 +13,9 @@ import {
   createHeldHostedAlakazam50
 } from "../commerce-v2/hosted-alakazam-50.mjs";
 import {
+  createHeldHostedAlakazamRetainedPremium
+} from "../commerce-v2/hosted-alakazam-retained-premium.mjs";
+import {
   createHeldHostedAlakazamBilling
 } from "../commerce-v2/hosted-alakazam-billing.mjs";
 import {
@@ -420,6 +423,7 @@ export function createHostedApi(
     alakazamAccount = null,
     alakazam35 = null,
     alakazam50 = null,
+    alakazamRetainedPremium = null,
     alakazamPublication = null,
     alakazamBilling = null,
     alakazamBillingSurfaces = null,
@@ -624,6 +628,24 @@ export function createHostedApi(
     ),
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam $50 boundary is invalid.",
+    { status: 500 }
+  );
+  const alakazamRetainedPremiumBoundary =
+    alakazamRetainedPremium ??
+    createHeldHostedAlakazamRetainedPremium();
+  invariant(
+    [
+      "getSnapshot",
+      "getExport",
+      "readiness",
+      "restoreConfiguration"
+    ].every(
+      (method) =>
+        typeof alakazamRetainedPremiumBoundary[method] ===
+          "function"
+    ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted retained Alakazam premium boundary is invalid.",
     { status: 500 }
   );
   const alakazamPublicationBoundary =
@@ -837,6 +859,8 @@ export function createHostedApi(
             await alakazam35Boundary.readiness();
           const alakazam50Readiness =
             await alakazam50Boundary.readiness();
+          const alakazamRetainedPremiumReadiness =
+            await alakazamRetainedPremiumBoundary.readiness();
           const alakazamPublicationReadiness =
             await alakazamPublicationBoundary.readiness();
           const registration =
@@ -869,6 +893,13 @@ export function createHostedApi(
               alakazam50:
                 alakazam50Readiness.authorization === true &&
                 alakazam50Readiness.providerEffects === false,
+              alakazamRetainedPremium:
+                alakazamRetainedPremiumReadiness.ready === true &&
+                alakazamRetainedPremiumReadiness.authorization ===
+                  true &&
+                alakazamRetainedPremiumReadiness.providerEffects ===
+                  false &&
+                alakazamRetainedPremiumReadiness.state === "held",
               alakazamPublication:
                 alakazamPublicationReadiness.authorization ===
                   true &&
@@ -2022,6 +2053,54 @@ export function createHostedApi(
           method === "GET" &&
           (route = match(
             pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/premium$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before viewing retained Alakazam premium configuration.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_RETAINED_PREMIUM_ROUTE_BINDING_REJECTED",
+            "Retained Alakazam premium controls accept no query parameters."
+          );
+          result =
+            await alakazamRetainedPremiumBoundary.getSnapshot(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/premium\/export$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before exporting retained Alakazam premium configuration.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_RETAINED_PREMIUM_ROUTE_BINDING_REJECTED",
+            "Retained Alakazam premium exports accept no query parameters."
+          );
+          result =
+            await alakazamRetainedPremiumBoundary.getExport(
+              actor,
+              route[0]
+            );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
             /^\/api\/v1\/projects\/([^/]+)\/alakazam\/publication$/u
           ))
         ) {
@@ -2885,6 +2964,44 @@ export function createHostedApi(
               commandId: write.commandId
             }
           );
+          status = 202;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/premium\/restorations$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before restoring retained Alakazam premium configuration.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_RETAINED_PREMIUM_ROUTE_BINDING_REJECTED",
+            "Retained Alakazam premium restoration accepts no query parameters."
+          );
+          const selected = exactRouteBody(
+            body,
+            [
+              "expectedSourceConfigurationDigest",
+              "expectedSubscriptionRevision"
+            ],
+            "ALAKAZAM_RETAINED_PREMIUM_ROUTE_BINDING_REJECTED",
+            "The retained Alakazam premium restoration is invalid."
+          );
+          result =
+            await alakazamRetainedPremiumBoundary.restoreConfiguration(
+              actor,
+              route[0],
+              {
+                ...selected,
+                commandId: write.commandId
+              }
+            );
           status = 202;
         } else if (
           method === "POST" &&

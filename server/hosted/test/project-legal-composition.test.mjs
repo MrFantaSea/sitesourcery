@@ -163,8 +163,11 @@ test("project legal readiness differentiates catalog and data proof with exact t
             contract_marker_ready: true,
             v2_artifact_ready:
               text.includes("00000000-0000-4000-8000-000000000022") &&
+              text.includes("00000000-0000-4000-8000-000000000023") &&
               text.includes("SS-HOSTED-PRIVACY-2026-07-30-V2") &&
+              text.includes("SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2") &&
               text.includes("b57979f99f7176b7d83d7d9efad9893fb87605c2f51511ced79982675f98a06b") &&
+              text.includes("bd710c536d2b2c1b8d056efecc8930f98147566ab16d5919382ed10518fe2196") &&
               text.includes("19935"),
             v3_artifact_ready: true,
             authority_ready: true
@@ -206,30 +209,39 @@ test("project legal readiness differentiates catalog and data proof with exact t
         },
         {
           kind: "product",
-          version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+          version: "SS-HOSTED-WEBSITE-TERMS-TEST-V3",
           contentDigest: "b".repeat(64),
           contentUri: "https://example.test/terms/#self-service",
-          effectiveAt: "2026-07-30T00:00:00.000Z"
+          effectiveAt: "2026-08-08T00:00:00.000Z"
         },
         {
           kind: "website",
-          version: "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
+          version: "SS-HOSTED-WEBSITE-TERMS-TEST-V3",
           contentDigest: "b".repeat(64),
           contentUri: "https://example.test/terms/",
-          effectiveAt: "2026-07-30T00:00:00.000Z"
+          effectiveAt: "2026-08-08T00:00:00.000Z"
         }
       ],
       documentBindings: [
         { id: "00000000-0000-4000-8000-000000000048" },
-        { id: "00000000-0000-4000-8000-000000000021" },
-        { id: "00000000-0000-4000-8000-000000000023" }
+        { id: "00000000-0000-4000-8000-000000000103" },
+        { id: "00000000-0000-4000-8000-000000000104" }
       ],
-      artifactBindings: [{
-        artifactUri: "https://example.test/privacy/v3.html",
-        artifactSha256: "a".repeat(64),
-        byteCount: 1234,
-        mediaType: "text/html; charset=utf-8"
-      }],
+      artifactBindings: [
+        {
+          artifactUri: "https://example.test/privacy/v3.html",
+          artifactSha256: "a".repeat(64),
+          byteCount: 1234,
+          mediaType: "text/html; charset=utf-8"
+        },
+        { artifactUri: null },
+        {
+          artifactUri: "https://example.test/terms/v3.html",
+          artifactSha256: "b".repeat(64),
+          byteCount: 2345,
+          mediaType: "text/html; charset=utf-8"
+        }
+      ],
       authorityDigest: "c".repeat(64)
     }),
     false
@@ -269,8 +281,13 @@ test("project legal readiness differentiates catalog and data proof with exact t
   const dataQuery = calls.find(({ text }) =>
     text.includes("as v2_artifact_ready")
   ).text;
-  assert.match(dataQuery, /00000000-0000-4000-8000-000000000021/u);
+  assert.match(dataQuery, /00000000-0000-4000-8000-000000000022/u);
   assert.match(dataQuery, /00000000-0000-4000-8000-000000000023/u);
+  assert.match(dataQuery, /00000000-0000-4000-8000-000000000104/u);
+  assert.match(
+    dataQuery,
+    /artifact\.document_id =\s*'00000000-0000-4000-8000-000000000103'::uuid/u
+  );
   const constantsQuery = calls.find(({ text }) =>
     text.includes("as exact_artifacts_ready")
   ).text;
@@ -278,4 +295,13 @@ test("project legal readiness differentiates catalog and data proof with exact t
     constantsQuery,
     /artifact\.document_id in \(\$1::uuid, \$7::uuid, \$13::uuid\)/u
   );
+  assert.match(constantsQuery, /select count\(\*\) = 2/u);
+  assert.match(constantsQuery, /artifact\.document_id = \$24::uuid/u);
+  assert.match(constantsQuery, /\)\) = \$29::text as authority_digest_ready/u);
+  const constantsCall = calls.find(({ text }) =>
+    text.includes("as exact_artifacts_ready")
+  );
+  assert.equal(constantsCall.values.length, 29);
+  assert.equal(constantsCall.values[18], "00000000-0000-4000-8000-000000000048");
+  assert.equal(constantsCall.values[23], "00000000-0000-4000-8000-000000000104");
 });

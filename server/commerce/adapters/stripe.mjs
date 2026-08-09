@@ -23,6 +23,18 @@ import {
   ALAKAZAM_TIER_IDS,
   createAlakazamProviderMetadata
 } from "../../commerce-v2/alakazam.mjs";
+import {
+  ALAKAZAM_CANCELLATION_FACTS_SCHEMA
+} from "../../commerce-v2/alakazam-lifecycle-cancellation.mjs";
+import {
+  ALAKAZAM_RENEWAL_INVOICE_FACTS_SCHEMA
+} from "../../commerce-v2/alakazam-lifecycle-renewal.mjs";
+import {
+  ALAKAZAM_REVERSAL_FACTS_SCHEMA
+} from "../../commerce-v2/alakazam-lifecycle-reversal.mjs";
+import {
+  ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA
+} from "../../commerce-v2/alakazam-lifecycle-state.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -37,15 +49,39 @@ export const STRIPE_ALAKAZAM_CAPABILITIES =
     "checkout:create",
     "checkout:read",
     "coupons:read",
+    "charges:read",
     "customers:create",
     "customers:read",
+    "disputes:read",
+    "invoices:read",
     "prices:read",
     "products:read",
+    "refunds:read",
     "subscriptions:read",
     "subscriptions:update",
     "subscription_schedules:read",
     "subscription_schedules:write"
   ]);
+
+export const STRIPE_REQUIRED_WEBHOOK_EVENTS = Object.freeze([
+  "charge.dispute.closed",
+  "charge.dispute.created",
+  "charge.dispute.funds_reinstated",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.updated",
+  "charge.refunded",
+  "checkout.session.completed",
+  "customer.subscription.created",
+  "customer.subscription.deleted",
+  "customer.subscription.updated",
+  "invoice.paid",
+  "invoice.payment_action_required",
+  "invoice.payment_failed",
+  "invoice.payment_succeeded",
+  "refund.created",
+  "refund.failed",
+  "refund.updated"
+].sort());
 
 const LIVE_ENVIRONMENTS = new Set(["staging", "production"]);
 const LIVE_CAPABILITIES = new Set([
@@ -58,6 +94,7 @@ const LIVE_CAPABILITIES = new Set([
   "domain_refunds:create",
   "prices:read",
   "subscriptions:cancel",
+  "webhook_endpoints:read",
   "webhooks:verify",
   ...STRIPE_ALAKAZAM_CAPABILITIES
 ]);
@@ -72,8 +109,10 @@ const CANCELLABLE_SUBSCRIPTION_STATUSES = new Set([
 ]);
 const CHECKOUT_HOSTS = new Set(["checkout.stripe.com"]);
 const PORTAL_HOSTS = new Set(["billing.stripe.com"]);
-const PROVIDER_ID = /^(bpc|bps|ch|cs|cus|in|pi|price|prod|re|si|sub_sched|sub|txn)_[A-Za-z0-9_]+$/u;
+const PROVIDER_ID = /^(bpc|bps|ch|cs|cus|dp|in|pi|price|prod|re|si|sub_sched|sub|txn|we)_[A-Za-z0-9_]+$/u;
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9._:-]+$/u;
+const TAX_CODE = /^txcd_[A-Za-z0-9]+$/u;
+const TAX_REGISTRATION_ID = /^taxreg_[A-Za-z0-9_]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -132,6 +171,31 @@ const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
   ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA;
+const STRIPE_TAX_ATTESTATION_SCHEMA =
+  "sitesourcery.stripe-tax-attestation/v1";
+const STRIPE_TAX_CODE_FIELDS = Object.freeze([
+  "alakazam",
+  "customBuildChange",
+  "customBuildFinal",
+  "customBuildStart",
+  "domainRegistration",
+  "download",
+  "serviceAssessment",
+  "siteService"
+]);
+const STRIPE_ALAKAZAM_REFUND_EVENTS = new Set([
+  "charge.refunded",
+  "refund.created",
+  "refund.failed",
+  "refund.updated"
+]);
+const STRIPE_ALAKAZAM_DISPUTE_EVENTS = new Set([
+  "charge.dispute.closed",
+  "charge.dispute.created",
+  "charge.dispute.funds_reinstated",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.updated"
+]);
 
 export function createOfficialStripeClient({
   secretKey,
@@ -148,8 +212,10 @@ export function createOfficialStripeClient({
       apiVersion === STRIPE_API_VERSION &&
       (
         livemode
-          ? selectedKey.startsWith("sk_live_")
-          : selectedKey.startsWith("sk_test_")
+          ? selectedKey.startsWith("sk_live_") ||
+            selectedKey.startsWith("rk_live_")
+          : selectedKey.startsWith("sk_test_") ||
+            selectedKey.startsWith("rk_test_")
       ),
     "stripe_configuration_required",
     "Stripe credentials must match the exact mode and pinned API version",
@@ -508,6 +574,7 @@ function validateClient(client) {
       typeof client.billingPortal?.sessions?.create ===
         "function" &&
       typeof client.subscriptions?.update === "function" &&
+      typeof client.webhookEndpoints?.retrieve === "function" &&
       typeof client.webhooks?.constructEvent === "function",
     "stripe_client_invalid",
     "The official Stripe client contract is required",
@@ -571,6 +638,12 @@ function normalizedExpectation(value, index, livemode) {
           "prod",
           `priceExpectations[${index}].productId`
         );
+  invariant(
+    value.taxBehavior === "exclusive",
+    "stripe_price_expectation_invalid",
+    `Stripe Price expectation ${id} must be exclusive of tax`,
+    { status: 500 }
+  );
   return Object.freeze({
     id,
     active: true,
@@ -578,7 +651,103 @@ function normalizedExpectation(value, index, livemode) {
     unitAmount,
     livemode,
     recurring,
-    productId
+    productId,
+    taxBehavior: "exclusive"
+  });
+}
+
+function normalizedTaxCodes(value, domainAuthorization) {
+  invariant(
+    exactObjectKeys(value, STRIPE_TAX_CODE_FIELDS),
+    "stripe_tax_codes_required",
+    "Stripe requires one exact tax code for every payment purpose",
+    { status: 500 }
+  );
+  const selected = {};
+  for (const field of STRIPE_TAX_CODE_FIELDS) {
+    if (
+      field === "domainRegistration" &&
+      value[field] === null &&
+      domainAuthorization === null
+    ) {
+      selected[field] = null;
+      continue;
+    }
+    invariant(
+      typeof value[field] === "string" &&
+        TAX_CODE.test(value[field]),
+      "stripe_tax_codes_required",
+      `Stripe tax code ${field} is invalid`,
+      { status: 500 }
+    );
+    selected[field] = value[field];
+  }
+  invariant(
+    domainAuthorization === null ||
+      selected.domainRegistration !== null,
+    "stripe_domain_tax_code_required",
+    "Stripe domain authorization requires an exact owner-approved tax code",
+    { status: 500 }
+  );
+  return Object.freeze(selected);
+}
+
+function normalizedTaxAttestation(value, config) {
+  invariant(
+    exactObjectKeys(value, [
+      "approved",
+      "approvedAt",
+      "attestationId",
+      "defaultTaxBehavior",
+      "headOfficeCountry",
+      "livemode",
+      "provider",
+      "registrationDecision",
+      "registrationIds",
+      "schema",
+      "taxMode"
+    ]),
+    "stripe_tax_attestation_required",
+    "Stripe Tax requires one exact owner attestation",
+    { status: 500 }
+  );
+  const registrationIds = Array.isArray(value.registrationIds)
+    ? value.registrationIds
+    : [];
+  invariant(
+    value.schema === STRIPE_TAX_ATTESTATION_SCHEMA &&
+      value.provider === "stripe" &&
+      value.approved === true &&
+      value.livemode === config.livemode &&
+      value.taxMode === config.taxMode &&
+      value.defaultTaxBehavior === "exclusive" &&
+      typeof value.attestationId === "string" &&
+      SAFE_METADATA_VALUE.test(value.attestationId) &&
+      Number.isFinite(Date.parse(value.approvedAt)) &&
+      typeof value.headOfficeCountry === "string" &&
+      /^[A-Z]{2}$/u.test(value.headOfficeCountry) &&
+      ["registered", "none_registered"].includes(
+        value.registrationDecision
+      ) &&
+      registrationIds.every(
+        (id) =>
+          typeof id === "string" &&
+          TAX_REGISTRATION_ID.test(id)
+      ) &&
+      new Set(registrationIds).size ===
+        registrationIds.length &&
+      (value.registrationDecision === "registered"
+        ? registrationIds.length > 0
+        : registrationIds.length === 0),
+    "stripe_tax_attestation_invalid",
+    "Stripe Tax attestation does not match the exact account decision",
+    { status: 500 }
+  );
+  return Object.freeze({
+    ...structuredClone(value),
+    registrationIds: Object.freeze(
+      [...registrationIds].sort()
+    )
   });
 }
 
@@ -690,6 +859,14 @@ function validateConfig(value, mode) {
     config.portalReturnUrl,
     "portalReturnUrl"
   );
+  const portalPrivacyPolicyUrl = exactUrl(
+    config.portalPrivacyPolicyUrl,
+    "portalPrivacyPolicyUrl"
+  );
+  const portalTermsOfServiceUrl = exactUrl(
+    config.portalTermsOfServiceUrl,
+    "portalTermsOfServiceUrl"
+  );
   const suppliedOrigins = Array.isArray(
     config.approvedReturnOrigins
   )
@@ -711,7 +888,13 @@ function validateConfig(value, mode) {
   }
   invariant(
     approvedReturnOrigins.size > 0 &&
-      [successUrl, cancelUrl, portalReturnUrl].every((url) =>
+      [
+        successUrl,
+        cancelUrl,
+        portalReturnUrl,
+        portalPrivacyPolicyUrl,
+        portalTermsOfServiceUrl
+      ].every((url) =>
         approvedReturnOrigins.has(returnOrigin(url))
       ),
     "stripe_redirect_invalid",
@@ -729,6 +912,15 @@ function validateConfig(value, mode) {
     config.webhookSecret,
     "webhookSecret",
     500
+  );
+  const webhookEndpointId = providerId(
+    config.webhookEndpointId,
+    "we",
+    "webhookEndpointId"
+  );
+  const webhookEndpointUrl = exactUrl(
+    config.webhookEndpointUrl,
+    "webhookEndpointUrl"
   );
   if (mode === "approved_live") {
     invariant(
@@ -810,17 +1002,31 @@ function validateConfig(value, mode) {
     priceExpectations,
     config.livemode
   );
+  const taxCodes = normalizedTaxCodes(
+    config.taxCodes,
+    domainAuthorization
+  );
+  const taxAttestation = normalizedTaxAttestation(
+    config.taxAttestation,
+    config
+  );
   return Object.freeze({
     apiVersion: STRIPE_API_VERSION,
     livemode: config.livemode,
     successUrl,
     cancelUrl,
     portalReturnUrl,
+    portalPrivacyPolicyUrl,
+    portalTermsOfServiceUrl,
     approvedReturnOrigins: Object.freeze(
       [...approvedReturnOrigins].sort()
     ),
     taxMode: config.taxMode,
+    taxCodes,
+    taxAttestation,
     webhookSecret,
+    webhookEndpointId,
+    webhookEndpointUrl,
     checkoutTtlSeconds: integer(
       config.checkoutTtlSeconds ?? 1800,
       "checkoutTtlSeconds",
@@ -1047,6 +1253,7 @@ function priceMatches(price, expected) {
     price.livemode === expected.livemode &&
     price.currency === expected.currency &&
     price.unit_amount === expected.unitAmount &&
+    price.tax_behavior === expected.taxBehavior &&
     (
       expected.recurring === null
         ? price.recurring === null
@@ -3501,7 +3708,9 @@ function customBuildFinalPaymentFacts(
       linePrice.unit_amount === subtotalMinor &&
       linePrice.tax_behavior === "exclusive" &&
       lineProduct.name ===
-        "Site Sourcery Custom build — final installment",
+        "Site Sourcery Custom build — final installment" &&
+      lineProduct.tax_code ===
+        config.taxCodes.customBuildFinal,
     code,
     "Stripe changed the exact Custom-build final installment line",
     { status: 502 }
@@ -3961,17 +4170,20 @@ function alakazamPaymentFacts(
       { status: 502 }
     );
   } else {
+    const lineProduct = expandedAlakazamObject(
+      linePrice.product,
+      "prod",
+      "Stripe Alakazam upgrade Product"
+    );
     invariant(
       linePrice.active === true &&
         linePrice.livemode === config.livemode &&
         linePrice.currency === "usd" &&
         linePrice.unit_amount === listSubtotalMinor &&
         linePrice.recurring === null &&
-        providerReferenceId(
-          linePrice.product,
-          "prod",
-          "Stripe Alakazam upgrade Product ID"
-        ) === config.alakazam.productId,
+        linePrice.tax_behavior === "exclusive" &&
+        lineProduct.id === config.alakazam.productId &&
+        lineProduct.tax_code === config.taxCodes.alakazam,
       "stripe_alakazam_payment_mismatch",
       "Stripe Alakazam upgrade Checkout used the wrong fixed-difference Price",
       { status: 502 }
@@ -4777,7 +4989,7 @@ function domainAuthorizationProjection(
   return { ...projected, status: "manual_review" };
 }
 
-function checkoutLineItems(validated) {
+function checkoutLineItems(validated, taxCodes) {
   const items = [];
   for (const line of validated.lines) {
     if (line.authority.type === "stripe_price_refs") {
@@ -4799,10 +5011,14 @@ function checkoutLineItems(validated) {
       price_data: {
         currency: "usd",
         unit_amount: line.authority.priceData.unitAmount,
+        tax_behavior: "exclusive",
         product_data: {
           name: line.lineItemId.startsWith("domain:")
             ? "Domain registration"
-            : "Site Sourcery service"
+            : "Site Sourcery service",
+          tax_code: line.lineItemId.startsWith("domain:")
+            ? taxCodes.domainRegistration
+            : taxCodes.siteService
         }
       },
       quantity: 1
@@ -4979,7 +5195,11 @@ function alakazamProviderClient(client) {
       typeof client.subscriptionSchedules?.retrieve ===
         "function" &&
       typeof client.subscriptionSchedules?.update ===
-        "function",
+        "function" &&
+      typeof client.invoices?.retrieve === "function" &&
+      typeof client.charges?.retrieve === "function" &&
+      typeof client.refunds?.list === "function" &&
+      typeof client.disputes?.list === "function",
     "stripe_client_invalid",
     "The Stripe Alakazam provider contract is incomplete",
     { status: 500 }
@@ -4987,13 +5207,19 @@ function alakazamProviderClient(client) {
   return client;
 }
 
-function productMatchesAlakazam(value, config, livemode) {
+function productMatchesAlakazam(
+  value,
+  config,
+  livemode,
+  taxCode
+) {
   return (
     value &&
     value.id === config.productId &&
     value.active === true &&
     value.livemode === livemode &&
-    value.name === "Alakazam"
+    value.name === "Alakazam" &&
+    value.tax_code === taxCode
   );
 }
 
@@ -5020,7 +5246,9 @@ function portalConfigurationMatchesAlakazam(
   value,
   config,
   livemode,
-  portalReturnUrl
+  portalReturnUrl,
+  privacyPolicyUrl,
+  termsOfServiceUrl
 ) {
   return (
     value &&
@@ -5028,6 +5256,12 @@ function portalConfigurationMatchesAlakazam(
     value.active === true &&
     value.livemode === livemode &&
     value.default_return_url === portalReturnUrl &&
+    value.business_profile?.privacy_policy_url ===
+      privacyPolicyUrl &&
+    value.business_profile?.terms_of_service_url ===
+      termsOfServiceUrl &&
+    value.login_page?.enabled === false &&
+    value.login_page?.url === null &&
     value.features?.payment_method_update?.enabled ===
       true &&
     value.features?.invoice_history?.enabled === true &&
@@ -5035,6 +5269,21 @@ function portalConfigurationMatchesAlakazam(
     value.features?.subscription_update?.enabled ===
       false &&
     value.features?.subscription_cancel?.enabled === false
+  );
+}
+
+function webhookEndpointMatches(value, config) {
+  return (
+    value &&
+    value.id === config.webhookEndpointId &&
+    value.livemode === config.livemode &&
+    value.status === "enabled" &&
+    value.api_version === config.apiVersion &&
+    value.url === config.webhookEndpointUrl &&
+    value.application === null &&
+    Array.isArray(value.enabled_events) &&
+    JSON.stringify([...value.enabled_events].sort()) ===
+      JSON.stringify(STRIPE_REQUIRED_WEBHOOK_EVENTS)
   );
 }
 
@@ -5427,6 +5676,10 @@ export function createStripeProviderAdapter(options = {}) {
       createAlakazamStartCheckout: reject,
       createAlakazamUpgradeCheckout: reject,
       retrieveAlakazamPayment: reject,
+      retrieveAlakazamRenewalInvoice: reject,
+      retrieveAlakazamIncidentInvoice: reject,
+      retrieveAlakazamCancellation: reject,
+      retrieveAlakazamReversal: reject,
       retrieveAlakazamSubscription: reject,
       retrieveAlakazamSchedule: reject,
       applyAlakazamUpgrade: reject,
@@ -5584,7 +5837,8 @@ export function createStripeProviderAdapter(options = {}) {
       productMatchesAlakazam(
         product,
         config.alakazam,
-        config.livemode
+        config.livemode,
+        config.taxCodes.alakazam
       ),
       "stripe_alakazam_product_mismatch",
       "The Alakazam Product no longer matches the owner contract",
@@ -5628,7 +5882,9 @@ export function createStripeProviderAdapter(options = {}) {
         portal,
         config.alakazam,
         config.livemode,
-        config.portalReturnUrl
+        config.portalReturnUrl,
+        config.portalPrivacyPolicyUrl,
+        config.portalTermsOfServiceUrl
       ),
       "stripe_alakazam_portal_configuration_mismatch",
       "The Alakazam Billing Portal can bypass the reviewed account boundary",
@@ -5636,9 +5892,31 @@ export function createStripeProviderAdapter(options = {}) {
     );
   }
 
+  async function verifyWebhookEndpoint() {
+    requireCapability("webhook_endpoints:read");
+    let endpoint;
+    try {
+      endpoint = await client.webhookEndpoints.retrieve(
+        config.webhookEndpointId
+      );
+    } catch {
+      throw noEffect(
+        "stripe_webhook_endpoint_unavailable",
+        "The exact Stripe Webhook Endpoint could not be verified"
+      );
+    }
+    invariant(
+      webhookEndpointMatches(endpoint, config),
+      "stripe_webhook_endpoint_mismatch",
+      "Stripe Webhook Endpoint drifted from its exact release contract",
+      { status: 503 }
+    );
+  }
+
   async function retrieveAlakazamSubscriptionInternal({
     stripeSubscriptionId,
-    stripeCustomerId
+    stripeCustomerId,
+    observedAt = clock.now()
   }) {
     requireCapability("subscriptions:read");
     alakazamProviderClient(client);
@@ -5671,8 +5949,622 @@ export function createStripeProviderAdapter(options = {}) {
       response,
       config,
       customerId,
-      clock.now()
+      observedAt
     );
+  }
+
+  async function retrieveAlakazamLifecycleInvoiceInternal({
+    stripeInvoiceId,
+    stripeSubscriptionId,
+    stripeCustomerId,
+    kind
+  }) {
+    requireCapability("invoices:read");
+    requireCapability("subscriptions:read");
+    invariant(
+      kind === "renewal" || kind === "incident",
+      "stripe_alakazam_invoice_read_invalid",
+      "Stripe Alakazam invoice read kind is invalid",
+      { status: 500 }
+    );
+    const invoiceId = providerId(
+      stripeInvoiceId,
+      "in",
+      "stripeInvoiceId"
+    );
+    const subscriptionId = providerId(
+      stripeSubscriptionId,
+      "sub",
+      "stripeSubscriptionId"
+    );
+    const customerId = providerId(
+      stripeCustomerId,
+      "cus",
+      "stripeCustomerId"
+    );
+    const observedAt = canonicalIso(
+      clock.now(),
+      "providerObservedAt"
+    );
+    let invoice;
+    try {
+      invoice = await client.invoices.retrieve(invoiceId, {
+        expand: [
+          "lines.data.pricing.price_details.price",
+          "payments.data.payment.payment_intent"
+        ]
+      });
+    } catch {
+      throw noEffect(
+        kind === "renewal"
+          ? "stripe_alakazam_renewal_invoice_unavailable"
+          : "stripe_alakazam_incident_invoice_unavailable",
+        "Stripe Alakazam Invoice could not be read for reconciliation",
+        { stripeInvoiceId: invoiceId }
+      );
+    }
+    const subscription =
+      await retrieveAlakazamSubscriptionInternal({
+        stripeSubscriptionId: subscriptionId,
+        stripeCustomerId: customerId,
+        observedAt
+      });
+    invariant(
+      invoice?.id === invoiceId &&
+        invoice.livemode === config.livemode &&
+        invoice.currency === "usd" &&
+        providerReferenceId(
+          invoice.customer,
+          "cus",
+          "Stripe Alakazam Invoice Customer ID"
+        ) === customerId &&
+        invoice.parent?.type === "subscription_details" &&
+        providerReferenceId(
+          invoice.parent.subscription_details?.subscription,
+          "sub",
+          "Stripe Alakazam Invoice Subscription ID"
+        ) === subscriptionId &&
+        invoice.collection_method === "charge_automatically" &&
+        invoice.automatic_tax?.enabled ===
+          (config.taxMode === "automatic") &&
+        (config.taxMode !== "automatic" ||
+          invoice.automatic_tax?.status === "complete") &&
+        Array.isArray(invoice.lines?.data) &&
+        invoice.lines.data.length === 1 &&
+        invoice.lines.has_more === false &&
+        Array.isArray(invoice.payments?.data) &&
+        invoice.payments.data.length === 1 &&
+        invoice.payments.has_more === false,
+      kind === "renewal"
+        ? "stripe_alakazam_renewal_mismatch"
+        : "stripe_alakazam_incident_mismatch",
+      "Stripe Alakazam Invoice identity or collection settings changed",
+      { status: 502 }
+    );
+    const line = invoice.lines.data[0];
+    const priceId = providerReferenceId(
+      line.pricing?.price_details?.price,
+      "price",
+      "Stripe Alakazam Invoice Price ID"
+    );
+    const lineSubscriptionId = providerReferenceId(
+      line.parent?.subscription_item_details?.subscription,
+      "sub",
+      "Stripe Alakazam Invoice line Subscription ID"
+    );
+    const lineSubscriptionItemId = providerReferenceId(
+      line.parent?.subscription_item_details?.subscription_item,
+      "si",
+      "Stripe Alakazam Invoice Subscription Item ID"
+    );
+    invariant(
+      line.livemode === config.livemode &&
+        line.currency === "usd" &&
+        line.parent?.type === "subscription_item_details" &&
+        line.parent.subscription_item_details?.proration === false &&
+        lineSubscriptionId === subscriptionId &&
+        lineSubscriptionItemId ===
+          subscription.stripeSubscriptionItemId &&
+        line.pricing?.type === "price_details" &&
+        priceId === subscription.stripePriceId &&
+        line.quantity === 1 &&
+        line.amount === subscription.amountMinor &&
+        line.subtotal === subscription.amountMinor &&
+        Number.isSafeInteger(line.period?.start) &&
+        Number.isSafeInteger(line.period?.end) &&
+        line.period.start > 0 &&
+        line.period.end > line.period.start &&
+        invoice.subtotal === subscription.amountMinor &&
+        invoice.total_discount_amounts?.length === 0 &&
+        invoice.pre_payment_credit_notes_amount === 0 &&
+        invoice.post_payment_credit_notes_amount === 0 &&
+        Number.isSafeInteger(invoice.total_excluding_tax) &&
+        invoice.total_excluding_tax === subscription.amountMinor &&
+        Number.isSafeInteger(invoice.total) &&
+        invoice.total >= subscription.amountMinor &&
+        Number.isSafeInteger(invoice.amount_paid_off_stripe),
+      kind === "renewal"
+        ? "stripe_alakazam_renewal_mismatch"
+        : "stripe_alakazam_incident_mismatch",
+      "Stripe Alakazam Invoice line or totals changed",
+      { status: 502 }
+    );
+    const payment = invoice.payments.data[0];
+    const paymentIntent = expandedAlakazamObject(
+      payment.payment?.payment_intent,
+      "pi",
+      "Stripe Alakazam Invoice PaymentIntent"
+    );
+    invariant(
+      payment.livemode === config.livemode &&
+        payment.currency === "usd" &&
+        payment.payment?.type === "payment_intent" &&
+        paymentIntent.livemode === config.livemode &&
+        paymentIntent.currency === "usd" &&
+        providerReferenceId(
+          paymentIntent.customer,
+          "cus",
+          "Stripe Alakazam Invoice PaymentIntent Customer ID"
+        ) === customerId &&
+        paymentIntent.amount === invoice.total,
+      kind === "renewal"
+        ? "stripe_alakazam_renewal_mismatch"
+        : "stripe_alakazam_incident_mismatch",
+      "Stripe Alakazam Invoice PaymentIntent binding changed",
+      { status: 502 }
+    );
+    return Object.freeze({
+      invoice,
+      line,
+      payment,
+      paymentIntent,
+      subscription,
+      observedAt,
+      periodStartsAt: exactProviderTime(
+        line.period.start,
+        "Stripe Alakazam Invoice period start"
+      ),
+      periodEndsAt: exactProviderTime(
+        line.period.end,
+        "Stripe Alakazam Invoice period end"
+      ),
+      taxMinor: invoice.total - invoice.total_excluding_tax
+    });
+  }
+
+  async function retrieveAlakazamRenewalInvoiceInternal(
+    request
+  ) {
+    const readback =
+      await retrieveAlakazamLifecycleInvoiceInternal({
+        ...request,
+        kind: "renewal"
+      });
+    const {
+      invoice,
+      payment,
+      paymentIntent,
+      subscription
+    } = readback;
+    invariant(
+      invoice.status === "paid" &&
+        invoice.billing_reason === "subscription_cycle" &&
+        invoice.amount_due === invoice.total &&
+        invoice.amount_paid === invoice.total &&
+        invoice.amount_remaining === 0 &&
+        invoice.amount_paid_off_stripe === 0 &&
+        payment.status === "paid" &&
+        payment.amount_requested === invoice.total &&
+        payment.amount_paid === invoice.total &&
+        paymentIntent.status === "succeeded" &&
+        paymentIntent.amount_received === invoice.total,
+      "stripe_alakazam_renewal_mismatch",
+      "Stripe did not confirm one paid automatic Alakazam renewal",
+      { status: 502 }
+    );
+    const facts = {
+      schema: ALAKAZAM_RENEWAL_INVOICE_FACTS_SCHEMA,
+      provider: "stripe",
+      stripeInvoiceId: invoice.id,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+      stripeSubscriptionItemId:
+        subscription.stripeSubscriptionItemId,
+      stripeCustomerId: subscription.stripeCustomerId,
+      stripePriceId: subscription.stripePriceId,
+      stripePaymentIntentId: paymentIntent.id,
+      tierId: subscription.tierId,
+      status: invoice.status,
+      billingReason: invoice.billing_reason,
+      collectionMethod: invoice.collection_method,
+      paidOutOfBand: false,
+      listSubtotalMinor: subscription.amountMinor,
+      netSubtotalMinor: invoice.total_excluding_tax,
+      taxMinor: readback.taxMinor,
+      totalMinor: invoice.total,
+      amountPaidMinor: invoice.amount_paid,
+      amountRemainingMinor: invoice.amount_remaining,
+      taxMode: config.taxMode,
+      currency: "USD",
+      periodStartsAt: readback.periodStartsAt,
+      periodEndsAt: readback.periodEndsAt,
+      providerPaymentTime: exactProviderTime(
+        payment.status_transitions?.paid_at,
+        "Stripe Alakazam Invoice payment time"
+      ),
+      providerObservedAt: readback.observedAt,
+      subscription
+    };
+    return Object.freeze({
+      ...facts,
+      providerFactsDigest: digest(facts)
+    });
+  }
+
+  async function retrieveAlakazamIncidentInvoiceInternal(
+    request
+  ) {
+    const readback =
+      await retrieveAlakazamLifecycleInvoiceInternal({
+        ...request,
+        kind: "incident"
+      });
+    const {
+      invoice,
+      payment,
+      paymentIntent,
+      subscription
+    } = readback;
+    invariant(
+      ["open", "uncollectible"].includes(invoice.status) &&
+        invoice.amount_due > 0 &&
+        invoice.amount_paid === 0 &&
+        invoice.amount_remaining === invoice.amount_due &&
+        invoice.attempt_count >= 1 &&
+        payment.status !== "paid" &&
+        paymentIntent.status !== "succeeded" &&
+        paymentIntent.amount_received === 0,
+      "stripe_alakazam_incident_mismatch",
+      "Stripe did not confirm one unpaid Alakazam incident",
+      { status: 502 }
+    );
+    const facts = {
+      schema: ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA,
+      provider: "stripe",
+      stripeInvoiceId: invoice.id,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+      stripeCustomerId: subscription.stripeCustomerId,
+      stripePaymentIntentId: paymentIntent.id,
+      tierId: subscription.tierId,
+      status: invoice.status,
+      amountDueMinor: invoice.amount_due,
+      amountPaidMinor: invoice.amount_paid,
+      currency: "USD",
+      attemptCount: invoice.attempt_count,
+      nextPaymentAttemptAt:
+        invoice.next_payment_attempt === null
+          ? null
+          : exactProviderTime(
+              invoice.next_payment_attempt,
+              "Stripe Alakazam next payment attempt"
+            ),
+      paymentIntentStatus: paymentIntent.status,
+      subscriptionStatus: subscription.providerStatus,
+      providerObservedAt: readback.observedAt
+    };
+    return Object.freeze({
+      ...facts,
+      providerFactsDigest: digest(facts)
+    });
+  }
+
+  async function retrieveAlakazamCancellationInternal({
+    stripeSubscriptionId,
+    stripeCustomerId
+  }) {
+    const subscription =
+      await retrieveAlakazamSubscriptionInternal({
+        stripeSubscriptionId,
+        stripeCustomerId
+      });
+    invariant(
+      subscription.cancelAtPeriodEnd === true &&
+        ["active", "past_due", "unpaid"].includes(
+          subscription.providerStatus
+        ),
+      "stripe_alakazam_cancellation_mismatch",
+      "Stripe did not confirm a current period-end Alakazam cancellation",
+      { status: 502 }
+    );
+    const facts = {
+      schema: ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
+      provider: "stripe",
+      stripeSubscriptionId:
+        subscription.stripeSubscriptionId,
+      stripeCustomerId: subscription.stripeCustomerId,
+      tierId: subscription.tierId,
+      providerStatus: subscription.providerStatus,
+      cancelAtPeriodEnd: true,
+      cancelAt: subscription.currentPeriodEndsAt,
+      currentPeriodStartsAt:
+        subscription.currentPeriodStartsAt,
+      currentPeriodEndsAt: subscription.currentPeriodEndsAt,
+      currency: "USD",
+      providerObservedAt: subscription.providerObservedAt
+    };
+    return Object.freeze({
+      ...facts,
+      providerFactsDigest: digest(facts)
+    });
+  }
+
+  async function retrieveAlakazamReversalInternal({
+    eventType,
+    stripeChargeId,
+    stripePaymentIntentId
+  }) {
+    requireCapability("charges:read");
+    const refundEvent =
+      STRIPE_ALAKAZAM_REFUND_EVENTS.has(eventType);
+    const disputeEvent =
+      STRIPE_ALAKAZAM_DISPUTE_EVENTS.has(eventType);
+    invariant(
+      refundEvent !== disputeEvent,
+      "stripe_alakazam_reversal_read_invalid",
+      "Stripe Alakazam reversal requires one exact wake event type",
+      { status: 500 }
+    );
+    const chargeId = providerId(
+      stripeChargeId,
+      "ch",
+      "stripeChargeId"
+    );
+    const paymentIntentId = providerId(
+      stripePaymentIntentId,
+      "pi",
+      "stripePaymentIntentId"
+    );
+    const observedAt = canonicalIso(
+      clock.now(),
+      "providerObservedAt"
+    );
+    let charge;
+    try {
+      charge = await client.charges.retrieve(chargeId);
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_reversal_charge_unavailable",
+        "Stripe Alakazam Charge could not be read for reversal reconciliation",
+        { stripeChargeId: chargeId }
+      );
+    }
+    invariant(
+      charge?.id === chargeId &&
+        charge.livemode === config.livemode &&
+        charge.currency === "usd" &&
+        charge.paid === true &&
+        charge.status === "succeeded" &&
+        Number.isSafeInteger(charge.amount) &&
+        charge.amount > 0 &&
+        providerReferenceId(
+          charge.payment_intent,
+          "pi",
+          "Stripe Alakazam Charge PaymentIntent ID"
+        ) === paymentIntentId,
+      "stripe_alakazam_reversal_mismatch",
+      "Stripe Alakazam Charge identity or amount changed",
+      { status: 502 }
+    );
+    let reversalKind;
+    let outcome;
+    let amountReversedMinor;
+    let stripeRefundId = null;
+    let stripeDisputeId = null;
+    if (refundEvent) {
+      requireCapability("refunds:read");
+      let page;
+      try {
+        page = await client.refunds.list({
+          charge: chargeId,
+          limit: 2
+        });
+      } catch {
+        throw noEffect(
+          "stripe_alakazam_refund_unavailable",
+          "Stripe Alakazam Refund could not be read for reconciliation",
+          { stripeChargeId: chargeId }
+        );
+      }
+      invariant(
+        Array.isArray(page?.data) &&
+          page.data.length === 1 &&
+          page.has_more === false,
+        "stripe_alakazam_reversal_mismatch",
+        "Stripe Alakazam reversal requires one exact Refund",
+        { status: 502 }
+      );
+      const refund = page.data[0];
+      stripeRefundId = providerId(
+        refund?.id,
+        "re",
+        "Stripe Alakazam Refund ID"
+      );
+      invariant(
+        refund.livemode === config.livemode &&
+          refund.currency === "usd" &&
+          providerReferenceId(
+            refund.charge,
+            "ch",
+            "Stripe Alakazam Refund Charge ID"
+          ) === chargeId &&
+          providerReferenceId(
+            refund.payment_intent,
+            "pi",
+            "Stripe Alakazam Refund PaymentIntent ID"
+          ) === paymentIntentId &&
+          Number.isSafeInteger(refund.amount) &&
+          refund.amount > 0 &&
+          refund.amount <= charge.amount &&
+          ["failed", "succeeded"].includes(refund.status),
+        "stripe_alakazam_reversal_mismatch",
+        "Stripe Alakazam Refund identity, amount, or status changed",
+        { status: 502 }
+      );
+      reversalKind = "refund";
+      amountReversedMinor =
+        refund.status === "succeeded" ? refund.amount : 0;
+      outcome =
+        refund.status === "failed"
+          ? "refund_failed"
+          : refund.amount === charge.amount
+            ? "refund_full"
+            : "refund_partial";
+      invariant(
+        charge.amount_refunded === amountReversedMinor &&
+          charge.refunded ===
+            (outcome === "refund_full"),
+        "stripe_alakazam_reversal_mismatch",
+        "Stripe Charge and Refund totals disagree",
+        { status: 502 }
+      );
+    } else {
+      requireCapability("disputes:read");
+      let page;
+      try {
+        page = await client.disputes.list({
+          charge: chargeId,
+          limit: 2
+        });
+      } catch {
+        throw noEffect(
+          "stripe_alakazam_dispute_unavailable",
+          "Stripe Alakazam Dispute could not be read for reconciliation",
+          { stripeChargeId: chargeId }
+        );
+      }
+      invariant(
+        Array.isArray(page?.data) &&
+          page.data.length === 1 &&
+          page.has_more === false,
+        "stripe_alakazam_reversal_mismatch",
+        "Stripe Alakazam reversal requires one exact Dispute",
+        { status: 502 }
+      );
+      const dispute = page.data[0];
+      stripeDisputeId = providerId(
+        dispute?.id,
+        "dp",
+        "Stripe Alakazam Dispute ID"
+      );
+      const transactions = Array.isArray(
+        dispute.balance_transactions
+      )
+        ? dispute.balance_transactions
+        : [];
+      invariant(
+        dispute.livemode === config.livemode &&
+          dispute.currency === "usd" &&
+          providerReferenceId(
+            dispute.charge,
+            "ch",
+            "Stripe Alakazam Dispute Charge ID"
+          ) === chargeId &&
+          providerReferenceId(
+            dispute.payment_intent,
+            "pi",
+            "Stripe Alakazam Dispute PaymentIntent ID"
+          ) === paymentIntentId &&
+          Number.isSafeInteger(dispute.amount) &&
+          dispute.amount > 0 &&
+          dispute.amount <= charge.amount &&
+          transactions.length <= 2 &&
+          transactions.every(
+            (transaction) =>
+              Number.isSafeInteger(transaction?.amount) &&
+              transaction.amount !== 0
+          ),
+        "stripe_alakazam_reversal_mismatch",
+        "Stripe Alakazam Dispute identity, amount, or balance evidence changed",
+        { status: 502 }
+      );
+      const withdrawn = transactions.some(
+        ({ amount }) => amount < 0
+      );
+      const reinstated = transactions.some(
+        ({ amount }) => amount > 0
+      );
+      reversalKind = "dispute";
+      if (
+        eventType === "charge.dispute.funds_withdrawn"
+      ) {
+        invariant(
+          withdrawn,
+          "stripe_alakazam_reversal_mismatch",
+          "Stripe did not confirm withdrawn dispute funds",
+          { status: 502 }
+        );
+        outcome = "dispute_funds_withdrawn";
+        amountReversedMinor = dispute.amount;
+      } else if (
+        eventType === "charge.dispute.funds_reinstated"
+      ) {
+        invariant(
+          withdrawn && reinstated,
+          "stripe_alakazam_reversal_mismatch",
+          "Stripe did not confirm reinstated dispute funds",
+          { status: 502 }
+        );
+        outcome = "dispute_funds_reinstated";
+        amountReversedMinor = 0;
+      } else if (dispute.status === "lost") {
+        invariant(
+          withdrawn,
+          "stripe_alakazam_reversal_mismatch",
+          "Stripe lost Dispute has no withdrawn-funds evidence",
+          { status: 502 }
+        );
+        outcome = "dispute_lost";
+        amountReversedMinor = dispute.amount;
+      } else if (
+        ["won", "warning_closed"].includes(dispute.status)
+      ) {
+        outcome = "dispute_won";
+        amountReversedMinor = 0;
+      } else {
+        invariant(
+          [
+            "needs_response",
+            "under_review",
+            "warning_needs_response",
+            "warning_under_review"
+          ].includes(dispute.status),
+          "stripe_alakazam_reversal_mismatch",
+          "Stripe Dispute status is unsupported",
+          { status: 502 }
+        );
+        outcome = "dispute_open";
+        amountReversedMinor = withdrawn
+          ? dispute.amount
+          : 0;
+      }
+    }
+    const facts = {
+      schema: ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+      provider: "stripe",
+      reversalKind,
+      outcome,
+      stripeChargeId: chargeId,
+      stripePaymentIntentId: paymentIntentId,
+      stripeRefundId,
+      stripeDisputeId,
+      amountChargedMinor: charge.amount,
+      amountReversedMinor,
+      currency: "USD",
+      providerObservedAt: observedAt
+    };
+    return Object.freeze({
+      ...facts,
+      providerFactsDigest: digest(facts)
+    });
   }
 
   async function retrieveAlakazamScheduleInternal({
@@ -5819,6 +6711,7 @@ export function createStripeProviderAdapter(options = {}) {
   const adapter = {
     async readiness() {
       try {
+        await verifyWebhookEndpoint();
         if (config.alakazam) {
           await verifyAlakazamConfiguration();
         } else if (capabilities.has("prices:read")) {
@@ -5840,7 +6733,9 @@ export function createStripeProviderAdapter(options = {}) {
             domainCapabilities.length > 0 &&
             Boolean(config.domainAuthorization),
           webhookVerification: true,
+          webhookEndpoint: true,
           taxMode: config.taxMode,
+          taxAttestation: true,
           ...(config.alakazam
             ? { alakazam: true }
             : {})
@@ -6065,9 +6960,7 @@ export function createStripeProviderAdapter(options = {}) {
               currency: "usd",
               unit_amount:
                 validated.purpose.dueNowSubtotalMinor,
-              ...(config.taxMode === "automatic"
-                ? { tax_behavior: "exclusive" }
-                : {}),
+              tax_behavior: "exclusive",
               product: config.alakazam.productId
             },
             quantity: 1
@@ -6159,6 +7052,65 @@ export function createStripeProviderAdapter(options = {}) {
         checkoutSessionId,
         clock.now()
       );
+    },
+
+    async retrieveAlakazamRenewalInvoice(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "stripeCustomerId",
+            "stripeInvoiceId",
+            "stripeSubscriptionId"
+          ]),
+        "stripe_alakazam_renewal_read_invalid",
+        "Alakazam renewal readback requires exact Invoice, Subscription, and Customer identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamRenewalInvoiceInternal(request);
+    },
+
+    async retrieveAlakazamIncidentInvoice(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "stripeCustomerId",
+            "stripeInvoiceId",
+            "stripeSubscriptionId"
+          ]),
+        "stripe_alakazam_incident_read_invalid",
+        "Alakazam incident readback requires exact Invoice, Subscription, and Customer identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamIncidentInvoiceInternal(request);
+    },
+
+    async retrieveAlakazamCancellation(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "stripeCustomerId",
+            "stripeSubscriptionId"
+          ]),
+        "stripe_alakazam_cancellation_read_invalid",
+        "Alakazam cancellation readback requires exact Subscription and Customer identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamCancellationInternal(request);
+    },
+
+    async retrieveAlakazamReversal(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "eventType",
+            "stripeChargeId",
+            "stripePaymentIntentId"
+          ]),
+        "stripe_alakazam_reversal_read_invalid",
+        "Alakazam reversal readback requires exact event, Charge, and PaymentIntent identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamReversalInternal(request);
     },
 
     async retrieveAlakazamSubscription(request = {}) {
@@ -6645,7 +7597,10 @@ export function createStripeProviderAdapter(options = {}) {
         validated,
         config.priceExpectations
       );
-      const items = checkoutLineItems(validated);
+      const items = checkoutLineItems(
+        validated,
+        config.taxCodes
+      );
       const hasRecurring = validated.lines.some(
         ({ amounts }) => amounts.recurring
       );
@@ -6754,11 +7709,10 @@ export function createStripeProviderAdapter(options = {}) {
             price_data: {
               currency: "usd",
               unit_amount: 500,
-              ...(config.taxMode === "automatic"
-                ? { tax_behavior: "exclusive" }
-                : {}),
+              tax_behavior: "exclusive",
               product_data: {
-                name: "Abracadabra Download"
+                name: "Abracadabra Download",
+                tax_code: config.taxCodes.download
               }
             },
             quantity: 1
@@ -6875,7 +7829,9 @@ export function createStripeProviderAdapter(options = {}) {
                 unit_amount: 20000,
                 tax_behavior: "exclusive",
                 product_data: {
-                  name: "Site Sourcery website assessment"
+                  name: "Site Sourcery website assessment",
+                  tax_code:
+                    config.taxCodes.serviceAssessment
                 }
               },
               quantity: 1
@@ -7080,7 +8036,8 @@ export function createStripeProviderAdapter(options = {}) {
                   validated.purpose.price.amountMinor,
                 tax_behavior: "exclusive",
                 product_data: {
-                  name: "Site Sourcery Custom build — first installment"
+                  name: "Site Sourcery Custom build — first installment",
+                  tax_code: config.taxCodes.customBuildStart
                 }
               },
               quantity: 1
@@ -7277,7 +8234,9 @@ export function createStripeProviderAdapter(options = {}) {
                   validated.purpose.price.unitAmountMinor,
                 tax_behavior: "exclusive",
                 product_data: {
-                  name: "Site Sourcery Custom build — accepted change order"
+                  name: "Site Sourcery Custom build — accepted change order",
+                  tax_code:
+                    config.taxCodes.customBuildChange
                 }
               },
               quantity: validated.purpose.price.quantity
@@ -7474,7 +8433,8 @@ export function createStripeProviderAdapter(options = {}) {
                   validated.purpose.price.amountMinor,
                 tax_behavior: "exclusive",
                 product_data: {
-                  name: "Site Sourcery Custom build — final installment"
+                  name: "Site Sourcery Custom build — final installment",
+                  tax_code: config.taxCodes.customBuildFinal
                 }
               },
               quantity: 1
@@ -7755,6 +8715,7 @@ export function createStripeProviderAdapter(options = {}) {
             price_data: {
               currency: "usd",
               unit_amount: validated.amountMinor,
+              tax_behavior: "exclusive",
               product_data: {
                 name: `${validated.domain} registration — ${validated.years} ${
                   validated.years === 1
@@ -7763,6 +8724,8 @@ export function createStripeProviderAdapter(options = {}) {
                 }`,
                 description:
                   "Authorized now; captured only after registrar and registrant readback.",
+                tax_code:
+                  config.taxCodes.domainRegistration,
                 metadata: providerMetadata
               }
             },

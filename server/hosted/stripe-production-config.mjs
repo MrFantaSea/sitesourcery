@@ -31,6 +31,7 @@ const HOSTED_CAPABILITIES = Object.freeze([
   "checkout:create",
   "prices:read",
   "subscriptions:cancel",
+  "webhook_endpoints:read",
   "webhooks:verify"
 ]);
 const DOMAIN_CAPABILITIES = Object.freeze([
@@ -70,6 +71,7 @@ const ALAKAZAM_PRICE_EXPECTATION_FIELDS = Object.freeze([
   "livemode",
   "productId",
   "recurring",
+  "taxBehavior",
   "unitAmount"
 ]);
 const RECURRING_PRICE_FIELDS = Object.freeze([
@@ -435,6 +437,7 @@ function alakazamConfiguration(
       expectation.currency !== "usd" ||
       expectation.unitAmount !== tier.price.amountMinor ||
       expectation.livemode !== livemode ||
+      expectation.taxBehavior !== "exclusive" ||
       recurring.interval !== "month" ||
       recurring.intervalCount !== 1
     ) {
@@ -476,8 +479,12 @@ function keyForMode(environment, livemode) {
     500
   );
   if (
-    !secretKey.startsWith(
-      livemode ? "sk_live_" : "sk_test_"
+    !(
+      livemode
+        ? secretKey.startsWith("sk_live_") ||
+          secretKey.startsWith("rk_live_")
+        : secretKey.startsWith("sk_test_") ||
+          secretKey.startsWith("rk_test_")
     )
   ) {
     fail(
@@ -619,13 +626,38 @@ export function createConfiguredStripeProvider({
       environment,
       "SITESOURCERY_STRIPE_PORTAL_RETURN_URL"
     ),
+    portalPrivacyPolicyUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_PORTAL_PRIVACY_POLICY_URL"
+    ),
+    portalTermsOfServiceUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_PORTAL_TERMS_OF_SERVICE_URL"
+    ),
     approvedReturnOrigins,
     taxMode: text(
       environment,
       "SITESOURCERY_STRIPE_TAX_MODE",
       100
     ),
+    taxCodes: json(
+      environment,
+      "SITESOURCERY_STRIPE_TAX_CODES_JSON"
+    ),
+    taxAttestation: json(
+      environment,
+      "SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON"
+    ),
     webhookSecret: webhookSecret(environment),
+    webhookEndpointId: text(
+      environment,
+      "SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_ID",
+      255
+    ),
+    webhookEndpointUrl: text(
+      environment,
+      "SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_URL"
+    ),
     priceExpectations,
     domainAuthorization: domainAuthorization(
       environment,
@@ -704,11 +736,15 @@ export function redactStripeReadiness(
       value.domainAuthorization === true,
     webhookVerification:
       value.webhookVerification === true,
+    webhookEndpoint:
+      value.webhookEndpoint === true,
     taxMode:
       value.taxMode === "automatic" ||
       value.taxMode === "disabled_by_owner"
         ? value.taxMode
         : "unconfigured",
+    taxAttestation:
+      value.taxAttestation === true,
     code: safeToken(
       value.code ?? value.reason,
       value.ready === true

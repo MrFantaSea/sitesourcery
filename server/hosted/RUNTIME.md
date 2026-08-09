@@ -174,24 +174,48 @@ Approved composition requires every item below:
 - `SITESOURCERY_STRIPE_APPROVAL_JSON`: the exact JSON approval object, with no
   extra fields. It contains `provider`, `approved`, `environment`, `livemode`,
   `apiVersion`, `approvalId`, `approvedAt`, and `capabilities`.
-- `SITESOURCERY_STRIPE_SECRET_KEY`: a server-only `sk_test_` or `sk_live_` key
-  matching the bound environment and livemode.
+- `SITESOURCERY_STRIPE_SECRET_KEY`: preferably a least-privilege server-only
+  `rk_test_` or `rk_live_` restricted key matching the bound environment and
+  livemode. Matching `sk_test_`/`sk_live_` keys remain accepted only for
+  bootstrap and emergency rotation.
 - `SITESOURCERY_STRIPE_WEBHOOK_SECRET`: the server-only `whsec_` signing secret
   for the same Stripe endpoint.
+- `SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_ID` and
+  `SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_URL`: the exact mode-matched `we_` ID
+  and public HTTPS ingress URL. Startup reads the endpoint back and requires it
+  to be enabled, pinned to `2026-06-24.dahlia`, application-unowned, and bound
+  to the exact reviewed event set.
 - `SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON`: a non-empty JSON array of exact
-  Price ID, livemode, USD amount, and recurrence expectations.
+  Price ID, livemode, USD amount, recurrence, and `exclusive` tax-behavior
+  expectations.
 - `SITESOURCERY_STRIPE_APPROVED_RETURN_ORIGINS_JSON`: a non-empty JSON array of
   exact HTTPS origins.
 - `SITESOURCERY_STRIPE_CHECKOUT_SUCCESS_URL`,
   `SITESOURCERY_STRIPE_CHECKOUT_CANCEL_URL`, and
   `SITESOURCERY_STRIPE_PORTAL_RETURN_URL`, all on an approved origin.
+- `SITESOURCERY_STRIPE_PORTAL_PRIVACY_POLICY_URL` and
+  `SITESOURCERY_STRIPE_PORTAL_TERMS_OF_SERVICE_URL`. Alakazam readiness reads
+  the Portal configuration back and requires both exact legal URLs plus the
+  direct Portal login page disabled.
 - `SITESOURCERY_STRIPE_TAX_MODE`: exactly `automatic` or
   `disabled_by_owner`.
+- `SITESOURCERY_STRIPE_TAX_CODES_JSON`: the exact purpose map. Download,
+  assessment, Custom first/change/final payments, and website service use the
+  reviewed Website Design code; Alakazam uses the reviewed Website Hosting
+  code. Every inline Price carries an explicit `tax_behavior=exclusive` and
+  Product tax code. `domainRegistration` must remain `null` while domain
+  authorization is held and becomes mandatory before domain capability can be
+  approved.
+- `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`: a dated, mode-matched owner
+  attestation of the full Stripe Tax settings/registration readback. Startup
+  requires an approved attestation, an exact head-office country, default
+  exclusive behavior, and either exact `taxreg_` IDs or an explicit
+  `none_registered` decision. Missing account setup is never inferred.
 
 The approval must include all hosted capabilities: `checkout:create`,
-`billing_portal:create`, `prices:read`, `subscriptions:cancel`, and
-`webhooks:verify`. Domain capabilities are all-or-none. If approved, they also
-require:
+`billing_portal:create`, `prices:read`, `subscriptions:cancel`,
+`webhook_endpoints:read`, and `webhooks:verify`. Domain capabilities are
+all-or-none. If approved, they also require:
 
 - `SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE`;
 - `SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE`;

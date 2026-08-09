@@ -716,6 +716,7 @@ export function createAlakazamReversalService({
       let facts;
       try {
         facts = await ports.provider.retrieveAlakazamReversal({
+          eventType: event.eventType,
           stripeChargeId: event.stripeChargeId,
           stripePaymentIntentId:
             resolved.subscription.stripePaymentIntentId

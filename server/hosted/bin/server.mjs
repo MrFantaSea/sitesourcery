@@ -69,6 +69,15 @@ import {
   createPostgresAlakazam50Repository
 } from "../alakazam-50-postgres.mjs";
 import {
+  createAlakazamRetainedPremiumComposition
+} from "../alakazam-retained-premium-composition.mjs";
+import {
+  createPostgresAlakazamRetainedPremiumRepository
+} from "../alakazam-retained-premium-postgres.mjs";
+import {
+  createAlakazamRetainedPremiumLifecycle
+} from "../alakazam-retained-premium-lifecycle.mjs";
+import {
   createHostedAlakazamBillingSurfaces
 } from "../alakazam-billing.mjs";
 import {
@@ -170,8 +179,8 @@ import {
   exportWorkerOptionsFromEnvironment
 } from "../export-worker.mjs";
 import {
-  createAlakazamPublicationComposition
-} from "../alakazam-publication-composition.mjs";
+  createPublicationControlComposition
+} from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -289,6 +298,7 @@ let tenantServer = null;
 let cancellationWorker = null;
 let exportWorker = null;
 let alakazamFulfillmentWorker = null;
+let alakazamRetainedPremiumLifecycle = null;
 let shutdownPromise = null;
 const shutdownController = new AbortController();
 
@@ -317,11 +327,15 @@ function shutdown() {
           : Promise.resolve(),
         alakazamFulfillmentWorker
           ? alakazamFulfillmentWorker.stop()
+          : Promise.resolve(),
+        alakazamRetainedPremiumLifecycle
+          ? alakazamRetainedPremiumLifecycle.stop()
           : Promise.resolve()
       ]);
       cancellationWorker = null;
       exportWorker = null;
       alakazamFulfillmentWorker = null;
+      alakazamRetainedPremiumLifecycle = null;
       await authority.close();
     })();
   }
@@ -410,6 +424,17 @@ async function start() {
     resolveSession: commerceV2.resolveSession,
     clock: commerceV2.clock
   });
+  const alakazamRetainedPremiumRepository =
+    createPostgresAlakazamRetainedPremiumRepository({
+      authority
+    });
+  const alakazamRetainedPremium =
+    createAlakazamRetainedPremiumComposition({
+      authority,
+      resolveSession: commerceV2.resolveSession,
+      clock: commerceV2.clock,
+      repository: alakazamRetainedPremiumRepository
+    });
   const alakazam50FulfillmentRepository =
     createAlakazam50FulfillmentRepository({
       baseRepository: alakazamFulfillmentRepository,
@@ -425,7 +450,7 @@ async function start() {
       resolveSession: commerceV2.resolveSession
     });
   const alakazamPublication =
-    createAlakazamPublicationComposition({
+    createPublicationControlComposition({
       authority,
       resolveSession: commerceV2.resolveSession,
       clock: commerceV2.clock
@@ -550,6 +575,17 @@ async function start() {
   };
   const alakazamLifecyclePolicy =
     createConfiguredAlakazamLifecyclePolicy();
+  alakazamRetainedPremiumLifecycle =
+    createAlakazamRetainedPremiumLifecycle({
+      repository: alakazamRetainedPremiumRepository,
+      clock: commerceV2.clock,
+      enabled:
+        alakazamComposition.mode === "approved" &&
+        alakazamLifecyclePolicy.mode === "approved",
+      log(entry) {
+        process.stdout.write(`${JSON.stringify(entry)}\n`);
+      }
+    });
   const alakazamLifecyclePorts = {
     repository:
       createPostgresAlakazamLifecycleRepository({
@@ -581,6 +617,12 @@ async function start() {
       createAlakazamCancellationService(
         alakazamLifecyclePorts
       ),
+    cancellationRetainedExit: Object.freeze({
+      applyAfterConfirmedCancellation(input) {
+        return alakazamRetainedPremiumLifecycle
+          .applyCancellationConfirmation(input);
+      }
+    }),
     reversal:
       createAlakazamReversalService(
         alakazamLifecyclePorts
@@ -756,6 +798,7 @@ async function start() {
   await alakazamPublication.readiness();
   await alakazam35.readiness();
   await alakazam50.readiness();
+  await alakazamRetainedPremium.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -784,6 +827,7 @@ async function start() {
         alakazamAccount,
         alakazam35,
         alakazam50,
+        alakazamRetainedPremium,
         alakazamPublication,
         alakazamBilling,
         alakazamBillingSurfaces,
@@ -836,6 +880,9 @@ async function start() {
   alakazamFulfillmentWorker.start({
     signal: shutdownController.signal
   });
+  alakazamRetainedPremiumLifecycle.start({
+    signal: shutdownController.signal
+  });
 
   if (stripeComposition.mode === "approved_live") {
     cancellationWorker = createCancellationWorker({
@@ -873,6 +920,9 @@ async function start() {
         "held_not_started",
       alakazamFulfillmentWorker:
         alakazamFulfillmentWorker?.snapshot().state ??
+        "held_not_started",
+      alakazamRetainedPremiumLifecycle:
+        alakazamRetainedPremiumLifecycle?.snapshot().state ??
         "held_not_started"
     })}\n`
   );

@@ -1,0 +1,19 @@
+.alakazam-premium-panel{display:grid;gap:1rem;margin-top:1rem;padding:clamp(1rem,3vw,1.5rem);border:1px solid rgba(130,231,196,.34);border-radius:1rem;background:linear-gradient(145deg,rgba(130,231,196,.08),rgba(25,16,35,.76))}
+.alakazam-premium-panel h4{margin:0;color:var(--spark-text,#f8f4ff);font-size:clamp(1.25rem,4vw,1.8rem);line-height:1.1}
+.alakazam-premium-eyebrow{margin:0;color:var(--spark-mint,#82e7c4);font-size:.76rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
+.alakazam-premium-hold,.alakazam-premium-status,.alakazam-premium-notice{margin:0;color:var(--spark-muted,#c8bed4);line-height:1.55}
+.alakazam-premium-hold{padding:.8rem .9rem;border-left:3px solid var(--spark-mint,#82e7c4);background:rgba(130,231,196,.06)}
+.alakazam-premium-status.is-error{color:#ffe3ea}
+.alakazam-premium-body{display:grid;gap:.85rem;min-width:0}
+.alakazam-premium-badges,.alakazam-premium-actions{display:flex;flex-wrap:wrap;gap:.65rem}
+.alakazam-premium-badge{display:inline-flex;min-height:32px;align-items:center;padding:.3rem .65rem;border:1px solid rgba(130,231,196,.32);border-radius:999px;color:var(--spark-mint,#82e7c4);background:rgba(130,231,196,.07);font-size:.78rem;font-weight:850;text-transform:capitalize}
+.alakazam-premium-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;margin:0}
+.alakazam-premium-fact{min-width:0;padding:.75rem;border:1px solid rgba(255,255,255,.12);border-radius:.75rem;background:rgba(255,255,255,.025)}
+.alakazam-premium-fact dt{color:var(--spark-muted,#c8bed4);font-size:.74rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase}
+.alakazam-premium-fact dd{overflow-wrap:anywhere;margin:.2rem 0 0;color:var(--spark-text,#f8f4ff);font-weight:750}
+.alakazam-premium-notice{padding:.75rem .85rem;border:1px solid rgba(255,255,255,.12);border-radius:.75rem;background:rgba(255,255,255,.025)}
+.alakazam-premium-notice.is-masked{border-color:rgba(241,207,137,.34);color:var(--spark-gold,#f1cf89)}
+.alakazam-premium-notice.is-read-only{border-color:rgba(255,255,255,.2)}
+.alakazam-premium-notice.is-restored{border-color:rgba(130,231,196,.42);color:var(--spark-mint,#82e7c4)}
+.alakazam-premium-panel .spark-button{min-height:44px;padding:.65rem .8rem}
+@media(max-width:36rem){.alakazam-premium-values{grid-template-columns:1fr}.alakazam-premium-actions{display:grid;grid-template-columns:1fr}.alakazam-premium-actions .spark-button{width:100%}}

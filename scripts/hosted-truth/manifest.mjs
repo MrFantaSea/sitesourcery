@@ -135,14 +135,18 @@ export const hostedStagingAssetSha256 = Object.freeze({
     "5615189885bf84667cb28c8657f730b77cc40eb619c29460d5b33dce876ea167",
   "abracadabra/app/abracadabra-alakazam-50.js":
     "48d0e3ad2624c0b1d7b7a80f3f97606157a0078d987f1a48c144d0f3a326a43f",
+  "abracadabra/app/abracadabra-alakazam-retained-premium.css":
+    "6378fb96895dd7cdd8d0961998f9a1d09573cbfcbdbf9d4591a0862add7080d0",
+  "abracadabra/app/abracadabra-alakazam-retained-premium.js":
+    "43399001851ccf69209bc4620a82bc195d5307a18319036dd81be39c7a43e78b",
   "abracadabra/app/abracadabra-api.js":
-    "c7f9b274d8556d73710bd50af7610523f1a390beeb90758fd87b3ed3ef12f49f",
+    "3bccc48da292894144de658145b23a426b6cd9a77640fc4e90dbfeb4a891c797",
   "abracadabra/app/abracadabra-billing-views.js":
     "3bd32e18c5ef2a9592eee0acea35cf17c4a3071e64e5ed95e7edf1dca1c5c486",
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "abc8a93995f32a74424dcf946af3bc0f7ff0aec17d877d6785936f25174e5d14",
+    "0b7157a38f8031a5a8e466230b0036fbfc373394169a2d8ecf18b40559c18c4d",
   "abracadabra/app/abracadabra-hosted-control.js":
     "0907acd1380a061cc69331fd101ce7b00323156c10d3b534f01e7cef2126afd6",
 });
