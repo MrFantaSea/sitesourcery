@@ -15134,6 +15134,8 @@
       );
     var alakazam35Panel = null;
     var alakazam35Authority = "";
+    var alakazam50Panel = null;
+    var alakazam50Authority = "";
     var alakazamPublicationPanel =
       createAlakazamPublicationPanel(
         documentRef,
@@ -19776,6 +19778,7 @@
         capabilities: capabilities
       });
       syncAlakazam35Panel(lastState);
+      syncAlakazam50Panel(lastState);
     }
 
     function destroyAlakazam35Panel() {
@@ -19811,7 +19814,7 @@
         || !selectedProjectId
         || !accountId
         || !subscription
-        || subscription.status !== "active"
+        || !["active", "grace"].includes(subscription.status)
         || !["alakazam_35", "alakazam_50"].includes(tierId)
         || !Number.isSafeInteger(subscription.revision)
         || !module
@@ -19838,6 +19841,68 @@
         projectId: selectedProjectId
       });
       alakazam35Authority = authority;
+    }
+
+    function destroyAlakazam50Panel() {
+      if (
+        alakazam50Panel
+        && typeof alakazam50Panel.destroy === "function"
+      ) {
+        alakazam50Panel.destroy();
+      }
+      alakazam50Panel = null;
+      alakazam50Authority = "";
+    }
+
+    function syncAlakazam50Panel(state) {
+      var selectedProjectId = state && state.account
+        ? idOf(state.project)
+        : "";
+      var accountId = text(
+        state && state.account && state.account.id
+      );
+      var account = selectedProjectId
+        ? currentAlakazamAccount(selectedProjectId)
+        : null;
+      var subscription = account && account.subscription;
+      var tierId = text(
+        subscription
+        && subscription.tier
+        && subscription.tier.tierId
+      );
+      var module = windowRef.SiteSourceryAlakazam50;
+      if (
+        ALAKAZAM_PUBLIC_OFFER_STATE !== "released"
+        || !selectedProjectId
+        || !accountId
+        || !subscription
+        || !["active", "grace"].includes(subscription.status)
+        || tierId !== "alakazam_50"
+        || !Number.isSafeInteger(subscription.revision)
+        || !module
+        || typeof module.mount !== "function"
+      ) {
+        destroyAlakazam50Panel();
+        return;
+      }
+      var authority = JSON.stringify([
+        accountId,
+        selectedProjectId,
+        tierId,
+        subscription.status,
+        subscription.revision
+      ]);
+      if (
+        alakazam50Panel
+        && alakazam50Authority === authority
+      ) return;
+      destroyAlakazam50Panel();
+      alakazam50Panel = windowRef.SiteSourceryAlakazam50.mount({
+        documentRef,
+        container: alakazamPanel.element,
+        projectId: selectedProjectId
+      });
+      alakazam50Authority = authority;
     }
 
     function resetAlakazamCommand(projectId) {

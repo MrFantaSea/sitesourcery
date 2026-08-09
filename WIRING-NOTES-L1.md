@@ -1,331 +1,113 @@
-# L1 wiring notes: F-03 Alakazam $35 fulfillment
+# L1 integration ledger: held Alakazam $35 + $50 union
 
-This lane deliberately does not edit `server/hosted/http.mjs`,
-`server/hosted/postgres-service.mjs`, or
-`scripts/hosted-truth/manifest.mjs`. Alakazam remains commercially **HELD**.
-The release lane must apply only the following composition changes after this
-commit is integrated.
+This file resolves the add/add collision between the sealed F-03 wiring notes
+in merge parent `b2401e91d4fd3dc6f2cb8c1641b8267951c90307` and the sealed F-04 wiring
+notes in merge parent `cee4490022665ae55f907d1ad187e8da406605b9`. The verbatim lane notes remain
+available in those immutable parents. This ledger records the composed union.
 
-## `server/hosted/bin/server.mjs`
+## Release invariants
 
-Add this import beside the other hosted Alakazam composition imports:
+- Alakazam remains commercially **HELD**.
+- The public-offer state stays `held`.
+- The worker enable predicate stays gated by the separately approved release
+  configuration and the publication hold.
+- No Stripe, publication, tenant-runtime, or other provider port is passed to
+  either customer-control boundary.
+- F-03 remains the base multi-file/photo fulfillment layer. F-04 wraps F-03
+  only for an exact `alakazam_50` authority.
 
-```js
-import {
-  createAlakazam35Composition
-} from "../alakazam-35-composition.mjs";
-import {
-  createAlakazam35Compiler
-} from "../alakazam-35-compiler.mjs";
-import {
-  createAlakazam35FulfillmentRepository,
-  createAlakazam35TierCompiler
-} from "../alakazam-35-fulfillment.mjs";
-import {
-  createPostgresAlakazam35Repository
-} from "../alakazam-35-postgres.mjs";
-import {
-  createAlakazam35PublicationPort
-} from "../alakazam-35-publication-port.mjs";
+## Production composition
+
+`server/hosted/bin/server.mjs` composes in this order:
+
+1. `createPostgresAlakazam35Repository` and `createAlakazam35Composition`.
+2. `createAlakazam35FulfillmentRepository`, wrapping the base repository.
+3. `createPostgresAlakazam50Repository` and `createAlakazam50Composition`.
+4. `createAlakazam50FulfillmentRepository`, wrapping the F-03 repository.
+5. `createAlakazam35Compiler` and `createAlakazam35TierCompiler`.
+6. `createAlakazam50Compiler` and `createAlakazam50TierCompiler`, wrapping the
+   F-03 tier compiler.
+7. The unchanged `createAlakazam35PublicationPort`, so the immutable F-03
+   photo asset remains part of the compiled artifact set.
+8. The fulfillment worker receives only the final F-04 repository/compiler
+   wrappers and the unchanged held publication port.
+
+Both `alakazam35.readiness()` and `alakazam50.readiness()` run before the
+existing approved-release assertion. Both boundaries are supplied to
+`createHostedApi`.
+
+## Hosted HTTP composition
+
+`server/hosted/http.mjs` retains the complete F-03 boundary and adds an
+independent held F-04 boundary with exactly these methods:
+
+- `getSnapshot`
+- `readiness`
+- `requestCare`
+- `saveConfiguration`
+
+The capability is true only when `authorization === true` and
+`providerEffects === false`. The authenticated F-04 routes are:
+
+- `GET /api/v1/projects/:projectId/alakazam/50`
+- `POST /api/v1/projects/:projectId/alakazam/50/configurations`
+- `POST /api/v1/projects/:projectId/alakazam/50/care-requests`
+
+Every route rejects query drift. Writes retain the shared CSRF and
+`Idempotency-Key` boundary and use `write.commandId` as their only command
+identity. Configuration accepts only `borderChoiceId`, `cashAppHandle`,
+`expectedCurrentRevision`, `fontChoiceId`, `menu`, and `venmoHandle`. Care
+accepts only `message`.
+
+## Customer artifact registration
+
+`scripts/configure-abracadabra-hosted-staging.mjs` registers and loads the
+F-03 assets before the F-04 assets, and both before the customer-control DOM:
+
+- `abracadabra/app/abracadabra-alakazam-35.css`
+- `abracadabra/app/abracadabra-alakazam-35.js`
+- `abracadabra/app/abracadabra-alakazam-50.css`
+- `abracadabra/app/abracadabra-alakazam-50.js`
+
+`abracadabra/app/abracadabra-customer-control-dom.js` retains the F-03 panel
+for authorized $35/$50 accounts and mounts the F-04 panel only for an exact
+active or grace `alakazam_50` account. Both panels are destroyed on project,
+account, subscription-status, tier, or revision drift. The existing held
+public-offer gate remains outside both mounts.
+
+`scripts/hosted-truth/manifest.mjs` seals the exact assets with:
+
+```text
+abracadabra/app/abracadabra-alakazam-35.css f626e50f198761409fd10db139c70f442880d0c6ecc22b31cf707bd9312e8585
+abracadabra/app/abracadabra-alakazam-35.js  14604957e98d8f94f4143bbbfac0b0e722b068aa29b56560ff4028d41d01c431
+abracadabra/app/abracadabra-alakazam-50.css 5615189885bf84667cb28c8657f730b77cc40eb619c29460d5b33dce876ea167
+abracadabra/app/abracadabra-alakazam-50.js  48d0e3ad2624c0b1d7b7a80f3f97606157a0078d987f1a48c144d0f3a326a43f
 ```
 
-Immediately after `alakazamRepository` is composed, add:
+No released offer slot or public sales promise is added.
 
-```js
-  const alakazam35Repository =
-    createPostgresAlakazam35Repository({ authority });
-  const alakazam35 = createAlakazam35Composition({
-    repository: alakazam35Repository,
-    resolveSession: commerceV2.resolveSession,
-    clock: commerceV2.clock
-  });
-  const alakazamFulfillmentRepository =
-    createAlakazam35FulfillmentRepository({
-      baseRepository: alakazamRepository,
-      tierRepository: alakazam35Repository
-    });
-```
+## Migration-verifier union
 
-Immediately after the existing `compiler` is composed, add:
+The ordered post-Privacy list ends with:
 
-```js
-  const alakazam35Compiler = createAlakazam35Compiler({
-    baseCompiler: compiler
-  });
-  const alakazamTierCompiler = createAlakazam35TierCompiler({
-    baseCompiler: compiler,
-    alakazam35Compiler
-  });
-```
+1. `202608080101_alakazam_customer_publication_controls.sql`
+2. `202608080102_alakazam_35_fulfillment.sql`
+3. `202608080103_alakazam_50_authority.sql`
 
-Replace only the existing `publicationPort` construction after
-`tenantRuntime` opens with:
+The exact migration count is 55. The verifier retains the F-03 publication,
+photo, configuration, care, trigger, privilege, and non-cascading-FK proofs,
+then independently proves the F-04 configuration/care tables, deferred
+authority triggers, append-only privileges, exact runtime marker, menu
+validator privilege, and non-cascading foreign keys.
 
-```js
-  const publicationPort = createAlakazam35PublicationPort({
-    runtime: tenantRuntime,
-    assetRepository: alakazam35Repository,
-    clock: commerceV2.clock
-  });
-```
+## Required proof
 
-In the existing `createAlakazamFulfillmentWorker` call, replace only these two
-properties:
-
-```js
-      repository: alakazamFulfillmentRepository,
-      compiler: alakazamTierCompiler,
-```
-
-Immediately after the existing Alakazam readiness calls, add:
-
-```js
-  await alakazam35.readiness();
-```
-
-Add this property to the options passed to `createHostedApi(service, { ... })`
-immediately after `alakazamAccount`:
-
-```js
-        alakazam35,
-```
-
-The readiness result must remain `state: "held"`, `authorization: true`, and
-`providerEffects: false`. Do not connect a Stripe port or change the existing
-worker enable predicate. Without a separately approved Alakazam commercial
-release and removed publication hold, the worker remains `held_not_started`
-and no provider effect can run.
-
-## `server/hosted/http.mjs`
-
-Add this import beside the other held Alakazam imports:
-
-```js
-import {
-  createHeldHostedAlakazam35
-} from "../commerce-v2/hosted-alakazam-35.mjs";
-```
-
-Add this option immediately after `alakazamAccount = null` in the
-`createHostedApi` options:
-
-```js
-    alakazam35 = null,
-```
-
-Immediately after `alakazamAccountBoundary` is validated, add:
-
-```js
-  const alakazam35Boundary =
-    alakazam35 ?? createHeldHostedAlakazam35();
-  invariant(
-    [
-      "getSnapshot",
-      "readiness",
-      "requestCare",
-      "saveConfiguration",
-      "uploadPhoto"
-    ].every(
-      (method) =>
-        typeof alakazam35Boundary[method] === "function"
-    ),
-    "RUNTIME_CONFIGURATION_ERROR",
-    "Hosted Alakazam $35 boundary is invalid.",
-    { status: 500 }
-  );
-```
-
-In `GET /api/v1/capabilities`, read its readiness beside the other Alakazam
-boundaries:
-
-```js
-          const alakazam35Readiness =
-            await alakazam35Boundary.readiness();
-```
-
-Add this capability immediately after the other Alakazam capabilities:
-
-```js
-              alakazam35:
-                alakazam35Readiness.authorization === true &&
-                alakazam35Readiness.providerEffects === false,
-```
-
-Add this authenticated GET branch beside the Alakazam account routes:
-
-```js
-        } else if (
-          method === "GET" &&
-          (route = match(
-            pathname,
-            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/35$/u
-          ))
-        ) {
-          invariant(
-            actor !== null,
-            "AUTHENTICATION_REQUIRED",
-            "Sign in before managing Alakazam $35 controls.",
-            { status: 401 }
-          );
-          exactRouteQuery(
-            url,
-            [],
-            "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "Alakazam $35 controls accept no query parameters."
-          );
-          result = await alakazam35Boundary.getSnapshot(
-            actor,
-            route[0]
-          );
-```
-
-Add these three authenticated POST branches before the quote route. Every
-branch uses the existing write boundary, so CSRF and `Idempotency-Key` remain
-mandatory and `write.commandId` is the only command identity.
-
-```js
-        } else if (
-          method === "POST" &&
-          (route = match(
-            pathname,
-            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/35\/photos$/u
-          ))
-        ) {
-          invariant(actor !== null, "AUTHENTICATION_REQUIRED",
-            "Sign in before managing Alakazam $35 controls.", { status: 401 });
-          exactRouteQuery(url, [], "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "Alakazam $35 photo uploads accept no query parameters.");
-          const selected = exactRouteBody(body,
-            ["mediaBase64", "mediaType"],
-            "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "The Alakazam $35 photo upload is invalid.");
-          result = await alakazam35Boundary.uploadPhoto(actor, route[0], {
-            ...selected,
-            commandId: write.commandId
-          });
-          status = 202;
-        } else if (
-          method === "POST" &&
-          (route = match(
-            pathname,
-            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/35\/configurations$/u
-          ))
-        ) {
-          invariant(actor !== null, "AUTHENTICATION_REQUIRED",
-            "Sign in before managing Alakazam $35 controls.", { status: 401 });
-          exactRouteQuery(url, [], "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "Alakazam $35 configurations accept no query parameters.");
-          const selected = exactRouteBody(body, [
-            "expectedCurrentRevision",
-            "fontChoiceId",
-            "photoAssetId",
-            "sections"
-          ], "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "The Alakazam $35 configuration is invalid.");
-          result = await alakazam35Boundary.saveConfiguration(actor, route[0], {
-            ...selected,
-            commandId: write.commandId
-          });
-          status = 202;
-        } else if (
-          method === "POST" &&
-          (route = match(
-            pathname,
-            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/35\/care-requests$/u
-          ))
-        ) {
-          invariant(actor !== null, "AUTHENTICATION_REQUIRED",
-            "Sign in before managing Alakazam $35 controls.", { status: 401 });
-          exactRouteQuery(url, [], "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "Alakazam $35 care requests accept no query parameters.");
-          const selected = exactRouteBody(body, ["message"],
-            "ALAKAZAM_35_ROUTE_BINDING_REJECTED",
-            "The Alakazam $35 care request is invalid.");
-          result = await alakazam35Boundary.requestCare(actor, route[0], {
-            ...selected,
-            commandId: write.commandId
-          });
-          status = 202;
-```
-
-No route applies a media, care, Stripe, publication, or provider effect. The
-POST routes append immutable held evidence and return the refreshed snapshot.
-
-## Customer artifact
-
-Add these two files to `hostedStagingAssets` in
-`scripts/configure-abracadabra-hosted-staging.mjs`, keeping the array sorted:
-
-```js
-  "abracadabra/app/abracadabra-alakazam-35.css",
-  "abracadabra/app/abracadabra-alakazam-35.js",
-```
-
-Add the stylesheet to the hosted app head immediately after
-`abracadabra-app.css`, and add the script immediately before
-`abracadabra-customer-control-dom.js`:
-
-```html
-  <link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-35.css">
-  <script src="/abracadabra/app/abracadabra-alakazam-35.js" defer></script>
-```
-
-In `abracadabra-customer-control-dom.js`, mount the standalone panel only after
-the existing Alakazam account projection verifies an active `alakazam_35` or
-`alakazam_50` subscription. Destroy it when the selected project, account, or
-subscription authority changes. Use exactly:
-
-```js
-    alakazam35Panel = windowRef.SiteSourceryAlakazam35.mount({
-      documentRef,
-      container: alakazamPanel.element,
-      projectId: selectedProjectId
-    });
-```
-
-Keep the existing `ALAKAZAM_PUBLIC_OFFER_STATE === "released"` gate around the
-customer Alakazam room. The module is built and proven while the shipped
-commercial surface remains held.
-
-## `scripts/hosted-truth/manifest.mjs`
-
-Add these exact entries to `hostedStagingAssetSha256` after integrating this
-lane:
-
-```js
-  "abracadabra/app/abracadabra-alakazam-35.css":
-    "f626e50f198761409fd10db139c70f442880d0c6ecc22b31cf707bd9312e8585",
-  "abracadabra/app/abracadabra-alakazam-35.js":
-    "14604957e98d8f94f4143bbbfac0b0e722b068aa29b56560ff4028d41d01c431",
-```
-
-Do not add a released offer slot or change held public copy.
-
-## Compiler and publication boundary
-
-`server/hosted/alakazam-35-compiler.mjs` is the complete deterministic
-multi-file compiler. It reads the immutable configuration/photo binding,
-masks disabled sections, applies the expanded font class, rejects `$50`
-fields, and emits HTML plus the exact referenced immutable asset.
-
-`server/hosted/alakazam-35-fulfillment.mjs` binds the exact current durable
-configuration and immutable media bytes to a claimed `$35` or `$50` operation
-under a non-enumerable internal symbol. Customer JSON cannot supply that
-binding. `$25` claims continue through the unchanged Spark compiler.
-
-`server/hosted/alakazam-35-publication-port.mjs` wraps the existing self-host
-publication port. It resolves the sole referenced header asset from PostgreSQL,
-verifies path, media type, digest, and bytes, and installs the HTML and asset in
-one release. A missing, substituted, or duplicate asset reference rejects the
-release. Publications without an Alakazam header remain unchanged.
-
-Do not pass the multi-file compiler directly to the worker without both the
-claim decorator and publication adapter above. Silently dropping the immutable
-asset is forbidden.
-
-## Integration checks
-
-After applying the wiring, extend hosted HTTP tests to prove authentication,
-CSRF, idempotency, no-query/exact-body rejection, `$25` and stale-revision
-rejection, held readiness, three-version projection, and zero provider calls.
-Run `scripts/browser-audit-alakazam-35.mjs` unchanged at all three viewports.
+- Pinned syntax checks for every changed/new JavaScript module.
+- Focused F-03 + F-04 domain, hosted, HTTP, compiler, fulfillment, asset,
+  migration-structure, and verifier tests.
+- One fresh validated PostgreSQL 16 database with all 55 migrations, the
+  synthetic sealed Privacy V3 fixture, both tier journeys, exact cleanup, and
+  a read-only `databaseAbsent true` proof.
+- The unchanged F-04 browser audit at 320x720, 390x844, and 1440x1000 using
+  only its self-spawned loopback listener, browser process, and temporary
+  profile.

@@ -256,12 +256,13 @@ async function applyMigrations(pool) {
     "202608080051_alakazam_lifecycle_cancellation.sql",
     "202608080052_alakazam_lifecycle_reversal.sql",
     "202608080101_alakazam_customer_publication_controls.sql",
-    "202608080102_alakazam_35_fulfillment.sql"
+    "202608080102_alakazam_35_fulfillment.sql",
+    "202608080103_alakazam_50_authority.sql"
   ];
   assert.equal(
     names.length,
-    54,
-    "migration proof requires exactly 54 migrations through Alakazam $35 fulfillment"
+    55,
+    "migration proof requires exactly 55 migrations through Alakazam $50 authority"
   );
   assert.equal(heldIndex, 47);
   assert.deepEqual(
@@ -888,6 +889,12 @@ async function verifyPlatformSchema(pool) {
         as alakazam_35_care_requests,
       to_regprocedure('ss.hosted_alakazam_35_contract()') is not null
         as alakazam_35_runtime_contract,
+      to_regclass('ss.alakazam_50_configurations') is not null
+        as alakazam_50_configurations,
+      to_regclass('ss.alakazam_50_care_requests') is not null
+        as alakazam_50_care_requests,
+      to_regprocedure('ss.hosted_alakazam_50_contract()') is not null
+        as alakazam_50_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -3574,6 +3581,111 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Custom build handoff migration contract failed: ${name}`
+    );
+  }
+  const alakazam50 = await pool.query(`
+    with expected_tables(table_name) as (
+      values
+        ('alakazam_50_care_requests'),
+        ('alakazam_50_configurations')
+    ), expected_triggers(
+      table_name, trigger_name, function_name,
+      constraint_trigger, deferrable_trigger, initially_deferred
+    ) as (
+      values
+        ('alakazam_50_care_requests', 'alakazam_50_care_requests_immutable', 'reject_alakazam_50_evidence_mutation', false, false, false),
+        ('alakazam_50_care_requests', 'alakazam_50_care_requests_validate', 'validate_alakazam_50_care_request', true, true, true),
+        ('alakazam_50_configurations', 'alakazam_50_configurations_immutable', 'reject_alakazam_50_evidence_mutation', false, false, false),
+        ('alakazam_50_configurations', 'alakazam_50_configurations_validate', 'validate_alakazam_50_configuration', true, true, true)
+    )
+    select
+      ss.hosted_alakazam_50_contract() =
+        'canonical-alakazam-50-held-v1'
+        as exact_runtime_marker,
+      (
+        select count(*) = 2
+          and bool_and(relation.relkind = 'r')
+          and bool_and(relation.relpersistence = 'p')
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          ))
+          and bool_and(has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          ))
+          and bool_and(not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          ))
+          and bool_and(not has_table_privilege(
+            'anon', relation.oid, 'SELECT'
+          ))
+          and bool_and(not exists (
+            select 1 from pg_policy policy
+             where policy.polrelid = relation.oid
+          ))
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+      ) as exact_append_only_table_security,
+      (
+        select count(*) = 4
+          and bool_and(trigger_record.tgenabled = 'O')
+          and bool_and(
+            (trigger_record.tgconstraint <> 0) = expected.constraint_trigger
+          )
+          and bool_and(
+            trigger_record.tgdeferrable = expected.deferrable_trigger
+          )
+          and bool_and(
+            trigger_record.tginitdeferred = expected.initially_deferred
+          )
+        from expected_triggers expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+        join pg_trigger trigger_record
+          on trigger_record.tgrelid = relation.oid
+         and trigger_record.tgname = expected.trigger_name
+         and not trigger_record.tgisinternal
+        join pg_proc function_record
+          on function_record.oid = trigger_record.tgfoid
+         and function_record.proname = expected.function_name
+      ) as exact_trigger_set,
+      (
+        select count(*) = 8
+          and bool_and(constraint_record.confdeltype <> 'c')
+        from pg_constraint constraint_record
+       where constraint_record.conrelid in (
+         'ss.alakazam_50_configurations'::regclass,
+         'ss.alakazam_50_care_requests'::regclass
+       )
+         and constraint_record.contype = 'f'
+      ) as exact_non_cascading_foreign_keys,
+      not has_function_privilege(
+        'authenticated',
+        'ss.validate_alakazam_50_subscription_authority(uuid,uuid,uuid,uuid,bigint)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'anon',
+        'ss.hosted_alakazam_50_contract()',
+        'EXECUTE'
+      ) and has_function_privilege(
+        'service_role',
+        'ss.valid_alakazam_50_menu(jsonb)',
+        'EXECUTE'
+      ) as exact_function_security
+  `);
+  for (const [name, ready] of Object.entries(alakazam50.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Alakazam 50 migration contract failed: ${name}`
     );
   }
 

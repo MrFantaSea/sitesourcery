@@ -94,6 +94,8 @@ const ROOT = path.resolve(
 const EXPECTED_HOSTED_STAGING_ASSETS = [
   "abracadabra/app/abracadabra-alakazam-35.css",
   "abracadabra/app/abracadabra-alakazam-35.js",
+  "abracadabra/app/abracadabra-alakazam-50.css",
+  "abracadabra/app/abracadabra-alakazam-50.js",
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-billing-views.js",
   "abracadabra/app/abracadabra-control-mode.js",
@@ -253,6 +255,8 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
   for (const hostedOnlyAsset of [
     "abracadabra/app/abracadabra-alakazam-35.css",
     "abracadabra/app/abracadabra-alakazam-35.js",
+    "abracadabra/app/abracadabra-alakazam-50.css",
+    "abracadabra/app/abracadabra-alakazam-50.js",
     "abracadabra/app/abracadabra-api.js",
     "abracadabra/app/abracadabra-billing-views.js",
     "abracadabra/app/abracadabra-customer-control-dom.js",
@@ -542,6 +546,8 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   for (const asset of [
     "/abracadabra/app/abracadabra-alakazam-35.css",
     "/abracadabra/app/abracadabra-alakazam-35.js",
+    "/abracadabra/app/abracadabra-alakazam-50.css",
+    "/abracadabra/app/abracadabra-alakazam-50.js",
     "/abracadabra/app/abracadabra-api.js",
     "/abracadabra/app/abracadabra-billing-views.js",
     "/abracadabra/app/abracadabra-hosted-control.js",

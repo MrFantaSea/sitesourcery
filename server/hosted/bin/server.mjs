@@ -56,6 +56,19 @@ import {
   createAlakazam35PublicationPort
 } from "../alakazam-35-publication-port.mjs";
 import {
+  createAlakazam50Compiler
+} from "../alakazam-50-compiler.mjs";
+import {
+  createAlakazam50Composition
+} from "../alakazam-50-composition.mjs";
+import {
+  createAlakazam50FulfillmentRepository,
+  createAlakazam50TierCompiler
+} from "../alakazam-50-fulfillment.mjs";
+import {
+  createPostgresAlakazam50Repository
+} from "../alakazam-50-postgres.mjs";
+import {
   createHostedAlakazamBillingSurfaces
 } from "../alakazam-billing.mjs";
 import {
@@ -390,6 +403,18 @@ async function start() {
       baseRepository: alakazamRepository,
       tierRepository: alakazam35Repository
     });
+  const alakazam50Repository =
+    createPostgresAlakazam50Repository({ authority });
+  const alakazam50 = createAlakazam50Composition({
+    repository: alakazam50Repository,
+    resolveSession: commerceV2.resolveSession,
+    clock: commerceV2.clock
+  });
+  const alakazam50FulfillmentRepository =
+    createAlakazam50FulfillmentRepository({
+      baseRepository: alakazamFulfillmentRepository,
+      tierRepository: alakazam50Repository
+    });
   const alakazamAccountService =
     createAlakazamAccountService({
       repository: alakazamRepository
@@ -629,6 +654,13 @@ async function start() {
     baseCompiler: compiler,
     alakazam35Compiler
   });
+  const alakazam50Compiler = createAlakazam50Compiler({
+    baseCompiler: alakazamTierCompiler
+  });
+  const alakazam50TierCompiler = createAlakazam50TierCompiler({
+    baseCompiler: alakazamTierCompiler,
+    alakazam50Compiler
+  });
   const exportStore = await createPrivateExportObjectStore({
     root: path.resolve(
       process.env.SITESOURCERY_EXPORT_ROOT ??
@@ -651,8 +683,8 @@ async function start() {
   });
   alakazamFulfillmentWorker =
     createAlakazamFulfillmentWorker({
-      repository: alakazamFulfillmentRepository,
-      compiler: alakazamTierCompiler,
+      repository: alakazam50FulfillmentRepository,
+      compiler: alakazam50TierCompiler,
       publicationPort,
       clock: commerceV2.clock,
       ids: commerceV2.ids,
@@ -723,6 +755,7 @@ async function start() {
   await customBuildHandoff.readiness();
   await alakazamPublication.readiness();
   await alakazam35.readiness();
+  await alakazam50.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -750,6 +783,7 @@ async function start() {
         downloadCommerce,
         alakazamAccount,
         alakazam35,
+        alakazam50,
         alakazamPublication,
         alakazamBilling,
         alakazamBillingSurfaces,

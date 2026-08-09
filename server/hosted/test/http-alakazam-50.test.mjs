@@ -5,7 +5,7 @@ import test from "node:test";
 import { createHostedApi } from "../http.mjs";
 
 const ORIGIN = "https://app.sitesourcery.test";
-const SESSION_TOKEN = "session_alakazam_35";
+const SESSION_TOKEN = "session_alakazam_50";
 const CSRF = "c".repeat(40);
 const CUSTOMER_ID =
   "20000000-0000-4000-8000-000000000001";
@@ -27,15 +27,15 @@ function service() {
   };
 }
 
-function readRequest(path, signedIn = true) {
-  return new Request(`${ORIGIN}${path}`, {
+function readRequest(route, signedIn = true) {
+  return new Request(`${ORIGIN}${route}`, {
     headers: signedIn
       ? { Cookie: `ss_session=${SESSION_TOKEN}` }
       : {}
   });
 }
 
-function writeRequest(path, body, overrides = {}) {
+function writeRequest(route, body, overrides = {}) {
   const signedIn = overrides.signedIn !== false;
   const headers = {
     "Content-Type": "application/json",
@@ -51,7 +51,7 @@ function writeRequest(path, body, overrides = {}) {
     headers["Idempotency-Key"] =
       overrides.idempotencyKey ?? COMMAND_ID;
   }
-  return new Request(`${ORIGIN}${path}`, {
+  return new Request(`${ORIGIN}${route}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body)
@@ -72,10 +72,6 @@ function boundary(calls) {
       calls.push(["read", actor, projectId]);
       return { projectId, state: "held" };
     },
-    async uploadPhoto(actor, projectId, input) {
-      calls.push(["photo", actor, projectId, input]);
-      return { projectId, state: "held", commandId: input.commandId };
-    },
     async saveConfiguration(actor, projectId, input) {
       calls.push(["configuration", actor, projectId, input]);
       return { projectId, state: "held", commandId: input.commandId };
@@ -87,14 +83,14 @@ function boundary(calls) {
   };
 }
 
-test("default F03 HTTP boundary authenticates and remains commercially held", async () => {
+test("default F04 HTTP boundary authenticates and remains commercially held", async () => {
   const api = createHostedApi(service());
-  const path = `/api/v1/projects/${PROJECT_ID}/alakazam/35`;
-  const held = await api.fetch(readRequest(path));
+  const route = `/api/v1/projects/${PROJECT_ID}/alakazam/50`;
+  const held = await api.fetch(readRequest(route));
   assert.equal(held.status, 503);
-  assert.equal((await held.json()).error.code, "ALAKAZAM_35_HELD");
+  assert.equal((await held.json()).error.code, "ALAKAZAM_50_HELD");
 
-  const signedOut = await api.fetch(readRequest(path, false));
+  const signedOut = await api.fetch(readRequest(route, false));
   assert.equal(signedOut.status, 401);
   assert.equal(
     (await signedOut.json()).error.code,
@@ -105,49 +101,45 @@ test("default F03 HTTP boundary authenticates and remains commercially held", as
     new Request(`${ORIGIN}/api/v1/capabilities`)
   );
   assert.equal(capabilities.status, 200);
-  assert.equal((await capabilities.json()).alakazam35, false);
+  assert.equal((await capabilities.json()).alakazam50, false);
 });
 
-test("F03 HTTP routes preserve project, exact bodies, and idempotent command identity", async () => {
+test("F04 HTTP routes preserve project, exact bodies, and idempotent command identity", async () => {
   const calls = [];
   const api = createHostedApi(service(), {
-    alakazam35: boundary(calls)
+    alakazam50: boundary(calls)
   });
-  const path = `/api/v1/projects/${PROJECT_ID}/alakazam/35`;
+  const route = `/api/v1/projects/${PROJECT_ID}/alakazam/50`;
 
-  const read = await api.fetch(readRequest(path));
+  const read = await api.fetch(readRequest(route));
   assert.equal(read.status, 200);
   assert.deepEqual(await read.json(), {
     projectId: PROJECT_ID,
     state: "held"
   });
 
-  const photoBody = {
-    mediaBase64: "cG5n",
-    mediaType: "image/png"
-  };
   const configurationBody = {
+    borderChoiceId: "double",
+    cashAppHandle: "SiteSourcery",
     expectedCurrentRevision: 3,
-    fontChoiceId: "alt",
-    photoAssetId:
-      "60000000-0000-4000-8000-000000000001",
-    sections: {
-      about: true,
-      offerings: true,
-      practical: false,
-      contact: true
-    }
+    fontChoiceId: "display",
+    menu: [
+      { target: "home", label: "Home", enabled: true },
+      { target: "about", label: "Story", enabled: true },
+      { target: "offerings", label: "Menu", enabled: true },
+      { target: "contact", label: "Pay", enabled: true }
+    ],
+    venmoHandle: "SiteSourcery"
   };
   const careBody = {
-    message: "Please review the seasonal hours."
+    message: "Please review the premium menu."
   };
   for (const [suffix, body] of [
-    ["photos", photoBody],
     ["configurations", configurationBody],
     ["care-requests", careBody]
   ]) {
     const response = await api.fetch(
-      writeRequest(`${path}/${suffix}`, body)
+      writeRequest(`${route}/${suffix}`, body)
     );
     assert.equal(response.status, 202);
     assert.equal((await response.json()).commandId, COMMAND_ID);
@@ -155,12 +147,6 @@ test("F03 HTTP routes preserve project, exact bodies, and idempotent command ide
 
   assert.deepEqual(calls, [
     ["read", { userId: CUSTOMER_ID }, PROJECT_ID],
-    [
-      "photo",
-      { userId: CUSTOMER_ID },
-      PROJECT_ID,
-      { ...photoBody, commandId: COMMAND_ID }
-    ],
     [
       "configuration",
       { userId: CUSTOMER_ID },
@@ -178,58 +164,55 @@ test("F03 HTTP routes preserve project, exact bodies, and idempotent command ide
   const capabilities = await api.fetch(
     new Request(`${ORIGIN}/api/v1/capabilities`)
   );
-  assert.equal((await capabilities.json()).alakazam35, true);
+  assert.equal((await capabilities.json()).alakazam50, true);
 });
 
-test("F03 HTTP rejects query, authentication, CSRF, idempotency, and body drift before the boundary", async () => {
+test("F04 HTTP rejects query, authentication, CSRF, idempotency, and body drift before the boundary", async () => {
   const calls = [];
   const api = createHostedApi(service(), {
-    alakazam35: boundary(calls)
+    alakazam50: boundary(calls)
   });
-  const path = `/api/v1/projects/${PROJECT_ID}/alakazam/35`;
-  const photoPath = `${path}/photos`;
-  const photoBody = {
-    mediaBase64: "cG5n",
-    mediaType: "image/png"
-  };
+  const route = `/api/v1/projects/${PROJECT_ID}/alakazam/50`;
+  const careRoute = `${route}/care-requests`;
+  const careBody = { message: "Please review the menu." };
 
-  const queryRead = await api.fetch(readRequest(`${path}?extra=true`));
+  const queryRead = await api.fetch(readRequest(`${route}?extra=true`));
   assert.equal(queryRead.status, 400);
   assert.equal(
     (await queryRead.json()).error.code,
-    "ALAKAZAM_35_ROUTE_BINDING_REJECTED"
+    "ALAKAZAM_50_ROUTE_BINDING_REJECTED"
   );
 
   const cases = [
     {
-      request: writeRequest(photoPath, photoBody, { signedIn: false }),
+      request: writeRequest(careRoute, careBody, { signedIn: false }),
       status: 401,
       code: "AUTHENTICATION_REQUIRED"
     },
     {
-      request: writeRequest(photoPath, photoBody, { csrf: false }),
+      request: writeRequest(careRoute, careBody, { csrf: false }),
       status: 403,
       code: "CSRF_TOKEN_REQUIRED"
     },
     {
-      request: writeRequest(photoPath, photoBody, { idempotency: false }),
+      request: writeRequest(careRoute, careBody, { idempotency: false }),
       status: 400,
       code: "IDEMPOTENCY_KEY_REQUIRED"
     },
     {
-      request: writeRequest(`${photoPath}?extra=true`, photoBody),
+      request: writeRequest(`${careRoute}?extra=true`, careBody),
       status: 400,
-      code: "ALAKAZAM_35_ROUTE_BINDING_REJECTED"
+      code: "ALAKAZAM_50_ROUTE_BINDING_REJECTED"
     },
     {
-      request: writeRequest(photoPath, { ...photoBody, extra: true }),
+      request: writeRequest(careRoute, { ...careBody, extra: true }),
       status: 400,
-      code: "ALAKAZAM_35_ROUTE_BINDING_REJECTED"
+      code: "ALAKAZAM_50_ROUTE_BINDING_REJECTED"
     },
     {
-      request: writeRequest(photoPath, { mediaType: "image/png" }),
+      request: writeRequest(careRoute, {}),
       status: 400,
-      code: "ALAKAZAM_35_ROUTE_BINDING_REJECTED"
+      code: "ALAKAZAM_50_ROUTE_BINDING_REJECTED"
     }
   ];
   for (const item of cases) {
@@ -240,23 +223,10 @@ test("F03 HTTP rejects query, authentication, CSRF, idempotency, and body drift 
   assert.deepEqual(calls, []);
 });
 
-test("production F03 composition remains the base of F04 without changing the commercial enable predicate", async () => {
+test("production F04 composition wraps F03 and preserves the commercial enable predicate", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
-  );
-  assert.match(source, /createPostgresAlakazam35Repository\(\{ authority \}\)/u);
-  assert.match(
-    source,
-    /createAlakazam35FulfillmentRepository\(\{\s*baseRepository: alakazamRepository,\s*tierRepository: alakazam35Repository\s*\}\)/u
-  );
-  assert.match(
-    source,
-    /createAlakazam35TierCompiler\(\{\s*baseCompiler: compiler,\s*alakazam35Compiler\s*\}\)/u
-  );
-  assert.match(
-    source,
-    /createAlakazam35PublicationPort\(\{\s*runtime: tenantRuntime,\s*assetRepository: alakazam35Repository,\s*clock: commerceV2\.clock\s*\}\)/u
   );
   assert.match(
     source,
@@ -270,9 +240,9 @@ test("production F03 composition remains the base of F04 without changing the co
     source,
     /createAlakazamFulfillmentWorker\(\{\s*repository: alakazam50FulfillmentRepository,\s*compiler: alakazam50TierCompiler,\s*publicationPort,[\s\S]*?enabled:\s*alakazamComposition\.mode === "approved" &&\s*publicationHeld\(\) === false,/u
   );
-  assert.match(source, /await alakazam35\.readiness\(\)/u);
+  assert.match(source, /await alakazam35\.readiness\(\);\s*await alakazam50\.readiness\(\);/u);
   assert.doesNotMatch(
-    source.match(/createAlakazam35Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
-    /\b(?:provider|stripe|tenantRuntime)\s*:/u
+    source.match(/createAlakazam50Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
+    /\b(?:provider|stripe|tenantRuntime|publicationPort)\s*:/u
   );
 });

@@ -10,6 +10,9 @@ import {
   createHeldHostedAlakazam35
 } from "../commerce-v2/hosted-alakazam-35.mjs";
 import {
+  createHeldHostedAlakazam50
+} from "../commerce-v2/hosted-alakazam-50.mjs";
+import {
   createHeldHostedAlakazamBilling
 } from "../commerce-v2/hosted-alakazam-billing.mjs";
 import {
@@ -416,6 +419,7 @@ export function createHostedApi(
     downloadCommerce = null,
     alakazamAccount = null,
     alakazam35 = null,
+    alakazam50 = null,
     alakazamPublication = null,
     alakazamBilling = null,
     alakazamBillingSurfaces = null,
@@ -604,6 +608,22 @@ export function createHostedApi(
     ),
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam $35 boundary is invalid.",
+    { status: 500 }
+  );
+  const alakazam50Boundary =
+    alakazam50 ?? createHeldHostedAlakazam50();
+  invariant(
+    [
+      "getSnapshot",
+      "readiness",
+      "requestCare",
+      "saveConfiguration"
+    ].every(
+      (method) =>
+        typeof alakazam50Boundary[method] === "function"
+    ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Alakazam $50 boundary is invalid.",
     { status: 500 }
   );
   const alakazamPublicationBoundary =
@@ -815,6 +835,8 @@ export function createHostedApi(
             await alakazamBillingBoundary.readiness();
           const alakazam35Readiness =
             await alakazam35Boundary.readiness();
+          const alakazam50Readiness =
+            await alakazam50Boundary.readiness();
           const alakazamPublicationReadiness =
             await alakazamPublicationBoundary.readiness();
           const registration =
@@ -844,6 +866,9 @@ export function createHostedApi(
               alakazam35:
                 alakazam35Readiness.authorization === true &&
                 alakazam35Readiness.providerEffects === false,
+              alakazam50:
+                alakazam50Readiness.authorization === true &&
+                alakazam50Readiness.providerEffects === false,
               alakazamPublication:
                 alakazamPublicationReadiness.authorization ===
                   true &&
@@ -1974,6 +1999,29 @@ export function createHostedApi(
           method === "GET" &&
           (route = match(
             pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/50$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before managing Alakazam $50 controls.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_50_ROUTE_BINDING_REJECTED",
+            "Alakazam $50 controls accept no query parameters."
+          );
+          result = await alakazam50Boundary.getSnapshot(
+            actor,
+            route[0]
+          );
+        } else if (
+          method === "GET" &&
+          (route = match(
+            pathname,
             /^\/api\/v1\/projects\/([^/]+)\/alakazam\/publication$/u
           ))
         ) {
@@ -2755,6 +2803,81 @@ export function createHostedApi(
             "The Alakazam $35 care request is invalid."
           );
           result = await alakazam35Boundary.requestCare(
+            actor,
+            route[0],
+            {
+              ...selected,
+              commandId: write.commandId
+            }
+          );
+          status = 202;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/50\/configurations$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before managing Alakazam $50 controls.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_50_ROUTE_BINDING_REJECTED",
+            "Alakazam $50 configurations accept no query parameters."
+          );
+          const selected = exactRouteBody(
+            body,
+            [
+              "borderChoiceId",
+              "cashAppHandle",
+              "expectedCurrentRevision",
+              "fontChoiceId",
+              "menu",
+              "venmoHandle"
+            ],
+            "ALAKAZAM_50_ROUTE_BINDING_REJECTED",
+            "The Alakazam $50 configuration is invalid."
+          );
+          result = await alakazam50Boundary.saveConfiguration(
+            actor,
+            route[0],
+            {
+              ...selected,
+              commandId: write.commandId
+            }
+          );
+          status = 202;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/50\/care-requests$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before managing Alakazam $50 controls.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_50_ROUTE_BINDING_REJECTED",
+            "Alakazam $50 care requests accept no query parameters."
+          );
+          const selected = exactRouteBody(
+            body,
+            ["message"],
+            "ALAKAZAM_50_ROUTE_BINDING_REJECTED",
+            "The Alakazam $50 care request is invalid."
+          );
+          result = await alakazam50Boundary.requestCare(
             actor,
             route[0],
             {
