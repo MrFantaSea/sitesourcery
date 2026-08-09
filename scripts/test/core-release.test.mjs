@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT,
+  CORE_RELEASE_ALAKAZAM_CORE_JOURNEY_COUNT,
   CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
   CORE_RELEASE_ADMIN_URL_ENV,
   CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
@@ -226,10 +227,14 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
   );
   assert.match(
     commands[1].args[4],
-    /alakazam-lifecycle-postgres\.integration\.test\.mjs$/u
+    /alakazam-postgres-contract\.integration\.test\.mjs$/u
   );
   assert.match(
     commands[1].args[5],
+    /alakazam-lifecycle-postgres\.integration\.test\.mjs$/u
+  );
+  assert.match(
+    commands[1].args[6],
     /alakazam-billing-postgres\.integration\.test\.mjs$/u
   );
   for (const command of commands) {
@@ -264,6 +269,12 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
   assert.equal(
     commands[1].environment[
       "SITESOURCERY_PG_CUSTOM_SERVICE_QUOTES_TEST_URL"
+    ],
+    targetUrl
+  );
+  assert.equal(
+    commands[1].environment[
+      "SITESOURCERY_PG_ALAKAZAM_TEST_URL"
     ],
     targetUrl
   );
@@ -371,6 +382,8 @@ test("successful orchestration drops the exact database before npm test", async 
     migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
     customServicesJourneys:
       CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
+    alakazamCoreJourneys:
+      CORE_RELEASE_ALAKAZAM_CORE_JOURNEY_COUNT,
     alakazamLifecycleJourneys:
       CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
     alakazamBillingJourneys:

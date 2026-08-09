@@ -254,12 +254,13 @@ async function applyMigrations(pool) {
     "202608080049_alakazam_lifecycle_renewal.sql",
     "202608080050_alakazam_lifecycle_incidents.sql",
     "202608080051_alakazam_lifecycle_cancellation.sql",
-    "202608080052_alakazam_lifecycle_reversal.sql"
+    "202608080052_alakazam_lifecycle_reversal.sql",
+    "202608080101_alakazam_customer_publication_controls.sql"
   ];
   assert.equal(
     names.length,
-    52,
-    "migration proof requires exactly migrations 1-52"
+    53,
+    "migration proof requires exactly 53 migrations through publication controls"
   );
   assert.equal(heldIndex, 47);
   assert.deepEqual(

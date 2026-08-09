@@ -16,8 +16,9 @@ export const CORE_RELEASE_ADMIN_URL_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL";
 export const CORE_RELEASE_DATABASE_NAME_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_DATABASE_NAME";
-export const CORE_RELEASE_MIGRATION_COUNT = 52;
+export const CORE_RELEASE_MIGRATION_COUNT = 53;
 export const CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT = 4;
+export const CORE_RELEASE_ALAKAZAM_CORE_JOURNEY_COUNT = 5;
 export const CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT = 10;
 export const CORE_RELEASE_ALAKAZAM_BILLING_JOURNEY_COUNT = 3;
 
@@ -27,6 +28,8 @@ const CUSTOM_SERVICES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICES_TEST_URL";
 const CUSTOM_SERVICE_QUOTES_TEST_URL_ENV =
   "SITESOURCERY_PG_CUSTOM_SERVICE_QUOTES_TEST_URL";
+const ALAKAZAM_CORE_TEST_URL_ENV =
+  "SITESOURCERY_PG_ALAKAZAM_TEST_URL";
 const ALAKAZAM_LIFECYCLE_TEST_URL_ENV =
   "SITESOURCERY_PG_ALAKAZAM_LIFECYCLE_TEST_URL";
 const ALAKAZAM_BILLING_TEST_URL_ENV =
@@ -180,6 +183,7 @@ function withoutDatabaseSecrets(environment) {
   delete sanitized[MIGRATION_TEST_URL_ENV];
   delete sanitized[CUSTOM_SERVICES_TEST_URL_ENV];
   delete sanitized[CUSTOM_SERVICE_QUOTES_TEST_URL_ENV];
+  delete sanitized[ALAKAZAM_CORE_TEST_URL_ENV];
   return sanitized;
 }
 
@@ -216,6 +220,7 @@ export function buildCoreReleaseCommands({
     ...cleanEnvironment,
     [CUSTOM_SERVICES_TEST_URL_ENV]: targetDatabaseUrl,
     [CUSTOM_SERVICE_QUOTES_TEST_URL_ENV]: targetDatabaseUrl,
+    [ALAKAZAM_CORE_TEST_URL_ENV]: targetDatabaseUrl,
     [ALAKAZAM_LIFECYCLE_TEST_URL_ENV]: targetDatabaseUrl,
     [ALAKAZAM_BILLING_TEST_URL_ENV]: targetDatabaseUrl
   };
@@ -261,6 +266,10 @@ export function buildCoreReleaseCommands({
         path.join(
           projectRoot,
           "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
+        ),
+        path.join(
+          projectRoot,
+          "server/data-plane/tests/alakazam-postgres-contract.integration.test.mjs"
         ),
         path.join(
           projectRoot,
@@ -619,6 +628,8 @@ export async function runCoreRelease({
       migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
       customServicesJourneys:
         CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
+      alakazamCoreJourneys:
+        CORE_RELEASE_ALAKAZAM_CORE_JOURNEY_COUNT,
       alakazamLifecycleJourneys:
         CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT,
       alakazamBillingJourneys:
@@ -676,6 +687,8 @@ async function main() {
       migrationsApplied: result.migrationsApplied,
       customServicesJourneys:
         result.customServicesJourneys,
+      alakazamCoreJourneys:
+        result.alakazamCoreJourneys,
       alakazamLifecycleJourneys:
         result.alakazamLifecycleJourneys,
       alakazamBillingJourneys:
