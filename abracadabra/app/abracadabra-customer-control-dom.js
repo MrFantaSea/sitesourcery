@@ -15132,6 +15132,8 @@
           }
         }
       );
+    var alakazam35Panel = null;
+    var alakazam35Authority = "";
     var alakazamPublicationPanel =
       createAlakazamPublicationPanel(
         documentRef,
@@ -19773,6 +19775,69 @@
         command: alakazamCommand,
         capabilities: capabilities
       });
+      syncAlakazam35Panel(lastState);
+    }
+
+    function destroyAlakazam35Panel() {
+      if (
+        alakazam35Panel
+        && typeof alakazam35Panel.destroy === "function"
+      ) {
+        alakazam35Panel.destroy();
+      }
+      alakazam35Panel = null;
+      alakazam35Authority = "";
+    }
+
+    function syncAlakazam35Panel(state) {
+      var selectedProjectId = state && state.account
+        ? idOf(state.project)
+        : "";
+      var accountId = text(
+        state && state.account && state.account.id
+      );
+      var account = selectedProjectId
+        ? currentAlakazamAccount(selectedProjectId)
+        : null;
+      var subscription = account && account.subscription;
+      var tierId = text(
+        subscription
+        && subscription.tier
+        && subscription.tier.tierId
+      );
+      var module = windowRef.SiteSourceryAlakazam35;
+      if (
+        ALAKAZAM_PUBLIC_OFFER_STATE !== "released"
+        || !selectedProjectId
+        || !accountId
+        || !subscription
+        || subscription.status !== "active"
+        || !["alakazam_35", "alakazam_50"].includes(tierId)
+        || !Number.isSafeInteger(subscription.revision)
+        || !module
+        || typeof module.mount !== "function"
+      ) {
+        destroyAlakazam35Panel();
+        return;
+      }
+      var authority = JSON.stringify([
+        accountId,
+        selectedProjectId,
+        tierId,
+        subscription.status,
+        subscription.revision
+      ]);
+      if (
+        alakazam35Panel
+        && alakazam35Authority === authority
+      ) return;
+      destroyAlakazam35Panel();
+      alakazam35Panel = windowRef.SiteSourceryAlakazam35.mount({
+        documentRef,
+        container: alakazamPanel.element,
+        projectId: selectedProjectId
+      });
+      alakazam35Authority = authority;
     }
 
     function resetAlakazamCommand(projectId) {

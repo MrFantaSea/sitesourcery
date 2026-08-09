@@ -255,12 +255,13 @@ async function applyMigrations(pool) {
     "202608080050_alakazam_lifecycle_incidents.sql",
     "202608080051_alakazam_lifecycle_cancellation.sql",
     "202608080052_alakazam_lifecycle_reversal.sql",
-    "202608080101_alakazam_customer_publication_controls.sql"
+    "202608080101_alakazam_customer_publication_controls.sql",
+    "202608080102_alakazam_35_fulfillment.sql"
   ];
   assert.equal(
     names.length,
-    53,
-    "migration proof requires exactly 53 migrations through publication controls"
+    54,
+    "migration proof requires exactly 54 migrations through Alakazam $35 fulfillment"
   );
   assert.equal(heldIndex, 47);
   assert.deepEqual(
@@ -879,6 +880,14 @@ async function verifyPlatformSchema(pool) {
       to_regprocedure(
         'ss.hosted_alakazam_publication_contract()'
       ) is not null as alakazam_customer_publication_runtime_contract,
+      to_regclass('ss.alakazam_35_photo_assets') is not null
+        as alakazam_35_photo_assets,
+      to_regclass('ss.alakazam_35_configurations') is not null
+        as alakazam_35_configurations,
+      to_regclass('ss.alakazam_35_care_requests') is not null
+        as alakazam_35_care_requests,
+      to_regprocedure('ss.hosted_alakazam_35_contract()') is not null
+        as alakazam_35_runtime_contract,
       to_regprocedure(
         'ss.validate_service_case_offering_terminal_state()'
       ) is not null as custom_service_terminal_state_validator,
@@ -3654,6 +3663,100 @@ async function verifyPlatformSchema(pool) {
       ready,
       true,
       `Alakazam publication migration contract failed: ${name}`
+    );
+  }
+
+  const alakazam35 = await pool.query(`
+    with expected_tables(table_name) as (
+      values
+        ('alakazam_35_photo_assets'),
+        ('alakazam_35_configurations'),
+        ('alakazam_35_care_requests')
+    ), expected_triggers(table_name, trigger_name, function_name) as (
+      values
+        ('alakazam_35_photo_assets', 'alakazam_35_photo_assets_immutable', 'reject_alakazam_35_evidence_mutation'),
+        ('alakazam_35_photo_assets', 'alakazam_35_photo_assets_validate', 'validate_alakazam_35_photo_asset'),
+        ('alakazam_35_configurations', 'alakazam_35_configurations_immutable', 'reject_alakazam_35_evidence_mutation'),
+        ('alakazam_35_configurations', 'alakazam_35_configurations_validate', 'validate_alakazam_35_configuration'),
+        ('alakazam_35_care_requests', 'alakazam_35_care_requests_immutable', 'reject_alakazam_35_evidence_mutation'),
+        ('alakazam_35_care_requests', 'alakazam_35_care_requests_validate', 'validate_alakazam_35_care_request')
+    )
+    select
+      ss.hosted_alakazam_35_contract() =
+        'canonical-alakazam-35-held-v1'
+        as exact_runtime_marker,
+      (
+        select count(*) = 3
+          and bool_and(relation.relkind = 'r')
+          and bool_and(relation.relpersistence = 'p')
+          and bool_and(relation.relrowsecurity)
+          and bool_and(relation.relforcerowsecurity)
+          and bool_and(has_table_privilege(
+            'service_role', relation.oid, 'SELECT'
+          ))
+          and bool_and(has_table_privilege(
+            'service_role', relation.oid, 'INSERT'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'UPDATE'
+          ))
+          and bool_and(not has_table_privilege(
+            'service_role', relation.oid, 'DELETE'
+          ))
+          and bool_and(not has_table_privilege(
+            'authenticated', relation.oid, 'SELECT'
+          ))
+          and bool_and(not has_table_privilege(
+            'anon', relation.oid, 'SELECT'
+          ))
+          and bool_and(not exists (
+            select 1 from pg_policy policy
+             where policy.polrelid = relation.oid
+          ))
+        from expected_tables expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+      ) as exact_append_only_table_security,
+      (
+        select count(*) = 6
+          and bool_and(trigger_record.tgenabled = 'O')
+        from expected_triggers expected
+        join pg_class relation
+          on relation.oid = format('ss.%I', expected.table_name)::regclass
+        join pg_trigger trigger_record
+          on trigger_record.tgrelid = relation.oid
+         and trigger_record.tgname = expected.trigger_name
+         and not trigger_record.tgisinternal
+        join pg_proc function_record
+          on function_record.oid = trigger_record.tgfoid
+         and function_record.proname = expected.function_name
+      ) as exact_trigger_set,
+      (
+        select count(*) = 13
+          and bool_and(constraint_record.confdeltype <> 'c')
+        from pg_constraint constraint_record
+       where constraint_record.conrelid in (
+         'ss.alakazam_35_photo_assets'::regclass,
+         'ss.alakazam_35_configurations'::regclass,
+         'ss.alakazam_35_care_requests'::regclass
+       )
+         and constraint_record.contype = 'f'
+      ) as exact_non_cascading_foreign_keys,
+      not has_function_privilege(
+        'authenticated',
+        'ss.validate_alakazam_35_subscription_authority(uuid,uuid,uuid,uuid,bigint)',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'anon',
+        'ss.hosted_alakazam_35_contract()',
+        'EXECUTE'
+      ) as exact_function_security
+  `);
+  for (const [name, ready] of Object.entries(alakazam35.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Alakazam 35 migration contract failed: ${name}`
     );
   }
 }

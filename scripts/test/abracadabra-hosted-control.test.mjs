@@ -549,11 +549,16 @@ test("private staging injection selects hosted mode in strict script order witho
     hosted,
     /<meta name="sitesourcery-abracadabra-control-mode" content="hold">/u,
   );
+  assert.match(
+    hosted,
+    /abracadabra-app\.css">\s*<link rel="stylesheet" href="\/abracadabra\/app\/abracadabra-alakazam-35\.css">/u,
+  );
   const ordered = [
     "/abracadabra/app/abracadabra-control-mode.js",
     "/abracadabra/app/abracadabra-api.js",
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
+    "/abracadabra/app/abracadabra-alakazam-35.js",
     "/abracadabra/app/abracadabra-customer-control-dom.js",
   ];
   let cursor = -1;

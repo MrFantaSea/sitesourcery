@@ -1,4 +1,8 @@
 const APP_SCRIPT = '<script src="/abracadabra/app/abracadabra-app.js" defer></script>';
+const APP_STYLESHEET =
+  '<link rel="stylesheet" href="/abracadabra/app/abracadabra-app.css">';
+const ALAKAZAM_35_STYLESHEET =
+  '<link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-35.css">';
 const HOLD_META =
   '<meta name="sitesourcery-abracadabra-control-mode" content="hold">';
 const HOSTED_META =
@@ -135,11 +139,17 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
   if (!source.includes(APP_SCRIPT)) {
     throw new Error("Abracadabra app script marker is missing");
   }
+  if (!source.includes(APP_STYLESHEET)) {
+    throw new Error("Abracadabra app stylesheet marker is missing");
+  }
   if (!source.includes(HOLD_META)) {
     throw new Error("Abracadabra held-mode marker is missing");
   }
   if ((source.match(new RegExp(APP_SCRIPT.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "gu")) || []).length !== 1) {
     throw new Error("Abracadabra app script marker must be unique");
+  }
+  if ((source.match(new RegExp(APP_STYLESHEET.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "gu")) || []).length !== 1) {
+    throw new Error("Abracadabra app stylesheet marker must be unique");
   }
   if (
     source.includes("abracadabra-hosted-control.js")
@@ -157,15 +167,22 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     '<script src="/abracadabra/app/abracadabra-hosted-control.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-billing-views.js" defer></script>',
     APP_SCRIPT,
+    '<script src="/abracadabra/app/abracadabra-alakazam-35.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>',
   ].join("\n  ");
 
   return source
     .replace(HOLD_META, HOSTED_META)
+    .replace(
+      APP_STYLESHEET,
+      `${APP_STYLESHEET}\n  ${ALAKAZAM_35_STYLESHEET}`
+    )
     .replace(APP_SCRIPT, hostedScripts);
 }
 
 export const hostedStagingAssets = Object.freeze([
+  "abracadabra/app/abracadabra-alakazam-35.css",
+  "abracadabra/app/abracadabra-alakazam-35.js",
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-billing-views.js",
   "abracadabra/app/abracadabra-control-mode.js",

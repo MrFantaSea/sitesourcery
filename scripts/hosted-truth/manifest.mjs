@@ -127,6 +127,10 @@ export const hostedTruthSlots = Object.freeze([
 ]);
 
 export const hostedStagingAssetSha256 = Object.freeze({
+  "abracadabra/app/abracadabra-alakazam-35.css":
+    "f626e50f198761409fd10db139c70f442880d0c6ecc22b31cf707bd9312e8585",
+  "abracadabra/app/abracadabra-alakazam-35.js":
+    "14604957e98d8f94f4143bbbfac0b0e722b068aa29b56560ff4028d41d01c431",
   "abracadabra/app/abracadabra-api.js":
     "c7f9b274d8556d73710bd50af7610523f1a390beeb90758fd87b3ed3ef12f49f",
   "abracadabra/app/abracadabra-billing-views.js":
@@ -134,7 +138,7 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "0ac7a8fde0f44ac335d9d833e46e45e3b70583ec5dcca296ed2170f7c919573d",
+    "72798a1079a31a1069c47160e92c69d8fe23c209920f15b80a1943d0daff1083",
   "abracadabra/app/abracadabra-hosted-control.js":
     "0907acd1380a061cc69331fd101ce7b00323156c10d3b534f01e7cef2126afd6",
 });

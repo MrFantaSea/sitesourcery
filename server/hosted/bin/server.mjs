@@ -40,6 +40,22 @@ import {
   createPostgresAlakazamRepository
 } from "../alakazam-postgres.mjs";
 import {
+  createAlakazam35Composition
+} from "../alakazam-35-composition.mjs";
+import {
+  createAlakazam35Compiler
+} from "../alakazam-35-compiler.mjs";
+import {
+  createAlakazam35FulfillmentRepository,
+  createAlakazam35TierCompiler
+} from "../alakazam-35-fulfillment.mjs";
+import {
+  createPostgresAlakazam35Repository
+} from "../alakazam-35-postgres.mjs";
+import {
+  createAlakazam35PublicationPort
+} from "../alakazam-35-publication-port.mjs";
+import {
   createHostedAlakazamBillingSurfaces
 } from "../alakazam-billing.mjs";
 import {
@@ -161,7 +177,6 @@ import {
   createCanonicalPostgresAuthority,
   createPostgresPool
 } from "../repository-postgres.mjs";
-import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
 import {
   assertApprovedStripeReady,
@@ -363,6 +378,18 @@ async function start() {
     });
   const alakazamRepository =
     createPostgresAlakazamRepository({ authority });
+  const alakazam35Repository =
+    createPostgresAlakazam35Repository({ authority });
+  const alakazam35 = createAlakazam35Composition({
+    repository: alakazam35Repository,
+    resolveSession: commerceV2.resolveSession,
+    clock: commerceV2.clock
+  });
+  const alakazamFulfillmentRepository =
+    createAlakazam35FulfillmentRepository({
+      baseRepository: alakazamRepository,
+      tierRepository: alakazam35Repository
+    });
   const alakazamAccountService =
     createAlakazamAccountService({
       repository: alakazamRepository
@@ -595,6 +622,13 @@ async function start() {
       "SITESOURCERY_SPARK_COMPILER_SHA256"
     )
   });
+  const alakazam35Compiler = createAlakazam35Compiler({
+    baseCompiler: compiler
+  });
+  const alakazamTierCompiler = createAlakazam35TierCompiler({
+    baseCompiler: compiler,
+    alakazam35Compiler
+  });
   const exportStore = await createPrivateExportObjectStore({
     root: path.resolve(
       process.env.SITESOURCERY_EXPORT_ROOT ??
@@ -610,13 +644,15 @@ async function start() {
     controlHost: host,
     platformBaseDomain: licensedBaseDomain
   });
-  const publicationPort = createSelfHostPublicationPort({
-    runtime: tenantRuntime
+  const publicationPort = createAlakazam35PublicationPort({
+    runtime: tenantRuntime,
+    assetRepository: alakazam35Repository,
+    clock: commerceV2.clock
   });
   alakazamFulfillmentWorker =
     createAlakazamFulfillmentWorker({
-      repository: alakazamRepository,
-      compiler,
+      repository: alakazamFulfillmentRepository,
+      compiler: alakazamTierCompiler,
       publicationPort,
       clock: commerceV2.clock,
       ids: commerceV2.ids,
@@ -686,6 +722,7 @@ async function start() {
   await customServicesCustomBuildChangeCompletion.readiness();
   await customBuildHandoff.readiness();
   await alakazamPublication.readiness();
+  await alakazam35.readiness();
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments
@@ -712,6 +749,7 @@ async function start() {
       createHostedApi(service, {
         downloadCommerce,
         alakazamAccount,
+        alakazam35,
         alakazamPublication,
         alakazamBilling,
         alakazamBillingSurfaces,
