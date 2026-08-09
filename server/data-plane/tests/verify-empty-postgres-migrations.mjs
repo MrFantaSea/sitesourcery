@@ -3699,7 +3699,6 @@ export async function runMigrationVerification({
       heldSql,
       postPrivacyNames
     } = await applyMigrations(pool);
-    await verifyPlatformSchema(pool);
     await verifyPrivacyV3Hold(pool);
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
@@ -3708,6 +3707,7 @@ export async function runMigrationVerification({
       pool,
       postPrivacyNames
     );
+    await verifyPlatformSchema(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
     const v2After = await v2AuthorityFingerprint(pool);
