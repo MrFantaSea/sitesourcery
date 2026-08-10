@@ -45,6 +45,12 @@ registrant-contact commands before the customer journey is complete.
 ## Required configuration
 
 - `SITESOURCERY_DATABASE_URL`
+- `SITESOURCERY_POSTGRES_BUDGET_CONFIG`, the exact non-secret v1 timeout and
+  pool budget. Startup fails closed when it is missing or malformed. Statement,
+  lock, and idle-transaction limits are transaction-local; canonical
+  acquisition is deadline-bound. The default held example preserves the
+  existing ten-connection ceiling and admits at most eight API transactions so
+  two physical slots remain reserved for the future WORKERS-01 process split.
 - `SITESOURCERY_IDENTITY_PEPPER`, base64 for at least 32 bytes
 - `SITESOURCERY_IDENTITY_PEPPER_CONFIG`, the exact versioned v1 metadata
   contract naming the current writer and zero to three prior verifier-only

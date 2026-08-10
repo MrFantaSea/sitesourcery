@@ -189,6 +189,9 @@ import {
 } from "../identity-pepper-config.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
+import {
+  postgresBudgetConfigurationFromEnvironment
+} from "../postgres-budget-config.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
   createProjectLegalAuthorityFromEnvironment
@@ -290,13 +293,30 @@ if (apiPort === tenantPort) {
   );
 }
 
+const postgresBudgetConfiguration =
+  postgresBudgetConfigurationFromEnvironment(process.env);
 const pool = createPostgresPool({
+  max:
+    postgresBudgetConfiguration.policy.pool.totalConnections,
+  connectionTimeoutMillis:
+    postgresBudgetConfiguration.policy.timeouts.acquisitionMs,
+  statementTimeoutMillis:
+    postgresBudgetConfiguration.policy.timeouts.statementMs,
+  lockTimeoutMillis:
+    postgresBudgetConfiguration.policy.timeouts.lockMs,
+  idleInTransactionTimeoutMillis:
+    postgresBudgetConfiguration.policy.timeouts.idleInTransactionMs,
+  queryTimeoutMillis:
+    postgresBudgetConfiguration.policy.timeouts.statementMs,
   ssl:
     process.env.SITESOURCERY_DATABASE_SSL === "require"
       ? { rejectUnauthorized: true }
       : undefined
 });
-const authority = createCanonicalPostgresAuthority({ pool });
+const authority = createCanonicalPostgresAuthority({
+  pool,
+  budgetPolicy: postgresBudgetConfiguration.policy
+});
 let apiServer = null;
 let tenantServer = null;
 let cancellationWorker = null;
@@ -923,6 +943,7 @@ async function start() {
       recoveryProvider:
         readiness.recovery.provider ?? null,
       database: readiness.persistence.database,
+      postgresBudget: authority.budgetReadiness(),
       identityPepper:
         identityPepperConfiguration.readiness,
       compilerRevision: readiness.compiler.revision,
