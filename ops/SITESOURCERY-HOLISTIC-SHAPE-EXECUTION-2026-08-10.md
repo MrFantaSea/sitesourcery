@@ -105,8 +105,11 @@ legal, entitlement, or service authority.
   - Dependencies: none.
 
 - [ ] **OPS-ORIGIN-01 — exact Dell/HQ origin seal**
+  - Held installation/seal tooling is active against the current integration
+    lineage; no host mutation is authorized by the packet.
   - Install the final proven release, record tree/unit/env-schema hashes,
-    prove 58 migrations, held capabilities, loopback ingress, and rollback.
+    prove the final union migration set, held capabilities, loopback ingress,
+    and rollback.
   - Dependencies: SHAPE-EPOCH-01, INGRESS-01, full release proof.
 
 - [ ] **OPS-DNS-01 — safe Cloudflare cutover**
@@ -126,7 +129,7 @@ legal, entitlement, or service authority.
   - Dependencies: SHAPE-EPOCH-01 for release identity.
 
 - [ ] **OPS-BACKUP-01 — current recovery proof**
-  - Prove a non-empty 58-migration backup/restore including Legal V4, Custom,
+  - Prove a non-empty final-union backup/restore including Legal V4, Custom,
     payment readiness, and immutable evidence.
   - Record approved RPO/RTO/retention and a replacement-host procedure.
   - Prove an independent off-Zen age-key copy and second ciphertext destination.
@@ -175,10 +178,11 @@ legal, entitlement, or service authority.
   - Preserve all server-side capability checks.
   - Dependencies: ENGAGEMENT-01; staged after current P0 launch work.
 
-- [ ] **CUSTOMER-UX-01 — accessibility, failure, and rights controls**
+- [x] **CUSTOMER-UX-01 — accessibility, failure, and rights controls**
   - Tranche A completed at `a7d79a3`: bounded browser requests and complete
-    account-tab keyboard operation. Tranche B is active for checkout failure,
-    reconnect/session, support, export, deletion, and privacy-request states.
+    account-tab keyboard operation. Tranche B completed at `42a2d46`: exact
+    checkout states, safe reconnect/session refresh, bounded binary export,
+    support/export controls, and honest manual deletion/privacy routing.
   - Fix account-tab Arrow/Home/End behavior and screen-reader proof.
   - Add bounded fetch timeout, abort, reconnect, offline, browser-reopen,
     session-expiry, and second-device proofs.
@@ -186,7 +190,11 @@ legal, entitlement, or service authority.
   - Surface support, account export, deletion, and privacy request routes.
   - Dependencies: can start independently; coordinate with SURFACES-01.
 
-- [ ] **SUPPORT-CASE-01 — auditable support/privacy cases**
+- [x] **SUPPORT-CASE-01 — auditable support/privacy cases**
+  - Held lifecycle completed at `fb39d31` with migration 110, forced RLS,
+    digest-only evidence, customer/operator projections, and MAIL-01
+    reservation linkage. Provider delivery and destructive fulfillment remain
+    intentionally outside this packet.
   - Preserve phone/email intake.
   - Record identity verification, scope, export/deletion work, response, denial,
     appeal, and closure.
@@ -195,7 +203,12 @@ legal, entitlement, or service authority.
 
 ### Commercial kernel and service lifecycles
 
-- [ ] **TAX-PURPOSE-01 — purpose-bound tax authority**
+- [x] **TAX-PURPOSE-01 — purpose-bound tax authority**
+  - Completed at `a812f0c` and merged into the integration line at `de275ea` as
+    migration 109. The exact eight-purpose authority keeps current
+    professional-service collection disabled by owner, records exclusive
+    price behavior with zero pre-effective tax, and requires a separate
+    registration-bound activation before future collection.
   - Replace the contradictory global tax assumption with a registry per payment
     purpose.
   - Make Download/assessment/Custom truthfully operable under the approved
