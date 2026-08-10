@@ -26,6 +26,8 @@ import { createOperatorWorkQueue } from
   "../../hosted/operator-work-queue.mjs";
 import { createPostgresOperatorWorkQueueRepository } from
   "../../hosted/operator-work-queue-postgres.mjs";
+import { resolveMigrationVerificationInventory } from
+  "./migration-verification-inventory.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -318,7 +320,7 @@ export async function assertPostgres16(
   });
 }
 
-async function applyMigrations(pool) {
+async function applyMigrations(pool, expectedMigrationNames = null) {
   const namespace = await pool.query(
     "select to_regnamespace('ss') is not null as migrated"
   );
@@ -331,35 +333,13 @@ async function applyMigrations(pool) {
   const names = (await readdir(MIGRATIONS))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  const releaseName = "202608060048_hosted_privacy_v3.sql";
-  const releaseIndex = names.indexOf(releaseName);
-  const postPrivacyNames = [
-    "202608080049_alakazam_lifecycle_renewal.sql",
-    "202608080050_alakazam_lifecycle_incidents.sql",
-    "202608080051_alakazam_lifecycle_cancellation.sql",
-    "202608080052_alakazam_lifecycle_reversal.sql",
-    "202608080101_alakazam_customer_publication_controls.sql",
-    "202608080102_alakazam_35_fulfillment.sql",
-    "202608080103_alakazam_50_authority.sql",
-    "202608080104_publication_control_authority.sql",
-    "202608090104_alakazam_retained_premium_state.sql",
-    "202608090105_hosted_joint_legal_v4_authority.sql",
-    "202608100106_customer_engagement_bootstrap.sql",
-    "202608100107_durable_mail_lifecycle.sql",
-    "202608100108_professional_services_reversals.sql",
-    "202608100109_stripe_tax_purpose_authority.sql",
-    "202608100110_support_privacy_case_lifecycle.sql",
-    "202608100112_operator_work_queue.sql"
-  ];
-  assert.equal(
-    names.length,
-    64,
-    "migration proof requires exactly 64 migrations through purpose tax, support/privacy cases, and the held operator work queue"
-  );
-  assert.equal(releaseIndex, 47);
-  assert.deepEqual(
-    names.slice(releaseIndex + 1),
+  const {
+    releaseIndex,
+    releaseName,
     postPrivacyNames
+  } = resolveMigrationVerificationInventory(
+    names,
+    expectedMigrationNames
   );
 
   for (const name of names.slice(0, releaseIndex)) {
@@ -5707,7 +5687,8 @@ export async function runMigrationVerification({
   environment = process.env,
   PoolImpl = Pool,
   uuid = randomUUID,
-  writeOutput = (value) => process.stdout.write(value)
+  writeOutput = (value) => process.stdout.write(value),
+  expectedMigrationNames = null
 } = {}) {
   const plan = resolveMigrationDatabasePlan({ environment, uuid });
   const adminPool = plan.ownership === "verifier"
@@ -5743,7 +5724,7 @@ export async function runMigrationVerification({
       releaseName,
       releaseSql,
       postPrivacyNames
-    } = await applyMigrations(pool);
+    } = await applyMigrations(pool, expectedMigrationNames);
     await verifyPreJointLegalV3State(pool);
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
