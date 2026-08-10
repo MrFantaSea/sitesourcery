@@ -608,7 +608,8 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Free to See-\$5 Account Download-Alakazam Plans Held/u);
+  assert.match(landing, /Free to See-\$5 Download Coming-Alakazam Plans Held/u);
+  assert.match(landing, /the account and download path are not open yet/u);
   assert.match(
     landing,
     /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,

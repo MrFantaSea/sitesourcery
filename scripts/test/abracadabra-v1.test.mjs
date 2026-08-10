@@ -450,7 +450,8 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
     /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
   assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
-  assert.match(landingHtml, /Free to See-\$5 Account Download-Alakazam Plans Held/u);
+  assert.match(landingHtml, /Free to See-\$5 Download Coming-Alakazam Plans Held/u);
+  assert.match(landingHtml, /the account and download path are not open yet/u);
   assert.match(
     landingHtml,
     /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
@@ -708,7 +709,7 @@ test("held maker keeps canonical identity while pricing stays on account-aware s
   );
   assert.match(
     landingHtml,
-    /sign in to review the one-time \$5 Download quote/u,
+    /A one-time \$5 download of the file is planned; the account and download path are not open yet/u,
   );
   assert.match(hostedControlMarkup, /<strong>\$5 once<\/strong>/u);
   assert.equal(

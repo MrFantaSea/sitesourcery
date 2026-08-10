@@ -266,9 +266,9 @@ export const heldAlakazamExecutableSemantics = Object.freeze([
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
-    "Premade Website Download $5-Custom Sites from $400",
-    "Abracadabra builds it. Alakazam is still held.",
-    "No setup or monthly plan is for sale",
+    "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400.",
+    "Make a preview — free.",
+    "Neither of these is for sale yet.",
     "Check and ask about a domain",
   ]),
   "vnext.js": Object.freeze([
@@ -278,7 +278,8 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free to See-$5 Account Download-Alakazam Plans Held",
+    "Free to See-$5 Download Coming-Alakazam Plans Held",
+    "the account and download path are not open yet",
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
@@ -296,10 +297,11 @@ export const heldTruthRequirements = Object.freeze({
     "Abracadabra ready. Your local draft stays in this tab.",
   ]),
   "faq/index.html": Object.freeze([
-    "Download is $5 once per editor project",
+    "the account and payment path are not open yet",
+    "When it opens, Download will be $5 once per editor project",
     "The planned $25, $35, and $50 Alakazam plans are not available.",
     "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
-    "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
+    "the downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),
   "legal/index.html": Object.freeze([
@@ -353,9 +355,9 @@ export const heldTruthForbiddenPhrases = Object.freeze({
 export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
-    "Premade Website Download $5-Custom Sites from $400",
-    "Abracadabra builds it. Alakazam is still held.",
-    "No setup or monthly plan is for sale",
+    "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400.",
+    "Make a preview — free.",
+    "Neither of these is for sale yet.",
     "Check and ask about a domain",
   ]),
   "vnext.js": Object.freeze([
@@ -364,7 +366,8 @@ export const hostedTruthRequirements = Object.freeze({
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free to See-$5 Account Download-Alakazam Plans Held",
+    "Free to See-$5 Download Coming-Alakazam Plans Held",
+    "the account and download path are not open yet",
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
@@ -387,10 +390,11 @@ export const hostedTruthRequirements = Object.freeze({
     "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   ]),
   "faq/index.html": Object.freeze([
-    "Download is $5 once per editor project",
+    "the account and payment path are not open yet",
+    "When it opens, Download will be $5 once per editor project",
     "The planned $25, $35, and $50 Alakazam plans are not available.",
     "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
-    "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
+    "the downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),
   "legal/index.html": Object.freeze([
