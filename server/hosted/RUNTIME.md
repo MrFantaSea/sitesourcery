@@ -46,6 +46,10 @@ registrant-contact commands before the customer journey is complete.
 
 - `SITESOURCERY_DATABASE_URL`
 - `SITESOURCERY_IDENTITY_PEPPER`, base64 for at least 32 bytes
+- `SITESOURCERY_IDENTITY_PEPPER_CONFIG`, the exact versioned v1 metadata
+  contract naming the current writer and zero to three prior verifier-only
+  versions. It contains no secret material; startup fails closed when the
+  contract or any referenced root-owned secret variable is incomplete.
 - `SITESOURCERY_CONTACT_VAULT_KEY`, base64 for exactly 32 bytes
 - `SITESOURCERY_SPARK_COMPILER_SHA256`, the reviewed compiler source digest
 - `SITESOURCERY_OFFER_CATALOG_PATH`, the reviewed approved catalog JSON file,

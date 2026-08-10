@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -10,8 +11,8 @@ import {
   createHeldRegistrationMailPort
 } from "../registration-mail-port.mjs";
 
-const PEPPER = Buffer.alloc(32, 0x5a);
-const PRIOR = Buffer.alloc(32, 0x2a);
+const PEPPER = randomBytes(32);
+const PRIOR = randomBytes(32);
 
 test("peppered scrypt credentials use unique per-password salts", async () => {
   let sequence = 0;
@@ -87,7 +88,7 @@ test("identity bridge refuses missing PostgreSQL and weak pepper configuration",
           query() {},
           connect() {}
         },
-        pepper: Buffer.alloc(8)
+        pepper: randomBytes(8)
       }),
     (error) => error?.code === "IDENTITY_CONFIGURATION_ERROR"
   );
