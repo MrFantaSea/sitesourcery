@@ -331,7 +331,12 @@ legal, entitlement, or service authority.
   - Immutable hashed caching, responsive Domains hero, smaller OG image, broader
     social metadata, JSON-LD, minification, and live CWV measurements.
 
-- [ ] **CI-01 — protected exact release proof**
+- [x] **CI-01 — protected exact release proof**
+  - Completed at `31baa44` and merged at `fa4b850`. The manual held workflow
+    consumes an explicit successor migration inventory instead of freezing a
+    count, and its receipt grants no deployment, DNS, provider, or customer
+    authority. Repository protection and final successor inputs remain
+    execution-time gates.
   - Add current PostgreSQL replay/journeys/artifact/browser/ops proof to protected
     release CI without allowing CI to grant deployment authority.
 
