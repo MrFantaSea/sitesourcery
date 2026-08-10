@@ -21542,6 +21542,28 @@
       );
     }
 
+    function moveAuthTab(event, button) {
+      var tabs = all("[data-auth-mode]");
+      var current = tabs.indexOf(button);
+      var next = current;
+      if (event.key === "ArrowRight") {
+        next = (current + 1) % tabs.length;
+      } else if (event.key === "ArrowLeft") {
+        next = (current - 1 + tabs.length) % tabs.length;
+      } else if (event.key === "Home") {
+        next = 0;
+      } else if (event.key === "End") {
+        next = tabs.length - 1;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      setAuthMode(
+        tabs[next].getAttribute("data-auth-mode")
+      );
+      tabs[next].focus();
+    }
+
     function setStage(name) {
       all("[data-customer-stage]").forEach(
         function (stage) {
@@ -22270,6 +22292,12 @@
                 "data-auth-mode"
               )
             );
+          }
+        );
+        button.addEventListener(
+          "keydown",
+          function (event) {
+            moveAuthTab(event, button);
           }
         );
       }

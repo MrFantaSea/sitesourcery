@@ -655,7 +655,8 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
   );
   assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.credentials, "include");
-  assert.equal(calls[0].options.signal, controller.signal);
+  assert.notEqual(calls[0].options.signal, controller.signal);
+  assert.equal(calls[0].options.signal.aborted, false);
   assert.equal(calls[0].options.body, undefined);
   assert.equal(
     calls[0].options.headers["Idempotency-Key"],
@@ -692,7 +693,8 @@ test("the Abracadabra client reads only the selected project's held publication 
     `/api/v1/projects/${PROJECT_ID}/alakazam/publication`
   );
   assert.equal(calls[0].options.method, "GET");
-  assert.equal(calls[0].options.signal, controller.signal);
+  assert.notEqual(calls[0].options.signal, controller.signal);
+  assert.equal(calls[0].options.signal.aborted, false);
   assert.equal(calls[0].options.body, undefined);
 });
 

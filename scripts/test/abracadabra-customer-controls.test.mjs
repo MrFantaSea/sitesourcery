@@ -88,6 +88,29 @@ const CASE_ID = "84000000-0000-4000-8000-000000000001";
 const CUSTOMER_ID = "10000000-0000-4000-8000-000000000001";
 const OPERATOR_ID = "85000000-0000-4000-8000-000000000001";
 
+test("account access tabs implement the complete automatic-activation keyboard pattern", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const keyboard = source.slice(
+    source.indexOf("function moveAuthTab"),
+    source.indexOf("function setStage")
+  );
+  for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
+    assert.ok(keyboard.includes(`event.key === "${key}"`), key);
+  }
+  assert.match(keyboard, /event\.preventDefault\(\)/u);
+  assert.match(keyboard, /setAuthMode\([\s\S]*?tabs\[next\]\.focus\(\)/u);
+  assert.match(
+    source,
+    /button\.addEventListener\(\s*"keydown",\s*function \(event\) \{\s*moveAuthTab\(event, button\);/u
+  );
+});
+
 const expectation = Object.freeze({
   acceptedDisclosureDigest: DISCLOSURE_DIGEST,
   acceptedQuoteDigest: QUOTE_DIGEST,
