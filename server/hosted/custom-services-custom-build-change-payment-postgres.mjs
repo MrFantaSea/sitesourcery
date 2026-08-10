@@ -262,9 +262,11 @@ function validateRelease(value) {
       value.holdScope === "new_checkout_creation_only" &&
       value.providerEffectProcessing ===
         "settlement_and_reconciliation_continue" &&
-      value.taxMode === "automatic",
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ),
     "RUNTIME_CONFIGURATION_ERROR",
-    "Custom-build change payment release must preserve automatic-tax USD billing.",
+    "Custom-build change payment release must preserve exact purpose-bound USD tax billing.",
     { status: 500 }
   );
   return Object.freeze({ ...value });
@@ -371,7 +373,7 @@ async function discoverAndLockJob(
   return jobId;
 }
 
-function purposeFromRow(row) {
+function purposeFromRow(row, taxMode = row?.tax_mode) {
   invariant(
     row &&
       UUID.test(String(row.organization_id ?? "")) &&
@@ -386,7 +388,8 @@ function purposeFromRow(row) {
       SHA256.test(String(row.prior_effective_scope_digest ?? "")) &&
       SHA256.test(String(row.accepted_quote_digest ?? "")) &&
       SHA256.test(String(row.accepted_disclosure_digest ?? "")) &&
-      SHA256.test(String(row.invoice_digest ?? "")),
+      SHA256.test(String(row.invoice_digest ?? "")) &&
+      ["automatic", "disabled_by_owner"].includes(taxMode),
     "CUSTOM_BUILD_CHANGE_PAYMENT_CONFLICT",
     "The retained Custom-build change invoice purpose is incomplete.",
     { status: 500 }
@@ -423,13 +426,14 @@ function purposeFromRow(row) {
     acceptedQuoteDigest: row.accepted_quote_digest,
     acceptedDisclosureDigest: row.accepted_disclosure_digest,
     invoiceDigest: row.invoice_digest,
+    taxMode,
     price: {
       amountMinor,
       unitAmountMinor: 12500,
       quantity,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
 }
@@ -690,6 +694,7 @@ const INVOICE_SELECT = `
     attempt.provider_error_code,
     attempt.provider_request_expires_at,
     attempt.purpose_digest,
+    attempt.tax_mode,
     attempt.checkout_session_id,
     attempt.checkout_url,
     attempt.expires_at as checkout_expires_at,
@@ -717,6 +722,8 @@ const INVOICE_SELECT = `
       and receipt.payment_status = 'paid'
       and receipt.subtotal_minor = invoice.subtotal_minor
       and receipt.currency = invoice.currency
+      and receipt.tax_mode = attempt.tax_mode
+      and (receipt.tax_mode = 'automatic' or receipt.tax_minor = 0)
       and receipt.purpose_digest = attempt.purpose_digest
       and receipt.invoice_digest = invoice.invoice_digest
       and receipt.accepted_quote_digest = invoice.accepted_quote_digest
@@ -1052,7 +1059,11 @@ function exactPaymentFacts(value, resolution) {
       Number.isSafeInteger(value.taxMinor) &&
       value.taxMinor >= 0 &&
       value.totalMinor === value.subtotalMinor + value.taxMinor &&
-      value.taxMode === "automatic" &&
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ) &&
+      (value.taxMode === "automatic" ||
+        value.taxMinor === 0) &&
       value.currency === "USD" &&
       value.purposeDigest === resolution.purposeDigest &&
       SHA256.test(String(retainedDigest ?? "")) &&
@@ -1469,7 +1480,10 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
           );
         }
 
-        const purpose = purposeFromRow(invoice);
+        const purpose = purposeFromRow(
+          invoice,
+          paymentRelease.taxMode
+        );
         const purposeDigest = digest(purpose);
         const providerRequestExpiresAt =
           checkoutRequestExpiration(paymentClock);
@@ -1517,7 +1531,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
            ) values (
              $1, $2, $3, $4, $5, $6, $7,
              $8, $9, 'stripe', $10, $11, $12, $13, $14,
-             'USD', 'automatic', $15, 'provider_pending', 'ambiguous'
+             'USD', $15, $16, 'provider_pending', 'ambiguous'
            )`,
           [
             attemptId,
@@ -1534,6 +1548,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
             invoice.accepted_quote_digest,
             invoice.accepted_disclosure_digest,
             invoice.subtotal_minor,
+            paymentRelease.taxMode,
             providerRequestExpiresAt
           ]
         );
@@ -1728,6 +1743,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
              attempt.invoice_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              attempt.state as attempt_state,
              invoice.invoice_number,
              invoice.scope_boundary_digest,
@@ -1963,6 +1979,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
              attempt.state as attempt_state,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              receipt.id as receipt_id,
              receipt.checkout_session_id as receipt_checkout_session_id,
              receipt.payment_intent_id as receipt_payment_intent_id,
@@ -2139,8 +2156,8 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
              ) values (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                $11, $12, $13, 'stripe', $14, $15, $16, 'paid',
-               $17, $18, $19, 'automatic', 'USD', $20, $21, $22,
-               $23, $24::jsonb, $25, $26, $27
+               $17, $18, $19, $20, 'USD', $21, $22, $23,
+               $24, $25::jsonb, $26, $27, $28
              )`,
             [
               receiptId,
@@ -2162,6 +2179,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
               payment.subtotalMinor,
               payment.taxMinor,
               payment.totalMinor,
+              payment.taxMode,
               payment.purposeDigest,
               row.invoice_digest,
               row.accepted_quote_digest,
@@ -3036,7 +3054,8 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
             ready: paymentRelease.approved,
             state: paymentRelease.approved ? "approved" : "held",
             runtimeContract: RUNTIME_CONTRACT,
-            automaticTax: true,
+            taxMode: paymentRelease.taxMode,
+            exclusiveTaxBehavior: true,
             webhookWakeup: true,
             stripeReadback: true,
             atomicSettlement: true,

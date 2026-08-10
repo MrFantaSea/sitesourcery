@@ -343,12 +343,13 @@ async function applyMigrations(pool) {
     "202608100106_customer_engagement_bootstrap.sql",
     "202608100107_durable_mail_lifecycle.sql",
     "202608100108_professional_services_reversals.sql",
+    "202608100109_stripe_tax_purpose_authority.sql",
     "202608100110_support_privacy_case_lifecycle.sql"
   ];
   assert.equal(
     names.length,
-    62,
-    "migration proof requires exactly 62 migrations through engagement, mail, reversals, and support/privacy cases"
+    63,
+    "migration proof requires exactly 63 migrations through engagement, mail, reversals, purpose tax, and support/privacy cases"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(

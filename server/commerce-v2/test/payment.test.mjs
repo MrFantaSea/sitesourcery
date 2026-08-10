@@ -389,7 +389,7 @@ function fixture({
       return {
         ready: true,
         provider: "stripe",
-        taxMode
+        taxModes: { download: taxMode }
       };
     },
     async createDownloadCheckout(input) {

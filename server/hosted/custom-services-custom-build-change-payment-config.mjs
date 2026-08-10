@@ -39,11 +39,11 @@ export function validateCustomBuildChangePaymentRelease(value) {
     value.holdScope !== HOLD_SCOPE ||
     value.providerEffectProcessing !==
       PROVIDER_EFFECT_PROCESSING ||
-    value.taxMode !== "automatic"
+    value.taxMode !== "disabled_by_owner"
   ) {
     throw configurationError(
       "CUSTOM_BUILD_CHANGE_PAYMENT_RELEASE_INVALID",
-      "Custom-build change payment release must preserve USD automatic tax, gate only new Checkout creation, and continue settlement and reconciliation for existing provider effects."
+      "Custom-build change payment release must preserve the pre-effective disabled tax decision, gate only new Checkout creation, and continue settlement and reconciliation for existing provider effects."
     );
   }
   return Object.freeze({ ...value });
@@ -70,7 +70,7 @@ export function createConfiguredCustomBuildChangePaymentRelease({
       currency: "USD",
       holdScope: HOLD_SCOPE,
       providerEffectProcessing: PROVIDER_EFFECT_PROCESSING,
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     })
   });
 }
@@ -85,14 +85,17 @@ export function assertApprovedCustomBuildChangePaymentReady(
     composition?.mode === "approved" &&
     !(
       stripeReadiness?.ready === true &&
-      stripeReadiness?.taxMode === "automatic" &&
+      stripeReadiness?.taxModes?.customBuildChange ===
+        composition.release.taxMode &&
       customBuildReadiness?.schema ===
         "sitesourcery.custom-services-custom-build-readiness/v1" &&
       customBuildReadiness?.ready === true &&
       changePaymentReadiness?.schema ===
         "sitesourcery.custom-build-change-payment-readiness/v1" &&
       changePaymentReadiness?.ready === true &&
-      changePaymentReadiness?.automaticTax === true &&
+      changePaymentReadiness?.taxMode ===
+        composition.release.taxMode &&
+      changePaymentReadiness?.exclusiveTaxBehavior === true &&
       changePaymentReadiness?.webhookWakeup === true &&
       changePaymentReadiness?.stripeReadback === true &&
       changePaymentReadiness?.atomicSettlement === true &&
@@ -105,7 +108,7 @@ export function assertApprovedCustomBuildChangePaymentReady(
   ) {
     throw configurationError(
       "CUSTOM_BUILD_CHANGE_PAYMENT_NOT_READY",
-      "Approved Custom-build change payment requires ready Stripe automatic tax, exact provider readback settlement, atomic change activation, and reconciliation that remains active while new Checkout creation is held."
+      "Approved Custom-build change payment requires the exact purpose-bound Stripe tax decision, provider readback settlement, atomic change activation, and reconciliation that remains active while new Checkout creation is held."
     );
   }
   return stripeReadiness;

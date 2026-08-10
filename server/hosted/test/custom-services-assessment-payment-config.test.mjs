@@ -30,7 +30,7 @@ test("assessment payment defaults held behind one exact release", () => {
       approved: false,
       amountMinor: 20000,
       currency: "USD",
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     }
   });
   assert.throws(
@@ -47,7 +47,7 @@ test("assessment payment defaults held behind one exact release", () => {
   );
 });
 
-test("approved assessment payment requires ready automatic-tax Stripe and settlement", () => {
+test("approved assessment payment requires its exact purpose tax authority and settlement", () => {
   const approved =
     createConfiguredCustomServicesAssessmentPaymentRelease({
       environment: {
@@ -56,8 +56,11 @@ test("approved assessment payment requires ready automatic-tax Stripe and settle
       }
     });
   for (const readiness of [
-    { ready: false, taxMode: "automatic" },
-    { ready: true, taxMode: "disabled_by_owner" },
+    {
+      ready: false,
+      taxModes: { serviceAssessment: "disabled_by_owner" }
+    },
+    { ready: true, taxModes: { serviceAssessment: "automatic" } },
     { ready: true }
   ]) {
     assert.throws(
@@ -75,7 +78,10 @@ test("approved assessment payment requires ready automatic-tax Stripe and settle
     () =>
       assertApprovedCustomServicesAssessmentPaymentReady(
         approved,
-        { ready: true, taxMode: "automatic" }
+        {
+          ready: true,
+          taxModes: { serviceAssessment: "disabled_by_owner" }
+        }
       ),
     (error) =>
       error.code ===
@@ -84,7 +90,10 @@ test("approved assessment payment requires ready automatic-tax Stripe and settle
   assert.deepEqual(
     assertApprovedCustomServicesAssessmentPaymentReady(
       approved,
-      { ready: true, taxMode: "automatic" },
+      {
+        ready: true,
+        taxModes: { serviceAssessment: "disabled_by_owner" }
+      },
       {
         schema:
           "sitesourcery.custom-services-assessment-settlement-readiness/v1",
@@ -94,14 +103,17 @@ test("approved assessment payment requires ready automatic-tax Stripe and settle
         atomicSettlement: true
       }
     ),
-    { ready: true, taxMode: "automatic" }
+    {
+      ready: true,
+      taxModes: { serviceAssessment: "disabled_by_owner" }
+    }
   );
   assert.doesNotThrow(() =>
     assertApprovedCustomServicesAssessmentPaymentReady(
       createConfiguredCustomServicesAssessmentPaymentRelease({
         environment: {}
       }),
-      { ready: false, taxMode: "unconfigured" }
+      { ready: false, taxModes: {} }
     )
   );
 });

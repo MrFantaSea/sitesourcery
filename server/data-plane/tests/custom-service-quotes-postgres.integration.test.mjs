@@ -82,7 +82,7 @@ const APPROVED_ASSESSMENT_PAYMENT_RELEASE = Object.freeze({
   approved: true,
   amountMinor: 20000,
   currency: "USD",
-  taxMode: "automatic"
+  taxMode: "disabled_by_owner"
 });
 
 function pngCrc32(bytes) {
@@ -1274,7 +1274,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.equal(
       checkoutCalls[0].purpose.price.taxBehavior,
-      "automatic_exclusive"
+      "exclusive"
     );
     assert.equal(checkoutContexts.length, 3);
 
@@ -2177,9 +2177,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       customerId: providerIds.assessmentStripeCustomer,
       paymentStatus: "paid",
       subtotalMinor: 20000,
-      taxMinor: 1450,
-      totalMinor: 21450,
-      taxMode: "automatic",
+      taxMinor: 0,
+      totalMinor: 20000,
+      taxMode: "disabled_by_owner",
       currency: "USD",
       purposeDigest: retainedPurposeDigest,
       providerPaymentTime
@@ -2374,8 +2374,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       paidInvoiceProjection.invoice.payment.receiptId,
       settled.receiptId
     );
-    assert.equal(paidInvoiceProjection.invoice.tax.amountMinor, 1450);
-    assert.equal(paidInvoiceProjection.invoice.total.amountMinor, 21450);
+    assert.equal(paidInvoiceProjection.invoice.tax.amountMinor, 0);
+    assert.equal(paidInvoiceProjection.invoice.total.amountMinor, 20000);
     assert.equal(paidInvoiceProjection.job.jobId, settled.jobId);
     assert.equal(paidInvoiceProjection.job.state, "open");
     assert.equal(
@@ -2418,8 +2418,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             from ss.service_assessment_payment_receipts
            where invoice_id = $2
              and subtotal_minor = 20000
-             and tax_minor = 1450
-             and total_minor = 21450) as receipts,
+             and tax_minor = 0
+             and total_minor = 20000) as receipts,
          (select count(*)::int
             from ss.service_assessment_jobs
            where invoice_id = $2
@@ -3130,9 +3130,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       customerId: raceAssessmentStripeCustomerId,
       paymentStatus: "paid",
       subtotalMinor: 20000,
-      taxMinor: 1600,
-      totalMinor: 21600,
-      taxMode: "automatic",
+      taxMinor: 0,
+      totalMinor: 20000,
+      taxMode: "disabled_by_owner",
       currency: "USD",
       purposeDigest: raceAssessmentPurposeDigest,
       providerPaymentTime: raceAssessmentProviderPaidAt
@@ -3337,9 +3337,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             customerId: positiveCustomerId,
             paymentStatus: "paid",
             subtotalMinor: 40000,
-            taxMinor: 3200,
-            totalMinor: 43200,
-            taxMode: "automatic",
+            taxMinor: 0,
+            totalMinor: 40000,
+            taxMode: "disabled_by_owner",
             currency: "USD",
             purposeDigest: input.purposeDigest,
             providerPaymentTime: isoAfter()
@@ -3368,7 +3368,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             approved: true,
             currency: "USD",
             paymentWindowDays: 7,
-            taxMode: "automatic"
+            taxMode: "disabled_by_owner"
           },
           clock: { now: () => new Date().toISOString() },
           ids: { next: () => randomUUID() }
@@ -3702,7 +3702,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         acceptedDisclosureDigest:
           positiveFinalRow.accepted_disclosure_digest,
         price: { amountMinor: 60000, currency: "USD" },
-        taxMode: "automatic"
+        taxMode: "disabled_by_owner"
       };
       assert.deepEqual(finalPurpose.effectiveChangeOrderDigests, []);
       const finalPurposeDigest = digest(finalPurpose);
@@ -3797,7 +3797,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           positiveFinalRow.accepted_disclosure_digest,
         expected_subtotal_minor: 60000,
         currency: "USD",
-        tax_mode: "automatic",
+        tax_mode: "disabled_by_owner",
         provider_request_expires_at: finalExpiresAt,
         state: "provider_pending",
         provider_effect_certainty: "ambiguous",
@@ -3872,9 +3872,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         amountRefundedMinor: 0,
         disputed: false,
         subtotalMinor: 60000,
-        taxMinor: 4800,
-        totalMinor: 64800,
-        taxMode: "automatic",
+        taxMinor: 0,
+        totalMinor: 60000,
+        taxMode: "disabled_by_owner",
         currency: "USD",
         purposeDigest: finalPurposeDigest,
         providerPaymentTime: finalProviderPaidAt
@@ -3909,9 +3909,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         amount_refunded_minor: 0,
         disputed: false,
         subtotal_minor: 60000,
-        tax_minor: 4800,
-        total_minor: 64800,
-        tax_mode: "automatic",
+        tax_minor: 0,
+        total_minor: 60000,
+        tax_mode: "disabled_by_owner",
         currency: "USD",
         purpose: "custom_build_final",
         purpose_digest: finalPurposeDigest,
@@ -4244,7 +4244,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             holdScope: "new_checkout_creation_only",
             providerEffectProcessing:
               "settlement_and_reconciliation_continue",
-            taxMode: "automatic"
+            taxMode: "disabled_by_owner"
           }
         });
       await assert.rejects(
@@ -4969,9 +4969,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           customerId: buildCustomerId,
           paymentStatus: "paid",
           subtotalMinor: 45000,
-          taxMinor: 3600,
-          totalMinor: 48600,
-          taxMode: "automatic",
+          taxMinor: 0,
+          totalMinor: 45000,
+          taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest,
           providerPaymentTime: isoAfter()
@@ -5000,7 +5000,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           approved: true,
           currency: "USD",
           paymentWindowDays: 7,
-          taxMode: "automatic"
+          taxMode: "disabled_by_owner"
         },
         clock: { now: () => new Date().toISOString() },
         ids: { next: () => randomUUID() }
@@ -5014,7 +5014,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       ready: true,
       state: "approved",
       runtimeContract: "canonical-ss-v42-custom-build-start-payment",
-      automaticTax: true,
+      taxMode: "disabled_by_owner",
+      exclusiveTaxBehavior: true,
       stripeReadback: true,
       atomicCreditSettlement: true,
       opensBuildJob: true
@@ -5678,7 +5679,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           quantity: 2,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
         });
         assert.match(
           input.checkoutExpiresAt,
@@ -5696,7 +5697,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         changePaymentReadbacks += 1;
         assert.deepEqual(input.purpose, retainedChangePurpose);
         const subtotalMinor = changePaymentMismatch ? 12500 : 25000;
-        const taxMinor = changePaymentMismatch ? 1000 : 2000;
+        const taxMinor = 0;
         const facts = {
           schema:
             "sitesourcery.stripe-custom-build-change-payment-facts/v1",
@@ -5708,7 +5709,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           subtotalMinor,
           taxMinor,
           totalMinor: subtotalMinor + taxMinor,
-          taxMode: "automatic",
+          taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest,
           providerPaymentTime: new Date(Date.now() - 500).toISOString()
@@ -5740,7 +5741,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           holdScope: "new_checkout_creation_only",
           providerEffectProcessing:
             "settlement_and_reconciliation_continue",
-          taxMode: "automatic"
+          taxMode: "disabled_by_owner"
         },
         clock: { now: () => new Date().toISOString() },
         ids: { next: () => randomUUID() }
@@ -5750,7 +5751,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       ready: true,
       state: "approved",
       runtimeContract: "canonical-ss-v45-custom-build-change-payment",
-      automaticTax: true,
+      taxMode: "disabled_by_owner",
+      exclusiveTaxBehavior: true,
       webhookWakeup: true,
       stripeReadback: true,
       atomicSettlement: true,
@@ -6160,7 +6162,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       subtotalMinor: 25000,
       taxMinor: 1999,
       totalMinor: 26999,
-      taxMode: "automatic",
+      taxMode: "disabled_by_owner",
       currency: "USD",
       purposeDigest: changePurposeDigest,
       providerPaymentTime: driftProviderPaidAt
@@ -6361,8 +6363,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       );
     assert.equal(paidChangeInvoice.state, "paid");
     assert.equal(paidChangeInvoice.invoice.payment.chargeOccurred, true);
-    assert.equal(paidChangeInvoice.invoice.tax.amountMinor, 2000);
-    assert.equal(paidChangeInvoice.invoice.total.amountMinor, 27000);
+    assert.equal(paidChangeInvoice.invoice.tax.amountMinor, 0);
+    assert.equal(paidChangeInvoice.invoice.total.amountMinor, 25000);
     const effectiveChangeProjection =
       await customBuildChangeCompletion.readCustomer(
         customerAssessmentScope

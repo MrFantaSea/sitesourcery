@@ -250,7 +250,8 @@ function purposeFromRow(row) {
       UUID.test(String(row.quote_id ?? "")) &&
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
       SHA256.test(String(row.accepted_disclosure_digest ?? "")) &&
-      SHA256.test(String(row.invoice_digest ?? "")),
+      SHA256.test(String(row.invoice_digest ?? "")) &&
+      ["automatic", "disabled_by_owner"].includes(row.tax_mode),
     "ASSESSMENT_SETTLEMENT_CONFLICT",
     "The durable assessment payment purpose is inconsistent.",
     { status: 500 }
@@ -265,11 +266,12 @@ function purposeFromRow(row) {
     quoteId: row.quote_id,
     acceptedDisclosureDigest: row.accepted_disclosure_digest,
     invoiceDigest: row.invoice_digest,
+    taxMode: row.tax_mode,
     price: {
       amountMinor: 20000,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
 }
@@ -391,7 +393,11 @@ function exactPaymentFacts(value, resolution) {
       value.taxMinor >= 0 &&
       value.taxMinor <= 99_999_999 &&
       value.totalMinor === 20000 + value.taxMinor &&
-      value.taxMode === "automatic" &&
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ) &&
+      (value.taxMode === "automatic" ||
+        value.taxMinor === 0) &&
       value.currency === "USD" &&
       value.purposeDigest === resolution.purposeDigest &&
       SHA256.test(String(value.providerFactsDigest ?? "")) &&
@@ -497,7 +503,11 @@ function exactClaimRow(row, event) {
       row.provider_effect_certainty === "confirmed" &&
       Number(row.expected_subtotal_minor) === 20000 &&
       row.currency === "USD" &&
-      row.tax_mode === "automatic" &&
+      ["automatic", "disabled_by_owner"].includes(
+        row.tax_mode
+      ) &&
+      (row.tax_mode === "automatic" ||
+        Number(row.tax_minor) === 0) &&
       row.invoice_state === "tax_calculation_pending" &&
       row.invoice_purpose === "assessment" &&
       Number(row.subtotal_minor) === 20000 &&
@@ -1013,8 +1023,8 @@ export function createPostgresCustomServicesAssessmentSettlement({
                ) values (
                  $1, $2, $3, $4, $5, $6, $7, $8,
                  'stripe', $9, $10, $11, 'paid',
-                 20000, $12, $13, 'automatic', 'USD',
-                 $14, $15, $16, $17::jsonb, $18, $19, $20
+                 20000, $12, $13, $14, 'USD',
+                 $15, $16, $17, $18::jsonb, $19, $20, $21
                )`,
               [
                 receiptId,
@@ -1028,9 +1038,10 @@ export function createPostgresCustomServicesAssessmentSettlement({
                 payment.checkoutSessionId,
                 payment.paymentIntentId,
                 payment.customerId,
-                payment.taxMinor,
-                payment.totalMinor,
-                payment.purposeDigest,
+              payment.taxMinor,
+              payment.totalMinor,
+              payment.taxMode,
+              payment.purposeDigest,
                 resolution.purpose.invoiceDigest,
                 resolution.purpose.acceptedDisclosureDigest,
                 JSON.stringify(payment),
@@ -1132,6 +1143,7 @@ export function createPostgresCustomServicesAssessmentSettlement({
                attempt.invoice_digest as attempt_invoice_digest,
                attempt.accepted_disclosure_digest
                  as attempt_disclosure_digest,
+               attempt.tax_mode,
                attempt.expires_at,
                invoice.organization_id,
                invoice.project_id,

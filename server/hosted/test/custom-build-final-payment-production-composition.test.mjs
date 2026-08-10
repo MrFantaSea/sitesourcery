@@ -111,7 +111,7 @@ test("the default production release holds only new v46 final Checkout creation"
       holdScope: "new_checkout_creation_only",
       providerEffectProcessing:
         "settlement_and_reconciliation_continue",
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     }
   });
 });

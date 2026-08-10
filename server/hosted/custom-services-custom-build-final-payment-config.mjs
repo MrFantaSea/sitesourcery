@@ -39,11 +39,11 @@ export function validateCustomBuildFinalPaymentRelease(value) {
     value.holdScope !== HOLD_SCOPE ||
     value.providerEffectProcessing !==
       PROVIDER_EFFECT_PROCESSING ||
-    value.taxMode !== "automatic"
+    value.taxMode !== "disabled_by_owner"
   ) {
     throw configurationError(
       "CUSTOM_BUILD_FINAL_PAYMENT_RELEASE_INVALID",
-      "Custom-build final payment release must preserve USD automatic tax, gate only new Checkout creation, and continue settlement and reconciliation for existing provider effects."
+      "Custom-build final payment release must preserve the pre-effective disabled tax decision, gate only new Checkout creation, and continue settlement and reconciliation for existing provider effects."
     );
   }
   return Object.freeze({ ...value });
@@ -70,7 +70,7 @@ export function createConfiguredCustomBuildFinalPaymentRelease({
       currency: "USD",
       holdScope: HOLD_SCOPE,
       providerEffectProcessing: PROVIDER_EFFECT_PROCESSING,
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     })
   });
 }
@@ -89,9 +89,10 @@ export function assertApprovedCustomBuildFinalPaymentReady(
       composition.release.holdScope === HOLD_SCOPE &&
       composition.release.providerEffectProcessing ===
         PROVIDER_EFFECT_PROCESSING &&
-      composition.release.taxMode === "automatic" &&
+      composition.release.taxMode === "disabled_by_owner" &&
       stripeReadiness?.ready === true &&
-      stripeReadiness?.taxMode === "automatic" &&
+      stripeReadiness?.taxModes?.customBuildFinal ===
+        composition.release.taxMode &&
       customBuildReadiness?.schema ===
         "sitesourcery.custom-services-custom-build-readiness/v1" &&
       customBuildReadiness?.ready === true &&
@@ -104,7 +105,9 @@ export function assertApprovedCustomBuildFinalPaymentReady(
       finalPaymentReadiness?.assessmentCreditExcluded === true &&
       finalPaymentReadiness?.zeroBalanceClearance === true &&
       finalPaymentReadiness?.globalProviderEffectFence === true &&
-      finalPaymentReadiness?.automaticTax === true &&
+      finalPaymentReadiness?.taxMode ===
+        composition.release.taxMode &&
+      finalPaymentReadiness?.exclusiveTaxBehavior === true &&
       finalPaymentReadiness?.webhookWakeup === true &&
       finalPaymentReadiness?.stripeReadback === true &&
       finalPaymentReadiness?.atomicSettlement === true &&

@@ -26,11 +26,11 @@ export function validateCustomServicesAssessmentPaymentRelease(value) {
     typeof value.approved !== "boolean" ||
     value.amountMinor !== 20000 ||
     value.currency !== "USD" ||
-    value.taxMode !== "automatic"
+    value.taxMode !== "disabled_by_owner"
   ) {
     throw configurationError(
       "CUSTOM_SERVICES_ASSESSMENT_PAYMENT_RELEASE_INVALID",
-      "Assessment payment release must preserve the exact $200 automatic-tax contract."
+      "Assessment payment release must preserve the exact $200 pre-effective disabled-tax contract."
     );
   }
   return Object.freeze({ ...value });
@@ -54,7 +54,7 @@ export function createConfiguredCustomServicesAssessmentPaymentRelease({
       approved: mode === "approved",
       amountMinor: 20000,
       currency: "USD",
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     })
   });
 }
@@ -68,7 +68,8 @@ export function assertApprovedCustomServicesAssessmentPaymentReady(
     composition?.mode === "approved" &&
     !(
       readiness?.ready === true &&
-      readiness?.taxMode === "automatic" &&
+      readiness?.taxModes?.serviceAssessment ===
+        composition.release.taxMode &&
       settlementReadiness?.schema ===
         "sitesourcery.custom-services-assessment-settlement-readiness/v1" &&
       settlementReadiness?.ready === true &&
@@ -79,7 +80,7 @@ export function assertApprovedCustomServicesAssessmentPaymentReady(
   ) {
     throw configurationError(
       "CUSTOM_SERVICES_ASSESSMENT_PAYMENT_NOT_READY",
-      "Approved assessment payment requires ready Stripe automatic tax and exact assessment settlement."
+      "Approved assessment payment requires the exact purpose-bound Stripe tax decision and assessment settlement."
     );
   }
   return readiness;

@@ -8,7 +8,9 @@ import {
 
 const STRIPE_READY = Object.freeze({
   ready: true,
-  taxMode: "automatic"
+  taxModes: Object.freeze({
+    customBuildStart: "disabled_by_owner"
+  })
 });
 const CUSTOM_BUILD_READY = Object.freeze({
   schema: "sitesourcery.custom-services-custom-build-readiness/v1",
@@ -17,7 +19,8 @@ const CUSTOM_BUILD_READY = Object.freeze({
 const PAYMENT_READY = Object.freeze({
   schema: "sitesourcery.custom-build-payment-readiness/v1",
   ready: true,
-  automaticTax: true,
+  taxMode: "disabled_by_owner",
+  exclusiveTaxBehavior: true,
   stripeReadback: true,
   atomicCreditSettlement: true,
   opensBuildJob: true
@@ -32,7 +35,7 @@ test("Custom-build payment defaults held behind one exact release", () => {
         approved: false,
         currency: "USD",
         paymentWindowDays: 7,
-        taxMode: "automatic"
+        taxMode: "disabled_by_owner"
       }
     }
   );
@@ -65,7 +68,14 @@ test("approved Custom-build payment requires every exact readiness", () => {
   );
 
   for (const readiness of [
-    [{ ready: false, taxMode: "automatic" }, CUSTOM_BUILD_READY, PAYMENT_READY],
+    [
+      {
+        ready: false,
+        taxModes: { customBuildStart: "disabled_by_owner" }
+      },
+      CUSTOM_BUILD_READY,
+      PAYMENT_READY
+    ],
     [STRIPE_READY, { ...CUSTOM_BUILD_READY, schema: "wrong" }, PAYMENT_READY],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...PAYMENT_READY, opensBuildJob: false }]
   ]) {

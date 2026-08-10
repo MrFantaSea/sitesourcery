@@ -202,7 +202,7 @@ function exactCheckout(value) {
   });
 }
 
-function purpose(row) {
+function purpose(row, taxMode = row?.tax_mode) {
   invariant(
     row &&
       UUID.test(String(row.organization_id ?? "")) &&
@@ -212,7 +212,8 @@ function purpose(row) {
       UUID.test(String(row.quote_id ?? "")) &&
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
       SHA256.test(String(row.invoice_digest ?? "")) &&
-      SHA256.test(String(row.accepted_disclosure_digest ?? "")),
+      SHA256.test(String(row.accepted_disclosure_digest ?? "")) &&
+      ["automatic", "disabled_by_owner"].includes(taxMode),
     "ASSESSMENT_INVOICE_CONFLICT",
     "The retained assessment invoice is inconsistent.",
     { status: 500 }
@@ -228,11 +229,12 @@ function purpose(row) {
     acceptedDisclosureDigest:
       row.accepted_disclosure_digest,
     invoiceDigest: row.invoice_digest,
+    taxMode,
     price: {
       amountMinor: 20000,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
 }
@@ -248,7 +250,9 @@ function response(row, input) {
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
       Number(row.expected_subtotal_minor) === 20000 &&
       row.currency === "USD" &&
-      row.tax_mode === "automatic" &&
+      ["automatic", "disabled_by_owner"].includes(
+        row.tax_mode
+      ) &&
       row.state === "ready" &&
       row.provider_effect_certainty === "confirmed",
     "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED",
@@ -787,7 +791,10 @@ export function createPostgresCustomServicesAssessmentPayment({
             );
           }
 
-          const checkoutPurpose = purpose(invoice);
+          const checkoutPurpose = purpose(
+            invoice,
+            paymentRelease.taxMode
+          );
           const purposeDigest = digest(checkoutPurpose);
           const attemptId = randomUUID();
           const commandRowId = randomUUID();
@@ -820,7 +827,7 @@ export function createPostgresCustomServicesAssessmentPayment({
                state, provider_effect_certainty
              ) values (
                $1, $2, $3, $4, $5, $6, 'stripe', $7,
-               $8, $9, 20000, 'USD', 'automatic',
+               $8, $9, 20000, 'USD', $10,
                'provider_pending', 'not_submitted'
              )`,
             [
@@ -832,7 +839,8 @@ export function createPostgresCustomServicesAssessmentPayment({
               input.commandId,
               purposeDigest,
               input.invoiceDigest,
-              invoice.accepted_disclosure_digest
+              invoice.accepted_disclosure_digest,
+              paymentRelease.taxMode
             ]
           );
           return {

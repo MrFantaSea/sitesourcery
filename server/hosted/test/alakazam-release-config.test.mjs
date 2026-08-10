@@ -69,7 +69,7 @@ test("approved Alakazam refuses startup until matching Stripe readiness", () => 
         ready: true,
         provider: "stripe",
         alakazam: true,
-        taxMode: "automatic",
+        taxModes: { alakazam: "automatic" },
         livemode: false
       }),
     (error) => error.code === "ALAKAZAM_NOT_READY"
@@ -78,7 +78,7 @@ test("approved Alakazam refuses startup until matching Stripe readiness", () => 
     ready: true,
     provider: "stripe",
     alakazam: true,
-    taxMode: "disabled_by_owner",
+    taxModes: { alakazam: "disabled_by_owner" },
     livemode: false
   };
   assert.deepEqual(

@@ -259,9 +259,11 @@ function validateRelease(value) {
     typeof value.approved === "boolean" &&
       value.currency === "USD" &&
       value.paymentWindowDays === 7 &&
-      value.taxMode === "automatic",
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ),
     "RUNTIME_CONFIGURATION_ERROR",
-    "Custom build payment release must preserve the seven-day automatic-tax contract.",
+    "Custom build payment release must preserve the exact seven-day purpose-bound tax contract.",
     { status: 500 }
   );
   return Object.freeze({ ...value });
@@ -371,7 +373,7 @@ async function translated(work) {
   }
 }
 
-function purposeFromRow(row) {
+function purposeFromRow(row, taxMode = row?.tax_mode) {
   invariant(
     row &&
       UUID.test(String(row.organization_id ?? "")) &&
@@ -385,7 +387,8 @@ function purposeFromRow(row) {
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
       SHA256.test(String(row.accepted_quote_digest ?? "")) &&
       SHA256.test(String(row.accepted_disclosure_digest ?? "")) &&
-      SHA256.test(String(row.invoice_digest ?? "")),
+      SHA256.test(String(row.invoice_digest ?? "")) &&
+      ["automatic", "disabled_by_owner"].includes(taxMode),
     "CUSTOM_BUILD_PAYMENT_CONFLICT",
     "The retained Custom build invoice purpose is incomplete.",
     { status: 500 }
@@ -404,11 +407,12 @@ function purposeFromRow(row) {
     acceptedQuoteDigest: row.accepted_quote_digest,
     acceptedDisclosureDigest: row.accepted_disclosure_digest,
     invoiceDigest: row.invoice_digest,
+    taxMode,
     price: {
       amountMinor: integer(row.subtotal_minor, "invoice subtotal"),
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
 }
@@ -1018,7 +1022,10 @@ export function createPostgresCustomServicesCustomBuildPayment({
           );
         }
 
-        const purpose = purposeFromRow(invoice);
+        const purpose = purposeFromRow(
+          invoice,
+          paymentRelease.taxMode
+        );
         const purposeDigest = digest(purpose);
         const attemptId = uuid(
           paymentIds.next("custom_build_checkout"),
@@ -1061,7 +1068,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              currency, tax_mode, state, provider_effect_certainty
            ) values (
              $1, $2, $3, $4, $5, $6, 'stripe', $7,
-             $8, $9, $10, $11, 'USD', 'automatic',
+             $8, $9, $10, $11, 'USD', $12,
              'provider_pending', 'not_submitted'
            )`,
           [
@@ -1075,7 +1082,8 @@ export function createPostgresCustomServicesCustomBuildPayment({
             input.invoiceDigest,
             invoice.accepted_quote_digest,
             invoice.accepted_disclosure_digest,
-            invoice.subtotal_minor
+            invoice.subtotal_minor,
+            paymentRelease.taxMode
           ]
         );
         return {
@@ -1369,7 +1377,9 @@ export function createPostgresCustomServicesCustomBuildPayment({
         Number.isSafeInteger(value.taxMinor) &&
         value.taxMinor >= 0 &&
         value.totalMinor === value.subtotalMinor + value.taxMinor &&
-        value.taxMode === "automatic" &&
+        value.taxMode === paymentRelease.taxMode &&
+        (value.taxMode === "automatic" ||
+          value.taxMinor === 0) &&
         value.currency === "USD" &&
         value.purposeDigest === resolution.purposeDigest &&
         SHA256.test(String(retainedDigest ?? "")) &&
@@ -1419,6 +1429,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              attempt.invoice_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              attempt.state as attempt_state,
              invoice.invoice_number,
              invoice.quote_id,
@@ -1741,8 +1752,8 @@ export function createPostgresCustomServicesCustomBuildPayment({
              ) values (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, 'stripe',
                $10, $11, $12, 'paid', $13, $14, $15,
-               'automatic', 'USD', $16, $17, $18, $19,
-               $20::jsonb, $21, $22, $23
+               $16, 'USD', $17, $18, $19, $20,
+               $21::jsonb, $22, $23, $24
              )`,
             [
               receiptId,
@@ -1760,6 +1771,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
               payment.subtotalMinor,
               payment.taxMinor,
               payment.totalMinor,
+              payment.taxMode,
               payment.purposeDigest,
               row.invoice_digest,
               row.accepted_quote_digest,
@@ -1893,6 +1905,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              attempt.invoice_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              attempt.expires_at,
              invoice.invoice_number,
              invoice.quote_id,
@@ -2036,7 +2049,8 @@ export function createPostgresCustomServicesCustomBuildPayment({
             ready: paymentRelease.approved,
             state: paymentRelease.approved ? "approved" : "held",
             runtimeContract: RUNTIME_CONTRACT,
-            automaticTax: true,
+            taxMode: paymentRelease.taxMode,
+            exclusiveTaxBehavior: true,
             stripeReadback: true,
             atomicCreditSettlement: true,
             opensBuildJob: true
