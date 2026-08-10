@@ -106,6 +106,83 @@ test("authenticated reads use cookies and never put bearer credentials in browse
   assert.equal(calls[0].options.body, undefined);
 });
 
+test("ordinary API requests fail retryably at the bounded browser deadline", async () => {
+  let configuredDeadline = null;
+  let observedSignal = null;
+  const client = createClient({
+    fetch: async (_url, options) => new Promise((_resolve, reject) => {
+      observedSignal = options.signal;
+      options.signal.addEventListener("abort", () => {
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      }, { once: true });
+    }),
+    idempotencyFactory: () => "idem_timeout",
+    setTimeout(callback, milliseconds) {
+      configuredDeadline = milliseconds;
+      queueMicrotask(callback);
+      return 1;
+    },
+    clearTimeout() {},
+  });
+
+  await assert.rejects(
+    () => client.me(),
+    (error) => error instanceof APIError
+      && error.code === "REQUEST_TIMEOUT"
+      && error.retryable === true
+      && /too long/u.test(error.message),
+  );
+  assert.equal(configuredDeadline, 15_000);
+  assert.equal(observedSignal.aborted, true);
+});
+
+test("a caller abort propagates through the bounded request signal", async () => {
+  const caller = new AbortController();
+  let observedSignal = null;
+  let requestStarted;
+  const started = new Promise((resolve) => {
+    requestStarted = resolve;
+  });
+  const client = createClient({
+    fetch: async (_url, options) => new Promise((_resolve, reject) => {
+      observedSignal = options.signal;
+      requestStarted();
+      options.signal.addEventListener("abort", () => {
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      }, { once: true });
+    }),
+    idempotencyFactory: () => "idem_abort",
+  });
+
+  const pending = client.getAlakazamAccount(
+    "30000000-0000-4000-8000-000000000001",
+    { signal: caller.signal },
+  );
+  await started;
+  assert.notEqual(observedSignal, caller.signal);
+  caller.abort();
+  await assert.rejects(
+    pending,
+    (error) => error instanceof APIError
+      && error.code === "NETWORK_ERROR"
+      && error.retryable === true,
+  );
+  assert.equal(observedSignal.aborted, true);
+});
+
+test("API request timeout configuration is bounded and fail-closed", () => {
+  for (const requestTimeoutMs of [0, -1, 120_001, 1.5, "not-a-number"]) {
+    assert.throws(
+      () => createClient({
+        fetch: async () => response(200, {}),
+        requestTimeoutMs,
+      }),
+      (error) => error instanceof APIError
+        && error.code === "REQUEST_TIMEOUT_INVALID",
+    );
+  }
+});
+
 test("public project authority accepts only the exact sealed V3 snapshot", async () => {
   const authority = projectLegalAuthorityFixture();
   let call;

@@ -11,6 +11,7 @@
   "use strict";
 
   var WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+  var DEFAULT_REQUEST_TIMEOUT_MS = 15 * 1000;
   var SHA256 = /^[a-f0-9]{64}$/u;
   var UUID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -3143,10 +3144,75 @@
     }
     var baseUrl = configuredBaseUrl.replace(/\/+$/u, "");
     var idempotencyFactory = config.idempotencyFactory || defaultIdempotencyKey;
+    var requestTimeoutMs = config.requestTimeoutMs == null
+      ? DEFAULT_REQUEST_TIMEOUT_MS
+      : Number(config.requestTimeoutMs);
+    if (
+      !Number.isInteger(requestTimeoutMs)
+      || requestTimeoutMs < 1
+      || requestTimeoutMs > 120 * 1000
+    ) {
+      throw new APIError({
+        code: "REQUEST_TIMEOUT_INVALID",
+        message: "The secure service request timeout is invalid."
+      });
+    }
+    var AbortControllerImpl = config.AbortController
+      || (typeof globalThis === "object" && globalThis.AbortController);
+    var setTimeoutImpl = config.setTimeout
+      || (typeof globalThis === "object" && globalThis.setTimeout);
+    var clearTimeoutImpl = config.clearTimeout
+      || (typeof globalThis === "object" && globalThis.clearTimeout);
+    if (
+      typeof AbortControllerImpl !== "function"
+      || typeof setTimeoutImpl !== "function"
+      || typeof clearTimeoutImpl !== "function"
+    ) {
+      throw new APIError({
+        code: "REQUEST_TIMEOUT_UNAVAILABLE",
+        message: "This browser cannot safely bound secure service requests. Update the browser and try again."
+      });
+    }
     var csrfToken = null;
     var csrfBootstrap = null;
     var currentProjectLegalAuthority = null;
     var projectLegalAuthoritySequence = 0;
+
+    function beginRequestDeadline(externalSignal) {
+      var controller = new AbortControllerImpl();
+      var timedOut = false;
+      var externalAbort = null;
+      if (externalSignal) {
+        externalAbort = function () {
+          controller.abort(externalSignal.reason);
+        };
+        if (externalSignal.aborted) {
+          externalAbort();
+        } else if (typeof externalSignal.addEventListener === "function") {
+          externalSignal.addEventListener("abort", externalAbort, { once: true });
+        }
+      }
+      var timer = setTimeoutImpl(function () {
+        timedOut = true;
+        controller.abort();
+      }, requestTimeoutMs);
+      return {
+        cleanup: function () {
+          clearTimeoutImpl(timer);
+          if (
+            externalSignal
+            && externalAbort
+            && typeof externalSignal.removeEventListener === "function"
+          ) {
+            externalSignal.removeEventListener("abort", externalAbort);
+          }
+        },
+        signal: controller.signal,
+        timedOut: function () {
+          return timedOut;
+        }
+      };
+    }
 
     async function verifyProjectLegalAuthority(input) {
       var authority = validateProjectLegalAuthority(input);
@@ -3246,23 +3312,29 @@
       }
       if (requestOptions.revision != null) headers["If-Match"] = String(requestOptions.revision);
 
-      var response;
+      var deadline = beginRequestDeadline(requestOptions.signal);
       try {
-        response = await fetchImpl(baseUrl + path, {
-          method: upperMethod,
-          headers: headers,
-          body: body,
-          credentials: "include",
-          redirect: "error",
-          signal: requestOptions.signal
-        });
-      } catch (error) {
-        throw new APIError({
-          code: "NETWORK_ERROR",
-          message: "Site Sourcery could not reach its secure service. Check the connection and try again.",
-          retryable: true
-        });
-      }
+        var response;
+        try {
+          response = await fetchImpl(baseUrl + path, {
+            method: upperMethod,
+            headers: headers,
+            body: body,
+            credentials: "include",
+            redirect: "error",
+            signal: deadline.signal
+          });
+        } catch (error) {
+          throw new APIError({
+            code: deadline.timedOut()
+              ? "REQUEST_TIMEOUT"
+              : "NETWORK_ERROR",
+            message: deadline.timedOut()
+              ? "Site Sourcery took too long to respond. Check the connection and try again."
+              : "Site Sourcery could not reach its secure service. Check the connection and try again.",
+            retryable: true
+          });
+        }
 
       var requestId = response.headers && response.headers.get
         ? response.headers.get("x-request-id")
@@ -3295,6 +3367,17 @@
           }
         }
       }
+      if (deadline.signal.aborted) {
+        throw new APIError({
+          code: deadline.timedOut()
+            ? "REQUEST_TIMEOUT"
+            : "NETWORK_ERROR",
+          message: deadline.timedOut()
+            ? "Site Sourcery took too long to respond. Check the connection and try again."
+            : "Site Sourcery could not reach its secure service. Check the connection and try again.",
+          retryable: true
+        });
+      }
       if (!response.ok) {
         var errorBody = payload && isObject(payload.error) ? payload.error : payload;
         var serverMessage = errorBody && typeof errorBody.message === "string"
@@ -3311,6 +3394,9 @@
       }
       if (payload && typeof payload.csrfToken === "string") csrfToken = payload.csrfToken;
       return payload;
+      } finally {
+        deadline.cleanup();
+      }
     }
 
     async function requestBinary(path, requestOptions) {
