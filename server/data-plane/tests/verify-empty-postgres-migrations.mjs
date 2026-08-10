@@ -12,6 +12,10 @@ import { createMailLifecycle } from
   "../../hosted/mail-lifecycle.mjs";
 import { createPostgresMailLifecycleRepository } from
   "../../hosted/mail-lifecycle-postgres.mjs";
+import { createSupportCaseService } from
+  "../../hosted/support-cases.mjs";
+import { createPostgresSupportCaseRepository } from
+  "../../hosted/support-cases-postgres.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -305,12 +309,13 @@ async function applyMigrations(pool) {
     "202608080104_publication_control_authority.sql",
     "202608090104_alakazam_retained_premium_state.sql",
     "202608090105_hosted_joint_legal_v4_authority.sql",
-    "202608100107_durable_mail_lifecycle.sql"
+    "202608100107_durable_mail_lifecycle.sql",
+    "202608100110_support_privacy_case_lifecycle.sql"
   ];
   assert.equal(
     names.length,
-    59,
-    "migration proof requires exactly 59 migrations through held MAIL-01"
+    60,
+    "migration proof requires exactly 60 migrations through held SUPPORT-CASE-01"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -643,6 +648,365 @@ async function verifyDurableMailLifecycle(pool) {
       /email|body|subject_text|token|raw_payload|action_url/u.test(name)),
     false
   );
+}
+
+async function verifySupportPrivacyCaseLifecycle(pool) {
+  const scope = (await pool.query(`
+    select
+      receipt.user_id,
+      receipt.organization_id,
+      receipt.project_id
+    from ss.project_legal_acceptance_receipts receipt
+    join ss.organization_memberships membership
+      on membership.organization_id = receipt.organization_id
+     and membership.user_id = receipt.user_id
+     and membership.state = 'active'
+    join ss.operator_profiles operator
+      on operator.user_id = receipt.user_id
+    order by receipt.created_at
+    limit 1
+  `)).rows[0];
+  assert.ok(scope, "support case proof requires the MAIL-01 operator/customer fixture");
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const supportRepository = createPostgresSupportCaseRepository({ authority });
+  const mailRepository = createPostgresMailLifecycleRepository({ authority });
+  let current = "2026-08-10T16:00:00.000Z";
+  const clock = { now: () => current };
+  const mailLifecycle = createMailLifecycle({ repository: mailRepository, clock });
+  const supportCases = createSupportCaseService({
+    repository: supportRepository,
+    mailLifecycle,
+    clock
+  });
+  assert.equal((await supportCases.readiness()).ready, true);
+  const sha = (pair) => pair.repeat(32);
+  const customerOpening = ({ commandId, requestKind, parentCaseId = null }) => ({
+    actorId: scope.user_id,
+    commandId,
+    evidenceDigests: [sha("11")],
+    organizationId: scope.organization_id,
+    parentCaseId,
+    projectId: scope.project_id,
+    requestKind,
+    requesterReferenceDigest: sha("12"),
+    requesterUserId: scope.user_id,
+    scopeKind: "project"
+  });
+  const operatorBase = (caseId, commandId, expectedRevision) => ({
+    actorId: scope.user_id,
+    caseId,
+    commandId,
+    expectedRevision,
+    operatorOrganizationId: scope.organization_id
+  });
+
+  const exportCountBefore = Number((await pool.query(
+    `select count(*) from ss.export_requests`
+  )).rows[0].count);
+  const accountCountBefore = Number((await pool.query(
+    `select count(*) from auth.users where id = $1`, [scope.user_id]
+  )).rows[0].count);
+  const deletion = await supportCases.openAuthenticated(customerOpening({
+    commandId: "support.pg.deletion.open.0001",
+    requestKind: "deletion"
+  }));
+  assert.equal(deletion.state, "open");
+  assert.equal(deletion.identityState, "session_authenticated");
+  assert.equal("requesterReferenceDigest" in deletion, false);
+  current = "2026-08-10T16:01:00.000Z";
+  assert.equal((await supportCases.openAuthenticated(customerOpening({
+    commandId: "support.pg.deletion.open.0001",
+    requestKind: "deletion"
+  }))).id, deletion.id);
+  await assert.rejects(
+    supportCases.openAuthenticated(customerOpening({
+      commandId: "support.pg.deletion.open.0001",
+      requestKind: "export"
+    })),
+    (error) => error.code === "SUPPORT_CASE_IDEMPOTENCY_CONFLICT"
+  );
+
+  current = "2026-08-10T16:02:00.000Z";
+  let ownerCase = await supportCases.assign({
+    ...operatorBase(deletion.id, "support.pg.deletion.assign.0001", 1),
+    assignedOperatorId: scope.user_id
+  });
+  assert.equal(ownerCase.state, "assigned");
+  current = "2026-08-10T16:03:00.000Z";
+  ownerCase = await supportCases.updateIdentity({
+    ...operatorBase(deletion.id, "support.pg.deletion.identity.0001", 2),
+    evidenceDigest: sha("13"),
+    identityState: "verified"
+  });
+  assert.equal(ownerCase.identityState, "verified");
+  current = "2026-08-10T16:04:00.000Z";
+  ownerCase = await supportCases.setDeadline({
+    ...operatorBase(deletion.id, "support.pg.deletion.deadline.0001", 3),
+    basisDigest: sha("14"),
+    responseDueAt: "2026-08-20T16:00:00.000Z"
+  });
+  assert.equal(ownerCase.deadline.status, "active");
+  current = "2026-08-10T16:05:00.000Z";
+  ownerCase = await supportCases.startReview(
+    operatorBase(deletion.id, "support.pg.deletion.review.0001", 4)
+  );
+  assert.equal(ownerCase.state, "in_review");
+  current = "2026-08-10T16:06:00.000Z";
+  ownerCase = await supportCases.deny({
+    ...operatorBase(deletion.id, "support.pg.deletion.deny.0001", 5),
+    appealAvailable: true,
+    appealBasisDigest: sha("15"),
+    appealDueAt: "2026-09-01T16:00:00.000Z",
+    denialExplanationDigest: sha("16"),
+    denialReasonCode: "legal_exception"
+  });
+  assert.equal(ownerCase.state, "denied");
+  assert.equal(ownerCase.deadline.status, "met");
+
+  current = "2026-08-10T16:07:00.000Z";
+  const appeal = await supportCases.openAuthenticated(customerOpening({
+    commandId: "support.pg.appeal.open.0001",
+    requestKind: "appeal",
+    parentCaseId: deletion.id
+  }));
+  assert.equal(appeal.requestKind, "appeal");
+  assert.equal((await supportCases.readCustomerCase({
+    actorId: scope.user_id,
+    organizationId: scope.organization_id,
+    caseId: deletion.id
+  })).state, "appeal_pending");
+
+  current = "2026-08-10T16:08:00.000Z";
+  await supportCases.assign({
+    ...operatorBase(appeal.id, "support.pg.appeal.assign.0001", 1),
+    assignedOperatorId: scope.user_id
+  });
+  current = "2026-08-10T16:09:00.000Z";
+  await supportCases.updateIdentity({
+    ...operatorBase(appeal.id, "support.pg.appeal.identity.0001", 2),
+    evidenceDigest: sha("17"),
+    identityState: "verified"
+  });
+  current = "2026-08-10T16:10:00.000Z";
+  await supportCases.setDeadline({
+    ...operatorBase(appeal.id, "support.pg.appeal.deadline.0001", 3),
+    basisDigest: sha("18"),
+    responseDueAt: "2026-08-25T16:00:00.000Z"
+  });
+  current = "2026-08-10T16:11:00.000Z";
+  await supportCases.startReview(
+    operatorBase(appeal.id, "support.pg.appeal.review.0001", 4)
+  );
+  current = "2026-08-10T16:12:00.000Z";
+  await supportCases.respond({
+    ...operatorBase(appeal.id, "support.pg.appeal.respond.0001", 5),
+    responseDigest: sha("19")
+  });
+  current = "2026-08-10T16:13:00.000Z";
+  await supportCases.close({
+    ...operatorBase(appeal.id, "support.pg.appeal.close.0001", 6),
+    closureEvidenceDigest: sha("1a"),
+    closureReasonCode: "completed"
+  });
+  current = "2026-08-10T16:14:00.000Z";
+  const parentClosed = await supportCases.close({
+    ...operatorBase(deletion.id, "support.pg.deletion.close.0001", 7),
+    closureEvidenceDigest: sha("1b"),
+    closureReasonCode: "completed"
+  });
+  assert.equal(parentClosed.state, "closed");
+
+  current = "2026-08-10T16:15:00.000Z";
+  const phone = await supportCases.recordManual({
+    actorId: scope.user_id,
+    commandId: "support.pg.phone.open.0001",
+    evidenceDigests: [sha("21")],
+    intakeChannel: "phone",
+    organizationId: null,
+    operatorOrganizationId: scope.organization_id,
+    parentCaseId: null,
+    projectId: null,
+    requestKind: "access",
+    requesterReferenceDigest: sha("22"),
+    requesterUserId: null,
+    scopeKind: "general"
+  });
+  assert.equal(phone.intakeChannel, "phone");
+  current = "2026-08-10T16:16:00.000Z";
+  await supportCases.assign({
+    ...operatorBase(phone.id, "support.pg.phone.assign.0001", 1),
+    assignedOperatorId: scope.user_id
+  });
+  current = "2026-08-10T16:17:00.000Z";
+  await supportCases.updateIdentity({
+    ...operatorBase(phone.id, "support.pg.phone.identity.0001", 2),
+    evidenceDigest: sha("23"),
+    identityState: "unable_to_verify"
+  });
+  current = "2026-08-10T16:18:00.000Z";
+  await supportCases.setDeadline({
+    ...operatorBase(phone.id, "support.pg.phone.deadline.0001", 3),
+    basisDigest: sha("24"),
+    responseDueAt: "2026-08-20T16:00:00.000Z"
+  });
+  current = "2026-08-10T16:19:00.000Z";
+  await supportCases.deny({
+    ...operatorBase(phone.id, "support.pg.phone.deny.0001", 4),
+    appealAvailable: false,
+    appealBasisDigest: null,
+    appealDueAt: null,
+    denialExplanationDigest: sha("25"),
+    denialReasonCode: "identity_not_verified"
+  });
+  current = "2026-08-10T16:20:00.000Z";
+  await supportCases.close({
+    ...operatorBase(phone.id, "support.pg.phone.close.0001", 5),
+    closureEvidenceDigest: sha("26"),
+    closureReasonCode: "no_further_action"
+  });
+
+  current = "2026-08-10T16:21:00.000Z";
+  const manual = await supportCases.recordManual({
+    actorId: scope.user_id,
+    commandId: "support.pg.manual.open.0001",
+    evidenceDigests: [sha("31")],
+    intakeChannel: "manual",
+    organizationId: scope.organization_id,
+    operatorOrganizationId: scope.organization_id,
+    parentCaseId: null,
+    projectId: scope.project_id,
+    requestKind: "support",
+    requesterReferenceDigest: sha("32"),
+    requesterUserId: scope.user_id,
+    scopeKind: "project"
+  });
+  current = "2026-08-10T16:22:00.000Z";
+  await supportCases.assign({
+    ...operatorBase(manual.id, "support.pg.manual.assign.0001", 1),
+    assignedOperatorId: scope.user_id
+  });
+  current = "2026-08-10T16:23:00.000Z";
+  await supportCases.updateIdentity({
+    ...operatorBase(manual.id, "support.pg.manual.identity.0001", 2),
+    evidenceDigest: sha("33"),
+    identityState: "not_required"
+  });
+  current = "2026-08-10T16:24:00.000Z";
+  await supportCases.setDeadline({
+    ...operatorBase(manual.id, "support.pg.manual.deadline.0001", 3),
+    basisDigest: sha("34"),
+    responseDueAt: "2026-08-15T16:00:00.000Z"
+  });
+  current = "2026-08-10T16:25:00.000Z";
+  await supportCases.startReview(
+    operatorBase(manual.id, "support.pg.manual.review.0001", 4)
+  );
+  current = "2026-08-10T16:26:00.000Z";
+  await supportCases.respond({
+    ...operatorBase(manual.id, "support.pg.manual.respond.0001", 5),
+    responseDigest: sha("35")
+  });
+  current = "2026-08-10T16:27:00.000Z";
+  const notified = await supportCases.reserveNotification({
+    ...operatorBase(manual.id, "support.pg.manual.notify.0001", 6),
+    notificationKind: "response",
+    mailCommandId: "support.pg.mail.reserve.0001",
+    projectId: scope.project_id,
+    customerUserId: scope.user_id,
+    recipientDigest: sha("36"),
+    subjectReferenceDigest: sha("37"),
+    contentDigest: sha("38"),
+    templateVersion: "support_v1",
+    expiresAt: "2026-08-10T17:00:00.000Z"
+  });
+  assert.deepEqual(notified.notifications.map((entry) => entry.state), ["reserved"]);
+  const mailTruth = await pool.query(`
+    select delivery.state, delivery.message_type
+      from ss.hosted_support_case_mail_reservations reservation
+      join ss.hosted_mail_deliveries delivery
+        on delivery.id = reservation.mail_message_id
+     where reservation.case_id = $1
+  `, [manual.id]);
+  assert.deepEqual(mailTruth.rows[0], {
+    state: "pending",
+    message_type: "support_notification"
+  });
+
+  current = "2026-08-10T16:28:00.000Z";
+  const email = await supportCases.recordManual({
+    actorId: scope.user_id,
+    commandId: "support.pg.email.open.0001",
+    evidenceDigests: [sha("41")],
+    intakeChannel: "email",
+    organizationId: null,
+    operatorOrganizationId: scope.organization_id,
+    parentCaseId: null,
+    projectId: null,
+    requestKind: "correction",
+    requesterReferenceDigest: sha("42"),
+    requesterUserId: null,
+    scopeKind: "general"
+  });
+  assert.equal(email.intakeChannel, "email");
+  current = "2026-08-10T16:29:00.000Z";
+  await supportCases.openAuthenticated(customerOpening({
+    commandId: "support.pg.export.open.0001",
+    requestKind: "export"
+  }));
+
+  assert.equal(Number((await pool.query(
+    `select count(*) from ss.export_requests`
+  )).rows[0].count), exportCountBefore);
+  assert.equal(Number((await pool.query(
+    `select count(*) from auth.users where id = $1`, [scope.user_id]
+  )).rows[0].count), accountCountBefore);
+
+  const customer = await supportCases.readCustomerCase({
+    actorId: scope.user_id,
+    organizationId: scope.organization_id,
+    caseId: manual.id
+  });
+  for (const forbidden of [
+    "requesterReferenceDigest", "assignedOperatorId",
+    "identityEvidenceDigest", "deadlineBasisDigest", "evidence"
+  ]) assert.equal(Object.hasOwn(customer, forbidden), false);
+  const ownerQueue = await supportCases.listOperatorCases({
+    actorId: scope.user_id,
+    operatorOrganizationId: scope.organization_id
+  });
+  assert.ok(ownerQueue.cases.some((entry) => entry.id === email.id));
+
+  let immutableError = null;
+  try {
+    await pool.query(
+      `update ss.hosted_support_case_events
+          set event_kind = 'closed'
+        where id = (select id from ss.hosted_support_case_events limit 1)`
+    );
+  } catch (error) {
+    immutableError = error;
+  }
+  assert.equal(immutableError?.code, "55000");
+  let rlsError = null;
+  await pool.query("begin");
+  try {
+    await pool.query("set local role authenticated");
+    await pool.query("select * from ss.hosted_support_cases limit 1");
+  } catch (error) {
+    rlsError = error;
+  } finally {
+    await pool.query("rollback");
+  }
+  assert.equal(rlsError?.code, "42501");
+
+  const unsafeColumns = await pool.query(`
+    select column_name
+      from information_schema.columns
+     where table_schema = 'ss'
+       and table_name like 'hosted_support_case%'
+       and column_name ~ '(email|phone|body|subject|token|raw|document|export_bytes|deletion)'
+  `);
+  assert.equal(unsafeColumns.rowCount, 0);
 }
 
 async function verifyJointLegalV4ReleaseState(pool) {
@@ -4777,6 +5141,7 @@ export async function runMigrationVerification({
     await verifyReceiptRejectsFourthAcceptance(pool);
     await verifyV4ReceiptRejectsFourthAcceptance(pool);
     await verifyDurableMailLifecycle(pool);
+    await verifySupportPrivacyCaseLifecycle(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -4798,6 +5163,7 @@ export async function runMigrationVerification({
     writeOutput("rogueFourthAcceptanceRejected true\n");
     writeOutput("jointLegalV4ReceiptAcceptedAndFourthRejected true\n");
     writeOutput("durableMailLifecyclePostgresProof true\n");
+    writeOutput("supportPrivacyCaseLifecyclePostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
