@@ -8,19 +8,16 @@ import pg from "pg";
 
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
-<<<<<<< HEAD
 import { createHostedEngagementBootstrap } from
   "../../hosted/engagement-bootstrap.mjs";
 import { createPostgresEngagementBootstrapRepository } from
   "../../hosted/engagement-bootstrap-postgres.mjs";
 import { createProjectLegalAuthorityV4 } from
   "../../hosted/project-legal-authority.mjs";
-=======
 import { createMailLifecycle } from
   "../../hosted/mail-lifecycle.mjs";
 import { createPostgresMailLifecycleRepository } from
   "../../hosted/mail-lifecycle-postgres.mjs";
->>>>>>> feat/mail-lifecycle-20260810
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -5273,11 +5270,8 @@ export async function runMigrationVerification({
     );
     writeOutput("rogueFourthAcceptanceRejected true\n");
     writeOutput("jointLegalV4ReceiptAcceptedAndFourthRejected true\n");
-<<<<<<< HEAD
     writeOutput("customerEngagementBootstrapJourney true\n");
-=======
     writeOutput("durableMailLifecyclePostgresProof true\n");
->>>>>>> feat/mail-lifecycle-20260810
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
