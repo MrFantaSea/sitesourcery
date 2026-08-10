@@ -1169,6 +1169,53 @@ async function verifyOperatorWorkQueue(pool) {
   assert.deepEqual(await queue.list(scope), second);
 }
 
+async function verifyAccountingPurposeJournal(pool) {
+  const proof = await pool.query(`
+    select
+      ss.hosted_accounting_purpose_journal_contract_v1() =
+        'canonical-accounting-purpose-journal-v1-projection-only-held'
+        as contract_ready,
+      (
+        select relation.relrowsecurity and relation.relforcerowsecurity
+          from pg_class relation
+         where relation.oid = 'ss.accounting_purpose_journal'::regclass
+      ) as forced_rls,
+      has_table_privilege(
+        'service_role', 'ss.accounting_purpose_journal', 'SELECT'
+      ) and not has_table_privilege(
+        'service_role', 'ss.accounting_purpose_journal',
+        'INSERT,UPDATE,DELETE'
+      ) as exact_service_privileges,
+      not has_table_privilege(
+        'authenticated', 'ss.accounting_purpose_journal', 'SELECT'
+      ) and not has_table_privilege(
+        'anon', 'ss.accounting_purpose_journal', 'SELECT'
+      ) as customer_read_denied,
+      to_regprocedure(
+        'ss.project_accounting_purpose_journal_v1()'
+      ) is not null as projection_ready,
+      (select count(*) = 0 from ss.accounting_purpose_journal)
+        as held_empty_default,
+      not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'ss'
+           and table_name = 'accounting_purpose_journal'
+           and column_name in (
+             'customer_email', 'customer_phone', 'provider_customer_id',
+             'provider_payment_intent_id', 'raw_payload', 'secret'
+           )
+      ) as unsafe_columns_absent
+  `);
+  for (const [name, ready] of Object.entries(proof.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `accounting purpose journal contract failed: ${name}`
+    );
+  }
+}
+
 async function verifyJointLegalV4ReleaseState(pool) {
   const result = await pool.query(`
     select
@@ -5744,6 +5791,7 @@ export async function runMigrationVerification({
     await verifyDurableMailLifecycle(pool);
     await verifySupportPrivacyCaseLifecycle(pool);
     await verifyOperatorWorkQueue(pool);
+    await verifyAccountingPurposeJournal(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -5768,6 +5816,7 @@ export async function runMigrationVerification({
     writeOutput("durableMailLifecyclePostgresProof true\n");
     writeOutput("supportPrivacyCaseLifecyclePostgresProof true\n");
     writeOutput("operatorWorkQueuePostgresProof true\n");
+    writeOutput("accountingPurposeJournalHeldPostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

@@ -3194,3 +3194,39 @@ test("professional reversals are additive, evidence-first, monotonic, and provid
     /refunds[.]create|charges[.]create|payment_intents[.]create|provider_effect_authorized\s*=\s*true|on delete cascade|grant all privileges/iu
   );
 });
+
+test("ACCOUNTING-01 reserves migration 115 as a held projection-only journal", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name ===
+      "202608100115_accounting_purpose_journal.sql"
+  );
+  assert.ok(migration, "missing ACCOUNTING-01 migration 115");
+  assert.equal(selected.length, 65);
+  assert.match(migration.sql, /^-- ACCOUNTING-01[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  assert.match(
+    migration.sql,
+    /create table ss\.accounting_purpose_journal[\s\S]*unique \(source_relation, source_receipt_id\)/u
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.project_accounting_purpose_journal_v1\(\)/u
+  );
+  assert.match(
+    migration.sql,
+    /accounting_purpose_journal_guard[\s\S]*before insert or update or delete/u
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security/u
+  );
+  assert.match(
+    migration.sql,
+    /grant select on table ss\.accounting_purpose_journal to service_role/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /grant (?:insert|update|delete).*accounting_purpose_journal|on delete cascade|provider_effects_authorized\s*=\s*true/iu
+  );
+});
