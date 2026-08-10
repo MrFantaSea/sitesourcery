@@ -26,6 +26,10 @@ import { createOperatorWorkQueue } from
   "../../hosted/operator-work-queue.mjs";
 import { createPostgresOperatorWorkQueueRepository } from
   "../../hosted/operator-work-queue-postgres.mjs";
+import { createCommerceTransitionNotifications } from
+  "../../hosted/commerce-transition-notifications.mjs";
+import { createPostgresCommerceTransitionNotificationRepository } from
+  "../../hosted/commerce-transition-notifications-postgres.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -349,12 +353,13 @@ async function applyMigrations(pool) {
     "202608100108_professional_services_reversals.sql",
     "202608100109_stripe_tax_purpose_authority.sql",
     "202608100110_support_privacy_case_lifecycle.sql",
-    "202608100112_operator_work_queue.sql"
+    "202608100112_operator_work_queue.sql",
+    "202608100114_commerce_transition_notifications.sql"
   ];
   assert.equal(
     names.length,
-    64,
-    "migration proof requires exactly 64 migrations through purpose tax, support/privacy cases, and the held operator work queue"
+    65,
+    "migration proof requires exactly 65 migrations through the held commerce notification outbox"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -1187,6 +1192,134 @@ async function verifyOperatorWorkQueue(pool) {
   assert.equal(secondEvidenceItem.revision, firstEvidenceItem.revision);
   assert.equal(secondEvidenceItem.digest, firstEvidenceItem.digest);
   assert.deepEqual(await queue.list(scope), second);
+  return { operatorId, operatorOrganizationId, evidence, evidenceInput };
+}
+
+async function verifyCommerceTransitionNotifications(pool, queueProof) {
+  const contract = await pool.query(`
+    select
+      ss.hosted_commerce_notification_contract_v1() =
+        'canonical-commerce-transition-notifications-v1-mail-reserved-held'
+        as contract_ready,
+      to_regclass('ss.commerce_transition_notification_sources') is not null
+        as sources_ready,
+      (
+        select relation.relrowsecurity and relation.relforcerowsecurity
+          from pg_class relation
+         where relation.oid =
+           'ss.commerce_transition_notification_outbox'::regclass
+      ) as forced_rls,
+      not has_table_privilege(
+        'authenticated',
+        'ss.commerce_transition_notification_outbox',
+        'SELECT,INSERT,UPDATE,DELETE'
+      ) as authenticated_denied,
+      not has_table_privilege(
+        'service_role',
+        'ss.commerce_transition_notification_outbox',
+        'UPDATE,DELETE'
+      ) as mutation_denied,
+      exists (
+        select 1
+          from pg_constraint constraint_row
+         where constraint_row.conrelid =
+           'ss.hosted_mail_deliveries'::regclass
+           and pg_get_constraintdef(constraint_row.oid) like
+             '%commerce_customer_notification%'
+           and pg_get_constraintdef(constraint_row.oid) like
+             '%commerce_operator_notification%'
+      ) as mail_types_ready,
+      not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'ss'
+           and table_name = 'commerce_transition_notification_outbox'
+           and column_name in (
+             'raw_payload', 'email_address', 'phone_number',
+             'message_body', 'provider_error_message', 'checkout_url'
+           )
+      ) as unsafe_columns_absent
+  `);
+  for (const [name, ready] of Object.entries(contract.rows[0])) {
+    assert.equal(ready, true, `commerce notification contract failed: ${name}`);
+  }
+
+  const selectedNow = new Date().toISOString();
+  const database = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresCommerceTransitionNotificationRepository({
+    authority: database
+  });
+  const notifications = createCommerceTransitionNotifications({
+    repository,
+    clock: { now: () => selectedNow }
+  });
+  const input = {
+    commandId: "pg-commerce-notification-001",
+    audienceKind: "operator",
+    notificationKind: "invoice_finalization_failed",
+    source: {
+      table: "ss.stripe_invoice_finalization_failures",
+      id: queueProof.evidence.id,
+      revision: 1,
+      digest: queueProof.evidenceInput.payloadDigest,
+      state: "open"
+    },
+    recipientDigest: "e".repeat(64),
+    subjectReferenceDigest: "f".repeat(64),
+    contentDigest: "1".repeat(64),
+    templateVersion: "invoice_finalization_failed_v1",
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString()
+  };
+  const reserved = await notifications.reserve(input);
+  const replay = await notifications.reserve(input);
+  assert.equal(replay.id, reserved.id);
+  assert.equal(reserved.reservation.state, "held");
+  assert.equal(reserved.mail.lifecycleState, "pending");
+  assert.equal(reserved.mail.deliveryConfirmed, false);
+  assert.equal(reserved.providerEffectsAuthorized, false);
+  assert.equal(reserved.deliveryClaimed, false);
+  assert.deepEqual(reserved.source, {
+    table: "ss.stripe_invoice_finalization_failures",
+    id: queueProof.evidence.id,
+    revision: 1,
+    digest: queueProof.evidenceInput.payloadDigest,
+    state: "open",
+    occurredAt: queueProof.evidence.recordedAt
+  });
+  const operatorRead = await notifications.listOperator({
+    actorId: queueProof.operatorId,
+    operatorOrganizationId: queueProof.operatorOrganizationId
+  });
+  assert.equal(
+    operatorRead.items.some((item) => item.id === reserved.id),
+    true
+  );
+  const persisted = await pool.query(
+    `select notification.state, notification.provider_effects_authorized,
+            notification.delivery_claimed,
+            notification.reservation_digest =
+              ss.commerce_transition_notification_reservation_digest(
+                notification.id,
+                notification.request_digest,
+                notification.mail_message_id,
+                notification.mail_request_digest
+              ) as reservation_digest_valid,
+            mail.message_type,
+            mail.state as mail_state
+       from ss.commerce_transition_notification_outbox notification
+       join ss.hosted_mail_deliveries mail
+         on mail.id = notification.mail_message_id
+      where notification.id = $1`,
+    [reserved.id]
+  );
+  assert.deepEqual(persisted.rows[0], {
+    state: "held",
+    provider_effects_authorized: false,
+    delivery_claimed: false,
+    reservation_digest_valid: true,
+    message_type: "commerce_operator_notification",
+    mail_state: "pending"
+  });
 }
 
 async function verifyJointLegalV4ReleaseState(pool) {
@@ -5762,7 +5895,8 @@ export async function runMigrationVerification({
     await verifyV4ReceiptRejectsFourthAcceptance(pool);
     await verifyDurableMailLifecycle(pool);
     await verifySupportPrivacyCaseLifecycle(pool);
-    await verifyOperatorWorkQueue(pool);
+    const queueProof = await verifyOperatorWorkQueue(pool);
+    await verifyCommerceTransitionNotifications(pool, queueProof);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -5787,6 +5921,7 @@ export async function runMigrationVerification({
     writeOutput("durableMailLifecyclePostgresProof true\n");
     writeOutput("supportPrivacyCaseLifecyclePostgresProof true\n");
     writeOutput("operatorWorkQueuePostgresProof true\n");
+    writeOutput("commerceTransitionNotificationPostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

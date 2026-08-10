@@ -3194,3 +3194,41 @@ test("professional reversals are additive, evidence-first, monotonic, and provid
     /refunds[.]create|charges[.]create|payment_intents[.]create|provider_effect_authorized\s*=\s*true|on delete cascade|grant all privileges/iu
   );
 });
+
+test("commerce notifications are committed-source-bound, MAIL-reserved, and held", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608100114_commerce_transition_notifications.sql"
+  );
+  assert.ok(migration, "missing commerce transition notification migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v54\(\)[\s\S]*hosted_runtime_contract_v108\(\)[\s\S]*hosted_operator_work_queue_contract_v1\(\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /create view ss\.commerce_transition_notification_sources[\s\S]*create table ss\.commerce_transition_notification_outbox/iu
+  );
+  assert.match(
+    migration.sql,
+    /new\.state <> 'held'[\s\S]*new\.provider_effects_authorized[\s\S]*new\.delivery_claimed/iu
+  );
+  assert.match(
+    migration.sql,
+    /mail\.request_digest = new\.mail_request_digest[\s\S]*mail\.state = 'pending'[\s\S]*mail\.message_type = 'commerce_customer_notification'[\s\S]*mail\.message_type = 'commerce_operator_notification'/iu
+  );
+  assert.match(
+    migration.sql,
+    /commerce_transition_notification_reservation_digest\([\s\S]*new\.reservation_digest <>[\s\S]*new\.mail_request_digest/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*grant select, insert on ss\.commerce_transition_notification_outbox\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s*=\s*true|delivery_claimed\s*=\s*true|on delete cascade|grant all privileges/iu
+  );
+});
