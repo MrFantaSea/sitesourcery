@@ -23,11 +23,11 @@ authority.
 - The previously pasted Stripe Standard live key is treated as compromised
   until an authenticated Dashboard roll proves the old key expired. It is not
   used by this integration line.
-- The current integrated union applies 65 migrations cleanly on fresh
+- The current integrated union applies 66 migrations cleanly on fresh
   PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
-  marker. The proof includes the durable operator work queue and held accounting
-  purpose journal, and the generated proof database was removed and
-  absence-proven.
+  marker. The proof includes the durable operator work queue, held transition
+  notification outbox, and accounting purpose journal; the generated proof
+  database was removed and absence-proven.
 
 ## Target shape
 
@@ -269,9 +269,10 @@ legal, entitlement, or service authority.
   - Add `invoice.finalization_failed` evidence/alert ownership.
   - Dependencies: MAIL-01 and service-specific read models.
 
-- [ ] **COMMERCE-NOTIFY-01 — transition-driven notifications**
-  - Active in an isolated held-only packet from the 64-migration union;
-    migration 114 is reserved while CUSTOM-DIRECT-01 owns 113.
+- [x] **COMMERCE-NOTIFY-01 — transition-driven notifications**
+  - Completed at `d59bda2` and merged at `db852d2` as migration 114. The outbox
+    reserves truthful MAIL rows atomically from committed sources and remains
+    provider-free/held; fresh PostgreSQL 16 union proof is green.
   - Transactional outbox for quote, invoice, paid, failure, report, completion,
     cancellation, reversal, domain, and Care transitions.
   - Notifications originate from committed local transitions, not raw provider
@@ -402,9 +403,9 @@ legal, entitlement, or service authority.
 1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
    SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
 2. Integrate foundation and run exact final-union migration/full browser/ops
-   proof. The current 65-migration checkpoint through operator queue migration
-   112 and accounting migration 115 is green; Mail 111, Custom Direct 113, and
-   Commerce Notifications 114 require the final successor proof.
+   proof. The current 66-migration checkpoint through operator queue 112,
+   Commerce Notifications 114, and Accounting 115 is green; Mail 111 and
+   Custom Direct 113 require the final successor proof.
 3. Complete Legal publication, origin seal, current restore, monitoring, and
    Cloudflare cutover.
 4. Launch Download alone after exact Stripe test/live readiness proof.
