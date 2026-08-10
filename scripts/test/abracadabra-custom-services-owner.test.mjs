@@ -56,6 +56,8 @@ const REPORT_ID =
   "c0000000-0000-4000-8000-000000000001";
 const CREDIT_ID =
   "d0000000-0000-4000-8000-000000000001";
+const ENGAGEMENT_ID =
+  "e0000000-0000-4000-8000-000000000001";
 const DELIVERED_AT = "2026-08-05T14:00:00.000Z";
 const ACCEPTANCE_CUTOFF = new Date(
   Date.parse(DELIVERED_AT) + 90 * 24 * 60 * 60 * 1000
@@ -1093,7 +1095,7 @@ const CUSTOM_BUILD_CONTRACT_DIGEST =
 const CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
   "00000000-0000-4000-8000-000000000342";
 
-function customBuildTerms() {
+function customBuildTerms(creditSelection = "apply_assessment_credit") {
   return {
     schema: "sitesourcery.custom-build-quote-terms/v1",
     commercialContractId: CUSTOM_BUILD_CONTRACT_ID,
@@ -1101,7 +1103,9 @@ function customBuildTerms() {
     legalDocumentId: CUSTOM_BUILD_LEGAL_DOCUMENT_ID,
     rules: [
       "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
-      "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
+      creditSelection === "no_credit"
+        ? "No assessment credit is applied to this quote."
+        : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
       "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.",
       "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
       "Build work does not begin until the required first payment is verified.",
@@ -1125,6 +1129,8 @@ function customBuildAcceptance() {
 function customBuildQuote(overrides = {}) {
   return {
     acceptance: null,
+    origin: "assessment_successor",
+    creditSelection: "apply_assessment_credit",
     quoteId: QUOTE_ID,
     quoteRevision: 1,
     quoteDigest: "a".repeat(64),
@@ -1184,6 +1190,33 @@ function customBuildQuote(overrides = {}) {
   };
 }
 
+function directCustomBuildQuote(overrides = {}) {
+  const assessed = customBuildQuote();
+  return customBuildQuote({
+    origin: "direct",
+    creditSelection: "no_credit",
+    creditAcceptanceCutoff: null,
+    terms: customBuildTerms("no_credit"),
+    pricing: {
+      ...assessed.pricing,
+      creditAmountMinor: 0,
+      customerAmountMinor: 120000,
+      startCreditMinor: 0,
+      startDueMinor: 60000,
+      installments: assessed.pricing.installments.map((entry) =>
+        entry.number === 1
+          ? {
+              ...entry,
+              creditAmountMinor: 0,
+              amountDueMinor: 60000
+            }
+          : entry
+      )
+    },
+    ...overrides
+  });
+}
+
 function customerCustomBuildSnapshot(
   state = "issued",
   overrides = {}
@@ -1215,6 +1248,8 @@ function ownerCustomBuildOpportunities(overrides = {}) {
       "sitesourcery.custom-services-owner-custom-build-opportunities/v1",
     opportunities: [
       {
+        origin: "assessment_successor",
+        engagementId: null,
         organizationId: ORGANIZATION_ID,
         organizationName: "Customer Studio",
         projectId: PROJECT_ID,
@@ -1302,12 +1337,56 @@ function ownerCustomBuildReceipt(state = "issued") {
     projectId: PROJECT_ID,
     caseId: CASE_ID,
     customerId: CUSTOMER_ID,
+    origin: "assessment_successor",
+    directOpportunityId: null,
     jobId: JOB_ID,
     reportId: REPORT_ID,
     credit: customBuildCredit(
       state === "voided" ? "released" : "available"
     ),
     quote: customBuildQuote({ state })
+  };
+}
+
+function directCustomBuildOpportunity() {
+  return {
+    schema:
+      "sitesourcery.custom-services-owner-custom-build-opportunities/v1",
+    opportunities: [{
+      origin: "direct",
+      engagementId: ENGAGEMENT_ID,
+      organizationId: ORGANIZATION_ID,
+      organizationName: "Customer Studio",
+      projectId: PROJECT_ID,
+      projectName: "Customer Website",
+      caseId: CASE_ID,
+      customer: {
+        customerId: CUSTOMER_ID,
+        name: "Customer Owner",
+        email: "customer@example.test"
+      },
+      assessment: null,
+      credit: null,
+      currentQuote: directCustomBuildQuote()
+    }]
+  };
+}
+
+function directCustomBuildReceipt() {
+  return {
+    schema:
+      "sitesourcery.custom-services-owner-custom-build-quote/v1",
+    state: "issued",
+    origin: "direct",
+    directOpportunityId: ENGAGEMENT_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    caseId: CASE_ID,
+    customerId: CUSTOMER_ID,
+    jobId: null,
+    reportId: null,
+    credit: null,
+    quote: directCustomBuildQuote()
   };
 }
 
@@ -1326,7 +1405,7 @@ test("Custom build public estimates match every server-authority pricing rule wi
       uniqueLayouts: footprint[2],
       contentWords: footprint[3],
       suppliedMedia: footprint[4]
-    });
+    }, "apply_assessment_credit");
     assert.equal(estimate.serviceAmountMinor, amountMinor, tierId);
     assert.equal(estimate.creditAmountMinor, 20000, tierId);
     assert.equal(
@@ -1342,7 +1421,7 @@ test("Custom build public estimates match every server-authority pricing rule wi
       uniqueLayouts: 1,
       contentWords: 500,
       suppliedMedia: 2
-    }) },
+    }, "apply_assessment_credit") },
     {
       serviceAmountMinor: 40000,
       creditAmountMinor: 20000,
@@ -1361,7 +1440,7 @@ test("Custom build public estimates match every server-authority pricing rule wi
     uniqueLayouts: 16,
     contentWords: 7500,
     suppliedMedia: 64
-  });
+  }, "apply_assessment_credit");
   assert.equal(scale.scaleUnits, 1);
   assert.equal(scale.serviceAmountMinor, 427000);
   assert.equal(scale.customerAmountMinor, 407000);
@@ -1373,16 +1452,26 @@ test("Custom build public estimates match every server-authority pricing rule wi
     uniqueLayouts: 15,
     contentWords: 7000,
     suppliedMedia: 60
-  }), null);
+  }, "apply_assessment_credit"), null);
   const maximum = customBuildPublicEstimate("scale", {
     craftedPages: 30,
     sections: 120,
     uniqueLayouts: 30,
     contentWords: 14500,
     suppliedMedia: 120
-  });
+  }, "apply_assessment_credit");
   assert.equal(maximum.scaleUnits, 15);
   assert.equal(maximum.serviceAmountMinor, 805000);
+  const direct = customBuildPublicEstimate("site", {
+    craftedPages: 4,
+    sections: 16,
+    uniqueLayouts: 4,
+    contentWords: 1800,
+    suppliedMedia: 12
+  }, "no_credit");
+  assert.equal(direct.creditAmountMinor, 0);
+  assert.equal(direct.startDueMinor, 60000);
+  assert.equal(direct.customerAmountMinor, 120000);
 });
 
 test("customer Custom build snapshots fail closed around exact money, credit, footprint, and lifecycle truth", () => {
@@ -1401,6 +1490,19 @@ test("customer Custom build snapshots fail closed around exact money, credit, fo
   });
   const notAvailable = customerCustomBuildSnapshot(
     "not_available"
+  );
+  const direct = customerCustomBuildSnapshot("issued", {
+    credit: null,
+    quote: directCustomBuildQuote()
+  });
+  const assessmentWithoutCredit = customerCustomBuildSnapshot(
+    "issued",
+    {
+      credit: null,
+      quote: directCustomBuildQuote({
+        origin: "assessment_successor"
+      })
+    }
   );
   assert.equal(
     verifiedCustomerCustomBuildQuote(issued, PROJECT_ID),
@@ -1428,6 +1530,17 @@ test("customer Custom build snapshots fail closed around exact money, credit, fo
   assert.equal(
     verifiedCustomerCustomBuildQuote(notAvailable, PROJECT_ID),
     notAvailable
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(direct, PROJECT_ID),
+    direct
+  );
+  assert.equal(
+    verifiedCustomerCustomBuildQuote(
+      assessmentWithoutCredit,
+      PROJECT_ID
+    ),
+    assessmentWithoutCredit
   );
   assert.equal(
     verifiedCustomerCustomBuildQuote({
@@ -1465,6 +1578,15 @@ test("owner Custom build opportunity and issue/void receipt schemas bind one del
   const opportunities = ownerCustomBuildOpportunities();
   const issued = ownerCustomBuildReceipt();
   const voided = ownerCustomBuildReceipt("voided");
+  const directOpportunity = directCustomBuildOpportunity();
+  const directReceipt = directCustomBuildReceipt();
+  const assessmentWithoutCredit = {
+    ...issued,
+    credit: null,
+    quote: directCustomBuildQuote({
+      origin: "assessment_successor"
+    })
+  };
   assert.equal(
     verifiedOwnerCustomBuildOpportunities(opportunities),
     opportunities
@@ -1476,6 +1598,24 @@ test("owner Custom build opportunity and issue/void receipt schemas bind one del
   assert.equal(
     verifiedOwnerCustomBuildQuoteReceipt(voided),
     voided
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildOpportunities(
+      directOpportunity
+    ),
+    directOpportunity
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildQuoteReceipt(
+      directReceipt
+    ),
+    directReceipt
+  );
+  assert.equal(
+    verifiedOwnerCustomBuildQuoteReceipt(
+      assessmentWithoutCredit
+    ),
+    assessmentWithoutCredit
   );
   const replacementReady = ownerCustomBuildOpportunities({
     credit: customBuildCredit("released"),
@@ -1617,6 +1757,7 @@ test("Custom build owner and customer panels expose bounded mobile controls and 
     "listOwnerCustomBuildOpportunities",
     "listOwnerCustomBuildJobs",
     "issueOwnerCustomBuildQuote",
+    "issueOwnerDirectCustomBuildQuote",
     "voidOwnerCustomBuildQuote",
     "getCustomServicesCustomBuildQuote",
     "acceptCustomServicesCustomBuildQuote",

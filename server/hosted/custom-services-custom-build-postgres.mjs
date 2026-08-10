@@ -13,11 +13,14 @@ export const CUSTOM_BUILD_CUSTOMER_QUOTE_SCHEMA =
 
 const RUNTIME_CONTRACT =
   "canonical-ss-v41-custom-build-quote-credit";
+const DIRECT_CONTRACT =
+  "canonical-custom-direct-v1-engagement-optional-credit";
 const COMMERCIAL_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
 const COMMERCIAL_CONTRACT_DIGEST =
   "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
 const LEGAL_DOCUMENT_ID = "00000000-0000-4000-8000-000000000342";
 const ISSUE_ROUTE = "custom-services.custom-build-quote.issue";
+const ISSUE_DIRECT_ROUTE = "custom-services.custom-build-quote.issue-direct";
 const ACCEPT_ROUTE = "custom-services.custom-build-quote.accept";
 const VOID_ROUTE = "custom-services.custom-build-quote.void";
 const UUID =
@@ -170,6 +173,7 @@ function issueInput(value) {
     [
       "commandId",
       "contentWords",
+      "creditSelection",
       "craftedPages",
       "expiresAt",
       "organizationId",
@@ -185,6 +189,16 @@ function issueInput(value) {
   return Object.freeze({
     commandId: commandId(value.commandId),
     contentWords: integer(value.contentWords, "contentWords", 0, 14500),
+    creditSelection: (() => {
+      invariant(
+        value.creditSelection === "no_credit" ||
+          value.creditSelection === "apply_assessment_credit",
+        "invalid_input",
+        "creditSelection is invalid",
+        { status: 400 }
+      );
+      return value.creditSelection;
+    })(),
     craftedPages: integer(value.craftedPages, "craftedPages", 1, 30),
     expiresAt: futureIso(value.expiresAt, "expiresAt"),
     organizationId: uuid(value.organizationId, "organizationId"),
@@ -383,6 +397,13 @@ function quoteProjection(row) {
       row.commercial_contract_id === COMMERCIAL_CONTRACT_ID &&
       row.commercial_contract_digest === COMMERCIAL_CONTRACT_DIGEST &&
       row.legal_document_id === LEGAL_DOCUMENT_ID &&
+      ["direct", "assessment_successor"].includes(row.origin) &&
+      ["no_credit", "apply_assessment_credit"].includes(
+        row.credit_selection
+      ) &&
+      (row.credit_selection === "apply_assessment_credit"
+        ? Number(row.credit_amount_minor) === 20_000
+        : Number(row.credit_amount_minor) === 0) &&
       Array.isArray(row.installments),
     "custom_build_repository_conflict",
     "The stored Custom build quote is incomplete.",
@@ -425,6 +446,8 @@ function quoteProjection(row) {
     quoteDigest: row.quote_digest,
     disclosureDigest: row.disclosure_digest,
     state: row.quote_state,
+    origin: row.origin,
+    creditSelection: row.credit_selection,
     tier: {
       id: row.tier_id,
       label: row.tier_label,
@@ -446,7 +469,9 @@ function quoteProjection(row) {
       legalDocumentId: row.legal_document_id,
       rules: [
         "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
-        "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
+        Number(row.credit_amount_minor) === 0
+          ? "No assessment credit is applied to this quote."
+          : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
         paymentRule,
         "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
         "Build work does not begin until the required first payment is verified.",
@@ -455,13 +480,21 @@ function quoteProjection(row) {
     },
     pricing: {
       serviceAmountMinor: number(row.service_amount_minor, "serviceAmountMinor"),
-      creditAmountMinor: number(row.credit_amount_minor, "creditAmountMinor"),
+      creditAmountMinor: number(
+        row.credit_amount_minor,
+        "creditAmountMinor",
+        { zero: true }
+      ),
       customerAmountMinor: number(row.customer_amount_minor, "customerAmountMinor"),
       currency: row.currency,
       taxState: row.tax_state,
       paymentSchedule: row.payment_schedule,
       startValueMinor: number(row.start_value_minor, "startValueMinor"),
-      startCreditMinor: number(row.start_credit_minor, "startCreditMinor"),
+      startCreditMinor: number(
+        row.start_credit_minor,
+        "startCreditMinor",
+        { zero: true }
+      ),
       startDueMinor: number(row.start_due_minor, "startDueMinor", { zero: true }),
       finalDueMinor: number(row.final_due_minor, "finalDueMinor", { zero: true }),
       installments: row.installments.map((entry) => Object.freeze({
@@ -491,10 +524,9 @@ function quoteProjection(row) {
     ),
     issuedAt: iso(row.issued_at, "issuedAt"),
     expiresAt: iso(row.expires_at, "expiresAt"),
-    creditAcceptanceCutoff: iso(
-      row.credit_acceptance_cutoff,
-      "creditAcceptanceCutoff"
-    ),
+    creditAcceptanceCutoff: row.credit_acceptance_cutoff === null
+      ? null
+      : iso(row.credit_acceptance_cutoff, "creditAcceptanceCutoff"),
     acceptance
   });
 }
@@ -530,6 +562,8 @@ function customerSnapshot(row, scope) {
 const QUOTE_COLUMNS = `
   quote.id as quote_id,
   quote.state as quote_state,
+  quote.origin,
+  quote.credit_selection,
   revision.quote_revision,
   revision.quote_digest,
   revision.disclosure_digest,
@@ -603,11 +637,12 @@ async function selectQuoteById(client, quoteId) {
          quote.project_id,
          quote.case_id,
          quote.customer_user_id,
+         quote.direct_opportunity_id,
          quote.source_job_id,
          quote.source_report_id
        from ss.service_custom_build_quotes quote
        ${QUOTE_JOINS}
-       join ss.service_credit_grants credit
+       left join ss.service_credit_grants credit
          on credit.organization_id = revision.organization_id
         and credit.id = revision.credit_grant_id
         and credit.credit_digest = revision.credit_digest
@@ -629,6 +664,8 @@ function ownerReceipt(row) {
     projectId: row.project_id,
     caseId: row.case_id,
     customerId: row.customer_user_id,
+    origin: row.origin,
+    directOpportunityId: row.direct_opportunity_id,
     jobId: row.source_job_id,
     reportId: row.source_report_id,
     credit: creditProjection(row),
@@ -638,6 +675,8 @@ function ownerReceipt(row) {
 
 function opportunity(row) {
   return deepFreeze({
+    origin: row.opportunity_origin,
+    engagementId: row.engagement_id,
     organizationId: row.organization_id,
     organizationName: row.organization_name,
     projectId: row.project_id,
@@ -648,11 +687,13 @@ function opportunity(row) {
       name: row.customer_name,
       email: row.customer_email
     },
-    assessment: {
-      jobId: row.job_id,
-      reportId: row.report_id,
-      deliveredAt: iso(row.delivered_at, "deliveredAt")
-    },
+    assessment: row.report_id === null
+      ? null
+      : {
+          jobId: row.job_id,
+          reportId: row.report_id,
+          deliveredAt: iso(row.delivered_at, "deliveredAt")
+        },
     credit: creditProjection(row),
     currentQuote: quoteProjection(row)
   });
@@ -852,6 +893,9 @@ export function createHeldCustomServicesCustomBuild() {
     async issueQuote(actor) {
       return held(actor);
     },
+    async issueDirectQuote(actor) {
+      return held(actor);
+    },
     async voidQuote(actor) {
       return held(actor);
     },
@@ -896,6 +940,7 @@ export function createPostgresCustomServicesCustomBuild({
               await client.query(
                 `select
                    ss.hosted_runtime_contract_v41() as runtime_contract,
+                   ss.custom_build_direct_contract_v1() as direct_contract,
                    (
                      select count(*) = 7
                      from ss.service_catalog_policies policy
@@ -908,6 +953,7 @@ export function createPostgresCustomServicesCustomBuild({
             );
             invariant(
               selected.runtime_contract === RUNTIME_CONTRACT &&
+                selected.direct_contract === DIRECT_CONTRACT &&
                 selected.exact_catalog === true,
               "CUSTOM_BUILD_HELD",
               "Custom build quote storage is not ready.",
@@ -916,7 +962,8 @@ export function createPostgresCustomServicesCustomBuild({
             return deepFreeze({
               schema: "sitesourcery.custom-services-custom-build-readiness/v1",
               ready: true,
-              runtimeContract: selected.runtime_contract
+              runtimeContract: selected.runtime_contract,
+              directContract: selected.direct_contract
             });
           }
         )
@@ -935,6 +982,8 @@ export function createPostgresCustomServicesCustomBuild({
             await requireOperator(client, operatorUserId);
             const selected = await client.query(
               `select
+                 'assessment_successor'::text as opportunity_origin,
+                 null::uuid as engagement_id,
                  report.organization_id,
                  organization.name as organization_name,
                  report.project_id,
@@ -982,9 +1031,58 @@ export function createPostgresCustomServicesCustomBuild({
                left join ss.service_credit_applications application
                  on application.organization_id = report.organization_id
                 and application.quote_id = quote.id
-              where credit.acceptance_cutoff > clock_timestamp()
-                 or quote.state in ('issued', 'accepted')
-              order by report.delivered_at asc, report.id asc
+              union all
+              select
+                 'direct'::text as opportunity_origin,
+                 engagement.id as engagement_id,
+                 opportunity.organization_id,
+                 organization.name as organization_name,
+                 opportunity.project_id,
+                 project.name as project_name,
+                 opportunity.case_id,
+                 opportunity.customer_user_id,
+                 account_profile.display_name as customer_name,
+                 account_user.email as customer_email,
+                 null::uuid as job_id,
+                 null::uuid as report_id,
+                 null::timestamptz as delivered_at,
+                 null::uuid as credit_id,
+                 null::bigint as credit_amount,
+                 null::text as credit_currency,
+                 null::timestamptz as credit_cutoff,
+                 null::text as credit_application_state,
+                 ${QUOTE_COLUMNS}
+               from ss.service_custom_build_direct_opportunities opportunity
+               join ss.customer_engagements engagement
+                 on engagement.id = opportunity.engagement_id
+                and engagement.engagement_digest = opportunity.engagement_digest
+                and engagement.provenance = 'direct_custom_inquiry'
+               join ss.organizations organization
+                 on organization.id = opportunity.organization_id
+                and organization.state = 'active'
+               join ss.projects project
+                 on project.organization_id = opportunity.organization_id
+                and project.id = opportunity.project_id
+                and project.lifecycle = 'active'
+               join auth.users account_user
+                 on account_user.id = opportunity.customer_user_id
+                and account_user.disabled_at is null
+               join ss.hosted_account_profiles account_profile
+                 on account_profile.user_id = opportunity.customer_user_id
+                and account_profile.state = 'active'
+               left join lateral (
+                 select candidate.*
+                   from ss.service_custom_build_quotes candidate
+                  where candidate.organization_id = opportunity.organization_id
+                    and candidate.project_id = opportunity.project_id
+                    and candidate.direct_opportunity_id = opportunity.id
+                  order by candidate.created_at desc, candidate.id desc
+                  limit 1
+               ) quote on true
+               ${QUOTE_JOINS}
+               left join ss.service_credit_applications application
+                 on false
+              order by delivered_at asc nulls first, project_id asc
               limit 100`
             );
             return deepFreeze({
@@ -1040,16 +1138,21 @@ export function createPostgresCustomServicesCustomBuild({
                   and credit.source_report_id = report.id
                  where report.organization_id = $1
                    and report.job_id = $2
-                   and credit.acceptance_cutoff > clock_timestamp()
-                   and not exists (
-                     select 1
-                     from ss.service_credit_applications application
-                     where application.credit_grant_id = credit.id
-                       and application.state in (
-                         'reserved', 'settled', 'reconciliation_required'
+                   and (
+                     $3 = 'no_credit'
+                     or (
+                       credit.acceptance_cutoff > clock_timestamp()
+                       and not exists (
+                         select 1
+                         from ss.service_credit_applications application
+                         where application.credit_grant_id = credit.id
+                           and application.state in (
+                             'reserved', 'settled', 'reconciliation_required'
+                           )
                        )
+                     )
                    )`,
-                [input.organizationId, jobId]
+                [input.organizationId, jobId, input.creditSelection]
               ),
               "customBuildOpportunity"
             );
@@ -1065,9 +1168,15 @@ export function createPostgresCustomServicesCustomBuild({
             const revisionId = uuid(randomUUID(), "generated revisionId");
             await client.query(
               `insert into ss.service_custom_build_quotes (
-                 id, source_report_id, created_by_operator_user_id
-               ) values ($1, $2, $3)`,
-              [quoteId, source.report_id, operatorUserId]
+                 id, origin, source_report_id, credit_selection,
+                 created_by_operator_user_id
+               ) values ($1, 'assessment_successor', $2, $3, $4)`,
+              [
+                quoteId,
+                source.report_id,
+                input.creditSelection,
+                operatorUserId
+              ]
             );
             await client.query(
               `insert into ss.service_custom_build_quote_revisions (
@@ -1112,6 +1221,123 @@ export function createPostgresCustomServicesCustomBuild({
               organizationId: input.organizationId,
               principalId: operatorUserId,
               routeKey: ISSUE_ROUTE,
+              commandId: input.commandId,
+              receipt
+            });
+            return receipt;
+          }
+        )
+      );
+    },
+
+    async issueDirectQuote(actor, projectIdInput, value) {
+      const operatorUserId = actorId(
+        actor,
+        "Sign in before issuing a direct Custom build quote."
+      );
+      const projectId = uuid(projectIdInput, "projectId");
+      const input = issueInput(value);
+      invariant(
+        input.creditSelection === "no_credit",
+        "invalid_input",
+        "A direct Custom opportunity cannot apply an assessment credit.",
+        { status: 400 }
+      );
+      const requestDigest = digest({
+        route: ISSUE_DIRECT_ROUTE,
+        operatorUserId,
+        projectId,
+        ...input
+      });
+      return translated(() =>
+        database.service(
+          {
+            actorKind: "operator",
+            userId: operatorUserId,
+            organizationId: input.organizationId
+          },
+          async (client) => {
+            await requireOperator(client, operatorUserId);
+            await client.query(
+              "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+              [`custom-build-issue:${input.organizationId}:${projectId}`]
+            );
+            const prior = await priorCommand(client, {
+              principalId: operatorUserId,
+              routeKey: ISSUE_DIRECT_ROUTE,
+              commandId: input.commandId,
+              requestDigest,
+              responseSchema: CUSTOM_BUILD_OWNER_QUOTE_SCHEMA
+            });
+            if (prior !== null) return prior;
+
+            const source = one(
+              await client.query(
+                `select opportunity.id
+                   from ss.service_custom_build_direct_opportunities opportunity
+                   join ss.customer_engagements engagement
+                     on engagement.id = opportunity.engagement_id
+                    and engagement.engagement_digest = opportunity.engagement_digest
+                    and engagement.provenance = 'direct_custom_inquiry'
+                  where opportunity.organization_id = $1
+                    and opportunity.project_id = $2
+                    and opportunity.state = 'available'`,
+                [input.organizationId, projectId]
+              ),
+              "customBuildDirectOpportunity"
+            );
+            await openCommand(client, {
+              organizationId: input.organizationId,
+              principalId: operatorUserId,
+              routeKey: ISSUE_DIRECT_ROUTE,
+              commandId: input.commandId,
+              requestDigest
+            });
+
+            const quoteId = uuid(randomUUID(), "generated quoteId");
+            const revisionId = uuid(randomUUID(), "generated revisionId");
+            await client.query(
+              `insert into ss.service_custom_build_quotes (
+                 id, origin, direct_opportunity_id, credit_selection,
+                 created_by_operator_user_id
+               ) values ($1, 'direct', $2, 'no_credit', $3)`,
+              [quoteId, source.id, operatorUserId]
+            );
+            await client.query(
+              `insert into ss.service_custom_build_quote_revisions (
+                 id, quote_id, tier_id, crafted_pages, sections,
+                 unique_layouts, content_words, supplied_media,
+                 scope_statement, target_completion_date, expires_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+               )`,
+              [
+                revisionId,
+                quoteId,
+                input.tierId,
+                input.craftedPages,
+                input.sections,
+                input.uniqueLayouts,
+                input.contentWords,
+                input.suppliedMedia,
+                input.scopeStatement,
+                input.targetCompletionDate,
+                input.expiresAt
+              ]
+            );
+            await client.query(
+              `insert into ss.service_custom_build_quote_commands (
+                 quote_id, command_id
+               ) values ($1, $2)`,
+              [quoteId, input.commandId]
+            );
+            const receipt = ownerReceipt(
+              await selectQuoteById(client, quoteId)
+            );
+            await completeCommand(client, {
+              organizationId: input.organizationId,
+              principalId: operatorUserId,
+              routeKey: ISSUE_DIRECT_ROUTE,
               commandId: input.commandId,
               receipt
             });
@@ -1205,28 +1431,19 @@ export function createPostgresCustomServicesCustomBuild({
                    credit.acceptance_cutoff as credit_cutoff,
                    application.state as credit_application_state,
                    ${QUOTE_COLUMNS}
-                 from ss.service_assessment_reports report
-                 join ss.service_credit_grants credit
-                   on credit.organization_id = report.organization_id
-                  and credit.source_report_id = report.id
-                 left join lateral (
-                   select candidate.*
-                   from ss.service_custom_build_quotes candidate
-                   where candidate.organization_id = report.organization_id
-                     and candidate.project_id = report.project_id
-                     and candidate.customer_user_id = report.customer_user_id
-                     and candidate.source_report_id = report.id
-                   order by candidate.created_at desc, candidate.id desc
-                   limit 1
-                 ) quote on true
+                 from ss.service_custom_build_quotes quote
                  ${QUOTE_JOINS}
+                 left join ss.service_credit_grants credit
+                   on credit.organization_id = revision.organization_id
+                  and credit.id = revision.credit_grant_id
+                  and credit.credit_digest = revision.credit_digest
                  left join ss.service_credit_applications application
-                   on application.organization_id = report.organization_id
+                   on application.organization_id = quote.organization_id
                   and application.quote_id = quote.id
-                where report.organization_id = $1
-                  and report.project_id = $2
-                  and report.customer_user_id = $3
-                order by report.delivered_at desc
+                where quote.organization_id = $1
+                  and quote.project_id = $2
+                  and quote.customer_user_id = $3
+                order by quote.created_at desc, quote.id desc
                 limit 1`,
                 [scope.organizationId, scope.projectId, scope.customerId]
               ),
@@ -1316,9 +1533,11 @@ export function createPostgresCustomServicesCustomBuild({
             const receipt = ownerReceipt(row);
             invariant(
               receipt.state === "accepted" &&
-                receipt.credit?.state === "reserved",
+                (receipt.quote.pricing.creditAmountMinor === 0
+                  ? receipt.credit === null
+                  : receipt.credit?.state === "reserved"),
               "custom_build_repository_conflict",
-              "The Custom build acceptance did not reserve its exact credit.",
+              "The Custom build acceptance did not retain its exact credit selection.",
               { status: 500 }
             );
             const snapshot = customerSnapshot(row, input);

@@ -4656,6 +4656,7 @@
         input,
         [
           "commandId",
+          "creditSelection",
           "organizationId",
           "tierId",
           "craftedPages",
@@ -4696,6 +4697,98 @@
         {
           body: {
             commandId: commandId,
+            creditSelection: oneOf(
+              source.creditSelection,
+              "Assessment credit selection",
+              ["apply_assessment_credit", "no_credit"]
+            ),
+            organizationId: requiredUuid(
+              source.organizationId,
+              "Organization ID"
+            ),
+            tierId: tierId,
+            craftedPages: footprint.craftedPages,
+            sections: footprint.sections,
+            uniqueLayouts: footprint.uniqueLayouts,
+            contentWords: footprint.contentWords,
+            suppliedMedia: footprint.suppliedMedia,
+            scopeStatement: boundedText(
+              source.scopeStatement,
+              "Custom website scope",
+              20,
+              2000
+            ),
+            targetCompletionDate: requiredDate(
+              source.targetCompletionDate,
+              "Target completion date"
+            ),
+            expiresAt: requiredIso(
+              source.expiresAt,
+              "Custom website quote expiration"
+            )
+          },
+          idempotencyKey: commandId
+        }
+      );
+    }
+
+    function issueOwnerDirectCustomBuildQuote(projectId, input) {
+      var source = exactInput(
+        input,
+        [
+          "commandId",
+          "creditSelection",
+          "organizationId",
+          "tierId",
+          "craftedPages",
+          "sections",
+          "uniqueLayouts",
+          "contentWords",
+          "suppliedMedia",
+          "scopeStatement",
+          "targetCompletionDate",
+          "expiresAt"
+        ],
+        "Direct Custom website quote"
+      );
+      rejectClaimedAuthority(source);
+      var commandId = requiredUuid(
+        source.commandId,
+        "Direct Custom website quote command ID"
+      );
+      var tierId = oneOf(
+        source.tierId,
+        "Custom website tier",
+        [
+          "card",
+          "card-plus",
+          "site",
+          "site-plus",
+          "signature",
+          "flagship",
+          "scale"
+        ]
+      );
+      if (source.creditSelection !== "no_credit") {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message:
+            "Direct Custom website quote credit selection is invalid."
+        });
+      }
+      var footprint = customBuildFootprint(tierId, source);
+      return request(
+        "POST",
+        "/operator/custom-services/custom-build-opportunities/"
+          + segment(
+            requiredUuid(projectId, "Custom project ID"),
+            "Custom project ID"
+          )
+          + "/quote",
+        {
+          body: {
+            commandId: commandId,
+            creditSelection: "no_credit",
             organizationId: requiredUuid(
               source.organizationId,
               "Organization ID"
@@ -6756,6 +6849,8 @@
         resolveOwnerCustomBuildRequest,
       issueOwnerCustomBuildQuote:
         issueOwnerCustomBuildQuote,
+      issueOwnerDirectCustomBuildQuote:
+        issueOwnerDirectCustomBuildQuote,
       voidOwnerCustomBuildQuote:
         voidOwnerCustomBuildQuote,
       getCustomServicesCustomBuildQuote:

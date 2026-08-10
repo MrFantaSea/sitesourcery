@@ -558,6 +558,8 @@ export function createHostedApi(
     typeof customServicesCustomBuildBoundary.listOpportunities ===
       "function" &&
       typeof customServicesCustomBuildBoundary.issueQuote === "function" &&
+      typeof customServicesCustomBuildBoundary.issueDirectQuote ===
+        "function" &&
       typeof customServicesCustomBuildBoundary.voidQuote === "function" &&
       typeof customServicesCustomBuildBoundary.readCurrentQuote ===
         "function" &&
@@ -1801,6 +1803,7 @@ export function createHostedApi(
                 [
                   "commandId",
                   "contentWords",
+                  "creditSelection",
                   "craftedPages",
                   "expiresAt",
                   "organizationId",
@@ -1813,6 +1816,44 @@ export function createHostedApi(
                 ],
                 "INVALID_CUSTOM_BUILD_QUOTE",
                 "The Custom build quote is invalid."
+              )
+            );
+          status = 201;
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/operator\/custom-services\/custom-build-opportunities\/([^/]+)\/quote$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before issuing a direct Custom build quote.",
+            { status: 401 }
+          );
+          result =
+            await customServicesCustomBuildBoundary.issueDirectQuote(
+              actor,
+              route[0],
+              exactRouteBody(
+                write,
+                [
+                  "commandId",
+                  "contentWords",
+                  "craftedPages",
+                  "creditSelection",
+                  "expiresAt",
+                  "organizationId",
+                  "scopeStatement",
+                  "sections",
+                  "suppliedMedia",
+                  "targetCompletionDate",
+                  "tierId",
+                  "uniqueLayouts"
+                ],
+                "INVALID_CUSTOM_BUILD_QUOTE",
+                "The direct Custom build quote is invalid."
               )
             );
           status = 201;
