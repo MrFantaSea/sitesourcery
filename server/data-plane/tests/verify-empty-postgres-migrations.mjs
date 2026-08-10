@@ -22,6 +22,10 @@ import { createSupportCaseService } from
   "../../hosted/support-cases.mjs";
 import { createPostgresSupportCaseRepository } from
   "../../hosted/support-cases-postgres.mjs";
+import { createOperatorWorkQueue } from
+  "../../hosted/operator-work-queue.mjs";
+import { createPostgresOperatorWorkQueueRepository } from
+  "../../hosted/operator-work-queue-postgres.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -344,12 +348,13 @@ async function applyMigrations(pool) {
     "202608100107_durable_mail_lifecycle.sql",
     "202608100108_professional_services_reversals.sql",
     "202608100109_stripe_tax_purpose_authority.sql",
-    "202608100110_support_privacy_case_lifecycle.sql"
+    "202608100110_support_privacy_case_lifecycle.sql",
+    "202608100112_operator_work_queue.sql"
   ];
   assert.equal(
     names.length,
-    63,
-    "migration proof requires exactly 63 migrations through engagement, mail, reversals, purpose tax, and support/privacy cases"
+    64,
+    "migration proof requires exactly 64 migrations through purpose tax, support/privacy cases, and the held operator work queue"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -1041,6 +1046,147 @@ async function verifySupportPrivacyCaseLifecycle(pool) {
        and column_name ~ '(email|phone|body|subject|token|raw|document|export_bytes|deletion)'
   `);
   assert.equal(unsafeColumns.rowCount, 0);
+}
+
+async function verifyOperatorWorkQueue(pool) {
+  const contract = await pool.query(`
+    select
+      ss.hosted_operator_work_queue_contract_v1() =
+        'canonical-operator-work-queue-v1-source-authoritative-held'
+        as contract_ready,
+      (
+        select count(*) = 2
+          from pg_class relation
+         where relation.oid = any(array[
+           'ss.operator_work_queue_items'::regclass,
+           'ss.stripe_invoice_finalization_failures'::regclass
+         ])
+           and relation.relrowsecurity
+           and relation.relforcerowsecurity
+      ) as forced_rls,
+      not has_table_privilege(
+        'authenticated', 'ss.operator_work_queue_items', 'SELECT'
+      ) as authenticated_read_denied,
+      not has_table_privilege(
+        'service_role', 'ss.operator_work_queue_items',
+        'INSERT,UPDATE,DELETE'
+      ) as direct_projection_mutation_denied,
+      not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'ss'
+           and table_name in (
+             'operator_work_queue_items',
+             'stripe_invoice_finalization_failures'
+           )
+           and column_name in (
+             'raw_payload', 'email_address', 'phone_number',
+             'message_body', 'provider_error_message'
+           )
+      ) as unsafe_columns_absent
+  `);
+  for (const [name, ready] of Object.entries(contract.rows[0])) {
+    assert.equal(ready, true, `operator queue contract failed: ${name}`);
+  }
+
+  const operatorId = randomUUID();
+  const authorizerId = randomUUID();
+  const operatorOrganizationId = randomUUID();
+  await pool.query(
+    `insert into auth.users (id, email) values ($1, $2), ($3, $4)`,
+    [
+      operatorId, `queue-operator-${operatorId}@example.test`,
+      authorizerId, `queue-authorizer-${authorizerId}@example.test`
+    ]
+  );
+  await pool.query(
+    `insert into ss.hosted_account_profiles (user_id, display_name, state)
+     values ($1, 'Queue Operator', 'active'),
+            ($2, 'Queue Authorizer', 'active')`,
+    [operatorId, authorizerId]
+  );
+  await pool.query(
+    `insert into ss.operator_profiles (
+       user_id, display_label, state, authorized_by_user_id, authorized_at
+     ) values ($1, 'Queue Operator', 'held', $2, clock_timestamp())`,
+    [operatorId, authorizerId]
+  );
+  await pool.query(
+    `insert into ss.operator_permissions (
+       operator_user_id, capability, state, granted_by_user_id, granted_at
+     ) values (
+       $1, 'service_management_manage', 'held', $2, clock_timestamp()
+     )`,
+    [operatorId, authorizerId]
+  );
+  await pool.query(
+    `insert into ss.service_operator_authority_events (
+       operator_user_id, capability, event_sequence, event_kind,
+       predecessor_event_id, recorded_by_kind, effective_at,
+       expires_at, created_at
+     ) values (
+       $1, 'service_management_manage', 1, 'grant', null,
+       'deployment_control', clock_timestamp(),
+       clock_timestamp() + interval '1 day', clock_timestamp()
+     )`,
+    [operatorId]
+  );
+
+  const database = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresOperatorWorkQueueRepository({
+    authority: database
+  });
+  let observedAt = new Date().toISOString();
+  const queue = createOperatorWorkQueue({
+    repository,
+    reversalRepair: {
+      async reconcileEvidence() {
+        assert.fail("invoice finalization evidence has no repair command");
+      }
+    },
+    clock: { now: () => observedAt }
+  });
+  const evidenceInput = {
+    commandId: "pg-invoice-finalization-001",
+    providerEventIdDigest: "b".repeat(64),
+    invoiceIdDigest: "c".repeat(64),
+    payloadDigest: "a".repeat(64),
+    signatureVerificationDigest: "d".repeat(64),
+    reasonCode: "unknown_review",
+    providerCreatedAt: new Date(Date.now() - 60_000).toISOString()
+  };
+  const evidence = await queue.recordInvoiceFinalizationFailure(evidenceInput);
+  const replay = await queue.recordInvoiceFinalizationFailure(evidenceInput);
+  assert.equal(replay.id, evidence.id);
+
+  const scope = { actorId: operatorId, operatorOrganizationId };
+  const first = await queue.refresh(scope);
+  assert.ok(first.items.length >= 1);
+  assert.equal(first.items.every((item) =>
+    typeof item.source.table === "string" &&
+    typeof item.source.id === "string" &&
+    Number.isSafeInteger(item.source.revision) &&
+    /^[0-9a-f]{64}$/u.test(item.source.digest)
+  ), true);
+  const firstEvidenceItem = first.items.find((item) => item.source.id === evidence.id);
+  assert.ok(firstEvidenceItem);
+  assert.deepEqual(firstEvidenceItem.source, {
+    table: "ss.stripe_invoice_finalization_failures",
+    id: evidence.id,
+    revision: 1,
+    digest: evidenceInput.payloadDigest,
+    state: "open"
+  });
+  assert.equal(firstEvidenceItem.kind, "invoice_finalization_failure");
+  assert.equal(firstEvidenceItem.repair, null);
+  observedAt = new Date(Date.now() + 1000).toISOString();
+  const second = await queue.refresh(scope);
+  const secondEvidenceItem = second.items.find((item) =>
+    item.source.id === evidence.id
+  );
+  assert.equal(secondEvidenceItem.revision, firstEvidenceItem.revision);
+  assert.equal(secondEvidenceItem.digest, firstEvidenceItem.digest);
+  assert.deepEqual(await queue.list(scope), second);
 }
 
 async function verifyJointLegalV4ReleaseState(pool) {
@@ -5616,6 +5762,7 @@ export async function runMigrationVerification({
     await verifyV4ReceiptRejectsFourthAcceptance(pool);
     await verifyDurableMailLifecycle(pool);
     await verifySupportPrivacyCaseLifecycle(pool);
+    await verifyOperatorWorkQueue(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -5639,6 +5786,7 @@ export async function runMigrationVerification({
     writeOutput("customerEngagementBootstrapJourney true\n");
     writeOutput("durableMailLifecyclePostgresProof true\n");
     writeOutput("supportPrivacyCaseLifecyclePostgresProof true\n");
+    writeOutput("operatorWorkQueuePostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
