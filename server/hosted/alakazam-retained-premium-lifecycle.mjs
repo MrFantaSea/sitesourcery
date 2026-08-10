@@ -330,6 +330,8 @@ export function createAlakazamRetainedPremiumLifecycle({
   workerId = `alakazam-retained-lifecycle-${randomUUID()}`,
   enabled = false,
   intervalMs = 5_000,
+  errorBackoffMs = 5_000,
+  maximumBackoffMs = 60_000,
   wait = defaultWait,
   log = () => {}
 } = {}) {
@@ -341,6 +343,12 @@ export function createAlakazamRetainedPremiumLifecycle({
       Number.isSafeInteger(intervalMs) &&
       intervalMs >= 100 &&
       intervalMs <= 300_000 &&
+      Number.isSafeInteger(errorBackoffMs) &&
+      errorBackoffMs >= 100 &&
+      errorBackoffMs <= 300_000 &&
+      Number.isSafeInteger(maximumBackoffMs) &&
+      maximumBackoffMs >= errorBackoffMs &&
+      maximumBackoffMs <= 900_000 &&
       typeof wait === "function" &&
       typeof log === "function",
     "ALAKAZAM_RETAINED_LIFECYCLE_INVALID",
@@ -352,6 +360,7 @@ export function createAlakazamRetainedPremiumLifecycle({
   let loopPromise = null;
   let state = enabled ? "stopped" : "held";
   let cycles = 0;
+  let consecutiveErrors = 0;
   let lastStatus = null;
   let lastErrorCode = null;
 
@@ -519,21 +528,31 @@ export function createAlakazamRetainedPremiumLifecycle({
     emit({ state });
     try {
       while (!signal.aborted) {
+        let delay = intervalMs;
         try {
           const result = await runOnce();
           cycles += 1;
+          consecutiveErrors = 0;
           lastStatus = result.status;
           lastErrorCode = null;
           emit({ state, cycle: cycles, resultStatus: lastStatus });
         } catch (error) {
           cycles += 1;
+          consecutiveErrors += 1;
+          delay = Math.min(
+            maximumBackoffMs,
+            errorBackoffMs * 2 ** Math.min(
+              consecutiveErrors - 1,
+              20
+            )
+          );
           lastStatus = "error";
           lastErrorCode = String(
             error?.code ?? "ALAKAZAM_RETAINED_LIFECYCLE_CYCLE_FAILED"
           ).slice(0, 128);
           emit({ state, cycle: cycles, errorCode: lastErrorCode });
         }
-        if (!signal.aborted) await wait(intervalMs, signal);
+        if (!signal.aborted) await wait(delay, signal);
       }
     } finally {
       state = "stopped";
@@ -579,7 +598,11 @@ export function createAlakazamRetainedPremiumLifecycle({
       return Object.freeze({
         state,
         enabled,
+        intervalMs,
+        errorBackoffMs,
+        maximumBackoffMs,
         cycles,
+        consecutiveErrors,
         lastStatus,
         lastErrorCode
       });

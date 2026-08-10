@@ -2184,7 +2184,12 @@ function metric(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function createPoolBudgetRuntime({ pool, policy, timers = {} }) {
+function createPoolBudgetRuntime({
+  pool,
+  policy,
+  workload,
+  timers = {}
+}) {
   const now = timers.now ?? Date.now;
   const schedule = timers.setTimeout ?? setTimeout;
   const cancel = timers.clearTimeout ?? clearTimeout;
@@ -2209,6 +2214,9 @@ function createPoolBudgetRuntime({ pool, policy, timers = {} }) {
     totalWaitMs: 0,
     maximumWaitMs: 0
   };
+  const processConnectionBudget = workload === "worker"
+    ? policy.pool.workerReservedConnections
+    : policy.pool.apiConnections;
 
   function releaseSlot() {
     active -= 1;
@@ -2232,7 +2240,7 @@ function createPoolBudgetRuntime({ pool, policy, timers = {} }) {
   }
 
   function acquireSlot(deadlineAt) {
-    if (active < policy.pool.apiConnections) {
+    if (active < processConnectionBudget) {
       active += 1;
       return Promise.resolve({ queued: false, release: releaseSlot });
     }
@@ -2344,12 +2352,18 @@ function createPoolBudgetRuntime({ pool, policy, timers = {} }) {
         apiConnections: policy.pool.apiConnections,
         workerReservedConnections:
           policy.pool.workerReservedConnections,
+        processConnectionBudget,
+        workload,
         connectionIncrease: policy.pool.connectionIncrease,
-        workerScope: "held-for-workers-01"
+        workerScope: workload === "worker"
+          ? "dedicated-process"
+          : "external-process"
       }),
       telemetry: Object.freeze({
         schema: "sitesourcery.postgres-pool-telemetry/v1",
         pii: "none",
+        activeTransactions: active,
+        queuedAcquisitions: queued,
         activeApiTransactions: active,
         queuedApiAcquisitions: queued,
         requestedAcquisitions: counters.requested,
@@ -2396,6 +2410,7 @@ export function createPostgresPool(options = {}) {
 export function createCanonicalPostgresAuthority({
   pool,
   budgetPolicy = DEFAULT_POSTGRES_BUDGET_POLICY,
+  workload = "api",
   budgetTimers
 } = {}) {
   invariant(
@@ -2406,10 +2421,17 @@ export function createCanonicalPostgresAuthority({
     "PostgreSQL pool is required.",
     { status: 500 }
   );
+  invariant(
+    workload === "api" || workload === "worker",
+    "POSTGRES_BUDGET_CONFIGURATION_INVALID",
+    "PostgreSQL workload scope is invalid.",
+    { status: 500 }
+  );
   const selectedBudgetPolicy = validatePostgresBudgetPolicy(budgetPolicy);
   const budgetRuntime = createPoolBudgetRuntime({
     pool,
     policy: selectedBudgetPolicy,
+    workload,
     timers: budgetTimers
   });
 

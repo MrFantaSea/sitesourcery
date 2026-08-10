@@ -224,25 +224,29 @@ test("F04 HTTP rejects query, authentication, CSRF, idempotency, and body drift 
 });
 
 test("production F04 composition wraps F03 and preserves the commercial enable predicate", async () => {
-  const source = await readFile(
+  const apiSource = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
   );
-  assert.match(
-    source,
-    /createAlakazam50FulfillmentRepository\(\{\s*baseRepository: alakazamFulfillmentRepository,\s*tierRepository: alakazam50Repository\s*\}\)/u
+  const workerSource = await readFile(
+    new URL("../worker-alakazam-composition.mjs", import.meta.url),
+    "utf8"
   );
   assert.match(
-    source,
-    /createAlakazam50TierCompiler\(\{\s*baseCompiler: alakazamTierCompiler,\s*alakazam50Compiler\s*\}\)/u
+    workerSource,
+    /createAlakazam50FulfillmentRepository\(\{\s*baseRepository: createAlakazam35FulfillmentRepository\(\{[\s\S]*?tierRepository: tier35Repository\s*\}\),\s*tierRepository: tier50Repository\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazamFulfillmentWorker\(\{\s*repository: alakazam50FulfillmentRepository,\s*compiler: alakazam50TierCompiler,\s*publicationPort,[\s\S]*?enabled:\s*alakazamComposition\.mode === "approved" &&\s*publicationHeld\(\) === false,/u
+    workerSource,
+    /createAlakazam50TierCompiler\(\{\s*baseCompiler: tier35Compiler,\s*alakazam50Compiler: createAlakazam50Compiler\(\{\s*baseCompiler: tier35Compiler\s*\}\)\s*\}\)/u
   );
-  assert.match(source, /await alakazam35\.readiness\(\);\s*await alakazam50\.readiness\(\);/u);
+  assert.match(
+    workerSource,
+    /const enabled =\s*shared\.release\.mode === "approved" &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
+  );
+  assert.match(workerSource, /tier35Repository\.readiness\(\)[\s\S]*?tier50Repository\.readiness\(\)/u);
   assert.doesNotMatch(
-    source.match(/createAlakazam50Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
+    apiSource.match(/createAlakazam50Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
     /\b(?:provider|stripe|tenantRuntime|publicationPort)\s*:/u
   );
 });

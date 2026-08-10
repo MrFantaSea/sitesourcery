@@ -4,7 +4,7 @@
 
 `server/hosted/bin/server.mjs` parses exactly one required
 `SITESOURCERY_POSTGRES_BUDGET_CONFIG` v1 document before creating the pool. Its
-validated total becomes `pg.Pool.max`, its acquisition deadline becomes
+validated API budget becomes the API `pg.Pool.max`, its acquisition deadline becomes
 `connectionTimeoutMillis`, and the timeout values also bound the pool's direct
 readiness queries. The same immutable policy is passed to the canonical
 PostgreSQL authority, which reapplies the three PostgreSQL limits locally for
@@ -35,16 +35,13 @@ are unchanged.
    `ops/SITESOURCERY-PG-OPS-BUDGETS-HELD.md`; do not infer limits from a live
    database.
 
-## WORKERS-01 residual
+## WORKERS-01 process split
 
-Export, fulfillment, lifecycle, and cancellation workers currently consume the
-same in-process service and canonical authority as HTTP work. PG-OPS-01 caps API
-authority use below the physical pool maximum, thereby preserving connection
-headroom, but it does not falsely label those shared calls as an independently
-budgeted worker pool. WORKERS-01 must move worker composition to a separately
-owned process/authority/pool, bind the configured reserve to that pool, and add
-cross-process saturation proof before `workerScope` may change from
-`held-for-workers-01`.
+WORKERS-01 binds the configured API and worker budgets to separate process-owned
+pools whose maxima sum to the unchanged total. The API starts no loops and the
+worker authority reports `workerScope: dedicated-process`. Export and
+cancellation narrow production ports remain fail-closed until the separately
+documented MAIL-COMPOSE-FINAL-03 residual is resolved.
 
 No migration, provider action, database mutation, deployment, or commercial
 authority is included.

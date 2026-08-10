@@ -61,7 +61,7 @@ test("versioned PostgreSQL budgets compose exact conservative production policy"
   assert.equal(configuration.readiness.telemetry.pii, "none");
   assert.equal(
     configuration.readiness.pool.workerScope,
-    "held-for-workers-01"
+    "external-process"
   );
   assert.doesNotMatch(JSON.stringify(configuration.readiness), /postgres(?:ql)?:\/\//iu);
 });

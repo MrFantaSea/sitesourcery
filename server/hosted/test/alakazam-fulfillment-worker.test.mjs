@@ -55,7 +55,11 @@ function authority() {
   });
 }
 
-function fixture({ finalizeFails = false } = {}) {
+function fixture({
+  finalizeFails = false,
+  claimFailures = 0,
+  workerOptions = {}
+} = {}) {
   const htmlBytes = Buffer.from(
     "<!doctype html><html><body>worker artifact</body></html>",
     "utf8"
@@ -113,6 +117,12 @@ function fixture({ finalizeFails = false } = {}) {
   const repository = {
     async claimNextFulfillment(input) {
       calls.claims.push(structuredClone(input));
+      if (claimFailures > 0) {
+        claimFailures -= 1;
+        const error = new Error("injected fulfillment failure");
+        error.code = "DATABASE_UNAVAILABLE";
+        throw error;
+      }
       return structuredClone(claim);
     },
     async stageFulfillmentPublication(input) {
@@ -228,7 +238,8 @@ function fixture({ finalizeFails = false } = {}) {
         return idValues[label];
       }
     },
-    workerId: "worker-one"
+    workerId: "worker-one",
+    ...workerOptions
   });
   return { calls, worker };
 }
@@ -255,6 +266,42 @@ test("the fulfillment worker compiles, binds, publishes, and finalizes one exact
     "alakazam_fulfillment_receipt",
     "alakazam_fulfillment_release"
   ]);
+});
+
+test("fulfillment loop uses bounded error backoff and resets after success", async () => {
+  const waits = [];
+  const pending = [];
+  const { worker } = fixture({
+    claimFailures: 2,
+    workerOptions: {
+      enabled: true,
+      intervalMs: 150,
+      errorBackoffMs: 100,
+      maximumBackoffMs: 175,
+      wait(milliseconds, signal) {
+        waits.push(milliseconds);
+        return new Promise((resolve) => {
+          pending.push(() => {
+            if (!signal.aborted) resolve();
+            else resolve();
+          });
+        });
+      }
+    }
+  });
+  worker.start();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[0], 100);
+  pending.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[1], 175);
+  pending.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[2], 150);
+  assert.equal(worker.snapshot().consecutiveErrors, 0);
+  const stopping = worker.stop();
+  pending.shift()();
+  await stopping;
 });
 
 test("a finalization failure is unpublished and durably marked dark for retry", async () => {

@@ -249,29 +249,17 @@ test("ambiguous cancellation effects enter operator-only reconciliation and cann
   );
 });
 
-test("the production entrypoint starts only the leased cancellation worker and stops it before database close", async () => {
-  const source = await readFile(
-    new URL("../bin/server.mjs", import.meta.url),
-    "utf8"
-  );
-  assert.match(
-    source,
-    /stripeComposition\.mode === "approved_live"/u
-  );
-  assert.match(
-    source,
-    /createCancellationWorker\(\{/u
-  );
-  assert.doesNotMatch(
-    source,
-    /processQueuedExports/u
-  );
-  assert.ok(
-    source.indexOf("cancellationWorker.stop()") <
-      source.indexOf("authority.close()")
-  );
-  assert.doesNotMatch(
-    source,
-    /setTimeout\(\(\) => process\.exit/u
-  );
+test("the API starts no cancellation loop and the worker entrypoint fails closed without its narrow port", async () => {
+  const [apiSource, workerSource, runbook] = await Promise.all([
+    readFile(new URL("../bin/server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../bin/worker.mjs", import.meta.url), "utf8"),
+    readFile(
+      new URL("../../../ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md", import.meta.url),
+      "utf8"
+    )
+  ]);
+  assert.doesNotMatch(apiSource, /createCancellationWorker|cancellationWorker\.start/u);
+  assert.match(workerSource, /createWorkerSupervisor/u);
+  assert.match(runbook, /cancellation.*WORKER_PURPOSE_UNAVAILABLE/is);
+  assert.doesNotMatch(workerSource, /setTimeout\(\(\) => process\.exit/u);
 });
