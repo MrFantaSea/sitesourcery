@@ -384,6 +384,22 @@
 .customer-alakazam-publication-actions .spark-button{width:100%;min-height:44px}
 .customer-separate-help{display:flex;max-width:58rem;align-items:flex-start;gap:.55rem;margin-top:1rem;padding:1rem 1.1rem;border:1px solid rgba(130,231,196,.2);border-radius:1rem;color:var(--spark-muted);background:rgba(130,231,196,.045);line-height:1.55}
 .customer-separate-help strong{flex:0 0 auto;color:var(--spark-text)}
+.customer-account-routes{display:grid;max-width:58rem;gap:1rem;margin-top:1rem;padding:clamp(1.1rem,3vw,1.8rem);border:1px solid var(--spark-line);border-radius:1.2rem;background:rgba(25,16,35,.72)}
+.customer-account-routes>h3{margin:0;font-size:clamp(1.35rem,3vw,2rem)}
+.customer-account-route-status{margin:0;padding:.8rem 1rem;border-left:4px solid var(--spark-violet);border-radius:.65rem;color:var(--spark-muted);background:rgba(185,152,255,.07);line-height:1.55}
+.customer-account-route-status[data-state="ready"],.customer-account-route-status[data-state="account-ready"]{border-left-color:var(--spark-mint);background:rgba(72,151,125,.09)}
+.customer-account-route-status[data-state="offline"],.customer-account-route-status[data-state="session-ended"]{border-left-color:var(--spark-danger);color:#ffe5ec;background:rgba(150,52,79,.12)}
+.customer-checkout-state{padding:1rem 1.1rem;border:1px solid var(--spark-line);border-left:4px solid var(--spark-violet);border-radius:.8rem;background:rgba(185,152,255,.06)}
+.customer-checkout-state[data-tone="success"]{border-left-color:var(--spark-mint);background:rgba(72,151,125,.09)}
+.customer-checkout-state[data-tone="attention"]{border-left-color:var(--spark-gold);background:rgba(242,206,131,.07)}
+.customer-checkout-state h4,.customer-account-manual-routes h4{margin:0;color:var(--spark-text);font-size:1.05rem}
+.customer-checkout-state p{margin:.45rem 0 0;color:var(--spark-muted);line-height:1.6}
+.customer-account-route-card{display:grid;gap:.85rem}
+.customer-account-route-card>.spark-field{margin:0}
+.customer-account-route-card>.spark-button,.customer-account-routes>.spark-button{justify-self:start;min-height:44px}
+.customer-account-route-manual{margin:0;color:var(--spark-muted);font-size:.82rem;line-height:1.55}
+.customer-account-route-manual a{display:inline-flex;min-height:44px;align-items:center}
+.customer-account-manual-routes .platform-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;text-align:center}
 
 .spark-workroom{padding:clamp(2rem,4vw,3.5rem) 0}
 .spark-section-head{max-width:50rem;margin-bottom:2rem}

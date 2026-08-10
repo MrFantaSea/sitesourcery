@@ -379,6 +379,21 @@
       state.projectLegalAcceptanceEpoch += 1;
     }
 
+    function clearSessionState() {
+      selectionEpoch += 1;
+      state.phase = "signed-out";
+      state.account = null;
+      state.organizations = [];
+      state.organizationId = null;
+      state.projects = [];
+      state.project = null;
+      state.selectedVersionId = null;
+      state.subscription = null;
+      state.cancellationPreview = null;
+      state.exportJob = null;
+      resetDomains();
+    }
+
     function resetDomainPurchase() {
       domainPurchaseEpoch += 1;
       domainOrderEpoch += 1;
@@ -489,6 +504,17 @@
         .catch(function (error) {
           var presented = safeError(error, "That request could not be completed.");
           if (operations[name] && operations[name].token === token) {
+            if (
+              Number(error && error.status) === 401
+              || [
+                "AUTHENTICATION_REQUIRED",
+                "REAUTHENTICATION_REQUIRED"
+              ].includes(presented.code)
+            ) {
+              sessionEpoch += 1;
+              invalidateProjectLegalAcceptance();
+              clearSessionState();
+            }
             operations[name] = {
               status: "error",
               attempt: attempt,
@@ -642,17 +668,14 @@
             : null;
       state.account = account;
       if (!account) {
-        state.phase = "signed-out";
-        state.organizations = [];
-        state.organizationId = null;
-        state.projects = [];
-        state.project = null;
-        state.subscription = null;
-        state.cancellationPreview = null;
-        state.exportJob = null;
-        resetDomains();
+        clearSessionState();
         return null;
       }
+      state.project = null;
+      state.selectedVersionId = null;
+      state.subscription = null;
+      state.cancellationPreview = null;
+      state.exportJob = null;
       resetDomains();
       var organizationPayload = await api.listOrganizations();
       if (expectedSessionEpoch !== sessionEpoch) return null;
@@ -676,16 +699,7 @@
           return await loadAccountData(payload, expectedSessionEpoch);
         } catch (error) {
           if (error && error.status === 401 && expectedSessionEpoch === sessionEpoch) {
-            state.phase = "signed-out";
-            state.account = null;
-            state.organizations = [];
-            state.organizationId = null;
-            state.projects = [];
-            state.project = null;
-            state.subscription = null;
-            state.cancellationPreview = null;
-            state.exportJob = null;
-            resetDomains();
+            clearSessionState();
             return null;
           }
           if (expectedSessionEpoch === sessionEpoch) state.phase = "error";
@@ -780,18 +794,7 @@
         return task("signOut", async function () {
           await api.signOut({ idempotencyKey: key });
           if (expectedSessionEpoch !== sessionEpoch) return null;
-          selectionEpoch += 1;
-          state.phase = "signed-out";
-          state.account = null;
-          state.organizations = [];
-          state.organizationId = null;
-          state.projects = [];
-          state.project = null;
-          state.selectedVersionId = null;
-          state.subscription = null;
-          state.cancellationPreview = null;
-          state.exportJob = null;
-          resetDomains();
+          clearSessionState();
           return null;
         }, { write: true, retry: retryCall });
       };
@@ -806,6 +809,23 @@
         }, { write: true, retry: retryCall });
       };
       return retryCall();
+    }
+
+    function refreshSession() {
+      var selectedProjectId = idOf(state.project);
+      return boot().then(function () {
+        if (
+          !state.account
+          || !selectedProjectId
+          || !state.projects.some(function (project) {
+            return idOf(project) === selectedProjectId;
+          })
+        ) return snapshot();
+        return selectProject(selectedProjectId)
+          .then(function () {
+            return snapshot();
+          });
+      });
     }
 
     function completeRecovery(input) {
@@ -2145,6 +2165,7 @@
         completeRegistration,
       signIn: signIn,
       signOut: signOut,
+      refreshSession: refreshSession,
       requestRecovery: requestRecovery,
       completeRecovery: completeRecovery,
       selectOrganization: selectOrganization,

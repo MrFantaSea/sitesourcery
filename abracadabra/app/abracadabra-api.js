@@ -3400,28 +3400,47 @@
     }
 
     async function requestBinary(path, requestOptions) {
-      var response;
+      var deadline = beginRequestDeadline(
+        requestOptions && requestOptions.signal
+      );
       try {
-        response = await fetchImpl(baseUrl + path, {
-          method: "GET",
-          headers: { Accept: "application/zip, application/octet-stream" },
-          credentials: "include",
-          redirect: "error",
-          signal: requestOptions && requestOptions.signal
-        });
-      } catch (_error) {
-        throw new APIError({
-          code: "NETWORK_ERROR",
-          message: "Site Sourcery could not reach its secure service. Check the connection and try again.",
-          retryable: true
-        });
-      }
+        var response;
+        try {
+          response = await fetchImpl(baseUrl + path, {
+            method: "GET",
+            headers: { Accept: "application/zip, application/octet-stream" },
+            credentials: "include",
+            redirect: "error",
+            signal: deadline.signal
+          });
+        } catch (_error) {
+          throw new APIError({
+            code: deadline.timedOut()
+              ? "REQUEST_TIMEOUT"
+              : "NETWORK_ERROR",
+            message: deadline.timedOut()
+              ? "Site Sourcery took too long to respond. Check the connection and try again."
+              : "Site Sourcery could not reach its secure service. Check the connection and try again.",
+            retryable: true
+          });
+        }
       var requestId = response.headers && response.headers.get
         ? response.headers.get("x-request-id")
         : null;
       var contentType = response.headers && response.headers.get
         ? String(response.headers.get("content-type") || "").toLowerCase()
         : "";
+      if (deadline.signal.aborted) {
+        throw new APIError({
+          code: deadline.timedOut()
+            ? "REQUEST_TIMEOUT"
+            : "NETWORK_ERROR",
+          message: deadline.timedOut()
+            ? "Site Sourcery took too long to respond. Check the connection and try again."
+            : "Site Sourcery could not reach its secure service. Check the connection and try again.",
+          retryable: true
+        });
+      }
       if (!response.ok) {
         var payload = null;
         if (contentType.includes("application/json")) {
@@ -3470,10 +3489,32 @@
       try {
         blob = await response.blob();
       } catch (_error) {
+        if (deadline.signal.aborted) {
+          throw new APIError({
+            code: deadline.timedOut()
+              ? "REQUEST_TIMEOUT"
+              : "NETWORK_ERROR",
+            message: deadline.timedOut()
+              ? "Site Sourcery took too long to respond. Check the connection and try again."
+              : "Site Sourcery could not reach its secure service. Check the connection and try again.",
+            retryable: true
+          });
+        }
         throw new APIError({
           code: "INVALID_EXPORT_RESPONSE",
           message: "The project export archive could not be read.",
           requestId: requestId,
+          retryable: true
+        });
+      }
+      if (deadline.signal.aborted) {
+        throw new APIError({
+          code: deadline.timedOut()
+            ? "REQUEST_TIMEOUT"
+            : "NETWORK_ERROR",
+          message: deadline.timedOut()
+            ? "Site Sourcery took too long to respond. Check the connection and try again."
+            : "Site Sourcery could not reach its secure service. Check the connection and try again.",
           retryable: true
         });
       }
@@ -3492,6 +3533,9 @@
         .replace(/[^a-z0-9._-]+/giu, "-")
         .slice(0, 160);
       return Object.freeze({ blob: blob, filename: filename });
+      } finally {
+        deadline.cleanup();
+      }
     }
 
     async function requestPrivateEvidence(path, requestOptions) {
