@@ -32,6 +32,9 @@ const DOMAIN_CAPABILITIES = [
 const ALAKAZAM_CAPABILITIES = [
   ...STRIPE_PRODUCTION_CONTRACT.alakazamCapabilities
 ];
+const READINESS_PURPOSES = [
+  ...STRIPE_PRODUCTION_CONTRACT.readinessPurposes
+];
 const COMPLETE_ALAKAZAM_CAPABILITIES = [
   ...new Set([
     ...HOSTED_CAPABILITIES,
@@ -258,6 +261,31 @@ test("production Stripe composition defaults to held and supplies no latent conf
   });
   assert.equal(composition.mode, "held");
   assert.equal(composition.adapter, capture.adapter);
+  assert.deepEqual(READINESS_PURPOSES, [
+    "alakazam",
+    "customBuildChange",
+    "customBuildFinal",
+    "customBuildStart",
+    "domainRegistration",
+    "download",
+    "serviceAssessment",
+    "siteService"
+  ]);
+  assert.deepEqual(HOSTED_CAPABILITIES, [
+    "checkout:create",
+    "checkout:read",
+    "prices:read",
+    "webhook_endpoints:read",
+    "webhooks:verify"
+  ]);
+  assert.equal(
+    HOSTED_CAPABILITIES.includes("billing_portal:create"),
+    false
+  );
+  assert.equal(
+    HOSTED_CAPABILITIES.includes("subscriptions:cancel"),
+    false
+  );
   assert.deepEqual(capture.calls, [{ mode: "held" }]);
   assert.doesNotMatch(
     JSON.stringify(composition),
@@ -611,7 +639,7 @@ test("contract_test and every mismatched approval boundary are impossible in pro
         approval: approval({
           capabilities: [
             ...HOSTED_CAPABILITIES,
-            "checkout:read"
+            "customers:read"
           ]
         })
       }),

@@ -43,6 +43,16 @@ export const STRIPE_PROVIDER_MODES = Object.freeze([
   "contract_test",
   "approved_live"
 ]);
+export const STRIPE_READINESS_PURPOSES = Object.freeze([
+  "alakazam",
+  "customBuildChange",
+  "customBuildFinal",
+  "customBuildStart",
+  "domainRegistration",
+  "download",
+  "serviceAssessment",
+  "siteService"
+]);
 export const STRIPE_ALAKAZAM_CAPABILITIES =
   Object.freeze([
     "billing_portal_configurations:read",
@@ -6944,7 +6954,89 @@ export function createStripeProviderAdapter(options = {}) {
     );
   }
 
+  function readinessProjection({ purpose = null } = {}) {
+    return {
+      ready: true,
+      provider: "stripe",
+      mode,
+      environment:
+        approval?.environment ?? "contract_test",
+      livemode: config.livemode,
+      apiVersion: config.apiVersion,
+      ...(purpose === null ? {} : { purpose }),
+      priceCount:
+        purpose === null || purpose === "alakazam"
+          ? config.priceExpectations.length
+          : 0,
+      domainAuthorization:
+        (purpose === null || purpose === "domainRegistration") &&
+        domainCapabilities.length > 0 &&
+        Boolean(config.domainAuthorization),
+      webhookVerification:
+        purpose === "domainRegistration" ? false : true,
+      webhookEndpoint:
+        purpose === "domainRegistration" ? false : true,
+      taxModes: config.taxAuthority.purposes,
+      taxPurposeAuthority: true,
+      automaticTaxActivation:
+        config.taxAuthority.automaticActivation !== null,
+      taxAttestation: true,
+      ...(purpose === "alakazam" ||
+      (purpose === null && config.alakazam)
+        ? { alakazam: true }
+        : {})
+    };
+  }
+
+  async function readinessForPurpose(purpose) {
+    try {
+      invariant(
+        STRIPE_READINESS_PURPOSES.includes(purpose),
+        "stripe_readiness_purpose_invalid",
+        "Stripe readiness requires one exact payment purpose",
+        { status: 500 }
+      );
+      if (purpose === "domainRegistration") {
+        invariant(
+          domainCapabilities.length > 0 &&
+            Boolean(config.domainAuthorization),
+          "stripe_domain_authorization_held",
+          "Stripe Domain authorization is held",
+          { status: 503 }
+        );
+        domainProviderClient(client);
+      } else {
+        await verifyWebhookEndpoint();
+      }
+      if (purpose === "alakazam") {
+        invariant(
+          Boolean(config.alakazam),
+          "stripe_alakazam_held",
+          "Stripe Alakazam is held",
+          { status: 503 }
+        );
+        await verifyAlakazamConfiguration();
+      }
+      return readinessProjection({ purpose });
+    } catch (error) {
+      return {
+        ready: false,
+        provider: "stripe",
+        mode,
+        environment:
+          approval?.environment ?? "contract_test",
+        livemode: config.livemode,
+        purpose:
+          STRIPE_READINESS_PURPOSES.includes(purpose)
+            ? purpose
+            : null,
+        code: error?.code ?? "stripe_not_ready"
+      };
+    }
+  }
+
   const adapter = {
+    readinessForPurpose,
     async readiness() {
       try {
         await verifyWebhookEndpoint();
@@ -6956,29 +7048,7 @@ export function createStripeProviderAdapter(options = {}) {
         if (domainCapabilities.length > 0) {
           domainProviderClient(client);
         }
-        return {
-          ready: true,
-          provider: "stripe",
-          mode,
-          environment:
-            approval?.environment ?? "contract_test",
-          livemode: config.livemode,
-          apiVersion: config.apiVersion,
-          priceCount: config.priceExpectations.length,
-          domainAuthorization:
-            domainCapabilities.length > 0 &&
-            Boolean(config.domainAuthorization),
-          webhookVerification: true,
-          webhookEndpoint: true,
-          taxModes: config.taxAuthority.purposes,
-          taxPurposeAuthority: true,
-          automaticTaxActivation:
-            config.taxAuthority.automaticActivation !== null,
-          taxAttestation: true,
-          ...(config.alakazam
-            ? { alakazam: true }
-            : {})
-        };
+        return readinessProjection();
       } catch (error) {
         return {
           ready: false,
