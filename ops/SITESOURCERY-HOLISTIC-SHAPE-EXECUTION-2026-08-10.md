@@ -23,9 +23,10 @@ authority.
 - The previously pasted Stripe Standard live key is treated as compromised
   until an authenticated Dashboard roll proves the old key expired. It is not
   used by this integration line.
-- The current integrated union applies 63 migrations cleanly on fresh
+- The current integrated union applies 64 migrations cleanly on fresh
   PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
-  marker. The generated proof database was removed and absence-proven.
+  marker. The proof includes the durable operator work queue, and the generated
+  proof database was removed and absence-proven.
 
 ## Target shape
 
@@ -111,8 +112,9 @@ legal, entitlement, or service authority.
   - Dependencies: none.
 
 - [ ] **OPS-ORIGIN-01 — exact Dell/HQ origin seal**
-  - Held installation/seal tooling is active against the current integration
-    lineage; no host mutation is authorized by the packet.
+  - Held installation/seal tooling completed at `ffbc13e` and is merged. A real
+    seal still requires the final successor epoch and authorized host proof; no
+    host mutation was authorized by the packet.
   - Install the final proven release, record tree/unit/env-schema hashes,
     prove the final union migration set, held capabilities, loopback ingress,
     and rollback.
@@ -135,6 +137,9 @@ legal, entitlement, or service authority.
   - Dependencies: SHAPE-EPOCH-01 for release identity.
 
 - [ ] **OPS-BACKUP-01 — current recovery proof**
+  - The held, fail-closed contract/verifier/runbook completed at `f29e760` and
+    is merged. It authorizes no backup, restore, mount, database, or network
+    effect; the real final-union drill and owner facts below remain open.
   - Prove a non-empty final-union backup/restore including Legal V4, Custom,
     payment readiness, and immutable evidence.
   - Record approved RPO/RTO/retention and a replacement-host procedure.
@@ -253,7 +258,10 @@ legal, entitlement, or service authority.
     customer/operator notifications on the exact deployment.
   - Dependencies: none.
 
-- [ ] **OPS-QUEUE-01 — one operator work queue**
+- [x] **OPS-QUEUE-01 — one operator work queue**
+  - Completed at `5270762` and merged at `b8e7692` as migration 112. Fresh
+    PostgreSQL 16 union proof applies all 64 migrations and proves the exact
+    source-authoritative queue before removing the generated database.
   - Project existing reconciliation-required, service-job, publication, domain,
     Care, notification, and provider failures into one read model.
   - Invoke only existing bounded repair commands; no generic mark-paid action.
@@ -261,6 +269,8 @@ legal, entitlement, or service authority.
   - Dependencies: MAIL-01 and service-specific read models.
 
 - [ ] **COMMERCE-NOTIFY-01 — transition-driven notifications**
+  - Active in an isolated held-only packet from the 64-migration union;
+    migration 114 is reserved while CUSTOM-DIRECT-01 owns 113.
   - Transactional outbox for quote, invoice, paid, failure, report, completion,
     cancellation, reversal, domain, and Care transitions.
   - Notifications originate from committed local transitions, not raw provider
@@ -383,8 +393,9 @@ legal, entitlement, or service authority.
 1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
    SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
 2. Integrate foundation and run exact final-union migration/full browser/ops
-   proof. The current 63-migration checkpoint is green; later 112/113 packets
-   require a final successor proof.
+   proof. The current 64-migration checkpoint through operator queue migration
+   112 is green; Custom Direct 113 and later packets require the final successor
+   proof.
 3. Complete Legal publication, origin seal, current restore, monitoring, and
    Cloudflare cutover.
 4. Launch Download alone after exact Stripe test/live readiness proof.
