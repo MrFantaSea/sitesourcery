@@ -1,0 +1,37 @@
+# ACTIVATION_HOLD — second-observer candidate only. Do not copy, enable, or start.
+
+[Unit]
+Description=Check the independent Site Sourcery monitor heartbeat
+ConditionPathExists=/etc/sitesourcery-dead-man/DEAD_MAN_APPROVED
+
+[Service]
+Type=oneshot
+User=sitesourcery-dead-man
+Group=sitesourcery-dead-man
+WorkingDirectory=/opt/sitesourcery-dead-man/current
+EnvironmentFile=/etc/sitesourcery-dead-man/dead-man.env
+ExecStart=/opt/sitesourcery-dead-man/node-24.18.0/bin/node /opt/sitesourcery-dead-man/current/ops/independent-dead-man.mjs
+UMask=0077
+TimeoutStartSec=15s
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/opt/sitesourcery-dead-man/current /etc/sitesourcery-dead-man /var/lib/sitesourcery-independent-monitor

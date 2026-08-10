@@ -2144,7 +2144,11 @@ test("operations candidates keep independent approvals and provider egress holds
   );
   assert.match(
     files[3],
-    /ops\/monitor-held\.mjs/u
+    /ops\/independent-monitor\.mjs/u
+  );
+  assert.doesNotMatch(
+    files[3],
+    /Requires=.*sitesourcery|After=.*sitesourcery|backup-mount|BACKUP_QUIESCE|SITESOURCERY_DATABASE_URL|\/mnt\/sitesourcery-backups/u
   );
   assert.match(
     files[5],
