@@ -349,7 +349,11 @@ legal, entitlement, or service authority.
   - Add current PostgreSQL replay/journeys/artifact/browser/ops proof to protected
     release CI without allowing CI to grant deployment authority.
 
-- [ ] **IDENTITY-ROTATION-01 — pepper overlap**
+- [x] **IDENTITY-ROTATION-01 — pepper overlap**
+  - Completed at `88df3f6` and merged at `2142757`. Production now writes with
+    one current pepper version and verifies only explicitly configured bounded
+    prior versions; readiness and examples are secret-free. Real rotation and
+    two-observation retirement remain operator procedures, not code authority.
   - Compose prior peppers during rotation and prove existing accounts remain
     verifiable before removing old material.
 
