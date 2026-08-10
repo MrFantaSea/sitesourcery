@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { MAX_BODY_BYTES, WRITE_METHODS } from "./constants.mjs";
+import { WRITE_METHODS } from "./constants.mjs";
 import { HostedError, invariant, publicError } from "./errors.mjs";
+import {
+  DEFAULT_INGRESS_POLICY,
+  validateIngressPolicy
+} from "./ingress-policy.mjs";
 import { digest, randomToken } from "./security.mjs";
 import {
   createHeldHostedAlakazamAccount
@@ -249,17 +253,74 @@ function currentCsrfToken(cookies, nextCsrfToken) {
   return nextCsrfToken();
 }
 
-async function readJson(request) {
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
+function declaredBodyLength(request, maximumBytes) {
+  const header = request.headers.get("content-length");
+  if (header === null) return null;
   invariant(
-    !Number.isFinite(contentLength) || contentLength <= MAX_BODY_BYTES,
+    /^(?:0|[1-9][0-9]*)$/u.test(header),
+    "INVALID_CONTENT_LENGTH",
+    "Content-Length is invalid.",
+    { status: 400 }
+  );
+  const contentLength = Number(header);
+  invariant(
+    Number.isSafeInteger(contentLength) && contentLength <= maximumBytes,
     "REQUEST_TOO_LARGE",
     "Request body is too large.",
     { status: 413 }
   );
-  const text = await request.text();
+  return contentLength;
+}
+
+function requestDeadlineError() {
+  return new HostedError(
+    "REQUEST_DEADLINE_EXCEEDED",
+    "The request took too long. Retry with the same idempotency key.",
+    { status: 504 }
+  );
+}
+
+async function readBoundedBytes(request, maximumBytes) {
+  declaredBodyLength(request, maximumBytes);
+  if (request.signal.aborted) throw requestDeadlineError();
+  if (!request.body) return Buffer.alloc(0);
+  const reader = request.body.getReader();
+  const chunks = [];
+  let byteCount = 0;
+  try {
+    while (true) {
+      let item;
+      try {
+        item = await reader.read();
+      } catch (error) {
+        if (request.signal.aborted) throw requestDeadlineError();
+        throw error;
+      }
+      if (item.done) break;
+      const chunk = Buffer.from(item.value);
+      byteCount += chunk.byteLength;
+      if (byteCount > maximumBytes) {
+        await reader.cancel("request body limit exceeded").catch(() => {});
+        throw new HostedError(
+          "REQUEST_TOO_LARGE",
+          "Request body is too large.",
+          { status: 413 }
+        );
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (request.signal.aborted) throw requestDeadlineError();
+  return Buffer.concat(chunks, byteCount);
+}
+
+async function readJson(request, maximumBytes) {
+  const bytes = await readBoundedBytes(request, maximumBytes);
+  const text = bytes.toString("utf8");
   invariant(
-    Buffer.byteLength(text) <= MAX_BODY_BYTES,
+    bytes.byteLength <= maximumBytes,
     "REQUEST_TOO_LARGE",
     "Request body is too large.",
     { status: 413 }
@@ -288,17 +349,7 @@ async function readJson(request) {
   return value;
 }
 
-async function readRawWebhook(request) {
-  const contentLength = Number(
-    request.headers.get("content-length") ?? 0
-  );
-  invariant(
-    !Number.isFinite(contentLength) ||
-      contentLength <= MAX_BODY_BYTES,
-    "REQUEST_TOO_LARGE",
-    "Request body is too large.",
-    { status: 413 }
-  );
+async function readRawWebhook(request, maximumBytes) {
   invariant(
     String(
       request.headers.get("content-type") ?? ""
@@ -309,12 +360,10 @@ async function readRawWebhook(request) {
     "Stripe webhook JSON is required.",
     { status: 415 }
   );
-  const bytes = Buffer.from(
-    await request.arrayBuffer()
-  );
+  const bytes = await readBoundedBytes(request, maximumBytes);
   invariant(
     bytes.byteLength > 0 &&
-      bytes.byteLength <= MAX_BODY_BYTES,
+      bytes.byteLength <= maximumBytes,
     bytes.byteLength === 0
       ? "STRIPE_WEBHOOK_BODY_REQUIRED"
       : "REQUEST_TOO_LARGE",
@@ -443,9 +492,11 @@ export function createHostedApi(
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
     engagementBootstrap = null,
-    stripeWebhook = null
+    stripeWebhook = null,
+    ingressPolicy = DEFAULT_INGRESS_POLICY
   } = {}
 ) {
+  const ingress = validateIngressPolicy(ingressPolicy);
   invariant(service && typeof service.authenticate === "function", "RUNTIME_CONFIGURATION_ERROR", "Hosted service is required.", {
     status: 500
   });
@@ -774,8 +825,16 @@ export function createHostedApi(
     typeof csrfTokens === "function" ? csrfTokens : () => randomToken(32);
 
   return Object.freeze({
-    async fetch(request) {
+    async fetch(request, requestContext = {}) {
       const requestId = nextRequestId("request");
+      const identityContext = Object.freeze({
+        clientAddress:
+          typeof requestContext?.clientAddress === "string" &&
+          requestContext.clientAddress.length > 0 &&
+          requestContext.clientAddress.length <= 80
+            ? requestContext.clientAddress
+            : "unavailable"
+      });
       try {
         const url = new URL(request.url);
         const method = request.method.toUpperCase();
@@ -961,7 +1020,10 @@ export function createHostedApi(
           );
           const result =
             await stripeWebhookBoundary.ingestStripeWebhook({
-              rawBody: await readRawWebhook(request),
+              rawBody: await readRawWebhook(
+                request,
+                ingress.body.webhookBytes
+              ),
               signature: request.headers.get(
                 "stripe-signature"
               )
@@ -988,7 +1050,9 @@ export function createHostedApi(
             : await service.authenticate(
                 cookies.ss_session
               );
-        const body = WRITE_METHODS.has(method) ? await readJson(request) : {};
+        const body = WRITE_METHODS.has(method)
+          ? await readJson(request, ingress.body.jsonBytes)
+          : {};
         const write = { ...body, commandId: commandId(request) };
         let route;
         let alakazamBillingSurface;
@@ -997,7 +1061,10 @@ export function createHostedApi(
         let headers = { "X-Request-Id": requestId };
 
         if (method === "POST" && pathname === "/api/v1/auth/register") {
-          const staged = await service.register(write);
+          const staged = await service.register(
+            write,
+            identityContext
+          );
           const { sessionToken, ...safe } = staged;
           invariant(
             sessionToken === undefined,
@@ -1046,7 +1113,10 @@ export function createHostedApi(
           result = await service.signOut(actor, write.commandId);
           headers["Set-Cookie"] = clearSessionCookie();
         } else if (method === "POST" && pathname === "/api/v1/auth/recovery") {
-          result = await service.requestRecovery(write);
+          result = await service.requestRecovery(
+            write,
+            identityContext
+          );
           status = 202;
         } else if (
           method === "POST" &&

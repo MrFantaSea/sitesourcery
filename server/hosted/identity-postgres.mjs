@@ -12,6 +12,7 @@ import { HostedError, invariant } from "./errors.mjs";
 import {
   createHeldRegistrationMailPort
 } from "./registration-mail-port.mjs";
+import { DEFAULT_INGRESS_POLICY } from "./ingress-policy.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SCRYPT_N = 32768;
@@ -21,11 +22,7 @@ const SCRYPT_BYTES = 64;
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const RECOVERY_MS = 30 * 60 * 1000;
 const REGISTRATION_MS = 2 * 60 * 60 * 1000;
-const DEFAULT_RATE_LIMIT = Object.freeze({
-  attempts: 6,
-  windowMs: 15 * 60 * 1000,
-  blockMs: 15 * 60 * 1000
-});
+const DEFAULT_RATE_LIMIT = DEFAULT_INGRESS_POLICY.identity.subject;
 
 function iso(value) {
   const selected = value instanceof Date ? value : new Date(value);
@@ -231,7 +228,11 @@ export function createPostgresIdentityBridge({
   registrationTtlMs = REGISTRATION_MS,
   registrationMailPort =
     createHeldRegistrationMailPort(),
-  rateLimit = DEFAULT_RATE_LIMIT
+  rateLimit = DEFAULT_RATE_LIMIT,
+  registrationRecoveryRateLimit = {
+    perIp: DEFAULT_INGRESS_POLICY.identity.perIp,
+    global: DEFAULT_INGRESS_POLICY.identity.global
+  }
 } = {}) {
   invariant(
     pool &&
@@ -293,6 +294,29 @@ export function createPostgresIdentityBridge({
     "Identity rate limits are invalid.",
     { status: 500 }
   );
+  const configuredRegistrationRecoveryRateLimit = {
+    perIp: {
+      ...DEFAULT_INGRESS_POLICY.identity.perIp,
+      ...registrationRecoveryRateLimit?.perIp
+    },
+    global: {
+      ...DEFAULT_INGRESS_POLICY.identity.global,
+      ...registrationRecoveryRateLimit?.global
+    }
+  };
+  for (const selected of Object.values(configuredRegistrationRecoveryRateLimit)) {
+    invariant(
+      Number.isInteger(selected.attempts) &&
+        selected.attempts >= 1 && selected.attempts <= 10_000 &&
+        Number.isInteger(selected.windowMs) &&
+        selected.windowMs >= 1_000 && selected.windowMs <= 24 * 60 * 60 * 1000 &&
+        Number.isInteger(selected.blockMs) &&
+        selected.blockMs >= 1_000 && selected.blockMs <= 24 * 60 * 60 * 1000,
+      "IDENTITY_CONFIGURATION_ERROR",
+      "Registration and recovery rate limits are invalid.",
+      { status: 500 }
+    );
+  }
   const query = (text, values) =>
     authority
       ? authority.service({}, (client) => client.query(text, values))
@@ -337,63 +361,72 @@ export function createPostgresIdentityBridge({
     return genericAuthFailure(429);
   }
 
-  async function consumeRateAttempt(scope, subject) {
+  async function consumeRateAttempts(scope, buckets) {
     const now = iso(clock());
-    const selected = subjectDigest(scope, subject);
+    const selectedBuckets = buckets
+      .map(({ subject, limit }) => ({
+        subjectDigest: subjectDigest(scope, subject),
+        limit
+      }))
+      .sort((left, right) =>
+        left.subjectDigest.localeCompare(right.subjectDigest)
+      );
     await rateTransact(async (client) => {
-      await client.query(
-        `select pg_advisory_xact_lock(
-           hashtextextended($1, 0)
-         )`,
-        [
-          `sitesourcery.identity-rate:${scope}:${selected}`
-        ]
-      );
-      const existing = await client.query(
-        `select
-           window_started_at, attempt_count, blocked_until
-           from ss.hosted_auth_rate_limits
-          where scope = $1 and subject_digest = $2
-          for update`,
-        [scope, selected]
-      );
-      const row = existing.rows[0];
-      if (
-        row?.blocked_until &&
-        Date.parse(row.blocked_until) > Date.parse(now)
-      ) {
-        throw rateLimitError(scope);
-      }
-      const freshWindow =
-        !row ||
-        (
-          row.blocked_until &&
-          Date.parse(row.blocked_until) <= Date.parse(now)
-        ) ||
-        Date.parse(row.window_started_at) + configuredRateLimit.windowMs <=
-          Date.parse(now);
-      const attempts = freshWindow ? 1 : Number(row.attempt_count) + 1;
-      const windowStartedAt = freshWindow
-        ? now
-        : new Date(row.window_started_at).toISOString();
-      const blockedUntil =
-        attempts >= configuredRateLimit.attempts
-          ? addMs(now, configuredRateLimit.blockMs)
+      for (const bucket of selectedBuckets) {
+        await client.query(
+          `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+          [`sitesourcery.identity-rate:${scope}:${bucket.subjectDigest}`]
+        );
+        const existing = await client.query(
+          `select window_started_at, attempt_count, blocked_until
+             from ss.hosted_auth_rate_limits
+            where scope = $1 and subject_digest = $2
+            for update`,
+          [scope, bucket.subjectDigest]
+        );
+        const row = existing.rows[0];
+        if (row?.blocked_until && Date.parse(row.blocked_until) > Date.parse(now)) {
+          throw rateLimitError(scope);
+        }
+        const freshWindow = !row ||
+          (row.blocked_until && Date.parse(row.blocked_until) <= Date.parse(now)) ||
+          Date.parse(row.window_started_at) + bucket.limit.windowMs <= Date.parse(now);
+        const attempts = freshWindow ? 1 : Number(row.attempt_count) + 1;
+        const windowStartedAt = freshWindow ? now : iso(row.window_started_at);
+        const blockedUntil = attempts >= bucket.limit.attempts
+          ? addMs(now, bucket.limit.blockMs)
           : null;
-      await client.query(
-        `insert into ss.hosted_auth_rate_limits (
-           scope, subject_digest, window_started_at, attempt_count,
-           blocked_until, updated_at
-         ) values ($1, $2, $3, $4, $5, $3)
-         on conflict (scope, subject_digest) do update
-           set window_started_at = excluded.window_started_at,
-               attempt_count = excluded.attempt_count,
-               blocked_until = excluded.blocked_until,
-               updated_at = excluded.updated_at`,
-        [scope, selected, windowStartedAt, attempts, blockedUntil]
-      );
+        await client.query(
+          `insert into ss.hosted_auth_rate_limits (
+             scope, subject_digest, window_started_at, attempt_count,
+             blocked_until, updated_at
+           ) values ($1, $2, $3, $4, $5, $3)
+           on conflict (scope, subject_digest) do update
+             set window_started_at = excluded.window_started_at,
+                 attempt_count = excluded.attempt_count,
+                 blocked_until = excluded.blocked_until,
+                 updated_at = excluded.updated_at`,
+          [scope, bucket.subjectDigest, windowStartedAt, attempts, blockedUntil]
+        );
+      }
     });
-    return { now, subjectDigest: selected };
+    return { now, subjectDigest: selectedBuckets[0].subjectDigest };
+  }
+
+  function consumeRateAttempt(scope, subject) {
+    return consumeRateAttempts(scope, [{
+      subject,
+      limit: configuredRateLimit
+    }]);
+  }
+
+  function consumeRegistrationRecoveryRate(scope, email, requestContext) {
+    const clientAddress = String(requestContext?.clientAddress ?? "unavailable");
+    return consumeRateAttempts(scope, [
+      { subject: email, limit: configuredRateLimit },
+      { subject: `client:${clientAddress}`, limit: configuredRegistrationRecoveryRateLimit.perIp },
+      { subject: "global", limit: configuredRegistrationRecoveryRateLimit.global }
+    ]);
   }
 
   async function clearRate(scope, selected) {
@@ -459,7 +492,7 @@ export function createPostgresIdentityBridge({
       email: rawEmail,
       password: rawPassword,
       commandId
-    }) {
+    }, requestContext = {}) {
       const email = normalizeEmail(rawEmail);
       const displayName = text(name, "Name", 100);
       const orgName = text(organizationName, "Organization name", 120, 2);
@@ -535,9 +568,10 @@ export function createPostgresIdentityBridge({
           replayed: true
         };
       }
-      const gate = await consumeRateAttempt(
+      const gate = await consumeRegistrationRecoveryRate(
         "registration",
-        email
+        email,
+        requestContext
       );
       const encoded = await hashPasswordWithPepper(selectedPassword, {
         pepper,
@@ -1233,7 +1267,8 @@ export function createPostgresIdentityBridge({
 
     async issueRecoveryForDelivery(
       rawEmail,
-      { commandId } = {}
+      { commandId } = {},
+      requestContext = {}
     ) {
       const email = normalizeEmail(rawEmail);
       const selectedCommandId = text(
@@ -1275,9 +1310,10 @@ export function createPostgresIdentityBridge({
           }
         };
       }
-      const gate = await consumeRateAttempt(
+      const gate = await consumeRegistrationRecoveryRate(
         "recovery",
-        email
+        email,
+        requestContext
       );
       const delivery = await transact(async (client) => {
         const result = await client.query(

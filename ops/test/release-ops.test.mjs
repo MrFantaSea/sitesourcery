@@ -223,6 +223,10 @@ test("Caddy routes the exact control API and hosted artifact before tenant domai
     controlBlock,
     /reverse_proxy 127\.0\.0\.1:8788/u
   );
+  assert.match(controlBlock, /request_body \{\s+max_size 1MB/u);
+  assert.match(controlBlock, /dial_timeout 3s/u);
+  assert.match(controlBlock, /response_header_timeout 20s/u);
+  assert.match(controlBlock, /header_up X-Real-IP \{remote_host\}/u);
   assert.match(
     controlBlock,
     /root \* \{\$SITESOURCERY_HOSTED_PUBLIC_ROOT\}/u

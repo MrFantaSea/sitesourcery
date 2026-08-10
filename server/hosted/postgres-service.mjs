@@ -36,6 +36,7 @@ import {
   publicProjectLegalAuthority,
   validateProjectLegalAcceptance
 } from "./project-legal-authority.mjs";
+import { DEFAULT_INGRESS_POLICY } from "./ingress-policy.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -598,7 +599,8 @@ export function createCanonicalPostgresService({
   exportLeaseMs = DEFAULT_EXPORT_LEASE_MS,
   licensedBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN,
   projectLegalAuthority = null,
-  projectLegalAuthorityDiagnostic = null
+  projectLegalAuthorityDiagnostic = null,
+  resourceLimits = DEFAULT_INGRESS_POLICY.writes
 } = {}) {
   invariant(
     authority?.kind === "canonical-postgres" &&
@@ -607,6 +609,26 @@ export function createCanonicalPostgresService({
     "Canonical PostgreSQL authority is required.",
     { status: 500 }
   );
+  const configuredResourceLimits = {
+    perPrincipal: {
+      ...DEFAULT_INGRESS_POLICY.writes.perPrincipal,
+      ...resourceLimits?.perPrincipal
+    },
+    compile: {
+      ...DEFAULT_INGRESS_POLICY.writes.compile,
+      ...resourceLimits?.compile
+    }
+  };
+  for (const selected of Object.values(configuredResourceLimits)) {
+    invariant(
+      Number.isInteger(selected.attempts) && selected.attempts >= 1 &&
+        selected.attempts <= 10_000 && Number.isInteger(selected.windowMs) &&
+        selected.windowMs >= 1_000 && selected.windowMs <= 24 * 60 * 60 * 1000,
+      "RUNTIME_CONFIGURATION_ERROR",
+      "Hosted write quotas are invalid.",
+      { status: 500 }
+    );
+  }
   invariant(
     identity &&
       typeof identity.authenticate === "function" &&
@@ -897,6 +919,11 @@ export function createCanonicalPostgresService({
         now(clock)
       ]
     );
+    await assertWriteQuota(client, {
+      actor,
+      organizationId,
+      routeKey
+    });
     const result = await work(commandRowId);
     await client.query(
       `update ss.idempotency_keys
@@ -907,6 +934,56 @@ export function createCanonicalPostgresService({
       [commandRowId, JSON.stringify(result)]
     );
     return result;
+  }
+
+  async function assertWriteQuota(
+    client,
+    { actor, organizationId, routeKey }
+  ) {
+    await client.query(
+      `select pg_advisory_xact_lock(hashtextextended($1, 0))`,
+      [`sitesourcery.write-quota:${organizationId}:${actor.userId}`]
+    );
+    const writes = await client.query(
+      `select count(*)::integer as count
+         from ss.idempotency_keys
+        where organization_id = $1
+          and principal_id = $2
+          and created_at >= $3::timestamptz - ($4::bigint * interval '1 millisecond')`,
+      [
+        organizationId,
+        actor.userId,
+        now(clock),
+        configuredResourceLimits.perPrincipal.windowMs
+      ]
+    );
+    invariant(
+      Number(writes.rows[0]?.count) <= configuredResourceLimits.perPrincipal.attempts,
+      "PROJECT_WRITE_RATE_LIMITED",
+      "Too many project changes were requested. Retry shortly.",
+      { status: 429 }
+    );
+    if (routeKey !== "project.version.create") return;
+    const compiles = await client.query(
+      `select count(*)::integer as count
+         from ss.idempotency_keys
+        where organization_id = $1
+          and principal_id = $2
+          and route_key = 'project.version.create'
+          and created_at >= $3::timestamptz - ($4::bigint * interval '1 millisecond')`,
+      [
+        organizationId,
+        actor.userId,
+        now(clock),
+        configuredResourceLimits.compile.windowMs
+      ]
+    );
+    invariant(
+      Number(compiles.rows[0]?.count) <= configuredResourceLimits.compile.attempts,
+      "COMPILE_RATE_LIMITED",
+      "Too many versions were compiled. Retry shortly.",
+      { status: 429 }
+    );
   }
 
   async function projectWrite(
@@ -5688,8 +5765,8 @@ export function createCanonicalPostgresService({
       return identity.authenticate(token);
     },
 
-    register(input) {
-      return identity.register(input);
+    register(input, requestContext) {
+      return identity.register(input, requestContext);
     },
 
     completeRegistration(input) {
@@ -5704,7 +5781,7 @@ export function createCanonicalPostgresService({
       return identity.signOut(requiredActor(actor));
     },
 
-    async requestRecovery(input) {
+    async requestRecovery(input, requestContext) {
       const selectedCommandId = commandId(input.commandId);
       const recipient = normalizeEmail(input.email);
       const requestDigest = digest({
@@ -5748,9 +5825,11 @@ export function createCanonicalPostgresService({
         { status: 500 }
       );
       const issued =
-        await identity.issueRecoveryForDelivery(recipient, {
-          commandId: selectedCommandId
-        });
+        await identity.issueRecoveryForDelivery(
+          recipient,
+          { commandId: selectedCommandId },
+          requestContext
+        );
       invariant(
         issued.recipient === recipient,
         "RECOVERY_DELIVERY_INVALID",
@@ -6452,15 +6531,13 @@ export function createCanonicalPostgresService({
         "Review the exact generated page before saving this version.",
         { status: 400 }
       );
-      const compiled = compiler.compile(rawFacts);
       const previewDigest = requiredText(
         input.previewDigest,
         "Preview digest",
         64
       );
       invariant(
-        /^[a-f0-9]{64}$/u.test(previewDigest) &&
-          previewDigest === compiled.artifactDigest,
+        /^[a-f0-9]{64}$/u.test(previewDigest),
         "PREVIEW_ARTIFACT_MISMATCH",
         "The reviewed page does not match the exact server-generated artifact.",
         { status: 409 }
@@ -6475,6 +6552,13 @@ export function createCanonicalPostgresService({
           compilerRevision: compiler.revision
         },
         work: async (client, scope) => {
+          const compiled = compiler.compile(rawFacts);
+          invariant(
+            previewDigest === compiled.artifactDigest,
+            "PREVIEW_ARTIFACT_MISMATCH",
+            "The reviewed page does not match the exact server-generated artifact.",
+            { status: 409 }
+          );
           await client.query(
             "select id from ss.projects where id = $1 for update",
             [scope.projectId]

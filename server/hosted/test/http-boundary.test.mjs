@@ -30,7 +30,8 @@ function createContext({
       webhookSecret:
         "whsec_never-public"
     }
-  }
+  },
+  ingressPolicy
 } = {}) {
   let requestSequence = 0;
   let csrfIssues = 0;
@@ -44,7 +45,8 @@ function createContext({
     projectCreates: [],
     authorityReads: 0,
     authenticate: [],
-    readiness: []
+    readiness: [],
+    identityContexts: []
   };
   const service = {
     async authenticate(token) {
@@ -55,8 +57,9 @@ function createContext({
       calls.readiness.push(true);
       return structuredClone(readiness);
     },
-    async register(input) {
+    async register(input, requestContext) {
       calls.register.push(input);
+      calls.identityContexts.push(["registration", requestContext]);
       return {
         accepted: true,
         verificationRequired: true,
@@ -80,8 +83,9 @@ function createContext({
         replayed: false
       };
     },
-    async requestRecovery(input) {
+    async requestRecovery(input, requestContext) {
       calls.recovery.push(input);
+      calls.identityContexts.push(["recovery", requestContext]);
       return {
         accepted: true,
         delivery: "manual_operator",
@@ -229,7 +233,8 @@ function createContext({
     csrfTokens() {
       csrfIssues += 1;
       return CSRF;
-    }
+    },
+    ...(ingressPolicy ? { ingressPolicy } : {})
   });
   return {
     api,
@@ -237,6 +242,54 @@ function createContext({
     csrfIssueCount: () => csrfIssues
   };
 }
+
+test("HTTP ingress stops streaming JSON over the configured cap and forwards bounded client identity", async () => {
+  const base = (await import("../ingress-policy.mjs")).DEFAULT_INGRESS_POLICY;
+  const context = createContext({
+    ingressPolicy: {
+      ...base,
+      body: { ...base.body, jsonBytes: 1024 }
+    }
+  });
+  let cancelled = false;
+  const request = new Request(`${ORIGIN}/api/v1/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: ORIGIN,
+      Cookie: `ss_csrf=${CSRF}`,
+      "X-CSRF-Token": CSRF,
+      "Idempotency-Key": "bounded-register-1"
+    },
+    body: new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(700));
+        controller.enqueue(new Uint8Array(700));
+      },
+      cancel() { cancelled = true; }
+    }),
+    duplex: "half"
+  });
+  const response = await context.api.fetch(request, {
+    clientAddress: "203.0.113.10"
+  });
+  assert.equal(response.status, 413);
+  assert.equal(context.calls.register.length, 0);
+  assert.equal(cancelled, true);
+
+  const accepted = await context.api.fetch(
+    writeRequest("/api/v1/auth/recovery", {
+      body: { email: "owner@example.test" },
+      cookie: `ss_csrf=${CSRF}`
+    }),
+    { clientAddress: "203.0.113.10" }
+  );
+  assert.equal(accepted.status, 202);
+  assert.deepEqual(context.calls.identityContexts.at(-1), [
+    "recovery",
+    { clientAddress: "203.0.113.10" }
+  ]);
+});
 
 function writeRequest(path, {
   body,
