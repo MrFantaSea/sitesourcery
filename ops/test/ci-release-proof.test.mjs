@@ -83,7 +83,13 @@ function releaseInput() {
       artifact: { manifestSha256: snapshot.artifact.sha256 },
       units: { manifestSha256: snapshot.units.sha256 },
       environmentSchema: {
-        manifestSha256: snapshot.environmentSchema.sha256
+        manifestSha256: snapshot.environmentSchema.sha256,
+        classificationSha256:
+          snapshot.environmentSchema.classificationSha256
+      },
+      worker: {
+        manifestSha256: snapshot.worker.sha256,
+        contractSha256: snapshot.worker.contractSha256
       },
       migration: {
         count: snapshot.migration.count,

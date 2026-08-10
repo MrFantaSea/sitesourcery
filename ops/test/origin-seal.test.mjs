@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  classifyOriginEnvironmentName,
   collectOriginRepositorySnapshot,
+  collectOriginWorkerRuntime,
   verifyOriginReleaseRepository
 } from "../origin-seal-repository.mjs";
 import {
@@ -13,6 +23,8 @@ import {
   ORIGIN_HOST_ROLE,
   ORIGIN_LOOPBACK_EXPECTATIONS,
   ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
+  ORIGIN_WORKER_PATHS,
+  ORIGIN_WORKER_PURPOSES,
   compareOriginInstalledReadback,
   createOriginInstallPlan,
   createOriginInstalledReadback,
@@ -20,6 +32,7 @@ import {
   createOriginRollbackPlan,
   createOriginSeal,
   expectedOriginInstalledIdentity,
+  expectedOriginInstalledWorker,
   validateOriginReleaseInput,
   validateOriginSeal
 } from "../origin-seal-runtime.mjs";
@@ -72,7 +85,13 @@ function epochFromSnapshot(overrides = {}) {
       manifestSha256: snapshot.units.sha256
     },
     environmentSchema: {
-      manifestSha256: snapshot.environmentSchema.sha256
+      manifestSha256: snapshot.environmentSchema.sha256,
+      classificationSha256:
+        snapshot.environmentSchema.classificationSha256
+    },
+    worker: {
+      manifestSha256: snapshot.worker.sha256,
+      contractSha256: snapshot.worker.contractSha256
     },
     migration: {
       count: snapshot.migration.count,
@@ -154,8 +173,130 @@ test("successor input derives migration authority and every origin hash from exa
     input.epoch.environmentSchema.manifestSha256,
     snapshot.environmentSchema.sha256
   );
+  assert.equal(
+    input.epoch.environmentSchema.classificationSha256,
+    snapshot.environmentSchema.classificationSha256
+  );
+  assert.equal(input.epoch.worker.manifestSha256, snapshot.worker.sha256);
+  assert.equal(
+    input.epoch.worker.contractSha256,
+    snapshot.worker.contractSha256
+  );
   assert.equal(input.epoch.legal.manifestSha256, snapshot.legal.sha256);
   assert.equal(input.epoch.ingress.manifestSha256, snapshot.ingress.sha256);
+});
+
+test("worker evidence binds entrypoints unit environment held purposes and split pool", () => {
+  assert.deepEqual(
+    snapshot.worker.files.map(({ path: selectedPath }) => selectedPath),
+    Object.values(ORIGIN_WORKER_PATHS).sort((left, right) =>
+      left.localeCompare(right)
+    )
+  );
+  assert.equal(
+    snapshot.units.files.some(({ path: selectedPath }) =>
+      selectedPath === ORIGIN_WORKER_PATHS.unit
+    ),
+    true
+  );
+  assert.equal(
+    snapshot.environmentSchema.files.some(({ path: selectedPath }) =>
+      selectedPath === ORIGIN_WORKER_PATHS.environmentSchema
+    ),
+    true
+  );
+  assert.equal(snapshot.worker.contract.activation, "held");
+  assert.deepEqual(
+    snapshot.worker.contract.selectedPurposes,
+    ORIGIN_WORKER_PURPOSES
+  );
+  assert.deepEqual(snapshot.worker.contract.postgresPool, {
+    totalConnections: 10,
+    apiConnections: 8,
+    workerReservedConnections: 2,
+    connectionIncrease: "none"
+  });
+  assert.equal(snapshot.worker.contract.apiWorkerLoopCount, 0);
+  assert.equal(
+    snapshot.worker.contract.apiWorkerMode,
+    "external_process_required"
+  );
+  assert.equal(snapshot.worker.contract.workerOwnsPublicListener, false);
+  assert.equal(snapshot.worker.contract.allowsProviderEffects, false);
+});
+
+test("environment inventory projects names and classifications without values", () => {
+  assert.equal(
+    classifyOriginEnvironmentName("SITESOURCERY_ENGAGEMENT_TOKEN_SECRET"),
+    "secret"
+  );
+  assert.equal(
+    classifyOriginEnvironmentName("SITESOURCERY_HOSTED_PORT"),
+    "non-secret-configuration"
+  );
+  assert.equal(
+    snapshot.environmentSchema.variables.some(
+      ({ name, classification }) =>
+        name === "SITESOURCERY_DATABASE_URL" && classification === "secret"
+    ),
+    true
+  );
+  for (const variable of snapshot.environmentSchema.variables) {
+    assert.deepEqual(Object.keys(variable).sort(), [
+      "classification",
+      "name",
+      "source"
+    ]);
+  }
+  assert.doesNotMatch(
+    JSON.stringify(snapshot.environmentSchema.variables),
+    /replace-with|postgresql:|base64-secret/u
+  );
+});
+
+test("worker evidence fails closed on API loop or held-config drift", async () => {
+  const fixture = await mkdtemp(
+    path.join(os.tmpdir(), "ss-origin-worker-contract-")
+  );
+  try {
+    for (const relativePath of Object.values(ORIGIN_WORKER_PATHS)) {
+      const target = path.join(fixture, relativePath);
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(path.join(projectRoot, relativePath), target);
+    }
+    const selected = await collectOriginWorkerRuntime(fixture);
+    assert.equal(selected.contract.activation, "held");
+
+    const apiPath = path.join(fixture, ORIGIN_WORKER_PATHS.apiEntrypoint);
+    const apiSource = await readFile(apiPath, "utf8");
+    await writeFile(
+      apiPath,
+      `${apiSource}\n// createWorkerSupervisor would violate API isolation.\n`,
+      "utf8"
+    );
+    await assert.rejects(
+      collectOriginWorkerRuntime(fixture),
+      /zero in-process worker loops/u
+    );
+
+    await writeFile(apiPath, apiSource, "utf8");
+    const environmentPath = path.join(
+      fixture,
+      ORIGIN_WORKER_PATHS.environmentSchema
+    );
+    const environment = await readFile(environmentPath, "utf8");
+    await writeFile(
+      environmentPath,
+      environment.replace('"activation":"held"', '"activation":"owner-approved"'),
+      "utf8"
+    );
+    await assert.rejects(
+      collectOriginWorkerRuntime(fixture),
+      /must remain exactly held/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test("missing or stale successor migration authority fails closed", () => {
@@ -183,6 +324,11 @@ test("seal rejects source artifact unit environment legal and ingress drift inde
     (epoch) => {
       epoch.environmentSchema.manifestSha256 = "4".repeat(64);
     },
+    (epoch) => {
+      epoch.environmentSchema.classificationSha256 = "7".repeat(64);
+    },
+    (epoch) => { epoch.worker.manifestSha256 = "8".repeat(64); },
+    (epoch) => { epoch.worker.contractSha256 = "9".repeat(64); },
     (epoch) => { epoch.legal.manifestSha256 = "5".repeat(64); },
     (epoch) => { epoch.ingress.manifestSha256 = "6".repeat(64); }
   ];
@@ -247,6 +393,7 @@ test("origin seal is deterministic, exact-host-role, held, and loopback-only", (
   assert.deepEqual(first.authority, ORIGIN_HELD_AUTHORITY);
   assert.deepEqual(first.layout, layout);
   assert.deepEqual(first.ingress.expectations, ORIGIN_LOOPBACK_EXPECTATIONS);
+  assert.deepEqual(first.worker, snapshot.worker);
   assert.equal(first.migration.count, snapshot.migration.count);
   assert.equal(first.rollback.predecessorCommitSha, PREDECESSOR_COMMIT);
 });
@@ -257,6 +404,7 @@ test("installed readback compares every identity field without granting authorit
     seal: selectedSeal,
     observedAt: OBSERVED_AT,
     identity: expectedOriginInstalledIdentity(selectedSeal),
+    worker: expectedOriginInstalledWorker(selectedSeal),
     listeners: structuredClone(ORIGIN_LOOPBACK_EXPECTATIONS),
     authority: structuredClone(ORIGIN_HELD_AUTHORITY)
   });
@@ -277,6 +425,7 @@ test("installed readback compares every identity field without granting authorit
       seal: selectedSeal,
       observedAt: OBSERVED_AT,
       identity: wrongIdentity,
+      worker: expectedOriginInstalledWorker(selectedSeal),
       listeners: structuredClone(ORIGIN_LOOPBACK_EXPECTATIONS),
       authority: structuredClone(ORIGIN_HELD_AUTHORITY)
     })
@@ -293,6 +442,7 @@ test("installed readback rejects public listeners or any capability lift", () =>
     seal: selectedSeal,
     observedAt: OBSERVED_AT,
     identity: expectedOriginInstalledIdentity(selectedSeal),
+    worker: expectedOriginInstalledWorker(selectedSeal),
     listeners: structuredClone(ORIGIN_LOOPBACK_EXPECTATIONS),
     authority: structuredClone(ORIGIN_HELD_AUTHORITY)
   };
@@ -307,6 +457,40 @@ test("installed readback rejects public listeners or any capability lift", () =>
     () => createOriginInstalledReadback(base),
     /must remain exactly held/u
   );
+});
+
+test("installed worker readback rejects effects and reports bounded contract drift", () => {
+  const selectedSeal = seal();
+  const common = {
+    seal: selectedSeal,
+    observedAt: OBSERVED_AT,
+    identity: expectedOriginInstalledIdentity(selectedSeal),
+    listeners: structuredClone(ORIGIN_LOOPBACK_EXPECTATIONS),
+    authority: structuredClone(ORIGIN_HELD_AUTHORITY)
+  };
+  for (const mutate of [
+    (worker) => { worker.activation = "owner-approved"; },
+    (worker) => { worker.apiWorkerLoopCount = 1; },
+    (worker) => { worker.workerOwnsPublicListener = true; },
+    (worker) => { worker.allowsProviderEffects = true; },
+    (worker) => { worker.postgresPool.workerReservedConnections = 3; }
+  ]) {
+    const worker = structuredClone(expectedOriginInstalledWorker(selectedSeal));
+    mutate(worker);
+    assert.throws(
+      () => createOriginInstalledReadback({ ...common, worker }),
+      /held, external, and effect-free|allocation is invalid/u
+    );
+  }
+
+  const worker = structuredClone(expectedOriginInstalledWorker(selectedSeal));
+  worker.selectedPurposes = worker.selectedPurposes.slice(0, -1);
+  const mismatch = compareOriginInstalledReadback({
+    seal: selectedSeal,
+    readback: createOriginInstalledReadback({ ...common, worker })
+  });
+  assert.equal(mismatch.state, "mismatch");
+  assert.deepEqual(mismatch.mismatches, ["WORKER_CONTRACT_MISMATCH"]);
 });
 
 test("held install and rollback plans contain exact commands but no activation", () => {
@@ -329,6 +513,23 @@ test("held install and rollback plans contain exact commands but no activation",
     "provider_call",
     "deployment"
   ]);
+  const installIds = install.commands.map(({ id }) => id);
+  assert.ok(
+    installIds.indexOf("verify-worker-approval-held") <
+      installIds.indexOf("install-worker-unit")
+  );
+  assert.ok(
+    installIds.indexOf("verify-private-worker-environment") <
+      installIds.indexOf("install-worker-unit")
+  );
+  assert.ok(
+    installIds.indexOf("install-hosted-unit") <
+      installIds.indexOf("install-worker-unit") &&
+      installIds.indexOf("install-worker-unit") <
+        installIds.indexOf("install-origin-unit") &&
+      installIds.indexOf("install-origin-unit") <
+        installIds.indexOf("install-tunnel-unit")
+  );
 
   const rollback = createOriginRollbackPlan(selectedSeal);
   assert.equal(rollback.state, "held");
@@ -337,6 +538,21 @@ test("held install and rollback plans contain exact commands but no activation",
   assert.equal(
     rollback.commands.some(({ argv }) => argv.includes("start")),
     false
+  );
+  const rollbackIds = rollback.commands.map(({ id }) => id);
+  assert.ok(
+    rollbackIds.indexOf("remove-worker-approval") <
+      rollbackIds.indexOf("stop-worker-runtime")
+  );
+  assert.ok(
+    rollbackIds.indexOf("stop-tunnel") <
+      rollbackIds.indexOf("stop-origin-gateway") &&
+      rollbackIds.indexOf("stop-origin-gateway") <
+        rollbackIds.indexOf("stop-worker-runtime") &&
+      rollbackIds.indexOf("stop-worker-runtime") <
+        rollbackIds.indexOf("stop-hosted-runtime") &&
+      rollbackIds.indexOf("stop-hosted-runtime") <
+        rollbackIds.indexOf("select-predecessor")
   );
   assert.deepEqual(rollback.postcondition, ORIGIN_HELD_AUTHORITY);
 });
@@ -361,6 +577,18 @@ test("tool sources and schema contain no hard-coded current migration count or l
     false
   );
   assert.equal(schema.$defs.migration.properties.count.minimum, 1);
+  assert.deepEqual(schema.$defs.workerReference.required, [
+    "manifestSha256",
+    "contractSha256"
+  ]);
+  assert.deepEqual(schema.$defs.environmentReference.required, [
+    "manifestSha256",
+    "classificationSha256"
+  ]);
+  assert.equal(
+    schema.$defs.epoch.required.includes("worker"),
+    true
+  );
   const combined = sources.join("\n");
   assert.doesNotMatch(combined, /ssh\b|scp\b|fetch\(|https\.request|stripe|resend|cloudflare\.com\/client/u);
   assert.doesNotMatch(combined, /migrationCount\s*[:=]\s*[0-9]+/u);

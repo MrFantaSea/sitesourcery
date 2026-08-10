@@ -1,4 +1,4 @@
-# Site Sourcery OPS-ORIGIN-01A Dell/HQ origin seal — 2026-08-10
+# Site Sourcery OPS-ORIGIN-01A + OPS-ORIGIN-WORKER-02 Dell/HQ origin seal — 2026-08-10
 
 ## Status
 
@@ -28,6 +28,7 @@ verified successor release input
   source commit/tree
   built artifact manifest
   units + environment-schema manifests
+  held worker runtime manifest + contract
   migration count/latest/manifest
   legal tuple/manifest
   loopback ingress manifest
@@ -75,9 +76,10 @@ identity changes.
 3. The complete selected artifact tree is a bounded, regular-file-only manifest
    with per-file bytes and SHA-256 values. Symlinks and unsupported filesystem
    entries fail closed.
-4. The hosted runtime, loopback origin, and tunnel unit bytes are bound by one
-   unit manifest. The hosted and Caddy environment examples are bound as the
-   environment schema; runtime values and secrets are not read or sealed.
+4. The hosted runtime, external worker, loopback origin, and tunnel unit bytes
+   are bound by one unit manifest. The hosted, worker, and Caddy environment
+   examples are bound as the environment schema; runtime values and secrets are
+   not read or sealed.
 5. Migration authority comes only from the successor input. The repository
    recomputes the sorted SQL manifest, count, and latest filename. Absence or
    any disagreement rejects the seal.
@@ -91,25 +93,56 @@ identity changes.
    `127.0.0.1:8080`, tunnel metrics are `127.0.0.1:20241`, both tunnel hostnames
    route only to `127.0.0.1:8081`, and the tunnel configuration ends in
    `http_status:404`.
-9. Release and commercial controls, Stripe mode, registration mail, and
+9. The worker contract separately binds the API and worker entrypoints, worker
+   unit, worker environment template, exact held purposes, and the explicit
+   API/worker PostgreSQL split. The API source must declare
+   `external_process_required` and contain no worker supervisor/factory start;
+   the held worker starts no loop, owns no listener, and permits no provider
+   effect.
+10. Release and commercial controls, Stripe mode, registration mail, and
    recovery mail remain held. The seal grants no capability and permits no
    customer, provider, DNS, or deployment effect.
-10. A readback can be `verified` only when every identity field, listener
-    expectation, seal digest, and held authority matches exactly. Mismatch
-    output contains fixed field codes rather than observed values.
+11. A readback can be `verified` only when every identity field, held worker
+    contract, listener expectation, seal digest, and held authority matches
+    exactly. Mismatch output contains fixed field codes rather than observed
+    values.
 
 ## Exact bound files
 
 Unit manifest:
 
 - `ops/sitesourcery-hosted.service.held`
+- `ops/sitesourcery-workers.service.held`
 - `ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service`
 - `ops/production-rehearsal/sitesourcery-cloudflared.user.service`
 
 Environment-schema manifest:
 
 - `ops/hosted.env.example`
+- `ops/workers.env.example`
 - `ops/caddy.env.example`
+
+Worker-runtime manifest:
+
+- `server/hosted/bin/server.mjs`
+- `server/hosted/bin/worker.mjs`
+- `ops/sitesourcery-workers.service.held`
+- `ops/workers.env.example`
+
+The successor input supplies both the worker manifest digest and its derived
+contract digest. The repository recomputes them from the exact clean candidate;
+no current release hash, migration count, purpose list, or pool allocation is
+manufactured by the origin tooling.
+
+The environment evidence separately projects only each assignment's source
+path, variable name, and `secret` or `non-secret-configuration` classification.
+The classification projection never includes a value or a value-derived
+digest. In particular,
+`SITESOURCERY_ENGAGEMENT_TOKEN_SECRET` is classified as `secret` when the
+ENGAGEMENT composition commit is present. After merging that commit, release
+integration must recompute the environment manifest/classification and the
+successor input digests; this packet does not cherry-pick its source or inspect
+secret material.
 
 Ingress manifest:
 
@@ -165,11 +198,13 @@ The plan is evidence, not an installer. It requires these gates:
 - private runtime environment installed out of band without disclosure;
 - exact installed readback.
 
-The plan verifies the release directory and all three holds, checks only that a
-private runtime environment exists, copies the three bound unit candidates,
-selects the exact release symlink, and reloads the two service managers. It
-contains no service start, restart, enable, migration, DNS, provider, or deploy
-command. Do not execute any plan command during ordinary review.
+The plan verifies the release directory and every runtime/publication/worker/
+tunnel hold, checks only that the private hosted and worker environments exist,
+copies the four bound unit candidates in hosted → worker → origin → tunnel
+order, selects the exact release symlink, and reloads the two service managers.
+`WORKERS_APPROVED` must be absent and `WORKERS_HOLD` present. It contains no
+service start, restart, enable, migration, DNS, provider, or deploy command.
+Do not execute any plan command during ordinary review.
 
 Secret values are never inferred from `ops/hosted.env.example`. If final runtime
 values or credentials are needed, stop this workflow and enter a separately
@@ -184,9 +219,14 @@ private environments under this packet. The observation file has schema
 
 - the seal digest, host role, and exact UTC observation time;
 - source commit/tree;
-- artifact, unit, environment-schema, migration, legal, and ingress digests;
+- artifact, unit, environment-schema/classification, migration, legal, and
+  ingress digests;
+- worker-runtime manifest and held-contract digests;
 - migration count and latest filename from read-only database/schema evidence;
 - the legal authority digest;
+- the exact installed held worker contract: API/worker/unit/environment digests,
+  selected purposes, API/worker pool allocation, API worker-loop count zero,
+  external-process mode, no public listener, and no provider effect;
 - the four exact loopback listeners, empty public listener list, outbound-only
   tunnel expectation, and `http_status:404` catch-all;
 - the exact held authority object;
@@ -213,9 +253,10 @@ Print the rollback plan from the same seal:
 
 The plan names the exact predecessor commit, tree, artifact-manifest digest,
 and `/opt/sitesourcery/releases/<predecessor-commit>` directory. Its ordered
-commands remove only the tunnel approval marker; stop only the tunnel, loopback
-origin, and hosted runtime; verify and select only the predecessor directory;
-reload both service managers; and confirm runtime and publication remain held.
+commands remove only the tunnel and worker approval markers; stop tunnel →
+loopback origin → external worker → hosted runtime; verify and select only the
+predecessor directory; reload both service managers; and confirm runtime,
+worker, and publication authority remain held.
 It deliberately contains no start command. DNS, Pages fallback, database,
 provider, payment, mail, customer, and commercial state are untouched.
 
@@ -230,6 +271,7 @@ count.
 This packet can prove the tooling and current repository contracts offline. It
 cannot truthfully prove a final origin seal until a successor release input and
 its final built artifact exist. It cannot prove installed Dell/HQ identity,
-Linux unit loading, real listeners, database migrations, tunnel connectivity,
-or rollback duration without separately authorized host work. Those are
-explicit future gates, not implied successes.
+Linux unit loading, the installed worker purpose/pool projection, real
+listeners, database migrations, tunnel connectivity, or rollback duration
+without separately authorized host work. Those are explicit future gates, not
+implied successes.

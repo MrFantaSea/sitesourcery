@@ -22,6 +22,10 @@ export const ORIGIN_INSTALL_PLAN_SCHEMA =
   "sitesourcery.dell-hq-origin-install-plan/v1";
 export const ORIGIN_ROLLBACK_PLAN_SCHEMA =
   "sitesourcery.dell-hq-origin-rollback-plan/v1";
+export const ORIGIN_WORKER_CONTRACT_SCHEMA =
+  "sitesourcery.dell-hq-origin-worker-contract/v1";
+export const ORIGIN_ENVIRONMENT_CLASSIFICATION_SCHEMA =
+  "sitesourcery.origin-environment-classification/v1";
 
 export const ORIGIN_HOST_ROLE = "dell_origin_hq_database";
 export const ORIGIN_UNION_BASE_COMMIT =
@@ -52,12 +56,29 @@ export const ORIGIN_LOOPBACK_EXPECTATIONS = deepFreeze({
   tunnelTransport: "outbound_only"
 });
 
+export const ORIGIN_WORKER_PATHS = deepFreeze({
+  apiEntrypoint: "server/hosted/bin/server.mjs",
+  workerEntrypoint: "server/hosted/bin/worker.mjs",
+  unit: "ops/sitesourcery-workers.service.held",
+  environmentSchema: "ops/workers.env.example"
+});
+
+export const ORIGIN_WORKER_PURPOSES = Object.freeze([
+  "export",
+  "cancellation",
+  "alakazam-fulfillment",
+  "alakazam-retained-lifecycle"
+]);
+
 const IDENTITY_FIELDS = Object.freeze([
   "sourceCommitSha",
   "sourceTreeSha",
   "artifactManifestSha256",
   "unitManifestSha256",
   "environmentSchemaManifestSha256",
+  "environmentClassificationSha256",
+  "workerManifestSha256",
+  "workerContractSha256",
   "migrationCount",
   "latestMigration",
   "migrationManifestSha256",
@@ -228,6 +249,251 @@ export function originFileManifestSha256(value) {
   );
 }
 
+export function originEnvironmentClassificationSha256(value) {
+  return sha256Bytes(
+    Buffer.from(
+      `${canonicalJson({
+        schema: ORIGIN_ENVIRONMENT_CLASSIFICATION_SCHEMA,
+        variables: value.variables
+      })}\n`,
+      "utf8"
+    )
+  );
+}
+
+function validateOriginEnvironmentEvidence(value, label) {
+  exactObject(
+    value,
+    [
+      "domain",
+      "fileCount",
+      "byteCount",
+      "files",
+      "sha256",
+      "variables",
+      "classificationSha256"
+    ],
+    label
+  );
+  validateManifest(
+    {
+      domain: value.domain,
+      fileCount: value.fileCount,
+      byteCount: value.byteCount,
+      files: value.files,
+      sha256: value.sha256
+    },
+    `${label} manifest`,
+    { allowFiles: true }
+  );
+  if (!Array.isArray(value.variables) || value.variables.length < 1) {
+    fail(`${label} variable classification is empty.`);
+  }
+  const sources = new Set(value.files.map((entry) => entry.path));
+  let previous = null;
+  for (const [index, entry] of value.variables.entries()) {
+    exactObject(
+      entry,
+      ["source", "name", "classification"],
+      `${label} variable ${index}`
+    );
+    relativePath(entry.source, `${label} variable source`);
+    if (
+      !sources.has(entry.source) ||
+      typeof entry.name !== "string" ||
+      !/^[A-Z][A-Z0-9_]{2,127}$/u.test(entry.name) ||
+      !["non-secret-configuration", "secret"].includes(entry.classification)
+    ) {
+      fail(`${label} variable classification is invalid.`);
+    }
+    const identity = `${entry.source}\u0000${entry.name}`;
+    if (previous !== null && identity.localeCompare(previous) <= 0) {
+      fail(`${label} variable classifications must be uniquely ordered.`);
+    }
+    previous = identity;
+  }
+  digest(value.classificationSha256, `${label} classification digest`);
+  if (
+    value.classificationSha256 !==
+    originEnvironmentClassificationSha256(value)
+  ) {
+    fail(`${label} classification digest is invalid.`);
+  }
+  return value;
+}
+
+function workerFileBinding(value, field) {
+  exactObject(value, ["path", "sha256"], `Origin worker ${field}`);
+  if (value.path !== ORIGIN_WORKER_PATHS[field]) {
+    fail(`Origin worker ${field} path is invalid.`);
+  }
+  digest(value.sha256, `Origin worker ${field} digest`);
+  return value;
+}
+
+function selectedWorkerPurposes(value) {
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > ORIGIN_WORKER_PURPOSES.length ||
+    new Set(value).size !== value.length ||
+    value.some((purpose) => !ORIGIN_WORKER_PURPOSES.includes(purpose))
+  ) {
+    fail("Origin worker purposes must be a nonempty exact allowlist.");
+  }
+  const canonical = ORIGIN_WORKER_PURPOSES.filter((purpose) =>
+    value.includes(purpose)
+  );
+  if (canonicalJson(value) !== canonicalJson(canonical)) {
+    fail("Origin worker purposes must use canonical order.");
+  }
+  return value;
+}
+
+function workerPoolAllocation(value) {
+  exactObject(
+    value,
+    [
+      "totalConnections",
+      "apiConnections",
+      "workerReservedConnections",
+      "connectionIncrease"
+    ],
+    "Origin worker PostgreSQL allocation"
+  );
+  const total = positiveInteger(
+    value.totalConnections,
+    "Origin total PostgreSQL connections"
+  );
+  const api = positiveInteger(
+    value.apiConnections,
+    "Origin API PostgreSQL connections"
+  );
+  const worker = positiveInteger(
+    value.workerReservedConnections,
+    "Origin worker PostgreSQL connections"
+  );
+  if (
+    total > 24 ||
+    api > 23 ||
+    worker > 23 ||
+    api + worker !== total ||
+    !["none", "held-request"].includes(value.connectionIncrease) ||
+    (total <= 10 && value.connectionIncrease !== "none") ||
+    (total > 10 && value.connectionIncrease !== "held-request")
+  ) {
+    fail("Origin API and worker PostgreSQL allocation is invalid or unbounded.");
+  }
+  return value;
+}
+
+export function originWorkerContractSha256(value) {
+  return sha256Bytes(
+    Buffer.from(`${canonicalJson(value)}\n`, "utf8")
+  );
+}
+
+export function validateOriginWorkerContract(value) {
+  exactObject(
+    value,
+    [
+      "schema",
+      "activation",
+      "apiEntrypoint",
+      "workerEntrypoint",
+      "unit",
+      "environmentSchema",
+      "selectedPurposes",
+      "postgresPool",
+      "apiWorkerMode",
+      "apiWorkerLoopCount",
+      "workerOwnsPublicListener",
+      "allowsProviderEffects"
+    ],
+    "Origin held worker contract"
+  );
+  if (
+    value.schema !== ORIGIN_WORKER_CONTRACT_SCHEMA ||
+    value.activation !== "held" ||
+    value.apiWorkerMode !== "external_process_required" ||
+    value.apiWorkerLoopCount !== 0 ||
+    value.workerOwnsPublicListener !== false ||
+    value.allowsProviderEffects !== false
+  ) {
+    fail("Origin worker contract must remain held, external, and effect-free.");
+  }
+  for (const field of [
+    "apiEntrypoint",
+    "workerEntrypoint",
+    "unit",
+    "environmentSchema"
+  ]) {
+    workerFileBinding(value[field], field);
+  }
+  selectedWorkerPurposes(value.selectedPurposes);
+  workerPoolAllocation(value.postgresPool);
+  return value;
+}
+
+function validateOriginWorkerEvidence(value, label) {
+  exactObject(
+    value,
+    [
+      "domain",
+      "fileCount",
+      "byteCount",
+      "files",
+      "sha256",
+      "contract",
+      "contractSha256"
+    ],
+    label
+  );
+  validateManifest(
+    {
+      domain: value.domain,
+      fileCount: value.fileCount,
+      byteCount: value.byteCount,
+      files: value.files,
+      sha256: value.sha256
+    },
+    `${label} manifest`,
+    { allowFiles: true }
+  );
+  if (
+    value.domain !== "origin-worker-runtime" ||
+    value.fileCount !== Object.keys(ORIGIN_WORKER_PATHS).length
+  ) {
+    fail(`${label} must bind the exact worker runtime files.`);
+  }
+  const paths = value.files.map((entry) => entry.path);
+  const expectedPaths = Object.values(ORIGIN_WORKER_PATHS).sort((left, right) =>
+    left.localeCompare(right)
+  );
+  if (canonicalJson(paths) !== canonicalJson(expectedPaths)) {
+    fail(`${label} files are incomplete or drifted.`);
+  }
+  validateOriginWorkerContract(value.contract);
+  for (const field of [
+    "apiEntrypoint",
+    "workerEntrypoint",
+    "unit",
+    "environmentSchema"
+  ]) {
+    const file = value.files.find(
+      (entry) => entry.path === ORIGIN_WORKER_PATHS[field]
+    );
+    if (file?.sha256 !== value.contract[field].sha256) {
+      fail(`${label} ${field} digest drifted from its exact file.`);
+    }
+  }
+  digest(value.contractSha256, `${label} contract digest`);
+  if (value.contractSha256 !== originWorkerContractSha256(value.contract)) {
+    fail(`${label} contract digest is invalid.`);
+  }
+  return value;
+}
+
 function successorEpochPayload(epoch) {
   return {
     schema: epoch.schema,
@@ -239,6 +505,7 @@ function successorEpochPayload(epoch) {
     artifact: epoch.artifact,
     units: epoch.units,
     environmentSchema: epoch.environmentSchema,
+    worker: epoch.worker,
     migration: epoch.migration,
     legal: epoch.legal,
     ingress: epoch.ingress,
@@ -305,6 +572,7 @@ export function validateOriginReleaseInput(value) {
       "artifact",
       "units",
       "environmentSchema",
+      "worker",
       "migration",
       "legal",
       "ingress",
@@ -355,13 +623,24 @@ export function validateOriginReleaseInput(value) {
   digest(epoch.units.manifestSha256, "Origin unit manifest");
   exactObject(
     epoch.environmentSchema,
-    ["manifestSha256"],
+    ["manifestSha256", "classificationSha256"],
     "Origin environment schema"
   );
   digest(
     epoch.environmentSchema.manifestSha256,
     "Origin environment-schema manifest"
   );
+  digest(
+    epoch.environmentSchema.classificationSha256,
+    "Origin environment classification"
+  );
+  exactObject(
+    epoch.worker,
+    ["manifestSha256", "contractSha256"],
+    "Origin worker runtime"
+  );
+  digest(epoch.worker.manifestSha256, "Origin worker manifest");
+  digest(epoch.worker.contractSha256, "Origin worker contract");
 
   exactObject(
     epoch.migration,
@@ -448,6 +727,7 @@ function sealPayload(value) {
     artifact: value.artifact,
     units: value.units,
     environmentSchema: value.environmentSchema,
+    worker: value.worker,
     migration: value.migration,
     legal: value.legal,
     ingress: value.ingress,
@@ -477,6 +757,7 @@ export function createOriginSeal({ releaseInput, observed }) {
       "artifact",
       "units",
       "environmentSchema",
+      "worker",
       "migration",
       "legal",
       "ingress"
@@ -495,7 +776,6 @@ export function createOriginSeal({ releaseInput, observed }) {
   for (const [field, label] of [
     ["artifact", "Origin artifact manifest"],
     ["units", "Origin unit manifest"],
-    ["environmentSchema", "Origin environment-schema manifest"],
     ["ingress", "Origin ingress manifest"]
   ]) {
     validateManifest(observed[field], label, { allowFiles: true });
@@ -505,6 +785,31 @@ export function createOriginSeal({ releaseInput, observed }) {
       label
     );
   }
+  validateOriginEnvironmentEvidence(
+    observed.environmentSchema,
+    "Observed environment schema"
+  );
+  exactDigestMatch(
+    observed.environmentSchema.sha256,
+    input.epoch.environmentSchema.manifestSha256,
+    "Origin environment-schema manifest"
+  );
+  exactDigestMatch(
+    observed.environmentSchema.classificationSha256,
+    input.epoch.environmentSchema.classificationSha256,
+    "Origin environment classification"
+  );
+  validateOriginWorkerEvidence(observed.worker, "Observed worker runtime");
+  exactDigestMatch(
+    observed.worker.sha256,
+    input.epoch.worker.manifestSha256,
+    "Origin worker manifest"
+  );
+  exactDigestMatch(
+    observed.worker.contractSha256,
+    input.epoch.worker.contractSha256,
+    "Origin worker contract"
+  );
   requireManifestRoot(
     observed.artifact,
     input.epoch.layout.artifactRoot,
@@ -599,6 +904,7 @@ export function createOriginSeal({ releaseInput, observed }) {
     artifact: structuredClone(observed.artifact),
     units: structuredClone(observed.units),
     environmentSchema: structuredClone(observed.environmentSchema),
+    worker: structuredClone(observed.worker),
     migration: structuredClone(observed.migration),
     legal: structuredClone(observed.legal),
     ingress: {
@@ -630,6 +936,7 @@ export function validateOriginSeal(value) {
       "artifact",
       "units",
       "environmentSchema",
+      "worker",
       "migration",
       "legal",
       "ingress",
@@ -668,11 +975,15 @@ export function validateOriginSeal(value) {
   commit(value.source.treeSha, "Origin seal source tree");
   for (const [field, label] of [
     ["artifact", "Origin seal artifact"],
-    ["units", "Origin seal units"],
-    ["environmentSchema", "Origin seal environment schema"]
+    ["units", "Origin seal units"]
   ]) {
     validateManifest(value[field], label, { allowFiles: true });
   }
+  validateOriginEnvironmentEvidence(
+    value.environmentSchema,
+    "Origin seal environment schema"
+  );
+  validateOriginWorkerEvidence(value.worker, "Origin seal worker runtime");
   requireManifestRoot(
     value.artifact,
     value.layout.artifactRoot,
@@ -805,6 +1116,10 @@ export function expectedOriginInstalledIdentity(seal) {
     artifactManifestSha256: selected.artifact.sha256,
     unitManifestSha256: selected.units.sha256,
     environmentSchemaManifestSha256: selected.environmentSchema.sha256,
+    environmentClassificationSha256:
+      selected.environmentSchema.classificationSha256,
+    workerManifestSha256: selected.worker.sha256,
+    workerContractSha256: selected.worker.contractSha256,
     migrationCount: selected.migration.count,
     latestMigration: selected.migration.latest,
     migrationManifestSha256: selected.migration.sha256,
@@ -814,6 +1129,11 @@ export function expectedOriginInstalledIdentity(seal) {
   });
 }
 
+export function expectedOriginInstalledWorker(seal) {
+  const selected = validateOriginSeal(seal);
+  return deepFreeze(structuredClone(selected.worker.contract));
+}
+
 function readbackPayload(value) {
   return {
     schema: value.schema,
@@ -821,6 +1141,7 @@ function readbackPayload(value) {
     hostRole: value.hostRole,
     observedAt: value.observedAt,
     identity: value.identity,
+    worker: value.worker,
     listeners: value.listeners,
     authority: value.authority
   };
@@ -832,7 +1153,14 @@ export function originInstalledReadbackDigest(value) {
   );
 }
 
-export function createOriginInstalledReadback({ seal, observedAt, identity, listeners, authority }) {
+export function createOriginInstalledReadback({
+  seal,
+  observedAt,
+  identity,
+  worker,
+  listeners,
+  authority
+}) {
   const selectedSeal = validateOriginSeal(seal);
   const value = {
     schema: ORIGIN_INSTALLED_READBACK_SCHEMA,
@@ -840,6 +1168,7 @@ export function createOriginInstalledReadback({ seal, observedAt, identity, list
     hostRole: ORIGIN_HOST_ROLE,
     observedAt,
     identity,
+    worker,
     listeners,
     authority
   };
@@ -852,7 +1181,17 @@ export function createOriginInstalledReadback({ seal, observedAt, identity, list
 export function validateOriginInstalledReadback(value) {
   exactObject(
     value,
-    ["schema", "sealSha256", "hostRole", "observedAt", "identity", "listeners", "authority", "digest"],
+    [
+      "schema",
+      "sealSha256",
+      "hostRole",
+      "observedAt",
+      "identity",
+      "worker",
+      "listeners",
+      "authority",
+      "digest"
+    ],
     "Origin installed readback"
   );
   if (
@@ -876,6 +1215,7 @@ export function validateOriginInstalledReadback(value) {
       digest(value.identity[field], `Installed ${field}`);
     }
   }
+  validateOriginWorkerContract(value.worker);
   if (canonicalJson(value.listeners) !== canonicalJson(ORIGIN_LOOPBACK_EXPECTATIONS)) {
     fail("Origin installed listener readback is not exactly loopback-only.");
   }
@@ -901,6 +1241,7 @@ export function compareOriginInstalledReadback({ seal, readback }) {
   const selectedSeal = validateOriginSeal(seal);
   const selectedReadback = validateOriginInstalledReadback(readback);
   const expected = expectedOriginInstalledIdentity(selectedSeal);
+  const expectedWorker = expectedOriginInstalledWorker(selectedSeal);
   const mismatches = [];
   for (const field of IDENTITY_FIELDS) {
     if (selectedReadback.identity[field] !== expected[field]) {
@@ -909,6 +1250,9 @@ export function compareOriginInstalledReadback({ seal, readback }) {
   }
   if (selectedReadback.sealSha256 !== selectedSeal.sealSha256) {
     mismatches.push("SEAL_IDENTITY_MISMATCH");
+  }
+  if (canonicalJson(selectedReadback.worker) !== canonicalJson(expectedWorker)) {
+    mismatches.push("WORKER_CONTRACT_MISMATCH");
   }
   mismatches.sort((left, right) => left.localeCompare(right));
   const payload = {
@@ -954,9 +1298,13 @@ export function createOriginInstallPlan(seal) {
     command("verify-release-directory", ["test", "-d", releaseRoot]),
     command("verify-runtime-hold", ["test", "!", "-e", "/etc/sitesourcery/RUNTIME_APPROVED"]),
     command("verify-publication-hold", ["test", "-e", "/etc/sitesourcery/PUBLICATION_HOLD"]),
+    command("verify-worker-approval-held", ["test", "!", "-e", "/etc/sitesourcery/WORKERS_APPROVED"]),
+    command("verify-worker-hold", ["test", "-e", "/etc/sitesourcery/WORKERS_HOLD"]),
     command("verify-tunnel-hold", ["test", "!", "-e", "/home/simtech/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED"]),
     command("verify-private-environment", ["test", "-r", "/etc/sitesourcery/hosted.env"]),
+    command("verify-private-worker-environment", ["test", "-r", "/etc/sitesourcery/workers.env"]),
     command("install-hosted-unit", ["install", "-o", "root", "-g", "root", "-m", "0644", `${releaseRoot}/ops/sitesourcery-hosted.service.held`, "/etc/systemd/system/sitesourcery-hosted.service"]),
+    command("install-worker-unit", ["install", "-o", "root", "-g", "root", "-m", "0644", `${releaseRoot}/ops/sitesourcery-workers.service.held`, "/etc/systemd/system/sitesourcery-workers.service"]),
     command("install-origin-unit", ["install", "-o", "simtech", "-g", "simtech", "-m", "0644", `${releaseRoot}/ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service`, "/home/simtech/.config/systemd/user/sitesourcery-origin.service"]),
     command("install-tunnel-unit", ["install", "-o", "simtech", "-g", "simtech", "-m", "0644", `${releaseRoot}/ops/production-rehearsal/sitesourcery-cloudflared.user.service`, "/home/simtech/.config/systemd/user/sitesourcery-cloudflared.service"]),
     command("select-release", ["ln", "-sfn", releaseRoot, "/opt/sitesourcery/current"]),
@@ -974,6 +1322,7 @@ export function createOriginInstallPlan(seal) {
       "owner_install_approval",
       "successor_release_epoch_verified",
       "private_environment_values_installed_out_of_band",
+      "private_worker_environment_values_installed_out_of_band",
       "installed_readback_verified"
     ],
     commands,
@@ -996,14 +1345,18 @@ export function createOriginRollbackPlan(seal) {
     `/opt/sitesourcery/releases/${selected.rollback.predecessorCommitSha}`;
   const commands = [
     command("remove-tunnel-approval", ["rm", "-f", "--", "/home/simtech/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED"]),
+    command("remove-worker-approval", ["rm", "-f", "--", "/etc/sitesourcery/WORKERS_APPROVED"]),
     command("stop-tunnel", ["systemctl", "--user", "stop", "sitesourcery-cloudflared.service"]),
     command("stop-origin-gateway", ["systemctl", "--user", "stop", "sitesourcery-origin.service"]),
+    command("stop-worker-runtime", ["systemctl", "stop", "sitesourcery-workers.service"]),
     command("stop-hosted-runtime", ["systemctl", "stop", "sitesourcery-hosted.service"]),
     command("verify-predecessor-directory", ["test", "-d", predecessorRoot]),
     command("select-predecessor", ["ln", "-sfn", predecessorRoot, "/opt/sitesourcery/current"]),
     command("reload-system-manager", ["systemctl", "daemon-reload"]),
     command("reload-user-manager", ["systemctl", "--user", "daemon-reload"]),
     command("confirm-runtime-held", ["test", "!", "-e", "/etc/sitesourcery/RUNTIME_APPROVED"]),
+    command("confirm-worker-approval-held", ["test", "!", "-e", "/etc/sitesourcery/WORKERS_APPROVED"]),
+    command("confirm-worker-hold", ["test", "-e", "/etc/sitesourcery/WORKERS_HOLD"]),
     command("confirm-publication-held", ["test", "-e", "/etc/sitesourcery/PUBLICATION_HOLD"])
   ];
   const payload = {
