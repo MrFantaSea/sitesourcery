@@ -6,6 +6,9 @@ import {
   createCanonicalPostgresAuthority,
   createPostgresHostedRepository
 } from "../repository-postgres.mjs";
+import {
+  DEFAULT_POSTGRES_BUDGET_POLICY
+} from "../postgres-budget-config.mjs";
 
 function fakePool(readinessRow = {}) {
   const calls = [];
@@ -462,20 +465,39 @@ test("tenant transaction sets role and transaction-local principal before work",
     pool.calls.map((call) => call.text),
     [
       "connect",
-      "begin",
-      "set transaction isolation level REPEATABLE READ read only",
+      "begin isolation level REPEATABLE READ read only",
       "set local role authenticated",
-      "select set_config('request.jwt.claim.sub', $1, true)",
-      "select set_config('request.jwt.claims', $1, true)",
-      "select set_config('app.organization_id', $1, true)",
-      "select set_config('app.service_actor_kind', $1, true)",
-      "select set_config('app.service_actor_user_id', $1, true)",
-      "select set_config('app.service_actor_organization_id', $1, true)",
+      `select
+          set_config('statement_timeout', $1, true),
+          set_config('lock_timeout', $2, true),
+          set_config('idle_in_transaction_session_timeout', $3, true),
+          set_config('request.jwt.claim.sub', $4, true),
+          set_config('request.jwt.claims', $5, true),
+          set_config('app.organization_id', $6, true),
+          set_config('app.service_actor_kind', $7, true),
+          set_config('app.service_actor_user_id', $8, true),
+          set_config('app.service_actor_organization_id', $9, true)`,
       "select ss.current_user_id(), ss.current_org_id()",
       "commit",
       "release"
     ]
   );
+  const setup = pool.calls[3];
+  assert.deepEqual(setup.values, [
+    "15000ms",
+    "3000ms",
+    "30000ms",
+    "00000000-0000-4000-8000-000000000101",
+    JSON.stringify({
+      sub: "00000000-0000-4000-8000-000000000101",
+      organization_id:
+        "00000000-0000-4000-8000-000000000201"
+    }),
+    "00000000-0000-4000-8000-000000000201",
+    "",
+    "",
+    ""
+  ]);
 });
 
 test("customer service transaction binds the exact actor locally", async () => {
@@ -495,23 +517,13 @@ test("customer service transaction binds the exact actor locally", async () => {
     }
   );
 
-  const settings = pool.calls.filter((call) =>
-    call.text.startsWith("select set_config('app.service_actor_")
+  const settings = pool.calls.find((call) =>
+    call.text.includes("set_config('app.service_actor_kind'")
   );
-  assert.deepEqual(settings, [
-    {
-      text: "select set_config('app.service_actor_kind', $1, true)",
-      values: ["customer"]
-    },
-    {
-      text: "select set_config('app.service_actor_user_id', $1, true)",
-      values: [userId]
-    },
-    {
-      text:
-        "select set_config('app.service_actor_organization_id', $1, true)",
-      values: [organizationId]
-    }
+  assert.deepEqual(settings.values.slice(6), [
+    "customer",
+    userId,
+    organizationId
   ]);
 });
 
@@ -550,6 +562,148 @@ test("service transaction is explicit and rollback preserves the original error"
     true
   );
   assert.equal(pool.calls.some((call) => call.text === "rollback"), true);
+});
+
+test("transaction-local budget setup fails closed with rollback and release", async () => {
+  const calls = [];
+  const setupFailure = Object.assign(new Error("statement timeout setup failed"), {
+    code: "XX000"
+  });
+  const client = {
+    async query(text, values = []) {
+      calls.push({ text, values });
+      if (text.includes("set_config('statement_timeout'")) {
+        throw setupFailure;
+      }
+      return { rows: [], rowCount: 0 };
+    },
+    release() {
+      calls.push({ text: "release", values: [] });
+    }
+  };
+  const pool = {
+    async query() {
+      return { rows: [readyRow()], rowCount: 1 };
+    },
+    async connect() {
+      calls.push({ text: "connect", values: [] });
+      return client;
+    },
+    async end() {}
+  };
+  const authority = createCanonicalPostgresAuthority({ pool });
+  let workCalled = false;
+  await assert.rejects(
+    authority.service({}, async () => {
+      workCalled = true;
+    }),
+    (error) => error === setupFailure
+  );
+  assert.equal(workCalled, false);
+  assert.deepEqual(
+    calls.map((call) => call.text).slice(-2),
+    ["rollback", "release"]
+  );
+  assert.equal(
+    authority.budgetReadiness().telemetry.activeApiTransactions,
+    0
+  );
+});
+
+test("API admission preserves worker headroom and fails closed at its deadline", async () => {
+  const pool = fakePool(readyRow());
+  let releaseFirst;
+  const firstMayFinish = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  const authority = createCanonicalPostgresAuthority({
+    pool,
+    budgetPolicy: {
+      timeouts: {
+        ...DEFAULT_POSTGRES_BUDGET_POLICY.timeouts,
+        acquisitionMs: 100
+      },
+      pool: {
+        totalConnections: 2,
+        apiConnections: 1,
+        workerReservedConnections: 1,
+        connectionIncrease: "none"
+      }
+    }
+  });
+  const first = authority.service({}, async () => firstMayFinish);
+  while (authority.budgetReadiness().telemetry.activeApiTransactions !== 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await assert.rejects(
+    authority.service({}, async () => "must-not-run"),
+    (error) =>
+      error?.code === "DATABASE_ACQUISITION_TIMEOUT" &&
+      error?.status === 503
+  );
+  const saturated = authority.budgetReadiness();
+  assert.equal(saturated.pool.apiConnections, 1);
+  assert.equal(saturated.pool.workerReservedConnections, 1);
+  assert.equal(saturated.pool.workerScope, "held-for-workers-01");
+  assert.equal(saturated.telemetry.timedOutAcquisitions, 1);
+  assert.equal(saturated.telemetry.saturationEvents, 1);
+  assert.equal(saturated.telemetry.queuedApiAcquisitions, 0);
+  assert.equal(saturated.telemetry.pii, "none");
+  assert.doesNotMatch(
+    JSON.stringify(saturated),
+    /00000000-|select |postgresql:\/\//iu
+  );
+  assert.equal(
+    pool.calls.filter((call) => call.text === "connect").length,
+    1
+  );
+  releaseFirst("done");
+  assert.equal(await first, "done");
+  assert.equal(
+    authority.budgetReadiness().telemetry.activeApiTransactions,
+    0
+  );
+});
+
+test("pool acquisition deadline releases a client that arrives late", async () => {
+  let resolveConnection;
+  let released = 0;
+  const pool = {
+    async query() {
+      return { rows: [readyRow()], rowCount: 1 };
+    },
+    connect() {
+      return new Promise((resolve) => {
+        resolveConnection = resolve;
+      });
+    },
+    async end() {}
+  };
+  const authority = createCanonicalPostgresAuthority({
+    pool,
+    budgetPolicy: {
+      timeouts: {
+        ...DEFAULT_POSTGRES_BUDGET_POLICY.timeouts,
+        acquisitionMs: 100
+      },
+      pool: DEFAULT_POSTGRES_BUDGET_POLICY.pool
+    }
+  });
+  await assert.rejects(
+    authority.service({}, async () => "must-not-run"),
+    (error) => error?.code === "DATABASE_ACQUISITION_TIMEOUT"
+  );
+  resolveConnection({
+    release() {
+      released += 1;
+    }
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(released, 1);
+  assert.equal(
+    authority.budgetReadiness().telemetry.activeApiTransactions,
+    0
+  );
 });
 
 test("legacy aggregate PostgreSQL entrypoint fails closed", () => {

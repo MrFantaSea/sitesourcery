@@ -1,6 +1,11 @@
 import pg from "pg";
 
 import { HostedError, invariant } from "./errors.mjs";
+import {
+  DEFAULT_POSTGRES_BUDGET_POLICY,
+  POSTGRES_BUDGET_READINESS_SCHEMA,
+  validatePostgresBudgetPolicy
+} from "./postgres-budget-config.mjs";
 
 const { Pool } = pg;
 
@@ -2167,6 +2172,203 @@ async function rollback(client) {
   }
 }
 
+function acquisitionTimeout() {
+  return new HostedError(
+    "DATABASE_ACQUISITION_TIMEOUT",
+    "PostgreSQL capacity was not available before the bounded deadline.",
+    { status: 503 }
+  );
+}
+
+function metric(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function createPoolBudgetRuntime({ pool, policy, timers = {} }) {
+  const now = timers.now ?? Date.now;
+  const schedule = timers.setTimeout ?? setTimeout;
+  const cancel = timers.clearTimeout ?? clearTimeout;
+  invariant(
+    typeof now === "function" &&
+      typeof schedule === "function" &&
+      typeof cancel === "function",
+    "POSTGRES_BUDGET_CONFIGURATION_INVALID",
+    "PostgreSQL budget timers are invalid.",
+    { status: 500 }
+  );
+
+  let active = 0;
+  let queued = 0;
+  const waiters = [];
+  const counters = {
+    requested: 0,
+    acquired: 0,
+    waited: 0,
+    timedOut: 0,
+    saturated: 0,
+    totalWaitMs: 0,
+    maximumWaitMs: 0
+  };
+
+  function releaseSlot() {
+    active -= 1;
+    while (waiters.length > 0) {
+      const next = waiters.shift();
+      if (next.settled) continue;
+      if (next.deadlineAt <= now()) {
+        next.settled = true;
+        cancel(next.timer);
+        queued -= 1;
+        next.reject(acquisitionTimeout());
+        continue;
+      }
+      next.settled = true;
+      cancel(next.timer);
+      queued -= 1;
+      active += 1;
+      next.resolve({ queued: true, release: releaseSlot });
+      break;
+    }
+  }
+
+  function acquireSlot(deadlineAt) {
+    if (active < policy.pool.apiConnections) {
+      active += 1;
+      return Promise.resolve({ queued: false, release: releaseSlot });
+    }
+    counters.saturated += 1;
+    queued += 1;
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        settled: false,
+        resolve,
+        reject,
+        deadlineAt,
+        timer: null
+      };
+      const remainingMs = Math.max(0, deadlineAt - now());
+      waiter.timer = schedule(() => {
+        if (waiter.settled) return;
+        waiter.settled = true;
+        queued -= 1;
+        const index = waiters.indexOf(waiter);
+        if (index >= 0) waiters.splice(index, 1);
+        reject(acquisitionTimeout());
+      }, remainingMs);
+      waiters.push(waiter);
+    });
+  }
+
+  function connectBefore(deadlineAt) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const remainingMs = deadlineAt - now();
+      if (remainingMs <= 0) {
+        reject(acquisitionTimeout());
+        return;
+      }
+      const timer = schedule(() => {
+        settled = true;
+        reject(acquisitionTimeout());
+      }, remainingMs);
+      Promise.resolve()
+        .then(() => pool.connect())
+        .then(
+          (client) => {
+            if (settled) {
+              client.release();
+              return;
+            }
+            settled = true;
+            cancel(timer);
+            resolve(client);
+          },
+          (error) => {
+            if (settled) return;
+            settled = true;
+            cancel(timer);
+            reject(error);
+          }
+        );
+    });
+  }
+
+  async function acquireClient() {
+    const startedAt = now();
+    const deadlineAt = startedAt + policy.timeouts.acquisitionMs;
+    counters.requested += 1;
+    let slot;
+    try {
+      slot = await acquireSlot(deadlineAt);
+      const client = await connectBefore(deadlineAt);
+      const waitMs = Math.max(0, now() - startedAt);
+      counters.acquired += 1;
+      counters.totalWaitMs += waitMs;
+      counters.maximumWaitMs = Math.max(counters.maximumWaitMs, waitMs);
+      if (slot.queued || waitMs > 0) counters.waited += 1;
+      let released = false;
+      return {
+        client,
+        release() {
+          if (released) return;
+          released = true;
+          try {
+            client.release();
+          } finally {
+            slot.release();
+          }
+        }
+      };
+    } catch (error) {
+      slot?.release();
+      if (error?.code === "DATABASE_ACQUISITION_TIMEOUT") {
+        counters.timedOut += 1;
+      }
+      throw error;
+    }
+  }
+
+  function readiness() {
+    return Object.freeze({
+      schema: POSTGRES_BUDGET_READINESS_SCHEMA,
+      ready: true,
+      connection: "redacted",
+      timeouts: Object.freeze({
+        statement: "transaction-local",
+        lock: "transaction-local",
+        idleInTransaction: "transaction-local",
+        acquisition: "bounded"
+      }),
+      pool: Object.freeze({
+        totalConnections: policy.pool.totalConnections,
+        apiConnections: policy.pool.apiConnections,
+        workerReservedConnections:
+          policy.pool.workerReservedConnections,
+        connectionIncrease: policy.pool.connectionIncrease,
+        workerScope: "held-for-workers-01"
+      }),
+      telemetry: Object.freeze({
+        schema: "sitesourcery.postgres-pool-telemetry/v1",
+        pii: "none",
+        activeApiTransactions: active,
+        queuedApiAcquisitions: queued,
+        requestedAcquisitions: counters.requested,
+        successfulAcquisitions: counters.acquired,
+        waitedAcquisitions: counters.waited,
+        timedOutAcquisitions: counters.timedOut,
+        saturationEvents: counters.saturated,
+        totalWaitMs: counters.totalWaitMs,
+        maximumWaitMs: counters.maximumWaitMs,
+        physicalConnections: metric(pool.totalCount),
+        idleConnections: metric(pool.idleCount),
+        driverWaiters: metric(pool.waitingCount)
+      })
+    });
+  }
+
+  return Object.freeze({ acquireClient, readiness });
+}
+
 export function createPostgresPool(options = {}) {
   const connectionString =
     options.connectionString ?? process.env.SITESOURCERY_DATABASE_URL;
@@ -2181,12 +2383,21 @@ export function createPostgresPool(options = {}) {
     max: options.max ?? 10,
     idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
     connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5_000,
+    statement_timeout: options.statementTimeoutMillis,
+    lock_timeout: options.lockTimeoutMillis,
+    idle_in_transaction_session_timeout:
+      options.idleInTransactionTimeoutMillis,
+    query_timeout: options.queryTimeoutMillis,
     allowExitOnIdle: options.allowExitOnIdle ?? false,
     ssl: options.ssl
   });
 }
 
-export function createCanonicalPostgresAuthority({ pool } = {}) {
+export function createCanonicalPostgresAuthority({
+  pool,
+  budgetPolicy = DEFAULT_POSTGRES_BUDGET_POLICY,
+  budgetTimers
+} = {}) {
   invariant(
     pool &&
       typeof pool.connect === "function" &&
@@ -2195,6 +2406,12 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     "PostgreSQL pool is required.",
     { status: 500 }
   );
+  const selectedBudgetPolicy = validatePostgresBudgetPolicy(budgetPolicy);
+  const budgetRuntime = createPoolBudgetRuntime({
+    pool,
+    policy: selectedBudgetPolicy,
+    timers: budgetTimers
+  });
 
   async function readiness() {
     try {
@@ -2465,45 +2682,42 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       );
     }
 
-    const client = await pool.connect();
+    const acquired = await budgetRuntime.acquireClient();
+    const client = acquired.client;
     try {
-      await client.query("begin");
       await client.query(
-        `set transaction isolation level ${selectedIsolation}${
+        `begin isolation level ${selectedIsolation}${
           readOnly ? " read only" : ""
         }`
       );
       await client.query(`set local role ${selectedRole}`);
       await client.query(
-        "select set_config('request.jwt.claim.sub', $1, true)",
-        [userId ?? ""]
-      );
-      await client.query(
-        "select set_config('request.jwt.claims', $1, true)",
+        `select
+          set_config('statement_timeout', $1, true),
+          set_config('lock_timeout', $2, true),
+          set_config('idle_in_transaction_session_timeout', $3, true),
+          set_config('request.jwt.claim.sub', $4, true),
+          set_config('request.jwt.claims', $5, true),
+          set_config('app.organization_id', $6, true),
+          set_config('app.service_actor_kind', $7, true),
+          set_config('app.service_actor_user_id', $8, true),
+          set_config('app.service_actor_organization_id', $9, true)`,
         [
+          `${selectedBudgetPolicy.timeouts.statementMs}ms`,
+          `${selectedBudgetPolicy.timeouts.lockMs}ms`,
+          `${selectedBudgetPolicy.timeouts.idleInTransactionMs}ms`,
+          userId ?? "",
           JSON.stringify({
             ...(userId ? { sub: userId } : {}),
             ...(organizationId
               ? { organization_id: organizationId }
               : {})
-          })
+          }),
+          organizationId ?? "",
+          selectedActorKind ?? "",
+          selectedActorKind && userId ? userId : "",
+          selectedActorKind && organizationId ? organizationId : ""
         ]
-      );
-      await client.query(
-        "select set_config('app.organization_id', $1, true)",
-        [organizationId ?? ""]
-      );
-      await client.query(
-        "select set_config('app.service_actor_kind', $1, true)",
-        [selectedActorKind ?? ""]
-      );
-      await client.query(
-        "select set_config('app.service_actor_user_id', $1, true)",
-        [selectedActorKind && userId ? userId : ""]
-      );
-      await client.query(
-        "select set_config('app.service_actor_organization_id', $1, true)",
-        [selectedActorKind && organizationId ? organizationId : ""]
       );
       const result = await work(client);
       await client.query("commit");
@@ -2512,7 +2726,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
       await rollback(client);
       throw error;
     } finally {
-      client.release();
+      acquired.release();
     }
   }
 
@@ -2522,6 +2736,7 @@ export function createCanonicalPostgresAuthority({ pool } = {}) {
     readiness,
     projectLegalAuthorityMatches,
     assertReady,
+    budgetReadiness: budgetRuntime.readiness,
 
     tenant({ userId, organizationId, isolation, readOnly = false }, work) {
       return transaction(

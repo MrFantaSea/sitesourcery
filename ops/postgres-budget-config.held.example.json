@@ -1,0 +1,15 @@
+{
+  "schema": "sitesourcery.postgres-budget-config/v1",
+  "timeouts": {
+    "statementMs": 15000,
+    "lockMs": 3000,
+    "idleInTransactionMs": 30000,
+    "acquisitionMs": 5000
+  },
+  "pool": {
+    "totalConnections": 10,
+    "apiConnections": 8,
+    "workerReservedConnections": 2,
+    "connectionIncrease": "none"
+  }
+}
