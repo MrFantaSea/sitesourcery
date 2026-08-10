@@ -1,0 +1,712 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sitesourcery.com/schemas/backup-restore-contract-v1.json",
+  "title": "Site Sourcery held backup and clean-room restore contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "mode",
+    "binding",
+    "decisions",
+    "requirements",
+    "evidence",
+    "holds"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sitesourcery.backup-restore-contract/v1"
+    },
+    "mode": {
+      "const": "held"
+    },
+    "binding": {
+      "$ref": "#/$defs/binding"
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rpo", "retention", "keyCustody"],
+      "properties": {
+        "rpo": {
+          "$ref": "#/$defs/rpoDecision"
+        },
+        "retention": {
+          "$ref": "#/$defs/retentionDecision"
+        },
+        "keyCustody": {
+          "$ref": "#/$defs/keyCustodyDecision"
+        }
+      }
+    },
+    "requirements": {
+      "const": {
+        "backup": {
+          "attemptEvidenceSchema": "sitesourcery.backup-attempt-succeeded/v2",
+          "quiescenceSchema": "sitesourcery.backup-quiesce/v1",
+          "runtimeUnit": "sitesourcery-hosted.service",
+          "runtimeState": "inactive",
+          "writerFence": "engaged",
+          "databaseWriterCount": 0,
+          "filesystemSnapshotStable": true,
+          "destinationMarkerSchema": "sitesourcery.off-machine-destination/v1",
+          "destinationStorageClass": "off_machine",
+          "immutableAttempts": true,
+          "ciphertextFormat": "age",
+          "plaintextDestinationForbidden": true
+        },
+        "restore": {
+          "evidenceSchema": "sitesourcery.clean-room-restore/v2",
+          "targetFreshness": "fresh_only",
+          "productionTargetForbidden": true,
+          "networkExposure": "none",
+          "providerEgress": "held",
+          "requiresReadinessProof": true,
+          "requiresJourneyProof": true,
+          "cleanupScope": "exact_restore_target_only",
+          "requiresCleanupProof": true,
+          "requiresRollbackProof": true
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backup", "restore"],
+      "properties": {
+        "backup": {
+          "$ref": "#/$defs/backupEvidence"
+        },
+        "restore": {
+          "$ref": "#/$defs/restoreEvidence"
+        }
+      }
+    },
+    "holds": {
+      "$ref": "#/$defs/holds"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "safeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "migrationFile": {
+      "type": "string",
+      "pattern": "^[0-9]{12}_[a-z0-9_]+\\.sql$"
+    },
+    "isoTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migrationCount",
+        "latestMigration",
+        "inventorySha256"
+      ],
+      "properties": {
+        "migrationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latestMigration": {
+          "$ref": "#/$defs/migrationFile"
+        },
+        "inventorySha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "releaseEpochProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "epochId",
+        "bindingSha256",
+        "receiptSha256",
+        "sourceCommitSha",
+        "artifactManifestSha256",
+        "migrationCount",
+        "latestMigration",
+        "migrationInventorySha256"
+      ],
+      "properties": {
+        "schema": {
+          "const": "sitesourcery.release-epoch/v1"
+        },
+        "epochId": {
+          "$ref": "#/$defs/safeId"
+        },
+        "bindingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receiptSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceCommitSha": {
+          "$ref": "#/$defs/commitSha"
+        },
+        "artifactManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "migrationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latestMigration": {
+          "$ref": "#/$defs/migrationFile"
+        },
+        "migrationInventorySha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commitSha"],
+      "properties": {
+        "commitSha": {
+          "$ref": "#/$defs/commitSha"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256"],
+      "properties": {
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "installedIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "releaseEpochBindingSha256",
+        "releaseCommitSha",
+        "artifactManifestSha256",
+        "migrationCount",
+        "receiptSha256",
+        "observedAt"
+      ],
+      "properties": {
+        "state": {
+          "const": "verified"
+        },
+        "releaseEpochBindingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "releaseCommitSha": {
+          "$ref": "#/$defs/commitSha"
+        },
+        "artifactManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "migrationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "receiptSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observedAt": {
+          "$ref": "#/$defs/isoTimestamp"
+        }
+      }
+    },
+    "integrationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "releaseEpoch",
+        "source",
+        "artifact",
+        "installedIdentity",
+        "database"
+      ],
+      "properties": {
+        "schema": {
+          "const": "sitesourcery.backup-restore-integration-input/v1"
+        },
+        "releaseEpoch": {
+          "$ref": "#/$defs/releaseEpochProjection"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "installedIdentity": {
+          "$ref": "#/$defs/installedIdentity"
+        },
+        "database": {
+          "$ref": "#/$defs/database"
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseEpoch",
+        "source",
+        "artifact",
+        "installedIdentity",
+        "database",
+        "sha256"
+      ],
+      "properties": {
+        "releaseEpoch": {
+          "$ref": "#/$defs/releaseEpochProjection"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "installedIdentity": {
+          "$ref": "#/$defs/installedIdentity"
+        },
+        "database": {
+          "$ref": "#/$defs/database"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rpoDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "maximumAgeMs", "evidenceSha256"],
+      "properties": {
+        "state": {
+          "enum": ["required", "approved"]
+        },
+        "maximumAgeMs": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "evidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "required" },
+            "maximumAgeMs": { "type": "null" },
+            "evidenceSha256": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "approved" },
+            "maximumAgeMs": { "type": "integer", "minimum": 1 },
+            "evidenceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "retentionDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "maximumAgeMs",
+        "minimumSuccessfulAttempts",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["required", "approved"]
+        },
+        "maximumAgeMs": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "minimumSuccessfulAttempts": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "evidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "required" },
+            "maximumAgeMs": { "type": "null" },
+            "minimumSuccessfulAttempts": { "type": "null" },
+            "evidenceSha256": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "approved" },
+            "maximumAgeMs": { "type": "integer", "minimum": 1 },
+            "minimumSuccessfulAttempts": { "type": "integer", "minimum": 1 },
+            "evidenceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "keyCustodyDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "recipientFingerprintSha256",
+        "custodyEvidenceSha256",
+        "recoveryAccessEvidenceSha256"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["required", "approved"]
+        },
+        "recipientFingerprintSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "custodyEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "recoveryAccessEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "required" },
+            "recipientFingerprintSha256": { "type": "null" },
+            "custodyEvidenceSha256": { "type": "null" },
+            "recoveryAccessEvidenceSha256": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "approved" },
+            "recipientFingerprintSha256": { "$ref": "#/$defs/sha256" },
+            "custodyEvidenceSha256": { "$ref": "#/$defs/sha256" },
+            "recoveryAccessEvidenceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "backupEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bindingSha256",
+        "receiptSha256",
+        "quiescenceEvidenceSha256",
+        "destinationMarkerSha256",
+        "ciphertextManifestSha256",
+        "recipientFingerprintSha256",
+        "keyCustodyEvidenceSha256",
+        "recoveryAccessEvidenceSha256",
+        "completedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_proven", "verified"]
+        },
+        "bindingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "quiescenceEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "destinationMarkerSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "ciphertextManifestSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "recipientFingerprintSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "keyCustodyEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "recoveryAccessEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "completedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_proven" },
+            "receiptSha256": { "type": "null" },
+            "quiescenceEvidenceSha256": { "type": "null" },
+            "destinationMarkerSha256": { "type": "null" },
+            "ciphertextManifestSha256": { "type": "null" },
+            "recipientFingerprintSha256": { "type": "null" },
+            "keyCustodyEvidenceSha256": { "type": "null" },
+            "recoveryAccessEvidenceSha256": { "type": "null" },
+            "completedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "verified" },
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "quiescenceEvidenceSha256": { "$ref": "#/$defs/sha256" },
+            "destinationMarkerSha256": { "$ref": "#/$defs/sha256" },
+            "ciphertextManifestSha256": { "$ref": "#/$defs/sha256" },
+            "recipientFingerprintSha256": { "$ref": "#/$defs/sha256" },
+            "keyCustodyEvidenceSha256": { "$ref": "#/$defs/sha256" },
+            "recoveryAccessEvidenceSha256": { "$ref": "#/$defs/sha256" },
+            "completedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "restoreEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bindingSha256",
+        "receiptSha256",
+        "backupReceiptSha256",
+        "backupCompletedAt",
+        "startedAt",
+        "targetFreshnessEvidenceSha256",
+        "readinessProofSha256",
+        "journeyProofSha256",
+        "cleanupProofSha256",
+        "rollbackProofSha256",
+        "completedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_proven", "verified"]
+        },
+        "bindingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "backupReceiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "backupCompletedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        },
+        "startedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        },
+        "targetFreshnessEvidenceSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "readinessProofSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "journeyProofSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "cleanupProofSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "rollbackProofSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "completedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_proven" },
+            "receiptSha256": { "type": "null" },
+            "backupReceiptSha256": { "type": "null" },
+            "backupCompletedAt": { "type": "null" },
+            "startedAt": { "type": "null" },
+            "targetFreshnessEvidenceSha256": { "type": "null" },
+            "readinessProofSha256": { "type": "null" },
+            "journeyProofSha256": { "type": "null" },
+            "cleanupProofSha256": { "type": "null" },
+            "rollbackProofSha256": { "type": "null" },
+            "completedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "verified" },
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "backupReceiptSha256": { "$ref": "#/$defs/sha256" },
+            "backupCompletedAt": { "$ref": "#/$defs/isoTimestamp" },
+            "startedAt": { "$ref": "#/$defs/isoTimestamp" },
+            "targetFreshnessEvidenceSha256": { "$ref": "#/$defs/sha256" },
+            "readinessProofSha256": { "$ref": "#/$defs/sha256" },
+            "journeyProofSha256": { "$ref": "#/$defs/sha256" },
+            "cleanupProofSha256": { "$ref": "#/$defs/sha256" },
+            "rollbackProofSha256": { "$ref": "#/$defs/sha256" },
+            "completedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "holds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "allowsBackup",
+        "allowsDecrypt",
+        "allowsDatabaseMutation",
+        "allowsMountMutation",
+        "allowsProviderEffects",
+        "allowsCustomerEffects",
+        "allowsCleanup",
+        "blockers"
+      ],
+      "properties": {
+        "state": {
+          "const": "held"
+        },
+        "allowsBackup": {
+          "const": false
+        },
+        "allowsDecrypt": {
+          "const": false
+        },
+        "allowsDatabaseMutation": {
+          "const": false
+        },
+        "allowsMountMutation": {
+          "const": false
+        },
+        "allowsProviderEffects": {
+          "const": false
+        },
+        "allowsCustomerEffects": {
+          "const": false
+        },
+        "allowsCleanup": {
+          "const": false
+        },
+        "blockers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "owner_rpo_decision",
+              "owner_retention_decision",
+              "owner_key_custody_decision",
+              "backup_evidence",
+              "clean_room_restore_evidence",
+              "execution_not_authorized"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
