@@ -1,35 +1,62 @@
-# Site Sourcery holistic shape audit and execution ledger
+# Site Sourcery holistic shape execution ledger
 
-Status: active coordination authority  
-Prepared: 2026-08-10  
-Integration base: `69ad11c682dda9d6f792492d322b662dcbc98b4b`  
-Core ancestor: `84aca6b757a806b428ae0cce8115c12dcc6486cd`
+Status: active, deduplicated coordination ledger
 
-This ledger consolidates the system-map, customer-journey, adversarial,
-operability, authority/data, product/customer, product/legal/data,
-commercial/provider, and operational-topology audits. It is an execution
-index, not a new source of commercial, legal, provider, or deployment
-authority.
+Prepared: 2026-08-10
 
-## Current verdict
+Ledger snapshot: `fbd99f231850dc5f31f818d34b744279ebe37bf0`
 
-- Inquiry-only static publication is candidate-ready but not deployed.
-- Hosted customer accounts and API are held pending the P0 packets below.
-- Every payment purpose remains held pending its purpose-specific proof.
-- Legal V4 is sealed and immutable; Stripe Tax has one scheduled New Jersey
-  registration effective 2026-10-21T04:00:00Z.
-- Cloudflare delegation must not occur before the retained DS-safety deadline
-  and fresh fail-closed preflight.
-- The previously pasted Stripe Standard live key is treated as compromised
-  until an authenticated Dashboard roll proves the old key expired. It is not
-  used by this integration line.
-- The current integrated union applies 67 migrations cleanly on fresh
-  PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
-  marker. The proof includes direct Custom, the durable operator work queue,
-  held transition notification outbox, and accounting purpose journal; the
-  generated proof database was removed and absence-proven.
+Legal V4 release ancestor: `69ad11c682dda9d6f792492d322b662dcbc98b4b`
 
-## Target shape
+Core release ancestor: `84aca6b757a806b428ae0cce8115c12dcc6486cd`
+
+This file is an execution index, not commercial, legal, provider, DNS, or
+deployment authority. It consolidates the earlier system-map, customer,
+adversarial, operability, authority/data, legal, commercial, and topology
+registers without reopening completed packets.
+
+## Status vocabulary
+
+- **MERGED / HELD**: implementation and repository proof are in this snapshot,
+  but no customer, provider, deployment, DNS, or commercial effect is granted.
+- **ACTIVE — PENDING COMMIT**: an isolated packet is still being implemented,
+  reviewed, or integrated. It is not complete authority.
+- **REQUIRED-PRE-\***: an evidence or owner/provider gate for the named launch
+  boundary.
+- **POST-LAUNCH / FEATURE**: deliberately deferred; it must not be smuggled into
+  a launch proof.
+
+All production, provider, publication, DNS, deployment, and commercial effects
+remain held at this snapshot.
+
+## Current shape and verdict
+
+- The repository union contains exactly 70 Supabase migrations through
+  `202608100117_direct_custom_reversal_normalization.sql`. The retained ordered
+  inventory is in
+  `server/data-plane/tests/migration-verification-inventory.mjs`; this is not a
+  successor release epoch or installed-database claim.
+- API startup is designed to start zero durable worker loops. Supervised worker
+  entrypoints and narrow worker ports are merged, but their real unit/env
+  installation remains held.
+- Production mail now distinguishes provider acceptance from delivery.
+  Presenting the exact valid, unexpired, unsuperseded activation or recovery
+  token is the first-party possession evidence that can advance the matching
+  request under existing idempotency fences.
+- Legal V4 bytes are sealed and immutable. No owner publication receipt or real
+  `publishedAt` fact has been supplied to this ledger.
+- The Alakazam policy authority and the fail-closed gate requiring a genuinely
+  released policy are merged. That gate does not make the current held policy
+  released and does not enable Alakazam effects.
+- The current reviewed Legal V4 Pages projection contains 94 files. CI now
+  requires each explicit successor to supply its own positive `fileCount` and
+  exact `manifestSha256`; 94 is evidence for this projection, not a global
+  runtime or workflow constant.
+- Inquiry-only static publication remains a candidate boundary, not a proven
+  deployed publication. Hosted accounts/API and every payment purpose remain
+  held pending the applicable lists below.
+
+## Target shape to preserve
 
 ```text
 Visitor
@@ -41,26 +68,25 @@ One account and engagement spine
 ├─ exact legal/offer acceptance
 ├─ purpose-bound tax and payment authority
 ├─ purpose-specific fulfillment engine
-├─ customer status and evidence
-└─ one operator work queue
+├─ customer status and immutable evidence
+└─ one source-authoritative operator work queue
 
 One release epoch
-├─ source and artifact digests
-├─ legal tuple and migration count
-├─ installed Dell/HQ identity
+├─ source/artifact/legal/migration identities
+├─ installed API and external-worker identities
 ├─ public mode: Pages fallback | Cloudflare DNS-only | tunnel-hosted
-├─ provider capability/purpose state
-└─ backup, monitoring, rollback, and live-byte proof
+├─ held provider and customer capability states
+└─ independent backup, monitoring, rollback, and live-byte proof
 ```
 
 Pages is an explicit status/contact/legal fallback, not a second customer
-product. Stripe and Resend are evidence/effect providers, never catalog,
-legal, entitlement, or service authority.
+product. Stripe and Resend are evidence/effect providers, never catalog, legal,
+entitlement, fulfillment, or service authority.
 
 ## Invariants
 
 1. Browser state and provider callbacks never create money, legal, tax,
-   entitlement, completion, ownership, or publication authority.
+   entitlement, completion, ownership, publication, or delivery authority.
 2. One accepted offer snapshot binds one purpose, provider attempt, immutable
    receipt, and resulting service transition.
 3. Provider effects use stable idempotency and exact readback; uncertainty
@@ -77,359 +103,235 @@ legal, entitlement, or service authority.
    authority.
 10. Backups, monitoring, and rollback must work when the main runtime fails.
 
-## Active work packets
+## Merged engineering register
 
-### Release, authority, and infrastructure
+Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 
-- [x] **SHAPE-EPOCH-01 — canonical release epoch and verifier**
-  - Completed independently at `2161422`; merged into the integration line.
-  - The held snapshot remains intentionally stale until the first-wave union is
-    resealed against its final migration set and implementation parent.
-  - Base: `69ad11c`.
-  - Add one non-secret, purpose-scoped release ledger joining source, artifact,
-    legal tuple, 58 migrations, installed release, public mode, provider modes,
-    backup, monitor, and rollback proof.
-  - Split liveness, dependency readiness, and customer capability truth.
-  - Keep every release/provider switch held by default.
-  - Dependencies: none. Blocks hosted deployment and commerce.
+| Packet | Repository evidence | Current result |
+| --- | --- | --- |
+| SHAPE-EPOCH-01 | `2161422`; `ops/release-epoch.mjs` | Fail-closed non-secret epoch contract and liveness/readiness/capability vocabulary. Retained epoch remains stale. |
+| LEGAL-PUBLISH-01 | `71d4aac`; `server/hosted/legal-publication-control.mjs` | Approved/effective basis is separate from real publication time; owner facts cannot be invented. |
+| INGRESS-01 | `d0aaf42`; `server/hosted/ingress-policy.mjs`, `ops/Caddyfile.candidate.held` | Pre-buffer limits, deadlines, concurrency/rate/write/compile budgets, and ownership-before-expensive-work. |
+| OPS-MON-01 | `4d48937`; `ops/independent-monitor.mjs`, `ops/independent-dead-man.mjs` | Independent held probes, telemetry contracts, and dead-man candidates. |
+| OPS-BACKUP-01 | `f29e760`; `ops/backup-restore-contract.mjs` | Held backup/restore contract and clean-room verifier; no real final-union restore yet. |
+| OPS-SECRETS-01 | `5d86201`; `ops/credential-topology.mjs` | Secret-blind topology and rotation contract; no real secret presence or revocation claim. |
+| OPS-ORIGIN-01 / WORKER-02 | `ffbc13e`, `83e7d6c`; `ops/origin-seal-runtime.mjs` | Held origin seal now binds API plus worker unit/env identity, pool allocation, zero-loop API proof, install/stop/rollback order. |
+| CI-01 / CI-LEGAL-MANIFEST-02 | `31baa44`, `511f7f9`; `ops/ci-release-proof-runtime.mjs` | Manual/protected held proof uses explicit successor migration and Legal manifest inputs; exact rebuilt count and digest must match. |
+| IA-01 | `1c02bc8`; public HTML/catalog proof | Three plain starting paths and honest held/current product language. |
+| ENGAGEMENT-01 | `1842899`, production composition `74fa475`; `server/hosted/engagement-production-composition.mjs` | Canonical invitation/claim/project bootstrap is composed with a separately configured secret name and held effects. |
+| CUSTOM-DIRECT-01 | verified union `3eb2b41`, merged at `416a2b1`; migration 113 | Direct and assessment-successor Custom opportunities preserve exact credit, project, and money authority. |
+| CUSTOMER-UX-01 A/B | `a7d79a3`, `42a2d46` | Keyboard, bounded request, reconnect/session, checkout-state, support/export, and honest manual rights routing. |
+| SUPPORT-CASE-01 | `fb39d31`; migration 110 | Forced-RLS support/privacy lifecycle with digest-only evidence and held mail reservation linkage. |
+| TAX-PURPOSE-01 | `a812f0c`; migration 109 | Eight-purpose tax authority; current collection policy remains purpose-bound and held. |
+| STRIPE-SLICES-01 | `b5ff3d2` | Download readiness no longer depends on subscription/Portal/Alakazam capabilities. |
+| PRO-REVERSALS-01 | `bd89bd8`; migration 108 | Evidence-first assessment/Custom cancellation, termination, refund, dispute, and reconciliation semantics. |
+| DIRECT-REVERSAL-01 | `5d69ded`; migration 117 | Direct Custom reversal bindings normalized without weakening assessment-backed authority. |
+| MAIL-01 / MAIL-WIRING-02 / MAIL-COMPOSE-03 → MAIL-COMPOSE-FINAL-03 | `43a121a`, `d8a93cd`, `c459982`; migrations 107 and 111 | Reserve-before-effect composition; provider accepted is never persisted as delivered; token possession proves delivery/activation or consumption. |
+| OPS-QUEUE-01 | `5270762`; migration 112 | One source-authoritative operator read model; no generic mark-paid repair. |
+| COMMERCE-NOTIFY-01 | `d59bda2`; migration 114 | Held outbox originates from committed transitions, not raw provider events. |
+| ACCOUNTING-01 | `5c69005`; migration 115 | Append-only purpose journal projects only existing source evidence; it does not replace product state machines. |
+| ALAKAZAM-POLICY-01 | `c337273`; migration 116 | One canonical held lifecycle/purge/export authority. |
+| ALAKAZAM released-policy gate | `746245a`; `server/hosted/alakazam-release-config.mjs` | Approved construction fails unless exact policy readiness is verified and released with required effects. Current effects remain held. |
+| WORKERS-01 / WORKERS-02 | `02836fa`, `7b06fc4`; `server/hosted/bin/worker.mjs`, `server/hosted/worker-core-composition.mjs` | API starts no duplicate loops; supervised, purpose-allowlisted worker process uses independent bounded PG capacity. |
+| PG-OPS-01 | `764dd42`; `server/hosted/postgres-budget-config.mjs` | Fail-closed statement/lock/idle/acquisition and API/worker pool budgets with PII-free saturation evidence. |
+| READINESS-01 | `511397a`; `server/hosted/readiness-snapshot.mjs` | Cheap liveness is separated from cached/singleflight dependency readiness and customer capability. |
+| IDENTITY-ROTATION-01 | `88df3f6` | One current writer pepper plus bounded explicitly configured prior verifier versions; no real secret was rotated. |
+| PERF-01 / PERF-01A | `b6bd28b`; `PERF-01A-EVIDENCE.md` | Responsive Domain imagery, smaller OG asset, and source-truthful metadata/JSON-LD with sealed Legal bytes preserved; live CWV remains unproven. |
 
-- [x] **LEGAL-PUBLISH-01 — one hostname, one legal/product truth**
-  - Held semantics completed at `71d4aac`: the sealed effective basis is
-    separate from real publication time, and absent owner facts fail closed.
-  - Preserve immutable V2/V3/V4 bytes and exact V4 tuple.
-  - Resolve owner publication/effective-date receipt semantics without editing
-    sealed V4 bytes.
-  - Make Pages an explicit status/contact/legal fallback.
-  - Prove current aliases and versioned URLs byte-for-byte.
-  - Dependencies: SHAPE-EPOCH-01 for final seal.
+## Active packets — pending commit or integration
 
-- [x] **INGRESS-01 — bounded public ingress and abuse controls**
-  - Completed at `d0aaf42`; merged with Engagement HTTP routes at `35030b1`.
-  - Enforce streaming body limits before buffering at Caddy and Node.
-  - Add request deadlines, bounded concurrency, per-IP/global auth limits,
-    unique-email amplification protection, and compile/write quotas.
-  - Check ownership before compilation or expensive work.
-  - Remove enumeration differences without weakening recovery.
-  - Dependencies: none.
+These are not complete in ledger snapshot `fbd99f2`:
 
-- [ ] **OPS-ORIGIN-01 — exact Dell/HQ origin seal**
-  - Held installation/seal tooling completed at `ffbc13e` and is merged. A real
-    seal still requires the final successor epoch and authorized host proof; no
-    host mutation was authorized by the packet.
-  - Install the final proven release, record tree/unit/env-schema hashes,
-    prove the final union migration set, held capabilities, loopback ingress,
-    and rollback.
-  - Dependencies: SHAPE-EPOCH-01, INGRESS-01, full release proof.
+- **PRO-LIFECYCLE-COMPOSE-02 — ACTIVE, PENDING INTEGRATION.** Candidate
+  `aede848` exists outside this snapshot. It still requires review and merge
+  proof before the production professional lifecycle can be called complete.
+- **TAX-READBACK-AUTHORITY — ACTIVE, PENDING COMMIT.** Its isolated worktree is
+  not represented by an independent packet commit in this snapshot. Do not
+  infer provider/tax readiness from migration 109, the scheduled registration,
+  or an in-progress adapter diff.
 
-- [ ] **OPS-DNS-01 — safe Cloudflare cutover**
-  - Run the retained post-deadline DS/fallback preflight.
-  - Change nameservers only; prove Active, Universal SSL, tunnel and origin.
-  - Preserve Pages rollback and mail records.
-  - Add only the new Cloudflare DS after convergence.
-  - Dependencies: LEGAL-PUBLISH-01, OPS-ORIGIN-01.
+## REQUIRED-PRE-STATIC
 
-- [x] **OPS-MON-01 — independent observability and dead-man**
-  - Held independent monitor completed at `4d48937`; activation and outbound
-    alert delivery remain installation-time gates.
-  - Decouple monitoring from runtime and backup mounts.
-  - Add external apex/content/TLS/tunnel probes and a dead-man alert.
-  - Add PII-free request IDs, route/status/latency, DB wait, provider duration,
-    worker lag, deployment identity, and unexpected-exception logging.
-  - Dependencies: SHAPE-EPOCH-01 for release identity.
+The smallest inquiry/contact/legal Pages launch requires all of these and does
+not require hosted or commerce release:
 
-- [ ] **OPS-BACKUP-01 — current recovery proof**
-  - The held, fail-closed contract/verifier/runbook completed at `f29e760` and
-    is merged. It authorizes no backup, restore, mount, database, or network
-    effect; the real final-union drill and owner facts below remain open.
-  - Prove a non-empty final-union backup/restore including Legal V4, Custom,
-    payment readiness, and immutable evidence.
-  - Record approved RPO/RTO/retention and a replacement-host procedure.
-  - Prove an independent off-Zen age-key copy and second ciphertext destination.
-  - Plan WAL/PITR before availability promises.
-  - Dependencies: final schema from integration.
+- Create the exact successor input for the chosen candidate: candidate SHA,
+  rebuilt artifact/tree identities, sealed Legal tuple, exact 70-or-later
+  ordered migration inventory, and the current rebuilt Legal manifest's exact
+  positive file count and digest.
+- Run the protected/manual held CI proof on that exact successor. For the
+  reviewed projection the explicit evidence is 94 files; a later projection
+  must use its own derived count.
+- **LEGAL-PUBLISH-FINAL:** obtain and verify the one-shot owner Legal
+  publication receipt with real owner authorization, exact sealed
+  `effectiveAt`, and actual `publishedAt`.
+- Publish/read back the exact static artifact and prove public legal aliases,
+  contact path, redirects/404, TLS, and rollback bytes. This does not release
+  accounts, API, payment, mail, tunnel, or provider effects.
+- **OPS-DNS-01:** if the apex requires Cloudflare delegation, complete the
+  post-cutoff DNS preflight and convergence sequence below; otherwise retain
+  the explicit Pages fallback without claiming apex convergence.
 
-- [ ] **OPS-SECRETS-01 — provider credential topology**
-  - Secret-blind topology contract/verifier/runbook completed at `5d86201` and
-    is merged. It grants no effects and explicitly leaves actual presence,
-    separation, overlap, revocation, custody, and dual-operator facts unproven.
-  - Inventory scope without exposing values.
-  - Separate staging/production Resend authority; rotate any shared historical
-    full-access credential; prove revocation and delivery.
-  - Document Stripe webhook-secret overlap rotation.
-  - Dependencies: MAIL-01 and final provider composition.
+## REQUIRED-PRE-HOSTED
 
-### Customer and product spine
+Hosted accounts/API require every applicable static gate plus:
 
-- [x] **IA-01 — one plain-language customer spine**
-  - Completed at `1c02bc8`; 18 retained visual proofs cover six pages at
-    320, 390, and 1440 pixels without repository image bloat.
-  - Use three starting paths: make a preview, assess an existing site, or
-    commission Custom directly.
-  - Align navigation, three-path chooser, size ladder, jobs, Domains, Care,
-    Responder, and held labels without erasing the brand voice.
-  - Describe unavailable products as held/coming later; no present-tense buy
-    claim while its purpose is held.
-  - Dependencies: none.
+- Review and integrate the active professional-lifecycle packet if its routes
+  are in the hosted candidate. Review the active Tax readback packet separately;
+  neither may be called complete from this ledger.
+- **SHAPE-EPOCH-SUCCESSOR:** mint a new successor release epoch from the final
+  candidate. The retained
+  `ops/releases/shape-epoch-2026-08-10/release-epoch.json` still binds 58
+  migrations and cannot describe this 70-migration union.
+- Run syntax, full pinned Node/hosted/ops, exact migration-structure, fresh
+  PostgreSQL 16 replay/journeys, generated-database cleanup/absence, and exact
+  browser proofs against the same successor.
+- **OPS-ORIGIN-01 final execution:** install and read back the exact Dell/HQ
+  source, artifact, unit, redacted
+  env-schema, migration, legal, ingress, API, external-worker, pool-allocation,
+  and held-purpose identities. Prove API zero-loop and worker purpose allowlist.
+- **OPS-BACKUP-01 final drill:** run a non-empty current-union backup/restore on
+  an independent path; record owner-approved RPO/RTO/retention, off-host
+  ciphertext, replacement-host steps, and a restore digest. Held tooling is not
+  this proof.
+- **OPS-MON-01 / ONCALL-01:** activate and independently observe
+  apex/content/TLS/tunnel probes plus the dead-man. Record paging ownership,
+  secondary recovery contact, incident escalation, and failed-worker audit.
+- Prove rollback to an exact predecessor: application, API and worker stop/start
+  order, database compatibility, Pages fallback, and installed readback.
+- **OPS-SECRETS-01 final rotation:** prove production secret
+  presence/separation/rotation without exposing values:
+  identity pepper versions, engagement token secret, Stripe runtime/provisioner
+  keys, webhook overlap, Resend authority, backup age keys, and operator custody.
+- **MAIL-PROVIDER-FINAL:** prove transactional mail on the exact deployment:
+  reserve, provider accepted, valid-token possession,
+  bounce/complaint/suppression, recovery fallback, and redacted readiness.
+  Provider acceptance alone is not delivery.
+- **LOAD-SLO-01:** complete the bounded load/SLO proof for ingress, API/worker
+  pool budgets, readiness cache/singleflight, queue lag/backpressure, and
+  graceful shutdown.
+- **OPS-DNS-01:** complete Cloudflare origin/tunnel/TLS and post-cutoff DNS
+  convergence without enabling any held customer/provider capability.
 
-- [x] **ENGAGEMENT-01 — invitation, claim, and canonical project bootstrap**
-  - Completed at `1842899`; merged with migration 106 and exact PG16 proof.
-  - Operator creates an expiring invitation for a customer-owned engagement.
-  - Customer sets credentials and claims a new-site or external-site project
-    without creating an Abracadabra preview.
-  - Support direct Custom provenance and delivered-assessment provenance.
-  - Preserve exact organization/project/legal authority and audit evidence.
-  - Dependencies: none; blocks assessment/Custom customer completeness.
+## REQUIRED-PRE-COMMERCE
 
-- [x] **CUSTOM-DIRECT-01 — direct Custom opportunity**
-  - Completed at `6391192`, verified against the integrated UX/accounting line
-    at `3eb2b41`, and merged at `416a2b1` as migration 113. Both direct
-    no-credit and assessment-successor flows retain exact money/credit/project
-    authority and pass fresh PostgreSQL 16 replay.
-  - Allow a direct Custom quote without a mandatory assessment report/credit.
-  - Keep assessment credit optional, exact, one-use, and project-bound.
-  - Prove both direct and assessment-successor arithmetic and lifecycle.
-  - Dependencies: ENGAGEMENT-01, TAX-PURPOSE-01.
+Each purpose is released independently only after all hosted gates and its own
+exact proof:
 
-- [ ] **SURFACES-01 — separate maker, account, and operator bundles**
-  - Establish `/make/`, `/account/`, and `/operator/` surfaces.
-  - Route-load Download/services/operator capabilities; do not ship operator or
-    held-product code to ordinary customers.
-  - Preserve all server-side capability checks.
-  - Dependencies: ENGAGEMENT-01; staged after current P0 launch work.
+- Roll the previously exposed Stripe Standard live key in authenticated Stripe
+  UI, verify the old key is expired/revoked, install only purpose-appropriate
+  restricted credentials, and retain secret-free evidence.
+- Seal the live Stripe Tax attestation from same-mode Settings plus the complete
+  registration list. Do not infer `none_registered` from an empty list. Preserve
+  the scheduled New Jersey registration effective
+  `2026-10-21T04:00:00Z`; that date alone neither enables collection nor
+  releases a purpose.
+- Finish and merge exact Tax provider readback authority; reconcile its facts
+  with migration 109 and each purpose's approved pre-/post-effective policy.
+- Read back the exact live mode, endpoint/events, Checkout purpose, Product,
+  Price, Coupon, Portal or subscription capability only where that purpose
+  requires it. Prove idempotency, return/reconciliation, refund/dispute/dunning,
+  operator ambiguity handling, and no double charge/refund/credit.
+- Release Download separately from assessment/Custom. Professional-service
+  release additionally requires the reviewed professional-lifecycle
+  composition and exact engagement/reversal/financial-clearance journey.
+- Alakazam remains held until the canonical policy is deliberately released,
+  exact tier/revision/tax/provider/customer evidence is present, and the
+  released-policy gate passes. Domains, Care, publication, and Responder remain
+  separate feature releases.
 
-- [x] **CUSTOMER-UX-01 — accessibility, failure, and rights controls**
-  - Tranche A completed at `a7d79a3`: bounded browser requests and complete
-    account-tab keyboard operation. Tranche B completed at `42a2d46`: exact
-    checkout states, safe reconnect/session refresh, bounded binary export,
-    support/export controls, and honest manual deletion/privacy routing.
-  - Fix account-tab Arrow/Home/End behavior and screen-reader proof.
-  - Add bounded fetch timeout, abort, reconnect, offline, browser-reopen,
-    session-expiry, and second-device proofs.
-  - Add contextual checkout decline/cancel/abandon/no-charge feedback.
-  - Surface support, account export, deletion, and privacy request routes.
-  - Dependencies: can start independently; coordinate with SURFACES-01.
+## External owner/provider facts still open
 
-- [x] **SUPPORT-CASE-01 — auditable support/privacy cases**
-  - Held lifecycle completed at `fb39d31` with migration 110, forced RLS,
-    digest-only evidence, customer/operator projections, and MAIL-01
-    reservation linkage. Provider delivery and destructive fulfillment remain
-    intentionally outside this packet.
-  - Preserve phone/email intake.
-  - Record identity verification, scope, export/deletion work, response, denial,
-    appeal, and closure.
-  - Prove owner notification and fallback; never claim delivery from a DB insert.
-  - Dependencies: MAIL-01.
+| Fact | Current evidence | Required close |
+| --- | --- | --- |
+| Legal owner receipt / publication | V4 basis and bytes are sealed; owner facts are absent. | Owner supplies real authorization, exact basis effective instant, and actual `publishedAt`; verify one-shot receipt and public bytes. |
+| Successor epoch | Retained epoch is a 58-migration historical checkpoint. | Seal final source/artifact/legal/70-or-later migration/API-worker/public-mode/provider/backup/monitor/rollback identities. |
+| Dell/HQ install and rollback | Held origin/API/worker tooling exists. | Authorized exact install, installed-vs-expected readback, loopback/tunnel proof, and predecessor rollback rehearsal. |
+| Backup | Held contract exists. | Current non-empty final-union restore, off-host ciphertext, retention/RPO/RTO owner facts, and absence/readback evidence. |
+| Monitor/on-call | Held independent probes/dead-man exist. | External activation, alert receipt, dead-man expiry/recovery, secondary contact, and launch-day ownership. |
+| Stripe Standard key | Previously exposed live-shaped Standard key is treated as compromised and unused here. | Authenticated roll, old-key revocation proof, restricted replacements, redacted runtime readiness. |
+| Stripe Tax | One New Jersey registration is documented as scheduled for `2026-10-21T04:00:00Z`. | Same-mode complete Settings/registration readback and sealed owner attestation; later collection must obey exact effective authority. |
+| DNS/Cloudflare | Held tunnel/origin candidates exist; convergence is not proved. | Wait through the retained cutoff, recheck old DS/fallback fail-closed, delegate, prove Active/SSL/tunnel/origin/mail records, then add only the reviewed Cloudflare DS after convergence. |
+| Resend/mail | Durable local lifecycle and production composition are held. | Restricted production credential, exact sender/domain/provider readback, accepted/bounce/complaint/suppression and customer recovery proof. |
 
-### Commercial kernel and service lifecycles
+## POST-LAUNCH / FEATURE
 
-- [x] **TAX-PURPOSE-01 — purpose-bound tax authority**
-  - Completed at `a812f0c` and merged into the integration line at `de275ea` as
-    migration 109. The exact eight-purpose authority keeps current
-    professional-service collection disabled by owner, records exclusive
-    price behavior with zero pre-effective tax, and requires a separate
-    registration-bound activation before future collection.
-  - Replace the contradictory global tax assumption with a registry per payment
-    purpose.
-  - Make Download/assessment/Custom truthfully operable under the approved
-    pre-effective policy while preserving exclusive behavior and tax codes.
-  - Keep Domains null/held until classified.
-  - Dependencies: none; P0 for assessment/Custom.
-
-- [x] **STRIPE-SLICES-01 — capability/purpose-aware readiness**
-  - Completed at `b5ff3d2` and merged. Download now requires exact
-    `readinessForPurpose("download")`, which proves webhook/tax readiness
-    without reading Alakazam Product, Prices, Coupon, Portal, Subscriptions, or
-    Schedules. The base hosted capability set no longer includes Portal or
-    subscription cancellation.
-  - Download readiness must not depend on Portal/subscription capabilities.
-  - Keep least privilege, exact endpoint/coupon/catalog readback, and current
-    runtime key until a deliberate split is justified.
-  - Dependencies: TAX-PURPOSE-01.
-
-- [x] **PRO-REVERSALS-01 — assessment/Custom closure semantics**
-  - Completed at `bd89bd8`; merged with migration 108 at `c20a6a2`.
-  - Define agreement-bound cancellation, termination, earned/unearned amounts,
-    refund/dispute/reversal, abandoned access, handoff consequence, and operator
-    review.
-  - Do not invent one universal refund rule.
-  - Dependencies: TAX-PURPOSE-01; blocks professional-service commerce.
-
-- [x] **MAIL-01 — transactional delivery lifecycle**
-  - Durable held lifecycle completed at `43a121a`; migration 107 is merged.
-  - MAIL-WIRING-02 completed at `d8a93cd` and is merged. MAIL-COMPOSE-03 is
-    active to replace legacy provider-accepted-as-delivered call-site behavior
-    before production composition.
-  - Model pending → provider accepted → delivered | bounced | complained |
-    suppressed | expired.
-  - Add webhook/event ingestion, exception queue, and fallback recovery path.
-  - Prove signup, activation, recovery, new login, expiry, public URLs, and
-    customer/operator notifications on the exact deployment.
-  - Dependencies: none.
-
-- [x] **OPS-QUEUE-01 — one operator work queue**
-  - Completed at `5270762` and merged at `b8e7692` as migration 112. Fresh
-    PostgreSQL 16 union proof applies all 64 migrations and proves the exact
-    source-authoritative queue before removing the generated database.
-  - Project existing reconciliation-required, service-job, publication, domain,
-    Care, notification, and provider failures into one read model.
-  - Invoke only existing bounded repair commands; no generic mark-paid action.
-  - Add `invoice.finalization_failed` evidence/alert ownership.
-  - Dependencies: MAIL-01 and service-specific read models.
-
-- [x] **COMMERCE-NOTIFY-01 — transition-driven notifications**
-  - Completed at `d59bda2` and merged at `db852d2` as migration 114. The outbox
-    reserves truthful MAIL rows atomically from committed sources and remains
-    provider-free/held; fresh PostgreSQL 16 union proof is green.
-  - Transactional outbox for quote, invoice, paid, failure, report, completion,
-    cancellation, reversal, domain, and Care transitions.
-  - Notifications originate from committed local transitions, not raw provider
-    events.
-  - Dependencies: MAIL-01.
-
-- [x] **ACCOUNTING-01 — cross-product purpose journal**
-  - Completed at `5c69005` and merged at `3a7b6bb` as migration 115. The seven
-    source relations replay idempotently on fresh PostgreSQL 16; absent fee,
-    payout-aging, and Domain tax evidence remains explicitly absent.
-  - Append-only projection over product-specific receipts, fees, payouts, aging,
-    tax export, and evidence bundles.
-  - Do not replace purpose-specific payment/service state machines.
-  - Dependencies: stable purpose registry and reversal semantics.
-
-- [ ] **ALAKAZAM-POLICY-01 — one lifecycle authority**
-  - Resolve configurable lifecycle versus hard-coded Care lifecycle conflict.
-  - Bind grace, suspension, cancellation, reversal, retention, export, purge,
-    customer controls, and later legal acceptance to one policy.
-  - Dependencies: later Alakazam release; remains held meanwhile.
-
-- [ ] **CARE-ENGINE-01 — one Care accounting engine**
-  - Delineate included Alakazam Care from any standalone Custom Care.
-  - Implement one provider-period request/usage ledger, classification,
-    assignment, acknowledgement, completion, and customer history.
-  - Prevent $50 customers from receiving parallel $35 and $50 allowances.
-  - Dependencies: ALAKAZAM-POLICY-01.
-
-- [ ] **PUBLICATION-01 — consolidate publication authority**
-  - Prove parity, retain entitlement/version/address/screening gates, then remove
-    the unused legacy composition wrapper.
-  - Dependencies: later publication release.
-
-- [ ] **DOMAIN-01 — separate domain launch**
-  - Resolve classification, dynamic registrar pricing, billing/renewal,
-    production adapter, capture/refund/DNS journey, and customer controls.
-  - Remove fixed Stripe Product/Price/Payment Link authority after proof.
-  - Dependencies: separate owner release; remains held.
-
-- [ ] **RESPONDER-01 — decide or archive**
-  - Either implement pricing, telephony/A2P, provider/account/support,
-    cancellation/reconciliation/legal/payment, or remove it from the active
-    product spine until funded.
-  - Dependencies: independent future decision.
-
-### Performance, maintainability, and continuity
-
-- [ ] **WORKERS-01 — supervised worker processes**
-  - Move sync ZIP/export and later lifecycle/publication work off the web event
-    loop while retaining database leases and bounded budgets.
-
-- [x] **PG-OPS-01 — database budgets**
-  - Completed at `764dd42` and merged. Statement, lock, idle-transaction,
-    acquisition, API/worker capacity, and redacted saturation budgets now fail
-    closed; true process/pool separation remains WORKERS-01.
-  - Add statement/lock/idle-transaction timeouts, consolidate session setup,
-    reserve worker connections, and measure before resizing pool 10.
-
-- [ ] **READINESS-01 — cheap liveness and bounded readiness**
-  - Separate liveness from dependencies/customer capabilities; short-lived
-    cache/singleflight broad provider checks.
-
-- [ ] **PERF-01 — static delivery and measured CWV**
-  - Static tranche completed at `b6bd28b` and merged: responsive Domains hero
-    transfer drops 68.4–95.0% by viewport and the lossless OG image drops 60.6%,
-    with Legal V2/V3/V4 bytes unchanged. Immutable caching/minification and live
-    post-launch CWV remain.
-  - Immutable hashed caching, responsive Domains hero, smaller OG image, broader
-    social metadata, JSON-LD, minification, and live CWV measurements.
-
-- [x] **CI-01 — protected exact release proof**
-  - Completed at `31baa44` and merged at `fa4b850`. The manual held workflow
-    consumes an explicit successor migration inventory instead of freezing a
-    count, and its receipt grants no deployment, DNS, provider, or customer
-    authority. Repository protection and final successor inputs remain
-    execution-time gates.
-  - Add current PostgreSQL replay/journeys/artifact/browser/ops proof to protected
-    release CI without allowing CI to grant deployment authority.
-
-- [x] **IDENTITY-ROTATION-01 — pepper overlap**
-  - Completed at `88df3f6` and merged at `2142757`. Production now writes with
-    one current pepper version and verifies only explicitly configured bounded
-    prior versions; readiness and examples are secret-free. Real rotation and
-    two-observation retirement remain operator procedures, not code authority.
-  - Compose prior peppers during rotation and prove existing accounts remain
-    verifiable before removing old material.
-
-- [ ] **ONCALL-01 — continuity beyond one operator**
-  - Secondary recovery contact, escalation/paging, incident runbook, authority
-    renewal, and periodic failed-job audit.
-
-- [ ] **TRUTH-CLEANUP-01 — archive stale generations**
-  - Fence/retire generic v1 commerce, stale runbooks, dormant Care authority,
-    unused provider objects, redirects, obsolete completion matrices, and stale
-    release templates after reference/readback proof.
-  - Prune only confirmed missing worktrees and define one canonical checkout.
-
-- [ ] **MODULARIZE-01 — reduce unsafe module size**
-  - Split the customer DOM, Stripe adapter, PostgreSQL services, and HTTP router
-    by bounded domain after behavior is locked by tests.
-  - Generate architecture, migration, and deployed-commit inventories.
+- **SURFACES-01:** split `/make/`, `/account/`, and `/operator/` bundles without
+  weakening server capability checks.
+- **CARE-ENGINE-01:** one provider-period Care ledger; prevent parallel $35/$50
+  allowances. Requires a deliberately released Alakazam policy.
+- **PUBLICATION-01:** prove parity and retire the unused legacy wrapper while
+  retaining screening, entitlement, revision, address, and rollback gates.
+- **DOMAIN-01:** separate classification, dynamic registrar pricing, renewal,
+  production adapter, capture/refund/DNS, and customer-control release.
+- **RESPONDER-01:** fund and implement pricing/provider/A2P/support/legal/payment
+  lifecycle or remove it from the active product spine.
+- **PERF-01B:** immutable caching/minification only with exact Legal/control
+  preservation; collect live CWV and degraded-network evidence.
+- **WAL/PITR and continuity:** add only before making the corresponding
+  availability promise; rehearse replacement-host and key-person recovery.
+- **TRUTH-CLEANUP-01:** after reference/readback proof, retire stale commerce,
+  dormant Care, obsolete runbooks/templates, unused provider objects, and
+  confirmed missing worktrees; define one canonical checkout.
+- **MODULARIZE-01:** after behavioral proof, split customer DOM, Stripe adapter,
+  PostgreSQL services, and HTTP router by bounded domain and generate
+  architecture/migration/deployed-commit inventories.
 
 ## Coverage of the prior consolidated audit
 
-| Prior register | Covered by |
+Every unique prior register mapping is retained here; completion of a mapped
+packet does not close its external proof gate.
+
+| Prior register | Current mapping |
 | --- | --- |
-| PS-01..03 | LEGAL-PUBLISH-01, OPS-DNS-01 |
-| PH-01..03 | SHAPE-EPOCH-01, OPS-ORIGIN-01, OPS-DNS-01 |
+| PS-01..03 | LEGAL-PUBLISH-01, REQUIRED-PRE-STATIC owner receipt/public readback, OPS-DNS-01 |
+| PH-01..03 | SHAPE-EPOCH-01, OPS-ORIGIN-01/WORKER-02, REQUIRED-PRE-HOSTED install, OPS-DNS-01 |
 | PH-04 | INGRESS-01 |
-| PH-05..06 | OPS-BACKUP-01 |
-| PH-07..08 | MAIL-01 |
-| PH-09 | OPS-MON-01 |
-| PH-10 | SUPPORT-CASE-01, OPS-BACKUP-01 |
+| PH-05..06 | OPS-BACKUP-01 plus real current restore |
+| PH-07..08 | MAIL-01/WIRING-02/FINAL-03 plus provider delivery/recovery proof |
+| PH-09 | OPS-MON-01 plus external activation/dead-man receipt |
+| PH-10 | SUPPORT-CASE-01, OPS-BACKUP-01, owner escalation |
 | PH-11..12 | CUSTOMER-UX-01, SUPPORT-CASE-01 |
-| PC-01..02 | TAX-PURPOSE-01, STRIPE-SLICES-01, exact live proof |
+| PC-01..02 | TAX-PURPOSE-01, STRIPE-SLICES-01, exact live purpose proof |
 | PC-03 | ENGAGEMENT-01, CUSTOM-DIRECT-01 |
-| PC-04..05 | CUSTOMER-UX-01, PRO-REVERSALS-01 |
+| PC-04..05 | CUSTOMER-UX-01, PRO-REVERSALS-01, DIRECT-REVERSAL-01, pending professional composition |
 | PC-06 | OPS-QUEUE-01 |
-| PC-07 | TAX-PURPOSE-01, final provider readback |
-| PL-01..02 | PG-OPS-01, WORKERS-01, load proof |
-| PL-03 | PERF-01 |
-| PL-04 | WORKERS-01 |
-| PL-05 | OPS-BACKUP-01, ONCALL-01 |
+| PC-07 | TAX-PURPOSE-01, pending Tax readback, final provider attestation |
+| PL-01..02 | PG-OPS-01, WORKERS-01/02, bounded load proof |
+| PL-03 | PERF-01A/01B |
+| PL-04 | WORKERS-01/02 |
+| PL-05 | OPS-BACKUP-01, continuity/on-call close |
 | PL-06 | READINESS-01 |
 | PL-07 | CUSTOMER-UX-01 |
-| PL-08 | CI-01 |
+| PL-08 | CI-01/CI-LEGAL-MANIFEST-02 |
 | PL-09 | TRUTH-CLEANUP-01, MODULARIZE-01 |
-| PL-10 | load/SLO proof in PG-OPS-01 and WORKERS-01 |
-| PL-11 | IDENTITY-ROTATION-01 |
-| PL-12..14 | ONCALL-01, MAIL-01, OPS-MON-01 |
-| PL-15 | PERF-01 |
+| PL-10 | load/SLO proof across INGRESS-01, PG-OPS-01, WORKERS-01/02, READINESS-01 |
+| PL-11 | IDENTITY-ROTATION-01 plus real secret rotation/retirement proof |
+| PL-12..14 | continuity/on-call close, MAIL-01, OPS-MON-01 |
+| PL-15 | PERF-01A/01B |
 | PL-16 | ALAKAZAM-POLICY-01, CARE-ENGINE-01, DOMAIN-01, PUBLICATION-01 |
-| PL-17 | OPS-SECRETS-01 |
+| PL-17 | OPS-SECRETS-01 plus real secret roll/readback |
 | PL-18 | SUPPORT-CASE-01 |
-| PL-19 | PERF-01 |
+| PL-19 | PERF-01A/01B |
 
-## Integration order
+## Shortest dependency-safe execution order
 
-1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
-   SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
-2. Integrate foundation and run exact final-union migration/full browser/ops
-   proof. The current 67-migration checkpoint through Custom Direct 113,
-   Commerce Notifications 114, and Accounting 115 is green; Mail 111 requires
-   the final successor proof.
-3. Complete Legal publication, origin seal, current restore, monitoring, and
-   Cloudflare cutover.
-4. Launch Download alone after exact Stripe test/live readiness proof.
-5. Add direct/assessment Custom only after engagement, tax, and reversal
-   packets are green.
-6. Add operator queue, notification, accounting, surface separation, and
-   performance/continuity improvements.
-7. Treat Alakazam/Care, Domains, publication, and Responder as separate later
-   releases with their own authority and proofs.
+1. Finish and review the two active packets; merge only their exact bounded
+   commits after focused and union proof.
+2. Freeze the final candidate and generate the explicit successor epoch,
+   migration inventory, and Legal manifest evidence.
+3. Run protected CI plus local fresh-PG/browser/ops union proof on that exact
+   candidate; fix defects, never evidence expectations.
+4. Obtain the owner Legal publication receipt and launch/read back static Pages
+   only. Keep hosted and commerce held.
+5. Perform the authorized origin/API/worker install, current backup/restore,
+   independent monitor/dead-man, rollback, and post-cutoff DNS/tunnel/TLS proof.
+6. Prove hosted accounts, mail, recovery, worker, readiness, and conservative
+   load behavior before releasing hosted customer capability.
+7. Roll/restrict Stripe credentials, seal Tax/provider readback, then release
+   one payment purpose at a time. Alakazam, Care, Domains, publication, and
+   Responder remain separately owner-gated feature releases.
+
+Nothing in this ledger authorizes a push, deployment, DNS change, provider
+mutation, credential action, database mutation, publication, or customer
+effect.
