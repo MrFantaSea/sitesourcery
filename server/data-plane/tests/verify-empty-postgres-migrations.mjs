@@ -8,12 +8,19 @@ import pg from "pg";
 
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
+<<<<<<< HEAD
 import { createHostedEngagementBootstrap } from
   "../../hosted/engagement-bootstrap.mjs";
 import { createPostgresEngagementBootstrapRepository } from
   "../../hosted/engagement-bootstrap-postgres.mjs";
 import { createProjectLegalAuthorityV4 } from
   "../../hosted/project-legal-authority.mjs";
+=======
+import { createMailLifecycle } from
+  "../../hosted/mail-lifecycle.mjs";
+import { createPostgresMailLifecycleRepository } from
+  "../../hosted/mail-lifecycle-postgres.mjs";
+>>>>>>> feat/mail-lifecycle-20260810
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -333,12 +340,13 @@ async function applyMigrations(pool) {
     "202608090104_alakazam_retained_premium_state.sql",
     "202608090105_hosted_joint_legal_v4_authority.sql",
     "202608100106_customer_engagement_bootstrap.sql",
+    "202608100107_durable_mail_lifecycle.sql",
     "202608100108_professional_services_reversals.sql"
   ];
   assert.equal(
     names.length,
-    60,
-    "migration proof requires exactly 60 migrations through customer engagement and professional-services reversals"
+    61,
+    "migration proof requires exactly 61 migrations through engagement, durable mail, and professional-services reversals"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -381,12 +389,307 @@ async function applyPostPrivacyMigrations(
   }
 }
 
+async function verifyDurableMailLifecycle(pool) {
+  const scope = (await pool.query(`
+    select
+      receipt.user_id,
+      receipt.organization_id,
+      receipt.project_id
+    from ss.project_legal_acceptance_receipts receipt
+    join ss.projects project
+      on project.organization_id = receipt.organization_id
+     and project.id = receipt.project_id
+     and project.lifecycle = 'active'
+    order by receipt.created_at
+    limit 1
+  `)).rows[0];
+  assert.ok(scope, "mail proof requires one active customer project scope");
+  await pool.query(
+    `insert into ss.organization_memberships (
+       organization_id, user_id, role, state, accepted_at
+     ) values ($1, $2, 'owner', 'active', clock_timestamp())
+     on conflict (organization_id, user_id) do update
+       set role = 'owner', state = 'active', removed_at = null`,
+    [scope.organization_id, scope.user_id]
+  );
+
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresMailLifecycleRepository({ authority });
+  assert.equal((await repository.readiness()).ready, true);
+  let current = "2026-08-10T14:00:00.000Z";
+  const lifecycle = createMailLifecycle({
+    repository,
+    clock: { now: () => current }
+  });
+  const sha = (character) => character.repeat(64);
+  const common = {
+    recipientDigest: sha("1"),
+    subjectReferenceDigest: sha("2"),
+    contentDigest: sha("3"),
+    templateVersion: "mail_v1",
+    expiresAt: "2026-08-10T15:00:00.000Z"
+  };
+  const activation = await lifecycle.reserve({
+    commandId: "mail.pg.activation.0001",
+    messageType: "account_activation",
+    organizationId: null,
+    projectId: null,
+    customerUserId: null,
+    ...common
+  });
+  const recovery = await lifecycle.reserve({
+    commandId: "mail.pg.recovery.0001",
+    messageType: "account_recovery",
+    organizationId: null,
+    projectId: null,
+    customerUserId: scope.user_id,
+    ...common,
+    recipientDigest: sha("4")
+  });
+  const support = await lifecycle.reserve({
+    commandId: "mail.pg.support.0001",
+    messageType: "support_notification",
+    organizationId: scope.organization_id,
+    projectId: scope.project_id,
+    customerUserId: scope.user_id,
+    ...common,
+    recipientDigest: sha("5"),
+    expiresAt: "2026-08-10T14:30:00.000Z"
+  });
+  const bounced = await lifecycle.reserve({
+    commandId: "mail.pg.activation.0002",
+    messageType: "account_activation",
+    organizationId: null,
+    projectId: null,
+    customerUserId: null,
+    ...common,
+    recipientDigest: sha("6")
+  });
+  assert.deepEqual(
+    [activation.state, recovery.state, support.state, bounced.state],
+    ["pending", "pending", "pending", "pending"]
+  );
+
+  current = "2026-08-10T14:02:00.000Z";
+  const acceptance = await lifecycle.recordProviderAcceptance({
+    commandId: "mail.pg.accept.0001",
+    messageId: activation.messageId,
+    provider: "resend",
+    providerMessageIdDigest: sha("7"),
+    evidenceDigest: sha("8"),
+    acceptedAt: "2026-08-10T14:01:00.000Z"
+  });
+  assert.equal(acceptance.acceptanceState, "provider_accepted");
+  assert.equal(acceptance.currentState, "provider_accepted");
+  const acceptedProjection = await pool.query(
+    `select state from ss.hosted_mail_deliveries where id = $1`,
+    [activation.messageId]
+  );
+  assert.equal(acceptedProjection.rows[0].state, "provider_accepted");
+
+  current = "2026-08-10T14:04:00.000Z";
+  const deliveredInput = {
+    provider: "resend",
+    providerEventIdDigest: sha("9"),
+    providerMessageIdDigest: sha("7"),
+    eventKind: "delivered",
+    signatureVerificationDigest: sha("a"),
+    evidenceDigest: sha("b"),
+    occurredAt: "2026-08-10T14:03:00.000Z"
+  };
+  assert.equal(
+    (await lifecycle.ingestProviderEvent(deliveredInput)).currentState,
+    "delivered"
+  );
+  current = "2026-08-10T14:05:00.000Z";
+  assert.equal(
+    (await lifecycle.ingestProviderEvent(deliveredInput)).eventState,
+    "applied"
+  );
+  await assert.rejects(
+    lifecycle.ingestProviderEvent({
+      ...deliveredInput,
+      evidenceDigest: sha("c")
+    }),
+    (error) => error.code === "MAIL_PROVIDER_EVENT_IDEMPOTENCY_CONFLICT"
+  );
+
+  current = "2026-08-10T14:07:00.000Z";
+  await lifecycle.ingestProviderEvent({
+    ...deliveredInput,
+    providerEventIdDigest: sha("d"),
+    eventKind: "complained",
+    evidenceDigest: sha("e"),
+    occurredAt: "2026-08-10T14:06:00.000Z"
+  });
+  current = "2026-08-10T14:09:00.000Z";
+  assert.equal((await lifecycle.ingestProviderEvent({
+    ...deliveredInput,
+    providerEventIdDigest: sha("f"),
+    eventKind: "suppressed",
+    evidenceDigest: sha("0"),
+    occurredAt: "2026-08-10T14:08:00.000Z"
+  })).currentState, "suppressed");
+
+  current = "2026-08-10T14:04:00.000Z";
+  const earlyDelivery = await lifecycle.ingestProviderEvent({
+    provider: "resend",
+    providerEventIdDigest: "ab".repeat(32),
+    providerMessageIdDigest: "bc".repeat(32),
+    eventKind: "delivered",
+    signatureVerificationDigest: "cd".repeat(32),
+    evidenceDigest: "de".repeat(32),
+    occurredAt: "2026-08-10T14:03:00.000Z"
+  });
+  assert.equal(earlyDelivery.eventState, "pending");
+  current = "2026-08-10T14:05:00.000Z";
+  const recoveryAcceptance = await lifecycle.recordProviderAcceptance({
+    commandId: "mail.pg.accept.0002",
+    messageId: recovery.messageId,
+    provider: "resend",
+    providerMessageIdDigest: "bc".repeat(32),
+    evidenceDigest: "ef".repeat(32),
+    acceptedAt: "2026-08-10T14:02:00.000Z"
+  });
+  assert.equal(recoveryAcceptance.acceptanceState, "provider_accepted");
+  assert.equal(recoveryAcceptance.currentState, "delivered");
+
+  current = "2026-08-10T14:02:00.000Z";
+  await lifecycle.recordProviderAcceptance({
+    commandId: "mail.pg.accept.0003",
+    messageId: bounced.messageId,
+    provider: "resend",
+    providerMessageIdDigest: "12".repeat(32),
+    evidenceDigest: "23".repeat(32),
+    acceptedAt: "2026-08-10T14:01:00.000Z"
+  });
+  current = "2026-08-10T14:04:00.000Z";
+  assert.equal((await lifecycle.ingestProviderEvent({
+    provider: "resend",
+    providerEventIdDigest: "34".repeat(32),
+    providerMessageIdDigest: "12".repeat(32),
+    eventKind: "bounced",
+    signatureVerificationDigest: "45".repeat(32),
+    evidenceDigest: "56".repeat(32),
+    occurredAt: "2026-08-10T14:03:00.000Z"
+  })).currentState, "bounced");
+
+  current = "2026-08-10T14:31:00.000Z";
+  assert.equal((await lifecycle.expire({
+    commandId: "mail.pg.expire.0001",
+    messageId: support.messageId
+  })).state, "expired");
+
+  const lifecycleCounts = await pool.query(`
+    select
+      count(*) filter (where state = 'suppressed') = 1 as suppressed_ready,
+      count(*) filter (where state = 'delivered') = 1 as delivered_ready,
+      count(*) filter (where state = 'bounced') = 1 as bounced_ready,
+      count(*) filter (where state = 'expired') = 1 as expired_ready,
+      (select count(*) = 1
+         from ss.hosted_mail_recipient_suppressions) as suppression_ready,
+      (select count(*) = 0
+         from ss.hosted_mail_provider_event_inbox
+        where state = 'pending') as inbox_drained,
+      (select count(*) >= 3
+         from ss.hosted_mail_exception_projection
+        where state = 'open') as exceptions_ready
+    from ss.hosted_mail_deliveries
+  `);
+  for (const [facet, ready] of Object.entries(lifecycleCounts.rows[0])) {
+    assert.equal(ready, true, `MAIL-01 PostgreSQL proof failed: ${facet}`);
+  }
+
+  await pool.query(
+    `insert into ss.hosted_account_profiles (
+       user_id, display_name, state
+     ) values ($1, 'MAIL-01 operator', 'active')
+     on conflict (user_id) do update set state = 'active'`,
+    [scope.user_id]
+  );
+  await pool.query(
+    `insert into ss.operator_profiles (
+       user_id, display_label, state, authorized_by_user_id, authorized_at
+     ) values ($1, 'MAIL-01 operator', 'held', $1, clock_timestamp())
+     on conflict (user_id) do nothing`,
+    [scope.user_id]
+  );
+  await pool.query(
+    `insert into ss.operator_permissions (
+       operator_user_id, capability, state, granted_by_user_id, granted_at
+     ) values ($1, 'service_case_manage', 'held', $1, clock_timestamp())
+     on conflict (operator_user_id, capability) do nothing`,
+    [scope.user_id]
+  );
+  await pool.query(
+    `insert into ss.service_operator_authority_events (
+       operator_user_id, capability, event_sequence, event_kind,
+       predecessor_event_id, recorded_by_kind, effective_at, expires_at,
+       created_at
+     ) values ($1, 'service_case_manage', 1, 'grant', null,
+       'deployment_control', clock_timestamp(),
+       clock_timestamp() + interval '1 day', clock_timestamp())`,
+    [scope.user_id]
+  );
+  const capability = await pool.query(
+    `select
+       clock_timestamp() as observed_at,
+       ss.service_operator_has_capability(
+         $1, 'service_case_manage', clock_timestamp()
+       ) as allowed`,
+    [scope.user_id]
+  );
+  assert.equal(
+    capability.rows[0].allowed,
+    true,
+    "MAIL-01 operator capability grant did not become current"
+  );
+  current = capability.rows[0].observed_at.toISOString();
+  const ownerQueue = await lifecycle.listOwnerExceptions({
+    actorId: scope.user_id,
+    organizationId: scope.organization_id
+  });
+  assert.ok(ownerQueue.items.length >= 3);
+  assert.equal(
+    ownerQueue.items.some((item) =>
+      "recipientDigest" in item || "providerMessageIdDigest" in item),
+    false
+  );
+
+  let rlsError = null;
+  await pool.query("begin");
+  try {
+    await pool.query("set local role authenticated");
+    await pool.query("select * from ss.hosted_mail_deliveries limit 1");
+  } catch (error) {
+    rlsError = error;
+  } finally {
+    await pool.query("rollback");
+  }
+  assert.equal(rlsError?.code, "42501");
+
+  const columns = await pool.query(`
+    select column_name
+      from information_schema.columns
+     where table_schema = 'ss'
+       and table_name like 'hosted_mail_%'
+  `);
+  assert.equal(
+    columns.rows.some(({ column_name: name }) =>
+      /email|body|subject_text|token|raw_payload|action_url/u.test(name)),
+    false
+  );
+}
+
 async function verifyJointLegalV4ReleaseState(pool) {
   const result = await pool.query(`
     select
       ss.hosted_runtime_contract_v53() =
         'canonical-ss-v53-joint-legal-v4-authority'
         as v53_contract_ready,
+      ss.hosted_runtime_contract_v54() =
+        'canonical-ss-v54-durable-mail-lifecycle'
+        as v54_contract_ready,
       (
         select count(*) = 3
           from ss.legal_documents document
@@ -4949,6 +5252,7 @@ export async function runMigrationVerification({
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
     await verifyV4ReceiptRejectsFourthAcceptance(pool);
+    await verifyDurableMailLifecycle(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -4969,7 +5273,11 @@ export async function runMigrationVerification({
     );
     writeOutput("rogueFourthAcceptanceRejected true\n");
     writeOutput("jointLegalV4ReceiptAcceptedAndFourthRejected true\n");
+<<<<<<< HEAD
     writeOutput("customerEngagementBootstrapJourney true\n");
+=======
+    writeOutput("durableMailLifecyclePostgresProof true\n");
+>>>>>>> feat/mail-lifecycle-20260810
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
