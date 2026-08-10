@@ -32,6 +32,9 @@ export function createHeldStripeAdapter() {
     async readiness() {
       return { ready: false, reason: "stripe_not_configured" };
     },
+    async readinessForPurpose() {
+      return { ready: false, reason: "stripe_not_configured" };
+    },
     createCheckout: reject,
     retrieveAlakazamRenewalInvoice: reject,
     retrieveAlakazamIncidentInvoice: reject,

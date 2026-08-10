@@ -1,6 +1,7 @@
 import {
   STRIPE_ALAKAZAM_CAPABILITIES,
   STRIPE_API_VERSION,
+  STRIPE_READINESS_PURPOSES,
   createStripeProviderAdapter
 } from "../commerce/adapters/stripe.mjs";
 import {
@@ -27,12 +28,18 @@ const APPROVAL_FIELDS = Object.freeze([
   "provider"
 ]);
 const HOSTED_CAPABILITIES = Object.freeze([
-  "billing_portal:create",
   "checkout:create",
+  "checkout:read",
   "prices:read",
-  "subscriptions:cancel",
   "webhook_endpoints:read",
   "webhooks:verify"
+]);
+const ALAKAZAM_CAPABILITIES = Object.freeze([
+  ...new Set([
+    ...STRIPE_ALAKAZAM_CAPABILITIES,
+    "billing_portal:create",
+    "subscriptions:cancel"
+  ])
 ]);
 const DOMAIN_CAPABILITIES = Object.freeze([
   "domain_authorization:cancel",
@@ -44,10 +51,10 @@ const DOMAIN_CAPABILITIES = Object.freeze([
 const APPROVED_CAPABILITIES = new Set([
   ...HOSTED_CAPABILITIES,
   ...DOMAIN_CAPABILITIES,
-  ...STRIPE_ALAKAZAM_CAPABILITIES
+  ...ALAKAZAM_CAPABILITIES
 ]);
 const ALAKAZAM_EXCLUSIVE_CAPABILITIES = Object.freeze(
-  STRIPE_ALAKAZAM_CAPABILITIES.filter(
+  ALAKAZAM_CAPABILITIES.filter(
     (capability) =>
       !HOSTED_CAPABILITIES.includes(capability)
   )
@@ -275,7 +282,7 @@ function exactApproval(environment, deployment, livemode) {
     );
   }
   const approvedAlakazamCapabilities =
-    STRIPE_ALAKAZAM_CAPABILITIES.filter(
+    ALAKAZAM_CAPABILITIES.filter(
       (capability) => capabilities.has(capability)
     );
   const approvedExclusiveAlakazamCapabilities =
@@ -285,7 +292,7 @@ function exactApproval(environment, deployment, livemode) {
   if (
     approvedExclusiveAlakazamCapabilities.length !== 0 &&
     approvedAlakazamCapabilities.length !==
-      STRIPE_ALAKAZAM_CAPABILITIES.length
+      ALAKAZAM_CAPABILITIES.length
   ) {
     fail(
       "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE",
@@ -299,7 +306,7 @@ function exactApproval(environment, deployment, livemode) {
         DOMAIN_CAPABILITIES.length,
     alakazamApproved:
       approvedAlakazamCapabilities.length ===
-      STRIPE_ALAKAZAM_CAPABILITIES.length
+      ALAKAZAM_CAPABILITIES.length
   };
 }
 
@@ -796,6 +803,6 @@ export const STRIPE_PRODUCTION_CONTRACT =
     modes: Object.freeze([...PRODUCTION_MODES]),
     hostedCapabilities: HOSTED_CAPABILITIES,
     domainCapabilities: DOMAIN_CAPABILITIES,
-    alakazamCapabilities:
-      STRIPE_ALAKAZAM_CAPABILITIES
+    alakazamCapabilities: ALAKAZAM_CAPABILITIES,
+    readinessPurposes: STRIPE_READINESS_PURPOSES
   });

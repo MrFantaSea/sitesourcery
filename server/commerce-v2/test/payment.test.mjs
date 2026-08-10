@@ -156,6 +156,7 @@ function fixture({
 } = {}) {
   const calls = {
     readiness: 0,
+    readinessPurposes: [],
     create: [],
     retrieve: [],
     lifecycle: [],
@@ -392,6 +393,16 @@ function fixture({
         taxModes: { download: taxMode }
       };
     },
+    async readinessForPurpose(purpose) {
+      calls.readiness += 1;
+      calls.readinessPurposes.push(purpose);
+      return {
+        ready: true,
+        provider: "stripe",
+        purpose,
+        taxModes: { download: taxMode }
+      };
+    },
     async createDownloadCheckout(input) {
       calls.create.push(structuredClone(input));
       if (createError) throw createError;
@@ -491,6 +502,9 @@ test("automatic tax is a valid exact $5 item-plus-tax contract", async () => {
     provider: "stripe",
     taxMode: "automatic"
   });
+  assert.deepEqual(context.calls.readinessPurposes, [
+    "download"
+  ]);
   await context.service.dispatch(preparation());
   await context.service.ingestStripeEvent(
     verifiedEvent()

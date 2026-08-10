@@ -365,7 +365,22 @@ function createContractPaymentProvider() {
           provider: "stripe",
           mode: "contract_test",
           livemode: false,
-          taxMode: "disabled_by_owner"
+          taxModes: {
+            download: "disabled_by_owner"
+          }
+        };
+      },
+      async readinessForPurpose(purpose) {
+        assert.equal(purpose, "download");
+        return {
+          ready: true,
+          provider: "stripe",
+          mode: "contract_test",
+          livemode: false,
+          purpose,
+          taxModes: {
+            download: "disabled_by_owner"
+          }
         };
       },
       async createCheckout(input) {

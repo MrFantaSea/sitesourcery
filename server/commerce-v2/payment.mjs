@@ -98,6 +98,7 @@ function validatePorts({ repository, provider, clock, ids }) {
       [
         "createDownloadCheckout",
         "readiness",
+        "readinessForPurpose",
         "retrieveDownloadCheckoutLifecycle",
         "retrieveDownloadCheckout"
       ]
@@ -566,7 +567,9 @@ export function createDownloadPaymentService({
   async function providerReadiness() {
     let status;
     try {
-      status = await ports.provider.readiness();
+      status = await ports.provider.readinessForPurpose(
+        "download"
+      );
     } catch (error) {
       return deepFreeze({
         ready: false,

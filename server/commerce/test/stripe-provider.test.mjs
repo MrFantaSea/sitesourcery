@@ -11,6 +11,7 @@ import {
   STRIPE_CUSTOM_BUILD_FINAL_METADATA_SCHEMA,
   STRIPE_CUSTOM_BUILD_FINAL_PAYMENT_SCHEMA,
   STRIPE_CUSTOM_BUILD_FINAL_PURPOSE_SCHEMA,
+  STRIPE_READINESS_PURPOSES,
   STRIPE_REQUIRED_WEBHOOK_EVENTS,
   createOfficialStripeClient,
   createStripeProviderAdapter
@@ -2355,6 +2356,13 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     provider: "stripe",
     mode: "held"
   });
+  assert.deepEqual(
+    await adapter.readinessForPurpose("download"),
+    {
+      ready: false,
+      reason: "stripe_not_configured"
+    }
+  );
   for (const operation of [
     "createCheckout",
     "createServiceAssessmentCheckout",
@@ -2616,6 +2624,77 @@ test("readiness reads back every exact owner-approved Price", async () => {
   assert.deepEqual(calls.webhookEndpoints, [
     "we_contract_test"
   ]);
+});
+
+test("Download readiness is isolated from Alakazam Product, Coupon, Portal, subscription, and Price dependencies", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({
+    config,
+    portalConfigurationError:
+      new Error("Portal must not be read")
+  });
+  const { adapter } = adapterFixture({ config, fake });
+  assert.deepEqual(
+    await adapter.readinessForPurpose("download"),
+    {
+      ready: true,
+      provider: "stripe",
+      mode: "contract_test",
+      environment: "contract_test",
+      livemode: false,
+      apiVersion: STRIPE_API_VERSION,
+      purpose: "download",
+      priceCount: 0,
+      domainAuthorization: false,
+      webhookVerification: true,
+      webhookEndpoint: true,
+      taxModes: config.taxAuthority.purposes,
+      taxPurposeAuthority: true,
+      automaticTaxActivation: false,
+      taxAttestation: true
+    }
+  );
+  assert.deepEqual(fake.calls.webhookEndpoints, [
+    "we_contract_test"
+  ]);
+  for (const calls of [
+    fake.calls.prices,
+    fake.calls.products,
+    fake.calls.coupons,
+    fake.calls.portalConfigurations,
+    fake.calls.subscriptionReads,
+    fake.calls.scheduleReads
+  ]) assert.deepEqual(calls, []);
+});
+
+test("purpose readiness accepts only the exact reviewed purpose registry", async () => {
+  const { adapter, calls } = adapterFixture();
+  assert.deepEqual(
+    [...STRIPE_READINESS_PURPOSES],
+    [
+      "alakazam",
+      "customBuildChange",
+      "customBuildFinal",
+      "customBuildStart",
+      "domainRegistration",
+      "download",
+      "serviceAssessment",
+      "siteService"
+    ]
+  );
+  assert.deepEqual(
+    await adapter.readinessForPurpose("Download"),
+    {
+      ready: false,
+      provider: "stripe",
+      mode: "contract_test",
+      environment: "contract_test",
+      livemode: false,
+      purpose: null,
+      code: "stripe_readiness_purpose_invalid"
+    }
+  );
+  assert.deepEqual(calls.webhookEndpoints, []);
 });
 
 test("readiness fails closed on Webhook Endpoint URL, status, API version, mode, or event drift", async () => {
