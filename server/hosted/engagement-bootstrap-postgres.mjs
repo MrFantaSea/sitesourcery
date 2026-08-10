@@ -282,8 +282,8 @@ export function createPostgresEngagementBootstrapRepository({
           { readOnly: true },
           (client) => client.query(`
             select
-              ss.hosted_runtime_contract_v54() =
-                'canonical-ss-v54-customer-engagement-bootstrap'
+              ss.hosted_runtime_contract_v106() =
+                'canonical-ss-v106-customer-engagement-bootstrap'
                 as contract_ready,
               to_regclass('ss.customer_engagement_invitations') is not null
                 as invitations_ready,

@@ -17,8 +17,8 @@ In `server/hosted/repository-postgres.mjs`, extend the canonical readiness
 query and required-boolean projection with one `engagement_bootstrap_ready`
 field. It must require all of the following, not merely the migration marker:
 
-- `ss.hosted_runtime_contract_v54()` returns exactly
-  `canonical-ss-v54-customer-engagement-bootstrap`;
+- `ss.hosted_runtime_contract_v106()` returns exactly
+  `canonical-ss-v106-customer-engagement-bootstrap`;
 - `ss.customer_engagement_invitations` and `ss.customer_engagements` exist;
 - both tables have forced RLS;
 - `anon` and `authenticated` have no invitation-table privilege;

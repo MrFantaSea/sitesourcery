@@ -1177,9 +1177,9 @@ async function verifyJointLegalV4ReleaseState(pool) {
 async function verifyCustomerEngagementBootstrapState(pool) {
   const result = await pool.query(`
     select
-      ss.hosted_runtime_contract_v54() =
-        'canonical-ss-v54-customer-engagement-bootstrap'
-        as v54_contract_ready,
+      ss.hosted_runtime_contract_v106() =
+        'canonical-ss-v106-customer-engagement-bootstrap'
+        as v106_contract_ready,
       to_regclass('ss.customer_engagement_invitations') is not null
         as invitations_ready,
       to_regclass('ss.customer_engagements') is not null
