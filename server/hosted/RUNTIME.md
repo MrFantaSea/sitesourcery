@@ -11,10 +11,16 @@ email, publication, or public deployment. Checkout, registrar, and DNS remain
 explicit held provider boundaries. Repository and system publication holds
 remain in force, and no code removes them.
 
-`GET /api/v1/health` and `GET /api/v1/ready` are the only sessionless probe
-routes. They run before authentication and CSRF, return only the service name
-and one boolean, and never expose dependency configuration or diagnostics.
-Stripe webhooks remain the separate raw-body, signature-authenticated route.
+`GET /api/v1/health` remains the retained minimal compatibility probe.
+`GET /api/v1/live` reports only process liveness, the fixed service identity,
+and a validated PII-free release identity; it performs no database, provider,
+or filesystem-wide work. `GET /api/v1/ready` uses a bounded short-TTL,
+singleflight dependency snapshot and reports only fixed states, codes, age, and
+latency buckets. It retains the `ready` and `service` fields consumed by the
+origin and independent monitors. Dependency configuration and diagnostics are
+never returned. Customer capabilities remain a separate fail-closed route and
+are not granted by either probe. Stripe webhooks remain the separate raw-body,
+signature-authenticated route.
 
 ## Domain runtime
 

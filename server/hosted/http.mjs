@@ -6,6 +6,9 @@ import {
   DEFAULT_INGRESS_POLICY,
   validateIngressPolicy
 } from "./ingress-policy.mjs";
+import {
+  createReadinessSnapshot
+} from "./readiness-snapshot.mjs";
 import { digest, randomToken } from "./security.mjs";
 import {
   createHeldHostedAlakazamAccount
@@ -78,6 +81,14 @@ const JSON_HEADERS = Object.freeze({
   "X-Frame-Options": "DENY"
 });
 const MAXIMUM_PRIVATE_EVIDENCE_BYTES = 700 * 1024;
+const HOSTED_RUNTIME_SERVICE =
+  "sitesourcery-hosted-runtime";
+const HOSTED_LIVENESS_SCHEMA =
+  "sitesourcery.hosted-liveness/v1";
+const HOSTED_READINESS_SCHEMA =
+  "sitesourcery.hosted-readiness/v1";
+const HOSTED_RELEASE_IDENTITY_SCHEMA =
+  "sitesourcery.hosted-release-identity/v1";
 const SESSIONLESS_IDENTITY_WRITES = new Set([
   "/api/v1/auth/register",
   "/api/v1/auth/register/complete",
@@ -109,6 +120,54 @@ const HOSTED_OPERATIONS_STATE_VALUES =
     ]),
     dns: new Set(["held", "approved_live"])
   });
+
+function runtimeReleaseIdentity(input) {
+  if (input === null || input === undefined) {
+    return Object.freeze({
+      schema: HOSTED_RELEASE_IDENTITY_SCHEMA,
+      state: "unbound",
+      epochId: null,
+      bindingSha256: null,
+      publicArtifactCommitSha: null
+    });
+  }
+  invariant(
+    input &&
+      typeof input === "object" &&
+      JSON.stringify(
+        Object.keys(input).sort()
+      ) === JSON.stringify([
+        "bindingSha256",
+        "epochId",
+        "publicArtifactCommitSha",
+        "schema",
+        "state"
+      ]) &&
+      input.schema ===
+        HOSTED_RELEASE_IDENTITY_SCHEMA &&
+      input.state === "bound" &&
+      /^[A-Za-z0-9._:-]{1,128}$/u.test(
+        input.epochId
+      ) &&
+      /^[a-f0-9]{64}$/u.test(
+        input.bindingSha256
+      ) &&
+      /^[a-f0-9]{40}$/u.test(
+        input.publicArtifactCommitSha
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted release identity is invalid.",
+    { status: 500 }
+  );
+  return Object.freeze({
+    schema: HOSTED_RELEASE_IDENTITY_SCHEMA,
+    state: "bound",
+    epochId: input.epochId,
+    bindingSha256: input.bindingSha256,
+    publicArtifactCommitSha:
+      input.publicArtifactCommitSha
+  });
+}
 
 function operationsStateProjection(readiness) {
   const domains =
@@ -493,6 +552,8 @@ export function createHostedApi(
     customServicesOwner = null,
     engagementBootstrap = null,
     stripeWebhook = null,
+    readinessPolicy = undefined,
+    releaseIdentity = null,
     ingressPolicy = DEFAULT_INGRESS_POLICY
   } = {}
 ) {
@@ -500,6 +561,14 @@ export function createHostedApi(
   invariant(service && typeof service.authenticate === "function", "RUNTIME_CONFIGURATION_ERROR", "Hosted service is required.", {
     status: 500
   });
+  const release = runtimeReleaseIdentity(
+    releaseIdentity
+  );
+  const readinessBoundary =
+    createReadinessSnapshot({
+      check: () => service.readiness(),
+      ...(readinessPolicy ?? {})
+    });
   const downloadBoundary =
     downloadCommerce ??
     createHeldHostedDownloadCommerce();
@@ -851,8 +920,23 @@ export function createHostedApi(
           return json(
             {
               ok: true,
-              service:
-                "sitesourcery-hosted-runtime"
+              service: HOSTED_RUNTIME_SERVICE
+            },
+            200,
+            { "X-Request-Id": requestId }
+          );
+        }
+
+        if (
+          method === "GET" &&
+          pathname === "/api/v1/live"
+        ) {
+          return json(
+            {
+              schema: HOSTED_LIVENESS_SCHEMA,
+              live: true,
+              service: HOSTED_RUNTIME_SERVICE,
+              release
             },
             200,
             { "X-Request-Id": requestId }
@@ -890,22 +974,21 @@ export function createHostedApi(
           method === "GET" &&
           pathname === "/api/v1/ready"
         ) {
-          invariant(
-            typeof service.readiness === "function",
-            "RUNTIME_CONFIGURATION_ERROR",
-            "Hosted readiness is unavailable.",
-            { status: 500 }
-          );
           const readiness =
-            await service.readiness();
-          const ready = readiness?.ready === true;
+            await readinessBoundary.read();
           return json(
             {
-              ready,
-              service:
-                "sitesourcery-hosted-runtime"
+              schema: HOSTED_READINESS_SCHEMA,
+              ready: readiness.ready,
+              service: HOSTED_RUNTIME_SERVICE,
+              release,
+              ageMs: readiness.ageMs,
+              state: readiness.state,
+              code: readiness.code,
+              latencyBucket:
+                readiness.latencyBucket
             },
-            ready ? 200 : 503,
+            readiness.ready ? 200 : 503,
             { "X-Request-Id": requestId }
           );
         }

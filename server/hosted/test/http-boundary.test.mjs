@@ -10,6 +10,22 @@ const SESSION = "session_customer_1";
 const ACTOR = Object.freeze({
   userId: "00000000-0000-4000-8000-000000000001"
 });
+const UNBOUND_RELEASE = Object.freeze({
+  schema:
+    "sitesourcery.hosted-release-identity/v1",
+  state: "unbound",
+  epochId: null,
+  bindingSha256: null,
+  publicArtifactCommitSha: null
+});
+const READINESS_LATENCY_BUCKETS = new Set([
+  "under_25_ms",
+  "25_to_99_ms",
+  "100_to_249_ms",
+  "250_to_999_ms",
+  "one_second_or_more",
+  "timeout"
+]);
 
 function jsonBody(response) {
   return response.json();
@@ -31,7 +47,8 @@ function createContext({
         "whsec_never-public"
     }
   },
-  ingressPolicy
+  ingressPolicy,
+  releaseIdentity = null
 } = {}) {
   let requestSequence = 0;
   let csrfIssues = 0;
@@ -234,6 +251,9 @@ function createContext({
       csrfIssues += 1;
       return CSRF;
     },
+    ...(releaseIdentity
+      ? { releaseIdentity }
+      : {}),
     ...(ingressPolicy ? { ingressPolicy } : {})
   });
   return {
@@ -448,16 +468,50 @@ test("health and readiness probes are sessionless, bounded, and nonsecret", asyn
     health.headers.get("x-request-id"),
     "req_1"
   );
+  assert.equal(context.calls.readiness.length, 0);
+
+  const live = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/live`)
+  );
+  assert.equal(live.status, 200);
+  assert.deepEqual(await live.json(), {
+    schema: "sitesourcery.hosted-liveness/v1",
+    live: true,
+    service: "sitesourcery-hosted-runtime",
+    release: UNBOUND_RELEASE
+  });
+  assert.equal(context.calls.readiness.length, 0);
 
   const ready = await context.api.fetch(
     new Request(`${ORIGIN}/api/v1/ready`)
   );
   assert.equal(ready.status, 200);
   const readyPayload = await ready.json();
-  assert.deepEqual(readyPayload, {
+  assert.deepEqual({
+    ...readyPayload,
+    ageMs: 0,
+    latencyBucket: "observed"
+  }, {
+    schema: "sitesourcery.hosted-readiness/v1",
     ready: true,
-    service: "sitesourcery-hosted-runtime"
+    service: "sitesourcery-hosted-runtime",
+    release: UNBOUND_RELEASE,
+    ageMs: 0,
+    state: "ready",
+    code: "ready",
+    latencyBucket: "observed"
   });
+  assert.equal(
+    Number.isSafeInteger(readyPayload.ageMs) &&
+      readyPayload.ageMs >= 0,
+    true
+  );
+  assert.equal(
+    READINESS_LATENCY_BUCKETS.has(
+      readyPayload.latencyBucket
+    ),
+    true
+  );
   assert.deepEqual(context.calls.authenticate, []);
   assert.equal(context.calls.readiness.length, 1);
   assert.doesNotMatch(
@@ -476,11 +530,78 @@ test("health and readiness probes are sessionless, bounded, and nonsecret", asyn
     new Request(`${ORIGIN}/api/v1/ready`)
   );
   assert.equal(unavailable.status, 503);
-  assert.deepEqual(await unavailable.json(), {
+  const unavailablePayload =
+    await unavailable.json();
+  assert.deepEqual({
+    ...unavailablePayload,
+    ageMs: 0,
+    latencyBucket: "observed"
+  }, {
+    schema: "sitesourcery.hosted-readiness/v1",
     ready: false,
-    service: "sitesourcery-hosted-runtime"
+    service: "sitesourcery-hosted-runtime",
+    release: UNBOUND_RELEASE,
+    ageMs: 0,
+    state: "not_ready",
+    code: "dependency_not_ready",
+    latencyBucket: "observed"
   });
+  assert.equal(
+    Number.isSafeInteger(
+      unavailablePayload.ageMs
+    ) && unavailablePayload.ageMs >= 0,
+    true
+  );
+  assert.equal(
+    READINESS_LATENCY_BUCKETS.has(
+      unavailablePayload.latencyBucket
+    ),
+    true
+  );
   assert.deepEqual(held.calls.authenticate, []);
+});
+
+test("liveness reports an injected validated release identity without checking dependencies", async () => {
+  const releaseIdentity = {
+    schema:
+      "sitesourcery.hosted-release-identity/v1",
+    state: "bound",
+    epochId: "fixture-release-epoch",
+    bindingSha256: "a".repeat(64),
+    publicArtifactCommitSha: "b".repeat(40)
+  };
+  const context = createContext({ releaseIdentity });
+  const response = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/live`)
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    schema: "sitesourcery.hosted-liveness/v1",
+    live: true,
+    service: "sitesourcery-hosted-runtime",
+    release: releaseIdentity
+  });
+  assert.equal(context.calls.readiness.length, 0);
+  assert.deepEqual(context.calls.authenticate, []);
+});
+
+test("concurrent readiness probes share one bounded dependency check", async () => {
+  const context = createContext();
+  const responses = await Promise.all(
+    Array.from({ length: 25 }, () =>
+      context.api.fetch(
+        new Request(`${ORIGIN}/api/v1/ready`)
+      )
+    )
+  );
+  assert.equal(
+    responses.every((response) =>
+      response.status === 200
+    ),
+    true
+  );
+  assert.equal(context.calls.readiness.length, 1);
+  assert.deepEqual(context.calls.authenticate, []);
 });
 
 test("project legal authority is public, exact-shaped, and project creation is held before legacy validation", async () => {
