@@ -18,7 +18,9 @@ const TEMPLATE = /^[a-z0-9][a-z0-9._:-]{1,79}$/u;
 const MESSAGE_TYPES = new Set([
   "account_activation",
   "account_recovery",
-  "support_notification"
+  "support_notification",
+  "commerce_customer_notification",
+  "commerce_operator_notification"
 ]);
 const PROVIDER_EVENTS = new Set([
   "delivered",
@@ -160,7 +162,15 @@ export function normalizeMailReservation(input, requestedAt) {
     (selected.messageType === "support_notification" &&
       selected.organizationId !== null &&
       selected.projectId !== null &&
-      selected.customerUserId !== null);
+      selected.customerUserId !== null) ||
+    (selected.messageType === "commerce_customer_notification" &&
+      selected.organizationId !== null &&
+      selected.projectId !== null &&
+      selected.customerUserId !== null) ||
+    (selected.messageType === "commerce_operator_notification" &&
+      selected.customerUserId === null &&
+      ((selected.organizationId === null && selected.projectId === null) ||
+        (selected.organizationId !== null && selected.projectId !== null)));
   invariant(
     scopeMatches,
     "MAIL_LIFECYCLE_INVALID",
