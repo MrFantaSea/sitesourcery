@@ -85,7 +85,9 @@ legal, entitlement, or service authority.
   - Keep every release/provider switch held by default.
   - Dependencies: none. Blocks hosted deployment and commerce.
 
-- [ ] **LEGAL-PUBLISH-01 — one hostname, one legal/product truth**
+- [x] **LEGAL-PUBLISH-01 — one hostname, one legal/product truth**
+  - Held semantics completed at `71d4aac`: the sealed effective basis is
+    separate from real publication time, and absent owner facts fail closed.
   - Preserve immutable V2/V3/V4 bytes and exact V4 tuple.
   - Resolve owner publication/effective-date receipt semantics without editing
     sealed V4 bytes.
@@ -114,7 +116,9 @@ legal, entitlement, or service authority.
   - Add only the new Cloudflare DS after convergence.
   - Dependencies: LEGAL-PUBLISH-01, OPS-ORIGIN-01.
 
-- [ ] **OPS-MON-01 — independent observability and dead-man**
+- [x] **OPS-MON-01 — independent observability and dead-man**
+  - Held independent monitor completed at `4d48937`; activation and outbound
+    alert delivery remain installation-time gates.
   - Decouple monitoring from runtime and backup mounts.
   - Add external apex/content/TLS/tunnel probes and a dead-man alert.
   - Add PII-free request IDs, route/status/latency, DB wait, provider duration,
@@ -213,7 +217,10 @@ legal, entitlement, or service authority.
   - Do not invent one universal refund rule.
   - Dependencies: TAX-PURPOSE-01; blocks professional-service commerce.
 
-- [ ] **MAIL-01 — transactional delivery lifecycle**
+- [x] **MAIL-01 — transactional delivery lifecycle**
+  - Durable held lifecycle completed at `43a121a`; migration 107 is merged.
+  - MAIL-WIRING-02 is active to replace legacy provider-accepted-as-delivered
+    wording before production composition.
   - Model pending → provider accepted → delivered | bounced | complained |
     suppressed | expired.
   - Add webhook/event ingestion, exception queue, and fallback recovery path.
