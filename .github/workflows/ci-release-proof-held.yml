@@ -1,0 +1,179 @@
+name: Held exact-release proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact full lowercase candidate commit SHA
+        required: true
+        type: string
+      successor_input_sha256:
+        description: SHA-256 of the verified successor release-epoch input
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: held-release-proof-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  exact-release-proof:
+    environment: ci-release-proof-held
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CI_RELEASE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      CI_RELEASE_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      CI_RELEASE_SUCCESSOR_INPUT_FILE_SHA256: ${{ inputs.successor_input_sha256 }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - name: Check out exact protected workflow authority
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate exact manual held inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
+          [[ "$CI_RELEASE_CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$CI_RELEASE_SUCCESSOR_INPUT_FILE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$(git -C control rev-parse HEAD)" = "$GITHUB_WORKFLOW_SHA"
+          input="control/ops/releases/ci-successor-inputs/${CI_RELEASE_CANDIDATE_SHA}.json"
+          test -f "$input"
+          test ! -L "$input"
+          printf 'CI_RELEASE_SUCCESSOR_INPUT_PATH=%s\n' "$input" >> "$GITHUB_ENV"
+
+      - name: Check out exact candidate without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin exact Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Verify immutable proof implementation and successor authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C target rev-parse HEAD)" = "$CI_RELEASE_CANDIDATE_SHA"
+          test "$(tr -d '\n' < target/.nvmrc)" = 24.18.0
+          for file in \
+            ops/ci-release-proof-runtime.mjs \
+            ops/ci-release-proof-repository.mjs \
+            ops/ci-release-proof.mjs \
+            server/data-plane/tests/migration-verification-inventory.mjs \
+            server/data-plane/tests/verify-empty-postgres-migrations.mjs
+          do
+            cmp --silent "control/$file" "target/$file"
+          done
+          digest="$(node target/ops/ci-release-proof.mjs input \
+            --root target \
+            --input "$CI_RELEASE_SUCCESSOR_INPUT_PATH" \
+            --input-sha "$CI_RELEASE_SUCCESSOR_INPUT_FILE_SHA256")"
+          [[ "$digest" =~ ^[a-f0-9]{64}$ ]]
+          printf 'CI_RELEASE_SUCCESSOR_INPUT_DIGEST=%s\n' "$digest" >> "$GITHUB_ENV"
+          evidence="$RUNNER_TEMP/ci-release-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir "$evidence"
+          test -d "$evidence"
+          test ! -L "$evidence"
+          printf 'CI_RELEASE_EVIDENCE_ROOT=%s\n' "$evidence" >> "$GITHUB_ENV"
+
+      - name: Install candidate locked dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+
+      - name: Install exact reviewed browser
+        working-directory: target
+        run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
+
+      - name: Run full candidate proof
+        working-directory: target
+        run: npm test
+
+      - name: Record full candidate proof
+        run: node target/ops/ci-release-proof.mjs record --step full-npm
+
+      - name: Run exact ops proof independently
+        working-directory: target
+        run: npm run check:ops
+
+      - name: Record exact ops proof
+        run: node target/ops/ci-release-proof.mjs record --step ops
+
+      - name: Build and verify exact Legal V4 Pages projection
+        working-directory: target
+        run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+
+      - name: Record exact Legal V4 80-file proof
+        run: node target/ops/ci-release-proof.mjs legal-v4 --root target --artifact-root target/_site
+
+      - name: Run and record three-width browser proof
+        run: node target/ops/ci-release-proof.mjs browser --root target --artifact-root target/_site
+
+      - name: Run fresh PostgreSQL 16 journey and exact cleanup proof
+        shell: bash
+        env:
+          CI_RELEASE_PG_ADMIN_URL: postgresql://postgres@127.0.0.1:55432/postgres
+        run: |
+          set -euo pipefail
+          database="ss_ci_release_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          [[ "$database" =~ ^ss_ci_release_[1-9][0-9]*_[1-9][0-9]*$ ]]
+          pg_bin="$(pg_config --bindir)"
+          test "$($pg_bin/postgres --version | awk '{print $3}' | cut -d. -f1)" = 16
+          data="$RUNNER_TEMP/ci-release-pg16-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          socket="$RUNNER_TEMP/ci-release-pg16-socket-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir "$socket"
+          "$pg_bin/initdb" --auth=trust --no-locale --encoding=UTF8 --username=postgres "$data"
+          "$pg_bin/pg_ctl" -D "$data" -o "-h 127.0.0.1 -p 55432 -k $socket" -w start
+          started=true
+          cleanup() {
+            status=$?
+            if [[ "${started:-false}" = true ]]; then
+              [[ "$database" =~ ^ss_ci_release_[1-9][0-9]*_[1-9][0-9]*$ ]]
+              "$pg_bin/psql" "$CI_RELEASE_PG_ADMIN_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --command "select pg_terminate_backend(pid) from pg_stat_activity where datname = '$database' and pid <> pg_backend_pid()"
+              "$pg_bin/dropdb" --host=127.0.0.1 --port=55432 --username=postgres --if-exists "$database"
+              node target/ops/ci-release-proof.mjs absence
+              "$pg_bin/pg_ctl" -D "$data" -m fast -w stop
+              started=false
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT INT TERM
+          "$pg_bin/createdb" --host=127.0.0.1 --port=55432 --username=postgres "$database"
+          export SITESOURCERY_PG_MIGRATION_TEST_URL="postgresql://postgres@127.0.0.1:55432/$database"
+          node target/ops/ci-release-proof.mjs postgres
+          cleanup
+
+      - name: Reject candidate mutation and issue held final receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git -C target status --porcelain=v1 --untracked-files=no)"
+          node target/ops/ci-release-proof.mjs final --root target
+          test -f "$CI_RELEASE_EVIDENCE_ROOT/final.json"
+          test ! -L "$CI_RELEASE_EVIDENCE_ROOT/final.json"
+
+      - name: State the non-authorizing result
+        run: |
+          printf '%s\n' \
+            'Exact release proof passed in HELD state.' \
+            'No deploy, provider, DNS, commercial, publication, or customer-effect authority was granted.'
