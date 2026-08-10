@@ -73,7 +73,10 @@ legal, entitlement, or service authority.
 
 ### Release, authority, and infrastructure
 
-- [ ] **SHAPE-EPOCH-01 — canonical release epoch and verifier**
+- [x] **SHAPE-EPOCH-01 — canonical release epoch and verifier**
+  - Completed independently at `2161422`; merged into the integration line.
+  - The held snapshot remains intentionally stale until the first-wave union is
+    resealed against its final migration set and implementation parent.
   - Base: `69ad11c`.
   - Add one non-secret, purpose-scoped release ledger joining source, artifact,
     legal tuple, 58 migrations, installed release, public mode, provider modes,
@@ -90,7 +93,8 @@ legal, entitlement, or service authority.
   - Prove current aliases and versioned URLs byte-for-byte.
   - Dependencies: SHAPE-EPOCH-01 for final seal.
 
-- [ ] **INGRESS-01 — bounded public ingress and abuse controls**
+- [x] **INGRESS-01 — bounded public ingress and abuse controls**
+  - Completed at `d0aaf42`; merged with Engagement HTTP routes at `35030b1`.
   - Enforce streaming body limits before buffering at Caddy and Node.
   - Add request deadlines, bounded concurrency, per-IP/global auth limits,
     unique-email amplification protection, and compile/write quotas.
@@ -134,7 +138,9 @@ legal, entitlement, or service authority.
 
 ### Customer and product spine
 
-- [ ] **IA-01 — one plain-language customer spine**
+- [x] **IA-01 — one plain-language customer spine**
+  - Completed at `1c02bc8`; 18 retained visual proofs cover six pages at
+    320, 390, and 1440 pixels without repository image bloat.
   - Use three starting paths: make a preview, assess an existing site, or
     commission Custom directly.
   - Align navigation, three-path chooser, size ladder, jobs, Domains, Care,
@@ -143,7 +149,8 @@ legal, entitlement, or service authority.
     claim while its purpose is held.
   - Dependencies: none.
 
-- [ ] **ENGAGEMENT-01 — invitation, claim, and canonical project bootstrap**
+- [x] **ENGAGEMENT-01 — invitation, claim, and canonical project bootstrap**
+  - Completed at `1842899`; merged with migration 106 and exact PG16 proof.
   - Operator creates an expiring invitation for a customer-owned engagement.
   - Customer sets credentials and claims a new-site or external-site project
     without creating an Abracadabra preview.
@@ -165,6 +172,9 @@ legal, entitlement, or service authority.
   - Dependencies: ENGAGEMENT-01; staged after current P0 launch work.
 
 - [ ] **CUSTOMER-UX-01 — accessibility, failure, and rights controls**
+  - Tranche A completed at `a7d79a3`: bounded browser requests and complete
+    account-tab keyboard operation. Tranche B is active for checkout failure,
+    reconnect/session, support, export, deletion, and privacy-request states.
   - Fix account-tab Arrow/Home/End behavior and screen-reader proof.
   - Add bounded fetch timeout, abort, reconnect, offline, browser-reopen,
     session-expiry, and second-device proofs.
@@ -195,7 +205,8 @@ legal, entitlement, or service authority.
     runtime key until a deliberate split is justified.
   - Dependencies: TAX-PURPOSE-01.
 
-- [ ] **PRO-REVERSALS-01 — assessment/Custom closure semantics**
+- [x] **PRO-REVERSALS-01 — assessment/Custom closure semantics**
+  - Completed at `bd89bd8`; merged with migration 108 at `c20a6a2`.
   - Define agreement-bound cancellation, termination, earned/unearned amounts,
     refund/dispute/reversal, abandoned access, handoff consequence, and operator
     review.
@@ -349,4 +360,3 @@ legal, entitlement, or service authority.
    performance/continuity improvements.
 7. Treat Alakazam/Care, Domains, publication, and Responder as separate later
    releases with their own authority and proofs.
-
