@@ -75,6 +75,9 @@ import {
   createPostgresAlakazamRetainedPremiumRepository
 } from "../alakazam-retained-premium-postgres.mjs";
 import {
+  createPostgresAlakazamPolicyAuthorityRepository
+} from "../alakazam-policy-authority-postgres.mjs";
+import {
   createAlakazamRetainedPremiumLifecycle
 } from "../alakazam-retained-premium-lifecycle.mjs";
 import {
@@ -427,6 +430,10 @@ async function start() {
   });
   const alakazamRetainedPremiumRepository =
     createPostgresAlakazamRetainedPremiumRepository({
+      authority
+    });
+  const alakazamPolicyAuthorityRepository =
+    createPostgresAlakazamPolicyAuthorityRepository({
       authority
     });
   const alakazamRetainedPremium =
@@ -807,6 +814,13 @@ async function start() {
   await alakazam35.readiness();
   await alakazam50.readiness();
   await alakazamRetainedPremium.readiness();
+  const alakazamPolicyReadiness =
+    await alakazamPolicyAuthorityRepository.readiness();
+  if (alakazamPolicyReadiness.ready !== true) {
+    throw new Error(
+      "Canonical held Alakazam policy authority is not ready."
+    );
+  }
   assertApprovedAlakazamReady(
     alakazamComposition,
     readiness.payments

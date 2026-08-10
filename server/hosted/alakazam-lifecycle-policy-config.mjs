@@ -44,6 +44,18 @@ const TEXT_VARIABLES = Object.freeze([
   "disputeConsequence"
 ]);
 
+const CANONICAL_APPROVED_POLICY = Object.freeze({
+  policyVersion: "alakazam-lifecycle.2026-08-10.v1",
+  graceHours: 168,
+  suspendAfterGraceHours: 0,
+  retentionHours: 720,
+  exportWindowHours: 720,
+  graceConsequence: "restrict_publication",
+  suspensionConsequence: "suspend_service",
+  refundConsequence: "owner_review",
+  disputeConsequence: "owner_review"
+});
+
 function configurationError(code, message) {
   const error = new Error(message);
   error.name = "AlakazamLifecyclePolicyConfigurationError";
@@ -127,6 +139,14 @@ export function createConfiguredAlakazamLifecyclePolicy({
   for (const field of TEXT_VARIABLES) {
     const name = ALAKAZAM_LIFECYCLE_POLICY_VARIABLES[field];
     input[field] = environment[name];
+  }
+  if (!Object.entries(CANONICAL_APPROVED_POLICY).every(
+    ([field, expected]) => input[field] === expected
+  )) {
+    throw configurationError(
+      "ALAKAZAM_LIFECYCLE_POLICY_NOT_CANONICAL",
+      "Approved Alakazam lifecycle configuration must exactly match the canonical 7-day grace, 30-day retained exit/export, and owner-reviewed reversal policy."
+    );
   }
   return Object.freeze({
     mode,

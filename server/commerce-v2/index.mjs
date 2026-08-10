@@ -46,6 +46,7 @@ export * from "./hosted-alakazam-account.mjs";
 export * from "./hosted-alakazam-publication.mjs";
 export * from "./hosted-alakazam-billing.mjs";
 export * from "./alakazam-lifecycle-policy.mjs";
+export * from "./alakazam-policy-authority.mjs";
 export * from "./alakazam-lifecycle-renewal.mjs";
 export * from "./alakazam-lifecycle-state.mjs";
 export * from "./alakazam-lifecycle-cancellation.mjs";

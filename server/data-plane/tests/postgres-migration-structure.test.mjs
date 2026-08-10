@@ -3309,3 +3309,54 @@ test("commerce notifications are committed-source-bound, MAIL-reserved, and held
     /provider_effects_authorized\s*=\s*true|delivery_claimed\s*=\s*true|on delete cascade|grant all privileges/iu
   );
 });
+
+test("ALAKAZAM-POLICY-01 reserves migration 116 as one held customer-right authority", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name ===
+      "202608100116_alakazam_policy_authority.sql"
+  );
+  assert.ok(migration, "missing ALAKAZAM-POLICY-01 migration 116");
+  assert.match(migration.sql, /^-- ALAKAZAM-POLICY-01[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  assert.match(
+    migration.sql,
+    /create table ss\.alakazam_policy_authorities[\s\S]*SS-ALAKAZAM-POLICY-2026-08-10-V1/iu
+  );
+  assert.match(
+    migration.sql,
+    /paymentGraceHours[^\n]*168[\s\S]*retainedExitHours[^\n]*720[\s\S]*exportWindowHours[^\n]*720/iu
+  );
+  assert.match(
+    migration.sql,
+    /first_failed_at \+ interval '7 days'[\s\S]*starts_at \+ interval '30 days'/iu
+  );
+  assert.match(
+    migration.sql,
+    /provider_confirmed_effective_cancellation[\s\S]*paid_through_boundary_reached[\s\S]*available_export_grant/iu
+  );
+  assert.match(
+    migration.sql,
+    /payment_recovered[\s\S]*download_reversal_event_id is null/iu
+  );
+  assert.match(
+    migration.sql,
+    /create view ss\.alakazam_policy_subscription_authority_v1[\s\S]*security_invoker = true/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*grant select on table ss\.alakazam_policy_authorities to service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /canonical-alakazam-policy-authority-v1-held/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects\s+boolean[^\n]*default\s+true|commercial_effects\s+boolean[^\n]*default\s+true|publication_effects\s+boolean[^\n]*default\s+true|charges[.]create|subscriptions[.]create|payment_intents[.]create/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /commerce_v2_download|service_custom|service_assessment/iu
+  );
+});
