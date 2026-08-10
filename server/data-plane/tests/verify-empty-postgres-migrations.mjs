@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1418,7 +1418,7 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
   const repository = createPostgresEngagementBootstrapRepository({
     authority: database,
     legalAuthority,
-    pepper: Buffer.alloc(32, 41),
+    pepper: randomBytes(32),
     pepperVersion: "engagement-proof-v1",
     clock: () => new Date(currentTime)
   });

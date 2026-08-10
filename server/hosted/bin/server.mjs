@@ -184,6 +184,9 @@ import {
 import { createHostedApi } from "../http.mjs";
 import { ingressPolicyFromEnvironment } from "../ingress-policy.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
+import {
+  identityPepperConfigurationFromEnvironment
+} from "../identity-pepper-config.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
@@ -663,25 +666,25 @@ async function start() {
     createHeldDomainRuntime();
   const ingressPolicy = ingressPolicyFromEnvironment(process.env);
 
-  const identityPepper = secret(
-    "SITESOURCERY_IDENTITY_PEPPER"
-  );
+  const identityPepperConfiguration =
+    identityPepperConfigurationFromEnvironment(
+      process.env
+    );
   const registrationMailPort =
     await createConfiguredRegistrationMailPort();
-  const identity = createPostgresIdentityBridge({
-    pool,
-    authority,
-    pepper: identityPepper,
-    registrationMailPort,
-    rateLimit: ingressPolicy.identity.subject,
-    registrationRecoveryRateLimit: {
-      perIp: ingressPolicy.identity.perIp,
-      global: ingressPolicy.identity.global
-    },
-    pepperVersion:
-      process.env.SITESOURCERY_IDENTITY_PEPPER_VERSION ??
-      "v1"
-  });
+  const identity = identityPepperConfiguration.compose(
+    createPostgresIdentityBridge,
+    {
+      pool,
+      authority,
+      registrationMailPort,
+      rateLimit: ingressPolicy.identity.subject,
+      registrationRecoveryRateLimit: {
+        perIp: ingressPolicy.identity.perIp,
+        global: ingressPolicy.identity.global
+      }
+    }
+  );
   const contactVault = createAesGcmContactVault({
     key: secret(
       "SITESOURCERY_CONTACT_VAULT_KEY",
@@ -920,6 +923,8 @@ async function start() {
       recoveryProvider:
         readiness.recovery.provider ?? null,
       database: readiness.persistence.database,
+      identityPepper:
+        identityPepperConfiguration.readiness,
       compilerRevision: readiness.compiler.revision,
       catalogVersion: readiness.catalog.catalogVersion,
       payments: paymentReadiness,

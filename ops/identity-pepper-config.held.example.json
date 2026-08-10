@@ -1,0 +1,13 @@
+{
+  "schema": "sitesourcery.identity-pepper-config/v1",
+  "current": {
+    "version": "replace-current-version",
+    "secretEnvironment": "SITESOURCERY_IDENTITY_PEPPER"
+  },
+  "prior": [
+    {
+      "version": "replace-prior-version",
+      "secretEnvironment": "SITESOURCERY_IDENTITY_PEPPER_PRIOR_1"
+    }
+  ]
+}

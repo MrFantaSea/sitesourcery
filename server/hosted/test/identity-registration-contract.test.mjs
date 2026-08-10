@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
@@ -7,7 +8,7 @@ import {
 } from "../registration-mail-port.mjs";
 
 const NOW = "2026-07-30T12:00:00.000Z";
-const PEPPER = Buffer.alloc(32, 0x6b);
+const PEPPER = randomBytes(32);
 const OWNER_EMAIL = "owner@example.test";
 const OWNER_PASSWORD =
   "correct horse battery staple";
