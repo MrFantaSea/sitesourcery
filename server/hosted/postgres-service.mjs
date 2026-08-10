@@ -51,6 +51,12 @@ const DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 const RECOVERY_DELIVERY_TTL_MS = 30 * 60 * 1000;
 const CHECKOUT_HOST = "checkout.stripe.com";
 const BILLING_PORTAL_HOST = "billing.stripe.com";
+const POSTGRES_WORKER_PORTS_SCHEMA =
+  "sitesourcery.postgres-worker-ports/v1";
+const POSTGRES_WORKER_PURPOSES = Object.freeze([
+  "export",
+  "cancellation"
+]);
 
 function uuid(value, field) {
   const selected = String(value ?? "");
@@ -587,7 +593,7 @@ function translatePostgres(error) {
   return error;
 }
 
-export function createCanonicalPostgresService({
+function createCanonicalPostgresRuntime({
   authority,
   identity,
   compiler,
@@ -607,7 +613,7 @@ export function createCanonicalPostgresService({
   projectLegalAuthority = null,
   projectLegalAuthorityDiagnostic = null,
   resourceLimits = DEFAULT_INGRESS_POLICY.writes
-} = {}) {
+} = {}, workerPurposes = null) {
   invariant(
     authority?.kind === "canonical-postgres" &&
       typeof authority.service === "function",
@@ -615,6 +621,14 @@ export function createCanonicalPostgresService({
     "Canonical PostgreSQL authority is required.",
     { status: 500 }
   );
+  const workerOnly = workerPurposes !== null;
+  const selectedWorkerPurposes = new Set(
+    workerPurposes ?? []
+  );
+  const includesExport =
+    !workerOnly || selectedWorkerPurposes.has("export");
+  const includesCancellation =
+    !workerOnly || selectedWorkerPurposes.has("cancellation");
   const configuredResourceLimits = {
     perPrincipal: {
       ...DEFAULT_INGRESS_POLICY.writes.perPrincipal,
@@ -635,7 +649,7 @@ export function createCanonicalPostgresService({
       { status: 500 }
     );
   }
-  invariant(
+  if (!workerOnly) invariant(
     identity &&
       typeof identity.authenticate === "function" &&
       typeof identity.register === "function" &&
@@ -653,7 +667,7 @@ export function createCanonicalPostgresService({
     "First-party identity is required.",
     { status: 500 }
   );
-  invariant(
+  if (!workerOnly) invariant(
     compiler &&
       typeof compiler.compile === "function" &&
       typeof compiler.revision === "string",
@@ -661,13 +675,13 @@ export function createCanonicalPostgresService({
     "Canonical Spark compiler is required.",
     { status: 500 }
   );
-  invariant(
+  if (!workerOnly) invariant(
     catalogPort && typeof catalogPort.current === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Approved offer catalog port is required.",
     { status: 500 }
   );
-  invariant(
+  if (!workerOnly) invariant(
     publicationPort &&
       typeof publicationPort.request === "function" &&
       typeof publicationPort.rollback === "function" &&
@@ -676,7 +690,7 @@ export function createCanonicalPostgresService({
     "Private publication port is required.",
     { status: 500 }
   );
-  invariant(
+  if (includesExport) invariant(
     exportStore &&
       typeof exportStore.key === "function" &&
       typeof exportStore.put === "function" &&
@@ -686,7 +700,7 @@ export function createCanonicalPostgresService({
     "Private export object store is required.",
     { status: 500 }
   );
-  invariant(
+  if (includesExport) invariant(
     Number.isSafeInteger(exportLeaseMs) &&
       exportLeaseMs > 0 &&
       exportLeaseMs <= MAXIMUM_EXPORT_LEASE_MS,
@@ -694,11 +708,13 @@ export function createCanonicalPostgresService({
     "Export worker lease duration is invalid.",
     { status: 500 }
   );
-  const defaultExportWorkerId = exportWorkerIdentity(
-    suppliedExportWorkerId ??
-      `export-worker:${randomUUID()}`
-  );
-  invariant(
+  const defaultExportWorkerId = includesExport
+    ? exportWorkerIdentity(
+        suppliedExportWorkerId ??
+          `export-worker:${randomUUID()}`
+      )
+    : null;
+  if (!workerOnly) invariant(
     recoveryMailPort &&
       typeof recoveryMailPort.readiness === "function" &&
       typeof recoveryMailPort.deliver === "function",
@@ -9235,5 +9251,120 @@ export function createCanonicalPostgresService({
     }
   };
 
+  if (workerOnly) {
+    const ports = {
+      schema: POSTGRES_WORKER_PORTS_SCHEMA
+    };
+    if (includesCancellation) {
+      ports.cancellation = Object.freeze({
+        kind: "leased-cancellation-outbox",
+        async readiness() {
+          let persistenceReady = false;
+          let providerReady = false;
+          let mode = "held";
+          try {
+            persistenceReady =
+              (await authority.readiness())?.ready === true;
+          } catch {
+            persistenceReady = false;
+          }
+          try {
+            const status =
+              await paymentProvider.readiness();
+            mode = status?.mode === "approved_live"
+              ? "approved_live"
+              : "held";
+            providerReady =
+              status?.ready === true &&
+              mode === "approved_live";
+          } catch {
+            providerReady = false;
+          }
+          return Object.freeze({
+            schema:
+              "sitesourcery.cancellation-worker-port-readiness/v1",
+            ready:
+              persistenceReady && providerReady,
+            purpose: "cancellation",
+            persistence:
+              persistenceReady ? "ready" : "not_ready",
+            provider: "stripe",
+            mode,
+            providerEffects:
+              providerReady ? "owner-approved" : "held",
+            code: !persistenceReady
+              ? "WORKER_PERSISTENCE_NOT_READY"
+              : providerReady
+                ? "READY"
+                : "WORKER_PAYMENT_PROVIDER_NOT_READY"
+          });
+        },
+        processPaymentOutbox(input) {
+          return service.processPaymentOutbox(input);
+        }
+      });
+    }
+    if (includesExport) {
+      ports.export = Object.freeze({
+        kind: "fenced-export-queue",
+        async readiness() {
+          let persistenceReady = false;
+          try {
+            persistenceReady =
+              (await authority.readiness())?.ready === true;
+          } catch {
+            persistenceReady = false;
+          }
+          return Object.freeze({
+            schema:
+              "sitesourcery.export-worker-port-readiness/v1",
+            ready: persistenceReady,
+            purpose: "export",
+            persistence:
+              persistenceReady ? "ready" : "not_ready",
+            objectStore: "configured-private",
+            providerEffects: "none",
+            code: persistenceReady
+              ? "READY"
+              : "WORKER_PERSISTENCE_NOT_READY"
+          });
+        },
+        processQueuedExports(input) {
+          return service.processQueuedExports(input);
+        }
+      });
+    }
+    return Object.freeze(ports);
+  }
+
   return Object.freeze(service);
+}
+
+export function createCanonicalPostgresService(options = {}) {
+  return createCanonicalPostgresRuntime(options);
+}
+
+export function createCanonicalPostgresWorkerPorts({
+  purposes,
+  ...options
+} = {}) {
+  invariant(
+    Array.isArray(purposes) &&
+      purposes.length >= 1 &&
+      purposes.length <= POSTGRES_WORKER_PURPOSES.length &&
+      purposes.every((purpose) =>
+        POSTGRES_WORKER_PURPOSES.includes(purpose)
+      ) &&
+      new Set(purposes).size === purposes.length &&
+      JSON.stringify(purposes) === JSON.stringify(
+        POSTGRES_WORKER_PURPOSES.filter((purpose) =>
+          purposes.includes(purpose)
+        )
+      ) &&
+      typeof options.authority?.readiness === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Canonical PostgreSQL worker purposes are invalid.",
+    { status: 500 }
+  );
+  return createCanonicalPostgresRuntime(options, purposes);
 }

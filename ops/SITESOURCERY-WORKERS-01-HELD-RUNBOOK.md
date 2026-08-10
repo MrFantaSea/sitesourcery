@@ -20,19 +20,18 @@ Every command below remains owner-gated.
 - Existing claim leases, fence tokens, idempotency keys, effect certainty,
   publication holds, lifecycle evidence, and provider modes remain authoritative.
 
-## Current activation blocker
+## Current held activation gates
 
-Only `alakazam-fulfillment` and `alakazam-retained-lifecycle` have narrow
-production composition in this packet. Export and cancellation processing are
-methods on `createCanonicalPostgresService`, whose constructor also requires
-identity and recovery-mail composition. Extracting those two narrow ports now
-would overlap MAIL-COMPOSE-FINAL-03 and the explicitly excluded identity/mail
-call sites. Therefore any owner-approved config containing `export` or
-`cancellation` fails with `WORKER_PURPOSE_UNAVAILABLE` before any loop starts.
-Do not activate this unit until that residual is resolved and separately
-reviewed. There is no standalone publication loop: publication remains the
-lease-fenced stage of Alakazam fulfillment, and synchronous customer release
-commands retain their existing authority.
+WORKERS-02 resolves the former export/cancellation constructor residual after
+MAIL-COMPOSE-FINAL-03. The external process now receives only exact readiness
+and processing ports for those purposes and imports no identity or mail
+composition. This is not activation authority. Export remains held unless its
+exact export mode is enabled, cancellation remains held unless the complete
+reviewed Stripe adapter reads back `approved_live`, and every selected purpose
+must pass PostgreSQL and purpose-specific readiness before any loop starts.
+There is no standalone publication loop: publication remains the lease-fenced
+stage of Alakazam fulfillment, and synchronous customer release commands
+retain their existing authority.
 
 ## Held installation plan
 
@@ -46,8 +45,8 @@ After a separately sealed union commit and owner approval:
    variables.
 3. Keep `activation` equal to `held`, keep `WORKERS_HOLD` present, and keep
    `WORKERS_APPROVED` absent while validating unit paths and permissions.
-4. Resolve and seal the export/cancellation narrow-port residual. Select only
-   purposes whose exact provider and commercial approvals already exist.
+4. Select only purposes whose exact provider, commercial, storage, and policy
+   approvals already exist. Keep export and Stripe modes held otherwise.
 5. Rehearse with injected/disposable dependencies. Prove all dependency
    readbacks occur before all starts, no duplicate API loop exists, API and
    worker connection maxima sum to the unchanged total, lease recovery works,

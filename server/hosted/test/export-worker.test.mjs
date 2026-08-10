@@ -174,15 +174,19 @@ test("export worker environment is exact, bounded, and held unless enabled", () 
   );
 });
 
-test("API starts no export loop and the worker process documents its narrow-port hold", async () => {
-  const [apiSource, runbook] = await Promise.all([
+test("API starts no export loop and the worker process owns the held narrow port", async () => {
+  const [apiSource, workerSource, runbook] = await Promise.all([
     readFile(new URL("../bin/server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../bin/worker.mjs", import.meta.url), "utf8"),
     readFile(
       new URL("../../../ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md", import.meta.url),
       "utf8"
     )
   ]);
   assert.doesNotMatch(apiSource, /createExportWorker|exportWorker\.start/u);
-  assert.match(runbook, /Export and cancellation processing are\s+methods on `createCanonicalPostgresService`/u);
-  assert.match(runbook, /WORKER_PURPOSE_UNAVAILABLE/u);
+  assert.match(workerSource, /createCoreWorkerFactories/u);
+  assert.match(
+    runbook,
+    /Export remains held unless its\s+exact export mode is enabled/iu
+  );
 });

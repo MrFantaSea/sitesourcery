@@ -266,9 +266,10 @@ test("graceful stop fails closed at the exact configured deadline", async () => 
 });
 
 test("production entrypoints split pools and contain no worker identity or mail composition", async () => {
-  const [api, worker, alakazam, unit, example, runbook] = await Promise.all([
+  const [api, worker, core, alakazam, unit, example, runbook] = await Promise.all([
     readFile(path.join(root, "server/hosted/bin/server.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/bin/worker.mjs"), "utf8"),
+    readFile(path.join(root, "server/hosted/worker-core-composition.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-alakazam-composition.mjs"), "utf8"),
     readFile(path.join(root, "ops/sitesourcery-workers.service.held"), "utf8"),
     readFile(path.join(root, "ops/workers.env.example"), "utf8"),
@@ -282,13 +283,14 @@ test("production entrypoints split pools and contain no worker identity or mail 
   assert.match(api, /backgroundWorkers: "external_process_required"/u);
   assert.match(worker, /pool\.workerReservedConnections/u);
   assert.match(worker, /workload: "worker"/u);
+  assert.match(worker, /createCoreWorkerFactories/u);
   assert.doesNotMatch(
-    `${worker}\n${alakazam}`,
+    `${worker}\n${core}\n${alakazam}`,
     /identity-postgres|identity-pepper|registrationMail|recoveryMail|resend-mail/iu
   );
   assert.match(unit, /ConditionPathExists=\/etc\/sitesourcery\/WORKERS_APPROVED/u);
   assert.match(unit, /ConditionPathExists=!\/etc\/sitesourcery\/WORKERS_HOLD/u);
   assert.doesNotMatch(example, /IDENTITY|RESEND|MAIL_/u);
-  assert.match(runbook, /WORKER_PURPOSE_UNAVAILABLE/u);
+  assert.match(runbook, /WORKERS-02 resolves/u);
   assert.match(runbook, /MAIL-COMPOSE-FINAL-03/u);
 });

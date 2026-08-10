@@ -249,7 +249,7 @@ test("ambiguous cancellation effects enter operator-only reconciliation and cann
   );
 });
 
-test("the API starts no cancellation loop and the worker entrypoint fails closed without its narrow port", async () => {
+test("the API starts no cancellation loop and the worker entrypoint owns its narrow port", async () => {
   const [apiSource, workerSource, runbook] = await Promise.all([
     readFile(new URL("../bin/server.mjs", import.meta.url), "utf8"),
     readFile(new URL("../bin/worker.mjs", import.meta.url), "utf8"),
@@ -259,7 +259,10 @@ test("the API starts no cancellation loop and the worker entrypoint fails closed
     )
   ]);
   assert.doesNotMatch(apiSource, /createCancellationWorker|cancellationWorker\.start/u);
-  assert.match(workerSource, /createWorkerSupervisor/u);
-  assert.match(runbook, /cancellation.*WORKER_PURPOSE_UNAVAILABLE/is);
+  assert.match(workerSource, /createCoreWorkerFactories/u);
+  assert.match(
+    runbook,
+    /external process now receives only exact readiness\s+and processing ports/iu
+  );
   assert.doesNotMatch(workerSource, /setTimeout\(\(\) => process\.exit/u);
 });
